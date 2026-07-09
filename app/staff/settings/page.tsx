@@ -2,12 +2,12 @@
 import useSWR, { mutate } from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles } from "lucide-react";
+import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, Power, PowerOff } from "lucide-react";
 import {
-  Tabs, Pagination, toast, Accordion,
+  Tabs, Pagination, toast, Accordion, Switch,
   DatePicker, DateField, Calendar, I18nProvider,
 } from "@heroui/react";
-import { parseDate, type DateValue } from "@internationalized/date";
+import { parseDate, parseDateTime, type DateValue } from "@internationalized/date";
 import { api } from "../../lib/api";
 import {
   PageHeader, Panel, Button, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select,
@@ -40,7 +40,7 @@ export default function SettingsPage() {
   const params = useSearchParams();
   // Allow deep-linking to a specific tab, e.g. /staff/settings?tab=terms
   const tabParam = params.get("tab");
-  const initialTab = ["rate", "cap", "courses", "terms"].includes(tabParam ?? "")
+  const initialTab = ["rate", "cap", "courses", "terms", "windows"].includes(tabParam ?? "")
     ? (tabParam as string)
     : "rate";
   return (
@@ -53,6 +53,7 @@ export default function SettingsPage() {
             <Tabs.Tab id="cap">เพดานชั่วโมง<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="courses">รายวิชา<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="terms">ภาคเรียน<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="windows">ระยะเวลารับสมัคร TA<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
@@ -67,6 +68,9 @@ export default function SettingsPage() {
         </Tabs.Panel>
         <Tabs.Panel id="terms" className="pt-6">
           <TermsSection />
+        </Tabs.Panel>
+        <Tabs.Panel id="windows" className="pt-6">
+          <RequestWindowsSection />
         </Tabs.Panel>
       </Tabs>
     </div>
@@ -2042,6 +2046,434 @@ function ConfirmSaveModal({
       }
     >
       <p className="text-sm">{description}</p>
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* TA request windows — per-term open/close scheduling                         */
+/* -------------------------------------------------------------------------- */
+
+interface RequestWindow {
+  id: string;
+  term_id: string;
+  opens_at: string;
+  closes_at: string;
+  is_open: boolean;
+  note?: string | null;
+}
+
+function windowStatus(w: RequestWindow, now = Date.now()) {
+  const opens = new Date(w.opens_at).getTime();
+  const closes = new Date(w.closes_at).getTime();
+  if (!w.is_open) {
+    if (now > closes) return { tone: "neutral" as const, label: "หมดเวลา + ปิดไว้" };
+    return { tone: "warn" as const, label: "ปิดชั่วคราว" };
+  }
+  if (now < opens) return { tone: "info" as const, label: "ยังไม่เริ่ม" };
+  if (now > closes) return { tone: "neutral" as const, label: "หมดเวลาแล้ว" };
+  return { tone: "success" as const, label: "กำลังเปิดรับสมัคร" };
+}
+
+function RequestWindowsSection() {
+  const { data: terms } = useSWR<Term[]>("/terms");
+  const [termId, setTermId] = useState<string>("");
+  useEffect(() => {
+    if (termId || !terms?.length) return;
+    const pick = terms.find(t => t.is_active) ?? terms[0];
+    if (pick?.id) setTermId(pick.id);
+  }, [terms, termId]);
+
+  const swrKey = termId ? `/ta-request/windows?term_id=${termId}` : null;
+  const { data: windows } = useSWR<RequestWindow[]>(swrKey);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<RequestWindow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RequestWindow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const noTerms = terms !== undefined && terms.length === 0;
+  const term = terms?.find(t => t.id === termId);
+  const list = windows ?? [];
+
+  async function toggleOpen(w: RequestWindow, next: boolean) {
+    try {
+      await api.post("/ta-request/windows", { ...w, is_open: next });
+      await mutate(swrKey);
+      toast.success(next ? "เปิดรับคำขอแล้ว" : "ปิดรับคำขอชั่วคราว");
+    } catch (e) {
+      toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
+    }
+  }
+  async function doDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.del(`/ta-request/windows/${deleteTarget.id}`);
+      await mutate(swrKey);
+      toast.success("ลบช่วงเวลารับสมัครแล้ว");
+      setDeleteTarget(null);
+    } catch (e) {
+      toast.danger("ลบไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Panel
+      title="ระยะเวลารับสมัคร TA"
+      description="กำหนดช่วงเวลาที่อาจารย์สามารถยื่นคำขอ TA ในแต่ละภาคเรียน — นอกช่วงนี้ระบบจะไม่รับคำขอ"
+      actions={
+        !noTerms && (
+          <>
+            <Select
+              value={termId}
+              onChange={e => setTermId(e.target.value)}
+              className="max-w-xs"
+            >
+              {terms?.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.academic_year}/{t.semester}{t.is_active ? " (active)" : ""}
+                </option>
+              ))}
+            </Select>
+            <Button
+              variant="primary"
+              disabled={!termId}
+              onClick={() => { setEditing(null); setFormOpen(true); }}
+            >
+              <Plus size={14} /> เพิ่มช่วงเวลา
+            </Button>
+          </>
+        )
+      }
+    >
+      {noTerms ? (
+        <Alert
+          status="warning"
+          title="ยังไม่มีปีการศึกษา / ภาคเรียน"
+          description="ต้องสร้างภาคเรียนที่แท็บ 'ภาคเรียน' ก่อน จึงจะกำหนดช่วงเวลารับสมัครได้"
+        />
+      ) : !windows ? (
+        <div className="py-6 text-sm text-muted">กำลังโหลด…</div>
+      ) : list.length === 0 ? (
+        <div className="py-8 flex flex-col items-center gap-3 text-center border border-dashed border-hairline rounded-lg">
+          <CalendarDays size={28} className="text-muted" />
+          <div>
+            <div className="text-sm font-medium">
+              ยังไม่ได้เปิดรับคำขอ TA สำหรับ {term?.academic_year}/{term?.semester}
+            </div>
+            <div className="text-xs text-muted mt-1">
+              อาจารย์จะยังไม่สามารถส่งคำขอในภาคเรียนนี้ได้จนกว่าจะกำหนดช่วงเวลา
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => { setEditing(null); setFormOpen(true); }}
+            >
+              <CalendarDays size={14} /> กำหนดช่วงเวลาเอง
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                if (!termId) return;
+                const now = new Date();
+                const end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+                try {
+                  await api.post("/ta-request/windows", {
+                    term_id: termId,
+                    opens_at: now.toISOString(),
+                    closes_at: end.toISOString(),
+                    is_open: true,
+                    note: "เปิดด่วน (30 วัน)",
+                  });
+                  await mutate(swrKey);
+                  toast.success("เปิดรับสมัครทันทีแล้ว", { description: "ระยะเวลา 30 วัน" });
+                } catch (e) {
+                  toast.danger("เปิดไม่สำเร็จ", { description: (e as Error).message });
+                }
+              }}
+            >
+              <Power size={14} /> เปิดรับสมัครทันที (30 วัน)
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {list.map(w => {
+            const st = windowStatus(w);
+            return (
+              <div
+                key={w.id}
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-panel px-4 py-3"
+              >
+                <Chip tone={st.tone}>{st.label}</Chip>
+                <div className="flex flex-col min-w-0">
+                  <div className="text-sm font-medium tabular">
+                    {formatThaiDateTime(w.opens_at)} → {formatThaiDateTime(w.closes_at)}
+                  </div>
+                  {w.note && <div className="text-xs text-muted truncate">{w.note}</div>}
+                </div>
+                <div className="ms-auto flex items-center gap-2">
+                  <Switch
+                    isSelected={w.is_open}
+                    onChange={sel => toggleOpen(w, sel)}
+                    aria-label={w.is_open ? "ปิดชั่วคราว" : "เปิดรับ"}
+                  >
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      <span className="text-xs">{w.is_open ? "เปิด" : "ปิด"}</span>
+                    </Switch.Content>
+                  </Switch>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setEditing(w); setFormOpen(true); }}
+                  >
+                    <Pencil size={14} /> แก้ไข
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeleteTarget(w)}
+                  >
+                    <Trash2 size={14} /> ลบ
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <WindowFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        termId={termId}
+        editing={editing}
+        onSaved={async () => {
+          setFormOpen(false);
+          await mutate(swrKey);
+          toast.success(editing ? "แก้ไขช่วงเวลาแล้ว" : "เพิ่มช่วงเวลาแล้ว");
+        }}
+      />
+
+      <ConfirmSaveModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={doDelete}
+        saving={deleting}
+        variant="danger"
+        confirmLabel="ลบ"
+        confirmIcon={<Trash2 size={14} />}
+        title="ลบช่วงเวลารับสมัคร?"
+        description="การลบจะไม่มีผลกับคำขอที่ส่งมาก่อนหน้านี้ แต่จะไม่สามารถลบได้ถ้ามีคำขออ้างอิงช่วงเวลานี้อยู่"
+      />
+    </Panel>
+  );
+}
+
+function formatThaiDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const dateStr = `${d.getDate()} ${THAI_MONTHS_ABBR[d.getMonth()]} ${d.getFullYear() + 543}`;
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${dateStr} ${hh}:${mm} น.`;
+}
+
+// "YYYY-MM-DDTHH:mm" (local wall-clock) ↔ ISO round-trip. We deliberately treat
+// the input as local time so the picker matches what the staff typed.
+function dateToLocalMinute(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+function isoToLocalMinute(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return dateToLocalMinute(d);
+}
+function localMinuteToISO(local: string): string {
+  // new Date("YYYY-MM-DDTHH:mm") is parsed as local time — exactly the intent.
+  return new Date(local).toISOString();
+}
+
+// Date + time (minute precision) picker in Thai locale. Mirrors TermDateField
+// but uses parseDateTime so the calendar exposes hour/minute segments.
+function TermDateTimeField({
+  label, value, onChange, autoFocus,
+}: {
+  label: string;
+  value: string;
+  onChange: (localMinute: string) => void;
+  autoFocus?: boolean;
+}) {
+  let dv: DateValue | null = null;
+  if (value) {
+    // Accept "YYYY-MM-DDTHH:mm" (no seconds) — parseDateTime wants seconds.
+    const withSec = value.length === 16 ? `${value}:00` : value;
+    try { dv = parseDateTime(withSec); } catch { dv = null; }
+  }
+  return (
+    <I18nProvider locale="th-TH">
+      <DatePicker
+        aria-label={label}
+        value={dv}
+        onChange={v => onChange(v ? v.toString().slice(0, 16) : "")}
+        autoFocus={autoFocus}
+        granularity="minute"
+        hourCycle={24}
+      >
+        <DateField.Group fullWidth>
+          <DateField.Input>
+            {segment => <DateField.Segment segment={segment} />}
+          </DateField.Input>
+          <DateField.Suffix>
+            <DatePicker.Trigger>
+              <DatePicker.TriggerIndicator />
+            </DatePicker.Trigger>
+          </DateField.Suffix>
+        </DateField.Group>
+        <DatePicker.Popover>
+          <Calendar aria-label={label}>
+            <Calendar.Header>
+              <Calendar.YearPickerTrigger>
+                <Calendar.YearPickerTriggerHeading />
+                <Calendar.YearPickerTriggerIndicator />
+              </Calendar.YearPickerTrigger>
+              <Calendar.NavButton slot="previous" />
+              <Calendar.NavButton slot="next" />
+            </Calendar.Header>
+            <Calendar.Grid>
+              <Calendar.GridHeader>
+                {day => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+              </Calendar.GridHeader>
+              <Calendar.GridBody>{date => <Calendar.Cell date={date} />}</Calendar.GridBody>
+            </Calendar.Grid>
+            <Calendar.YearPickerGrid>
+              <Calendar.YearPickerGridBody>
+                {({ year }) => <Calendar.YearPickerCell year={year} />}
+              </Calendar.YearPickerGridBody>
+            </Calendar.YearPickerGrid>
+          </Calendar>
+        </DatePicker.Popover>
+      </DatePicker>
+    </I18nProvider>
+  );
+}
+
+function WindowFormModal({
+  open, onClose, termId, editing, onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  termId: string;
+  editing: RequestWindow | null;
+  onSaved: () => void;
+}) {
+  // Local wall-clock strings in "YYYY-MM-DDTHH:mm" — timezone applied at submit.
+  const [opensAt, setOpensAt] = useState("");
+  const [closesAt, setClosesAt] = useState("");
+  const [isOpen, setIsOpen] = useState(true);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setOpensAt(isoToLocalMinute(editing.opens_at));
+      setClosesAt(isoToLocalMinute(editing.closes_at));
+      setIsOpen(editing.is_open);
+      setNote(editing.note ?? "");
+    } else {
+      const now = new Date();
+      const end = new Date();
+      end.setDate(end.getDate() + 30);
+      setOpensAt(dateToLocalMinute(now));
+      setClosesAt(dateToLocalMinute(end));
+      setIsOpen(true);
+      setNote("");
+    }
+    setErr(null);
+  }, [open, editing]);
+
+  const canSave = !!termId && !!opensAt && !!closesAt && opensAt < closesAt;
+
+  async function submit() {
+    if (!canSave) {
+      setErr("กรุณากรอกวันเวลาให้ครบและเวลาปิดต้องหลังเวลาเปิด");
+      return;
+    }
+    setSaving(true); setErr(null);
+    try {
+      await api.post("/ta-request/windows", {
+        id: editing?.id,
+        term_id: termId,
+        opens_at: localMinuteToISO(opensAt),
+        closes_at: localMinuteToISO(closesAt),
+        is_open: isOpen,
+        note: note.trim() || null,
+      });
+      onSaved();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={editing ? "แก้ไขช่วงเวลารับสมัคร" : "เพิ่มช่วงเวลารับสมัคร"}
+      size="md"
+      icon={<CalendarDays size={18} />}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="primary" onClick={submit} disabled={!canSave || saving} isPending={saving}>
+            <Save size={14} /> บันทึก
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FieldGroup label="เริ่มรับสมัคร (วัน-เดือน-ปี เวลา)">
+            <TermDateTimeField label="เวลาเริ่ม" value={opensAt} onChange={setOpensAt} />
+          </FieldGroup>
+          <FieldGroup label="ปิดรับสมัคร (วัน-เดือน-ปี เวลา)">
+            <TermDateTimeField label="เวลาปิด" value={closesAt} onChange={setClosesAt} />
+          </FieldGroup>
+        </div>
+        <FieldGroup label="สถานะ" hint="ปิดชั่วคราวเพื่อหยุดรับคำขอโดยไม่ต้องลบช่วงเวลา">
+          <div className="flex items-center gap-3">
+            <Switch isSelected={isOpen} onChange={setIsOpen} aria-label="สถานะเปิดรับ">
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <span>{isOpen ? "เปิดรับคำขอ" : "ปิดชั่วคราว"}</span>
+              </Switch.Content>
+            </Switch>
+            {!isOpen && <PowerOff size={14} className="text-muted" />}
+          </div>
+        </FieldGroup>
+        <FieldGroup label="หมายเหตุ (ถ้ามี)">
+          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น 'รอบแรก' หรือ 'ขยายเวลาให้ CS'" />
+        </FieldGroup>
+        {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+      </div>
     </Modal>
   );
 }

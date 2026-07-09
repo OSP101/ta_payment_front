@@ -40,6 +40,8 @@ interface DataTableProps<T> {
   searchFn?: (row: T) => string;
   searchPlaceholder?: string;
   filters?: DataFilter<T>[];
+  /** Preselect specific filter values on first mount (keyed by filter id). */
+  initialFilterValues?: Record<string, string>;
   pageSize?: number;
   initialSort?: SortDescriptor;
   emptyTitle?: string;
@@ -70,12 +72,21 @@ function pageItems(total: number, current: number): (number | "…")[] {
 export function DataTable<T>({
   ariaLabel, columns, rows, rowKey,
   searchFn, searchPlaceholder = "ค้นหา…",
-  filters, pageSize = 10, initialSort,
+  filters, initialFilterValues, pageSize = 10, initialSort,
   emptyTitle = "ไม่มีข้อมูล", emptyDescription,
   loading, toolbarExtra,
 }: DataTableProps<T>) {
   const [query, setQuery] = useState("");
-  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [filterValues, setFilterValues] = useState<Record<string, string>>(initialFilterValues ?? {});
+  // If the caller resolves initial values asynchronously (e.g. after an SWR
+  // fetch), apply them the first time they arrive — but only once, so we don't
+  // overwrite user changes on subsequent renders.
+  const appliedInitRef = useState({ done: !!initialFilterValues })[0];
+  useEffect(() => {
+    if (appliedInitRef.done || !initialFilterValues) return;
+    appliedInitRef.done = true;
+    setFilterValues(initialFilterValues);
+  }, [initialFilterValues, appliedInitRef]);
   const [sort, setSort] = useState<SortDescriptor | undefined>(initialSort);
   const [page, setPage] = useState(1);
 

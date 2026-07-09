@@ -308,19 +308,24 @@ function RequestFormModal({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {assignments.map((a, idx) => (
-                    <AssignmentBlock
-                      key={idx}
-                      idx={idx}
-                      n={idx + 1}
-                      assignment={a}
-                      tas={tas?.items ?? []}
-                      scope={scope}
-                      onUpdate={updateAssign}
-                      onWorkload={updateWorkload}
-                      onRemove={() => removeAssignment(idx)}
-                    />
-                  ))}
+                  {assignments.map((a, idx) => {
+                    const takenElsewhere = new Set(
+                      assignments.filter((_, i) => i !== idx).map(x => x.ta_id).filter(Boolean),
+                    );
+                    return (
+                      <AssignmentBlock
+                        key={idx}
+                        idx={idx}
+                        n={idx + 1}
+                        assignment={a}
+                        tas={(tas?.items ?? []).filter(t => !takenElsewhere.has(t.id))}
+                        scope={scope}
+                        onUpdate={updateAssign}
+                        onWorkload={updateWorkload}
+                        onRemove={() => removeAssignment(idx)}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
