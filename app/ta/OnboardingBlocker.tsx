@@ -1,9 +1,9 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckCircle2, Circle, ArrowRight, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Circle, ArrowRight, ShieldAlert, Minus } from "lucide-react";
 import type { Term } from "../lib/api";
 import { api } from "../lib/api";
 import { Button } from "../components/ui";
@@ -63,13 +63,57 @@ export default function OnboardingBlocker() {
   );
 
   // Approved TAs have cleared onboarding permanently — hide.
-  if (approved) return null;
-
+  //
+  // Hooks below must run even when we early-return above; keep the two return
+  // paths above (approved / all-done) but move the collapse state before the
+  // second early return so React sees a stable hook order.
   const profileDone = isProfileComplete(profile, docs);
   const scheduleDone = hasScheduleForTerm(blocks);
+  const stepCount = (profileDone ? 1 : 0) + (scheduleDone ? 1 : 0);
+  const onCurrentTaskPage =
+    (!profileDone && pathname === "/ta/documents") ||
+    (!scheduleDone && pathname === "/ta/schedule");
+
+  // Collapse to a small pill when the user is already on the page for the
+  // incomplete task — otherwise the panel covers upload controls / schedule
+  // cells. The user can still expand manually. Persist the choice so it
+  // survives navigation within the same tab.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.sessionStorage.getItem("onboardingBlockerCollapsed");
+    if (stored === "1") setCollapsed(true);
+    else if (stored === "0") setCollapsed(false);
+    else setCollapsed(onCurrentTaskPage);
+    // Only re-run when the task-page relevance changes, not on every render.
+  }, [onCurrentTaskPage]);
+  function setCollapsedPersistent(v: boolean) {
+    setCollapsed(v);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("onboardingBlockerCollapsed", v ? "1" : "0");
+    }
+  }
+
+  if (approved) return null;
   if (profileDone && scheduleDone) return null;
 
-  const stepCount = (profileDone ? 1 : 0) + (scheduleDone ? 1 : 0);
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsedPersistent(false)}
+        aria-label="ขยายกล่องแจ้งเตือนการเริ่มต้น"
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-2
+                   rounded-full border-2 border-amber-400 bg-white shadow-lg
+                   pl-3 pr-4 py-2 text-sm font-medium text-amber-700
+                   hover:bg-amber-50"
+      >
+        <ShieldAlert size={16} />
+        <span>เริ่มต้นใช้งาน</span>
+        <span className="text-xs tabular text-muted">{stepCount}/2</span>
+      </button>
+    );
+  }
 
   return (
     <div
@@ -92,7 +136,17 @@ export default function OnboardingBlocker() {
               ทำทั้ง 2 ขั้นตอนนี้ให้เสร็จ ระบบจะปิดกล่องนี้ให้อัตโนมัติ
             </div>
           </div>
-          <div className="text-xs tabular text-muted shrink-0">{stepCount}/2</div>
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="text-xs tabular text-muted">{stepCount}/2</div>
+            <button
+              type="button"
+              onClick={() => setCollapsedPersistent(true)}
+              aria-label="ย่อกล่องแจ้งเตือน"
+              className="p-1 rounded-md text-muted hover:bg-slate-100"
+            >
+              <Minus size={14} />
+            </button>
+          </div>
         </div>
 
         <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mb-2">

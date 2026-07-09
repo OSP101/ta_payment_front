@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { Tabs } from "@heroui/react";
 import {
   Check, X, FileText, Download, Eye, Clock,
-  CheckCircle2, XCircle, ChevronLeft,
+  CheckCircle2, XCircle, ChevronLeft, History as HistoryIcon,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import {
   PageHeader, Panel, Button, StatusChip, EmptyState, Modal,
-  TextArea, FieldGroup, Spinner,
+  TextArea, FieldGroup, Spinner, Chip,
 } from "../../components/ui";
 
 /* -------------------------------------------------------------------------- */
@@ -33,17 +34,44 @@ interface Doc {
   status: string;
   reject_reason?: string | null;
   size_bytes?: number;
+  round?: number;
+  superseded?: boolean;
+  uploaded_at?: string;
+  reviewed_at?: string | null;
+}
+interface Profile {
+  status: string;
+  reject_reason?: string | null;
+  prefix?: string;
+  national_id?: string;
+  bank_name?: string;
+  account_no?: string;
+  account_name?: string;
+  current_round?: number;
 }
 interface DetailResp {
   documents: Doc[] | null;
-  profile?: {
-    status: string;
-    reject_reason?: string | null;
-    national_id?: string;
-    bank_name?: string;
-    account_no?: string;
-    account_name?: string;
-  } | null;
+  profile?: Profile | null;
+}
+interface ProfileSubmission {
+  id: string;
+  round: number;
+  prefix: string;
+  national_id: string;
+  bank_name: string;
+  bank_branch: string;
+  branch_code: string;
+  account_no: string;
+  account_name: string;
+  status: string;
+  submitted_at: string;
+  reviewed_at?: string | null;
+  reject_reason?: string | null;
+}
+interface HistoryResp {
+  profile: Profile | null;
+  submissions: ProfileSubmission[] | null;
+  documents: Doc[] | null;
 }
 
 const BUCKETS: { id: Bucket; label: string; icon: React.ReactNode }[] = [
@@ -192,10 +220,14 @@ function DetailModal({
   const { data, mutate: refetch, isLoading } = useSWR<DetailResp>(key);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [reason, setReason] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [preview, setPreview] = useState<Doc | null>(null);
 
   useEffect(() => {
     setMode({ kind: "list" });
     setReason("");
+    setShowHistory(false);
+    setPreview(null);
   }, [user?.user_id]);
 
   function resetAndClose() {
@@ -289,6 +321,8 @@ function DetailModal({
     : "";
 
   return (
+    <>
+    <DocPreviewModal doc={preview} onClose={() => setPreview(null)} />
     <Modal
       open={!!user}
       onClose={resetAndClose}
@@ -321,6 +355,7 @@ function DetailModal({
                         key={d.id}
                         doc={d}
                         readonly={!canFinalize}
+                        onPreview={() => setPreview(d)}
                         onApprove={() => approveDoc(d.id)}
                         onReject={() => setMode({ kind: "reject-doc", docId: d.id, filename: d.filename })}
                       />
@@ -333,6 +368,21 @@ function DetailModal({
                 <div className="rounded-lg border border-danger/40 bg-danger-soft/60 px-4 py-3 text-sm">
                   <div className="font-medium text-danger-soft-foreground mb-1">เหตุผลที่ถูกปฏิเสธ</div>
                   <div className="text-[var(--ink-2)] whitespace-pre-wrap">{profile.reject_reason}</div>
+                </div>
+              )}
+
+              {user && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHistory(v => !v)}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)]"
+                  >
+                    <HistoryIcon size={14} />
+                    {showHistory ? "ซ่อน" : "แสดง"}ประวัติการส่ง
+                    {showHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  {showHistory && <HistoryPanel userId={user.user_id} />}
                 </div>
               )}
             </div>
@@ -372,6 +422,47 @@ function DetailModal({
         </div>
       )}
     </Modal>
+    </>
+  );
+}
+
+function DocPreviewModal({ doc, onClose }: { doc: Doc | null; onClose: () => void }) {
+  const url = doc ? `/api/v1/documents/${doc.id}/download` : "";
+  const ext = (doc?.filename.split(".").pop() ?? "").toLowerCase();
+  const isImage = ext === "jpg" || ext === "jpeg" || ext === "png";
+  return (
+    <Modal
+      open={!!doc}
+      onClose={onClose}
+      title={doc ? (DOC_KIND_LABEL[doc.kind] ?? doc.kind) : ""}
+      size="xl"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>ปิด</Button>
+          {doc && (
+            <a href={url} target="_blank" rel="noreferrer">
+              <Button variant="secondary">
+                <Download size={14} /> ดาวน์โหลด
+              </Button>
+            </a>
+          )}
+        </>
+      }
+    >
+      {doc && (
+        <div className="space-y-2">
+          <div className="text-xs text-[var(--ink-3)] truncate">{doc.filename}</div>
+          <div className="w-full h-[70vh] rounded-lg border border-[var(--hairline)] overflow-hidden bg-slate-50 flex items-center justify-center">
+            {isImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={url} alt={doc.filename} className="max-w-full max-h-full object-contain" />
+            ) : (
+              <iframe src={url} title={doc.filename} className="w-full h-full" />
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -393,6 +484,7 @@ function ProfileSummary({
   profile: NonNullable<DetailResp["profile"]>;
 }) {
   const rows: [string, string | undefined][] = [
+    ["คำนำหน้า",       profile.prefix],
     ["เลขบัตรประชาชน", profile.national_id],
     ["ธนาคาร",         profile.bank_name],
     ["เลขที่บัญชี",     profile.account_no],
@@ -416,10 +508,11 @@ function ProfileSummary({
 }
 
 function DocRow({
-  doc, readonly, onApprove, onReject,
+  doc, readonly, onPreview, onApprove, onReject,
 }: {
   doc: Doc;
   readonly: boolean;
+  onPreview: () => void;
   onApprove: () => void;
   onReject: () => void;
 }) {
@@ -438,6 +531,9 @@ function DocRow({
       </div>
       <StatusChip status={doc.status} />
       <div className="flex items-center gap-1 shrink-0">
+        <Button variant="ghost" size="sm" aria-label="ดูไฟล์" onClick={onPreview}>
+          <Eye size={14} />
+        </Button>
         <a href={`/api/v1/documents/${doc.id}/download`} target="_blank" rel="noreferrer">
           <Button variant="ghost" size="sm" aria-label="ดาวน์โหลด">
             <Download size={14} />
@@ -455,5 +551,122 @@ function DocRow({
         )}
       </div>
     </li>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* History panel — full submission trail (profile snapshots + past docs)      */
+/* -------------------------------------------------------------------------- */
+
+function fmtDate(s?: string | null) {
+  if (!s) return "-";
+  try {
+    return new Date(s).toLocaleString("th-TH", {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch {
+    return s;
+  }
+}
+
+function HistoryPanel({ userId }: { userId: string }) {
+  const { data, isLoading } = useSWR<HistoryResp>(`/ta-review/${userId}/history`);
+  if (isLoading) {
+    return (
+      <div className="mt-3 py-4 flex items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+  if (!data) return null;
+  const subs = data.submissions ?? [];
+  const docs = data.documents ?? [];
+
+  // Group superseded docs by kind (skip current, they're already shown above).
+  const pastDocs = docs.filter(d => d.superseded);
+  const byKind: Record<string, Doc[]> = {};
+  for (const d of pastDocs) {
+    (byKind[d.kind] ??= []).push(d);
+  }
+
+  return (
+    <div className="mt-3 space-y-4 border border-[var(--hairline)] rounded-xl p-4 bg-surface-secondary/40">
+      <div>
+        <div className="text-xs font-medium uppercase tracking-wider text-[var(--ink-3)] mb-2">
+          ประวัติการส่งข้อมูลบัญชี
+        </div>
+        {subs.length === 0 ? (
+          <div className="text-sm text-[var(--ink-3)]">ไม่มีข้อมูล</div>
+        ) : (
+          <ul className="space-y-2">
+            {subs.map(sub => (
+              <li key={sub.id} className="rounded-lg border border-[var(--hairline)] p-3 bg-surface">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Chip tone="neutral">รอบที่ {sub.round}</Chip>
+                  <StatusChip status={sub.status} />
+                  <span className="text-xs text-[var(--ink-3)] ml-auto">
+                    ส่ง: {fmtDate(sub.submitted_at)}
+                    {sub.reviewed_at && <> · ตรวจ: {fmtDate(sub.reviewed_at)}</>}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  <span className="text-[var(--ink-3)]">ธนาคาร</span>
+                  <span className="tabular-nums">{sub.bank_name || "-"}</span>
+                  <span className="text-[var(--ink-3)]">เลขที่บัญชี</span>
+                  <span className="tabular-nums">{sub.account_no || "-"}</span>
+                  <span className="text-[var(--ink-3)]">ชื่อบัญชี</span>
+                  <span>{sub.account_name || "-"}</span>
+                </div>
+                {sub.reject_reason && (
+                  <div className="mt-2 text-xs text-danger-soft-foreground">
+                    เหตุผลที่ถูกปฏิเสธ: {sub.reject_reason}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <div className="text-xs font-medium uppercase tracking-wider text-[var(--ink-3)] mb-2">
+          เอกสารรอบก่อนหน้า (ถูกแทนที่)
+        </div>
+        {pastDocs.length === 0 ? (
+          <div className="text-sm text-[var(--ink-3)]">ยังไม่มี — TA ยังไม่เคยส่งเอกสารรอบใหม่</div>
+        ) : (
+          <ul className="space-y-2">
+            {Object.entries(byKind).map(([kind, list]) => (
+              <li key={kind}>
+                <div className="text-xs font-medium text-[var(--ink-2)] mb-1">
+                  {DOC_KIND_LABEL[kind] ?? kind}
+                </div>
+                <ul className="border border-[var(--hairline)] rounded-lg divide-y divide-[var(--hairline)]">
+                  {list.map(d => (
+                    <li key={d.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                      <FileText size={14} className="text-[var(--ink-3)] shrink-0" />
+                      <span className="flex-1 truncate">{d.filename}</span>
+                      <Chip tone="neutral">รอบ {d.round ?? "-"}</Chip>
+                      <StatusChip status={d.status} />
+                      <span className="text-[var(--ink-3)]">{fmtDate(d.uploaded_at)}</span>
+                      <a
+                        href={`/api/v1/documents/${d.id}/download`}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="เปิดไฟล์"
+                        className="text-[var(--ink-2)] hover:text-[var(--ink-1)]"
+                      >
+                        <Download size={14} />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
