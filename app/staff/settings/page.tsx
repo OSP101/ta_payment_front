@@ -40,12 +40,12 @@ export default function SettingsPage() {
   const params = useSearchParams();
   // Allow deep-linking to a specific tab, e.g. /staff/settings?tab=terms
   const tabParam = params.get("tab");
-  const initialTab = ["rate", "cap", "courses", "terms", "windows"].includes(tabParam ?? "")
+  const initialTab = ["rate", "cap", "courses", "terms", "windows", "admins"].includes(tabParam ?? "")
     ? (tabParam as string)
     : "rate";
   return (
     <div>
-      <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน เพดานงบ วิชา และภาคเรียน" />
+      <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน เพดานงบ วิชา ภาคเรียน และฝ่ายบริหาร" />
       <Tabs defaultSelectedKey={initialTab}>
         <Tabs.ListContainer>
           <Tabs.List aria-label="หมวดตั้งค่า">
@@ -54,6 +54,7 @@ export default function SettingsPage() {
             <Tabs.Tab id="courses">รายวิชา<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="terms">ภาคเรียน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="windows">ระยะเวลารับสมัคร TA<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
@@ -71,6 +72,9 @@ export default function SettingsPage() {
         </Tabs.Panel>
         <Tabs.Panel id="windows" className="pt-6">
           <RequestWindowsSection />
+        </Tabs.Panel>
+        <Tabs.Panel id="admins" className="pt-6">
+          <AdminOfficersSection />
         </Tabs.Panel>
       </Tabs>
     </div>
@@ -2552,6 +2556,322 @@ function WindowFormModal({
           <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น 'รอบแรก' หรือ 'ขยายเวลาให้ CS'" />
         </FieldGroup>
         {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+      </div>
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Admin officers — executive roster used on generated official documents     */
+/* -------------------------------------------------------------------------- */
+
+interface AdminOfficer {
+  id?: string;
+  academic_prefix: string;
+  full_name: string;
+  title: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+const PREFIX_PRESETS = ["", "อาจารย์", "ดร.", "ผศ.", "ผศ.ดร.", "รศ.", "รศ.ดร.", "ศ.", "ศ.ดร."] as const;
+
+function AdminOfficersSection() {
+  const { data } = useSWR<AdminOfficer[]>("/settings/admin-officers?include_inactive=1");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<AdminOfficer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminOfficer | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const rows = useMemo(
+    () => (data ?? []).slice().sort((a, b) =>
+      a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.full_name.localeCompare(b.full_name, "th"),
+    ),
+    [data],
+  );
+
+  function openAdd() {
+    setEditing(null);
+    setFormOpen(true);
+  }
+  function openEdit(o: AdminOfficer) {
+    setEditing(o);
+    setFormOpen(true);
+  }
+  async function doDelete() {
+    if (!deleteTarget?.id) return;
+    setDeleting(true);
+    try {
+      await api.del(`/settings/admin-officers/${deleteTarget.id}`);
+      await mutate("/settings/admin-officers?include_inactive=1");
+      toast.success(`ลบรายชื่อ ${deleteTarget.full_name} เรียบร้อยแล้ว`);
+      setDeleteTarget(null);
+    } catch (e) {
+      toast.danger("ลบไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setDeleting(false);
+    }
+  }
+  async function toggleActive(o: AdminOfficer) {
+    try {
+      await api.post("/settings/admin-officers", { ...o, is_active: !o.is_active });
+      await mutate("/settings/admin-officers?include_inactive=1");
+      toast.success(o.is_active ? "ปิดใช้งานเรียบร้อย" : "เปิดใช้งานเรียบร้อย");
+    } catch (e) {
+      toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
+    }
+  }
+
+  return (
+    <Panel
+      title="รายชื่อฝ่ายบริหาร"
+      description="รายชื่อและตำแหน่งของคณบดี / รองคณบดี / หัวหน้าสาขา / ผู้รับรอง สำหรับใส่ในเอกสารราชการที่ระบบสร้างให้อัตโนมัติ"
+      actions={
+        <Button variant="primary" onClick={openAdd}>
+          <Plus size={14} />เพิ่มรายชื่อ
+        </Button>
+      }
+    >
+      {rows.length === 0 ? (
+        <div className="text-sm text-muted py-4">ยังไม่มีรายชื่อฝ่ายบริหาร — กด "เพิ่มรายชื่อ" เพื่อเริ่ม</div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="data-table w-full">
+            <thead>
+              <tr>
+                <th className="num" title="ลำดับการแสดงในเอกสาร">ลำดับ</th>
+                <th>คำนำหน้า</th>
+                <th>ชื่อ-นามสกุล</th>
+                <th>ตำแหน่งบริหาร</th>
+                <th>สถานะ</th>
+                <th className="actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(o => (
+                <tr key={o.id} className={!o.is_active ? "opacity-60" : ""}>
+                  <td className="num tabular">{o.sort_order}</td>
+                  <td className="tabular">{o.academic_prefix || <span className="text-muted">—</span>}</td>
+                  <td>{o.full_name}</td>
+                  <td>{o.title}</td>
+                  <td>
+                    {o.is_active
+                      ? <Chip tone="success">เปิดใช้งาน</Chip>
+                      : <Chip tone="neutral">ปิดใช้งาน</Chip>}
+                  </td>
+                  <td className="actions">
+                    <div className="inline-flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(o)}>
+                        <Pencil size={13} />แก้ไข
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => toggleActive(o)}>
+                        {o.is_active ? <><PowerOff size={13} />ปิด</> : <><Power size={13} />เปิด</>}
+                      </Button>
+                      <Button variant="danger-soft" size="sm" onClick={() => setDeleteTarget(o)}>
+                        <Trash2 size={13} />ลบ
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AdminOfficerFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        editing={editing}
+        nextSortOrder={(rows.length > 0 ? Math.max(...rows.map(r => r.sort_order)) : 0) + 10}
+        onSaved={(name, mode) => {
+          setFormOpen(false);
+          toast.success(mode === "edit" ? `แก้ไข ${name} เรียบร้อยแล้ว` : `เพิ่ม ${name} เรียบร้อยแล้ว`);
+        }}
+      />
+
+      <ConfirmSaveModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={doDelete}
+        saving={deleting}
+        title="ยืนยันลบรายชื่อฝ่ายบริหาร?"
+        description={
+          deleteTarget
+            ? `ลบ "${deleteTarget.academic_prefix}${deleteTarget.full_name}" (${deleteTarget.title}) — หากใช้ในเอกสารเก่าอาจมีผลกระทบ ควรใช้ "ปิดใช้งาน" แทนหากไม่แน่ใจ`
+            : ""
+        }
+        variant="danger"
+        confirmLabel="ลบถาวร"
+        confirmIcon={<Trash2 size={14} />}
+      />
+    </Panel>
+  );
+}
+
+function AdminOfficerFormModal({
+  open, onClose, editing, nextSortOrder, onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  editing: AdminOfficer | null;
+  nextSortOrder: number;
+  onSaved: (name: string, mode: "add" | "edit") => void;
+}) {
+  const isEdit = editing !== null;
+  const [draft, setDraft] = useState<AdminOfficer>({
+    academic_prefix: "", full_name: "", title: "", sort_order: 0, is_active: true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setDraft(editing);
+    } else {
+      setDraft({
+        academic_prefix: "",
+        full_name: "",
+        title: "",
+        sort_order: nextSortOrder,
+        is_active: true,
+      });
+    }
+    setError(null);
+  }, [open, editing, nextSortOrder]);
+
+  const nameTrim = draft.full_name.trim();
+  const titleTrim = draft.title.trim();
+  const canSave = nameTrim !== "" && titleTrim !== "";
+
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        ...draft,
+        academic_prefix: draft.academic_prefix.trim(),
+        full_name: nameTrim,
+        title: titleTrim,
+        ...(isEdit && editing ? { id: editing.id } : {}),
+      };
+      await api.post("/settings/admin-officers", payload);
+      await mutate("/settings/admin-officers?include_inactive=1");
+      onSaved(nameTrim, isEdit ? "edit" : "add");
+    } catch (e) {
+      setError((e as Error).message || "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={
+        <span className="inline-flex items-center gap-2">
+          {isEdit ? <Pencil size={18} /> : <Plus size={18} />}
+          {isEdit ? `แก้ไขรายชื่อ — ${editing!.full_name}` : "เพิ่มรายชื่อฝ่ายบริหาร"}
+        </span>
+      }
+      size="lg"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
+            {isEdit ? <><Save size={14} />บันทึกการแก้ไข</> : <><Plus size={14} />เพิ่มรายชื่อ</>}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <FieldGroup label="คำนำหน้าทางวิชาการ" hint="เลือกจากรายการ หรือพิมพ์เอง">
+            <Select
+              value={PREFIX_PRESETS.includes(draft.academic_prefix as typeof PREFIX_PRESETS[number]) ? draft.academic_prefix : "__custom__"}
+              onChange={e => {
+                const v = e.target.value;
+                if (v === "__custom__") return;
+                setDraft({ ...draft, academic_prefix: v });
+              }}
+            >
+              {PREFIX_PRESETS.map(p => (
+                <option key={p || "none"} value={p}>{p || "— ไม่มี —"}</option>
+              ))}
+              <option value="__custom__">พิมพ์เอง…</option>
+            </Select>
+          </FieldGroup>
+          <div className="sm:col-span-3">
+            <FieldGroup label="คำนำหน้า (พิมพ์เอง)" hint="ปล่อยว่างได้หากใช้ค่าจากรายการด้านซ้าย">
+              <TextInput
+                value={draft.academic_prefix}
+                onChange={e => setDraft({ ...draft, academic_prefix: e.target.value })}
+                placeholder="เช่น ผศ.ดร."
+                maxLength={40}
+              />
+            </FieldGroup>
+          </div>
+        </div>
+
+        <FieldGroup label="ชื่อ-นามสกุล" hint="ไม่ต้องใส่คำนำหน้า">
+          <TextInput
+            value={draft.full_name}
+            onChange={e => setDraft({ ...draft, full_name: e.target.value })}
+            placeholder="เช่น สมชาย ใจดี"
+            autoFocus={!isEdit}
+          />
+        </FieldGroup>
+
+        <FieldGroup label="ตำแหน่งบริหาร (Title)" hint="ใส่ตามที่ต้องการให้ปรากฏในเอกสาร">
+          <TextInput
+            value={draft.title}
+            onChange={e => setDraft({ ...draft, title: e.target.value })}
+            placeholder="เช่น คณบดีคณะวิศวกรรมศาสตร์"
+          />
+        </FieldGroup>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <FieldGroup label="ลำดับการแสดง" hint="ตัวเลขน้อยกว่าจะปรากฏก่อน (แนะนำ 10, 20, 30…)">
+            <TextInput
+              type="number" min={0} step={1}
+              value={draft.sort_order}
+              onChange={e => setDraft({ ...draft, sort_order: Number(e.target.value) || 0 })}
+            />
+          </FieldGroup>
+          <FieldGroup label="สถานะ" hint="ปิดใช้งานจะไม่ถูกนำไปใช้ในเอกสารใหม่">
+            <div className="flex items-center gap-3 pt-2">
+              <Switch
+                isSelected={draft.is_active}
+                onChange={v => setDraft({ ...draft, is_active: v })}
+                aria-label="สถานะเปิดใช้งาน"
+              >
+                <Switch.Content>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <span>{draft.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</span>
+                </Switch.Content>
+              </Switch>
+            </div>
+          </FieldGroup>
+        </div>
+
+        <div className="rounded-lg border border-border bg-accent-soft/40 p-3">
+          <div className="text-xs text-muted uppercase tracking-wider mb-1">ตัวอย่างการปรากฏในเอกสาร</div>
+          <div className="text-sm">
+            <div className="font-medium">
+              {(draft.academic_prefix || "") + (nameTrim || "— ยังไม่กรอกชื่อ —")}
+            </div>
+            <div className="text-muted">{titleTrim || "— ยังไม่กรอกตำแหน่ง —"}</div>
+          </div>
+        </div>
+
+        {error && (
+          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
+        )}
       </div>
     </Modal>
   );

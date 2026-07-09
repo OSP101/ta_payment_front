@@ -7,8 +7,6 @@ import {
   Button,
   Dropdown,
   Label,
-  Link as HLink,
-  Separator,
 } from "@heroui/react";
 import {
   ChevronDown,
@@ -17,7 +15,6 @@ import {
   LogOut,
   Menu,
   X,
-  HelpCircle,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import { api } from "../lib/api";
@@ -95,9 +92,10 @@ export default function Shell({
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — sticky at viewport height so long content doesn't
+          stretch it, and internal nav scrolls on overflow. */}
       {!hideSidebar && (
-      <aside className="hidden md:flex flex-col shrink-0 bg-surface border-r border-border w-[260px]">
+      <aside className="hidden md:flex flex-col shrink-0 bg-surface border-r border-border w-60 lg:w-65 sticky top-0 h-screen">
         <BrandBlock brandTitle={brandTitle} />
         <nav className="flex-1 overflow-y-auto py-2">
           {nav.map((section, i) => (
@@ -113,8 +111,6 @@ export default function Shell({
             </div>
           ))}
         </nav>
-        <Separator className="opacity-60" />
-        <UserBlock me={me} onLogout={logout} />
       </aside>
       )}
 
@@ -122,7 +118,7 @@ export default function Shell({
       {!hideSidebar && mobileOpen && (
         <div className="md:hidden fixed inset-0 z-40" onClick={() => setMobileOpen(false)}>
           <div className="absolute inset-0 bg-backdrop" />
-          <aside className="absolute inset-y-0 left-0 w-[280px] bg-surface shadow-xl flex flex-col"
+          <aside className="absolute inset-y-0 left-0 w-[85vw] max-w-75 bg-surface shadow-xl flex flex-col"
                  onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-3 border-b border-border">
               <BrandMark brandTitle={brandTitle} />
@@ -144,13 +140,12 @@ export default function Shell({
                 </div>
               ))}
             </nav>
-            <UserBlock me={me} onLogout={logout} />
           </aside>
         </div>
       )}
 
       {/* Main column */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 min-h-screen">
         <TopBar
           title={currentTitle}
           me={me}
@@ -249,22 +244,14 @@ function NavRow({
   );
 }
 
-function UserBlock({ me, onLogout }: { me: Me; onLogout: () => void }) {
-  const initials = ((me.first_name?.[0] ?? "") + (me.last_name?.[0] ?? "")).toUpperCase() || "U";
-  return (
-    <div className="p-3 flex items-center gap-3">
-      <Avatar>
-        <Avatar.Fallback>{initials}</Avatar.Fallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium truncate text-foreground">{me.first_name} {me.last_name}</div>
-        <div className="text-xs text-muted truncate">{me.email}</div>
-      </div>
-      <Button variant="ghost" isIconOnly size="sm" onPress={onLogout} aria-label="ออกจากระบบ">
-        <LogOut size={16} />
-      </Button>
-    </div>
-  );
+// Priority order — a user may have multiple roles (e.g. staff + lecturer),
+// so pick the most privileged label to show.
+function roleLabel(roles: string[]): string {
+  if (roles.includes("admin")) return "ผู้ดูแลระบบ";
+  if (roles.includes("staff")) return "เจ้าหน้าที่";
+  if (roles.includes("lecturer")) return "อาจารย์";
+  if (roles.includes("ta")) return "ผู้ช่วยสอน (TA)";
+  return "ผู้ใช้งาน";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -295,8 +282,10 @@ function TopBar({
   const router = useRouter();
   const initials = ((me.first_name?.[0] ?? "") + (me.last_name?.[0] ?? "")).toUpperCase() || "U";
   const menuItems = userMenuItems ?? [];
+  const fullName = [me.title, me.first_name, me.last_name].filter(Boolean).join(" ");
+  const roleLbl = roleLabel(me.roles);
   return (
-    <header className="h-14 border-b border-border bg-surface flex items-center gap-3 px-4 md:px-6">
+    <header className="h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 sticky top-0 z-30">
       {showMobileMenu && (
         <Button variant="ghost" isIconOnly size="sm" onPress={onOpenMobile}
                 aria-label="เปิดเมนู" className="md:hidden">
@@ -312,26 +301,31 @@ function TopBar({
           <div className="text-sm font-medium text-foreground truncate">{title}</div>
         </div>
       )}
-      <HLink href="mailto:coco@kku.ac.th" className="hidden md:inline-flex text-sm">
-        <HelpCircle size={14} className="me-1" />
-        ศูนย์ช่วยเหลือ
-      </HLink>
 
       {topBarAccessory}
 
       <Dropdown>
-        <Button variant="ghost" aria-label="เมนูผู้ใช้" className="!px-1.5 !gap-1.5">
+        <Button variant="ghost" aria-label="เมนูผู้ใช้" className="px-1.5! gap-2! h-auto! py-1!">
           <Avatar>
             <Avatar.Fallback>{initials}</Avatar.Fallback>
           </Avatar>
+          <div className="hidden sm:flex flex-col items-start min-w-0 leading-tight">
+            <span className="text-sm font-medium text-foreground truncate max-w-40 md:max-w-56">
+              {fullName}
+            </span>
+            <span className="text-xs text-muted truncate max-w-40 md:max-w-56">
+              {roleLbl}
+            </span>
+          </div>
           <ChevronDown size={14} />
         </Button>
         <Dropdown.Popover>
           <div className="px-3 py-2.5 border-b border-border">
-            <div className="text-sm font-medium text-foreground truncate max-w-[200px]">
-              {me.first_name} {me.last_name}
+            <div className="text-sm font-medium text-foreground truncate max-w-50">
+              {fullName}
             </div>
-            <div className="text-xs text-muted truncate max-w-[200px]">{me.email}</div>
+            <div className="text-xs text-muted truncate max-w-50">{roleLbl}</div>
+            <div className="text-xs text-muted truncate max-w-50">{me.email}</div>
           </div>
           <Dropdown.Menu
             onAction={(key: React.Key) => {
