@@ -246,7 +246,7 @@ function NavRow({
 
 // Priority order — a user may have multiple roles (e.g. staff + lecturer),
 // so pick the most privileged label to show.
-function roleLabel(roles: string[]): string {
+export function roleLabel(roles: string[]): string {
   if (roles.includes("admin")) return "ผู้ดูแลระบบ";
   if (roles.includes("staff")) return "เจ้าหน้าที่";
   if (roles.includes("lecturer")) return "อาจารย์";
