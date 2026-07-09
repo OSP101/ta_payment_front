@@ -4,7 +4,7 @@ import useSWR, { mutate } from "swr";
 import { Wand2, Send, Save } from "lucide-react";
 import { api } from "../../lib/api";
 import {
-  PageHeader, Select, TextInput, StatusChip,
+  PageHeader, Panel, Select, TextInput, StatusChip,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { LockedActionButton, useTAApproval } from "../TAGate";
@@ -184,47 +184,51 @@ export default function WorklogPage() {
       />
 
       {!approved && (
-        <div className="mb-3 text-xs text-muted">
+        <div className="mb-4 text-xs text-muted">
           * ปุ่มบันทึก/ส่งจะปลดล็อกหลังเจ้าหน้าที่อนุมัติเอกสารในโปรไฟล์
         </div>
       )}
 
-      <DataTable
-        ariaLabel="บันทึกเวลาปฏิบัติงาน"
-        rows={logs}
-        loading={!!aid && !logs}
-        rowKey={l => l.id}
-        searchFn={l => `${l.work_date} ${ACTIVITY_LABEL[l.activity] ?? l.activity} ${l.room ?? ""} ${l.note ?? ""}`}
-        searchPlaceholder="ค้นหาวันที่ / กิจกรรม / ห้อง…"
-        filters={[
-          {
-            id: "status",
-            placeholder: "ทุกสถานะ",
-            options: [
-              { id: "", label: "ทุกสถานะ" },
-              { id: "draft", label: "ฉบับร่าง" },
-              { id: "submitted", label: "รออนุมัติ" },
-              { id: "approved", label: "อนุมัติแล้ว" },
-              { id: "rejected", label: "ไม่ผ่าน" },
-            ],
-            predicate: (l, v) => l.status === v,
-          },
-          {
-            id: "activity",
-            placeholder: "ทุกกิจกรรม",
-            options: [
-              { id: "", label: "ทุกกิจกรรม" },
-              ...Object.entries(ACTIVITY_LABEL).map(([v, label]) => ({ id: v, label })),
-            ],
-            predicate: (l, v) => l.activity === v,
-          },
-        ]}
-        initialSort={{ column: "work_date", direction: "ascending" }}
-        pageSize={15}
-        emptyTitle="ยังไม่มีบันทึก"
-        emptyDescription={`กด "สร้างอัตโนมัติ" เพื่อสร้างจากตารางสอน`}
-        columns={columns}
-      />
+      <Panel padded={false}>
+        <div className="p-4">
+          <DataTable
+            ariaLabel="บันทึกเวลาปฏิบัติงาน"
+            rows={logs}
+            loading={!!aid && !logs}
+            rowKey={l => l.id}
+            searchFn={l => `${l.work_date} ${ACTIVITY_LABEL[l.activity] ?? l.activity} ${l.room ?? ""} ${l.note ?? ""}`}
+            searchPlaceholder="ค้นหาวันที่ / กิจกรรม / ห้อง…"
+            filters={[
+              {
+                id: "status",
+                placeholder: "ทุกสถานะ",
+                options: [
+                  { id: "", label: "ทุกสถานะ" },
+                  { id: "draft", label: "ฉบับร่าง" },
+                  { id: "submitted", label: "รออนุมัติ" },
+                  { id: "approved", label: "อนุมัติแล้ว" },
+                  { id: "rejected", label: "ไม่ผ่าน" },
+                ],
+                predicate: (l, v) => l.status === v,
+              },
+              {
+                id: "activity",
+                placeholder: "ทุกกิจกรรม",
+                options: [
+                  { id: "", label: "ทุกกิจกรรม" },
+                  ...Object.entries(ACTIVITY_LABEL).map(([v, label]) => ({ id: v, label })),
+                ],
+                predicate: (l, v) => l.activity === v,
+              },
+            ]}
+            initialSort={{ column: "work_date", direction: "ascending" }}
+            pageSize={15}
+            emptyTitle="ยังไม่มีบันทึก"
+            emptyDescription={`กด "สร้างอัตโนมัติ" เพื่อสร้างจากตารางสอน`}
+            columns={columns}
+          />
+        </div>
+      </Panel>
     </div>
   );
 }

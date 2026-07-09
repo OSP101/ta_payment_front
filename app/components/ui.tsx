@@ -138,6 +138,44 @@ export function StatCard({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Tab label — shared visual for Tabs.Tab children (icon + text + count pill) */
+/* -------------------------------------------------------------------------- */
+
+export function TabLabel({
+  icon,
+  children,
+  count,
+  active,
+}: {
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  /** Optional numeric badge shown to the right of the label. */
+  count?: number;
+  /** Whether this tab is currently selected — tweaks the count-pill contrast. */
+  active?: boolean;
+}) {
+  const showCount = typeof count === "number" && count > 0;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {icon}
+      <span>{children}</span>
+      {showCount && (
+        <span
+          className={
+            "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums transition-colors " +
+            (active
+              ? "bg-(--brand) text-white"
+              : "bg-slate-100 text-slate-600")
+          }
+        >
+          {count}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Chip / status                                                              */
 /* -------------------------------------------------------------------------- */
 

@@ -9,9 +9,11 @@ import {
   Megaphone,
   Settings,
   ScrollText,
+  Bell,
 } from "lucide-react";
 import type { Me } from "../lib/api";
-import Shell, { type NavSection } from "../components/Shell";
+import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
+import NotificationBell from "../components/NotificationBell";
 
 const nav: NavSection[] = [
   {
@@ -48,9 +50,20 @@ const nav: NavSection[] = [
   },
 ];
 
+const userMenuItems: UserMenuItem[] = [
+  { id: "announce", label: "ประกาศ",   href: "/announcements",  icon: Megaphone },
+  { id: "notif",    label: "การเตือน", href: "/notifications",  icon: Bell },
+];
+
 export default function StaffShell({ me, children }: { me: Me; children: React.ReactNode }) {
   return (
-    <Shell me={me} brandTitle="TA Payment" nav={nav}>
+    <Shell
+      me={me}
+      brandTitle="TA Payment"
+      nav={nav}
+      userMenuItems={userMenuItems}
+      topBarAccessory={<NotificationBell />}
+    >
       {children}
     </Shell>
   );

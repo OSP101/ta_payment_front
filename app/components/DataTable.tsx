@@ -129,9 +129,13 @@ export function DataTable<T>({
   const pageRows = filtered.slice(start, start + pageSize);
 
   const hasToolbar = !!searchFn || (filters?.length ?? 0) > 0 || !!toolbarExtra;
+  // When we already have rows on screen and a fresh fetch is in flight, we show
+  // a translucent overlay instead of wiping the table — keeps context so the
+  // user doesn't lose their scroll / selection while data refreshes.
+  const showRefetchOverlay = !!loading && rowsLoaded && safeRows.length > 0;
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-4">
       {hasToolbar && (
         <div className="flex flex-wrap items-center gap-2">
           {searchFn && (
@@ -155,13 +159,14 @@ export function DataTable<T>({
               value={(filterValues[f.id] ?? "") === "" ? ALL_KEY : filterValues[f.id]}
               onChange={v => setFilterValues(prev => ({ ...prev, [f.id]: v === ALL_KEY ? "" : v }))}
               options={f.options.map(o => (o.id === "" ? { ...o, id: ALL_KEY } : o))}
-              className={f.className ?? "min-w-40"}
+              className={f.className ?? "min-w-44"}
             />
           ))}
           {toolbarExtra && <div className="ml-auto flex items-center gap-2">{toolbarExtra}</div>}
         </div>
       )}
 
+      <div className="relative">
       <Table>
         <Table.ScrollContainer>
           <Table.Content
@@ -189,7 +194,10 @@ export function DataTable<T>({
             <Table.Body
               renderEmptyState={() =>
                 loading && !rowsLoaded ? (
-                  <div className="py-10 flex justify-center"><Spinner /></div>
+                  <div className="py-14 flex flex-col items-center justify-center gap-2 text-(--ink-3)">
+                    <Spinner />
+                    <div className="text-xs">กำลังโหลดข้อมูล…</div>
+                  </div>
                 ) : (
                   <EmptyState
                     title={query || Object.values(filterValues).some(Boolean) ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}
@@ -253,6 +261,18 @@ export function DataTable<T>({
           </Table.Footer>
         )}
       </Table>
+      {showRefetchOverlay && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 flex items-start justify-center pt-6 bg-white/55 backdrop-blur-[1px] rounded-lg"
+        >
+          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-(--hairline) bg-white/95 px-3 py-1.5 text-xs text-(--ink-2) shadow-sm">
+            <Spinner size="sm" />
+            กำลังโหลดข้อมูล…
+          </div>
+        </div>
+      )}
+      </div>
     </div>
   );
 }

@@ -3,11 +3,12 @@ import useSWR, { mutate } from "swr";
 import { useEffect, useMemo, useState } from "react";
 import {
   Check, X, Eye, AlertTriangle, Users, FileCheck2, CalendarCheck2, BookOpenCheck,
+  Clock, CheckCircle2, XCircle, ListFilter,
 } from "lucide-react";
 import { Tabs } from "@heroui/react";
 import { api, type Term } from "../../lib/api";
 import {
-  PageHeader, Button, Modal, TextArea, FieldGroup, Alert, Chip,
+  PageHeader, Panel, Button, Modal, TextArea, FieldGroup, Alert, Chip, TabLabel,
 } from "../../components/ui";
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 
@@ -172,61 +173,72 @@ export default function ApprovalsPage() {
       />
 
       {err && (
-        <div className="mb-3">
+        <div className="mb-4">
           <Alert status="danger" icon={<AlertTriangle size={16} />} title="ดำเนินการไม่สำเร็จ" description={err} />
         </div>
       )}
 
-      <Tabs
-        selectedKey={statusTab}
-        onSelectionChange={k => setStatusTab(k as typeof statusTab)}
-        className="mb-3"
-      >
-        <Tabs.ListContainer>
-          <Tabs.List aria-label="กรองตามสถานะ">
-            <Tabs.Tab id="submitted">
-              รออนุมัติ{counts.submitted > 0 && ` (${counts.submitted})`}
-              <Tabs.Indicator />
-            </Tabs.Tab>
-            <Tabs.Tab id="approved">
-              อนุมัติแล้ว{counts.approved > 0 && ` (${counts.approved})`}
-              <Tabs.Indicator />
-            </Tabs.Tab>
-            <Tabs.Tab id="rejected">
-              ปฏิเสธ{counts.rejected > 0 && ` (${counts.rejected})`}
-              <Tabs.Indicator />
-            </Tabs.Tab>
-            <Tabs.Tab id="all">
-              ทั้งหมด ({counts.all})
-              <Tabs.Indicator />
-            </Tabs.Tab>
-          </Tabs.List>
-        </Tabs.ListContainer>
-      </Tabs>
+      <Panel padded={false}>
+        <Tabs
+          selectedKey={statusTab}
+          onSelectionChange={k => setStatusTab(k as typeof statusTab)}
+        >
+          <Tabs.ListContainer>
+            <Tabs.List aria-label="กรองตามสถานะ" className="px-4 pt-2">
+              <Tabs.Tab id="submitted">
+                <TabLabel icon={<Clock size={14} />} count={counts.submitted} active={statusTab === "submitted"}>
+                  รออนุมัติ
+                </TabLabel>
+                <Tabs.Indicator />
+              </Tabs.Tab>
+              <Tabs.Tab id="approved">
+                <TabLabel icon={<CheckCircle2 size={14} />} count={counts.approved} active={statusTab === "approved"}>
+                  อนุมัติแล้ว
+                </TabLabel>
+                <Tabs.Indicator />
+              </Tabs.Tab>
+              <Tabs.Tab id="rejected">
+                <TabLabel icon={<XCircle size={14} />} count={counts.rejected} active={statusTab === "rejected"}>
+                  ปฏิเสธ
+                </TabLabel>
+                <Tabs.Indicator />
+              </Tabs.Tab>
+              <Tabs.Tab id="all">
+                <TabLabel icon={<ListFilter size={14} />} count={counts.all} active={statusTab === "all"}>
+                  ทั้งหมด
+                </TabLabel>
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            </Tabs.List>
+          </Tabs.ListContainer>
+        </Tabs>
 
-      <DataTable
-        ariaLabel={`คำขอ TA — ${statusTab === "all" ? "ทั้งหมด" : STATUS_META[statusTab]?.label ?? statusTab}`}
-        rows={data ? visibleRows : undefined}
-        loading={!data}
-        rowKey={r => r.id}
-        searchFn={r => `${r.course_code} ${r.course_name} ${r.lecturer_name}`}
-        searchPlaceholder="ค้นหารหัสวิชา / ชื่อวิชา / อาจารย์…"
-        filters={filters}
-        initialFilterValues={initialFilterValues ?? undefined}
-        initialSort={{ column: "submitted_at", direction: statusTab === "submitted" ? "ascending" : "descending" }}
-        emptyTitle={
-          statusTab === "submitted" ? "ไม่มีคำขอที่รออนุมัติ"
-          : statusTab === "approved" ? "ยังไม่มีคำขอที่อนุมัติ"
-          : statusTab === "rejected" ? "ยังไม่มีคำขอที่ถูกปฏิเสธ"
-          : "ยังไม่มีคำขอ"
-        }
-        emptyDescription={
-          statusTab === "submitted"
-            ? "เมื่ออาจารย์ส่งคำขอ TA จะแสดงที่นี่"
-            : undefined
-        }
-        columns={approvalColumns(setDetailId, setRejectId, statusTab === "all")}
-      />
+        <div className="p-4">
+          <DataTable
+            ariaLabel={`คำขอ TA — ${statusTab === "all" ? "ทั้งหมด" : STATUS_META[statusTab]?.label ?? statusTab}`}
+            rows={data ? visibleRows : undefined}
+            loading={!data}
+            rowKey={r => r.id}
+            searchFn={r => `${r.course_code} ${r.course_name} ${r.lecturer_name}`}
+            searchPlaceholder="ค้นหารหัสวิชา / ชื่อวิชา / อาจารย์…"
+            filters={filters}
+            initialFilterValues={initialFilterValues ?? undefined}
+            initialSort={{ column: "submitted_at", direction: statusTab === "submitted" ? "ascending" : "descending" }}
+            emptyTitle={
+              statusTab === "submitted" ? "ไม่มีคำขอที่รออนุมัติ"
+              : statusTab === "approved" ? "ยังไม่มีคำขอที่อนุมัติ"
+              : statusTab === "rejected" ? "ยังไม่มีคำขอที่ถูกปฏิเสธ"
+              : "ยังไม่มีคำขอ"
+            }
+            emptyDescription={
+              statusTab === "submitted"
+                ? "เมื่ออาจารย์ส่งคำขอ TA จะแสดงที่นี่"
+                : undefined
+            }
+            columns={approvalColumns(setDetailId, setRejectId, statusTab === "all")}
+          />
+        </div>
+      </Panel>
 
       <DetailModal
         id={detailId}

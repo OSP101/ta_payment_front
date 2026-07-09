@@ -3,36 +3,45 @@ import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dropdown } from "@heroui/react";
-import { Bell, BellRing } from "lucide-react";
+import { Bell, BellRing, Check } from "lucide-react";
 import { api } from "../lib/api";
-import { Button } from "../components/ui";
+import { Button } from "./ui";
 
 interface Notif {
   id: string;
   title: string;
   body: string;
-  link?: string;
-  read_at?: string;
+  link?: string | null;
+  read_at?: string | null;
   created_at: string;
 }
 
-// Notification bell for TA users. Sits in the top-right header (left of the
-// avatar). The red dot only reflects unread system notifications — the
-// onboarding reminder ("submit documents / build schedule") lives in the
-// persistent bottom-right OnboardingBlocker instead, so those two signals
-// don't compete for attention.
-export default function NotificationBell() {
+// Shared bell used in every role shell. The onboarding banner (for un-approved
+// TAs) is intentionally *not* driven by this component — that lives in the
+// persistent bottom-right OnboardingBlocker so the two signals don't compete.
+export default function NotificationBell({
+  seeAllHref = "/notifications",
+}: {
+  seeAllHref?: string;
+}) {
   const router = useRouter();
   const { data } = useSWR<Notif[]>("/me/notifications?limit=10");
   const list = data ?? [];
 
-  const unreadCount = list.filter(n => !n.read_at).length;
-  const showDot = unreadCount > 0;
+  const unread = list.filter(n => !n.read_at);
+  const show = unread.length > 0;
 
   async function markRead(id: string) {
     try {
       await api.post(`/me/notifications/${id}/read`);
-      mutate((k: string) => k.startsWith("/me/notifications"));
+      mutate((k) => typeof k === "string" && k.startsWith("/me/notifications"));
+    } catch {}
+  }
+
+  async function markAll() {
+    try {
+      await api.post(`/me/notifications/read-all`);
+      mutate((k) => typeof k === "string" && k.startsWith("/me/notifications"));
     } catch {}
   }
 
@@ -42,16 +51,16 @@ export default function NotificationBell() {
         variant="ghost"
         isIconOnly
         size="sm"
-        aria-label={showDot ? `การเตือน ${unreadCount} รายการ` : "การเตือน"}
+        aria-label={show ? `การเตือน ${unread.length} รายการ` : "การเตือน"}
         className="relative"
       >
-        {showDot ? <BellRing size={18} /> : <Bell size={18} />}
-        {showDot && (
+        {show ? <BellRing size={18} /> : <Bell size={18} />}
+        {show && (
           <span
             aria-hidden
             className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center leading-none"
           >
-            {unreadCount}
+            {unread.length > 9 ? "9+" : unread.length}
           </span>
         )}
       </Button>
@@ -59,16 +68,25 @@ export default function NotificationBell() {
       <Dropdown.Popover className="min-w-[320px] max-w-[380px]">
         <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
           <div className="text-sm font-semibold text-foreground">การเตือน</div>
-          <Link href="/ta/notifications" className="text-xs text-accent hover:underline">
-            ดูทั้งหมด
-          </Link>
+          <div className="flex items-center gap-1">
+            {show && (
+              <button
+                type="button"
+                onClick={markAll}
+                className="text-xs text-accent hover:underline inline-flex items-center gap-1"
+              >
+                <Check size={11} /> อ่านทั้งหมด
+              </button>
+            )}
+            <Link href={seeAllHref} className="text-xs text-accent hover:underline ms-2">
+              ดูทั้งหมด
+            </Link>
+          </div>
         </div>
 
         <div className="max-h-[360px] overflow-y-auto">
           {list.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-muted">
-              ยังไม่มีการเตือน
-            </div>
+            <div className="px-3 py-6 text-center text-xs text-muted">ยังไม่มีการเตือน</div>
           ) : (
             list.map(n => (
               <button
@@ -93,6 +111,11 @@ export default function NotificationBell() {
                       {n.title}
                     </div>
                     <div className="text-xs text-muted mt-0.5 line-clamp-2">{n.body}</div>
+                    <div className="text-[10px] text-muted mt-1">
+                      {new Date(n.created_at).toLocaleString("th-TH", {
+                        day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+                      })}
+                    </div>
                   </div>
                 </div>
               </button>

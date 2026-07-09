@@ -89,12 +89,13 @@ function buildSections(
 }
 
 export default function OpenCourseModal({
-  open, onClose, termId, termLabel,
+  open, onClose, termId, termLabel, redirectBase = "/lecturer/courses",
 }: {
   open: boolean;
   onClose: () => void;
   termId: string;
   termLabel: string;
+  redirectBase?: string;
 }) {
   const router = useRouter();
   const { data: fcs } = useSWR<FC[]>(open ? "/faculty-courses" : null);
@@ -147,7 +148,7 @@ export default function OpenCourseModal({
         description: selected ? `${selected.code} — ${selected.name_th}` : undefined,
       });
       onClose();
-      router.push(`/lecturer/courses/${res.id}`);
+      router.push(`${redirectBase}/${res.id}`);
     } catch (e) {
       setErr((e as Error).message || "เปิดรายวิชาไม่สำเร็จ");
     } finally {

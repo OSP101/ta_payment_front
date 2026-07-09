@@ -1,7 +1,8 @@
 "use client";
-import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink } from "lucide-react";
+import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell } from "lucide-react";
 import type { Me } from "../lib/api";
-import Shell, { type NavSection } from "../components/Shell";
+import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
+import NotificationBell from "../components/NotificationBell";
 
 export default function LecturerCourseShell({
   me, tcId, courseCode, children,
@@ -36,9 +37,19 @@ export default function LecturerCourseShell({
   ];
 
   const brandTitle = "TA Payment";
+  const userMenuItems: UserMenuItem[] = [
+    { id: "announce", label: "ประกาศ",   href: "/announcements",  icon: Megaphone },
+    { id: "notif",    label: "การเตือน", href: "/notifications",  icon: Bell },
+  ];
 
   return (
-    <Shell me={me} brandTitle={brandTitle} nav={nav}>
+    <Shell
+      me={me}
+      brandTitle={brandTitle}
+      nav={nav}
+      userMenuItems={userMenuItems}
+      topBarAccessory={<NotificationBell />}
+    >
       {children}
     </Shell>
   );

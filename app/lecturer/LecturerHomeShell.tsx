@@ -2,9 +2,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar, Button, Dropdown, Label, Link as HLink } from "@heroui/react";
-import { ChevronDown, LogOut, HelpCircle } from "lucide-react";
+import { ChevronDown, LogOut, HelpCircle, Megaphone } from "lucide-react";
 import type { Me } from "../lib/api";
 import { api } from "../lib/api";
+import NotificationBell from "../components/NotificationBell";
 
 export default function LecturerHomeShell({
   me, children,
@@ -42,10 +43,16 @@ export default function LecturerHomeShell({
 
         <div className="flex-1" />
 
+        <HLink href="/announcements" className="hidden md:inline-flex text-sm">
+          <Megaphone size={14} className="me-1" />
+          ประกาศ
+        </HLink>
         <HLink href="mailto:coco@kku.ac.th" className="hidden md:inline-flex text-sm">
           <HelpCircle size={14} className="me-1" />
           ศูนย์ช่วยเหลือ
         </HLink>
+
+        <NotificationBell />
 
         <Dropdown>
           <Button variant="ghost" aria-label="User menu" className="!px-1.5 !gap-1.5">

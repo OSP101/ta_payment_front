@@ -11,7 +11,7 @@ import { Copy, KeyRound, Pencil, Plus, UserX } from "lucide-react";
 import { api } from "../../lib/api";
 import {
   Alert, Button, Chip, FieldGroup, Modal,
-  PageHeader, Select,
+  PageHeader, Panel, Select,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 
@@ -231,43 +231,47 @@ export default function UsersPage() {
         }
       />
 
-      <DataTable
-        ariaLabel="ผู้ใช้ทั้งหมดในระบบ"
-        rows={data?.items}
-        loading={!data}
-        rowKey={u => u.id}
-        searchFn={u => `${u.title ?? ""} ${u.first_name} ${u.last_name} ${u.email}`}
-        searchPlaceholder="ค้นหาชื่อ / อีเมล…"
-        filters={[
-          {
-            id: "role",
-            placeholder: "ทุกบทบาท",
-            options: [
-              { id: "", label: "ทุกบทบาท" },
-              { id: "admin", label: "Admin / ผู้บริหาร" },
-              { id: "staff", label: "เจ้าหน้าที่" },
-              { id: "lecturer", label: "อาจารย์" },
-              { id: "ta", label: "ผู้ช่วยสอน (TA)" },
-            ],
-            predicate: (u, v) => u.roles.includes(v),
-          },
-          {
-            id: "active",
-            placeholder: "ทุกสถานะ",
-            options: [
-              { id: "", label: "ทุกสถานะ" },
-              { id: "active", label: "ใช้งาน" },
-              { id: "inactive", label: "ปิดใช้งาน" },
-            ],
-            predicate: (u, v) => (v === "active" ? u.is_active : !u.is_active),
-          },
-        ]}
-        initialSort={{ column: "name", direction: "ascending" }}
-        pageSize={15}
-        emptyTitle="ไม่พบผู้ใช้"
-        emptyDescription="ลองปรับเงื่อนไขการค้นหา"
-        columns={columns}
-      />
+      <Panel padded={false}>
+        <div className="p-4">
+          <DataTable
+            ariaLabel="ผู้ใช้ทั้งหมดในระบบ"
+            rows={data?.items}
+            loading={!data}
+            rowKey={u => u.id}
+            searchFn={u => `${u.title ?? ""} ${u.first_name} ${u.last_name} ${u.email}`}
+            searchPlaceholder="ค้นหาชื่อ / อีเมล…"
+            filters={[
+              {
+                id: "role",
+                placeholder: "ทุกบทบาท",
+                options: [
+                  { id: "", label: "ทุกบทบาท" },
+                  { id: "admin", label: "Admin / ผู้บริหาร" },
+                  { id: "staff", label: "เจ้าหน้าที่" },
+                  { id: "lecturer", label: "อาจารย์" },
+                  { id: "ta", label: "ผู้ช่วยสอน (TA)" },
+                ],
+                predicate: (u, v) => u.roles.includes(v),
+              },
+              {
+                id: "active",
+                placeholder: "ทุกสถานะ",
+                options: [
+                  { id: "", label: "ทุกสถานะ" },
+                  { id: "active", label: "ใช้งาน" },
+                  { id: "inactive", label: "ปิดใช้งาน" },
+                ],
+                predicate: (u, v) => (v === "active" ? u.is_active : !u.is_active),
+              },
+            ]}
+            initialSort={{ column: "name", direction: "ascending" }}
+            pageSize={15}
+            emptyTitle="ไม่พบผู้ใช้"
+            emptyDescription="ลองปรับเงื่อนไขการค้นหา"
+            columns={columns}
+          />
+        </div>
+      </Panel>
 
       <CreateUserModal open={creating} onClose={() => setCreating(false)} />
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} />}

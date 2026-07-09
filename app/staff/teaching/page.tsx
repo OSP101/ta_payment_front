@@ -2,13 +2,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
-import { Upload, Download, Save, CalendarPlus, Settings } from "lucide-react";
+import { Download, Save, CalendarPlus, Settings, BookPlus } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api, type Term } from "../../lib/api";
 import {
-  PageHeader, Panel, Button, Select, TextInput, FieldGroup, Modal, Chip, EmptyState,
+  PageHeader, Panel, Button, Select, TextInput, Chip, EmptyState,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
+import OpenCourseModal from "../../lecturer/(home)/OpenCourseModal";
 
 interface TC {
   id: string; code: string; name_th: string; term_id: string;
@@ -31,7 +32,10 @@ export default function TeachingPage() {
   const noTerms = termsLoaded && terms.length === 0;
 
   const { data: courses } = useSWR<TC[]>(termId ? `/teaching-courses?term_id=${termId}` : null);
-  const [importing, setImporting] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const activeTerm = terms?.find(t => t.id === termId);
+  const termLabel = activeTerm ? `${activeTerm.academic_year}/${activeTerm.semester}` : "";
 
   return (
     <div>
@@ -48,8 +52,8 @@ export default function TeachingPage() {
                   </option>
                 ))}
               </Select>
-              <Button variant="primary" disabled={!termId} onClick={() => setImporting(true)}>
-                <Upload size={16} /> นำเข้า Excel
+              <Button variant="primary" disabled={!termId} onClick={() => setCreating(true)}>
+                <BookPlus size={16} /> เปิดรายวิชา
               </Button>
             </>
           )
@@ -72,22 +76,32 @@ export default function TeachingPage() {
           />
         </Panel>
       ) : (
-        <DataTable
-          ariaLabel="วิชาที่เปิดสอน"
-          rows={courses}
-          loading={!!termId && !courses}
-          rowKey={c => c.id}
-          searchFn={c => `${c.code} ${c.name_th}`}
-          searchPlaceholder="ค้นหารหัสวิชา / ชื่อวิชา…"
-          initialSort={{ column: "code", direction: "ascending" }}
-          pageSize={10}
-          emptyTitle="ยังไม่มีวิชาในภาคเรียนนี้"
-          emptyDescription="เริ่มจากการนำเข้าไฟล์ Excel"
-          columns={courseColumns}
-        />
+        <Panel padded={false}>
+          <div className="p-4">
+            <DataTable
+              ariaLabel="วิชาที่เปิดสอน"
+              rows={courses}
+              loading={!!termId && !courses}
+              rowKey={c => c.id}
+              searchFn={c => `${c.code} ${c.name_th}`}
+              searchPlaceholder="ค้นหารหัสวิชา / ชื่อวิชา…"
+              initialSort={{ column: "code", direction: "ascending" }}
+              pageSize={10}
+              emptyTitle="ยังไม่มีวิชาในภาคเรียนนี้"
+              emptyDescription="กดปุ่ม “เปิดรายวิชา” เพื่อสร้างวิชาใหม่"
+              columns={courseColumns}
+            />
+          </div>
+        </Panel>
       )}
 
-      <ImportModal open={importing && !!termId} termId={termId} onClose={() => setImporting(false)} />
+      <OpenCourseModal
+        open={creating && !!termId}
+        onClose={() => setCreating(false)}
+        termId={termId}
+        termLabel={termLabel}
+        redirectBase="/staff/teaching"
+      />
     </div>
   );
 }
@@ -189,63 +203,3 @@ function BudgetBadge({ id }: { id: string }) {
   );
 }
 
-function ImportModal({
-  open, termId, onClose,
-}: { open: boolean; termId: string; onClose: () => void }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<{ row_count: number; error_count: number; errors?: string[] } | null>(null);
-
-  async function submit() {
-    if (!file) return;
-    setPending(true);
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("term_id", termId);
-    try {
-      const r = await api.upload<{ row_count: number; error_count: number; errors?: string[] }>(
-        "/teaching-courses/import", fd,
-      );
-      setResult(r);
-      mutate((k: string) => k.startsWith("/teaching-courses"));
-    } catch (e) { alert((e as Error).message); }
-    setPending(false);
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} title="นำเข้าตารางสอน (.xlsx)" size="lg"
-      footer={<>
-        <Button variant="ghost" onClick={onClose}>ปิด</Button>
-        <Button variant="primary" onClick={submit} disabled={!file || pending}>
-          {pending ? "กำลังนำเข้า…" : "นำเข้า"}
-        </Button>
-      </>}
-    >
-      <div className="space-y-3">
-        <div className="text-sm text-[var(--ink-3)]">
-          หัวคอลัมน์: <code className="text-xs bg-slate-100 rounded px-1">code, name, sec_no, track, kind, day, start, end, room</code>
-          <div className="mt-1">
-            <code className="text-xs">kind</code>: lecture | lab &nbsp;·&nbsp;
-            <code className="text-xs">track</code>: regular | special &nbsp;·&nbsp;
-            <code className="text-xs">day</code>: 0=อาทิตย์…6=เสาร์
-          </div>
-        </div>
-        <FieldGroup label="ไฟล์ Excel">
-          <input type="file" accept=".xlsx"
-                 onChange={e => setFile(e.target.files?.[0] ?? null)}
-                 className="block w-full text-sm text-[var(--ink-2)] file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[var(--brand-soft)] file:text-[var(--brand)] hover:file:brightness-95" />
-        </FieldGroup>
-        {result && (
-          <div className="text-sm bg-slate-50 border border-[var(--hairline)] rounded-lg p-3">
-            <div>อ่านสำเร็จ: <b>{result.row_count}</b> แถว · ผิดพลาด: <b>{result.error_count}</b> แถว</div>
-            {result.errors && result.errors.length > 0 && (
-              <ul className="mt-2 text-xs text-red-600 max-h-40 overflow-y-auto space-y-0.5">
-                {result.errors.map((er, i) => <li key={i}>• {er}</li>)}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}

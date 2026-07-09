@@ -10,7 +10,7 @@ import {
 import { api } from "../../lib/api";
 import {
   PageHeader, Panel, Button, StatusChip, Modal,
-  TextArea, FieldGroup, Spinner, Chip,
+  TextArea, FieldGroup, Spinner, Chip, TabLabel,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 
@@ -93,9 +93,28 @@ const DOC_KIND_LABEL: Record<string, string> = {
 
 export default function ReviewPage() {
   const [bucket, setBucket] = useState<Bucket>("pending");
-  const key = `/ta-review?status=${bucket}`;
-  const { data, isLoading } = useSWR<Pending[]>(key);
+  // Fetch all three buckets in parallel so tab counts are always meaningful
+  // and switching tabs is instant (already cached). SWR dedupes so revisiting
+  // a bucket doesn't cause extra network chatter.
+  const pending  = useSWR<Pending[]>("/ta-review?status=pending");
+  const approved = useSWR<Pending[]>("/ta-review?status=approved");
+  const rejected = useSWR<Pending[]>("/ta-review?status=rejected");
+  const byBucket: Record<Bucket, ReturnType<typeof useSWR<Pending[]>>> = {
+    pending, approved, rejected,
+  };
+  const current = byBucket[bucket];
+  const counts = {
+    pending:  pending.data?.length ?? 0,
+    approved: approved.data?.length ?? 0,
+    rejected: rejected.data?.length ?? 0,
+  };
   const [selected, setSelected] = useState<Pending | null>(null);
+
+  function revalidateAll() {
+    mutate("/ta-review?status=pending");
+    mutate("/ta-review?status=approved");
+    mutate("/ta-review?status=rejected");
+  }
 
   return (
     <div>
@@ -113,9 +132,9 @@ export default function ReviewPage() {
             <Tabs.List aria-label="สถานะการตรวจสอบ" className="px-4 pt-2">
               {BUCKETS.map(b => (
                 <Tabs.Tab key={b.id} id={b.id}>
-                  <span className="inline-flex items-center gap-1.5">
-                    {b.icon}{b.label}
-                  </span>
+                  <TabLabel icon={b.icon} count={counts[b.id]} active={bucket === b.id}>
+                    {b.label}
+                  </TabLabel>
                   <Tabs.Indicator />
                 </Tabs.Tab>
               ))}
@@ -125,8 +144,8 @@ export default function ReviewPage() {
           {BUCKETS.map(b => (
             <Tabs.Panel key={b.id} id={b.id}>
               <UserList
-                data={bucket === b.id ? data : undefined}
-                loading={bucket === b.id && isLoading}
+                data={bucket === b.id ? current.data : undefined}
+                loading={bucket === b.id && current.isLoading}
                 bucket={b.id}
                 onSelect={setSelected}
               />
@@ -138,7 +157,7 @@ export default function ReviewPage() {
       <DetailModal
         user={selected}
         onClose={() => setSelected(null)}
-        onChanged={() => mutate(key)}
+        onChanged={revalidateAll}
       />
     </div>
   );
