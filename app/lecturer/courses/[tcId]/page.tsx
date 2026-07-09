@@ -9,6 +9,7 @@ import {
 import {
   PageHeader, Panel, StatCard, Button, Chip, EmptyState,
 } from "../../../components/ui";
+import { RequestsTable, type TARequestRow } from "../../RequestsTable";
 
 interface Section {
   id: string; sec_no: string; track: string; room?: string;
@@ -20,17 +21,11 @@ interface TC {
   num_students_special: number;
   sections?: Section[];
 }
-interface Req {
-  id: string; course_code: string; course_name: string;
-  teaching_course_id?: string;
-  status: string;
-  reject_reason?: string;
-}
 
 export default function CoursePage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
   const { data: course } = useSWR<TC>(tcId ? `/teaching-courses/${tcId}` : null);
-  const { data: allReqs } = useSWR<Req[]>("/ta-requests");
+  const { data: allReqs } = useSWR<TARequestRow[]>("/ta-requests");
 
   const courseReqs = (allReqs ?? []).filter(
     r => r.teaching_course_id === tcId || r.course_code === course?.code,
@@ -117,52 +112,34 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
             </div>
           </Panel>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Panel title="Sections" description="รายการ section ในรายวิชานี้">
-              {(course.sections ?? []).length === 0 ? (
-                <div className="text-sm text-muted py-4">ยังไม่มี section</div>
-              ) : (
-                <ul className="space-y-2">
-                  {course.sections!.map(s => (
-                    <li
-                      key={s.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-medium tabular">Sec {s.sec_no}</span>
-                        <Chip tone={s.track === "special" ? "warn" : "neutral"}>
-                          {s.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
-                        </Chip>
-                      </div>
-                      {s.room && <div className="text-xs text-muted truncate">{s.room}</div>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
+          <Panel title="Sections" description="รายการ section ในรายวิชานี้" className="mb-4">
+            {(course.sections ?? []).length === 0 ? (
+              <div className="text-sm text-muted py-4">ยังไม่มี section</div>
+            ) : (
+              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {course.sections!.map(s => (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-medium tabular">Sec {s.sec_no}</span>
+                      <Chip tone={s.track === "special" ? "warn" : "neutral"}>
+                        {s.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
+                      </Chip>
+                    </div>
+                    {s.room && <div className="text-xs text-muted truncate">{s.room}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
 
-            <Panel title="สถานะคำขอ TA ของวิชานี้" description="คำขอที่คุณเคยส่งสำหรับวิชานี้">
-              {courseReqs.length === 0 ? (
-                <EmptyState title="ยังไม่มีคำขอ" description="เริ่มจาก 'ส่งคำขอ TA' ด้านบน" />
-              ) : (
-                <ul className="divide-y divide-(--hairline)">
-                  {courseReqs.map(r => (
-                    <li key={r.id} className="py-3 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium">{r.course_code} — {r.course_name}</div>
-                        {r.reject_reason && (
-                          <div className="text-xs text-red-600 mt-1">
-                            เหตุผลที่ไม่อนุมัติ: {r.reject_reason}
-                          </div>
-                        )}
-                      </div>
-                      <StatusChipInline status={r.status} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
+          <div className="mb-2">
+            <div className="text-sm font-semibold">ประวัติคำขอ TA ของวิชานี้</div>
+            <div className="text-xs text-muted mt-0.5">คำขอทั้งหมดที่คุณเคยส่งสำหรับวิชานี้</div>
           </div>
+          <RequestsTable rows={courseReqs} loading={!allReqs} emptyDescription="เริ่มจาก 'ส่งคำขอ TA' ด้านบน" />
         </>
       )}
     </div>
@@ -198,16 +175,3 @@ function ActionCard({
   );
 }
 
-function StatusChipInline({ status }: { status: string }) {
-  const map: Record<string, { tone: "success" | "warn" | "danger" | "info" | "neutral"; label: string }> = {
-    approved:  { tone: "success", label: "อนุมัติแล้ว" },
-    submitted: { tone: "info",    label: "รอตรวจ" },
-    pending:   { tone: "warn",    label: "รอดำเนินการ" },
-    draft:     { tone: "neutral", label: "ฉบับร่าง" },
-    rejected:  { tone: "danger",  label: "ไม่ผ่าน" },
-    cancelled: { tone: "neutral", label: "ยกเลิก" },
-    needs_fix: { tone: "warn",    label: "ให้แก้ไข" },
-  };
-  const m = map[status] ?? { tone: "neutral" as const, label: status };
-  return <Chip tone={m.tone}>{m.label}</Chip>;
-}

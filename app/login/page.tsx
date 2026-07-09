@@ -56,9 +56,9 @@ export default function LoginPage() {
       <header className="border-b border-border px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
-            C
+            T
           </div>
-          <div className="font-semibold text-[15px] text-foreground">COCO TA Payment</div>
+          <div className="font-semibold text-[15px] text-foreground">TA Payment</div>
         </div>
         <div className="text-xs text-muted">วิทยาลัยการคอมพิวเตอร์ ม.ขอนแก่น</div>
       </header>
@@ -67,10 +67,10 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
             <div className="w-14 h-14 mx-auto rounded-xl flex items-center justify-center text-accent-foreground text-xl font-bold shadow-sm bg-accent">
-              C
+              T
             </div>
             <h1 className="mt-4 text-[22px] font-semibold text-foreground">
-              เข้าสู่ระบบ COCO TA Payment
+              เข้าสู่ระบบ TA Payment
             </h1>
             <p className="text-sm text-muted mt-1">ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน</p>
           </div>

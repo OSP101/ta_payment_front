@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar, Button, Dropdown, Label, Link as HLink } from "@heroui/react";
 import { ChevronDown, LogOut, HelpCircle } from "lucide-react";
@@ -22,12 +23,18 @@ export default function LecturerHomeShell({
     <div className="min-h-screen flex flex-col bg-background">
       <header className="h-14 border-b border-border bg-surface flex items-center gap-3 px-4 md:px-8 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
-            C
-          </div>
-          <div className="font-semibold text-[15px] text-foreground leading-tight">
-            COCO TA Payment
-          </div>
+          <Link
+            href="/"
+            aria-label="TA Payment — ไปหน้าแรก"
+            className="flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 hover:bg-surface-secondary transition-colors"
+          >
+            <div className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
+              T
+            </div>
+            <div className="font-semibold text-[15px] text-foreground leading-tight">
+              TA Payment
+            </div>
+          </Link>
           <span className="hidden md:inline text-xs text-muted ms-2 border-l border-border ps-2">
             อาจารย์ผู้รับผิดชอบรายวิชา
           </span>

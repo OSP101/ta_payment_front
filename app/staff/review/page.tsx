@@ -9,9 +9,10 @@ import {
 } from "lucide-react";
 import { api } from "../../lib/api";
 import {
-  PageHeader, Panel, Button, StatusChip, EmptyState, Modal,
+  PageHeader, Panel, Button, StatusChip, Modal,
   TextArea, FieldGroup, Spinner, Chip,
 } from "../../components/ui";
+import { DataTable, type DataColumn } from "../../components/DataTable";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -155,47 +156,54 @@ function UserList({
   bucket: Bucket;
   onSelect: (u: Pending) => void;
 }) {
-  if (loading) {
-    return (
-      <div className="py-12 flex items-center justify-center">
-        <Spinner />
-      </div>
-    );
-  }
-  if (!data || data.length === 0) {
-    const emptyText = {
-      pending:  "ไม่มีเอกสารที่รอตรวจ",
-      approved: "ยังไม่มีรายการที่อนุมัติ",
-      rejected: "ยังไม่มีรายการที่ถูกปฏิเสธ",
-    }[bucket];
-    return <EmptyState title={emptyText} />;
-  }
+  const emptyText = {
+    pending:  "ไม่มีเอกสารที่รอตรวจ",
+    approved: "ยังไม่มีรายการที่อนุมัติ",
+    rejected: "ยังไม่มีรายการที่ถูกปฏิเสธ",
+  }[bucket];
+
+  const columns: DataColumn<Pending>[] = [
+    {
+      id: "name", label: "ชื่อ - นามสกุล", sortable: true, isRowHeader: true,
+      sortValue: u => u.full_name,
+      className: "font-medium",
+      render: u => u.full_name,
+    },
+    {
+      id: "email", label: "อีเมล", sortable: true,
+      sortValue: u => u.email,
+      className: "text-(--ink-3)",
+      render: u => u.email,
+    },
+    {
+      id: "status", label: "สถานะ",
+      render: u => <StatusChip status={u.status} />,
+    },
+    {
+      id: "actions", label: <span className="sr-only">การจัดการ</span>,
+      className: "text-right",
+      render: u => (
+        <Button variant="secondary" size="sm" onClick={() => onSelect(u)}>
+          <Eye size={14} /> ดู
+        </Button>
+      ),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>ชื่อ - นามสกุล</th>
-            <th>อีเมล</th>
-            <th>สถานะ</th>
-            <th className="actions">การจัดการ</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map(u => (
-            <tr key={u.user_id}>
-              <td className="font-medium">{u.full_name}</td>
-              <td className="text-[var(--ink-3)]">{u.email}</td>
-              <td><StatusChip status={u.status} /></td>
-              <td className="actions">
-                <Button variant="secondary" size="sm" onClick={() => onSelect(u)}>
-                  <Eye size={14} /> ดู
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="p-4">
+      <DataTable
+        ariaLabel="รายชื่อ TA ที่ส่งเอกสาร"
+        rows={data}
+        loading={loading}
+        rowKey={u => u.user_id}
+        searchFn={u => `${u.full_name} ${u.email}`}
+        searchPlaceholder="ค้นหาชื่อ / อีเมล…"
+        initialSort={{ column: "name", direction: "ascending" }}
+        pageSize={10}
+        emptyTitle={emptyText}
+        columns={columns}
+      />
     </div>
   );
 }

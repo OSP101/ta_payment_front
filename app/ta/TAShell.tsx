@@ -27,7 +27,7 @@ export default function TAShell({
   return (
     <Shell
       me={me}
-      brandTitle="COCO TA Payment"
+      brandTitle="TA Payment"
       nav={nav}
       userMenuItems={userMenuItems}
       topBarAccessory={<NotificationBell />}

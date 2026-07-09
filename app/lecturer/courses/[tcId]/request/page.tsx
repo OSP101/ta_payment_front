@@ -1,9 +1,8 @@
 "use client";
 import { use, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import {
-  Plus, Send, Trash2, Users, ClipboardList, Wallet, CheckCircle2, AlertCircle, Info,
+  Plus, Send, Trash2, ClipboardList, Wallet, CheckCircle2, AlertCircle, Info,
   UserPlus, Copy,
 } from "lucide-react";
 import {
@@ -17,12 +16,14 @@ import {
   Label as HLabel,
   TextField as HTextField,
   FieldError as HFieldError,
+  toast,
   type Key,
 } from "@heroui/react";
 import { api } from "../../../../lib/api";
 import {
   PageHeader, Panel, Button, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
 } from "../../../../components/ui";
+import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                       */
@@ -44,6 +45,9 @@ interface Assignment {
   };
 }
 
+const GRAD_MIN_HRS = 10;
+const GRAD_MAX_HRS = 12;
+
 const emptyWorkload = (): Assignment["workload"] => ({
   help_teach_hrs: 0, help_teach_desc: "",
   prep_hrs: 0, prep_desc: "",
@@ -59,40 +63,91 @@ const emptyWorkload = (): Assignment["workload"] => ({
 
 export default function RequestPage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
-  const router = useRouter();
-
   const { data: course } = useSWR<{ id: string; code: string; name_th: string; sections?: Section[] }>(
     tcId ? `/teaching-courses/${tcId}` : null,
   );
-  const { data: tas } = useSWR<{ items: TA[] }>("/users?role=ta&limit=200");
+  const { data: allReqs } = useSWR<TARequestRow[]>("/ta-requests");
+  const [formOpen, setFormOpen] = useState(false);
+
+  const courseReqs = (allReqs ?? []).filter(
+    r => r.teaching_course_id === tcId || r.course_code === course?.code,
+  );
+
+  return (
+    <div>
+      <Breadcrumbs className="mb-3">
+        <Breadcrumbs.Item href="/lecturer">รายวิชาที่สอน</Breadcrumbs.Item>
+        <Breadcrumbs.Item href={`/lecturer/courses/${tcId}`}>
+          {course ? `${course.code} — ${course.name_th}` : "…"}
+        </Breadcrumbs.Item>
+        <Breadcrumbs.Item>คำขอ TA</Breadcrumbs.Item>
+      </Breadcrumbs>
+
+      <PageHeader
+        title="คำขอผู้ช่วยสอน"
+        description={course
+          ? `${course.code} — ${course.name_th} · ประวัติคำขอทั้งหมดของวิชานี้`
+          : "ประวัติคำขอทั้งหมดของวิชานี้"}
+        actions={
+          <Button variant="primary" onClick={() => setFormOpen(true)}>
+            <Send size={16} /> ส่งคำขอ TA
+          </Button>
+        }
+      />
+
+      <RequestsTable rows={courseReqs} loading={!allReqs} />
+
+      <RequestFormModal
+        open={formOpen}
+        tcId={tcId}
+        course={course}
+        onClose={() => setFormOpen(false)}
+        onSubmitted={() => {
+          setFormOpen(false);
+          mutate("/ta-requests");
+          toast.success("ส่งคำขอ TA เรียบร้อยแล้ว", { description: "รอเจ้าหน้าที่ตรวจสอบและอนุมัติ" });
+        }}
+      />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Request form modal                                                          */
+/* -------------------------------------------------------------------------- */
+
+function RequestFormModal({
+  open, tcId, course, onClose, onSubmitted,
+}: {
+  open: boolean;
+  tcId: string;
+  course?: { id: string; code: string; name_th: string; sections?: Section[] };
+  onClose: () => void;
+  onSubmitted: () => void;
+}) {
+  const { data: tas } = useSWR<{ items: TA[] }>(open ? "/users?role=ta&limit=200" : null);
 
   const [scope, setScope] = useState<"lecture" | "lab" | "both">("both");
-  const [counts, setCounts] = useState<Record<string, { undergrad_count: number; graduate_count: number }>>({});
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [creatingTa, setCreatingTa] = useState(false);
 
+  // Fresh form every time the modal opens.
   useEffect(() => {
-    if (course?.sections) {
-      const init: typeof counts = {};
-      course.sections.forEach(s => { init[s.id] = { undergrad_count: 0, graduate_count: 0 }; });
-      setCounts(init);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [course?.id]);
+    if (!open) return;
+    setAssignments([]);
+    setScope("both");
+    setErr(null);
+  }, [open, course?.id]);
 
   /* --- derived --------------------------------------------------------- */
-  const totalPlannedUG = Object.values(counts).reduce((s, c) => s + (c.undergrad_count || 0), 0);
-  const totalPlannedG = Object.values(counts).reduce((s, c) => s + (c.graduate_count || 0), 0);
-  const totalPlanned = totalPlannedUG + totalPlannedG;
   const firstSectionId = course?.sections?.[0]?.id ?? "";
 
-  const step2Ok = totalPlanned > 0;
-  const step3Ok = assignments.length > 0 && assignments.every(a => a.ta_id);
+  const taChosen = assignments.length > 0 && assignments.every(a => a.ta_id);
   const workloadOk = assignments.length > 0 && assignments.every(a => sumWorkload(a) > 0);
 
-  const canSubmit = step2Ok && step3Ok && workloadOk && assignments.length === totalPlanned;
+  const canSubmit = taChosen && workloadOk;
 
   /* --- helpers --------------------------------------------------------- */
   function addAssignment(secId?: string, taId = "", level = "undergrad") {
@@ -117,39 +172,63 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
     if (!tcId) return;
     setErr(null); setPending(true);
     try {
+      // Derive per-section counts from the assignment list so the backend
+      // still receives the "ta_request_counts" rows it expects.
+      const bySection = new Map<string, { undergrad_count: number; graduate_count: number }>();
+      for (const s of course?.sections ?? []) {
+        bySection.set(s.id, { undergrad_count: 0, graduate_count: 0 });
+      }
+      for (const a of assignments) {
+        const c = bySection.get(a.section_id) ?? { undergrad_count: 0, graduate_count: 0 };
+        if (a.level === "master" || a.level === "phd") c.graduate_count += 1;
+        else c.undergrad_count += 1;
+        bySection.set(a.section_id, c);
+      }
       await api.post("/ta-requests", {
         teaching_course_id: tcId,
         reimburse_scope: scope,
-        counts: Object.entries(counts).map(([section_id, c]) => ({ section_id, ...c })),
+        counts: [...bySection.entries()].map(([section_id, c]) => ({ section_id, ...c })),
         assignments,
       });
-      router.push("/lecturer");
+      onSubmitted();
     } catch (e) { setErr((e as Error).message); }
     finally { setPending(false); }
   }
 
   const steps = [
     { n: 1, label: "ประเภทการเบิก", icon: <Wallet size={14} />, ok: true },
-    { n: 2, label: "จำนวน TA", icon: <Users size={14} />, ok: step2Ok },
-    { n: 3, label: "เลือก TA", icon: <ClipboardList size={14} />, ok: step3Ok && assignments.length === totalPlanned },
-    { n: 4, label: "ภาระงาน", icon: <CheckCircle2 size={14} />, ok: workloadOk && assignments.length > 0 },
+    { n: 2, label: "เลือก TA", icon: <ClipboardList size={14} />, ok: taChosen },
+    { n: 3, label: "ภาระงาน", icon: <CheckCircle2 size={14} />, ok: workloadOk },
   ];
 
   return (
-    <div className="pb-24">
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/lecturer">รายวิชาที่สอน</Breadcrumbs.Item>
-        <Breadcrumbs.Item href={`/lecturer/courses/${tcId}`}>
-          {course ? `${course.code} — ${course.name_th}` : "…"}
-        </Breadcrumbs.Item>
-        <Breadcrumbs.Item>ส่งคำขอ TA</Breadcrumbs.Item>
-      </Breadcrumbs>
-
-      <PageHeader
-        title="ส่งคำขอผู้ช่วยสอน"
-        description={course ? `${course.code} — ${course.name_th} · กรอกตามลำดับ 4 ขั้นตอน` : "กรอกตามลำดับ 4 ขั้นตอน"}
-      />
-
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="ส่งคำขอผู้ช่วยสอน"
+      icon={<Send size={18} />}
+      size="2xl"
+      footer={
+        <div className="flex flex-wrap items-center justify-between w-full gap-3">
+          <div className="flex items-center gap-3 text-xs text-ink-3">
+            <span>เพิ่มแล้ว <b className="text-ink-1">{assignments.length}</b> คน</span>
+            <span>เบิก <b className="text-ink-1">{scope === "lecture" ? "บรรยาย" : scope === "lab" ? "ปฏิบัติการ" : "บรรยาย+ปฏิบัติการ"}</b></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+            <Button
+              variant="primary"
+              onClick={submit}
+              disabled={!canSubmit || pending}
+              isPending={pending}
+            >
+              <Send size={16} />
+              {pending ? "กำลังส่ง…" : `ส่งคำขอ (${assignments.length} คน)`}
+            </Button>
+          </div>
+        </div>
+      }
+    >
       {/* Step progress indicator */}
       <div className="rounded-xl border border-border bg-panel p-3 mb-4 overflow-x-auto">
         <ol className="flex items-center gap-2 min-w-max">
@@ -183,102 +262,26 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
         {/* Step 2 --------------------------------------------------------- */}
         <StepPanel
           n={2}
-          title="จำนวน TA ที่ต้องการต่อ Section"
-          description="ระบุจำนวน TA ระดับปริญญาตรี และบัณฑิตศึกษา"
-          status={step2Ok
-            ? { tone: "success", text: `รวม ${totalPlanned} คน` }
-            : { tone: "warn", text: "ยังไม่ได้ระบุจำนวน" }}
-        >
-          {!course?.sections?.length ? (
-            <EmptyState title="ยังไม่มี section ในรายวิชานี้" />
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-hairline">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs text-ink-3">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-medium">Section</th>
-                    <th className="text-left px-3 py-2 font-medium w-36">TA ปริญญาตรี</th>
-                    <th className="text-left px-3 py-2 font-medium w-36">TA บัณฑิตศึกษา</th>
-                    <th className="text-left px-3 py-2 font-medium">รวม</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {course.sections.map(s => {
-                    const c = counts[s.id] ?? { undergrad_count: 0, graduate_count: 0 };
-                    const rowTotal = c.undergrad_count + c.graduate_count;
-                    return (
-                      <tr key={s.id} className="border-t border-hairline">
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">Sec {s.sec_no}</span>
-                            <Chip tone={s.track === "special" ? "warn" : "neutral"}>
-                              {s.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
-                            </Chip>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <CountField
-                            value={c.undergrad_count}
-                            onChange={v => setCounts({ ...counts, [s.id]: { ...c, undergrad_count: v } })}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <CountField
-                            value={c.graduate_count}
-                            onChange={v => setCounts({ ...counts, [s.id]: { ...c, graduate_count: v } })}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Chip tone={rowTotal > 0 ? "brand" : "neutral"}>{rowTotal} คน</Chip>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <div className="flex items-center gap-2 mt-2 text-xs text-ink-3">
-            <Info size={12} />
-            รวมทั้งหมด <b className="text-ink-1">{totalPlanned}</b> คน
-            ({totalPlannedUG} ตรี, {totalPlannedG} โท/เอก)
-          </div>
-        </StepPanel>
-
-        {/* Step 3 & 4 ---------------------------------------------------- */}
-        <StepPanel
-          n={3}
-          title="เลือก TA และกำหนดภาระงาน"
-          description={totalPlanned > 0
-            ? `เพิ่มรายชื่อ TA ทั้งหมดของวิชานี้ (ต้องการ ${totalPlanned} คน)`
-            : "กรอก ขั้นตอน 2 ก่อน"}
+          title="เพิ่มรายชื่อ TA และกำหนดภาระงาน"
+          description="เพิ่ม TA ทีละคน เลือก section และกรอกภาระงานของแต่ละคน"
           status={
-            totalPlanned === 0
-              ? { tone: "neutral", text: "รอ" }
-              : assignments.length === 0
-              ? { tone: "warn", text: `เพิ่มอีก ${totalPlanned} คน` }
-              : assignments.length < totalPlanned
-              ? { tone: "warn", text: `เพิ่มอีก ${totalPlanned - assignments.length} คน` }
-              : assignments.length > totalPlanned
-              ? { tone: "danger", text: `เกิน ${assignments.length - totalPlanned} คน` }
-              : !step3Ok
+            assignments.length === 0
+              ? { tone: "warn", text: "ยังไม่ได้เพิ่ม TA" }
+              : !taChosen
               ? { tone: "warn", text: "ยังไม่ได้เลือก TA" }
               : !workloadOk
               ? { tone: "warn", text: "ยังไม่ได้กรอกภาระงาน" }
               : { tone: "success", text: `${assignments.length} คน · พร้อมส่ง` }
           }
         >
-          {totalPlanned === 0 ? (
-            <EmptyState
-              title="ยังไม่ได้กำหนดจำนวน TA"
-              description="โปรดกรอกจำนวน TA ในขั้นตอน 2 ก่อน"
-            />
+          {!course?.sections?.length ? (
+            <EmptyState title="ยังไม่มี section ในรายวิชานี้" />
           ) : (
             <div className="space-y-3">
               {/* Toolbar with add + create buttons */}
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 border border-hairline px-3 py-2">
                 <div className="text-xs text-ink-3">
-                  รวม TA ในวิชานี้ <b className="text-ink-1">{assignments.length}</b> / {totalPlanned} คน
+                  รวม TA ในวิชานี้ <b className="text-ink-1">{assignments.length}</b> คน
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -291,7 +294,6 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
                   <Button
                     variant="primary"
                     size="sm"
-                    disabled={assignments.length >= totalPlanned}
                     onClick={() => addAssignment()}
                   >
                     <Plus size={14} /> เพิ่ม TA
@@ -330,7 +332,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
         )}
       </div>
 
-      {/* Create-TA modal */}
+      {/* Create-TA modal (stacked on top of the form modal) */}
       <CreateTaModal
         open={creatingTa}
         onClose={() => setCreatingTa(false)}
@@ -339,32 +341,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
           addAssignment(undefined, ta.id, ta.study_level ?? "undergrad");
         }}
       />
-
-      {/* Sticky action bar */}
-      <div className="fixed bottom-0 left-0 right-0 md:left-(--sidebar-w) z-10 bg-panel/95 backdrop-blur border-t border-border">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-4 text-xs text-ink-3">
-            <span>วางแผน <b className="text-ink-1">{totalPlanned}</b> คน</span>
-            <span>เพิ่มแล้ว <b className="text-ink-1">{assignments.length}</b> คน</span>
-            <span>เบิก <b className="text-ink-1">{scope === "lecture" ? "บรรยาย" : scope === "lab" ? "ปฏิบัติการ" : "บรรยาย+ปฏิบัติการ"}</b></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={() => router.push(`/lecturer/courses/${tcId}`)}>
-              ยกเลิก
-            </Button>
-            <Button
-              variant="primary"
-              onClick={submit}
-              disabled={!canSubmit || pending}
-              isPending={pending}
-            >
-              <Send size={16} />
-              {pending ? "กำลังส่ง…" : `ส่งคำขอ (${assignments.length} คน)`}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -441,24 +418,6 @@ function ScopeRadio({ value, label, desc }: { value: string; label: string; desc
   );
 }
 
-function CountField({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <NumberField
-      value={value}
-      onChange={onChange}
-      minValue={0}
-      maxValue={20}
-      className="w-32"
-    >
-      <NumberField.Group>
-        <NumberField.DecrementButton />
-        <NumberField.Input />
-        <NumberField.IncrementButton />
-      </NumberField.Group>
-    </NumberField>
-  );
-}
-
 function sumWorkload(a: Assignment): number {
   const w = a.workload;
   if (a.level === "master" || a.level === "phd") {
@@ -481,7 +440,10 @@ function AssignmentBlock({
 }) {
   const isGrad = a.level === "master" || a.level === "phd";
   const total = sumWorkload(a);
-  const gradWarn = isGrad && (total < 10 || total > 12);
+  const gradWarn = isGrad && (total < GRAD_MIN_HRS || total > GRAD_MAX_HRS);
+  // Each field may grow only until the combined total hits the 12 hr/wk cap,
+  // so the NumberField "+" button disables itself at the limit.
+  const headroom = Math.max(0, GRAD_MAX_HRS - total);
 
   const ta = tas.find(t => t.id === a.ta_id);
 
@@ -528,12 +490,16 @@ function AssignmentBlock({
             <div className="text-xs font-medium text-ink-2 mb-2">ภาระงาน (บัณฑิตศึกษา) — 10 ถึง 12 ชม./สัปดาห์</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <HrsRow label="ช่วยสอน" hrs={a.workload.help_teach_hrs} desc={a.workload.help_teach_desc}
+                max={a.workload.help_teach_hrs + headroom}
                 onH={v => onWorkload(idx, { help_teach_hrs: v })} onD={v => onWorkload(idx, { help_teach_desc: v })} />
               <HrsRow label="เตรียมการสอน" hrs={a.workload.prep_hrs} desc={a.workload.prep_desc}
+                max={a.workload.prep_hrs + headroom}
                 onH={v => onWorkload(idx, { prep_hrs: v })} onD={v => onWorkload(idx, { prep_desc: v })} />
               <HrsRow label="ตรวจแบบทดสอบ" hrs={a.workload.grade_hrs} desc={a.workload.grade_desc}
+                max={a.workload.grade_hrs + headroom}
                 onH={v => onWorkload(idx, { grade_hrs: v })} onD={v => onWorkload(idx, { grade_desc: v })} />
               <HrsRow label="อื่น ๆ" hrs={a.workload.other_hrs} desc={a.workload.other_desc}
+                max={a.workload.other_hrs + headroom}
                 onH={v => onWorkload(idx, { other_hrs: v })} onD={v => onWorkload(idx, { other_desc: v })} />
             </div>
           </div>
@@ -664,12 +630,12 @@ function CheckHrs({
 }
 
 function HrsRow({
-  label, hrs, desc, onH, onD,
-}: { label: string; hrs: number; desc: string; onH: (v: number) => void; onD: (v: string) => void }) {
+  label, hrs, desc, onH, onD, max,
+}: { label: string; hrs: number; desc: string; onH: (v: number) => void; onD: (v: string) => void; max?: number }) {
   return (
     <FieldGroup label={label}>
       <div className="flex items-center gap-2">
-        <HourInput value={hrs} onChange={onH} />
+        <HourInput value={hrs} onChange={onH} maxValue={max} />
         <TextInput
           value={desc}
           onChange={e => onD(e.target.value)}
@@ -751,12 +717,15 @@ function TaAutocomplete({
   );
 }
 
-function HourInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function HourInput({
+  value, onChange, maxValue,
+}: { value: number; onChange: (v: number) => void; maxValue?: number }) {
   return (
     <NumberField
       value={value}
       onChange={onChange}
       minValue={0}
+      maxValue={maxValue}
       step={0.5}
       formatOptions={{ maximumFractionDigits: 1 }}
       className="w-32 shrink-0"

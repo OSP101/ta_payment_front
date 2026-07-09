@@ -366,7 +366,7 @@ export function Modal({
   open: boolean;
   onClose: () => void;
   title?: React.ReactNode;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
   children: React.ReactNode;
   footer?: React.ReactNode;
   icon?: React.ReactNode;
@@ -376,6 +376,7 @@ export function Modal({
     md: "sm:max-w-md",
     lg: "sm:max-w-lg",
     xl: "sm:max-w-2xl",
+    "2xl": "sm:max-w-4xl",
   }[size];
   return (
     <HModal>

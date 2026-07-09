@@ -50,7 +50,7 @@ const nav: NavSection[] = [
 
 export default function StaffShell({ me, children }: { me: Me; children: React.ReactNode }) {
   return (
-    <Shell me={me} brandTitle="COCO TA Payment" nav={nav}>
+    <Shell me={me} brandTitle="TA Payment" nav={nav}>
       {children}
     </Shell>
   );

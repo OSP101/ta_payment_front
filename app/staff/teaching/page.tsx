@@ -8,6 +8,7 @@ import { api, type Term } from "../../lib/api";
 import {
   PageHeader, Panel, Button, Select, TextInput, FieldGroup, Modal, Chip, EmptyState,
 } from "../../components/ui";
+import { DataTable, type DataColumn } from "../../components/DataTable";
 
 interface TC {
   id: string; code: string; name_th: string; term_id: string;
@@ -55,8 +56,8 @@ export default function TeachingPage() {
         }
       />
 
-      <Panel padded={false}>
-        {noTerms ? (
+      {noTerms ? (
+        <Panel padded={false}>
           <EmptyState
             icon={<CalendarPlus size={28} />}
             title="ยังไม่ได้สร้างปีการศึกษา / ภาคเรียน"
@@ -69,50 +70,62 @@ export default function TeachingPage() {
               </Link>
             }
           />
-        ) : (courses ?? []).length === 0 ? (
-          <EmptyState title="ยังไม่มีวิชาในภาคเรียนนี้" description="เริ่มจากการนำเข้าไฟล์ Excel" />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>รหัสวิชา</th>
-                  <th>ชื่อวิชา</th>
-                  <th className="num">นศ. ปกติ</th>
-                  <th className="num">นศ. พิเศษ</th>
-                  <th>งบประมาณ</th>
-                  <th className="actions">การจัดการ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {courses!.map(c => (
-                  <tr key={c.id}>
-                    <td className="font-medium tabular">{c.code}</td>
-                    <td>{c.name_th}</td>
-                    <td className="num">
-                      <NumStudentsEditor id={c.id} track="regular" value={c.num_students_regular} />
-                    </td>
-                    <td className="num">
-                      <NumStudentsEditor id={c.id} track="special" value={c.num_students_special} />
-                    </td>
-                    <td><BudgetBadge id={c.id} /></td>
-                    <td className="actions">
-                      <a href={`/api/v1/exports/course/${c.id}.zip`}>
-                        <Button variant="ghost" size="sm"><Download size={14} /> ZIP</Button>
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+        </Panel>
+      ) : (
+        <DataTable
+          ariaLabel="วิชาที่เปิดสอน"
+          rows={courses}
+          loading={!!termId && !courses}
+          rowKey={c => c.id}
+          searchFn={c => `${c.code} ${c.name_th}`}
+          searchPlaceholder="ค้นหารหัสวิชา / ชื่อวิชา…"
+          initialSort={{ column: "code", direction: "ascending" }}
+          pageSize={10}
+          emptyTitle="ยังไม่มีวิชาในภาคเรียนนี้"
+          emptyDescription="เริ่มจากการนำเข้าไฟล์ Excel"
+          columns={courseColumns}
+        />
+      )}
 
       <ImportModal open={importing && !!termId} termId={termId} onClose={() => setImporting(false)} />
     </div>
   );
 }
+
+const courseColumns: DataColumn<TC>[] = [
+  {
+    id: "code", label: "รหัสวิชา", sortable: true, isRowHeader: true,
+    sortValue: c => c.code,
+    className: "font-medium tabular-nums",
+    render: c => c.code,
+  },
+  {
+    id: "name", label: "ชื่อวิชา", sortable: true,
+    sortValue: c => c.name_th,
+    render: c => c.name_th,
+  },
+  {
+    id: "regular", label: "นศ. ปกติ",
+    render: c => <NumStudentsEditor id={c.id} track="regular" value={c.num_students_regular} />,
+  },
+  {
+    id: "special", label: "นศ. พิเศษ",
+    render: c => <NumStudentsEditor id={c.id} track="special" value={c.num_students_special} />,
+  },
+  {
+    id: "budget", label: "งบประมาณ",
+    render: c => <BudgetBadge id={c.id} />,
+  },
+  {
+    id: "actions", label: <span className="sr-only">การจัดการ</span>,
+    className: "text-right",
+    render: c => (
+      <a href={`/api/v1/exports/course/${c.id}.zip`}>
+        <Button variant="ghost" size="sm"><Download size={14} /> ZIP</Button>
+      </a>
+    ),
+  },
+];
 
 function NumStudentsEditor({
   id, track, value,

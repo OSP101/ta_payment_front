@@ -7,12 +7,13 @@ import {
   Label as HLabel,
   TextField as HTextField,
 } from "@heroui/react";
-import { Copy, KeyRound, Pencil, Plus, Search, UserX } from "lucide-react";
+import { Copy, KeyRound, Pencil, Plus, UserX } from "lucide-react";
 import { api } from "../../lib/api";
 import {
-  Alert, Button, Chip, EmptyState, FieldGroup, Modal,
-  PageHeader, Panel, Select, TextInput,
+  Alert, Button, Chip, FieldGroup, Modal,
+  PageHeader, Select,
 } from "../../components/ui";
+import { DataTable, type DataColumn } from "../../components/DataTable";
 
 interface User {
   id: string;
@@ -157,15 +158,66 @@ function VSelect({
 /* -------------------------------------------------------------------------- */
 
 export default function UsersPage() {
-  const [q, setQ] = useState("");
-  const [role, setRole] = useState("");
-  const { data } = useSWR<{ items: User[]; total: number }>(
-    `/users?q=${encodeURIComponent(q)}&role=${role}`,
-  );
+  const { data } = useSWR<{ items: User[]; total: number }>("/users?limit=500");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [resetting, setResetting] = useState<User | null>(null);
   const [deactivating, setDeactivating] = useState<User | null>(null);
+
+  const columns: DataColumn<User>[] = [
+    {
+      id: "name", label: "ชื่อ", sortable: true, isRowHeader: true,
+      sortValue: u => `${u.first_name} ${u.last_name}`,
+      className: "font-medium",
+      render: u => [u.title, u.first_name, u.last_name].filter(Boolean).join(" "),
+    },
+    {
+      id: "email", label: "อีเมล", sortable: true,
+      sortValue: u => u.email,
+      className: "text-(--ink-3)",
+      render: u => u.email,
+    },
+    {
+      id: "roles", label: "บทบาท",
+      render: u => (
+        <div className="flex gap-1 flex-wrap">
+          {u.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
+        </div>
+      ),
+    },
+    {
+      id: "level", label: "ระดับ",
+      className: "text-(--ink-3)",
+      render: u => u.study_level
+        ? (STUDY_LEVELS.find(l => l.value === u.study_level)?.label ?? u.study_level)
+        : "-",
+    },
+    {
+      id: "status", label: "สถานะ",
+      render: u => u.is_active
+        ? <Chip tone="success">ใช้งาน</Chip>
+        : <Chip tone="danger">ปิด</Chip>,
+    },
+    {
+      id: "actions", label: <span className="sr-only">การจัดการ</span>,
+      className: "text-right",
+      render: u => (
+        <div className="flex gap-1 justify-end">
+          <Button variant="ghost" size="sm" onClick={() => setEditing(u)}>
+            <Pencil size={14} /> แก้ไข
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setResetting(u)}>
+            <KeyRound size={14} /> รีเซ็ตรหัส
+          </Button>
+          {u.is_active && (
+            <Button variant="danger-soft" size="sm" onClick={() => setDeactivating(u)}>
+              <UserX size={14} /> ปิด
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -179,87 +231,43 @@ export default function UsersPage() {
         }
       />
 
-      <Panel className="mb-4">
-        <div className="flex gap-3 flex-wrap">
-          <div className="flex-1 min-w-[240px] relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-4)]" />
-            <TextInput
-              placeholder="ค้นหาชื่อ / อีเมล / รหัสนักศึกษา"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              style={{ paddingLeft: 34 }}
-            />
-          </div>
-          <Select value={role} onChange={e => setRole(e.target.value)} className="max-w-xs">
-            <option value="">ทุกบทบาท</option>
-            <option value="admin">Admin / ผู้บริหาร</option>
-            <option value="staff">เจ้าหน้าที่</option>
-            <option value="lecturer">อาจารย์</option>
-            <option value="ta">ผู้ช่วยสอน (TA)</option>
-          </Select>
-        </div>
-      </Panel>
-
-      <Panel padded={false}>
-        {(data?.items ?? []).length === 0 ? (
-          <EmptyState title="ไม่พบผู้ใช้" description="ลองปรับเงื่อนไขการค้นหา" />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>ชื่อ</th>
-                  <th>อีเมล</th>
-                  <th>บทบาท</th>
-                  <th>ระดับ</th>
-                  <th>สถานะ</th>
-                  <th className="actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.items ?? []).map(u => (
-                  <tr key={u.id}>
-                    <td className="font-medium">
-                      {[u.title, u.first_name, u.last_name].filter(Boolean).join(" ")}
-                    </td>
-                    <td className="text-[var(--ink-3)]">{u.email}</td>
-                    <td>
-                      <div className="flex gap-1 flex-wrap">
-                        {u.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
-                      </div>
-                    </td>
-                    <td className="text-[var(--ink-3)]">
-                      {u.study_level
-                        ? (STUDY_LEVELS.find(l => l.value === u.study_level)?.label ?? u.study_level)
-                        : "-"}
-                    </td>
-                    <td>
-                      {u.is_active
-                        ? <Chip tone="success">ใช้งาน</Chip>
-                        : <Chip tone="danger">ปิด</Chip>}
-                    </td>
-                    <td className="actions">
-                      <div className="flex gap-1 justify-end">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(u)}>
-                          <Pencil size={14} /> แก้ไข
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setResetting(u)}>
-                          <KeyRound size={14} /> รีเซ็ตรหัส
-                        </Button>
-                        {u.is_active && (
-                          <Button variant="danger-soft" size="sm" onClick={() => setDeactivating(u)}>
-                            <UserX size={14} /> ปิด
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      <DataTable
+        ariaLabel="ผู้ใช้ทั้งหมดในระบบ"
+        rows={data?.items}
+        loading={!data}
+        rowKey={u => u.id}
+        searchFn={u => `${u.title ?? ""} ${u.first_name} ${u.last_name} ${u.email}`}
+        searchPlaceholder="ค้นหาชื่อ / อีเมล…"
+        filters={[
+          {
+            id: "role",
+            placeholder: "ทุกบทบาท",
+            options: [
+              { id: "", label: "ทุกบทบาท" },
+              { id: "admin", label: "Admin / ผู้บริหาร" },
+              { id: "staff", label: "เจ้าหน้าที่" },
+              { id: "lecturer", label: "อาจารย์" },
+              { id: "ta", label: "ผู้ช่วยสอน (TA)" },
+            ],
+            predicate: (u, v) => u.roles.includes(v),
+          },
+          {
+            id: "active",
+            placeholder: "ทุกสถานะ",
+            options: [
+              { id: "", label: "ทุกสถานะ" },
+              { id: "active", label: "ใช้งาน" },
+              { id: "inactive", label: "ปิดใช้งาน" },
+            ],
+            predicate: (u, v) => (v === "active" ? u.is_active : !u.is_active),
+          },
+        ]}
+        initialSort={{ column: "name", direction: "ascending" }}
+        pageSize={15}
+        emptyTitle="ไม่พบผู้ใช้"
+        emptyDescription="ลองปรับเงื่อนไขการค้นหา"
+        columns={columns}
+      />
 
       <CreateUserModal open={creating} onClose={() => setCreating(false)} />
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} />}
