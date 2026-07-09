@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Alert,
   Button,
   Card,
+  FieldError,
   Input,
   InputGroup,
   Label,
@@ -14,6 +15,9 @@ import {
 } from "@heroui/react";
 import { LogIn, Eye, EyeOff, Shield, ShieldAlert } from "lucide-react";
 import { api, errMessage, type Me } from "../lib/api";
+import { notify } from "../lib/notify";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,6 +25,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showErrors, setShowErrors] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ssoUrl, setSsoUrl] = useState<string | null>(null);
 
@@ -30,12 +35,33 @@ export default function LoginPage() {
       .catch(() => {});
   }, []);
 
+  const fieldErrors = useMemo(() => {
+    const e: { email?: string; password?: string } = {};
+    const trimmed = email.trim();
+    if (!trimmed) e.email = "กรุณากรอกอีเมล";
+    else if (!EMAIL_RE.test(trimmed)) e.email = "รูปแบบอีเมลไม่ถูกต้อง";
+    if (!password) e.password = "กรุณากรอกรหัสผ่าน";
+    return e;
+  }, [email, password]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+
+    if (fieldErrors.email || fieldErrors.password) {
+      setShowErrors(true);
+      const missing = [
+        fieldErrors.email ? "อีเมล" : null,
+        fieldErrors.password ? "รหัสผ่าน" : null,
+      ].filter(Boolean).join(" และ ");
+      notify.warning(missing ? `กรุณากรอก${missing}ให้ครบก่อนเข้าสู่ระบบ` : "กรุณาตรวจสอบข้อมูลที่กรอก");
+      return;
+    }
+
+    setShowErrors(false);
     setLoading(true);
     try {
-      const res = await api.post<{ user: Me; token?: string }>("/auth/login", { email, password });
+      const res = await api.post<{ user: Me; token?: string }>("/auth/login", { email: email.trim(), password });
       if (res.user?.must_change_password) {
         router.push("/change-password");
       } else {
@@ -45,7 +71,12 @@ export default function LoginPage() {
       }
       router.refresh();
     } catch (e) {
-      setErr(errMessage(e));
+      const msg = errMessage(e);
+      setErr(msg);
+      // A Toast with the specific reason so the user notices even when focus is
+      // elsewhere. 401 = wrong creds; 0/408/5xx carry human-readable Thai
+      // messages from api.ts already.
+      notify.error(msg);
     } finally {
       setLoading(false);
     }
@@ -61,7 +92,7 @@ export default function LoginPage() {
           </div>
           <div className="font-semibold text-[15px] text-foreground">TA Payment</div>
         </div>
-        <div className="text-xs text-muted">วิทยาลัยการคอมพิวเตอร์ ม.ขอนแก่น</div>
+        {/* <div className="text-xs text-muted">วิทยาลัยการคอมพิวเตอร์ ม.ขอนแก่น</div> */}
       </header>
 
       <main className="flex-1 flex items-center justify-center px-4 py-10 bg-background">
@@ -101,9 +132,13 @@ export default function LoginPage() {
                   isRequired
                   value={email}
                   onChange={(v) => { setEmail(v); if (err) setErr(null); }}
+                  isInvalid={showErrors && !!fieldErrors.email}
                 >
                   <Label>อีเมล</Label>
                   <Input placeholder="you@kkumail.com" autoComplete="email" />
+                  {showErrors && fieldErrors.email && (
+                    <FieldError>{fieldErrors.email}</FieldError>
+                  )}
                 </TextField>
 
                 <TextField
@@ -111,6 +146,7 @@ export default function LoginPage() {
                   isRequired
                   value={password}
                   onChange={(v) => { setPassword(v); if (err) setErr(null); }}
+                  isInvalid={showErrors && !!fieldErrors.password}
                 >
                   <Label>รหัสผ่าน</Label>
                   <InputGroup>
@@ -130,6 +166,9 @@ export default function LoginPage() {
                       </Button>
                     </InputGroup.Suffix>
                   </InputGroup>
+                  {showErrors && fieldErrors.password && (
+                    <FieldError>{fieldErrors.password}</FieldError>
+                  )}
                 </TextField>
 
                 {err && (

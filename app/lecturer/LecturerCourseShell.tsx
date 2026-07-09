@@ -1,8 +1,9 @@
 "use client";
-import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell } from "lucide-react";
+import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell, ShieldAlert } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
+import { Alert } from "../components/ui";
 
 export default function LecturerCourseShell({
   me, tcId, courseCode, children,
@@ -42,6 +43,11 @@ export default function LecturerCourseShell({
     { id: "notif",    label: "การเตือน", href: "/notifications",  icon: Bell },
   ];
 
+  // Staff can jump into a lecturer's course view from the staff teaching page
+  // to manage on the lecturer's behalf. Surface that clearly so actions taken
+  // here aren't confused with actions the lecturer took themselves.
+  const impersonating = me.roles.includes("admin") || me.roles.includes("staff");
+
   return (
     <Shell
       me={me}
@@ -50,6 +56,16 @@ export default function LecturerCourseShell({
       userMenuItems={userMenuItems}
       topBarAccessory={<NotificationBell />}
     >
+      {impersonating && (
+        <div className="mb-4">
+          <Alert
+            status="warning"
+            icon={<ShieldAlert size={16} />}
+            title="กำลังเข้าใช้งานด้วยสิทธิ์เจ้าหน้าที่/ผู้ดูแลระบบ"
+            description="คุณเข้ามาในหน้ามุมมองของอาจารย์เพื่อจัดการแทน — การกระทำใด ๆ จะถูกบันทึกในนามผู้ใช้ปัจจุบัน"
+          />
+        </div>
+      )}
       {children}
     </Shell>
   );

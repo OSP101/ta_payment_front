@@ -2,12 +2,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
-import { Download, Save, CalendarPlus, Settings, BookPlus, Lock, CheckCircle2 } from "lucide-react";
+import { Save, CalendarPlus, Settings, BookPlus, CheckCircle2 } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api, type Term } from "../../lib/api";
-import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, Select, TextInput, Chip, EmptyState, ConfirmDialog,
+  PageHeader, Panel, Button, Select, TextInput, Chip, EmptyState,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import OpenCourseModal from "../../lecturer/(home)/OpenCourseModal";
@@ -145,66 +144,15 @@ const courseColumns: DataColumn<TC>[] = [
     id: "actions", label: <span className="sr-only">การจัดการ</span>,
     className: "text-right",
     render: c => (
-      <div className="inline-flex gap-1">
-        <Link href={`/staff/teaching/${c.id}`}>
-          <Button variant="ghost" size="sm"><Settings size={14} /> จัดการ</Button>
-        </Link>
-        <ZipExportButton course={c} />
-      </div>
+      // Open the lecturer view in a new tab so staff can operate on the course
+      // on behalf of the lecturer. The lecturer shell shows an admin banner
+      // when the visitor has admin/staff role.
+      <Link href={`/lecturer/courses/${c.id}`} target="_blank" rel="noopener noreferrer">
+        <Button variant="ghost" size="sm"><Settings size={14} /> จัดการ</Button>
+      </Link>
     ),
   },
 ];
-
-// ZIP export permanently locks the course from editing sections/schedules, so
-// gate the download behind a confirmation dialog explaining that.
-function ZipExportButton({ course }: { course: TC }) {
-  const [open, setOpen] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const exported = !!course.exported_at;
-
-  function startExport() {
-    setDownloading(true);
-    try {
-      window.location.href = `/api/v1/exports/course/${course.id}.zip`;
-    } catch (e) {
-      notify.error(e);
-    }
-    setTimeout(() => {
-      mutate((k: string) => k.startsWith("/teaching-courses"));
-      setDownloading(false);
-      setOpen(false);
-    }, 1200);
-  }
-
-  return (
-    <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-        {exported ? <Download size={14} /> : <Lock size={14} />} ZIP
-      </Button>
-      <ConfirmDialog
-        open={open}
-        onClose={() => setOpen(false)}
-        onConfirm={startExport}
-        isPending={downloading}
-        danger={!exported}
-        icon={<Lock size={20} />}
-        title="ยืนยันการส่งออก ZIP"
-        confirmLabel="ส่งออกและดาวน์โหลด"
-        message={
-          exported ? (
-            <p className="text-sm text-muted">
-              รายวิชานี้ถูกส่งออก (ล็อก) ไปแล้ว — ดาวน์โหลดซ้ำได้โดยไม่มีผลกระทบเพิ่มเติม
-            </p>
-          ) : (
-            <p className="text-sm text-muted">
-              การส่งออกจะล็อกรายวิชานี้ ไม่สามารถแก้ไข section/ตารางได้อีก การกระทำนี้ย้อนกลับไม่ได้
-            </p>
-          )
-        }
-      />
-    </>
-  );
-}
 
 function NumStudentsEditor({
   id, track, value,

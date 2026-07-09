@@ -3,7 +3,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
   Plus, Send, Trash2, ClipboardList, Wallet, CheckCircle2, AlertCircle, Info,
-  UserPlus, Copy,
+  UserPlus, Copy, CalendarClock, Clock,
 } from "lucide-react";
 import {
   Breadcrumbs,
@@ -46,6 +46,21 @@ interface Assignment {
   };
 }
 
+interface RequestWindow {
+  id: string;
+  term_id: string;
+  opens_at: string;
+  closes_at: string;
+  is_open: boolean;
+  note?: string | null;
+}
+
+type WindowState =
+  | { phase: "none" }
+  | { phase: "open"; window: RequestWindow; closesAt: number; remainingMs: number }
+  | { phase: "upcoming"; window: RequestWindow; opensAt: number; untilMs: number }
+  | { phase: "closed"; lastWindow?: RequestWindow };
+
 const GRAD_MIN_HRS = 10;
 const GRAD_MAX_HRS = 12;
 
@@ -64,15 +79,22 @@ const emptyWorkload = (): Assignment["workload"] => ({
 
 export default function RequestPage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
-  const { data: course } = useSWR<{ id: string; code: string; name_th: string; sections?: Section[] }>(
+  const { data: course } = useSWR<{ id: string; code: string; name_th: string; term_id?: string; sections?: Section[] }>(
     tcId ? `/teaching-courses/${tcId}` : null,
   );
   const { data: allReqs } = useSWR<TARequestRow[]>("/ta-requests");
+  const { data: windows } = useSWR<RequestWindow[]>(
+    course?.term_id ? `/ta-request/windows?term_id=${course.term_id}` : null,
+  );
   const [formOpen, setFormOpen] = useState(false);
 
   const courseReqs = (allReqs ?? []).filter(
     r => r.teaching_course_id === tcId || r.course_code === course?.code,
   );
+
+  const windowState = useWindowState(windows);
+  const windowLoading = !!course?.term_id && !windows;
+  const canSend = windowLoading || windowState.phase === "open";
 
   return (
     <div>
@@ -90,11 +112,17 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
           ? `${course.code} — ${course.name_th} · ประวัติคำขอทั้งหมดของวิชานี้`
           : "ประวัติคำขอทั้งหมดของวิชานี้"}
         actions={
-          <Button variant="primary" onClick={() => setFormOpen(true)}>
+          <Button
+            variant="primary"
+            onClick={() => setFormOpen(true)}
+            disabled={!canSend}
+          >
             <Send size={16} /> ส่งคำขอ TA
           </Button>
         }
       />
+
+      <WindowStatusBanner state={windowState} loading={windowLoading} />
 
       <RequestsTable rows={courseReqs} loading={!allReqs} />
 
@@ -973,6 +1001,141 @@ function TempPasswordPanel({ email, password }: { email: string; password: strin
             <Copy size={14} /> {copied ? "คัดลอกแล้ว" : "คัดลอก"}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Submission-window status banner                                             */
+/* -------------------------------------------------------------------------- */
+
+function useWindowState(windows: RequestWindow[] | undefined): WindowState {
+  // Re-render every minute so the countdown ticks down without a manual refresh.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  return useMemo<WindowState>(() => {
+    if (!windows || windows.length === 0) return { phase: "none" };
+
+    const active = windows.find(w => {
+      if (!w.is_open) return false;
+      const o = new Date(w.opens_at).getTime();
+      const c = new Date(w.closes_at).getTime();
+      return o <= now && now <= c;
+    });
+    if (active) {
+      const c = new Date(active.closes_at).getTime();
+      return { phase: "open", window: active, closesAt: c, remainingMs: c - now };
+    }
+
+    const upcoming = windows
+      .filter(w => w.is_open && new Date(w.opens_at).getTime() > now)
+      .sort((a, b) => new Date(a.opens_at).getTime() - new Date(b.opens_at).getTime())[0];
+    if (upcoming) {
+      const o = new Date(upcoming.opens_at).getTime();
+      return { phase: "upcoming", window: upcoming, opensAt: o, untilMs: o - now };
+    }
+
+    const last = windows
+      .slice()
+      .sort((a, b) => new Date(b.closes_at).getTime() - new Date(a.closes_at).getTime())[0];
+    return { phase: "closed", lastWindow: last };
+  }, [windows, now]);
+}
+
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return "หมดเวลาแล้ว";
+  const totalMin = Math.floor(ms / 60_000);
+  const days = Math.floor(totalMin / (60 * 24));
+  const hours = Math.floor((totalMin % (60 * 24)) / 60);
+  const minutes = totalMin % 60;
+  if (days > 0) return `${days} วัน ${hours} ชั่วโมง`;
+  if (hours > 0) return `${hours} ชั่วโมง ${minutes} นาที`;
+  return `${minutes} นาที`;
+}
+
+const THAI_MONTHS_ABBR = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+function formatThaiDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const date = `${d.getDate()} ${THAI_MONTHS_ABBR[d.getMonth()]} ${d.getFullYear() + 543}`;
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${date} ${hh}:${mm} น.`;
+}
+
+function WindowStatusBanner({ state, loading }: { state: WindowState; loading: boolean }) {
+  if (loading) return null;
+
+  if (state.phase === "open") {
+    const urgent = state.remainingMs < 24 * 60 * 60 * 1000;
+    return (
+      <div
+        className={
+          "mb-3 rounded-lg border px-4 py-3 flex flex-wrap items-center gap-3 " +
+          (urgent
+            ? "border-amber-300 bg-amber-50"
+            : "border-emerald-300 bg-emerald-50")
+        }
+      >
+        <Chip tone={urgent ? "warn" : "success"}>
+          <CheckCircle2 size={12} /> เปิดรับคำขอ
+        </Chip>
+        <div className="flex flex-col min-w-0">
+          <div className={"text-sm font-medium " + (urgent ? "text-amber-900" : "text-emerald-900")}>
+            <Clock size={14} className="inline -mt-0.5 mr-1" />
+            เหลืออีก {formatRemaining(state.remainingMs)} จะปิดรับ
+          </div>
+          <div className={"text-xs " + (urgent ? "text-amber-800" : "text-emerald-800")}>
+            ปิดรับ: {formatThaiDateTime(state.window.closes_at)}
+            {state.window.note ? ` · ${state.window.note}` : ""}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.phase === "upcoming") {
+    return (
+      <div className="mb-3 rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 flex flex-wrap items-center gap-3">
+        <Chip tone="info"><CalendarClock size={12} /> ยังไม่เปิดรับ</Chip>
+        <div className="flex flex-col min-w-0">
+          <div className="text-sm font-medium text-sky-900">
+            จะเปิดรับใน {formatRemaining(state.untilMs)}
+          </div>
+          <div className="text-xs text-sky-800">
+            เปิดรับ: {formatThaiDateTime(state.window.opens_at)}
+            {" → "}
+            ปิดรับ: {formatThaiDateTime(state.window.closes_at)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.phase === "closed") {
+    return (
+      <div className="mb-3 rounded-lg border border-hairline bg-slate-50 px-4 py-3 flex flex-wrap items-center gap-3">
+        <Chip tone="neutral"><AlertCircle size={12} /> ปิดรับคำขอแล้ว</Chip>
+        <div className="text-sm text-ink-2">
+          {state.lastWindow
+            ? `ช่วงล่าสุดปิดรับเมื่อ ${formatThaiDateTime(state.lastWindow.closes_at)}`
+            : "ไม่มีช่วงเวลารับสมัครที่เปิดอยู่"}
+          {" — โปรดติดต่อเจ้าหน้าที่หากต้องการยื่นคำขอ"}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-hairline bg-slate-50 px-4 py-3 flex flex-wrap items-center gap-3">
+      <Chip tone="neutral"><AlertCircle size={12} /> ยังไม่กำหนดช่วงเวลารับสมัคร</Chip>
+      <div className="text-sm text-ink-2">
+        เจ้าหน้าที่ยังไม่ได้กำหนดช่วงเวลารับคำขอ TA สำหรับภาคเรียนนี้
       </div>
     </div>
   );

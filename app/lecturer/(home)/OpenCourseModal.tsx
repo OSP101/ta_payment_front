@@ -8,7 +8,7 @@ import {
   DatePicker, DateField, Calendar, I18nProvider, toast,
 } from "@heroui/react";
 import { parseDate, type DateValue } from "@internationalized/date";
-import { BookPlus, CircleAlert, Clock } from "lucide-react";
+import { BookPlus, CircleAlert, Clock, Check, ChevronRight, ChevronDown } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
@@ -31,6 +31,7 @@ interface FC {
   credits: number;
   lecture_hrs: number;
   lab_hrs: number;
+  self_hrs: number;
   is_active: boolean;
 }
 
@@ -127,6 +128,12 @@ export default function OpenCourseModal({
       ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่มสอน"
       : null;
 
+  // Progressive reveal gates: each step unlocks the next only when its
+  // required fields are filled cleanly.
+  const step1Done = !!draft.faculty_course_id;
+  const step2Done = step1Done && !!draft.starts_on && !!draft.ends_on && !dateError;
+  const step3Done = step2Done && totalSections > 0;
+
   const canSubmit =
     !!draft.faculty_course_id &&
     !!draft.starts_on &&
@@ -188,11 +195,9 @@ export default function OpenCourseModal({
         </>
       }
     >
-      <div className="space-y-5">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted mb-2">
-            เลือกรายวิชาจากคณะ
-          </div>
+      <div className="space-y-3">
+        {/* Step 1 — always visible */}
+        <StepCard n={1} title="เลือกวิชา" done={!!draft.faculty_course_id}>
           <CourseAutocomplete
             items={activeFcs}
             value={draft.faculty_course_id}
@@ -205,122 +210,145 @@ export default function OpenCourseModal({
                 <div className="text-xs text-muted mt-0.5">{selected.name_th}</div>
               </div>
               <div className="text-xs text-muted ms-auto tabular">
-                {selected.credits}({selected.lecture_hrs}-{selected.lab_hrs}) หน่วยกิต
+                {selected.credits}({selected.lecture_hrs}-{selected.lab_hrs}-{selected.self_hrs}) หน่วยกิต
               </div>
             </div>
           )}
-        </div>
+        </StepCard>
 
-        <SectionDivider label="ช่วงเวลาเรียน" required />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FieldGroup label="วันเริ่มสอน">
-            <ThaiDateField
-              value={draft.starts_on}
-              onChange={v => setDraft(d => ({ ...d, starts_on: v }))}
-            />
-          </FieldGroup>
-          <FieldGroup label="วันสิ้นสุด" error={dateError ?? undefined}>
-            <ThaiDateField
-              value={draft.ends_on}
-              onChange={v => setDraft(d => ({ ...d, ends_on: v }))}
-            />
-          </FieldGroup>
-        </div>
-
-        <SectionDivider label="กลุ่มเรียน (section)" required />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FieldGroup
-            label={<span className="inline-flex items-center gap-2">ภาคปกติ <Chip tone="brand">regular</Chip></span>}
-            hint={
-              draft.regular_sections > 0
-                ? `จะสร้าง sec ${Array.from({ length: draft.regular_sections }, (_, i) => i + 1).join(", ")}`
-                : "ยังไม่เปิด section ภาคปกติ"
-            }
-          >
-            <TextInput
-              type="number" min={0} max={99} step={1}
-              value={draft.regular_sections}
-              onChange={e => setDraft(d => ({ ...d, regular_sections: clampSectionCount(e.target.value) }))}
-              className="max-w-[140px]"
-            />
-          </FieldGroup>
-          <FieldGroup
-            label={<span className="inline-flex items-center gap-2">ภาคพิเศษ <Chip tone="warn">special</Chip></span>}
-            hint={
-              draft.special_sections > 0
-                ? `จะสร้าง sec ${Array.from({ length: draft.special_sections }, (_, i) => 801 + i).join(", ")}`
-                : "ยังไม่เปิด section ภาคพิเศษ"
-            }
-          >
-            <TextInput
-              type="number" min={0} max={99} step={1}
-              value={draft.special_sections}
-              onChange={e => setDraft(d => ({ ...d, special_sections: clampSectionCount(e.target.value) }))}
-              className="max-w-[140px]"
-            />
-          </FieldGroup>
-        </div>
-        <div className="text-xs text-muted -mt-2">
-          รวมทั้งหมด <b className="tabular">{totalSections}</b> section — เลขห้อง จำนวน นศ.
-          และตารางเวลากรอกที่นี่ได้ หรือมาแก้ในหน้าจัดการวิชาภายหลังก็ได้
-        </div>
-
-        {totalSections > 0 && (
-          <SectionStudentCounts
-            regularSecs={regularSecNos(draft.regular_sections)}
-            specialSecs={specialSecNos(draft.special_sections)}
-            counts={draft.student_counts}
-            onChange={(sec, v) =>
-              setDraft(d => ({ ...d, student_counts: { ...d.student_counts, [sec]: v } }))
-            }
-          />
+        {/* Step 2 — revealed after Step 1 */}
+        {step1Done && (
+          <StepCard n={2} title="ช่วงเวลาเรียน" done={step2Done}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <FieldGroup label="วันเริ่มสอน">
+                <ThaiDateField
+                  value={draft.starts_on}
+                  onChange={v => setDraft(d => ({ ...d, starts_on: v }))}
+                />
+              </FieldGroup>
+              <FieldGroup label="วันสิ้นสุด" error={dateError ?? undefined}>
+                <ThaiDateField
+                  value={draft.ends_on}
+                  onChange={v => setDraft(d => ({ ...d, ends_on: v }))}
+                />
+              </FieldGroup>
+            </div>
+          </StepCard>
         )}
 
-        {totalSections > 0 && (
-          <SectionSchedulesPanel
-            regularSecs={regularSecNos(draft.regular_sections)}
-            specialSecs={specialSecNos(draft.special_sections)}
-            schedules={draft.schedules}
-            onChange={(sec, rows) =>
-              setDraft(d => ({ ...d, schedules: { ...d.schedules, [sec]: rows } }))
-            }
-          />
+        {/* Step 3 — revealed after Step 2 */}
+        {step2Done && (
+          <StepCard n={3} title="กลุ่มเรียน (section)" done={step3Done}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <FieldGroup
+                label={<span className="inline-flex items-center gap-2">ภาคปกติ <Chip tone="brand">regular</Chip></span>}
+                hint={
+                  draft.regular_sections > 0
+                    ? `จะสร้าง sec ${Array.from({ length: draft.regular_sections }, (_, i) => i + 1).join(", ")}`
+                    : "ยังไม่เปิด section ภาคปกติ"
+                }
+              >
+                <TextInput
+                  type="number" min={0} max={99} step={1}
+                  value={draft.regular_sections}
+                  onChange={e => setDraft(d => ({ ...d, regular_sections: clampSectionCount(e.target.value) }))}
+                  className="max-w-[140px]"
+                />
+              </FieldGroup>
+              <FieldGroup
+                label={<span className="inline-flex items-center gap-2">ภาคพิเศษ <Chip tone="warn">special</Chip></span>}
+                hint={
+                  draft.special_sections > 0
+                    ? `จะสร้าง sec ${Array.from({ length: draft.special_sections }, (_, i) => 801 + i).join(", ")}`
+                    : "ยังไม่เปิด section ภาคพิเศษ"
+                }
+              >
+                <TextInput
+                  type="number" min={0} max={99} step={1}
+                  value={draft.special_sections}
+                  onChange={e => setDraft(d => ({ ...d, special_sections: clampSectionCount(e.target.value) }))}
+                  className="max-w-[140px]"
+                />
+              </FieldGroup>
+            </div>
+            {totalSections > 0 && (
+              <div className="text-xs text-muted mt-2">
+                รวมทั้งหมด <b className="tabular">{totalSections}</b> section
+              </div>
+            )}
+          </StepCard>
         )}
 
-        <SectionDivider label="วันสอบ (ไม่บังคับตอนนี้)" />
-        <div className="text-xs text-muted -mt-2">
-          หากยังไม่ทราบ สามารถเว้นว่างและกลับมากรอกภายหลังได้ —
-          <b className="text-warning ms-1">
-            แต่ TA จะไม่สามารถสร้างการลงบันทึกเวลาได้จนกว่าจะกรอกครบ
-          </b>
-        </div>
+        {/* Optional block — revealed after Step 3 */}
+        {step3Done && (
+          <div className="rounded-lg border border-border bg-surface-secondary/30 p-3">
+            <div className="text-xs font-semibold text-muted mb-2">
+              รายละเอียดเพิ่มเติม <span className="font-normal">(ไม่บังคับ — กรอกที่นี่ หรือมาแก้ในหน้าจัดการวิชาภายหลังก็ได้)</span>
+            </div>
+            <div className="space-y-2">
+              <Collapsible
+                title="จำนวนนักศึกษาต่อ section"
+                summary={studentCountsSummary(draft.student_counts, totalSections)}
+              >
+                <SectionStudentCounts
+                  regularSecs={regularSecNos(draft.regular_sections)}
+                  specialSecs={specialSecNos(draft.special_sections)}
+                  counts={draft.student_counts}
+                  onChange={(sec, v) =>
+                    setDraft(d => ({ ...d, student_counts: { ...d.student_counts, [sec]: v } }))
+                  }
+                />
+              </Collapsible>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FieldGroup label={<span>สอบกลางภาค <Chip tone="brand">บรรยาย</Chip></span>}>
-            <ThaiDateField
-              value={draft.midterm_lecture_date}
-              onChange={v => setDraft(d => ({ ...d, midterm_lecture_date: v }))}
-            />
-          </FieldGroup>
-          <FieldGroup label={<span>สอบกลางภาค <Chip tone="warn">ปฏิบัติการ</Chip></span>}>
-            <ThaiDateField
-              value={draft.midterm_lab_date}
-              onChange={v => setDraft(d => ({ ...d, midterm_lab_date: v }))}
-            />
-          </FieldGroup>
-          <FieldGroup label={<span>สอบปลายภาค <Chip tone="brand">บรรยาย</Chip></span>}>
-            <ThaiDateField
-              value={draft.final_lecture_date}
-              onChange={v => setDraft(d => ({ ...d, final_lecture_date: v }))}
-            />
-          </FieldGroup>
-          <FieldGroup label={<span>สอบปลายภาค <Chip tone="warn">ปฏิบัติการ</Chip></span>}>
-            <ThaiDateField
-              value={draft.final_lab_date}
-              onChange={v => setDraft(d => ({ ...d, final_lab_date: v }))}
-            />
-          </FieldGroup>
-        </div>
+              <Collapsible
+                title="ตารางเวลาเรียน"
+                summary={schedulesSummary(draft.schedules, totalSections)}
+              >
+                <SectionSchedulesPanel
+                  regularSecs={regularSecNos(draft.regular_sections)}
+                  specialSecs={specialSecNos(draft.special_sections)}
+                  schedules={draft.schedules}
+                  onChange={(sec, rows) =>
+                    setDraft(d => ({ ...d, schedules: { ...d.schedules, [sec]: rows } }))
+                  }
+                />
+              </Collapsible>
+
+              <Collapsible
+                title="วันสอบ"
+                summary={examSummary(draft)}
+                warn="TA จะสร้างการลงบันทึกเวลาไม่ได้จนกว่าจะกรอกครบ"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FieldGroup label={<span>สอบกลางภาค <Chip tone="brand">บรรยาย</Chip></span>}>
+                    <ThaiDateField
+                      value={draft.midterm_lecture_date}
+                      onChange={v => setDraft(d => ({ ...d, midterm_lecture_date: v }))}
+                    />
+                  </FieldGroup>
+                  <FieldGroup label={<span>สอบกลางภาค <Chip tone="warn">ปฏิบัติการ</Chip></span>}>
+                    <ThaiDateField
+                      value={draft.midterm_lab_date}
+                      onChange={v => setDraft(d => ({ ...d, midterm_lab_date: v }))}
+                    />
+                  </FieldGroup>
+                  <FieldGroup label={<span>สอบปลายภาค <Chip tone="brand">บรรยาย</Chip></span>}>
+                    <ThaiDateField
+                      value={draft.final_lecture_date}
+                      onChange={v => setDraft(d => ({ ...d, final_lecture_date: v }))}
+                    />
+                  </FieldGroup>
+                  <FieldGroup label={<span>สอบปลายภาค <Chip tone="warn">ปฏิบัติการ</Chip></span>}>
+                    <ThaiDateField
+                      value={draft.final_lab_date}
+                      onChange={v => setDraft(d => ({ ...d, final_lab_date: v }))}
+                    />
+                  </FieldGroup>
+                </div>
+              </Collapsible>
+            </div>
+          </div>
+        )}
 
         {err && (
           <Alert status="danger" icon={<CircleAlert size={16} />} title="เปิดรายวิชาไม่สำเร็จ" description={err} />
@@ -444,16 +472,87 @@ function SectionSchedulesPanel({
   );
 }
 
-function SectionDivider({ label, required }: { label: string; required?: boolean }) {
+function StepCard({
+  n, title, done, children,
+}: {
+  n: number;
+  title: string;
+  done: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-center gap-2 mt-1">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-        {label}
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <div
+          className={
+            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 " +
+            (done
+              ? "bg-success-soft text-success-soft-foreground"
+              : "bg-accent-soft text-accent-soft-foreground")
+          }
+          aria-hidden
+        >
+          {done ? <Check size={12} /> : n}
+        </div>
+        <div className="font-semibold text-sm">{title}</div>
       </div>
-      {required && <span className="text-xs text-danger">*</span>}
-      <div className="flex-1 border-t border-border" />
+      {children}
     </div>
   );
+}
+
+function Collapsible({
+  title, summary, warn, children,
+}: {
+  title: string;
+  summary?: string;
+  warn?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-border bg-surface">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-secondary/50 transition-colors"
+      >
+        {open ? <ChevronDown size={14} className="text-muted shrink-0" /> : <ChevronRight size={14} className="text-muted shrink-0" />}
+        <span className="text-sm font-medium">{title}</span>
+        {summary && <span className="text-xs text-muted ms-auto">{summary}</span>}
+      </button>
+      {open && (
+        <div className="p-3 border-t border-border space-y-3">
+          {warn && (
+            <div className="text-xs text-warning">
+              {warn}
+            </div>
+          )}
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function studentCountsSummary(counts: Record<string, string>, total: number): string {
+  const filled = Object.values(counts).filter(v => v.trim() !== "" && Number(v) > 0).length;
+  if (filled === 0) return "ยังไม่กรอก";
+  return `กรอกแล้ว ${filled}/${total} section`;
+}
+
+function schedulesSummary(schedules: Record<string, SectionScheduleRow[]>, total: number): string {
+  const filled = Object.values(schedules).filter(rows => rows.length > 0).length;
+  if (filled === 0) return "ยังไม่กำหนด";
+  return `กำหนดแล้ว ${filled}/${total} section`;
+}
+
+function examSummary(d: Draft): string {
+  const filled = [d.midterm_lecture_date, d.midterm_lab_date, d.final_lecture_date, d.final_lab_date]
+    .filter(v => !!v).length;
+  if (filled === 0) return "ยังไม่กำหนด";
+  return `กรอกแล้ว ${filled}/4`;
 }
 
 function CourseAutocomplete({
