@@ -8,11 +8,14 @@ import {
   DatePicker, DateField, Calendar, I18nProvider, toast,
 } from "@heroui/react";
 import { parseDate, type DateValue } from "@internationalized/date";
-import { BookPlus, CircleAlert } from "lucide-react";
+import { BookPlus, CircleAlert, Clock } from "lucide-react";
 import { api } from "../../lib/api";
 import {
   Modal, Button, FieldGroup, TextInput, Alert, Chip,
 } from "../../components/ui";
+import SectionScheduleEditor, {
+  type SectionScheduleRow, toApiPayload, validateRows,
+} from "../../components/SectionScheduleEditor";
 
 interface FC {
   id: string;
@@ -36,6 +39,9 @@ interface Draft {
   special_sections: number;
   // Keyed by sec_no. Empty string = not specified (server saves 0).
   student_counts: Record<string, string>;
+  // Keyed by sec_no. Empty array = no schedule specified — lecturer can
+  // fill in later via the settings page.
+  schedules: Record<string, SectionScheduleRow[]>;
 }
 
 const EMPTY: Draft = {
@@ -49,6 +55,7 @@ const EMPTY: Draft = {
   regular_sections: 1,
   special_sections: 0,
   student_counts: {},
+  schedules: {},
 };
 
 // KKU convention: regular sections numbered 1..N, special sections start at 801.
@@ -60,16 +67,25 @@ function specialSecNos(n: number): string[] {
   return Array.from({ length: n }, (_, i) => String(801 + i));
 }
 function buildSections(
-  regular: number, special: number, counts: Record<string, string>,
-): { sec_no: string; track: "regular" | "special"; num_students: number }[] {
-  const out: { sec_no: string; track: "regular" | "special"; num_students: number }[] = [];
-  for (const n of regularSecNos(regular)) {
-    out.push({ sec_no: n, track: "regular", num_students: Number(counts[n] || 0) });
-  }
-  for (const n of specialSecNos(special)) {
-    out.push({ sec_no: n, track: "special", num_students: Number(counts[n] || 0) });
-  }
-  return out;
+  regular: number, special: number,
+  counts: Record<string, string>,
+  schedules: Record<string, SectionScheduleRow[]>,
+): {
+  sec_no: string;
+  track: "regular" | "special";
+  num_students: number;
+  schedules: ReturnType<typeof toApiPayload>;
+}[] {
+  const one = (sec_no: string, track: "regular" | "special") => ({
+    sec_no,
+    track,
+    num_students: Number(counts[sec_no] || 0),
+    schedules: toApiPayload(schedules[sec_no] ?? []),
+  });
+  return [
+    ...regularSecNos(regular).map(n => one(n, "regular")),
+    ...specialSecNos(special).map(n => one(n, "special")),
+  ];
 }
 
 export default function OpenCourseModal({
@@ -94,11 +110,16 @@ export default function OpenCourseModal({
 
   const totalSections = draft.regular_sections + draft.special_sections;
 
+  const scheduleBlocked = Object.values(draft.schedules).some(rows =>
+    rows.length > 0 && validateRows(rows).hasBlockingError,
+  );
+
   const canSubmit =
     !!draft.faculty_course_id &&
     !!draft.starts_on &&
     !!draft.ends_on &&
     totalSections > 0 &&
+    !scheduleBlocked &&
     !saving;
 
   async function submit() {
@@ -115,7 +136,10 @@ export default function OpenCourseModal({
         midterm_lab_date: draft.midterm_lab_date || undefined,
         final_lecture_date: draft.final_lecture_date || undefined,
         final_lab_date: draft.final_lab_date || undefined,
-        sections: buildSections(draft.regular_sections, draft.special_sections, draft.student_counts),
+        sections: buildSections(
+          draft.regular_sections, draft.special_sections,
+          draft.student_counts, draft.schedules,
+        ),
       };
       const res = await api.post<{ id: string }>("/teaching-courses", body);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
@@ -220,7 +244,8 @@ export default function OpenCourseModal({
           </FieldGroup>
         </div>
         <div className="text-xs text-muted -mt-2">
-          รวมทั้งหมด <b className="tabular">{totalSections}</b> section — เลขห้องและตารางเวลาสามารถแก้ไขได้ในหน้าจัดการวิชา
+          รวมทั้งหมด <b className="tabular">{totalSections}</b> section — เลขห้อง จำนวน นศ.
+          และตารางเวลากรอกที่นี่ได้ หรือมาแก้ในหน้าจัดการวิชาภายหลังก็ได้
         </div>
 
         {totalSections > 0 && (
@@ -230,6 +255,17 @@ export default function OpenCourseModal({
             counts={draft.student_counts}
             onChange={(sec, v) =>
               setDraft(d => ({ ...d, student_counts: { ...d.student_counts, [sec]: v } }))
+            }
+          />
+        )}
+
+        {totalSections > 0 && (
+          <SectionSchedulesPanel
+            regularSecs={regularSecNos(draft.regular_sections)}
+            specialSecs={specialSecNos(draft.special_sections)}
+            schedules={draft.schedules}
+            onChange={(sec, rows) =>
+              setDraft(d => ({ ...d, schedules: { ...d.schedules, [sec]: rows } }))
             }
           />
         )}
@@ -328,6 +364,64 @@ function SecCountGrid({
             />
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function SectionSchedulesPanel({
+  regularSecs, specialSecs, schedules, onChange,
+}: {
+  regularSecs: string[];
+  specialSecs: string[];
+  schedules: Record<string, SectionScheduleRow[]>;
+  onChange: (sec: string, rows: SectionScheduleRow[]) => void;
+}) {
+  const allSecs = [
+    ...regularSecs.map(n => ({ sec: n, track: "regular" as const })),
+    ...specialSecs.map(n => ({ sec: n, track: "special" as const })),
+  ];
+  const [openSec, setOpenSec] = useState<string | null>(null);
+
+  return (
+    <div className="rounded-lg border border-border p-3 space-y-2 bg-surface-secondary/40">
+      <div className="text-xs text-muted">
+        <b>ตารางเวลาเรียนต่อ section</b> — ไม่บังคับ กดที่ section เพื่อกำหนดวัน-เวลาเรียน
+      </div>
+      <div className="divide-y divide-border rounded-md border border-border bg-surface">
+        {allSecs.map(({ sec, track }) => {
+          const rows = schedules[sec] ?? [];
+          const isOpen = openSec === sec;
+          return (
+            <div key={sec} className="p-2">
+              <button
+                type="button"
+                onClick={() => setOpenSec(isOpen ? null : sec)}
+                className="w-full flex items-center gap-2 text-left"
+              >
+                <Clock size={13} className="text-muted" />
+                <span className="text-sm font-medium tabular">Sec {sec}</span>
+                <Chip tone={track === "special" ? "warn" : "brand"}>
+                  {track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
+                </Chip>
+                <span className="text-xs text-muted ms-auto">
+                  {rows.length > 0
+                    ? `${rows.length} คาบ`
+                    : "ยังไม่กำหนด"}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="mt-2">
+                  <SectionScheduleEditor
+                    value={rows}
+                    onChange={next => onChange(sec, next)}
+                    compact
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

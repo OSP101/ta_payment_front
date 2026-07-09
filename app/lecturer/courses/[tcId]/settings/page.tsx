@@ -5,17 +5,21 @@ import {
   Breadcrumbs, DatePicker, DateField, Calendar, I18nProvider, Tabs, toast,
 } from "@heroui/react";
 import { parseDate, type DateValue } from "@internationalized/date";
-import { Save, X, CircleAlert, Info as InfoIcon, Lock, Plus, Trash2, LayoutGrid, Users, CalendarDays } from "lucide-react";
+import { Save, X, CircleAlert, Info as InfoIcon, Lock, Plus, Trash2, LayoutGrid, Users, CalendarDays, Clock } from "lucide-react";
 import { api } from "../../../../lib/api";
 import {
   PageHeader, Panel, Button, FieldGroup, TextInput, Chip, Alert, Modal, EmptyState,
 } from "../../../../components/ui";
+import SectionScheduleEditor, {
+  type SectionScheduleRow, validateRows, toApiPayload, ScheduleSummary,
+} from "../../../../components/SectionScheduleEditor";
 
 interface SectionRow {
   id: string;
   sec_no: string;
   track: "regular" | "special" | string;
   num_students: number;
+  schedules?: SectionScheduleRow[];
 }
 
 interface TC {
@@ -328,8 +332,9 @@ function SectionsPanel({
             <thead>
               <tr>
                 <th style={{ width: 100 }}>Sec</th>
-                <th style={{ width: 160 }}>ประเภท</th>
-                <th className="num" style={{ width: 240 }}>จำนวนนักศึกษา</th>
+                <th style={{ width: 140 }}>ประเภท</th>
+                <th className="num" style={{ width: 220 }}>จำนวนนักศึกษา</th>
+                <th>ตารางเวลา</th>
                 {!locked && <th className="actions" style={{ width: 80 }} />}
               </tr>
             </thead>
@@ -374,9 +379,11 @@ function SectionEditRow({
 }) {
   const [count, setCount] = useState(String(section.num_students));
   const [saving, setSaving] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   useEffect(() => { setCount(String(section.num_students)); }, [section.num_students]);
 
   const dirty = Number(count) !== section.num_students;
+  const scheduleRows = section.schedules ?? [];
 
   async function save() {
     if (!dirty || locked) return;
@@ -414,6 +421,22 @@ function SectionEditRow({
           <span className="text-xs text-muted">คน</span>
         </div>
       </td>
+      <td>
+        <div className="flex items-center gap-2 flex-wrap">
+          {scheduleRows.length > 0 ? (
+            <ScheduleSummary rows={scheduleRows} />
+          ) : (
+            <span className="text-xs text-muted italic">ยังไม่กำหนด</span>
+          )}
+          <Button
+            variant="ghost" size="sm"
+            onClick={() => setScheduleOpen(true)}
+            aria-label={locked ? "ดูตารางเวลา" : "แก้ตารางเวลา"}
+          >
+            <Clock size={13} />{locked ? "ดู" : "แก้"}
+          </Button>
+        </div>
+      </td>
       {!locked && (
         <td className="actions">
           <div className="inline-flex gap-1">
@@ -430,7 +453,92 @@ function SectionEditRow({
           </div>
         </td>
       )}
+      <SectionScheduleModal
+        open={scheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+        tcId={tcId}
+        section={section}
+        locked={locked}
+      />
     </tr>
+  );
+}
+
+function SectionScheduleModal({
+  open, onClose, tcId, section, locked,
+}: {
+  open: boolean;
+  onClose: () => void;
+  tcId: string;
+  section: SectionRow;
+  locked: boolean;
+}) {
+  const [rows, setRows] = useState<SectionScheduleRow[]>(section.schedules ?? []);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Reset draft each time the modal opens or the source data changes.
+  useEffect(() => {
+    if (open) { setRows(section.schedules ?? []); setErr(null); }
+  }, [open, section.schedules]);
+
+  const errors = validateRows(rows);
+  const canSave = !locked && !errors.hasBlockingError && !saving;
+
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      await api.put(`/teaching-courses/${tcId}/sections/${section.id}/schedules`, {
+        schedules: toApiPayload(rows),
+      });
+      await mutate(`/teaching-courses/${tcId}`);
+      toast.success(`บันทึกตารางเวลา Sec ${section.sec_no} เรียบร้อยแล้ว`);
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message || "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Clock size={18} />
+          ตารางเวลา Sec {section.sec_no}
+          <Chip tone={section.track === "special" ? "warn" : "brand"}>
+            {section.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
+          </Chip>
+        </span>
+      }
+      size="xl"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ปิด</Button>
+          {!locked && (
+            <Button variant="primary" onClick={save} disabled={!canSave} isPending={saving}>
+              <Save size={14} />บันทึก
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="text-xs text-muted">
+          กำหนดวัน–เวลาเรียนของ section นี้ให้ครบทุกคาบ (ทั้งบรรยายและปฏิบัติการ) —
+          ระบบใช้ข้อมูลนี้เพื่อเช็คว่า TA ที่เลือกไว้ไม่ติดเวลาเรียนอื่น
+        </div>
+        <SectionScheduleEditor value={rows} onChange={setRows} disabled={locked} />
+        {err && (
+          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={err} />
+        )}
+      </div>
+    </Modal>
   );
 }
 

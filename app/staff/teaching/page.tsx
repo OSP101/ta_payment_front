@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
-import { Upload, Download, Save, CalendarPlus } from "lucide-react";
+import { Upload, Download, Save, CalendarPlus, Settings } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api, type Term } from "../../lib/api";
 import {
@@ -120,9 +120,14 @@ const courseColumns: DataColumn<TC>[] = [
     id: "actions", label: <span className="sr-only">การจัดการ</span>,
     className: "text-right",
     render: c => (
-      <a href={`/api/v1/exports/course/${c.id}.zip`}>
-        <Button variant="ghost" size="sm"><Download size={14} /> ZIP</Button>
-      </a>
+      <div className="inline-flex gap-1">
+        <Link href={`/staff/teaching/${c.id}`}>
+          <Button variant="ghost" size="sm"><Settings size={14} /> จัดการ</Button>
+        </Link>
+        <a href={`/api/v1/exports/course/${c.id}.zip`}>
+          <Button variant="ghost" size="sm"><Download size={14} /> ZIP</Button>
+        </a>
+      </div>
     ),
   },
 ];
