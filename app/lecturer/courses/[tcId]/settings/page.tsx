@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
   Breadcrumbs, DatePicker, DateField, Calendar, I18nProvider, Tabs, toast,
@@ -66,13 +66,8 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Sync draft when the course data loads / refreshes (unless user is editing).
-  useEffect(() => {
-    if (tc) setDraft(toDraft(tc));
-  }, [tc]);
-
   const canonical = toDraft(tc);
-  const dirty = tc && (
+  const dirty = !!tc && (
     draft.starts_on !== canonical.starts_on ||
     draft.ends_on !== canonical.ends_on ||
     draft.midterm_lecture_date !== canonical.midterm_lecture_date ||
@@ -81,10 +76,34 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
     draft.final_lab_date !== canonical.final_lab_date
   );
 
+  // Keep the latest `dirty` in a ref so the sync effect can read it without
+  // re-subscribing (which would resync on every keystroke). Initialised false
+  // so the very first load always syncs.
+  const dirtyRef = useRef(false);
+
+  // Sync draft when the course data loads / refreshes — but ONLY when the user
+  // has no unsaved edits, otherwise a background SWR revalidation would silently
+  // discard what they've typed. Declared BEFORE the ref-update effect so on the
+  // commit where `tc` arrives it reads the *previous* (false) dirty value and
+  // performs the initial sync.
+  useEffect(() => {
+    if (tc && !dirtyRef.current) setDraft(toDraft(tc));
+  }, [tc]);
+
+  useEffect(() => { dirtyRef.current = dirty; });
+
+  // ISO date strings (YYYY-MM-DD) compare lexicographically, so a plain string
+  // comparison is enough to enforce ends_on >= starts_on.
+  const dateRangeError =
+    draft.starts_on && draft.ends_on && draft.ends_on < draft.starts_on
+      ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่มสอน"
+      : null;
+
   const canSave =
     dirty &&
     !!draft.starts_on &&
     !!draft.ends_on &&
+    !dateRangeError &&
     !saving;
 
   async function save() {
@@ -225,7 +244,10 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
                   onChange={v => setDraft(d => ({ ...d, starts_on: v }))}
                 />
               </FieldGroup>
-              <FieldGroup label={<span className="inline-flex items-center gap-1">วันสิ้นสุด <span className="text-danger">*</span></span>}>
+              <FieldGroup
+                label={<span className="inline-flex items-center gap-1">วันสิ้นสุด <span className="text-danger">*</span></span>}
+                error={dateRangeError ?? undefined}
+              >
                 <ThaiDateField
                   value={draft.ends_on}
                   onChange={v => setDraft(d => ({ ...d, ends_on: v }))}
@@ -382,7 +404,15 @@ function SectionEditRow({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   useEffect(() => { setCount(String(section.num_students)); }, [section.num_students]);
 
-  const dirty = Number(count) !== section.num_students;
+  // Empty input is treated as "no change" (not 0). Reject negatives and
+  // non-integers.
+  const trimmed = count.trim();
+  const parsed = trimmed === "" ? null : Number(trimmed);
+  const countError =
+    parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed))
+      ? "จำนวนต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป"
+      : null;
+  const dirty = parsed !== null && !countError && parsed !== section.num_students;
   const scheduleRows = section.schedules ?? [];
 
   async function save() {
@@ -410,15 +440,18 @@ function SectionEditRow({
         </Chip>
       </td>
       <td className="num">
-        <div className="inline-flex items-center gap-2">
-          <TextInput
-            type="number" min={0} max={9999}
-            value={count}
-            onChange={e => setCount(e.target.value)}
-            disabled={locked}
-            className="w-24 text-right"
-          />
-          <span className="text-xs text-muted">คน</span>
+        <div className="inline-flex flex-col items-end gap-1">
+          <div className="inline-flex items-center gap-2">
+            <TextInput
+              type="number" min={0} max={9999}
+              value={count}
+              onChange={e => setCount(e.target.value)}
+              disabled={locked}
+              className="w-24 text-right"
+            />
+            <span className="text-xs text-muted">คน</span>
+          </div>
+          {countError && <span className="text-xs text-danger">{countError}</span>}
         </div>
       </td>
       <td>

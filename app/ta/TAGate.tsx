@@ -31,17 +31,29 @@ export function TAApprovalProvider({
 }
 
 // LockedActionButton disables its inner button when the TA is not approved.
+const LOCKED_REASON = "รอเจ้าหน้าที่อนุมัติเอกสาร";
 export function LockedActionButton({
   children,
   disabled,
   ...rest
 }: React.ComponentProps<typeof Button>) {
   const { approved } = useTAApproval();
-  return (
+  const button = (
     <Button {...rest} disabled={disabled || !approved}>
       {children}
     </Button>
   );
+  // When the lock is due to pending approval, explain why via a native tooltip.
+  // A disabled button doesn't emit hover events, so the title lives on a
+  // wrapping span (which still receives them) and doubles as an aria label.
+  if (!approved) {
+    return (
+      <span title={LOCKED_REASON} aria-label={LOCKED_REASON} className="inline-flex">
+        {button}
+      </span>
+    );
+  }
+  return button;
 }
 
 // Persistent banner shown at the top of every TA page (except the profile

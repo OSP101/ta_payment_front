@@ -28,6 +28,10 @@ export default function Signature({ value, onChange }: Props) {
   const drawingRef = useRef(false);
   const [strokes, setStrokes] = useState<Point[][]>([]);
   const [current, setCurrent] = useState<Point[]>([]);
+  // Mirror of `current` kept in a ref so commit logic in `up()` reads the latest
+  // points synchronously WITHOUT doing side effects inside a setState updater
+  // (which React StrictMode double-invokes, duplicating strokes).
+  const currentRef = useRef<Point[]>([]);
 
   // Redraw whenever committed strokes or the in-progress path changes.
   useEffect(() => {
@@ -54,10 +58,13 @@ export default function Signature({ value, onChange }: Props) {
     const c = canvasRef.current;
     if (!c) return null;
     const rect = c.getBoundingClientRect();
-    // Clamp to canvas bounds so out-of-frame drags don't produce absurd
-    // coordinates when the pointer is captured.
-    const x = Math.max(0, Math.min(W, e.clientX - rect.left));
-    const y = Math.max(0, Math.min(H, e.clientY - rect.top));
+    // Scale CSS pixels → internal bitmap coordinates. On mobile the canvas is
+    // shrunk to fit (max-w-full), so rect.width < W; without this factor the
+    // stroke lands offset from the finger.
+    const scaleX = rect.width > 0 ? c.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? c.height / rect.height : 1;
+    const x = Math.max(0, Math.min(W, (e.clientX - rect.left) * scaleX));
+    const y = Math.max(0, Math.min(H, (e.clientY - rect.top) * scaleY));
     return { x, y };
   }, []);
 
@@ -73,6 +80,7 @@ export default function Signature({ value, onChange }: Props) {
     const p = posFromEvent(e);
     if (!p) return;
     drawingRef.current = true;
+    currentRef.current = [p];
     setCurrent([p]);
     try {
       // Capture ensures move/up fire even if the pointer leaves the canvas.
@@ -84,7 +92,9 @@ export default function Signature({ value, onChange }: Props) {
     if (!drawingRef.current) return;
     const p = posFromEvent(e);
     if (!p) return;
-    setCurrent(c => [...c, p]);
+    const next = [...currentRef.current, p];
+    currentRef.current = next;
+    setCurrent(next);
   }
   function up(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!drawingRef.current) return;
@@ -92,17 +102,17 @@ export default function Signature({ value, onChange }: Props) {
     try {
       (e.target as Element).releasePointerCapture?.(e.pointerId);
     } catch { /* ignore */ }
-    setCurrent(cur => {
-      // Only commit a stroke with at least one point.
-      if (cur.length === 0) return cur;
-      const all = [...strokes, cur];
-      setStrokes(all);
-      emit(all);
-      return [];
-    });
+    const cur = currentRef.current;
+    if (cur.length === 0) return;
+    const all = [...strokes, cur];
+    currentRef.current = [];
+    setStrokes(all);
+    setCurrent([]);
+    emit(all);
   }
   function clear() {
     drawingRef.current = false;
+    currentRef.current = [];
     setStrokes([]);
     setCurrent([]);
     onChange("", "");
@@ -110,7 +120,7 @@ export default function Signature({ value, onChange }: Props) {
 
   return (
     <div>
-      <div className="border border-slate-300 rounded-md bg-white inline-block">
+      <div className="border border-slate-300 rounded-md bg-white inline-block max-w-full">
         <canvas
           ref={canvasRef}
           width={W}
@@ -120,7 +130,9 @@ export default function Signature({ value, onChange }: Props) {
           onPointerUp={up}
           onPointerCancel={up}
           onPointerLeave={e => { if (drawingRef.current) up(e); }}
-          className="touch-none cursor-crosshair block"
+          aria-label="พื้นที่วาดลายเซ็น"
+          role="img"
+          className="touch-none cursor-crosshair block max-w-full h-auto"
         />
       </div>
       <div className="flex gap-2 mt-2">

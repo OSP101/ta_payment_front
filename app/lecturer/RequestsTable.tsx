@@ -84,12 +84,11 @@ export function RequestsTable({
       filters={[{
         id: "status",
         placeholder: "ทุกสถานะ",
+        // Derive from the full STATUS_MAP so every status (incl. cancelled /
+        // pending) is filterable — not just a hardcoded subset.
         options: [
           { id: "", label: "ทุกสถานะ" },
-          { id: "submitted", label: "ส่งแล้ว · รออนุมัติ" },
-          { id: "approved", label: "อนุมัติแล้ว" },
-          { id: "rejected", label: "ปฏิเสธ" },
-          { id: "draft", label: "ฉบับร่าง" },
+          ...Object.entries(STATUS_MAP).map(([id, v]) => ({ id, label: v.label })),
         ],
         predicate: (r, v) => r.status === v,
       }]}

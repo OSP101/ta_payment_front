@@ -7,6 +7,7 @@ import {
   IdCard, Wallet, FileSignature, CreditCard, BookOpen,
 } from "lucide-react";
 import { api } from "../../lib/api";
+import { notify } from "../../lib/notify";
 import {
   THAI_BANKS, findBank, normalizeAccountNo, normalizeNationalID, STUDENT_ID_PATTERN,
 } from "../../lib/banks";
@@ -84,6 +85,17 @@ function isProfileStepDone(p: Profile | undefined) {
   return validateProfile(p) === null && !!p.signature_svg;
 }
 
+// Thai national-ID checksum (mod-11). The 13th digit is a check digit derived
+// from the first 12, so a single-digit typo is caught before submit.
+function isValidThaiID(id: string): boolean {
+  const d = (id ?? "").replace(/[^0-9]/g, "");
+  if (d.length !== 13) return false;
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += Number(d[i]) * (13 - i);
+  const check = (11 - (sum % 11)) % 10;
+  return check === Number(d[12]);
+}
+
 // Returns null when the profile is submittable, otherwise the reason (Thai).
 // Kept as a single function so the Save button and the "step done" indicator
 // use identical rules — otherwise we'd have UX drift between the two.
@@ -103,9 +115,19 @@ function validateProfile(p: Profile): string | null {
   if (nid.length !== 13) {
     return "เลขบัตรประชาชนต้องมี 13 หลัก";
   }
+  if (!isValidThaiID(nid)) {
+    return "เลขบัตรประชาชนไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง";
+  }
   const bank = findBank(p.bank_name);
   if (!bank) {
     return "โปรดเลือกธนาคารจากรายการ";
+  }
+  if (!p.bank_branch.trim()) {
+    return "โปรดกรอกสาขาของธนาคาร";
+  }
+  const branchCode = (p.branch_code ?? "").replace(/[^0-9]/g, "");
+  if (branchCode.length !== 4) {
+    return "รหัสสาขาต้องเป็นตัวเลข 4 หลัก";
   }
   const acct = normalizeAccountNo(p.account_no);
   if (!bank.accountLen.includes(acct.length)) {
@@ -114,6 +136,9 @@ function validateProfile(p: Profile): string | null {
   }
   if (!p.account_name.trim()) {
     return "โปรดกรอกชื่อบัญชี";
+  }
+  if (!p.signature_svg) {
+    return "โปรดวาดลายเซ็นก่อนบันทึก";
   }
   return null;
 }
@@ -385,12 +410,12 @@ function ProfileStep({
   onSaved: () => void;
 }) {
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const bank = useMemo(() => findBank(form.bank_name), [form.bank_name]);
   const acctDigits = useMemo(() => normalizeAccountNo(form.account_no), [form.account_no]);
   const nidDigits  = useMemo(() => normalizeNationalID(form.national_id), [form.national_id]);
+  const phoneDigits = useMemo(() => (form.phone ?? "").replace(/[^0-9]/g, ""), [form.phone]);
   const formErr    = useMemo(() => validateProfile(form), [form]);
 
   // Field-level errors only surface after the user has interacted with that
@@ -399,9 +424,19 @@ function ProfileStep({
     touched.student_id && form.student_id && !STUDENT_ID_PATTERN.test(form.student_id.trim())
       ? "รูปแบบต้องเป็น XXXXXXXXX-X (11 อักษรรวมขีด)"
       : undefined;
+  const phoneErr =
+    touched.phone && phoneDigits.length > 0 && phoneDigits.length !== 9 && phoneDigits.length !== 10
+      ? `กรอก ${phoneDigits.length} หลัก (ต้องมี 9-10 หลัก)`
+      : undefined;
   const nidErr =
-    touched.national_id && nidDigits.length > 0 && nidDigits.length !== 13
-      ? `กรอก ${nidDigits.length}/13 หลัก`
+    touched.national_id && nidDigits.length > 0
+      ? (nidDigits.length !== 13
+          ? `กรอก ${nidDigits.length}/13 หลัก`
+          : (!isValidThaiID(nidDigits) ? "เลขบัตรประชาชนไม่ถูกต้อง" : undefined))
+      : undefined;
+  const branchCodeErr =
+    touched.branch_code && form.branch_code.length > 0 && form.branch_code.length !== 4
+      ? `กรอก ${form.branch_code.length}/4 หลัก`
       : undefined;
   const acctErr =
     touched.account_no && bank && acctDigits.length > 0 && !bank.accountLen.includes(acctDigits.length)
@@ -409,20 +444,22 @@ function ProfileStep({
       : undefined;
 
   async function save() {
-    setMsg(null);
     if (formErr) {
       // Ensure the offending field's error message is visible.
-      setTouched({ student_id: true, national_id: true, bank_name: true, account_no: true, account_name: true });
-      setMsg(formErr);
+      setTouched({
+        student_id: true, phone: true, national_id: true, bank_name: true,
+        bank_branch: true, branch_code: true, account_no: true, account_name: true,
+      });
+      notify.error(formErr);
       return;
     }
     setSaving(true);
     try {
       await api.put("/me/profile", form);
-      setMsg("บันทึกเรียบร้อย");
+      notify.success("บันทึกข้อมูลเรียบร้อย");
       await mutate("/me/profile");
       onSaved();
-    } catch (e) { setMsg((e as Error).message); }
+    } catch (e) { notify.error(e); }
     finally { setSaving(false); }
   }
 
@@ -454,7 +491,7 @@ function ProfileStep({
             maxLength={11}
             placeholder="เช่น 653020123-4" />
         </FieldGroup>
-        <FieldGroup label="เบอร์โทรศัพท์" hint="9-10 หลัก (ใช้กรอกในแบบแจ้งเจ้าหนี้)">
+        <FieldGroup label="เบอร์โทรศัพท์" hint="9-10 หลัก (ใช้กรอกในแบบแจ้งเจ้าหนี้)" error={phoneErr}>
           <TextInput value={form.phone}
             onChange={e => setForm({ ...form, phone: onlyDigits(e.target.value).slice(0, 10) })}
             onBlur={() => setTouched(t => ({ ...t, phone: true }))}
@@ -496,9 +533,10 @@ function ProfileStep({
             onChange={e => setForm({ ...form, bank_branch: e.target.value })}
             placeholder="เช่น ขอนแก่น" />
         </FieldGroup>
-        <FieldGroup label="รหัสสาขา" hint="ตัวเลข 4 หลัก">
+        <FieldGroup label="รหัสสาขา" hint="ตัวเลข 4 หลัก" error={branchCodeErr}>
           <TextInput value={form.branch_code}
-            onChange={e => setForm({ ...form, branch_code: onlyDigits(e.target.value) })}
+            onChange={e => setForm({ ...form, branch_code: onlyDigits(e.target.value).slice(0, 4) })}
+            onBlur={() => setTouched(t => ({ ...t, branch_code: true }))}
             inputMode="numeric"
             maxLength={4}
             placeholder="เช่น 0555" />
@@ -539,10 +577,9 @@ function ProfileStep({
       </div>
 
       <div className="flex flex-wrap gap-2 items-center mt-4 pt-4 border-t border-[var(--hairline)]">
-        <Button variant="primary" onClick={save} disabled={saving}>
+        <Button variant="primary" onClick={save} disabled={saving} isPending={saving}>
           <Save size={14} /> {saving ? "กำลังบันทึก…" : "บันทึกและทำขั้นตอนถัดไป"}
         </Button>
-        {msg && <div className="text-sm text-muted ml-auto">{msg}</div>}
       </div>
     </div>
   );
@@ -564,7 +601,6 @@ function CreditorFormStep({
   const [confirming, setConfirming] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
   const [showGrid, setShowGrid] = useState(false);
   // Bump the nonce to force the iframe to re-fetch (browsers cache PDF blobs
   // aggressively — even with Cache-Control: no-store the embedded viewer will
@@ -572,40 +608,45 @@ function CreditorFormStep({
   const [nonce, setNonce] = useState(() => Date.now());
 
   async function confirm() {
-    setMsg(null); setConfirming(true);
+    setConfirming(true);
     try {
       await api.post("/me/creditor-form/confirm", {});
-      setMsg("บันทึกเอกสารที่ระบบสร้างเรียบร้อย");
+      notify.success("บันทึกเอกสารที่ระบบสร้างเรียบร้อย");
       await mutate("/me/documents");
       onDone();
     } catch (e) {
-      setMsg((e as Error).message);
+      notify.error(e);
     } finally {
       setConfirming(false);
     }
   }
 
-  function pickFile(f: File | null) {
-    if (!f) { setFile(null); setMsg(null); return; }
+  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    if (!f) { setFile(null); return; }
     const err = validateUploadFile(f);
-    if (err) { setFile(null); setMsg(err); return; }
-    setFile(f); setMsg(null);
+    if (err) {
+      // Clear the native input so the rejected filename doesn't linger and
+      // re-selecting the same file still re-fires onChange.
+      setFile(null); e.target.value = ""; notify.error(err); return;
+    }
+    setFile(f);
   }
 
   async function upload() {
     if (!file) return;
-    setMsg(null); setUploading(true);
+    setUploading(true);
     try {
       const fd = new FormData();
       fd.append("kind", "creditor_form");
       fd.append("file", file);
       await api.upload("/me/documents", fd);
       setFile(null);
-      setMsg("อัปโหลดเรียบร้อย");
+      notify.success("อัปโหลดเรียบร้อย");
       await mutate("/me/documents");
       onDone();
     } catch (e) {
-      setMsg((e as Error).message);
+      notify.error(e);
     } finally {
       setUploading(false);
     }
@@ -688,17 +729,15 @@ function CreditorFormStep({
           >
             <input
               type="file" accept={ACCEPT_ATTR}
-              onChange={e => pickFile(e.target.files?.[0] ?? null)}
+              onChange={pickFile}
               className="block w-full text-sm text-[var(--ink-2)] file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[var(--brand-soft)] file:text-[var(--brand)] hover:file:brightness-95"
             />
           </FieldGroup>
-          <Button variant="secondary" onClick={upload} disabled={!file || uploading}>
+          <Button variant="secondary" onClick={upload} disabled={!file || uploading} isPending={uploading}>
             <Upload size={14} /> {uploading ? "กำลังอัปโหลด…" : "อัปโหลดไฟล์ที่กรอกเอง"}
           </Button>
         </div>
       </div>
-
-      {msg && <div className="text-sm text-muted mt-3">{msg}</div>}
     </div>
   );
 }
@@ -712,29 +751,33 @@ function DocStep({
 }: { kind: DocKind; doc: Doc | undefined; onUploaded: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
-  function pickFile(f: File | null) {
-    if (!f) { setFile(null); setMsg(null); return; }
+  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    if (!f) { setFile(null); return; }
     const err = validateUploadFile(f);
-    if (err) { setFile(null); setMsg(err); return; }
-    setFile(f); setMsg(null);
+    if (err) {
+      // Clear the native input so the rejected filename doesn't linger and
+      // re-selecting the same file still re-fires onChange.
+      setFile(null); e.target.value = ""; notify.error(err); return;
+    }
+    setFile(f);
   }
 
   async function upload() {
     if (!file) return;
-    setMsg(null); setUploading(true);
+    setUploading(true);
     try {
       const fd = new FormData();
       fd.append("kind", kind);
       fd.append("file", file);
       await api.upload("/me/documents", fd);
       setFile(null);
-      setMsg("อัปโหลดเรียบร้อย");
+      notify.success("อัปโหลดเรียบร้อย");
       await mutate("/me/documents");
       onUploaded();
     } catch (e) {
-      setMsg((e as Error).message);
+      notify.error(e);
     }
     finally { setUploading(false); }
   }
@@ -764,15 +807,14 @@ function DocStep({
         >
           <input
             type="file" accept={ACCEPT_ATTR}
-            onChange={e => pickFile(e.target.files?.[0] ?? null)}
+            onChange={pickFile}
             className="block w-full text-sm text-[var(--ink-2)] file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[var(--brand-soft)] file:text-[var(--brand)] hover:file:brightness-95"
           />
         </FieldGroup>
-        <Button variant="primary" onClick={upload} disabled={!file || uploading}>
+        <Button variant="primary" onClick={upload} disabled={!file || uploading} isPending={uploading}>
           <Upload size={14} /> {uploading ? "กำลังอัปโหลด…" : "อัปโหลด"}
         </Button>
       </div>
-      {msg && <div className="text-xs text-muted mt-2">{msg}</div>}
     </div>
   );
 }

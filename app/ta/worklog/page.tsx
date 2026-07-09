@@ -1,13 +1,42 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import useSWR, { mutate } from "swr";
-import { Wand2, Send, Save } from "lucide-react";
+import { Wand2, Send, Save, Clock } from "lucide-react";
 import { api } from "../../lib/api";
+import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Select, TextInput, StatusChip,
+  PageHeader, Panel, Select, TextInput, StatusChip, ConfirmDialog,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { LockedActionButton, useTAApproval } from "../TAGate";
+
+// Max billable hours per single work-log entry. Kept in sync with backend.
+const MAX_ROW_HOURS = 7;
+
+function parseHM(t: string): number {
+  const [h, m] = (t ?? "").split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return NaN;
+  return h * 60 + m;
+}
+
+// Returns null when the row is savable, otherwise a Thai reason. Enforced
+// client-side so the user gets instant feedback before hitting the server.
+function validateRow(w: WorkLog): string | null {
+  if (!w.work_date) return "โปรดระบุวันที่ปฏิบัติงาน";
+  if (!w.start_time || !w.end_time) return "โปรดระบุเวลาเริ่มและเวลาสิ้นสุด";
+  const s = parseHM(w.start_time);
+  const e = parseHM(w.end_time);
+  if (Number.isNaN(s) || Number.isNaN(e)) return "รูปแบบเวลาไม่ถูกต้อง";
+  if (e <= s) return "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม";
+  if (!(w.hours > 0)) return "จำนวนชั่วโมงต้องมากกว่า 0";
+  if (w.hours > MAX_ROW_HOURS) return `จำนวนชั่วโมงต้องไม่เกิน ${MAX_ROW_HOURS} ชั่วโมงต่อรายการ`;
+  const span = (e - s) / 60;
+  if (Math.abs(span - w.hours) > 0.25) {
+    return `จำนวนชั่วโมง (${w.hours}) ไม่ตรงกับช่วงเวลา ${w.start_time}–${w.end_time} (${span.toFixed(1)} ชม.)`;
+  }
+  return null;
+}
 
 interface Assignment { id: string; course_code: string; course_name: string; }
 interface WorkLog {
@@ -26,46 +55,84 @@ const ACTIVITY_LABEL: Record<string, string> = {
 
 export default function WorklogPage() {
   const { approved } = useTAApproval();
+  const searchParams = useSearchParams();
+  const courseParam = searchParams.get("course");
   const { data: assignments } = useSWR<Assignment[]>(
     "/me/assignments",
     (p: string) => api.get<Assignment[]>(p).catch(() => [] as Assignment[]),
   );
   const [aid, setAid] = useState<string>("");
-  useEffect(() => { if (!aid && assignments && assignments[0]) setAid(assignments[0].id); }, [assignments, aid]);
+  // Pick the initial assignment: honour the ?course= param from the home page
+  // when it points at a real assignment, otherwise fall back to the first one.
+  useEffect(() => {
+    if (aid || !assignments || assignments.length === 0) return;
+    const fromParam = courseParam && assignments.find(a => a.id === courseParam);
+    setAid(fromParam ? fromParam.id : assignments[0].id);
+  }, [assignments, aid, courseParam]);
 
   const { data: logs } = useSWR<WorkLog[]>(aid ? `/assignments/${aid}/worklog` : null);
 
   // Per-row edit drafts, keyed by log id. A row without a draft shows server data.
   const [drafts, setDrafts] = useState<Record<string, WorkLog>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
   useEffect(() => { setDrafts({}); }, [aid]);
 
   const view = (l: WorkLog): WorkLog => drafts[l.id] ?? l;
   const patch = (l: WorkLog, p: Partial<WorkLog>) =>
     setDrafts(prev => ({ ...prev, [l.id]: { ...(prev[l.id] ?? l), ...p } }));
 
+  const hasUnsaved = Object.keys(drafts).length > 0;
+  const totalHours = useMemo(
+    () => (logs ?? []).reduce((sum, l) => sum + (view(l).hours || 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logs, drafts],
+  );
+
+  const revalidate = () =>
+    mutate((k) => typeof k === "string" && k.startsWith(`/assignments/${aid}/worklog`));
+
   async function saveRow(l: WorkLog) {
     const w = view(l);
+    const err = validateRow(w);
+    if (err) { notify.error(err); return; }
     setSavingId(l.id);
     try {
       await api.put(`/assignments/${w.assignment_id}/worklog`, w);
       setDrafts(prev => { const next = { ...prev }; delete next[l.id]; return next; });
-      mutate((k: string) => k.startsWith(`/assignments/${aid}/worklog`));
+      notify.success("บันทึกรายการแล้ว");
+      revalidate();
+    } catch (e) {
+      notify.error(e);
     } finally { setSavingId(null); }
   }
 
   async function generate() {
     if (!aid) return;
     if (!confirm("สร้างตารางบันทึกเวลาอัตโนมัติจากตารางสอน? การกระทำนี้จะเขียนทับ draft ที่มีอยู่")) return;
-    await api.post(`/assignments/${aid}/worklog/generate`);
-    mutate((k: string) => k.startsWith(`/assignments/${aid}/worklog`));
+    setGenerating(true);
+    try {
+      await api.post(`/assignments/${aid}/worklog/generate`);
+      notify.success("สร้างรายการอัตโนมัติเรียบร้อย");
+      revalidate();
+    } catch (e) {
+      notify.error(e);
+    } finally { setGenerating(false); }
   }
 
   async function submit() {
+    setConfirmSubmit(false);
     if (!aid) return;
-    await api.post(`/assignments/${aid}/worklog/submit`);
-    mutate((k: string) => k.startsWith(`/assignments/${aid}/worklog`));
-    alert("ส่งให้อาจารย์อนุมัติแล้ว");
+    setSubmitting(true);
+    try {
+      await api.post(`/assignments/${aid}/worklog/submit`);
+      notify.success("ส่งให้อาจารย์อนุมัติแล้ว");
+      revalidate();
+    } catch (e) {
+      notify.error(e);
+    } finally { setSubmitting(false); }
   }
 
   const columns: DataColumn<WorkLog>[] = [
@@ -102,7 +169,7 @@ export default function WorklogPage() {
       render: l => {
         const w = view(l);
         return w.status === "draft" ? (
-          <TextInput type="number" step="0.5" className="w-20 text-right tabular"
+          <TextInput type="number" step="0.5" min={0} max={MAX_ROW_HOURS} className="w-20 text-right tabular"
                      value={w.hours} onChange={e => patch(l, { hours: Number(e.target.value) })} />
         ) : w.hours.toFixed(1);
       },
@@ -173,10 +240,10 @@ export default function WorklogPage() {
                 <option key={a.id} value={a.id}>{a.course_code} — {a.course_name}</option>
               ))}
             </Select>
-            <LockedActionButton variant="secondary" onClick={generate}>
+            <LockedActionButton variant="secondary" onClick={generate} isPending={generating} disabled={generating}>
               <Wand2 size={14} /> สร้างอัตโนมัติ
             </LockedActionButton>
-            <LockedActionButton variant="primary" onClick={submit}>
+            <LockedActionButton variant="primary" onClick={() => setConfirmSubmit(true)} isPending={submitting} disabled={submitting}>
               <Send size={14} /> ส่งอนุมัติ
             </LockedActionButton>
           </>
@@ -186,6 +253,18 @@ export default function WorklogPage() {
       {!approved && (
         <div className="mb-4 text-xs text-muted">
           * ปุ่มบันทึก/ส่งจะปลดล็อกหลังเจ้าหน้าที่อนุมัติเอกสารในโปรไฟล์
+        </div>
+      )}
+
+      {aid && (
+        <div className="mb-3 inline-flex items-center gap-2 text-sm text-foreground bg-surface-secondary border border-[var(--hairline)] px-3 py-1.5 rounded-lg">
+          <Clock size={14} className="text-muted" />
+          <span>รวมชั่วโมงทั้งหมด</span>
+          <span className="font-semibold tabular">{totalHours.toFixed(1)}</span>
+          <span className="text-muted">ชม.</span>
+          {hasUnsaved && (
+            <span className="text-xs text-warning-soft-foreground ml-2">(มีรายการที่ยังไม่บันทึก)</span>
+          )}
         </div>
       )}
 
@@ -229,6 +308,20 @@ export default function WorklogPage() {
           />
         </div>
       </Panel>
+
+      <ConfirmDialog
+        open={confirmSubmit}
+        onClose={() => setConfirmSubmit(false)}
+        onConfirm={submit}
+        isPending={submitting}
+        title="ส่งบันทึกเวลาให้อาจารย์อนุมัติ"
+        confirmLabel="ส่งอนุมัติ"
+        message={
+          hasUnsaved
+            ? "มีรายการที่แก้ไขแล้วแต่ยังไม่ได้กดบันทึก — รายการเหล่านั้นจะไม่ถูกส่ง โปรดบันทึกก่อนหากต้องการรวมไปด้วย ต้องการส่งต่อหรือไม่?"
+            : "เมื่อส่งแล้วจะไม่สามารถแก้ไขรายการที่ส่งได้จนกว่าอาจารย์จะพิจารณา ต้องการส่งหรือไม่?"
+        }
+      />
     </div>
   );
 }

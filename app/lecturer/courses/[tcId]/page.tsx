@@ -1,13 +1,14 @@
 "use client";
 import { use } from "react";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { Breadcrumbs } from "@heroui/react";
 import {
-  Send, Calculator, ClipboardCheck, ArrowRight, Users, GraduationCap, BookOpen, ChevronLeft,
+  Send, Calculator, ClipboardCheck, ArrowRight, Users, GraduationCap, BookOpen, ChevronLeft, CircleAlert,
 } from "lucide-react";
+import { ApiError } from "../../../lib/api";
 import {
-  PageHeader, Panel, StatCard, Button, Chip, EmptyState,
+  PageHeader, Panel, StatCard, Button, Chip, EmptyState, Alert,
 } from "../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../RequestsTable";
 
@@ -24,8 +25,11 @@ interface TC {
 
 export default function CoursePage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
-  const { data: course } = useSWR<TC>(tcId ? `/teaching-courses/${tcId}` : null);
+  const courseKey = tcId ? `/teaching-courses/${tcId}` : null;
+  const { data: course, error: courseError, isLoading: courseLoading } = useSWR<TC>(courseKey);
   const { data: allReqs } = useSWR<TARequestRow[]>("/ta-requests");
+
+  const notFound = courseError instanceof ApiError && courseError.status === 404;
 
   const courseReqs = (allReqs ?? []).filter(
     r => r.teaching_course_id === tcId || r.course_code === course?.code,
@@ -53,10 +57,33 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
         }
       />
 
-      {!course ? (
+      {notFound ? (
         <Panel>
           <EmptyState title="ไม่พบรายวิชา" description="อาจถูกลบหรือคุณไม่ได้รับผิดชอบวิชานี้" />
         </Panel>
+      ) : courseError ? (
+        <Panel>
+          <Alert
+            status="danger"
+            icon={<CircleAlert size={16} />}
+            title="โหลดข้อมูลรายวิชาไม่สำเร็จ"
+            description={(courseError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+            action={
+              courseKey && (
+                <Button variant="secondary" size="sm" onPress={() => mutate(courseKey)}>
+                  ลองใหม่
+                </Button>
+              )
+            }
+          />
+        </Panel>
+      ) : courseLoading || !course ? (
+        <div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            {[0, 1, 2, 3].map(i => <div key={i} className="h-24 rounded-xl bg-surface-secondary animate-pulse" />)}
+          </div>
+          <div className="h-40 rounded-xl bg-surface-secondary animate-pulse" />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

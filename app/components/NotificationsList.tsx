@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight, Bell, Check, CheckCheck } from "lucide-react";
 import { api } from "../lib/api";
+import { notify } from "../lib/notify";
 import { PageHeader, Panel, EmptyState, Button } from "./ui";
 
 interface Notif {
@@ -38,14 +39,19 @@ export default function NotificationsList({
     try {
       await api.post(`/me/notifications/${id}/read`);
       mutate((k) => typeof k === "string" && k.startsWith("/me/notifications"));
-    } catch {}
+    } catch (e) {
+      notify.error(e);
+    }
   }
 
   async function markAll() {
     try {
       await api.post(`/me/notifications/read-all`);
       mutate((k) => typeof k === "string" && k.startsWith("/me/notifications"));
-    } catch {}
+      notify.success("ทำเครื่องหมายอ่านทั้งหมดแล้ว");
+    } catch (e) {
+      notify.error(e);
+    }
   }
 
   return (

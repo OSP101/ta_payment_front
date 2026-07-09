@@ -89,6 +89,9 @@ interface Draft {
   publishedAt: string; // datetime-local value
   expires: boolean;
   expiresAt: string;   // datetime-local value
+  // Original ISO published_at of the item being edited — preserved so editing
+  // an already-live announcement doesn't reset its publish time to "now".
+  originalPublishedAt?: string | null;
 }
 
 const emptyDraft: Draft = {
@@ -103,6 +106,7 @@ const emptyDraft: Draft = {
   publishedAt: "",
   expires: false,
   expiresAt: "",
+  originalPublishedAt: null,
 };
 
 // ============================================================================
@@ -115,7 +119,15 @@ export default function AnnouncePage() {
   const [pending, setPending] = useState(false);
   const [tab, setTab] = useState("compose");
   const [confirmDelete, setConfirmDelete] = useState<Ann | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  // Pending action queued behind a "discard unsaved composer content?" confirm.
+  const [confirmSwitch, setConfirmSwitch] = useState<{ run: () => void } | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
+
+  // The composer has content worth protecting if the user typed a title/body.
+  function composerHasContent() {
+    return draft.title.trim() !== "" || draft.body.trim() !== "";
+  }
 
   // ---- derived counts for the header tabs ----------------------------------
   const counts = useMemo(() => {
@@ -145,10 +157,29 @@ export default function AnnouncePage() {
       publishedAt: a.published_at ? toLocalInput(a.published_at) : "",
       expires: !!a.expires_at,
       expiresAt: a.expires_at ? toLocalInput(a.expires_at) : "",
+      originalPublishedAt: a.published_at ?? null,
     });
     setTab("compose");
     // Scroll composer into view — the list can be long on wide screens.
     setTimeout(() => editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+  }
+
+  // Guarded entry points: warn before discarding unsaved composer content when
+  // switching to edit another item or starting a fresh announcement.
+  function guardedLoadForEdit(a: Ann) {
+    if (draft.id !== a.id && composerHasContent()) {
+      setConfirmSwitch({ run: () => loadForEdit(a) });
+    } else {
+      loadForEdit(a);
+    }
+  }
+  function guardedNew() {
+    if (composerHasContent()) {
+      setConfirmSwitch({ run: () => { resetDraft(); setTab("compose"); } });
+    } else {
+      resetDraft();
+      setTab("compose");
+    }
   }
 
   // ---- payload assembly ----------------------------------------------------
@@ -167,7 +198,15 @@ export default function AnnouncePage() {
     if (draft.audience.length === 0) return { error: "เลือกกลุ่มผู้รับอย่างน้อยหนึ่งกลุ่ม" };
 
     let publishedAt: string | null = null;
-    if (draft.publishMode === "now") publishedAt = new Date().toISOString();
+    if (draft.publishMode === "now") {
+      // Editing an already-published announcement must keep its original publish
+      // time; only a brand-new "publish now" gets the current timestamp.
+      publishedAt =
+        draft.id && draft.originalPublishedAt &&
+        new Date(draft.originalPublishedAt).getTime() <= Date.now()
+          ? draft.originalPublishedAt
+          : new Date().toISOString();
+    }
     else if (draft.publishMode === "scheduled") {
       if (!draft.publishedAt) return { error: "กรุณาระบุวันเวลาที่จะเผยแพร่" };
       const d = new Date(draft.publishedAt);
@@ -235,6 +274,7 @@ export default function AnnouncePage() {
   async function togglePin(a: Ann) {
     try {
       await api.post("/announcements", { ...toUpsertPayload(a), pinned: !a.pinned });
+      toast.success(a.pinned ? "ยกเลิกปักหมุดแล้ว" : "ปักหมุดไว้บนสุดแล้ว");
       mutate("/announcements?scope=all");
     } catch (e) {
       toast.danger(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
@@ -242,14 +282,17 @@ export default function AnnouncePage() {
   }
 
   async function del(a: Ann) {
-    setConfirmDelete(null);
+    setDeleting(true);
     try {
       await api.del(`/announcements/${a.id}`);
       toast.success("ลบประกาศแล้ว");
       mutate("/announcements?scope=all");
       if (draft.id === a.id) resetDraft();
+      setConfirmDelete(null);
     } catch (e) {
       toast.danger(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -325,7 +368,7 @@ export default function AnnouncePage() {
               <FilterChip active={statusFilter === "draft"}  onClick={() => setStatusFilter("draft")}>ฉบับร่าง ({counts.draft})</FilterChip>
               <FilterChip active={statusFilter === "expired"} onClick={() => setStatusFilter("expired")}>หมดอายุ ({counts.expired})</FilterChip>
               <div className="flex-1" />
-              <Button variant="secondary" size="sm" onPress={() => { resetDraft(); setTab("compose"); }}>
+              <Button variant="secondary" size="sm" onPress={guardedNew}>
                 <Plus size={14} /> ประกาศใหม่
               </Button>
             </div>
@@ -343,7 +386,7 @@ export default function AnnouncePage() {
                     <ManageRow
                       key={a.id}
                       a={a}
-                      onEdit={() => loadForEdit(a)}
+                      onEdit={() => guardedLoadForEdit(a)}
                       onDelete={() => setConfirmDelete(a)}
                       onTogglePublish={() => togglePublish(a)}
                       onTogglePin={() => togglePin(a)}
@@ -358,13 +401,13 @@ export default function AnnouncePage() {
 
       <Modal
         open={!!confirmDelete}
-        onClose={() => setConfirmDelete(null)}
+        onClose={() => { if (!deleting) setConfirmDelete(null); }}
         title="ลบประกาศ?"
         icon={<Trash2 size={18} />}
         footer={
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onPress={() => setConfirmDelete(null)}>ยกเลิก</Button>
-            <Button variant="danger" onPress={() => confirmDelete && del(confirmDelete)}>
+            <Button variant="ghost" onPress={() => setConfirmDelete(null)} disabled={deleting}>ยกเลิก</Button>
+            <Button variant="danger" onPress={() => confirmDelete && del(confirmDelete)} disabled={deleting} isPending={deleting}>
               <Trash2 size={14} /> ลบ
             </Button>
           </div>
@@ -373,6 +416,25 @@ export default function AnnouncePage() {
         <div className="text-sm">
           ลบประกาศ <span className="font-semibold">“{confirmDelete?.title}”</span> ออกจากระบบ?
           การกระทำนี้ไม่สามารถย้อนกลับได้ (การแจ้งเตือนที่ส่งไปแล้วจะยังอยู่ในกล่องขาเข้าของผู้ใช้)
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!confirmSwitch}
+        onClose={() => setConfirmSwitch(null)}
+        title="ทิ้งเนื้อหาที่ยังไม่ได้บันทึก?"
+        icon={<AlertTriangle size={18} />}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onPress={() => setConfirmSwitch(null)}>ยกเลิก</Button>
+            <Button variant="danger" onPress={() => { confirmSwitch?.run(); setConfirmSwitch(null); }}>
+              ทิ้งและดำเนินการต่อ
+            </Button>
+          </div>
+        }
+      >
+        <div className="text-sm">
+          มีเนื้อหาในตัวแก้ไขที่ยังไม่ได้บันทึก หากดำเนินการต่อ เนื้อหานี้จะหายไป ต้องการทิ้งหรือไม่?
         </div>
       </Modal>
     </div>

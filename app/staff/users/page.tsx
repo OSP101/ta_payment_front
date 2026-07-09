@@ -7,8 +7,9 @@ import {
   Label as HLabel,
   TextField as HTextField,
 } from "@heroui/react";
-import { Copy, KeyRound, Pencil, Plus, UserX } from "lucide-react";
+import { Check, Copy, KeyRound, Pencil, Plus, UserCheck, UserX } from "lucide-react";
 import { api } from "../../lib/api";
+import { notify } from "../../lib/notify";
 import {
   Alert, Button, Chip, FieldGroup, Modal,
   PageHeader, Panel, Select,
@@ -23,6 +24,7 @@ interface User {
   last_name: string;
   phone?: string | null;
   study_level?: string | null;
+  study_year?: number | null;
   roles: string[];
   is_active: boolean;
   bank_name?: string | null;
@@ -38,6 +40,9 @@ const STUDY_LEVELS: { value: string; label: string }[] = [
   { value: "phd", label: "ปริญญาเอก" },
 ];
 const ROLE_OPTIONS = ["staff", "lecturer", "ta"] as const;
+// Full role set for the edit multi-select — includes admin so an admin user
+// stays fully editable instead of being silently demoted.
+const ALL_ROLES = ["admin", "staff", "lecturer", "ta"] as const;
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "ผู้บริหาร",
@@ -46,11 +51,12 @@ const ROLE_LABEL: Record<string, string> = {
   ta: "ผู้ช่วยสอน",
 };
 
-function primaryRole(roles: string[]): string {
-  if (roles.includes("ta")) return "ta";
-  if (roles.includes("lecturer")) return "lecturer";
-  if (roles.includes("staff")) return "staff";
-  return roles[0] ?? "";
+/** Order-independent comparison of two role lists. */
+function sameRoles(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((v, i) => v === sb[i]);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -155,6 +161,40 @@ function VSelect({
   );
 }
 
+/** Multi-select role editor (checkbox chips) — preserves every assigned role. */
+function RolesField({
+  label, value, onChange, error, show,
+}: {
+  label: React.ReactNode;
+  value: string[];
+  onChange: (roles: string[]) => void;
+  error: string | null;
+  show: boolean;
+}) {
+  const invalid = show && !!error;
+  return (
+    <FieldGroup label={label} error={invalid ? error : undefined}>
+      <div className="flex gap-2 flex-wrap">
+        {ALL_ROLES.map(r => {
+          const on = value.includes(r);
+          return (
+            <button
+              key={r}
+              type="button"
+              onClick={() => onChange(on ? value.filter(x => x !== r) : [...value, r])}
+              className={`chip cursor-pointer transition ${on ? "chip-brand" : "chip-neutral"}`}
+              aria-pressed={on}
+            >
+              {on ? <Check size={12} className="me-1 inline" /> : null}
+              {ROLE_LABEL[r] ?? r}
+            </button>
+          );
+        })}
+      </div>
+    </FieldGroup>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 
 export default function UsersPage() {
@@ -163,6 +203,11 @@ export default function UsersPage() {
   const [editing, setEditing] = useState<User | null>(null);
   const [resetting, setResetting] = useState<User | null>(null);
   const [deactivating, setDeactivating] = useState<User | null>(null);
+  const [reactivating, setReactivating] = useState<User | null>(null);
+  const existingEmails = useMemo(
+    () => (data?.items ?? []).map(u => u.email.toLowerCase()),
+    [data],
+  );
 
   const columns: DataColumn<User>[] = [
     {
@@ -209,9 +254,13 @@ export default function UsersPage() {
           <Button variant="ghost" size="sm" onClick={() => setResetting(u)}>
             <KeyRound size={14} /> รีเซ็ตรหัส
           </Button>
-          {u.is_active && (
+          {u.is_active ? (
             <Button variant="danger-soft" size="sm" onClick={() => setDeactivating(u)}>
               <UserX size={14} /> ปิด
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={() => setReactivating(u)}>
+              <UserCheck size={14} /> เปิดใช้งาน
             </Button>
           )}
         </div>
@@ -273,20 +322,21 @@ export default function UsersPage() {
         </div>
       </Panel>
 
-      <CreateUserModal open={creating} onClose={() => setCreating(false)} />
+      <CreateUserModal open={creating} onClose={() => setCreating(false)} existingEmails={existingEmails} />
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} />}
       {resetting && <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />}
       {deactivating && <DeactivateModal user={deactivating} onClose={() => setDeactivating(null)} />}
+      {reactivating && <ReactivateModal user={reactivating} onClose={() => setReactivating(null)} />}
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
 
-function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function CreateUserModal({ open, onClose, existingEmails }: { open: boolean; onClose: () => void; existingEmails: string[] }) {
   const [form, setForm] = useState({
     email: "", title: "นาย", first_name: "", last_name: "",
-    role: "ta", study_level: "undergrad",
+    role: "ta", study_level: "undergrad", study_year: "",
   });
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -295,19 +345,24 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
 
   useEffect(() => {
     if (open) {
-      setForm({ email: "", title: "นาย", first_name: "", last_name: "", role: "ta", study_level: "undergrad" });
+      setForm({ email: "", title: "นาย", first_name: "", last_name: "", role: "ta", study_level: "undergrad", study_year: "" });
       setErr(null); setTempPassword(null); setShowErrors(false);
     }
   }, [open]);
 
+  const showYear = form.role === "ta" && form.study_level === "undergrad";
+
   const errors = useMemo(() => ({
-    email: vEmail(form.email),
+    // Client-side duplicate-email guard against the already-loaded user list so
+    // we fail fast before hitting the server.
+    email: vEmail(form.email) ??
+      (existingEmails.includes(form.email.trim().toLowerCase()) ? "อีเมลนี้มีผู้ใช้อยู่แล้ว" : null),
     title: vSelect(form.title, TITLE_OPTIONS),
     first_name: vName(form.first_name, "ชื่อ"),
     last_name: vName(form.last_name, "นามสกุล"),
     role: vSelect(form.role, ROLE_OPTIONS),
     study_level: form.role === "ta" ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
-  }), [form]);
+  }), [form, existingEmails]);
   const hasErrors = Object.values(errors).some(Boolean);
 
   async function submit() {
@@ -322,12 +377,14 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
         last_name: form.last_name.trim(),
         roles: [form.role],
         study_level: form.role === "ta" ? form.study_level : undefined,
+        study_year: showYear && form.study_year ? Number(form.study_year) : undefined,
       };
       const res = await api.post<{ user: User; temp_password: string }>("/users", body);
       mutate((k: string) => k.startsWith("/users"));
       setTempPassword(res.temp_password);
     } catch (e) {
       setErr((e as Error).message);
+      notify.error(e);
     } finally {
       setPending(false);
     }
@@ -392,6 +449,19 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
               </VSelect>
             )}
           </div>
+          {showYear && (
+            <VSelect label="ชั้นปี (สำหรับ TA ปริญญาตรี — จำเป็นสำหรับการใช้โหมด WBA ปี 4)"
+              value={form.study_year}
+              onChange={v => setForm({ ...form, study_year: v })}
+              error={null} show={showErrors}
+            >
+              <option value="">ไม่ระบุ</option>
+              <option value="1">ปี 1</option>
+              <option value="2">ปี 2</option>
+              <option value="3">ปี 3</option>
+              <option value="4">ปี 4</option>
+            </VSelect>
+          )}
           {err && <Alert status="danger" title="ไม่สามารถสร้างผู้ใช้ได้" description={err} />}
         </div>
       )}
@@ -408,8 +478,10 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     first_name: user.first_name,
     last_name: user.last_name,
     phone: user.phone ?? "",
-    role: primaryRole(user.roles),
+    // Preserve the full role set (incl. admin) rather than collapsing to one.
+    roles: [...user.roles],
     study_level: user.study_level ?? "undergrad",
+    study_year: user.study_year != null ? String(user.study_year) : "",
     bank_name: user.bank_name ?? "",
     bank_branch: user.bank_branch ?? "",
     branch_code: user.branch_code ?? "",
@@ -419,13 +491,14 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const isTa = form.roles.includes("ta");
   const errors = useMemo(() => ({
     email: vEmail(form.email),
     title: form.title === "" ? null : vSelect(form.title, TITLE_OPTIONS),
     first_name: vName(form.first_name, "ชื่อ"),
     last_name: vName(form.last_name, "นามสกุล"),
-    role: vSelect(form.role, ROLE_OPTIONS),
-    study_level: form.role === "ta" ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
+    roles: form.roles.length === 0 ? "เลือกบทบาทอย่างน้อยหนึ่งอย่าง" : null,
+    study_level: form.roles.includes("ta") ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
     phone: vPhone(form.phone),
     account_no: vAccountNo(form.account_no),
     branch_code: vBranchCode(form.branch_code),
@@ -437,14 +510,21 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     if (hasErrors) return;
     setPending(true); setErr(null);
     try {
+      const rolesChanged = !sameRoles(form.roles, user.roles);
       await api.patch(`/users/${user.id}`, {
         email: form.email.trim(),
         title: form.title,
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         phone: form.phone.trim(),
-        roles: [form.role],
-        study_level: form.role === "ta" ? form.study_level : "",
+        // Only send roles when they actually changed, so an unrelated edit never
+        // rewrites the user's role set.
+        ...(rolesChanged ? { roles: form.roles } : {}),
+        study_level: isTa ? form.study_level : "",
+        // 0 clears study_year server-side; send it only for undergrad TAs.
+        study_year: isTa && form.study_level === "undergrad"
+          ? (form.study_year ? Number(form.study_year) : 0)
+          : 0,
         bank_name: form.bank_name.trim(),
         bank_branch: form.bank_branch.trim(),
         branch_code: form.branch_code.trim(),
@@ -454,6 +534,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
       onClose();
     } catch (e) {
       setErr((e as Error).message);
+      notify.error(e);
     } finally {
       setPending(false);
     }
@@ -496,21 +577,31 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 error={errors.last_name} show={showErrors}
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <VSelect label="สิทธิ์การใช้งาน" value={form.role}
-                onChange={v => setForm({ ...form, role: v })}
-                error={errors.role} show={showErrors}
-              >
-                <option value="staff">เจ้าหน้าที่</option>
-                <option value="lecturer">อาจารย์</option>
-                <option value="ta">ผู้ช่วยสอน (TA)</option>
-              </VSelect>
-              {form.role === "ta" && (
+            <RolesField
+              label="บทบาท (เลือกได้หลายอย่าง)"
+              value={form.roles}
+              onChange={roles => setForm({ ...form, roles })}
+              error={errors.roles} show={showErrors}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              {isTa && (
                 <VSelect label="ระดับการศึกษา" value={form.study_level}
                   onChange={v => setForm({ ...form, study_level: v })}
                   error={errors.study_level} show={showErrors}
                 >
                   {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                </VSelect>
+              )}
+              {isTa && form.study_level === "undergrad" && (
+                <VSelect label="ชั้นปี (จำเป็นสำหรับ WBA ปี 4)" value={form.study_year}
+                  onChange={v => setForm({ ...form, study_year: v })}
+                  error={null} show={showErrors}
+                >
+                  <option value="">ไม่ระบุ</option>
+                  <option value="1">ปี 1</option>
+                  <option value="2">ปี 2</option>
+                  <option value="3">ปี 3</option>
+                  <option value="4">ปี 4</option>
                 </VSelect>
               )}
               <VField label="เบอร์โทร" placeholder="0812345678"
@@ -619,9 +710,11 @@ function DeactivateModal({ user, onClose }: { user: User; onClose: () => void })
     try {
       await api.post(`/users/${user.id}/deactivate`, { confirm_email: confirmEmail });
       mutate((k: string) => k.startsWith("/users"));
+      notify.success("ปิดใช้งานบัญชีเรียบร้อยแล้ว");
       onClose();
     } catch (e) {
       setErr((e as Error).message);
+      notify.error(e);
     } finally {
       setPending(false);
     }
@@ -653,6 +746,51 @@ function DeactivateModal({ user, onClose }: { user: User; onClose: () => void })
           error={emailError} show={showError}
         />
         {err && <Alert status="danger" title="ปิดใช้งานไม่สำเร็จ" description={err} />}
+      </div>
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+function ReactivateModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setPending(true); setErr(null);
+    try {
+      await api.post(`/users/${user.id}/activate`);
+      mutate((k: string) => k.startsWith("/users"));
+      notify.success("เปิดใช้งานบัญชีเรียบร้อยแล้ว");
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      notify.error(e);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="เปิดใช้งานบัญชี"
+      size="md"
+      footer={<>
+        <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
+        <Button variant="primary" onClick={submit} disabled={pending} isPending={pending}>
+          <UserCheck size={14} /> เปิดใช้งาน
+        </Button>
+      </>}
+    >
+      <div className="space-y-3">
+        <p className="text-sm">
+          เปิดใช้งานบัญชีของ <span className="font-medium">{user.first_name} {user.last_name}</span> ({user.email})
+          อีกครั้ง ผู้ใช้จะสามารถเข้าสู่ระบบได้ตามปกติ
+        </p>
+        {err && <Alert status="danger" title="เปิดใช้งานไม่สำเร็จ" description={err} />}
       </div>
     </Modal>
   );

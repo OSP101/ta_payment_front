@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Dropdown } from "@heroui/react";
 import { Bell, BellRing, Check } from "lucide-react";
 import { api } from "../lib/api";
+import { notify } from "../lib/notify";
 import { Button } from "./ui";
 
 interface Notif {
@@ -35,14 +36,19 @@ export default function NotificationBell({
     try {
       await api.post(`/me/notifications/${id}/read`);
       mutate((k) => typeof k === "string" && k.startsWith("/me/notifications"));
-    } catch {}
+    } catch (e) {
+      notify.error(e);
+    }
   }
 
   async function markAll() {
     try {
       await api.post(`/me/notifications/read-all`);
       mutate((k) => typeof k === "string" && k.startsWith("/me/notifications"));
-    } catch {}
+      notify.success("ทำเครื่องหมายอ่านทั้งหมดแล้ว");
+    } catch (e) {
+      notify.error(e);
+    }
   }
 
   return (
@@ -94,7 +100,12 @@ export default function NotificationBell({
                 type="button"
                 onClick={() => {
                   if (!n.read_at) markRead(n.id);
-                  if (n.link) router.push(n.link);
+                  // Only in-app paths go through the router; guard against
+                  // absolute/external URLs which router.push rejects.
+                  if (n.link) {
+                    if (n.link.startsWith("/")) router.push(n.link);
+                    else window.open(n.link, "_blank", "noopener");
+                  }
                 }}
                 className="w-full text-start px-3 py-2.5 border-b border-border last:border-b-0 hover:bg-surface-secondary transition-colors"
               >

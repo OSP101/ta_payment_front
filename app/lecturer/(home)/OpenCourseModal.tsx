@@ -10,9 +10,16 @@ import {
 import { parseDate, type DateValue } from "@internationalized/date";
 import { BookPlus, CircleAlert, Clock } from "lucide-react";
 import { api } from "../../lib/api";
+import { notify } from "../../lib/notify";
 import {
   Modal, Button, FieldGroup, TextInput, Alert, Chip,
 } from "../../components/ui";
+
+// Clamp a typed section count to a whole number in [0, 99] — blocks decimals,
+// NaN, and out-of-range values that would otherwise reach the backend.
+function clampSectionCount(v: string): number {
+  return Math.min(99, Math.max(0, Math.floor(Number(v) || 0)));
+}
 import SectionScheduleEditor, {
   type SectionScheduleRow, toApiPayload, validateRows,
 } from "../../components/SectionScheduleEditor";
@@ -115,10 +122,16 @@ export default function OpenCourseModal({
     rows.length > 0 && validateRows(rows).hasBlockingError,
   );
 
+  const dateError =
+    draft.starts_on && draft.ends_on && draft.ends_on < draft.starts_on
+      ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่มสอน"
+      : null;
+
   const canSubmit =
     !!draft.faculty_course_id &&
     !!draft.starts_on &&
     !!draft.ends_on &&
+    !dateError &&
     totalSections > 0 &&
     !scheduleBlocked &&
     !saving;
@@ -150,7 +163,10 @@ export default function OpenCourseModal({
       onClose();
       router.push(`${redirectBase}/${res.id}`);
     } catch (e) {
+      // e.g. this faculty course is already opened for the term — surface the
+      // backend's (Thai) reason both inline and as a toast.
       setErr((e as Error).message || "เปิดรายวิชาไม่สำเร็จ");
+      notify.error(e);
     } finally {
       setSaving(false);
     }
@@ -203,7 +219,7 @@ export default function OpenCourseModal({
               onChange={v => setDraft(d => ({ ...d, starts_on: v }))}
             />
           </FieldGroup>
-          <FieldGroup label="วันสิ้นสุด">
+          <FieldGroup label="วันสิ้นสุด" error={dateError ?? undefined}>
             <ThaiDateField
               value={draft.ends_on}
               onChange={v => setDraft(d => ({ ...d, ends_on: v }))}
@@ -222,9 +238,9 @@ export default function OpenCourseModal({
             }
           >
             <TextInput
-              type="number" min={0} max={99}
+              type="number" min={0} max={99} step={1}
               value={draft.regular_sections}
-              onChange={e => setDraft(d => ({ ...d, regular_sections: Math.max(0, Number(e.target.value)) }))}
+              onChange={e => setDraft(d => ({ ...d, regular_sections: clampSectionCount(e.target.value) }))}
               className="max-w-[140px]"
             />
           </FieldGroup>
@@ -237,9 +253,9 @@ export default function OpenCourseModal({
             }
           >
             <TextInput
-              type="number" min={0} max={99}
+              type="number" min={0} max={99} step={1}
               value={draft.special_sections}
-              onChange={e => setDraft(d => ({ ...d, special_sections: Math.max(0, Number(e.target.value)) }))}
+              onChange={e => setDraft(d => ({ ...d, special_sections: clampSectionCount(e.target.value) }))}
               className="max-w-[140px]"
             />
           </FieldGroup>

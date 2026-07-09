@@ -108,6 +108,12 @@ html, body {
   border: 1px solid transparent;
 }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Visible keyboard focus for legacy .btn/.chip elements (accessibility). */
+.btn:focus-visible,
+.chip:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
 .btn-sm { height: 30px; padding: 0 10px; font-size: 0.8125rem; }
 .btn-lg { height: 42px; padding: 0 18px; font-size: 0.9375rem; }
 

@@ -7,8 +7,9 @@ import {
 } from "lucide-react";
 import { Tabs } from "@heroui/react";
 import { api, type Term } from "../../lib/api";
+import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, Modal, TextArea, FieldGroup, Alert, Chip, TabLabel,
+  PageHeader, Panel, Button, Modal, TextArea, FieldGroup, Chip, TabLabel,
 } from "../../components/ui";
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 
@@ -62,7 +63,6 @@ export default function ApprovalsPage() {
   const { data: terms } = useSWR<Term[]>("/terms");
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   // Tab-based status filter — replaces the dropdown so the counts + queue are
   // obvious at a glance.
@@ -139,23 +139,27 @@ export default function ApprovalsPage() {
   );
 
   async function approve(id: string) {
-    setErr(null); setBusyId(id);
+    if (busyId) return;
+    setBusyId(id);
     try {
       await api.post(`/ta-requests/${id}/approve`);
       setDetailId(null);
       mutate("/ta-requests");
+      notify.success("อนุมัติคำขอเรียบร้อยแล้ว");
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "อนุมัติไม่สำเร็จ");
+      notify.error(e);
     } finally { setBusyId(null); }
   }
   async function confirmReject(id: string, reason: string) {
-    setErr(null); setBusyId(id);
+    if (busyId) return;
+    setBusyId(id);
     try {
       await api.post(`/ta-requests/${id}/reject`, { reason });
       setRejectId(null); setDetailId(null);
       mutate("/ta-requests");
+      notify.success("ปฏิเสธคำขอเรียบร้อยแล้ว");
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "ปฏิเสธไม่สำเร็จ");
+      notify.error(e);
     } finally { setBusyId(null); }
   }
 
@@ -171,12 +175,6 @@ export default function ApprovalsPage() {
             : `ทั้งหมด ${data.length} รายการ (ไม่มีที่รออนุมัติ)`;
         })()}
       />
-
-      {err && (
-        <div className="mb-4">
-          <Alert status="danger" icon={<AlertTriangle size={16} />} title="ดำเนินการไม่สำเร็จ" description={err} />
-        </div>
-      )}
 
       <Panel padded={false}>
         <Tabs
@@ -508,11 +506,14 @@ function RejectModal({
   id, busy, onClose, onConfirm,
 }: { id: string | null; busy: boolean; onClose: () => void; onConfirm: (id: string, reason: string) => void }) {
   const [reason, setReason] = useState("");
+  // Reset the reason whenever the target request changes so a stale reason from
+  // a previous request never leaks into a different rejection.
+  useEffect(() => { if (id) setReason(""); }, [id]);
   return (
     <Modal open={!!id} onClose={onClose} title="ระบุเหตุผลการปฏิเสธ"
       footer={<>
-        <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
-        <Button variant="primary" onClick={() => id && onConfirm(id, reason)}
+        <Button variant="ghost" onClick={onClose} disabled={busy}>ยกเลิก</Button>
+        <Button variant="primary" onClick={() => id && !busy && onConfirm(id, reason)}
           disabled={!reason.trim() || busy} isPending={busy}>ยืนยัน</Button>
       </>}
     >

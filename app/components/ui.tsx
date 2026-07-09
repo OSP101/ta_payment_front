@@ -246,7 +246,20 @@ export function Button({
   children,
   ...rest
 }: ButtonProps) {
-  const handlePress = onPress ?? (onClick ? () => onClick({} as React.MouseEvent) : undefined);
+  // Adapt legacy onClick to onPress. Supply a stub event whose common methods
+  // are safe no-ops so callers that call e.preventDefault()/stopPropagation()
+  // don't crash.
+  const handlePress =
+    onPress ??
+    (onClick
+      ? () =>
+          onClick({
+            preventDefault() {},
+            stopPropagation() {},
+            currentTarget: null,
+            target: null,
+          } as unknown as React.MouseEvent)
+      : undefined);
   return (
     <HButton
       variant={variant}
@@ -349,7 +362,9 @@ export function SelectField({
   options,
   className,
   isDisabled,
+  isRequired,
   hint,
+  error,
 }: {
   label?: React.ReactNode;
   placeholder?: string;
@@ -358,17 +373,26 @@ export function SelectField({
   options: SelectOption[];
   className?: string;
   isDisabled?: boolean;
+  isRequired?: boolean;
   hint?: React.ReactNode;
+  error?: React.ReactNode;
 }) {
   return (
     <HSelect
       className={className}
       placeholder={placeholder}
       isDisabled={isDisabled}
+      isRequired={isRequired}
+      isInvalid={!!error}
       selectedKey={value ?? null}
       onSelectionChange={(k: Key | null) => onChange?.(String(k ?? ""))}
     >
-      {label && <HLabel>{label}</HLabel>}
+      {label && (
+        <HLabel>
+          {label}
+          {isRequired && <span className="text-danger"> *</span>}
+        </HLabel>
+      )}
       <HSelect.Trigger>
         <HSelect.Value />
         <HSelect.Indicator />
@@ -383,7 +407,8 @@ export function SelectField({
           ))}
         </HListBox>
       </HSelect.Popover>
-      {hint && <HDescription>{hint}</HDescription>}
+      {hint && !error && <HDescription>{hint}</HDescription>}
+      {error && <HFieldError>{error}</HFieldError>}
     </HSelect>
   );
 }
@@ -442,6 +467,54 @@ export function Modal({
 }
 
 /* -------------------------------------------------------------------------- */
+/* ConfirmDialog — shared confirmation for destructive/irreversible actions   */
+/* -------------------------------------------------------------------------- */
+
+export function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  title = "ยืนยันการดำเนินการ",
+  message,
+  confirmLabel = "ยืนยัน",
+  cancelLabel = "ยกเลิก",
+  danger = false,
+  isPending = false,
+  icon,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title?: React.ReactNode;
+  message?: React.ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  isPending?: boolean;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={() => { if (!isPending) onClose(); }}
+      title={title}
+      size="sm"
+      icon={icon}
+      footer={
+        <>
+          <Button variant="tertiary" onPress={onClose} disabled={isPending}>{cancelLabel}</Button>
+          <Button variant={danger ? "danger" : "primary"} onPress={onConfirm} isPending={isPending}>
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      {typeof message === "string" ? <p className="text-sm text-muted">{message}</p> : message}
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Empty / loading                                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -485,7 +558,7 @@ export function ProgressBar({
     | "accent" | "warning" | "danger" | "success";
   const v = Math.max(0, Math.min(100, value));
   return (
-    <HProgressBar aria-label={label ?? "Progress"} value={v} color={color}>
+    <HProgressBar aria-label={label ?? "ความคืบหน้า"} value={v} color={color}>
       {label && <HLabel>{label}</HLabel>}
       {showValue && <HProgressBar.Output />}
       <HProgressBar.Track>
@@ -542,7 +615,7 @@ export function SearchField({
   className?: string;
 }) {
   return (
-    <HSearchField value={value} onChange={onChange} aria-label={ariaLabel ?? "Search"} className={className}>
+    <HSearchField value={value} onChange={onChange} aria-label={ariaLabel ?? "ค้นหา"} className={className}>
       <HSearchField.Group>
         <HSearchField.SearchIcon />
         <HSearchField.Input placeholder={placeholder} />

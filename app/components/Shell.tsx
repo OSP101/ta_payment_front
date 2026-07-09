@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import { api } from "../lib/api";
+import { notify } from "../lib/notify";
 
 export interface NavItem {
   label: string;
@@ -72,7 +73,13 @@ export default function Shell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   async function logout() {
-    try { await api.post("/auth/logout"); } catch {}
+    try {
+      await api.post("/auth/logout");
+    } catch (e) {
+      // The session cookie is httpOnly, so we can't clear it client-side. Warn
+      // the user (shared-lab machines) but still navigate away.
+      notify.error(e);
+    }
     router.push("/login");
     router.refresh();
   }
@@ -119,7 +126,7 @@ export default function Shell({
                  onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-3 border-b border-border">
               <BrandMark brandTitle={brandTitle} />
-              <Button variant="ghost" isIconOnly size="sm" onPress={() => setMobileOpen(false)} aria-label="Close">
+              <Button variant="ghost" isIconOnly size="sm" onPress={() => setMobileOpen(false)} aria-label="ปิดเมนู">
                 <X size={18} />
               </Button>
             </div>
@@ -253,7 +260,7 @@ function UserBlock({ me, onLogout }: { me: Me; onLogout: () => void }) {
         <div className="text-sm font-medium truncate text-foreground">{me.first_name} {me.last_name}</div>
         <div className="text-xs text-muted truncate">{me.email}</div>
       </div>
-      <Button variant="ghost" isIconOnly size="sm" onPress={onLogout} aria-label="Logout">
+      <Button variant="ghost" isIconOnly size="sm" onPress={onLogout} aria-label="ออกจากระบบ">
         <LogOut size={16} />
       </Button>
     </div>
@@ -292,7 +299,7 @@ function TopBar({
     <header className="h-14 border-b border-border bg-surface flex items-center gap-3 px-4 md:px-6">
       {showMobileMenu && (
         <Button variant="ghost" isIconOnly size="sm" onPress={onOpenMobile}
-                aria-label="Menu" className="md:hidden">
+                aria-label="เปิดเมนู" className="md:hidden">
           <Menu size={20} />
         </Button>
       )}
@@ -313,7 +320,7 @@ function TopBar({
       {topBarAccessory}
 
       <Dropdown>
-        <Button variant="ghost" aria-label="User menu" className="!px-1.5 !gap-1.5">
+        <Button variant="ghost" aria-label="เมนูผู้ใช้" className="!px-1.5 !gap-1.5">
           <Avatar>
             <Avatar.Fallback>{initials}</Avatar.Fallback>
           </Avatar>

@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { Breadcrumbs, toast } from "@heroui/react";
@@ -115,7 +115,23 @@ function SectionScheduleBlock({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => { setRows(section.schedules ?? []); }, [section.schedules]);
+  // Track current rows + the last server value we synced to, so a background
+  // SWR revalidation doesn't clobber the user's unsaved edits.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const syncedRef = useRef(JSON.stringify(toApiPayload(initial)));
+
+  useEffect(() => {
+    const incoming = section.schedules ?? [];
+    const localDirty =
+      JSON.stringify(toApiPayload(rowsRef.current)) !== syncedRef.current;
+    // Only pull server data in when the user has no unsaved local edits.
+    if (!localDirty) {
+      setRows(incoming);
+      syncedRef.current = JSON.stringify(toApiPayload(incoming));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section.schedules]);
 
   const errors = validateRows(rows);
   const dirty = JSON.stringify(toApiPayload(rows)) !== JSON.stringify(toApiPayload(initial));
@@ -129,6 +145,9 @@ function SectionScheduleBlock({
       await api.put(`/teaching-courses/${tcId}/sections/${section.id}/schedules`, {
         schedules: toApiPayload(rows),
       });
+      // Mark the just-saved payload as the synced baseline so the revalidation
+      // that follows adopts the server copy instead of being treated as dirty.
+      syncedRef.current = JSON.stringify(toApiPayload(rows));
       await mutate(`/teaching-courses/${tcId}`);
       toast.success(`บันทึกตารางเวลา Sec ${section.sec_no} เรียบร้อยแล้ว`);
     } catch (e) {

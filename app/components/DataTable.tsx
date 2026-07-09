@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Pagination, SearchField, Table, type SortDescriptor,
 } from "@heroui/react";
-import { EmptyState, SelectField, Spinner, type SelectOption } from "./ui";
+import { EmptyState, SelectField, Spinner, Alert, Button, type SelectOption } from "./ui";
 
 /* -------------------------------------------------------------------------- */
 /* DataTable — reusable HeroUI table with search / filters / sort / pagination */
@@ -47,6 +47,11 @@ interface DataTableProps<T> {
   emptyTitle?: string;
   emptyDescription?: string;
   loading?: boolean;
+  /** A fetch error (e.g. SWR `error`). When set and no rows are loaded, an
+   *  error state with a retry button replaces the table. */
+  error?: unknown;
+  /** Called when the user clicks "ลองใหม่" in the error state. */
+  onRetry?: () => void;
   /** Extra toolbar content rendered to the right of search/filters. */
   toolbarExtra?: React.ReactNode;
 }
@@ -74,7 +79,7 @@ export function DataTable<T>({
   searchFn, searchPlaceholder = "ค้นหา…",
   filters, initialFilterValues, pageSize = 10, initialSort,
   emptyTitle = "ไม่มีข้อมูล", emptyDescription,
-  loading, toolbarExtra,
+  loading, error, onRetry, toolbarExtra,
 }: DataTableProps<T>) {
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>(initialFilterValues ?? {});
@@ -123,10 +128,17 @@ export function DataTable<T>({
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
-  useEffect(() => { setPage(1); }, [query, filterValues, total]);
+  // Reset to page 1 only when the query or filters change — NOT when `total`
+  // shifts due to a background revalidation, which would yank the user off
+  // their current page. `safePage` already clamps when the list shrinks.
+  useEffect(() => { setPage(1); }, [query, filterValues]);
 
   const start = (safePage - 1) * pageSize;
   const pageRows = filtered.slice(start, start + pageSize);
+
+  // A load error with nothing already on screen: show a clear error + retry
+  // instead of a misleading "ไม่มีข้อมูล" empty state.
+  const showError = !!error && !rowsLoaded;
 
   const hasToolbar = !!searchFn || (filters?.length ?? 0) > 0 || !!toolbarExtra;
   // When we already have rows on screen and a fresh fetch is in flight, we show
@@ -166,7 +178,15 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="relative">
+      {showError ? (
+        <Alert
+          status="danger"
+          title="โหลดข้อมูลไม่สำเร็จ"
+          description={error instanceof Error ? error.message : "กรุณาลองใหม่อีกครั้ง"}
+          action={onRetry && <Button variant="secondary" size="sm" onPress={onRetry}>ลองใหม่</Button>}
+        />
+      ) : (
+      <div className="relative" aria-busy={!!loading}>
       <Table>
         <Table.ScrollContainer>
           <Table.Content
@@ -263,16 +283,16 @@ export function DataTable<T>({
       </Table>
       {showRefetchOverlay && (
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 flex items-start justify-center pt-6 bg-white/55 backdrop-blur-[1px] rounded-lg"
+          className="pointer-events-none absolute inset-0 flex items-start justify-center pt-6 bg-surface/55 backdrop-blur-[1px] rounded-lg"
         >
-          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-(--hairline) bg-white/95 px-3 py-1.5 text-xs text-(--ink-2) shadow-sm">
+          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-(--hairline) bg-surface/95 px-3 py-1.5 text-xs text-(--ink-2) shadow-sm">
             <Spinner size="sm" />
             กำลังโหลดข้อมูล…
           </div>
         </div>
       )}
       </div>
+      )}
     </div>
   );
 }

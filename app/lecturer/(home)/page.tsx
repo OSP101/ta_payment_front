@@ -1,12 +1,12 @@
 "use client";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarX2, BookPlus } from "lucide-react";
+import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarX2, BookPlus, CircleAlert } from "lucide-react";
 import type { Term } from "../../lib/api";
 import {
-  PageHeader, Panel, StatCard, EmptyState, Chip, Button, SelectField, type SelectOption,
+  PageHeader, Panel, StatCard, EmptyState, Chip, Button, SelectField, Alert, type SelectOption,
 } from "../../components/ui";
 import OpenCourseModal from "./OpenCourseModal";
 
@@ -30,7 +30,7 @@ export default function LecturerHome() {
   const termParam = params.get("term");
   const [openModal, setOpenModal] = useState(false);
 
-  const { data: terms } = useSWR<Term[]>("/terms");
+  const { data: terms, error: termsError } = useSWR<Term[]>("/terms");
 
   // Group terms by academic year (desc).
   const byYear = useMemo(() => {
@@ -96,7 +96,8 @@ export default function LecturerHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultYear, defaultTerm, terms]);
 
-  const { data: courses } = useSWR<TC[]>(defaultTerm ? `/teaching-courses?term_id=${defaultTerm}` : null);
+  const coursesKey = defaultTerm ? `/teaching-courses?term_id=${defaultTerm}` : null;
+  const { data: courses, error: coursesError } = useSWR<TC[]>(coursesKey);
 
   function setYear(y: string) {
     const list = byYear.find(([yr]) => String(yr) === y)?.[1] ?? [];
@@ -121,6 +122,56 @@ export default function LecturerHome() {
   const termDisplay = activeTerm
     ? `${activeTerm.academic_year}/${activeTerm.semester} — ${SEMESTER_LABELS[activeTerm.semester] ?? ""}`
     : "";
+
+  const pageDesc = "เลือกปีการศึกษาและภาคเรียน เพื่อดูรายวิชาที่คุณรับผิดชอบ";
+
+  // Terms failed to load — show a real error (with retry) instead of the
+  // misleading "ยังไม่มีภาคเรียน" empty state.
+  if (termsError && terms === undefined) {
+    return (
+      <div>
+        <PageHeader title="รายวิชาที่สอน" description={pageDesc} />
+        <Panel>
+          <Alert
+            status="danger"
+            icon={<CircleAlert size={16} />}
+            title="โหลดข้อมูลภาคเรียนไม่สำเร็จ"
+            description={(termsError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+            action={
+              <Button variant="secondary" size="sm" onPress={() => mutate("/terms")}>
+                ลองใหม่
+              </Button>
+            }
+          />
+        </Panel>
+      </div>
+    );
+  }
+
+  // Terms still loading — skeleton, not an empty state.
+  if (!termsLoaded) {
+    return (
+      <div>
+        <PageHeader title="รายวิชาที่สอน" description={pageDesc} />
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+          {[0, 1, 2].map(i => <div key={i} className="h-20 rounded-xl bg-surface-secondary animate-pulse" />)}
+        </div>
+        <Panel padded={false}>
+          <div className="divide-y divide-[var(--hairline)]">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="flex items-center gap-4 px-5 py-4">
+                <div className="w-10 h-10 rounded-lg bg-surface-secondary animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-1/3 rounded bg-surface-secondary animate-pulse" />
+                  <div className="h-3 w-1/4 rounded bg-surface-secondary animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -184,12 +235,12 @@ export default function LecturerHome() {
             />
             <StatCard
               label="วิชาที่รับผิดชอบ"
-              value={courses?.length ?? 0}
+              value={courses === undefined ? (coursesError ? "—" : "…") : courses.length}
               icon={<BookOpen size={18} />}
             />
             <StatCard
               label="นักศึกษาลงทะเบียนรวม"
-              value={totalStudents}
+              value={courses === undefined ? (coursesError ? "—" : "…") : totalStudents}
               icon={<Users size={18} />}
             />
           </div>
@@ -199,7 +250,35 @@ export default function LecturerHome() {
             description="คลิกที่วิชาเพื่อเข้าหน้าจัดการ — ส่งคำขอ TA, คำนวณงบ, อนุมัติรายงาน"
             padded={false}
           >
-            {(courses ?? []).length === 0 ? (
+            {coursesError && courses === undefined ? (
+              <div className="p-4">
+                <Alert
+                  status="danger"
+                  icon={<CircleAlert size={16} />}
+                  title="โหลดรายวิชาไม่สำเร็จ"
+                  description={(coursesError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+                  action={
+                    coursesKey && (
+                      <Button variant="secondary" size="sm" onPress={() => mutate(coursesKey)}>
+                        ลองใหม่
+                      </Button>
+                    )
+                  }
+                />
+              </div>
+            ) : courses === undefined ? (
+              <div className="divide-y divide-[var(--hairline)]">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="flex items-center gap-4 px-5 py-4">
+                    <div className="w-10 h-10 rounded-lg bg-surface-secondary animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-1/3 rounded bg-surface-secondary animate-pulse" />
+                      <div className="h-3 w-1/4 rounded bg-surface-secondary animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : courses.length === 0 ? (
               <EmptyState
                 icon={<BookOpen size={28} />}
                 title="ยังไม่มีวิชาในภาคเรียนนี้"
@@ -207,7 +286,7 @@ export default function LecturerHome() {
               />
             ) : (
               <ul className="divide-y divide-[var(--hairline)]">
-                {courses!.map(c => (
+                {courses.map(c => (
                   <li key={c.id}>
                     <Link
                       href={`/lecturer/courses/${c.id}`}

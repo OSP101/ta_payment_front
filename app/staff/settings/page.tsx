@@ -108,7 +108,30 @@ function PayRateSection() {
     setEditing(true);
   }
   function cancel() { setEditing(false); }
+
+  // Field-level validation — every rate must be a finite number > 0. Empty
+  // inputs coerce to 0 via Number(), which these checks reject.
+  const rateErrors = {
+    undergrad_regular: vPositive(draft.undergrad_regular),
+    ug_max_hours_per_day: vPositive(draft.ug_max_hours_per_day),
+    undergrad_special: vPositive(draft.undergrad_special),
+    graduate_regular: vPositive(draft.graduate_regular),
+    graduate_special_lumpsum: vPositive(draft.graduate_special_lumpsum),
+    max_courses_per_student: vPositiveInt(draft.max_courses_per_student),
+    ug_lecture_hours_per_credit: vPositive(draft.ug_lecture_hours_per_credit),
+    ug_lab_hours_per_credit: vPositive(draft.ug_lab_hours_per_credit),
+    baseline_students_lecture: vPositive(draft.baseline_students_lecture),
+    baseline_students_lab: vPositive(draft.baseline_students_lab),
+    ug_workload_rate_regular: vPositive(draft.ug_workload_rate_regular),
+  };
+  const hasRateErrors = Object.values(rateErrors).some(Boolean);
+  const effectiveFromError = !draft.effective_from ? "กรุณาระบุวันเริ่มใช้" : null;
+  const effectiveFromPast =
+    !!draft.effective_from && draft.effective_from < new Date().toISOString().slice(0, 10);
+  const canSaveRate = !hasRateErrors && !effectiveFromError;
+
   async function doSave() {
+    if (!canSaveRate) return;
     setSaving(true);
     try {
       await api.post("/settings/pay-rate", draft);
@@ -133,7 +156,7 @@ function PayRateSection() {
         editing ? (
           <>
             <Button variant="ghost" onClick={cancel}><X size={14} />ยกเลิก</Button>
-            <Button variant="primary" onClick={() => setConfirming(true)}>
+            <Button variant="primary" onClick={() => setConfirming(true)} disabled={!canSaveRate}>
               <Save size={14} />บันทึกเวอร์ชันใหม่
             </Button>
           </>
@@ -197,41 +220,62 @@ function PayRateSection() {
       {editing && (
         <div className="space-y-6">
           <EditGroup title="อัตราค่าจ้าง — ปริญญาตรี" description="ค่าตอบแทน TA ต่อชั่วโมง">
-            <F label="ตรี ปกติ (บาท/ชั่วโมง)" type="number" value={draft.undergrad_regular}
+            <F label="ตรี ปกติ (บาท/ชั่วโมง)" type="number" min={0} value={draft.undergrad_regular}
+               error={rateErrors.undergrad_regular}
                onChange={v => setDraft({ ...draft, undergrad_regular: Number(v) })} />
-            <F label="ชั่วโมงสูงสุด/วัน (ปกติ)" type="number" value={draft.ug_max_hours_per_day}
+            <F label="ชั่วโมงสูงสุด/วัน (ปกติ)" type="number" min={0} value={draft.ug_max_hours_per_day}
+               error={rateErrors.ug_max_hours_per_day}
                onChange={v => setDraft({ ...draft, ug_max_hours_per_day: Number(v) })} />
-            <F label="ตรี พิเศษ (บาท/ชั่วโมง)" type="number" value={draft.undergrad_special}
+            <F label="ตรี พิเศษ (บาท/ชั่วโมง)" type="number" min={0} value={draft.undergrad_special}
+               error={rateErrors.undergrad_special}
                onChange={v => setDraft({ ...draft, undergrad_special: Number(v) })} />
           </EditGroup>
 
           <EditGroup title="อัตราค่าจ้าง — บัณฑิตศึกษา (โท/เอก)" description="ปกติเป็นรายชั่วโมง, พิเศษเป็นเหมาจ่ายต่อเดือน">
-            <F label="ภาคปกติ" type="number" value={draft.graduate_regular}
+            <F label="ภาคปกติ" type="number" min={0} value={draft.graduate_regular}
+               error={rateErrors.graduate_regular}
                onChange={v => setDraft({ ...draft, graduate_regular: Number(v) })} />
-            <F label="ภาคพิเศษ (เหมาจ่าย)" type="number" value={draft.graduate_special_lumpsum}
+            <F label="ภาคพิเศษ (เหมาจ่าย)" type="number" min={0} value={draft.graduate_special_lumpsum}
+               error={rateErrors.graduate_special_lumpsum}
                onChange={v => setDraft({ ...draft, graduate_special_lumpsum: Number(v) })} />
           </EditGroup>
 
           <EditGroup title="ข้อกำหนดทั่วไป" description="เริ่มใช้เมื่อไร + ข้อจำกัดตามระเบียบ (จำนวนเดือนของแต่ละเทอมกำหนดที่แท็บ 'ภาคเรียน')">
             <F label="เริ่มใช้" type="date" value={draft.effective_from}
+               error={effectiveFromError}
                onChange={v => setDraft({ ...draft, effective_from: v })} />
-            <F label="จำนวนวิชา TA สูงสุด/คน" type="number" value={draft.max_courses_per_student}
+            <F label="จำนวนวิชา TA สูงสุด/คน" type="number" min={0} value={draft.max_courses_per_student}
+               error={rateErrors.max_courses_per_student}
                onChange={v => setDraft({ ...draft, max_courses_per_student: Number(v) })} />
           </EditGroup>
+
+          {effectiveFromPast && (
+            <Alert
+              status="warning"
+              icon={<CircleAlert size={16} />}
+              title="วันเริ่มใช้เป็นวันในอดีต"
+              description="เวอร์ชันนี้จะเริ่มใช้ย้อนหลัง อาจกระทบการคำนวณค่าจ้างของรายการที่ผ่านมา — โปรดตรวจสอบก่อนบันทึก"
+            />
+          )}
 
           <EditGroup
             title="สูตรคำนวณโหลด TA ปริญญาตรี"
             description="ตามชีต 2_59 ป.ตรี — ปกติ/พิเศษ ใช้ effective rate เดียวกัน (default 300 = 50% × 200 ตรี + 50% × 400 บัณฑิต)"
           >
-            <F label="ชั่วโมงบรรยาย / หน่วยกิต" type="number" value={draft.ug_lecture_hours_per_credit}
+            <F label="ชั่วโมงบรรยาย / หน่วยกิต" type="number" min={0} value={draft.ug_lecture_hours_per_credit}
+               error={rateErrors.ug_lecture_hours_per_credit}
                onChange={v => setDraft({ ...draft, ug_lecture_hours_per_credit: Number(v) })} />
-            <F label="ชั่วโมงปฏิบัติ / หน่วยกิต" type="number" value={draft.ug_lab_hours_per_credit}
+            <F label="ชั่วโมงปฏิบัติ / หน่วยกิต" type="number" min={0} value={draft.ug_lab_hours_per_credit}
+               error={rateErrors.ug_lab_hours_per_credit}
                onChange={v => setDraft({ ...draft, ug_lab_hours_per_credit: Number(v) })} />
-            <F label="Baseline นักศึกษา/section บรรยาย" type="number" value={draft.baseline_students_lecture}
+            <F label="Baseline นักศึกษา/section บรรยาย" type="number" min={0} value={draft.baseline_students_lecture}
+               error={rateErrors.baseline_students_lecture}
                onChange={v => setDraft({ ...draft, baseline_students_lecture: Number(v) })} />
-            <F label="Baseline นักศึกษา/section ปฏิบัติ" type="number" value={draft.baseline_students_lab}
+            <F label="Baseline นักศึกษา/section ปฏิบัติ" type="number" min={0} value={draft.baseline_students_lab}
+               error={rateErrors.baseline_students_lab}
                onChange={v => setDraft({ ...draft, baseline_students_lab: Number(v) })} />
-            <F label="Effective rate (บาท/ชั่วโมง/สัปดาห์/เดือน)" type="number" value={draft.ug_workload_rate_regular}
+            <F label="Effective rate (บาท/ชั่วโมง/สัปดาห์/เดือน)" type="number" min={0} value={draft.ug_workload_rate_regular}
+               error={rateErrors.ug_workload_rate_regular}
                onChange={v => setDraft({ ...draft, ug_workload_rate_regular: Number(v) })} />
           </EditGroup>
         </div>
@@ -2010,13 +2054,31 @@ function EditGroup({
 }
 
 function F({
-  label, value, onChange, type = "text",
-}: { label: string; value: string | number; onChange: (v: string) => void; type?: string }) {
+  label, value, onChange, type = "text", error, min,
+}: { label: string; value: string | number; onChange: (v: string) => void; type?: string; error?: string | null; min?: number }) {
   return (
-    <FieldGroup label={label}>
-      <TextInput type={type} value={value} onChange={e => onChange(e.target.value)} />
+    <FieldGroup label={label} error={error ?? undefined}>
+      <TextInput
+        type={type}
+        min={min}
+        value={value}
+        aria-invalid={error ? true : undefined}
+        onChange={e => onChange(e.target.value)}
+      />
     </FieldGroup>
   );
+}
+
+/* Positive-number validators shared by the pay-rate editor. */
+function vPositive(v: number): string | null {
+  if (!Number.isFinite(v)) return "กรุณากรอกตัวเลข";
+  if (v <= 0) return "ต้องมากกว่า 0";
+  return null;
+}
+function vPositiveInt(v: number): string | null {
+  if (!Number.isFinite(v)) return "กรุณากรอกตัวเลข";
+  if (!Number.isInteger(v) || v <= 0) return "ต้องเป็นจำนวนเต็มมากกว่า 0";
+  return null;
 }
 
 function ConfirmSaveModal({
@@ -2091,18 +2153,49 @@ function RequestWindowsSection() {
   const [editing, setEditing] = useState<RequestWindow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RequestWindow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Double-fire guards for the per-row Switch and the "เปิดด่วน" quick action.
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [quickOpening, setQuickOpening] = useState(false);
 
   const noTerms = terms !== undefined && terms.length === 0;
   const term = terms?.find(t => t.id === termId);
   const list = windows ?? [];
 
   async function toggleOpen(w: RequestWindow, next: boolean) {
+    if (togglingId) return;
+    setTogglingId(w.id);
     try {
       await api.post("/ta-request/windows", { ...w, is_open: next });
       await mutate(swrKey);
       toast.success(next ? "เปิดรับคำขอแล้ว" : "ปิดรับคำขอชั่วคราว");
     } catch (e) {
       toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function quickOpen30Days() {
+    if (!termId || quickOpening) return;
+    setQuickOpening(true);
+    const now = new Date();
+    // 30 calendar days from now — matches the label (the old +1 month was wrong).
+    const end = new Date();
+    end.setDate(end.getDate() + 30);
+    try {
+      await api.post("/ta-request/windows", {
+        term_id: termId,
+        opens_at: now.toISOString(),
+        closes_at: end.toISOString(),
+        is_open: true,
+        note: "เปิดด่วน (30 วัน)",
+      });
+      await mutate(swrKey);
+      toast.success("เปิดรับสมัครทันทีแล้ว", { description: "ระยะเวลา 30 วัน" });
+    } catch (e) {
+      toast.danger("เปิดไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setQuickOpening(false);
     }
   }
   async function doDelete() {
@@ -2177,24 +2270,9 @@ function RequestWindowsSection() {
             </Button>
             <Button
               variant="primary"
-              onClick={async () => {
-                if (!termId) return;
-                const now = new Date();
-                const end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-                try {
-                  await api.post("/ta-request/windows", {
-                    term_id: termId,
-                    opens_at: now.toISOString(),
-                    closes_at: end.toISOString(),
-                    is_open: true,
-                    note: "เปิดด่วน (30 วัน)",
-                  });
-                  await mutate(swrKey);
-                  toast.success("เปิดรับสมัครทันทีแล้ว", { description: "ระยะเวลา 30 วัน" });
-                } catch (e) {
-                  toast.danger("เปิดไม่สำเร็จ", { description: (e as Error).message });
-                }
-              }}
+              onClick={quickOpen30Days}
+              disabled={quickOpening}
+              isPending={quickOpening}
             >
               <Power size={14} /> เปิดรับสมัครทันที (30 วัน)
             </Button>
@@ -2220,6 +2298,7 @@ function RequestWindowsSection() {
                   <Switch
                     isSelected={w.is_open}
                     onChange={sel => toggleOpen(w, sel)}
+                    isDisabled={togglingId === w.id}
                     aria-label={w.is_open ? "ปิดชั่วคราว" : "เปิดรับ"}
                   >
                     <Switch.Content>

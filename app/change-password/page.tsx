@@ -1,17 +1,24 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Alert, Button, Card, FieldError, Input, Label, TextField } from "@heroui/react";
-import { KeyRound, ShieldAlert } from "lucide-react";
-import { api } from "../lib/api";
+import { Alert, Button, Card, FieldError, Input, InputGroup, Label, TextField } from "@heroui/react";
+import { Check, Eye, EyeOff, KeyRound, ShieldAlert, X } from "lucide-react";
+import { api, errMessage } from "../lib/api";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const rules = [
+    { ok: pw.length >= 8, label: "อย่างน้อย 8 ตัวอักษร" },
+    { ok: /[A-Za-z]/.test(pw), label: "มีตัวอักษร (A–Z)" },
+    { ok: /[0-9]/.test(pw), label: "มีตัวเลข (0–9)" },
+  ];
 
   const errors = useMemo(() => {
     const e: { pw: string | null; pw2: string | null } = { pw: null, pw2: null };
@@ -36,7 +43,7 @@ export default function ChangePasswordPage() {
       router.push("/");
       router.refresh();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errMessage(e));
     } finally {
       setLoading(false);
     }
@@ -66,7 +73,31 @@ export default function ChangePasswordPage() {
                 isInvalid={showErrors && !!errors.pw}
               >
                 <Label>รหัสผ่านใหม่</Label>
-                <Input type="password" autoComplete="new-password" />
+                <InputGroup>
+                  <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="new-password" />
+                  <InputGroup.Suffix className="pr-0">
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="ghost"
+                      aria-label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                      onPress={() => setShowPw(!showPw)}
+                    >
+                      {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </Button>
+                  </InputGroup.Suffix>
+                </InputGroup>
+                <div className="mt-1.5 flex flex-col gap-1">
+                  {rules.map((r, i) => (
+                    <div
+                      key={i}
+                      className={"flex items-center gap-1.5 text-xs " + (r.ok ? "text-success" : "text-muted")}
+                    >
+                      {r.ok ? <Check size={13} /> : <X size={13} />}
+                      {r.label}
+                    </div>
+                  ))}
+                </div>
                 {showErrors && errors.pw && <FieldError>{errors.pw}</FieldError>}
               </TextField>
               <TextField
@@ -77,7 +108,7 @@ export default function ChangePasswordPage() {
                 isInvalid={showErrors && !!errors.pw2}
               >
                 <Label>ยืนยันรหัสผ่านใหม่</Label>
-                <Input type="password" autoComplete="new-password" />
+                <Input type={showPw ? "text" : "password"} autoComplete="new-password" />
                 {showErrors && errors.pw2 && <FieldError>{errors.pw2}</FieldError>}
               </TextField>
               {err && (

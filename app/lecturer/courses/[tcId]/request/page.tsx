@@ -20,8 +20,9 @@ import {
   type Key,
 } from "@heroui/react";
 import { api } from "../../../../lib/api";
+import { notify } from "../../../../lib/notify";
 import {
-  PageHeader, Panel, Button, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
+  PageHeader, Panel, Button, TextInput, Select, SelectField, FieldGroup, Chip, EmptyState, Alert, Modal,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 
@@ -146,8 +147,16 @@ function RequestFormModal({
 
   const taChosen = assignments.length > 0 && assignments.every(a => a.ta_id);
   const workloadOk = assignments.length > 0 && assignments.every(a => sumWorkload(a) > 0);
+  const sectionChosen = assignments.length > 0 && assignments.every(a => !!a.section_id);
+  // Graduate TAs must fall within the 10–12 hr/week window — enforce it as a
+  // hard submit gate, not just a soft warning.
+  const gradHoursOk = assignments.every(a => {
+    if (a.level !== "master" && a.level !== "phd") return true;
+    const t = sumWorkload(a);
+    return t >= GRAD_MIN_HRS && t <= GRAD_MAX_HRS;
+  });
 
-  const canSubmit = taChosen && workloadOk;
+  const canSubmit = taChosen && workloadOk && sectionChosen && gradHoursOk;
 
   /* --- helpers --------------------------------------------------------- */
   function addAssignment(secId?: string, taId = "", level = "undergrad") {
@@ -191,7 +200,13 @@ function RequestFormModal({
         assignments,
       });
       onSubmitted();
-    } catch (e) { setErr((e as Error).message); }
+    } catch (e) {
+      // Surface the (Thai) reason the backend rejected the request — e.g. TA
+      // documents incomplete, 3-course cap reached, or schedule missing — both
+      // inline and as a toast so the lecturer sees WHY it failed.
+      setErr((e as Error).message);
+      notify.error(e);
+    }
     finally { setPending(false); }
   }
 
@@ -269,8 +284,12 @@ function RequestFormModal({
               ? { tone: "warn", text: "ยังไม่ได้เพิ่ม TA" }
               : !taChosen
               ? { tone: "warn", text: "ยังไม่ได้เลือก TA" }
+              : !sectionChosen
+              ? { tone: "warn", text: "ยังไม่ได้เลือก section" }
               : !workloadOk
               ? { tone: "warn", text: "ยังไม่ได้กรอกภาระงาน" }
+              : !gradHoursOk
+              ? { tone: "warn", text: "บัณฑิตศึกษาต้องอยู่ระหว่าง 10–12 ชม./สัปดาห์" }
               : { tone: "success", text: `${assignments.length} คน · พร้อมส่ง` }
           }
         >
@@ -318,6 +337,7 @@ function RequestFormModal({
                         idx={idx}
                         n={idx + 1}
                         assignment={a}
+                        sections={course?.sections ?? []}
                         tas={(tas?.items ?? []).filter(t => !takenElsewhere.has(t.id))}
                         scope={scope}
                         onUpdate={updateAssign}
@@ -432,11 +452,12 @@ function sumWorkload(a: Assignment): number {
 }
 
 function AssignmentBlock({
-  idx, n, assignment: a, tas, scope, onUpdate, onWorkload, onRemove,
+  idx, n, assignment: a, sections, tas, scope, onUpdate, onWorkload, onRemove,
 }: {
   idx: number;
   n: number;
   assignment: Assignment;
+  sections: Section[];
   tas: TA[];
   scope: "lecture" | "lab" | "both";
   onUpdate: (idx: number, patch: Partial<Assignment>) => void;
@@ -474,11 +495,24 @@ function AssignmentBlock({
 
       <div className="p-3 space-y-3">
         {/* TA picker */}
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_140px] gap-3">
           <TaAutocomplete
             tas={tas}
             value={a.ta_id}
             onChange={(taId, level) => onUpdate(idx, { ta_id: taId, level })}
+          />
+          <SelectField
+            label="Section"
+            placeholder="เลือก section"
+            isRequired
+            value={a.section_id || undefined}
+            onChange={v => onUpdate(idx, { section_id: v })}
+            options={sections.map(s => ({
+              id: s.id,
+              label: `Sec ${s.sec_no}${s.track === "special" ? " · ภาคพิเศษ" : ""}`,
+              textValue: `Sec ${s.sec_no}`,
+            }))}
+            error={!a.section_id ? "กรุณาเลือก section" : undefined}
           />
           <FieldGroup label="ระดับ">
             <div className="h-9 flex items-center">
@@ -620,7 +654,7 @@ function CheckHrs({
         </Checkbox.Content>
       </Checkbox>
       <div className={"flex items-center gap-2 pl-6 " + (enabled ? "" : "opacity-50 pointer-events-none")}>
-        <HourInput value={hrs} onChange={onH} />
+        <HourInput value={hrs} onChange={onH} maxValue={99} />
         {onD && (
           <TextInput
             value={desc ?? ""}

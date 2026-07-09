@@ -3,10 +3,10 @@ import useSWR from "swr";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, Users, ArrowRight, CalendarClock, CalendarX2 } from "lucide-react";
+import { BookOpen, Users, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw } from "lucide-react";
 import type { Term } from "../lib/api";
 import {
-  PageHeader, Panel, StatCard, EmptyState, Chip, SelectField, type SelectOption,
+  PageHeader, Panel, StatCard, EmptyState, Chip, SelectField, Spinner, Button, type SelectOption,
 } from "../components/ui";
 
 interface TC {
@@ -91,7 +91,12 @@ export default function TAHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultYear, defaultTerm, terms]);
 
-  const { data: courses } = useSWR<TC[]>(defaultTerm ? `/me/ta-courses?term_id=${defaultTerm}` : null);
+  const {
+    data: courses,
+    error: coursesError,
+    isLoading: coursesLoading,
+    mutate: reloadCourses,
+  } = useSWR<TC[]>(defaultTerm ? `/me/ta-courses?term_id=${defaultTerm}` : null);
 
   function setYear(y: string) {
     const list = byYear.find(([yr]) => String(yr) === y)?.[1] ?? [];
@@ -187,7 +192,22 @@ export default function TAHome() {
             description="คลิกเพื่อดูตารางเรียน/บันทึกเวลาปฏิบัติงาน"
             padded={false}
           >
-            {(courses ?? []).length === 0 ? (
+            {coursesError ? (
+              <EmptyState
+                icon={<AlertTriangle size={28} />}
+                title="โหลดรายวิชาไม่สำเร็จ"
+                description="เกิดข้อผิดพลาดขณะดึงข้อมูล โปรดลองใหม่อีกครั้ง"
+                action={
+                  <Button variant="secondary" size="sm" onPress={() => reloadCourses()}>
+                    <RefreshCw size={14} /> ลองใหม่
+                  </Button>
+                }
+              />
+            ) : coursesLoading || courses === undefined ? (
+              <div className="flex items-center justify-center gap-3 py-12 text-sm text-muted">
+                <Spinner size="sm" /> กำลังโหลดรายวิชา…
+              </div>
+            ) : courses.length === 0 ? (
               <EmptyState
                 icon={<BookOpen size={28} />}
                 title="ยังไม่มีวิชาในภาคเรียนนี้"

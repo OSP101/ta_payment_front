@@ -1,8 +1,9 @@
 "use client";
 import { use, useState } from "react";
-import useSWR from "swr";
-import { AlertTriangle, Info as InfoIcon, Sparkles, HelpCircle } from "lucide-react";
+import useSWR, { mutate } from "swr";
+import { AlertTriangle, Info as InfoIcon, Sparkles, HelpCircle, CircleAlert } from "lucide-react";
 import { Breadcrumbs } from "@heroui/react";
+import { ApiError } from "../../../../lib/api";
 import { PageHeader, Panel, Chip, EmptyState, Alert, Button } from "../../../../components/ui";
 import { FormulaHelpModal } from "../../../../components/formula-help";
 
@@ -30,8 +31,11 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
   const { data: course } = useSWR<{ id: string; code: string; name_th: string; num_students: number }>(
     tcId ? `/teaching-courses/${tcId}` : null,
   );
-  const { data: b } = useSWR<Budget>(tcId ? `/teaching-courses/${tcId}/budget` : null);
+  const budgetKey = tcId ? `/teaching-courses/${tcId}/budget` : null;
+  const { data: b, error: bError, isLoading: bLoading } = useSWR<Budget>(budgetKey);
   const courseName = course;
+
+  const notFound = bError instanceof ApiError && bError.status === 404;
 
   return (
     <div>
@@ -52,8 +56,34 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
         }
       />
 
-      {!b ? (
-        <Panel><EmptyState title="กำลังโหลดข้อมูลงบประมาณ…" /></Panel>
+      {notFound ? (
+        <Panel>
+          <EmptyState title="ไม่พบข้อมูลงบประมาณ" description="อาจถูกลบหรือคุณไม่ได้รับผิดชอบวิชานี้" />
+        </Panel>
+      ) : bError ? (
+        <Panel>
+          <Alert
+            status="danger"
+            icon={<CircleAlert size={16} />}
+            title="โหลดข้อมูลงบประมาณไม่สำเร็จ"
+            description={(bError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+            action={
+              budgetKey && (
+                <Button variant="secondary" size="sm" onPress={() => mutate(budgetKey)}>
+                  ลองใหม่
+                </Button>
+              )
+            }
+          />
+        </Panel>
+      ) : bLoading || !b ? (
+        <div className="space-y-4">
+          <div className="h-16 rounded-xl bg-surface-secondary animate-pulse" />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="h-40 rounded-xl bg-surface-secondary animate-pulse" />
+            <div className="h-40 rounded-xl bg-surface-secondary animate-pulse" />
+          </div>
+        </div>
       ) : (
         <>
           {b.over_budget && (

@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp,
 } from "lucide-react";
 import { api } from "../../lib/api";
+import { notify } from "../../lib/notify";
 import {
   PageHeader, Panel, Button, StatusChip, Modal,
   TextArea, FieldGroup, Spinner, Chip, TabLabel,
@@ -146,6 +147,8 @@ export default function ReviewPage() {
               <UserList
                 data={bucket === b.id ? current.data : undefined}
                 loading={bucket === b.id && current.isLoading}
+                error={bucket === b.id ? current.error : undefined}
+                onRetry={() => current.mutate()}
                 bucket={b.id}
                 onSelect={setSelected}
               />
@@ -168,10 +171,12 @@ export default function ReviewPage() {
 /* -------------------------------------------------------------------------- */
 
 function UserList({
-  data, loading, bucket, onSelect,
+  data, loading, error, onRetry, bucket, onSelect,
 }: {
   data?: Pending[];
   loading: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   bucket: Bucket;
   onSelect: (u: Pending) => void;
 }) {
@@ -215,6 +220,8 @@ function UserList({
         ariaLabel="รายชื่อ TA ที่ส่งเอกสาร"
         rows={data}
         loading={loading}
+        error={error}
+        onRetry={onRetry}
         rowKey={u => u.user_id}
         searchFn={u => `${u.full_name} ${u.email}`}
         searchPlaceholder="ค้นหาชื่อ / อีเมล…"
@@ -249,12 +256,18 @@ function DetailModal({
   const [reason, setReason] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [preview, setPreview] = useState<Doc | null>(null);
+  // Double-submit guards: per-doc id while approving/rejecting a single doc,
+  // and a whole-set flag while finalizing (approve/reject) the profile.
+  const [busyDocId, setBusyDocId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setMode({ kind: "list" });
     setReason("");
     setShowHistory(false);
     setPreview(null);
+    setBusyDocId(null);
+    setBusy(false);
   }, [user?.user_id]);
 
   function resetAndClose() {
@@ -268,28 +281,61 @@ function DetailModal({
   }
 
   async function approveDoc(id: string) {
-    await api.post(`/ta-review/docs/${id}`, { approve: true, reason: "" });
-    await refetch();
-    onChanged();
+    if (busyDocId) return;
+    setBusyDocId(id);
+    try {
+      await api.post(`/ta-review/docs/${id}`, { approve: true, reason: "" });
+      await refetch();
+      onChanged();
+      notify.success("อนุมัติเอกสารเรียบร้อยแล้ว");
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setBusyDocId(null);
+    }
   }
   async function confirmRejectDoc() {
-    if (mode.kind !== "reject-doc" || !reason.trim()) return;
-    await api.post(`/ta-review/docs/${mode.docId}`, { approve: false, reason });
-    backToList();
-    await refetch();
-    onChanged();
+    if (mode.kind !== "reject-doc" || !reason.trim() || busyDocId) return;
+    setBusyDocId(mode.docId);
+    try {
+      await api.post(`/ta-review/docs/${mode.docId}`, { approve: false, reason });
+      await refetch();
+      onChanged();
+      backToList();
+      notify.success("ตีกลับเอกสารเรียบร้อยแล้ว");
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setBusyDocId(null);
+    }
   }
   async function approveProfile() {
-    if (!user) return;
-    await api.post(`/ta-review/${user.user_id}/profile`, { approve: true, reason: "" });
-    onChanged();
-    resetAndClose();
+    if (!user || busy) return;
+    setBusy(true);
+    try {
+      await api.post(`/ta-review/${user.user_id}/profile`, { approve: true, reason: "" });
+      onChanged();
+      notify.success("อนุมัติเอกสารทั้งชุดเรียบร้อยแล้ว");
+      resetAndClose();
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setBusy(false);
+    }
   }
   async function confirmRejectProfile() {
-    if (!user || !reason.trim()) return;
-    await api.post(`/ta-review/${user.user_id}/profile`, { approve: false, reason });
-    onChanged();
-    resetAndClose();
+    if (!user || !reason.trim() || busy) return;
+    setBusy(true);
+    try {
+      await api.post(`/ta-review/${user.user_id}/profile`, { approve: false, reason });
+      onChanged();
+      notify.success("ตีกลับเอกสารทั้งชุดเรียบร้อยแล้ว");
+      resetAndClose();
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const docs = data?.documents ?? [];
@@ -302,10 +348,10 @@ function DetailModal({
   if (mode.kind === "reject-doc") {
     footer = (
       <>
-        <Button variant="ghost" onClick={backToList}>
+        <Button variant="ghost" onClick={backToList} disabled={!!busyDocId}>
           <ChevronLeft size={14} /> ย้อนกลับ
         </Button>
-        <Button variant="danger" onClick={confirmRejectDoc} disabled={!reason.trim()}>
+        <Button variant="danger" onClick={confirmRejectDoc} disabled={!reason.trim() || !!busyDocId} isPending={!!busyDocId}>
           <X size={14} /> ยืนยันปฏิเสธ
         </Button>
       </>
@@ -313,10 +359,10 @@ function DetailModal({
   } else if (mode.kind === "reject-profile") {
     footer = (
       <>
-        <Button variant="ghost" onClick={backToList}>
+        <Button variant="ghost" onClick={backToList} disabled={busy}>
           <ChevronLeft size={14} /> ย้อนกลับ
         </Button>
-        <Button variant="danger" onClick={confirmRejectProfile} disabled={!reason.trim()}>
+        <Button variant="danger" onClick={confirmRejectProfile} disabled={!reason.trim() || busy} isPending={busy}>
           <X size={14} /> ตีกลับให้แก้ไข
         </Button>
       </>
@@ -324,13 +370,13 @@ function DetailModal({
   } else {
     footer = (
       <>
-        <Button variant="ghost" onClick={resetAndClose}>ปิด</Button>
+        <Button variant="ghost" onClick={resetAndClose} disabled={busy || !!busyDocId}>ปิด</Button>
         {canFinalize && (
           <>
-            <Button variant="danger-soft" onClick={() => setMode({ kind: "reject-profile" })}>
+            <Button variant="danger-soft" onClick={() => setMode({ kind: "reject-profile" })} disabled={busy || !!busyDocId}>
               <X size={14} /> ตีกลับ
             </Button>
-            <Button variant="primary" onClick={approveProfile} disabled={!allApproved}>
+            <Button variant="primary" onClick={approveProfile} disabled={!allApproved || busy || !!busyDocId} isPending={busy}>
               <Check size={14} /> อนุมัติทั้งชุด
             </Button>
           </>
@@ -382,6 +428,8 @@ function DetailModal({
                         key={d.id}
                         doc={d}
                         readonly={!canFinalize}
+                        busy={busyDocId === d.id}
+                        disabled={!!busyDocId && busyDocId !== d.id}
                         onPreview={() => setPreview(d)}
                         onApprove={() => approveDoc(d.id)}
                         onReject={() => setMode({ kind: "reject-doc", docId: d.id, filename: d.filename })}
@@ -535,10 +583,12 @@ function ProfileSummary({
 }
 
 function DocRow({
-  doc, readonly, onPreview, onApprove, onReject,
+  doc, readonly, busy, disabled, onPreview, onApprove, onReject,
 }: {
   doc: Doc;
   readonly: boolean;
+  busy?: boolean;
+  disabled?: boolean;
   onPreview: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -567,12 +617,12 @@ function DocRow({
           </Button>
         </a>
         {!readonly && doc.status !== "approved" && (
-          <Button variant="primary" size="sm" onClick={onApprove}>
+          <Button variant="primary" size="sm" onClick={onApprove} disabled={busy || disabled} isPending={busy}>
             <Check size={14} /> ผ่าน
           </Button>
         )}
         {!readonly && doc.status !== "rejected" && (
-          <Button variant="danger-soft" size="sm" onClick={onReject}>
+          <Button variant="danger-soft" size="sm" onClick={onReject} disabled={busy || disabled}>
             <X size={14} /> ไม่ผ่าน
           </Button>
         )}

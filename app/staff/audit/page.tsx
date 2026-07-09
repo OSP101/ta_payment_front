@@ -11,6 +11,13 @@ interface Row {
   ip?: string; note?: string;
 }
 
+interface UserLite {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
 const ROLE_LABEL: Record<string, string> = {
   admin: "ผู้บริหาร",
   staff: "เจ้าหน้าที่",
@@ -18,49 +25,73 @@ const ROLE_LABEL: Record<string, string> = {
   ta: "ผู้ช่วยสอน",
 };
 
-const columns: DataColumn<Row>[] = [
-  {
-    id: "at", label: "เวลา", sortable: true, isRowHeader: true,
-    sortValue: r => r.at,
-    className: "whitespace-nowrap font-mono text-xs",
-    render: r => new Date(r.at).toLocaleString("th-TH"),
-  },
-  {
-    id: "actor", label: "ผู้กระทำ",
-    render: r => (
-      <span className="font-mono text-xs">
-        {r.actor_role
-          ? <Chip tone="neutral">{ROLE_LABEL[r.actor_role] ?? r.actor_role}</Chip>
-          : <span className="text-(--ink-4)">-</span>}
-        {r.actor_id && <span className="ml-2 text-(--ink-3)">{r.actor_id.slice(0, 8)}</span>}
-      </span>
-    ),
-  },
-  {
-    id: "action", label: "Action", sortable: true,
-    sortValue: r => r.action,
-    className: "font-mono text-xs text-(--brand)",
-    render: r => r.action,
-  },
-  {
-    id: "entity", label: "Entity",
-    className: "font-mono text-xs",
-    render: r => <>{r.entity} <span className="text-(--ink-4)">{r.entity_id?.slice(0, 8) ?? ""}</span></>,
-  },
-  {
-    id: "ip", label: "IP",
-    className: "font-mono text-xs text-(--ink-3)",
-    render: r => r.ip ?? "-",
-  },
-  {
-    id: "note", label: "Note",
-    className: "font-mono text-xs text-(--ink-3)",
-    render: r => r.note ?? "",
-  },
-];
+function buildColumns(resolveActor: (id: string) => string | null): DataColumn<Row>[] {
+  return [
+    {
+      id: "at", label: "เวลา", sortable: true, isRowHeader: true,
+      sortValue: r => r.at,
+      className: "whitespace-nowrap font-mono text-xs",
+      render: r => new Date(r.at).toLocaleString("th-TH"),
+    },
+    {
+      id: "actor", label: "ผู้กระทำ",
+      render: r => {
+        const name = r.actor_id ? resolveActor(r.actor_id) : null;
+        return (
+          <span className="text-xs">
+            {r.actor_role
+              ? <Chip tone="neutral">{ROLE_LABEL[r.actor_role] ?? r.actor_role}</Chip>
+              : <span className="text-(--ink-4)">-</span>}
+            {r.actor_id && (
+              <span className="ml-2 text-(--ink-3) font-mono" title={r.actor_id}>
+                {name ?? r.actor_id.slice(0, 8)}
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      id: "action", label: "Action", sortable: true,
+      sortValue: r => r.action,
+      className: "font-mono text-xs text-(--brand)",
+      render: r => r.action,
+    },
+    {
+      id: "entity", label: "Entity",
+      className: "font-mono text-xs",
+      render: r => <>{r.entity} <span className="text-(--ink-4)">{r.entity_id?.slice(0, 8) ?? ""}</span></>,
+    },
+    {
+      id: "ip", label: "IP",
+      className: "font-mono text-xs text-(--ink-3)",
+      render: r => r.ip ?? "-",
+    },
+    {
+      id: "note", label: "Note",
+      className: "font-mono text-xs text-(--ink-3)",
+      render: r => r.note ?? "",
+    },
+  ];
+}
 
 export default function AuditPage() {
-  const { data } = useSWR<Row[]>("/audit-logs?limit=200");
+  const { data, error, mutate: revalidate } = useSWR<Row[]>("/audit-logs?limit=200");
+  // Best-effort actor resolution: if the users list is available, map the actor
+  // UUID to a readable name. Failing that we fall back to the short UUID.
+  const { data: users } = useSWR<{ items: UserLite[] }>("/users?limit=500");
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of users?.items ?? []) {
+      m.set(u.id, `${u.first_name} ${u.last_name}`.trim() || u.email);
+    }
+    return m;
+  }, [users]);
+
+  const columns = useMemo(
+    () => buildColumns(id => nameById.get(id) ?? null),
+    [nameById],
+  );
 
   const entityOptions = useMemo(() => {
     const entities = [...new Set((data ?? []).map(r => r.entity))].sort();
@@ -76,7 +107,9 @@ export default function AuditPage() {
       <DataTable
         ariaLabel="Audit log"
         rows={data}
-        loading={!data}
+        loading={!data && !error}
+        error={error}
+        onRetry={() => revalidate()}
         rowKey={r => r.id}
         searchFn={r => `${r.action} ${r.entity} ${r.entity_id ?? ""} ${r.actor_id ?? ""} ${r.ip ?? ""} ${r.note ?? ""}`}
         searchPlaceholder="ค้นหา action / entity / IP / note…"

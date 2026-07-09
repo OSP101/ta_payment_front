@@ -26,7 +26,7 @@ function isProfileComplete(p: Profile | undefined, docs: Doc[] | undefined): boo
   if (!p) return false;
   const infoOK =
     !!p.student_id &&
-    p.national_id.replace(/-/g, "").length === 13 &&
+    (p.national_id ?? "").replace(/-/g, "").length === 13 &&
     !!p.bank_name &&
     !!p.account_no &&
     !!p.signature_svg;
@@ -104,9 +104,9 @@ export default function OnboardingBlocker() {
         onClick={() => setCollapsedPersistent(false)}
         aria-label="ขยายกล่องแจ้งเตือนการเริ่มต้น"
         className="fixed bottom-4 right-4 z-40 flex items-center gap-2
-                   rounded-full border-2 border-amber-400 bg-white shadow-lg
-                   pl-3 pr-4 py-2 text-sm font-medium text-amber-700
-                   hover:bg-amber-50"
+                   rounded-full border-2 border-warning bg-surface shadow-lg
+                   pl-3 pr-4 py-2 text-sm font-medium text-warning-soft-foreground
+                   hover:bg-surface-secondary"
       >
         <ShieldAlert size={16} />
         <span>เริ่มต้นใช้งาน</span>
@@ -121,11 +121,11 @@ export default function OnboardingBlocker() {
       aria-live="polite"
       aria-label="ต้องทำเอกสารและตารางเรียนให้เสร็จ"
       className="fixed bottom-4 right-4 z-40 w-[360px] max-w-[calc(100vw-2rem)]
-                 rounded-2xl border-2 border-amber-400 bg-white shadow-2xl"
+                 rounded-2xl border-2 border-warning bg-surface shadow-2xl"
     >
       <div className="p-4">
         <div className="flex items-start gap-2 mb-3">
-          <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-full bg-warning-soft text-warning-soft-foreground flex items-center justify-center shrink-0">
             <ShieldAlert size={18} />
           </div>
           <div className="min-w-0 flex-1">
@@ -142,16 +142,16 @@ export default function OnboardingBlocker() {
               type="button"
               onClick={() => setCollapsedPersistent(true)}
               aria-label="ย่อกล่องแจ้งเตือน"
-              className="p-1 rounded-md text-muted hover:bg-slate-100"
+              className="p-1 rounded-md text-muted hover:bg-surface-secondary"
             >
               <Minus size={14} />
             </button>
           </div>
         </div>
 
-        <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mb-2">
+        <div className="h-1.5 rounded-full bg-surface-secondary overflow-hidden mb-2">
           <div
-            className="h-full bg-amber-500 transition-[width]"
+            className="h-full bg-warning transition-[width]"
             style={{ width: `${(stepCount / 2) * 100}%` }}
           />
         </div>

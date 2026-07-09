@@ -5,7 +5,6 @@ import {
   Alert,
   Button,
   Card,
-  FieldError,
   Input,
   InputGroup,
   Label,
@@ -14,7 +13,7 @@ import {
   TextField,
 } from "@heroui/react";
 import { LogIn, Eye, EyeOff, Shield, ShieldAlert } from "lucide-react";
-import { api, type Me } from "../lib/api";
+import { api, errMessage, type Me } from "../lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,15 +35,17 @@ export default function LoginPage() {
     setErr(null);
     setLoading(true);
     try {
-      const res = await api.post<{ user: Me; token: string }>("/auth/login", { email, password });
+      const res = await api.post<{ user: Me; token?: string }>("/auth/login", { email, password });
       if (res.user?.must_change_password) {
         router.push("/change-password");
       } else {
-        router.push("/");
+        // Honour a ?next= redirect target set when the session expired mid-use.
+        const next = new URLSearchParams(window.location.search).get("next");
+        router.push(next && next.startsWith("/") ? next : "/");
       }
       router.refresh();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errMessage(e));
     } finally {
       setLoading(false);
     }
@@ -99,8 +100,7 @@ export default function LoginPage() {
                   type="email"
                   isRequired
                   value={email}
-                  onChange={setEmail}
-                  isInvalid={!!err}
+                  onChange={(v) => { setEmail(v); if (err) setErr(null); }}
                 >
                   <Label>อีเมล</Label>
                   <Input placeholder="you@kkumail.com" autoComplete="email" />
@@ -110,8 +110,7 @@ export default function LoginPage() {
                   name="password"
                   isRequired
                   value={password}
-                  onChange={setPassword}
-                  isInvalid={!!err}
+                  onChange={(v) => { setPassword(v); if (err) setErr(null); }}
                 >
                   <Label>รหัสผ่าน</Label>
                   <InputGroup>
@@ -124,14 +123,13 @@ export default function LoginPage() {
                         isIconOnly
                         size="sm"
                         variant="ghost"
-                        aria-label={showPw ? "Hide password" : "Show password"}
+                        aria-label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
                         onPress={() => setShowPw(!showPw)}
                       >
                         {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                       </Button>
                     </InputGroup.Suffix>
                   </InputGroup>
-                  {err && <FieldError>{err}</FieldError>}
                 </TextField>
 
                 {err && (
@@ -151,6 +149,10 @@ export default function LoginPage() {
                   {loading ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}
                 </Button>
               </form>
+
+              <p className="text-center text-xs text-muted">
+                ลืมรหัสผ่าน? กรุณาติดต่อเจ้าหน้าที่วิทยาลัยการคอมพิวเตอร์เพื่อรีเซ็ตรหัสผ่าน
+              </p>
             </Card.Content>
           </Card>
 

@@ -1,14 +1,15 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Save, CheckCircle2, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar } from "lucide-react";
-import { api, type Term } from "../../lib/api";
+import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar } from "lucide-react";
+import { api, type Term, type Me } from "../../lib/api";
+import { notify } from "../../lib/notify";
 import ScheduleGrid, {
   type Block, type BlockKind, type DraftRange,
   KIND_LABEL, blockTitle,
 } from "../../components/ScheduleGrid";
 import {
-  PageHeader, Panel, Select, Modal, Button, TextInput, FieldGroup, EmptyState, Alert,
+  PageHeader, Panel, Select, Modal, Button, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog,
 } from "../../components/ui";
 import { LockedActionButton, useTAApproval } from "../TAGate";
 
@@ -55,6 +56,11 @@ type EditorMode = { kind: "closed" } | { kind: "create"; draft: Partial<Block> }
 
 export default function TASchedulePage() {
   const { approved } = useTAApproval();
+  const { data: me } = useSWR<Me>("/me");
+  // WBA (no-regular-schedule) mode is only valid for year-4+ undergraduates.
+  // The backend enforces this; we mirror it here so the checkbox is disabled
+  // with a reason instead of failing on save.
+  const canWba = me?.study_level === "undergrad" && (me?.study_year ?? 0) >= 4;
   const { data: terms } = useSWR<Term[]>("/terms");
   const [termId, setTermId] = useState<string>("");
   useEffect(() => {
@@ -65,12 +71,35 @@ export default function TASchedulePage() {
 
   const { data: blocks } = useSWR<Block[]>(termId ? `/me/schedule?term_id=${termId}` : null);
   const [local, setLocal] = useState<Block[]>([]);
-  useEffect(() => { setLocal(blocks ?? []); }, [blocks]);
 
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  // Track unsaved local edits. While dirty we must NOT let a background SWR
+  // revalidation overwrite what the user is editing; the ref mirrors the state
+  // so the [blocks] effect reads a fresh value without re-subscribing to it.
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const markDirty = () => { dirtyRef.current = true; setDirty(true); };
+  const clearDirty = () => { dirtyRef.current = false; setDirty(false); };
+
+  useEffect(() => {
+    if (dirtyRef.current) return; // keep unsaved edits; don't clobber on revalidate
+    setLocal(blocks ?? []);
+  }, [blocks]);
+
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<EditorMode>({ kind: "closed" });
+  const [pendingTerm, setPendingTerm] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  function requestTermChange(next: string) {
+    if (!next || next === termId) return;
+    if (dirty) { setPendingTerm(next); return; }
+    switchTerm(next);
+  }
+  function switchTerm(next: string) {
+    clearDirty();
+    setPendingTerm(null);
+    setTermId(next);
+  }
 
   const isWba = local.some(b => b.is_wba);
   const regularBlocks = useMemo(
@@ -122,6 +151,7 @@ export default function TASchedulePage() {
   function closeEditor() { setEditor({ kind: "closed" }); }
 
   function upsertBlock(b: Block) {
+    markDirty();
     setLocal(prev => {
       const idx = prev.findIndex(x => x.id === b.id);
       if (idx < 0) return [...prev, b];
@@ -129,6 +159,7 @@ export default function TASchedulePage() {
     });
   }
   function removeBlock(id: string) {
+    markDirty();
     setLocal(prev => prev.filter(b => b.id !== id));
   }
 
@@ -138,6 +169,7 @@ export default function TASchedulePage() {
       if (hasRegulars && !window.confirm("การเปิดโหมด WBA จะลบคาบเรียนทั้งหมดที่กรอกไว้ ยืนยันหรือไม่?")) {
         return;
       }
+      markDirty();
       setLocal([{
         id: "wba-" + Date.now(),
         term_id: termId,
@@ -151,6 +183,7 @@ export default function TASchedulePage() {
         is_wba: true,
       }]);
     } else {
+      markDirty();
       setLocal(prev => prev.filter(b => !b.is_wba));
     }
   }
@@ -160,26 +193,26 @@ export default function TASchedulePage() {
     for (const b of local) {
       if (b.is_wba) continue;
       if (!inRange(b.start_time) || !inRange(b.end_time)) {
-        setErr(`คาบ ${b.start_time}–${b.end_time} อยู่นอกช่วง ${String(START_HR).padStart(2,"0")}:00–${String(END_HR).padStart(2,"0")}:00`);
+        notify.error(`คาบ ${b.start_time}–${b.end_time} อยู่นอกช่วง ${String(START_HR).padStart(2,"0")}:00–${String(END_HR).padStart(2,"0")}:00`);
         return;
       }
       if (parseHM(b.start_time) >= parseHM(b.end_time)) {
-        setErr(`คาบ ${blockTitle(b) || "คาบเรียน"} เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`);
+        notify.error(`คาบ ${blockTitle(b) || "คาบเรียน"} เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`);
         return;
       }
     }
     if (overlappingIds.size > 0) {
-      setErr("มีคาบเรียนทับซ้อนกัน โปรดแก้ไขก่อนบันทึก");
+      notify.error("มีคาบเรียนทับซ้อนกัน โปรดแก้ไขก่อนบันทึก");
       return;
     }
-    setSaving(true); setErr(null);
+    setSaving(true);
     try {
       await api.put(`/me/schedule?term_id=${termId}`, local);
-      setMsg("บันทึกตารางเรียนเรียบร้อย");
-      mutate((k: string) => typeof k === "string" && k.startsWith("/me/schedule"));
-      setTimeout(() => setMsg(null), 2500);
+      clearDirty();
+      notify.success("บันทึกตารางเรียนเรียบร้อย");
+      mutate((k) => typeof k === "string" && k.startsWith("/me/schedule"));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      notify.error(e);
     } finally { setSaving(false); }
   }
 
@@ -193,7 +226,7 @@ export default function TASchedulePage() {
         description="บันทึกตารางเรียนต่อภาคการศึกษา เพื่อใช้ตรวจสอบไม่ให้ทับซ้อนกับตารางสอนที่อาจารย์จะมอบหมาย · ลากบนตารางหรือกดปุ่มเพิ่มคาบเพื่อกรอกข้อมูล"
         actions={
           <>
-            <Select value={termId} onChange={e => setTermId(e.target.value)} className="max-w-xs">
+            <Select value={termId} onChange={e => requestTermChange(e.target.value)} className="max-w-xs">
               {terms?.map(t => (<option key={t.id} value={t.id}>{t.academic_year}/{t.semester}</option>))}
             </Select>
             <Button variant="secondary" onClick={() => openCreate()} disabled={isWba}>
@@ -206,14 +239,9 @@ export default function TASchedulePage() {
         }
       />
 
-      {msg && (
-        <div className="mb-3 inline-flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
-          <CheckCircle2 size={14} /> {msg}
-        </div>
-      )}
-      {err && (
-        <div className="mb-3">
-          <Alert status="danger" icon={<AlertTriangle size={16} />} title="บันทึกไม่สำเร็จ" description={err} />
+      {dirty && (
+        <div className="mb-3 text-xs text-warning-soft-foreground">
+          * มีการแก้ไขที่ยังไม่ได้บันทึก — กด “บันทึก” เพื่อจัดเก็บ
         </div>
       )}
       {!approved && (
@@ -288,7 +316,7 @@ export default function TASchedulePage() {
                     <Button variant="ghost" size="sm" onClick={() => openEdit(b.id)} aria-label="แก้ไข">
                       <Pencil size={14} />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => removeBlock(b.id)} aria-label="ลบ">
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteId(b.id)} aria-label="ลบ">
                       <Trash2 size={14} />
                     </Button>
                   </div>
@@ -300,10 +328,11 @@ export default function TASchedulePage() {
       )}
 
       <Panel title="กรณีพิเศษ" className="mt-4">
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <label className={"flex items-center gap-2 text-sm " + (canWba || isWba ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
           <input
             type="checkbox"
             checked={isWba}
+            disabled={!canWba && !isWba}
             onChange={e => toggleWba(e.target.checked)}
           />
           <span>ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)</span>
@@ -311,6 +340,14 @@ export default function TASchedulePage() {
         <p className="text-xs text-muted mt-1">
           เปิดตัวเลือกนี้เมื่อคุณไม่มีตารางเรียนประจำในภาคเรียนนี้ — ระบบจะข้ามการตรวจสอบทับซ้อนตอนอาจารย์ยื่นคำร้อง
         </p>
+        {!canWba && !isWba && (
+          <p className="text-xs text-warning mt-1">
+            โหมด WBA ใช้ได้เฉพาะนักศึกษาปริญญาตรีชั้นปีที่ 4 ขึ้นไป
+            {me?.study_level === "undergrad" && (me?.study_year ?? 0) < 1
+              ? " — ระบบยังไม่มีข้อมูลชั้นปีของคุณ กรุณาติดต่อเจ้าหน้าที่"
+              : ""}
+          </p>
+        )}
       </Panel>
 
       <BlockEditor
@@ -326,6 +363,26 @@ export default function TASchedulePage() {
           return day.find(x =>
             overlaps(x.start_time, x.end_time, candidate.start_time, candidate.end_time)) ?? null;
         }}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => { if (confirmDeleteId) removeBlock(confirmDeleteId); setConfirmDeleteId(null); }}
+        danger
+        title="ลบคาบเรียน"
+        message="ต้องการลบคาบเรียนนี้ออกจากตารางหรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก"
+        confirmLabel="ลบ"
+      />
+
+      <ConfirmDialog
+        open={pendingTerm !== null}
+        onClose={() => setPendingTerm(null)}
+        onConfirm={() => { if (pendingTerm) switchTerm(pendingTerm); }}
+        danger
+        title="เปลี่ยนภาคการศึกษา"
+        message="มีการแก้ไขตารางที่ยังไม่ได้บันทึก หากเปลี่ยนภาคการศึกษาตอนนี้ การแก้ไขจะหายไป ต้องการดำเนินการต่อหรือไม่?"
+        confirmLabel="เปลี่ยนโดยไม่บันทึก"
       />
     </div>
   );
@@ -379,6 +436,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
 
   const [error, setError] = useState<string | null>(null);
   const [overlapWarn, setOverlapWarn] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Live overlap warning
   useEffect(() => {
@@ -453,6 +511,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
   }
 
   return (
+    <>
     <Modal
       open={isOpen}
       onClose={onClose}
@@ -463,7 +522,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
         <div className="flex items-center justify-between w-full gap-2">
           <div>
             {isEdit && block && (
-              <Button variant="danger-soft" onClick={() => onDelete(block.id)}>
+              <Button variant="danger-soft" onClick={() => setConfirmDelete(true)}>
                 <Trash2 size={14} /> ลบคาบนี้
               </Button>
             )}
@@ -567,5 +626,16 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
         )}
       </div>
     </Modal>
+
+    <ConfirmDialog
+      open={confirmDelete}
+      onClose={() => setConfirmDelete(false)}
+      onConfirm={() => { setConfirmDelete(false); if (block) onDelete(block.id); }}
+      danger
+      title="ลบคาบเรียน"
+      message="ต้องการลบคาบเรียนนี้หรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก"
+      confirmLabel="ลบ"
+    />
+    </>
   );
 }
