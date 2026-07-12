@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
-import { Save, CalendarPlus, Settings, BookPlus, CheckCircle2 } from "lucide-react";
+import { Save, CalendarPlus, Settings, BookPlus, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api, type Term } from "../../lib/api";
 import {
@@ -10,6 +10,7 @@ import {
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import OpenCourseModal from "../../lecturer/(home)/OpenCourseModal";
+import ImportModal from "./ImportModal";
 
 interface TC {
   id: string; code: string; name_th: string; term_id: string;
@@ -34,6 +35,7 @@ export default function TeachingPage() {
 
   const { data: courses } = useSWR<TC[]>(termId ? `/teaching-courses?term_id=${termId}` : null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const activeTerm = terms?.find(t => t.id === termId);
   const termLabel = activeTerm ? `${activeTerm.academic_year}/${activeTerm.semester}` : "";
@@ -53,6 +55,9 @@ export default function TeachingPage() {
                   </option>
                 ))}
               </Select>
+              <Button variant="secondary" disabled={!termId} onClick={() => setImporting(true)}>
+                <FileSpreadsheet size={16} /> นำเข้า Excel
+              </Button>
               <Button variant="primary" disabled={!termId} onClick={() => setCreating(true)}>
                 <BookPlus size={16} /> เปิดรายวิชา
               </Button>
@@ -102,6 +107,13 @@ export default function TeachingPage() {
         termId={termId}
         termLabel={termLabel}
         redirectBase="/staff/teaching"
+      />
+
+      <ImportModal
+        open={importing}
+        onClose={() => setImporting(false)}
+        termId={termId}
+        termLabel={termLabel}
       />
     </div>
   );
