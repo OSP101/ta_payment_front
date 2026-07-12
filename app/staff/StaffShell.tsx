@@ -31,7 +31,7 @@ const nav: NavSection[] = [
     title: "การอนุมัติ",
     items: [
       { label: "ตรวจสอบเอกสาร", href: "/staff/review", icon: FileCheck2 },
-      { label: "อนุมัติคำขอ TA", href: "/staff/approvals", icon: ClipboardCheck },
+      { label: "รายการคำขอ TA", href: "/staff/approvals", icon: ClipboardCheck },
     ],
   },
   {

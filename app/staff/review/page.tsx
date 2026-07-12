@@ -1,80 +1,21 @@
 "use client";
 import useSWR, { mutate } from "swr";
-import { useEffect, useState } from "react";
-import { Tabs } from "@heroui/react";
+import { useMemo, useState } from "react";
+import { Tabs, SearchField, InputGroup, Label, TextField, FieldError } from "@heroui/react";
 import {
-  Check, X, FileText, Download, Eye, Clock,
-  CheckCircle2, XCircle, ChevronLeft, History as HistoryIcon,
-  ChevronDown, ChevronUp,
+  Clock, CheckCircle2, XCircle, Download, Clock3, Trash2, Eye, EyeOff, Shield,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, StatusChip, Modal,
-  TextArea, FieldGroup, Spinner, Chip, TabLabel,
+  PageHeader, Panel, Button, StatusChip, Spinner, Alert, TabLabel, Modal, Chip,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
-
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
+import { ReviewRow } from "./ReviewRow";
+import { PreviewDrawer } from "./PreviewDrawer";
+import { DOC_KIND_LABEL, fmtDate, daysUntil, type Pending, type Doc } from "./types";
 
 type Bucket = "pending" | "approved" | "rejected";
-
-interface Pending {
-  user_id: string;
-  full_name: string;
-  email: string;
-  status: string;
-  submitted_at?: string;
-  verified_at?: string;
-}
-interface Doc {
-  id: string;
-  kind: string;
-  filename: string;
-  status: string;
-  reject_reason?: string | null;
-  size_bytes?: number;
-  round?: number;
-  superseded?: boolean;
-  uploaded_at?: string;
-  reviewed_at?: string | null;
-}
-interface Profile {
-  status: string;
-  reject_reason?: string | null;
-  prefix?: string;
-  national_id?: string;
-  bank_name?: string;
-  account_no?: string;
-  account_name?: string;
-  current_round?: number;
-}
-interface DetailResp {
-  documents: Doc[] | null;
-  profile?: Profile | null;
-}
-interface ProfileSubmission {
-  id: string;
-  round: number;
-  prefix: string;
-  national_id: string;
-  bank_name: string;
-  bank_branch: string;
-  branch_code: string;
-  account_no: string;
-  account_name: string;
-  status: string;
-  submitted_at: string;
-  reviewed_at?: string | null;
-  reject_reason?: string | null;
-}
-interface HistoryResp {
-  profile: Profile | null;
-  submissions: ProfileSubmission[] | null;
-  documents: Doc[] | null;
-}
 
 const BUCKETS: { id: Bucket; label: string; icon: React.ReactNode }[] = [
   { id: "pending",  label: "รอตรวจ",     icon: <Clock size={14} /> },
@@ -82,34 +23,27 @@ const BUCKETS: { id: Bucket; label: string; icon: React.ReactNode }[] = [
   { id: "rejected", label: "ปฏิเสธ",     icon: <XCircle size={14} /> },
 ];
 
-const DOC_KIND_LABEL: Record<string, string> = {
-  national_id:   "สำเนาบัตรประชาชน",
-  bank_book:     "สำเนาสมุดบัญชีธนาคาร",
-  creditor_form: "แบบฟอร์มเจ้าหนี้",
-};
-
-/* -------------------------------------------------------------------------- */
-/* Page                                                                       */
-/* -------------------------------------------------------------------------- */
-
 export default function ReviewPage() {
   const [bucket, setBucket] = useState<Bucket>("pending");
-  // Fetch all three buckets in parallel so tab counts are always meaningful
-  // and switching tabs is instant (already cached). SWR dedupes so revisiting
-  // a bucket doesn't cause extra network chatter.
   const pending  = useSWR<Pending[]>("/ta-review?status=pending");
   const approved = useSWR<Pending[]>("/ta-review?status=approved");
   const rejected = useSWR<Pending[]>("/ta-review?status=rejected");
-  const byBucket: Record<Bucket, ReturnType<typeof useSWR<Pending[]>>> = {
-    pending, approved, rejected,
-  };
+  const byBucket = { pending, approved, rejected } as const;
   const current = byBucket[bucket];
   const counts = {
     pending:  pending.data?.length ?? 0,
     approved: approved.data?.length ?? 0,
     rejected: rejected.data?.length ?? 0,
   };
-  const [selected, setSelected] = useState<Pending | null>(null);
+
+  // Drawer preview state — a single doc from a single user at a time.
+  const [preview, setPreview] = useState<
+    { userId: string; doc: Doc } | null
+  >(null);
+
+  // Password-gated re-download state. Non-null when the confirm modal is
+  // open; carries just the target user id so the modal is self-contained.
+  const [redownloadFor, setRedownloadFor] = useState<Pending | null>(null);
 
   function revalidateAll() {
     mutate("/ta-review?status=pending");
@@ -121,7 +55,7 @@ export default function ReviewPage() {
     <div>
       <PageHeader
         title="ตรวจสอบเอกสาร TA"
-        description="ตรวจสอบและอนุมัติเอกสารของผู้ช่วยสอนที่ส่งเข้ามา"
+        description="ดูข้อมูลและเอกสารทั้งหมดของ TA ในแถวเดียว — กด 'อนุมัติทั้งชุด' หรือปฏิเสธพร้อมเหตุผลได้ทันที"
       />
 
       <Panel padded={false}>
@@ -142,43 +76,140 @@ export default function ReviewPage() {
             </Tabs.List>
           </Tabs.ListContainer>
 
-          {BUCKETS.map(b => (
-            <Tabs.Panel key={b.id} id={b.id}>
-              <UserList
-                data={bucket === b.id ? current.data : undefined}
-                loading={bucket === b.id && current.isLoading}
-                error={bucket === b.id ? current.error : undefined}
-                onRetry={() => current.mutate()}
-                bucket={b.id}
-                onSelect={setSelected}
-              />
-            </Tabs.Panel>
-          ))}
+          <Tabs.Panel id="pending">
+            <PendingList
+              data={pending.data}
+              loading={pending.isLoading}
+              error={pending.error}
+              onRetry={() => pending.mutate()}
+              onPreview={(userId, doc) => setPreview({ userId, doc })}
+              onChanged={revalidateAll}
+            />
+          </Tabs.Panel>
+          <Tabs.Panel id="approved">
+            <DecidedTable
+              data={approved.data}
+              loading={approved.isLoading}
+              error={approved.error}
+              onRetry={() => approved.mutate()}
+              bucket="approved"
+              onRedownload={u => setRedownloadFor(u)}
+            />
+          </Tabs.Panel>
+          <Tabs.Panel id="rejected">
+            <DecidedTable
+              data={rejected.data}
+              loading={rejected.isLoading}
+              error={rejected.error}
+              onRetry={() => rejected.mutate()}
+              bucket="rejected"
+            />
+          </Tabs.Panel>
         </Tabs>
       </Panel>
 
-      <DetailModal
-        user={selected}
-        onClose={() => setSelected(null)}
-        onChanged={revalidateAll}
+      <PreviewDrawer
+        userId={preview?.userId ?? null}
+        doc={
+          preview
+            ? {
+                id: preview.doc.id,
+                filename: preview.doc.filename,
+                kind: preview.doc.kind,
+                kindLabel: DOC_KIND_LABEL[preview.doc.kind] ?? preview.doc.kind,
+              }
+            : null
+        }
+        onClose={() => setPreview(null)}
+      />
+
+      <RedownloadModal
+        target={redownloadFor}
+        onClose={() => setRedownloadFor(null)}
       />
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* User list per tab                                                          */
+/* Pending bucket — one always-expanded card per user, no modal               */
 /* -------------------------------------------------------------------------- */
 
-function UserList({
-  data, loading, error, onRetry, bucket, onSelect,
+function PendingList({
+  data, loading, error, onRetry, onPreview, onChanged,
+}: {
+  data?: Pending[];
+  loading: boolean;
+  error?: unknown;
+  onRetry?: () => void;
+  onPreview: (userId: string, doc: Doc) => void;
+  onChanged: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return data ?? [];
+    return (data ?? []).filter(u =>
+      `${u.full_name} ${u.email}`.toLowerCase().includes(needle),
+    );
+  }, [data, q]);
+
+  if (loading) {
+    return <div className="p-6 flex justify-center"><Spinner /></div>;
+  }
+  if (error) {
+    return (
+      <div className="p-4">
+        <Alert
+          status="danger"
+          title="โหลดข้อมูลไม่สำเร็จ"
+          action={onRetry ? (
+            <Button variant="secondary" size="sm" onClick={onRetry}>ลองใหม่</Button>
+          ) : undefined}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4">
+      <div className="mb-3">
+        <SearchField value={q} onChange={setQ} aria-label="ค้นหาชื่อ / อีเมล">
+          <SearchField.Input placeholder="ค้นหาชื่อ / อีเมล…" />
+        </SearchField>
+      </div>
+      {filtered.length === 0 ? (
+        <div className="text-sm text-muted py-6 text-center">
+          {q ? "ไม่พบผลลัพธ์" : "ไม่มีเอกสารที่รอตรวจ"}
+        </div>
+      ) : (
+        filtered.map(u => (
+          <ReviewRow
+            key={u.user_id}
+            user={u}
+            onPreview={d => onPreview(u.user_id, d)}
+            onChanged={onChanged}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Approved / Rejected buckets — compact table, no per-row expansion needed   */
+/* -------------------------------------------------------------------------- */
+
+function DecidedTable({
+  data, loading, error, onRetry, bucket, onRedownload,
 }: {
   data?: Pending[];
   loading: boolean;
   error?: unknown;
   onRetry?: () => void;
   bucket: Bucket;
-  onSelect: (u: Pending) => void;
+  /** Only set for the approved bucket — the parent handles password gating. */
+  onRedownload?: (u: Pending) => void;
 }) {
   const emptyText = {
     pending:  "ไม่มีเอกสารที่รอตรวจ",
@@ -196,7 +227,7 @@ function UserList({
     {
       id: "email", label: "อีเมล", sortable: true,
       sortValue: u => u.email,
-      className: "text-(--ink-3)",
+      className: "text-muted",
       render: u => u.email,
     },
     {
@@ -204,20 +235,38 @@ function UserList({
       render: u => <StatusChip status={u.status} />,
     },
     {
-      id: "actions", label: <span className="sr-only">การจัดการ</span>,
-      className: "text-right",
-      render: u => (
-        <Button variant="secondary" size="sm" onClick={() => onSelect(u)}>
-          <Eye size={14} /> ดู
-        </Button>
-      ),
+      id: "verified_at", label: "วันที่ตรวจ",
+      className: "text-muted",
+      render: u => fmtDate(u.verified_at),
     },
+    ...(bucket === "approved"
+      ? [{
+          id: "expires_at", label: "อายุไฟล์",
+          render: (u: Pending) => <RetentionChip user={u} />,
+        } satisfies DataColumn<Pending>]
+      : []),
+    ...(onRedownload
+      ? [{
+          id: "actions", label: <span className="sr-only">การจัดการ</span>,
+          className: "text-right" as const,
+          render: (u: Pending) => (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onRedownload(u)}
+              disabled={u.all_files_deleted}
+            >
+              <Download size={14} /> ZIP
+            </Button>
+          ),
+        } satisfies DataColumn<Pending>]
+      : []),
   ];
 
   return (
     <div className="p-4">
       <DataTable
-        ariaLabel="รายชื่อ TA ที่ส่งเอกสาร"
+        ariaLabel="รายชื่อ TA"
         rows={data}
         loading={loading}
         error={error}
@@ -225,8 +274,8 @@ function UserList({
         rowKey={u => u.user_id}
         searchFn={u => `${u.full_name} ${u.email}`}
         searchPlaceholder="ค้นหาชื่อ / อีเมล…"
-        initialSort={{ column: "name", direction: "ascending" }}
-        pageSize={10}
+        initialSort={{ column: "verified_at", direction: "descending" }}
+        pageSize={20}
         emptyTitle={emptyText}
         columns={columns}
       />
@@ -234,516 +283,152 @@ function UserList({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Detail modal                                                               */
-/* -------------------------------------------------------------------------- */
-
-type Mode =
-  | { kind: "list" }
-  | { kind: "reject-doc"; docId: string; filename: string }
-  | { kind: "reject-profile" };
-
-function DetailModal({
-  user, onClose, onChanged,
-}: {
-  user: Pending | null;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
-  const key = user ? `/ta-review/${user.user_id}/docs` : null;
-  const { data, mutate: refetch, isLoading } = useSWR<DetailResp>(key);
-  const [mode, setMode] = useState<Mode>({ kind: "list" });
-  const [reason, setReason] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
-  const [preview, setPreview] = useState<Doc | null>(null);
-  // Double-submit guards: per-doc id while approving/rejecting a single doc,
-  // and a whole-set flag while finalizing (approve/reject) the profile.
-  const [busyDocId, setBusyDocId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setMode({ kind: "list" });
-    setReason("");
-    setShowHistory(false);
-    setPreview(null);
-    setBusyDocId(null);
-    setBusy(false);
-  }, [user?.user_id]);
-
-  function resetAndClose() {
-    setMode({ kind: "list" });
-    setReason("");
-    onClose();
-  }
-  function backToList() {
-    setMode({ kind: "list" });
-    setReason("");
-  }
-
-  async function approveDoc(id: string) {
-    if (busyDocId) return;
-    setBusyDocId(id);
-    try {
-      await api.post(`/ta-review/docs/${id}`, { approve: true, reason: "" });
-      await refetch();
-      onChanged();
-      notify.success("อนุมัติเอกสารเรียบร้อยแล้ว");
-    } catch (e) {
-      notify.error(e);
-    } finally {
-      setBusyDocId(null);
-    }
-  }
-  async function confirmRejectDoc() {
-    if (mode.kind !== "reject-doc" || !reason.trim() || busyDocId) return;
-    setBusyDocId(mode.docId);
-    try {
-      await api.post(`/ta-review/docs/${mode.docId}`, { approve: false, reason });
-      await refetch();
-      onChanged();
-      backToList();
-      notify.success("ตีกลับเอกสารเรียบร้อยแล้ว");
-    } catch (e) {
-      notify.error(e);
-    } finally {
-      setBusyDocId(null);
-    }
-  }
-  async function approveProfile() {
-    if (!user || busy) return;
-    setBusy(true);
-    try {
-      await api.post(`/ta-review/${user.user_id}/profile`, { approve: true, reason: "" });
-      onChanged();
-      notify.success("อนุมัติเอกสารทั้งชุดเรียบร้อยแล้ว");
-      resetAndClose();
-    } catch (e) {
-      notify.error(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function confirmRejectProfile() {
-    if (!user || !reason.trim() || busy) return;
-    setBusy(true);
-    try {
-      await api.post(`/ta-review/${user.user_id}/profile`, { approve: false, reason });
-      onChanged();
-      notify.success("ตีกลับเอกสารทั้งชุดเรียบร้อยแล้ว");
-      resetAndClose();
-    } catch (e) {
-      notify.error(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const docs = data?.documents ?? [];
-  const profile = data?.profile ?? null;
-  const allApproved = docs.length > 0 && docs.every(d => d.status === "approved");
-  const canFinalize = profile?.status === "submitted" || profile?.status === "needs_fix";
-
-  // ---- Footer per mode -----------------------------------------------------
-  let footer: React.ReactNode = null;
-  if (mode.kind === "reject-doc") {
-    footer = (
-      <>
-        <Button variant="ghost" onClick={backToList} disabled={!!busyDocId}>
-          <ChevronLeft size={14} /> ย้อนกลับ
-        </Button>
-        <Button variant="danger" onClick={confirmRejectDoc} disabled={!reason.trim() || !!busyDocId} isPending={!!busyDocId}>
-          <X size={14} /> ยืนยันปฏิเสธ
-        </Button>
-      </>
-    );
-  } else if (mode.kind === "reject-profile") {
-    footer = (
-      <>
-        <Button variant="ghost" onClick={backToList} disabled={busy}>
-          <ChevronLeft size={14} /> ย้อนกลับ
-        </Button>
-        <Button variant="danger" onClick={confirmRejectProfile} disabled={!reason.trim() || busy} isPending={busy}>
-          <X size={14} /> ตีกลับให้แก้ไข
-        </Button>
-      </>
-    );
-  } else {
-    footer = (
-      <>
-        <Button variant="ghost" onClick={resetAndClose} disabled={busy || !!busyDocId}>ปิด</Button>
-        {canFinalize && (
-          <>
-            <Button variant="danger-soft" onClick={() => setMode({ kind: "reject-profile" })} disabled={busy || !!busyDocId}>
-              <X size={14} /> ตีกลับ
-            </Button>
-            <Button variant="primary" onClick={approveProfile} disabled={!allApproved || busy || !!busyDocId} isPending={busy}>
-              <Check size={14} /> อนุมัติทั้งชุด
-            </Button>
-          </>
-        )}
-      </>
+/** Small chip showing how many days remain before the retention job scrubs
+ * this TA's approved doc files. Uses `earliest_expires_at` (min across the
+ * three docs) so the officer sees the tightest deadline. */
+function RetentionChip({ user }: { user: Pending }) {
+  if (user.all_files_deleted) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted">
+        <Trash2 size={12} /> ถูกลบแล้ว
+      </span>
     );
   }
-
-  const title = user
-    ? (mode.kind === "reject-doc"
-        ? "ปฏิเสธเอกสาร"
-        : mode.kind === "reject-profile"
-          ? "ตีกลับให้แก้ไข"
-          : user.full_name)
-    : "";
-
+  if (!user.earliest_expires_at) {
+    return <span className="text-xs text-muted">-</span>;
+  }
+  const days = daysUntil(user.earliest_expires_at);
+  if (days <= 0) {
+    return (
+      <Chip tone="warn">
+        <Clock3 size={12} /> หมดอายุแล้ว
+      </Chip>
+    );
+  }
+  // 3 days or less: highlight as warning so the officer notices before
+  // the sweep runs.
+  if (days <= 3) {
+    return (
+      <Chip tone="warn">
+        <Clock3 size={12} /> เหลือ {days} วัน
+      </Chip>
+    );
+  }
   return (
-    <>
-    <DocPreviewModal doc={preview} onClose={() => setPreview(null)} />
-    <Modal
-      open={!!user}
-      onClose={resetAndClose}
-      title={title}
-      size="xl"
-      footer={footer}
-    >
-      {mode.kind === "list" && (
-        <>
-          {user && (
-            <div className="text-sm text-[var(--ink-3)] -mt-1 mb-4">{user.email}</div>
-          )}
-
-          {isLoading ? (
-            <div className="py-10 flex items-center justify-center"><Spinner /></div>
-          ) : (
-            <div className="space-y-4">
-              {profile && (
-                <ProfileSummary profile={profile} />
-              )}
-
-              <div>
-                <SectionHeader label="เอกสารที่แนบ" />
-                {docs.length === 0 ? (
-                  <div className="text-sm text-[var(--ink-3)] py-3">ยังไม่มีเอกสาร</div>
-                ) : (
-                  <ul className="border border-[var(--hairline)] rounded-xl overflow-hidden divide-y divide-[var(--hairline)]">
-                    {docs.map(d => (
-                      <DocRow
-                        key={d.id}
-                        doc={d}
-                        readonly={!canFinalize}
-                        busy={busyDocId === d.id}
-                        disabled={!!busyDocId && busyDocId !== d.id}
-                        onPreview={() => setPreview(d)}
-                        onApprove={() => approveDoc(d.id)}
-                        onReject={() => setMode({ kind: "reject-doc", docId: d.id, filename: d.filename })}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {profile?.status === "rejected" && profile.reject_reason && (
-                <div className="rounded-lg border border-danger/40 bg-danger-soft/60 px-4 py-3 text-sm">
-                  <div className="font-medium text-danger-soft-foreground mb-1">เหตุผลที่ถูกปฏิเสธ</div>
-                  <div className="text-[var(--ink-2)] whitespace-pre-wrap">{profile.reject_reason}</div>
-                </div>
-              )}
-
-              {user && (
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setShowHistory(v => !v)}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)]"
-                  >
-                    <HistoryIcon size={14} />
-                    {showHistory ? "ซ่อน" : "แสดง"}ประวัติการส่ง
-                    {showHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                  {showHistory && <HistoryPanel userId={user.user_id} />}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {mode.kind === "reject-doc" && (
-        <div className="space-y-3">
-          <div className="text-sm text-[var(--ink-2)]">
-            เอกสาร: <span className="font-medium">{mode.filename}</span>
-          </div>
-          <FieldGroup label="เหตุผล (บังคับ)" hint="อธิบายให้ TA เข้าใจว่าต้องแก้ไขอะไร">
-            <TextArea
-              rows={5}
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              placeholder="เช่น ภาพเบลอ อ่านเลขบัญชีไม่ออก…"
-            />
-          </FieldGroup>
-        </div>
-      )}
-
-      {mode.kind === "reject-profile" && (
-        <div className="space-y-3">
-          <div className="text-sm text-[var(--ink-2)]">
-            ตีกลับเอกสารทั้งชุดของ <span className="font-medium">{user?.full_name}</span> ให้ TA แก้ไขและส่งใหม่
-          </div>
-          <FieldGroup label="เหตุผล (บังคับ)">
-            <TextArea
-              rows={5}
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              placeholder="สรุปสิ่งที่ต้องแก้ไขทั้งหมด…"
-            />
-          </FieldGroup>
-        </div>
-      )}
-    </Modal>
-    </>
+    <span className="inline-flex items-center gap-1 text-xs text-muted">
+      <Clock3 size={12} /> เหลือ {days} วัน
+    </span>
   );
 }
 
-function DocPreviewModal({ doc, onClose }: { doc: Doc | null; onClose: () => void }) {
-  const url = doc ? `/api/v1/documents/${doc.id}/download` : "";
-  const ext = (doc?.filename.split(".").pop() ?? "").toLowerCase();
-  const isImage = ext === "jpg" || ext === "jpeg" || ext === "png";
+/* -------------------------------------------------------------------------- */
+/* Re-download confirm — password-gated because the ZIP contains PII          */
+/* -------------------------------------------------------------------------- */
+
+function RedownloadModal({
+  target,
+  onClose,
+}: {
+  target: Pending | null;
+  onClose: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Clear the form whenever the modal opens against a new user so a stale
+  // password can't be reused across rows.
+  useMemo(() => {
+    if (target) {
+      setPassword("");
+      setShowPw(false);
+      setErr(null);
+    }
+  }, [target]);
+
+  async function submit() {
+    if (!target || busy) return;
+    if (!password) {
+      setErr("กรุณากรอกรหัสผ่าน");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await api.post<{ zip_token: string }>(
+        `/ta-review/${target.user_id}/zip-token`,
+        { password },
+      );
+      window.location.assign(
+        `/api/v1/ta-review/${target.user_id}/download.zip?token=${encodeURIComponent(res.zip_token)}`,
+      );
+      notify.success("กำลังดาวน์โหลด…");
+      onClose();
+    } catch (e) {
+      // Show the server's message inline so the officer can retry without
+      // losing modal state; a toast would be easy to miss with focus on
+      // the password field.
+      const msg = e instanceof Error ? e.message : "ยืนยันไม่สำเร็จ";
+      setErr(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Modal
-      open={!!doc}
+      open={!!target}
       onClose={onClose}
-      title={doc ? (DOC_KIND_LABEL[doc.kind] ?? doc.kind) : ""}
-      size="xl"
+      title="ยืนยันตัวตนก่อนดาวน์โหลด"
+      icon={<Shield size={18} />}
+      size="sm"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>ปิด</Button>
-          {doc && (
-            <a href={url} target="_blank" rel="noreferrer">
-              <Button variant="secondary">
-                <Download size={14} /> ดาวน์โหลด
-              </Button>
-            </a>
-          )}
+          <Button variant="ghost" onClick={onClose} disabled={busy}>ยกเลิก</Button>
+          <Button variant="primary" onClick={submit} disabled={busy || !password} isPending={busy}>
+            <Download size={14} /> ยืนยันและดาวน์โหลด
+          </Button>
         </>
       }
     >
-      {doc && (
-        <div className="space-y-2">
-          <div className="text-xs text-[var(--ink-3)] truncate">{doc.filename}</div>
-          <div className="w-full h-[70vh] rounded-lg border border-[var(--hairline)] overflow-hidden bg-slate-50 flex items-center justify-center">
-            {isImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt={doc.filename} className="max-w-full max-h-full object-contain" />
-            ) : (
-              <iframe src={url} title={doc.filename} className="w-full h-full" />
-            )}
+      {target && (
+        <div className="space-y-4">
+          <div className="text-sm text-muted">
+            ไฟล์ ZIP ของ <span className="font-medium text-foreground">{target.full_name}</span> มีข้อมูลส่วนบุคคล (เลขบัตร ปชช. / เลขบัญชี)
+            กรุณากรอกรหัสผ่านของคุณเพื่อยืนยันตัวตน
           </div>
+          <TextField
+            name="officer-password"
+            isRequired
+            value={password}
+            onChange={v => { setPassword(v); if (err) setErr(null); }}
+            isInvalid={!!err}
+          >
+            <Label>รหัสผ่าน</Label>
+            <InputGroup>
+              <InputGroup.Input
+                type={showPw ? "text" : "password"}
+                autoComplete="current-password"
+                autoFocus
+                onKeyDown={e => { if (e.key === "Enter") submit(); }}
+              />
+              <InputGroup.Suffix className="pr-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isIconOnly
+                  onClick={() => setShowPw(v => !v)}
+                  aria-label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                >
+                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                </Button>
+              </InputGroup.Suffix>
+            </InputGroup>
+            {err && <FieldError>{err}</FieldError>}
+          </TextField>
         </div>
       )}
     </Modal>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Sub components                                                             */
-/* -------------------------------------------------------------------------- */
-
-function SectionHeader({ label }: { label: string }) {
-  return (
-    <div className="text-xs font-medium uppercase tracking-wider text-[var(--ink-3)] mb-2">
-      {label}
-    </div>
-  );
-}
-
-function ProfileSummary({
-  profile,
-}: {
-  profile: NonNullable<DetailResp["profile"]>;
-}) {
-  const rows: [string, string | undefined][] = [
-    ["คำนำหน้า",       profile.prefix],
-    ["เลขบัตรประชาชน", profile.national_id],
-    ["ธนาคาร",         profile.bank_name],
-    ["เลขที่บัญชี",     profile.account_no],
-    ["ชื่อบัญชี",       profile.account_name],
-  ];
-  const filled = rows.filter(([, v]) => v && v.length > 0);
-  if (filled.length === 0) return null;
-  return (
-    <div>
-      <SectionHeader label="ข้อมูลบัญชี" />
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        {filled.map(([k, v]) => (
-          <div key={k} className="flex flex-col">
-            <span className="text-xs text-[var(--ink-3)]">{k}</span>
-            <span className="text-[var(--ink-1)] tabular-nums">{v}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DocRow({
-  doc, readonly, busy, disabled, onPreview, onApprove, onReject,
-}: {
-  doc: Doc;
-  readonly: boolean;
-  busy?: boolean;
-  disabled?: boolean;
-  onPreview: () => void;
-  onApprove: () => void;
-  onReject: () => void;
-}) {
-  const kindLabel = DOC_KIND_LABEL[doc.kind] ?? doc.kind;
-  return (
-    <li className="flex items-center gap-3 px-3 py-2.5">
-      <FileText size={18} className="text-[var(--ink-3)] shrink-0" />
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-[var(--ink-1)] truncate">{kindLabel}</div>
-        <div className="text-xs text-[var(--ink-3)] truncate">{doc.filename}</div>
-        {doc.status === "rejected" && doc.reject_reason && (
-          <div className="mt-1 text-xs text-danger-soft-foreground">
-            เหตุผล: {doc.reject_reason}
-          </div>
-        )}
-      </div>
-      <StatusChip status={doc.status} />
-      <div className="flex items-center gap-1 shrink-0">
-        <Button variant="ghost" size="sm" aria-label="ดูไฟล์" onClick={onPreview}>
-          <Eye size={14} />
-        </Button>
-        <a href={`/api/v1/documents/${doc.id}/download`} target="_blank" rel="noreferrer">
-          <Button variant="ghost" size="sm" aria-label="ดาวน์โหลด">
-            <Download size={14} />
-          </Button>
-        </a>
-        {!readonly && doc.status !== "approved" && (
-          <Button variant="primary" size="sm" onClick={onApprove} disabled={busy || disabled} isPending={busy}>
-            <Check size={14} /> ผ่าน
-          </Button>
-        )}
-        {!readonly && doc.status !== "rejected" && (
-          <Button variant="danger-soft" size="sm" onClick={onReject} disabled={busy || disabled}>
-            <X size={14} /> ไม่ผ่าน
-          </Button>
-        )}
-      </div>
-    </li>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* History panel — full submission trail (profile snapshots + past docs)      */
-/* -------------------------------------------------------------------------- */
-
-function fmtDate(s?: string | null) {
-  if (!s) return "-";
-  try {
-    return new Date(s).toLocaleString("th-TH", {
-      year: "numeric", month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch {
-    return s;
-  }
-}
-
-function HistoryPanel({ userId }: { userId: string }) {
-  const { data, isLoading } = useSWR<HistoryResp>(`/ta-review/${userId}/history`);
-  if (isLoading) {
-    return (
-      <div className="mt-3 py-4 flex items-center justify-center">
-        <Spinner />
-      </div>
-    );
-  }
-  if (!data) return null;
-  const subs = data.submissions ?? [];
-  const docs = data.documents ?? [];
-
-  // Group superseded docs by kind (skip current, they're already shown above).
-  const pastDocs = docs.filter(d => d.superseded);
-  const byKind: Record<string, Doc[]> = {};
-  for (const d of pastDocs) {
-    (byKind[d.kind] ??= []).push(d);
-  }
-
-  return (
-    <div className="mt-3 space-y-4 border border-[var(--hairline)] rounded-xl p-4 bg-surface-secondary/40">
-      <div>
-        <div className="text-xs font-medium uppercase tracking-wider text-[var(--ink-3)] mb-2">
-          ประวัติการส่งข้อมูลบัญชี
-        </div>
-        {subs.length === 0 ? (
-          <div className="text-sm text-[var(--ink-3)]">ไม่มีข้อมูล</div>
-        ) : (
-          <ul className="space-y-2">
-            {subs.map(sub => (
-              <li key={sub.id} className="rounded-lg border border-[var(--hairline)] p-3 bg-surface">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Chip tone="neutral">รอบที่ {sub.round}</Chip>
-                  <StatusChip status={sub.status} />
-                  <span className="text-xs text-[var(--ink-3)] ml-auto">
-                    ส่ง: {fmtDate(sub.submitted_at)}
-                    {sub.reviewed_at && <> · ตรวจ: {fmtDate(sub.reviewed_at)}</>}
-                  </span>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                  <span className="text-[var(--ink-3)]">ธนาคาร</span>
-                  <span className="tabular-nums">{sub.bank_name || "-"}</span>
-                  <span className="text-[var(--ink-3)]">เลขที่บัญชี</span>
-                  <span className="tabular-nums">{sub.account_no || "-"}</span>
-                  <span className="text-[var(--ink-3)]">ชื่อบัญชี</span>
-                  <span>{sub.account_name || "-"}</span>
-                </div>
-                {sub.reject_reason && (
-                  <div className="mt-2 text-xs text-danger-soft-foreground">
-                    เหตุผลที่ถูกปฏิเสธ: {sub.reject_reason}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div>
-        <div className="text-xs font-medium uppercase tracking-wider text-[var(--ink-3)] mb-2">
-          เอกสารรอบก่อนหน้า (ถูกแทนที่)
-        </div>
-        {pastDocs.length === 0 ? (
-          <div className="text-sm text-[var(--ink-3)]">ยังไม่มี — TA ยังไม่เคยส่งเอกสารรอบใหม่</div>
-        ) : (
-          <ul className="space-y-2">
-            {Object.entries(byKind).map(([kind, list]) => (
-              <li key={kind}>
-                <div className="text-xs font-medium text-[var(--ink-2)] mb-1">
-                  {DOC_KIND_LABEL[kind] ?? kind}
-                </div>
-                <ul className="border border-[var(--hairline)] rounded-lg divide-y divide-[var(--hairline)]">
-                  {list.map(d => (
-                    <li key={d.id} className="flex items-center gap-2 px-3 py-2 text-xs">
-                      <FileText size={14} className="text-[var(--ink-3)] shrink-0" />
-                      <span className="flex-1 truncate">{d.filename}</span>
-                      <Chip tone="neutral">รอบ {d.round ?? "-"}</Chip>
-                      <StatusChip status={d.status} />
-                      <span className="text-[var(--ink-3)]">{fmtDate(d.uploaded_at)}</span>
-                      <a
-                        href={`/api/v1/documents/${d.id}/download`}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label="เปิดไฟล์"
-                        className="text-[var(--ink-2)] hover:text-[var(--ink-1)]"
-                      >
-                        <Download size={14} />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
   );
 }

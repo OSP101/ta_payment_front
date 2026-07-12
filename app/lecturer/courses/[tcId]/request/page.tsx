@@ -221,17 +221,31 @@ function RequestFormModal({
         else c.undergrad_count += 1;
         bySection.set(a.section_id, c);
       }
-      await api.post("/ta-requests", {
+      const res = await api.post<{
+        id: string;
+        status: "approved" | "rejected";
+        reject_reason?: string;
+      }>("/ta-requests", {
         teaching_course_id: tcId,
         reimburse_scope: scope,
         counts: [...bySection.entries()].map(([section_id, c]) => ({ section_id, ...c })),
         assignments,
       });
+      if (res.status === "rejected") {
+        // Under the auto-decide model, business-rule failures come back as a
+        // 200 with status='rejected'. Show the system-generated reason inline
+        // so the lecturer can fix it and resubmit.
+        const reason = res.reject_reason || "ระบบตัดสินว่าคำขอไม่ผ่านเกณฑ์";
+        setErr(reason);
+        notify.error(reason);
+        return;
+      }
+      notify.success("ระบบอนุมัติคำขอเรียบร้อยแล้ว");
       onSubmitted();
     } catch (e) {
-      // Surface the (Thai) reason the backend rejected the request — e.g. TA
-      // documents incomplete, 3-course cap reached, or schedule missing — both
-      // inline and as a toast so the lecturer sees WHY it failed.
+      // Structural failures (bad section, negative workload, TA doesn't exist)
+      // still throw at Create time — surface the Thai message so the lecturer
+      // can correct the form.
       setErr((e as Error).message);
       notify.error(e);
     }
