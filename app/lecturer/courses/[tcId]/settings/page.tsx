@@ -26,12 +26,12 @@ interface TC {
   id: string;
   code: string;
   name_th: string;
+  // Credit-hour breakdown from the faculty course — drives which meeting kinds
+  // the schedule editor exposes. See [[schedule-kind-rules]].
+  lecture_hrs: number;
+  lab_hrs: number;
   starts_on?: string;
   ends_on?: string;
-  midterm_lecture_date?: string;
-  midterm_lab_date?: string;
-  final_lecture_date?: string;
-  final_lab_date?: string;
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
@@ -42,20 +42,22 @@ interface TC {
 interface Draft {
   starts_on: string;
   ends_on: string;
-  midterm_lecture_date: string;
-  midterm_lab_date: string;
-  final_lecture_date: string;
-  final_lab_date: string;
+}
+
+// Which meeting kinds the course actually has — drives what the schedule
+// editor lets you pick. See [[schedule-kind-rules]].
+function allowedKindsFromTC(tc?: TC): ("lecture" | "lab")[] {
+  if (!tc) return ["lecture", "lab"];
+  const k: ("lecture" | "lab")[] = [];
+  if (tc.lecture_hrs > 0) k.push("lecture");
+  if (tc.lab_hrs > 0) k.push("lab");
+  return k.length > 0 ? k : ["lecture", "lab"];
 }
 
 function toDraft(tc?: TC): Draft {
   return {
     starts_on: tc?.starts_on ?? "",
     ends_on: tc?.ends_on ?? "",
-    midterm_lecture_date: tc?.midterm_lecture_date ?? "",
-    midterm_lab_date: tc?.midterm_lab_date ?? "",
-    final_lecture_date: tc?.final_lecture_date ?? "",
-    final_lab_date: tc?.final_lab_date ?? "",
   };
 }
 
@@ -69,11 +71,7 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
   const canonical = toDraft(tc);
   const dirty = !!tc && (
     draft.starts_on !== canonical.starts_on ||
-    draft.ends_on !== canonical.ends_on ||
-    draft.midterm_lecture_date !== canonical.midterm_lecture_date ||
-    draft.midterm_lab_date !== canonical.midterm_lab_date ||
-    draft.final_lecture_date !== canonical.final_lecture_date ||
-    draft.final_lab_date !== canonical.final_lab_date
+    draft.ends_on !== canonical.ends_on
   );
 
   // Keep the latest `dirty` in a ref so the sync effect can read it without
@@ -228,7 +226,12 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
         </Tabs.Panel>
 
         <Tabs.Panel id="sections" className="pt-4">
-          <SectionsPanel tcId={tcId} sections={tc?.sections ?? []} locked={locked} />
+          <SectionsPanel
+            tcId={tcId}
+            sections={tc?.sections ?? []}
+            locked={locked}
+            allowedKinds={allowedKindsFromTC(tc)}
+          />
         </Tabs.Panel>
 
         <Tabs.Panel id="dates" className="pt-4">
@@ -256,37 +259,6 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
             </div>
           </Panel>
 
-          <Panel
-            title="วันสอบ"
-            description="เว้นว่างได้ แต่ TA จะยังลงบันทึกเวลาไม่ได้จนกว่าจะกรอกครบ"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <FieldGroup label={<span className="inline-flex items-center gap-2">สอบกลางภาค <Chip tone="brand">บรรยาย</Chip></span>}>
-                <ThaiDateField
-                  value={draft.midterm_lecture_date}
-                  onChange={v => setDraft(d => ({ ...d, midterm_lecture_date: v }))}
-                />
-              </FieldGroup>
-              <FieldGroup label={<span className="inline-flex items-center gap-2">สอบกลางภาค <Chip tone="warn">ปฏิบัติการ</Chip></span>}>
-                <ThaiDateField
-                  value={draft.midterm_lab_date}
-                  onChange={v => setDraft(d => ({ ...d, midterm_lab_date: v }))}
-                />
-              </FieldGroup>
-              <FieldGroup label={<span className="inline-flex items-center gap-2">สอบปลายภาค <Chip tone="brand">บรรยาย</Chip></span>}>
-                <ThaiDateField
-                  value={draft.final_lecture_date}
-                  onChange={v => setDraft(d => ({ ...d, final_lecture_date: v }))}
-                />
-              </FieldGroup>
-              <FieldGroup label={<span className="inline-flex items-center gap-2">สอบปลายภาค <Chip tone="warn">ปฏิบัติการ</Chip></span>}>
-                <ThaiDateField
-                  value={draft.final_lab_date}
-                  onChange={v => setDraft(d => ({ ...d, final_lab_date: v }))}
-                />
-              </FieldGroup>
-            </div>
-          </Panel>
         </Tabs.Panel>
       </Tabs>
 
@@ -311,11 +283,12 @@ function formatExportedAt(iso?: string): string {
 /* -------------------------------------------------------------------------- */
 
 function SectionsPanel({
-  tcId, sections, locked,
+  tcId, sections, locked, allowedKinds,
 }: {
   tcId: string;
   sections: SectionRow[];
   locked: boolean;
+  allowedKinds: ("lecture" | "lab")[];
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SectionRow | null>(null);
@@ -367,6 +340,7 @@ function SectionsPanel({
                   tcId={tcId}
                   section={sec}
                   locked={locked}
+                  allowedKinds={allowedKinds}
                   onDelete={() => setDeleteTarget(sec)}
                 />
               ))}
@@ -392,11 +366,12 @@ function SectionsPanel({
 }
 
 function SectionEditRow({
-  tcId, section, locked, onDelete,
+  tcId, section, locked, allowedKinds, onDelete,
 }: {
   tcId: string;
   section: SectionRow;
   locked: boolean;
+  allowedKinds: ("lecture" | "lab")[];
   onDelete: () => void;
 }) {
   const [count, setCount] = useState(String(section.num_students));
@@ -492,19 +467,21 @@ function SectionEditRow({
         tcId={tcId}
         section={section}
         locked={locked}
+        allowedKinds={allowedKinds}
       />
     </tr>
   );
 }
 
 function SectionScheduleModal({
-  open, onClose, tcId, section, locked,
+  open, onClose, tcId, section, locked, allowedKinds,
 }: {
   open: boolean;
   onClose: () => void;
   tcId: string;
   section: SectionRow;
   locked: boolean;
+  allowedKinds: ("lecture" | "lab")[];
 }) {
   const [rows, setRows] = useState<SectionScheduleRow[]>(section.schedules ?? []);
   const [saving, setSaving] = useState(false);
@@ -566,7 +543,12 @@ function SectionScheduleModal({
           กำหนดวัน–เวลาเรียนของ section นี้ให้ครบทุกคาบ (ทั้งบรรยายและปฏิบัติการ) —
           ระบบใช้ข้อมูลนี้เพื่อเช็คว่า TA ที่เลือกไว้ไม่ติดเวลาเรียนอื่น
         </div>
-        <SectionScheduleEditor value={rows} onChange={setRows} disabled={locked} />
+        <SectionScheduleEditor
+          value={rows}
+          onChange={setRows}
+          disabled={locked}
+          allowedKinds={allowedKinds}
+        />
         {err && (
           <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={err} />
         )}
@@ -635,7 +617,7 @@ function AddSectionModal({
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup
             label="เลข Section"
-            hint="ตัวเลขเท่านั้น เช่น 1, 2, 801"
+            hint="ตัวเลขเท่านั้น เช่น 1, 2, 3"
             error={duplicate ? `เลข ${secNo.trim()} มีอยู่แล้วในรายวิชา` : undefined}
           >
             <TextInput

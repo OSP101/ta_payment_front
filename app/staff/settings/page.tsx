@@ -28,9 +28,15 @@ interface Rate {
   term_months: number;
   ug_max_hours_per_day: number;
   max_courses_per_student: number;
+  // Migration 0018 — ประกาศ 731/2565 + 1080/2565 caps.
+  graduate_regular_hourly: number;      // 50 ฿/hr (แทน graduate_regular lump-sum เดิม)
+  grad_special_term_cap: number;        // 12,000 ฿/TA/course/term
+  daily_pay_cap_baht: number;           // 300 ฿/วัน สำหรับทุกคนคิดชั่วโมง
+  ug_regular_daily_hour_cap: number;    // ป.ตรี ปกติ 7 hrs/วัน
+  ug_special_daily_hour_cap: number;    // ป.ตรี พิเศษ 6 hrs/วัน
+  grad_regular_daily_hour_cap: number;  // บัณฑิต ปกติ 6 hrs/วัน
   note?: string;
 }
-interface Cap { id?: string; credits: number; hours_cap: number; note?: string; }
 interface FC {
   id?: string; code: string; name_th: string; name_en?: string;
   credits: number; lecture_hrs: number; lab_hrs: number; self_hrs: number; is_active: boolean;
@@ -40,29 +46,26 @@ export default function SettingsPage() {
   const params = useSearchParams();
   // Allow deep-linking to a specific tab, e.g. /staff/settings?tab=terms
   const tabParam = params.get("tab");
-  const initialTab = ["rate", "cap", "courses", "terms", "windows", "admins"].includes(tabParam ?? "")
+  const initialTab = ["rate", "courses", "terms", "windows", "periods", "admins"].includes(tabParam ?? "")
     ? (tabParam as string)
     : "rate";
   return (
     <div>
-      <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน เพดานงบ วิชา ภาคเรียน และฝ่ายบริหาร" />
+      <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน วิชา ภาคเรียน และฝ่ายบริหาร" />
       <Tabs defaultSelectedKey={initialTab}>
         <Tabs.ListContainer>
           <Tabs.List aria-label="หมวดตั้งค่า">
             <Tabs.Tab id="rate">อัตราค่าตอบแทน<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="cap">เพดานชั่วโมง<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="courses">รายวิชา<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="terms">ภาคเรียน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="windows">ระยะเวลารับสมัคร TA<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="periods">ระยะเวลาเบิกจ่ายรายเดือน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
         <Tabs.Panel id="rate" className="pt-6">
           <PayRateSection />
-        </Tabs.Panel>
-        <Tabs.Panel id="cap" className="pt-6">
-          <HourCapSection />
         </Tabs.Panel>
         <Tabs.Panel id="courses" className="pt-6">
           <FacultyCoursesSection />
@@ -72,6 +75,9 @@ export default function SettingsPage() {
         </Tabs.Panel>
         <Tabs.Panel id="windows" className="pt-6">
           <RequestWindowsSection />
+        </Tabs.Panel>
+        <Tabs.Panel id="periods" className="pt-6">
+          <SubmissionPeriodsSection />
         </Tabs.Panel>
         <Tabs.Panel id="admins" className="pt-6">
           <AdminOfficersSection />
@@ -101,6 +107,12 @@ function PayRateSection() {
     term_months: 4,
     ug_max_hours_per_day: 7,
     max_courses_per_student: 3,
+    graduate_regular_hourly: 50,
+    grad_special_term_cap: 12000,
+    daily_pay_cap_baht: 300,
+    ug_regular_daily_hour_cap: 7,
+    ug_special_daily_hour_cap: 6,
+    grad_regular_daily_hour_cap: 6,
   };
   const [draft, setDraft] = useState<Rate>(empty);
 
@@ -127,6 +139,12 @@ function PayRateSection() {
     baseline_students_lecture: vPositive(draft.baseline_students_lecture),
     baseline_students_lab: vPositive(draft.baseline_students_lab),
     ug_workload_rate_regular: vPositive(draft.ug_workload_rate_regular),
+    graduate_regular_hourly: vPositive(draft.graduate_regular_hourly),
+    grad_special_term_cap: vPositive(draft.grad_special_term_cap),
+    daily_pay_cap_baht: vPositive(draft.daily_pay_cap_baht),
+    ug_regular_daily_hour_cap: vPositive(draft.ug_regular_daily_hour_cap),
+    ug_special_daily_hour_cap: vPositive(draft.ug_special_daily_hour_cap),
+    grad_regular_daily_hour_cap: vPositive(draft.grad_regular_daily_hour_cap),
   };
   const hasRateErrors = Object.values(rateErrors).some(Boolean);
   const effectiveFromError = !draft.effective_from ? "กรุณาระบุวันเริ่มใช้" : null;
@@ -178,14 +196,20 @@ function PayRateSection() {
       {!editing && (
         data ? (
           <div className="space-y-5">
-            <ViewGroup title="อัตราค่าจ้าง — ปริญญาตรี">
+            <ViewGroup title="อัตราค่าจ้าง — ปริญญาตรี" hint="อ้างอิงประกาศ 731/2565 + 1080/2565">
               <ViewRow label="ภาคปกติ" value={`${data.undergrad_regular} บาท/ชั่วโมง`} />
-              <ViewRow label="ชั่วโมงสูงสุด/วัน (ปกติ)" value={`${data.ug_max_hours_per_day ?? 7} ชั่วโมง`} />
               <ViewRow label="ภาคพิเศษ" value={`${data.undergrad_special} บาท/ชั่วโมง`} />
+              <ViewRow label="ชั่วโมงสูงสุด/วัน (ปกติ)" value={`${data.ug_regular_daily_hour_cap ?? 7} ชั่วโมง`} />
+              <ViewRow label="ชั่วโมงสูงสุด/วัน (พิเศษ)" value={`${data.ug_special_daily_hour_cap ?? 6} ชั่วโมง`} />
             </ViewGroup>
             <ViewGroup title="อัตราค่าจ้าง — บัณฑิตศึกษา (โท/เอก)">
-              <ViewRow label="ภาคปกติ" value={`${data.graduate_regular} บาท/ชั่วโมง`} />
+              <ViewRow label="ภาคปกติ (คิดชั่วโมง)" value={`${data.graduate_regular_hourly ?? 50} บาท/ชั่วโมง`} />
+              <ViewRow label="ชั่วโมงสูงสุด/วัน (บัณฑิต ปกติ)" value={`${data.grad_regular_daily_hour_cap ?? 6} ชั่วโมง`} />
               <ViewRow label="ภาคพิเศษ (เหมาจ่าย)" value={`${data.graduate_special_lumpsum.toLocaleString()} บาท/เดือน`} />
+              <ViewRow label="เพดานพิเศษ/เทอม (ต่อ TA × วิชา)" value={`${(data.grad_special_term_cap ?? 12000).toLocaleString()} บาท`} />
+            </ViewGroup>
+            <ViewGroup title="เพดานรายวัน (ทุกคนคิดชั่วโมง)">
+              <ViewRow label="ค่าตอบแทนสูงสุด/วัน" value={`${(data.daily_pay_cap_baht ?? 300).toLocaleString()} บาท`} />
             </ViewGroup>
             <ViewGroup title="ข้อกำหนดทั่วไป" hint={`ใช้ตั้งแต่ ${data.effective_from}`}>
               <ViewRow label="จำนวนวิชา TA สูงสุด/คน" value={`${data.max_courses_per_student ?? 3} วิชา`} />
@@ -223,25 +247,40 @@ function PayRateSection() {
       {/* Edit mode */}
       {editing && (
         <div className="space-y-6">
-          <EditGroup title="อัตราค่าจ้าง — ปริญญาตรี" description="ค่าตอบแทน TA ต่อชั่วโมง">
+          <EditGroup title="อัตราค่าจ้าง — ปริญญาตรี" description="ประกาศ 731/2565: ปกติ 40, พิเศษ 50 บาท/ชั่วโมง">
             <F label="ตรี ปกติ (บาท/ชั่วโมง)" type="number" min={0} value={draft.undergrad_regular}
                error={rateErrors.undergrad_regular}
                onChange={v => setDraft({ ...draft, undergrad_regular: Number(v) })} />
-            <F label="ชั่วโมงสูงสุด/วัน (ปกติ)" type="number" min={0} value={draft.ug_max_hours_per_day}
-               error={rateErrors.ug_max_hours_per_day}
-               onChange={v => setDraft({ ...draft, ug_max_hours_per_day: Number(v) })} />
             <F label="ตรี พิเศษ (บาท/ชั่วโมง)" type="number" min={0} value={draft.undergrad_special}
                error={rateErrors.undergrad_special}
                onChange={v => setDraft({ ...draft, undergrad_special: Number(v) })} />
+            <F label="ชม. สูงสุด/วัน (ปกติ)" type="number" min={0} value={draft.ug_regular_daily_hour_cap}
+               error={rateErrors.ug_regular_daily_hour_cap}
+               onChange={v => setDraft({ ...draft, ug_regular_daily_hour_cap: Number(v) })} />
+            <F label="ชม. สูงสุด/วัน (พิเศษ)" type="number" min={0} value={draft.ug_special_daily_hour_cap}
+               error={rateErrors.ug_special_daily_hour_cap}
+               onChange={v => setDraft({ ...draft, ug_special_daily_hour_cap: Number(v) })} />
           </EditGroup>
 
-          <EditGroup title="อัตราค่าจ้าง — บัณฑิตศึกษา (โท/เอก)" description="ปกติเป็นรายชั่วโมง, พิเศษเป็นเหมาจ่ายต่อเดือน">
-            <F label="ภาคปกติ" type="number" min={0} value={draft.graduate_regular}
-               error={rateErrors.graduate_regular}
-               onChange={v => setDraft({ ...draft, graduate_regular: Number(v) })} />
-            <F label="ภาคพิเศษ (เหมาจ่าย)" type="number" min={0} value={draft.graduate_special_lumpsum}
+          <EditGroup title="อัตราค่าจ้าง — บัณฑิตศึกษา (โท/เอก)" description="ประกาศ 1080/2565: ปกติ 50 บาท/ชม., พิเศษ 4,000 บาท/เดือน (cap 12,000/เทอม)">
+            <F label="ภาคปกติ (บาท/ชั่วโมง)" type="number" min={0} value={draft.graduate_regular_hourly}
+               error={rateErrors.graduate_regular_hourly}
+               onChange={v => setDraft({ ...draft, graduate_regular_hourly: Number(v) })} />
+            <F label="ชม. สูงสุด/วัน (บัณฑิต ปกติ)" type="number" min={0} value={draft.grad_regular_daily_hour_cap}
+               error={rateErrors.grad_regular_daily_hour_cap}
+               onChange={v => setDraft({ ...draft, grad_regular_daily_hour_cap: Number(v) })} />
+            <F label="ภาคพิเศษ (เหมาจ่าย/เดือน)" type="number" min={0} value={draft.graduate_special_lumpsum}
                error={rateErrors.graduate_special_lumpsum}
                onChange={v => setDraft({ ...draft, graduate_special_lumpsum: Number(v) })} />
+            <F label="เพดานพิเศษ/เทอม (ต่อ TA × วิชา)" type="number" min={0} value={draft.grad_special_term_cap}
+               error={rateErrors.grad_special_term_cap}
+               onChange={v => setDraft({ ...draft, grad_special_term_cap: Number(v) })} />
+          </EditGroup>
+
+          <EditGroup title="เพดานรายวัน (ทุกคนคิดชั่วโมง)" description="ประกาศ: ค่าตอบแทนรวมของ TA ที่คิดชั่วโมง ต้องไม่เกิน 300 บาท/วัน">
+            <F label="ค่าตอบแทนสูงสุด/วัน (บาท)" type="number" min={0} value={draft.daily_pay_cap_baht}
+               error={rateErrors.daily_pay_cap_baht}
+               onChange={v => setDraft({ ...draft, daily_pay_cap_baht: Number(v) })} />
           </EditGroup>
 
           <EditGroup title="ข้อกำหนดทั่วไป" description="เริ่มใช้เมื่อไร + ข้อจำกัดตามระเบียบ (จำนวนเดือนของแต่ละเทอมกำหนดที่แท็บ 'ภาคเรียน')">
@@ -312,267 +351,6 @@ function PayRateSection() {
         }}
       />
     </Panel>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Hour cap — table + modal-based add / edit                                   */
-/* -------------------------------------------------------------------------- */
-
-function HourCapSection() {
-  const { data } = useSWR<Cap[]>("/settings/hour-caps");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingCap, setEditingCap] = useState<Cap | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Cap | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  function openAdd() {
-    setEditingCap(null);
-    setModalOpen(true);
-  }
-  function openEdit(cap: Cap) {
-    setEditingCap(cap);
-    setModalOpen(true);
-  }
-  function handleSaved(msg: string) {
-    toast.success(msg);
-    setModalOpen(false);
-  }
-  async function doDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await api.del(`/settings/hour-caps/${deleteTarget.credits}`);
-      await mutate("/settings/hour-caps");
-      toast.success(`ลบเพดาน ${deleteTarget.credits} หน่วยกิต เรียบร้อยแล้ว`);
-      setDeleteTarget(null);
-    } catch (e) {
-      toast.danger("ลบไม่สำเร็จ", { description: (e as Error).message });
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  return (
-    <Panel
-      title="เพดานชั่วโมงต่อหน่วยกิต"
-      description="ชั่วโมง TA สูงสุดตามหน่วยกิตของวิชา"
-      actions={
-        <Button variant="primary" onClick={openAdd}>
-          <Plus size={14} />เพิ่มเพดาน
-        </Button>
-      }
-    >
-      {(data?.length ?? 0) > 0 ? (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="data-table w-full">
-            <thead>
-              <tr>
-                <th>หน่วยกิต</th>
-                <th className="num">ชั่วโมงสูงสุด</th>
-                <th className="actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {(data ?? []).slice().sort((a, b) => a.credits - b.credits).map(c => (
-                <tr key={c.credits}>
-                  <td className="tabular">{c.credits}</td>
-                  <td className="num tabular">{c.hours_cap}</td>
-                  <td className="actions">
-                    <div className="inline-flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>
-                        <Pencil size={13} />แก้ไข
-                      </Button>
-                      <Button variant="danger-soft" size="sm" onClick={() => setDeleteTarget(c)}>
-                        <Trash2 size={13} />ลบ
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="text-sm text-muted py-4">ยังไม่มีข้อมูล — กด "เพิ่มเพดาน" เพื่อเริ่ม</div>
-      )}
-
-      <HourCapModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        editingCap={editingCap}
-        existing={data ?? []}
-        onSaved={handleSaved}
-      />
-
-      <ConfirmSaveModal
-        open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={doDelete}
-        saving={deleting}
-        title="ยืนยันลบเพดานชั่วโมง?"
-        description={
-          deleteTarget
-            ? `ลบเพดานสำหรับ ${deleteTarget.credits} หน่วยกิต (${deleteTarget.hours_cap} ชั่วโมง) — การลบไม่สามารถย้อนกลับได้`
-            : ""
-        }
-        variant="danger"
-        confirmLabel="ลบ"
-        confirmIcon={<Trash2 size={14} />}
-      />
-    </Panel>
-  );
-}
-
-function HourCapModal({
-  open, onClose, editingCap, existing, onSaved,
-}: {
-  open: boolean;
-  onClose: () => void;
-  editingCap: Cap | null;              // null = add mode
-  existing: Cap[];
-  onSaved: (msg: string) => void;
-}) {
-  const isEdit = editingCap !== null;
-  const [credits, setCredits] = useState<string>("");
-  const [hoursCap, setHoursCap] = useState<string>("");
-  const [saving, setSaving] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Reset form when modal opens
-  useEffect(() => {
-    if (open) {
-      setCredits(editingCap ? String(editingCap.credits) : "");
-      setHoursCap(editingCap ? String(editingCap.hours_cap) : "");
-      setError(null);
-    }
-  }, [open, editingCap]);
-
-  const creditsNum = Number(credits);
-  const hoursCapNum = Number(hoursCap);
-  const creditsValid = credits.trim() !== "" && Number.isInteger(creditsNum) && creditsNum > 0 && creditsNum <= 30;
-  const hoursValid = hoursCap.trim() !== "" && !Number.isNaN(hoursCapNum) && hoursCapNum > 0 && hoursCapNum <= 500;
-
-  // In edit mode, credits is locked (users can only change hours_cap).
-  // Duplicate detection only matters in add mode.
-  const duplicate = !isEdit ? existing.find(c => c.credits === creditsNum) : null;
-
-  const creditsError =
-    credits.trim() === "" ? null :
-    !Number.isInteger(creditsNum) ? "หน่วยกิตต้องเป็นจำนวนเต็ม" :
-    creditsNum <= 0 ? "หน่วยกิตต้องมากกว่า 0" :
-    creditsNum > 30 ? "หน่วยกิตดูสูงเกินไป (สูงสุด 30)" :
-    null;
-  const hoursError =
-    hoursCap.trim() === "" ? null :
-    Number.isNaN(hoursCapNum) ? "ชั่วโมงต้องเป็นตัวเลข" :
-    hoursCapNum <= 0 ? "ชั่วโมงต้องมากกว่า 0" :
-    hoursCapNum > 500 ? "ชั่วโมงดูสูงเกินไป (สูงสุด 500)" :
-    null;
-
-  const noChange = isEdit && editingCap && hoursCapNum === editingCap.hours_cap;
-  const canSave = creditsValid && hoursValid && !noChange;
-
-  function askSave() {
-    setError(null);
-    if (!canSave) return;
-    // Confirm when overwriting an existing row (add mode with duplicate) or on any edit
-    if (duplicate || isEdit) {
-      setConfirming(true);
-    } else {
-      doSave();
-    }
-  }
-  async function doSave() {
-    setSaving(true);
-    try {
-      await api.post("/settings/hour-caps", { credits: creditsNum, hours_cap: hoursCapNum });
-      await mutate("/settings/hour-caps");
-      const verb = isEdit ? "อัปเดต" : duplicate ? "แทนที่" : "เพิ่ม";
-      onSaved(`${verb}เพดาน ${creditsNum} หน่วยกิต → ${hoursCapNum} ชั่วโมง เรียบร้อยแล้ว`);
-      setConfirming(false);
-    } catch (e) {
-      setError((e as Error).message || "บันทึกไม่สำเร็จ");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <Modal
-        open={open}
-        onClose={onClose}
-        title={isEdit ? `แก้ไขเพดานชั่วโมง — ${editingCap!.credits} หน่วยกิต` : "เพิ่มเพดานชั่วโมงใหม่"}
-        icon={<Plus size={20} />}
-        size="md"
-        footer={
-          <>
-            <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-            <Button variant="primary" onClick={askSave} disabled={!canSave || saving} isPending={saving}>
-              <Save size={14} />บันทึก
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <FieldGroup
-            label="หน่วยกิต"
-            hint={isEdit ? "แก้ไขไม่ได้ — หากต้องการเปลี่ยน ให้ลบและเพิ่มใหม่" : "ตัวเลขจำนวนเต็ม 1–30"}
-            error={creditsError ?? undefined}
-          >
-            <TextInput
-              type="number" min={1} max={30} step={1}
-              value={credits}
-              disabled={isEdit}
-              onChange={e => setCredits(e.target.value)}
-              placeholder="เช่น 3"
-            />
-          </FieldGroup>
-
-          <FieldGroup label="ชั่วโมงสูงสุด" hint="จำนวนชั่วโมง TA ต่อเทอมสำหรับหน่วยกิตนี้" error={hoursError ?? undefined}>
-            <TextInput
-              type="number" min={1} max={500} step={1}
-              value={hoursCap}
-              onChange={e => setHoursCap(e.target.value)}
-              placeholder="เช่น 40"
-              autoFocus={isEdit}
-            />
-          </FieldGroup>
-
-          {duplicate && (
-            <Alert
-              status="warning"
-              icon={<CircleAlert size={16} />}
-              title={`หน่วยกิต ${duplicate.credits} มีอยู่แล้ว (${duplicate.hours_cap} ชม.)`}
-              description={`ถ้าบันทึก จะแทนที่ค่าเดิม ${duplicate.hours_cap} → ${hoursCapNum || "?"} ชั่วโมง`}
-            />
-          )}
-
-          {noChange && (
-            <div className="text-xs text-muted">ยังไม่มีการเปลี่ยนแปลง</div>
-          )}
-
-          {error && (
-            <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
-          )}
-        </div>
-      </Modal>
-
-      <ConfirmSaveModal
-        open={confirming}
-        onClose={() => setConfirming(false)}
-        onConfirm={doSave}
-        saving={saving}
-        title={duplicate ? "ยืนยันแทนที่ค่าเดิม?" : "ยืนยันบันทึก?"}
-        description={
-          duplicate
-            ? `หน่วยกิต ${creditsNum} เคยมี ${duplicate.hours_cap} ชั่วโมง จะเปลี่ยนเป็น ${hoursCapNum} ชั่วโมง`
-            : `บันทึกเพดาน ${creditsNum} หน่วยกิต → ${hoursCapNum} ชั่วโมง`
-        }
-      />
-    </>
   );
 }
 
@@ -1038,6 +816,10 @@ interface Term {
   id?: string;
   academic_year: number; semester: number;
   starts_on?: string; ends_on?: string;
+  // Faculty exam windows — worklog entries falling inside either range are
+  // blocked by the backend. Required at create/update.
+  midterm_starts_on?: string; midterm_ends_on?: string;
+  final_starts_on?: string; final_ends_on?: string;
   months: number;
   is_active: boolean;
 }
@@ -1627,6 +1409,19 @@ function TermFormModal({
     !draft.ends_on ? "กรุณาระบุวันสิ้นสุดสอน" :
     draft.starts_on && draft.ends_on && draft.starts_on >= draft.ends_on
       ? "วันสิ้นสุดต้องหลังวันเริ่ม" : null;
+  // Exam ranges — required (backend enforces). Also sanity-check that the
+  // range is closed (start ≤ end); we don't force it inside term start/end
+  // because faculty sometimes sets exams just outside the teaching window.
+  const midtermStartsError = !draft.midterm_starts_on ? "กรุณาระบุวันเริ่มสอบกลางภาค" : null;
+  const midtermEndsError =
+    !draft.midterm_ends_on ? "กรุณาระบุวันสิ้นสุดสอบกลางภาค" :
+    draft.midterm_starts_on && draft.midterm_ends_on && draft.midterm_starts_on > draft.midterm_ends_on
+      ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่ม" : null;
+  const finalStartsError = !draft.final_starts_on ? "กรุณาระบุวันเริ่มสอบปลายภาค" : null;
+  const finalEndsError =
+    !draft.final_ends_on ? "กรุณาระบุวันสิ้นสุดสอบปลายภาค" :
+    draft.final_starts_on && draft.final_ends_on && draft.final_starts_on > draft.final_ends_on
+      ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่ม" : null;
 
   // Duplicate (year, semester) — only relevant in add mode; edit mode locks these.
   const duplicate = !isEdit
@@ -1647,10 +1442,15 @@ function TermFormModal({
     draft.months === editing.months &&
     (draft.starts_on ?? "") === (editing.starts_on ?? "") &&
     (draft.ends_on ?? "") === (editing.ends_on ?? "") &&
+    (draft.midterm_starts_on ?? "") === (editing.midterm_starts_on ?? "") &&
+    (draft.midterm_ends_on ?? "") === (editing.midterm_ends_on ?? "") &&
+    (draft.final_starts_on ?? "") === (editing.final_starts_on ?? "") &&
+    (draft.final_ends_on ?? "") === (editing.final_ends_on ?? "") &&
     draft.is_active === editing.is_active;
 
   const canSave =
     !yearError && !semesterError && !monthsError && !startsError && !endsError &&
+    !midtermStartsError && !midtermEndsError && !finalStartsError && !finalEndsError &&
     !duplicate && !noChange;
 
   function askSave() {
@@ -1784,6 +1584,45 @@ function TermFormModal({
                 onChange={v => setDraft({ ...draft, ends_on: v })}
               />
             </FieldGroup>
+          </div>
+
+          {/* Exam windows — worklog entries falling inside these ranges are
+              rejected. Faculty publishes these once per term. */}
+          <div className="rounded-lg border border-border p-3 space-y-3 bg-surface-secondary/40">
+            <div className="text-xs font-semibold text-muted uppercase tracking-wide">ช่วงสอบตามประกาศคณะ</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FieldGroup label="เริ่มสอบกลางภาค" error={midtermStartsError ?? undefined}>
+                <TermDateField
+                  label="เริ่มสอบกลางภาค"
+                  value={draft.midterm_starts_on ?? ""}
+                  onChange={v => setDraft({ ...draft, midterm_starts_on: v })}
+                />
+              </FieldGroup>
+              <FieldGroup label="สิ้นสุดสอบกลางภาค" error={midtermEndsError ?? undefined}>
+                <TermDateField
+                  label="สิ้นสุดสอบกลางภาค"
+                  value={draft.midterm_ends_on ?? ""}
+                  onChange={v => setDraft({ ...draft, midterm_ends_on: v })}
+                />
+              </FieldGroup>
+              <FieldGroup label="เริ่มสอบปลายภาค" error={finalStartsError ?? undefined}>
+                <TermDateField
+                  label="เริ่มสอบปลายภาค"
+                  value={draft.final_starts_on ?? ""}
+                  onChange={v => setDraft({ ...draft, final_starts_on: v })}
+                />
+              </FieldGroup>
+              <FieldGroup label="สิ้นสุดสอบปลายภาค" error={finalEndsError ?? undefined}>
+                <TermDateField
+                  label="สิ้นสุดสอบปลายภาค"
+                  value={draft.final_ends_on ?? ""}
+                  onChange={v => setDraft({ ...draft, final_ends_on: v })}
+                />
+              </FieldGroup>
+            </div>
+            <div className="text-xs text-muted">
+              TA จะลงบันทึกเวลาในช่วงนี้ไม่ได้ — ระบบจะปฏิเสธอัตโนมัติ
+            </div>
           </div>
 
           <div className="rounded-lg border border-border p-3 flex items-center gap-2">
@@ -2868,6 +2707,221 @@ function AdminOfficerFormModal({
         {error && (
           <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
         )}
+      </div>
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Submission periods — monthly reimbursement window per term                 */
+/* -------------------------------------------------------------------------- */
+
+interface SubmissionPeriod {
+  id: string;
+  term_id: string;
+  year_month: string;
+  due_date: string;
+  label: string;
+  remind_days_before: number;
+  is_closed: boolean;
+}
+
+function SubmissionPeriodsSection() {
+  const { data: terms } = useSWR<Term[]>("/terms");
+  const [termId, setTermId] = useState<string>("");
+
+  // Default to the active term when the terms list arrives.
+  useEffect(() => {
+    if (termId || !terms || terms.length === 0) return;
+    const active = terms.find(t => t.is_active) ?? terms[0];
+    if (active.id) setTermId(active.id);
+  }, [terms, termId]);
+
+  const { data: periods, mutate: refresh } = useSWR<SubmissionPeriod[]>(
+    termId ? `/submission-periods?term_id=${termId}` : null,
+  );
+
+  const [creating, setCreating] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [editing, setEditing] = useState<SubmissionPeriod | null>(null);
+
+  async function bulkSeed() {
+    if (!termId) return;
+    if (!confirm("สร้าง 5 เดือนตามประกาศ (มิ.ย.–ต.ค.) สำหรับภาคเรียนนี้?")) return;
+    setSeeding(true);
+    try {
+      await api.post(`/submission-periods/bulk-for-term/${termId}`, {});
+      await refresh();
+      toast.success("สร้างระยะเวลา 5 เดือนเรียบร้อย");
+    } catch (e) {
+      toast.danger("สร้างไม่สำเร็จ", { description: (e as Error).message });
+    } finally { setSeeding(false); }
+  }
+
+  async function remove(id: string) {
+    if (!confirm("ลบระยะเวลานี้? สถานะการเซ็นของ TA ที่ผูกอยู่จะถูกลบไปด้วย")) return;
+    try {
+      await api.del(`/submission-periods/${id}`);
+      await refresh();
+      toast.success("ลบเรียบร้อย");
+    } catch (e) {
+      toast.danger("ลบไม่สำเร็จ", { description: (e as Error).message });
+    }
+  }
+
+  return (
+    <Panel
+      title="ระยะเวลาเบิกจ่ายรายเดือน"
+      description="รอบเบิกจ่ายต่อเดือน (ประกาศ 2569: มิ.ย.–ต.ค.) — ระบบส่ง reminder ผ่าน email/in-app ให้ TA อัตโนมัติก่อนวันครบกำหนด"
+      actions={
+        <>
+          <Button variant="secondary" onClick={bulkSeed} disabled={!termId || seeding}>
+            <Plus size={14} />สร้างอัตโนมัติ 5 เดือน
+          </Button>
+          <Button variant="primary" onClick={() => setCreating(true)} disabled={!termId}>
+            <Plus size={14} />เพิ่มเดือน
+          </Button>
+        </>
+      }
+    >
+      <div className="mb-4 max-w-md">
+        <FieldGroup label="ภาคเรียน">
+          <Select value={termId} onChange={e => setTermId(e.target.value)}>
+            <option value="">— เลือกภาคเรียน —</option>
+            {(terms ?? []).map(t => (
+              <option key={t.id} value={t.id!}>
+                {termLabel(t)}{t.is_active ? " · ใช้งาน" : ""}
+              </option>
+            ))}
+          </Select>
+        </FieldGroup>
+      </div>
+
+      {!termId ? (
+        <div className="text-sm text-muted py-4">เลือกภาคเรียนเพื่อดูรายการรอบเบิกจ่าย</div>
+      ) : !periods ? (
+        <div className="text-sm text-muted py-4">กำลังโหลด…</div>
+      ) : periods.length === 0 ? (
+        <div className="text-sm text-muted py-4">ยังไม่มีรอบเบิกจ่าย — กด "สร้างอัตโนมัติ 5 เดือน" เพื่อเริ่ม</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-ink-2">
+              <tr>
+                <th className="text-left px-3 py-2">ป้ายกำกับ</th>
+                <th className="text-left px-3 py-2">รหัสเดือน</th>
+                <th className="text-left px-3 py-2">กำหนดส่ง</th>
+                <th className="text-left px-3 py-2">แจ้งเตือน (วัน)</th>
+                <th className="text-left px-3 py-2">สถานะ</th>
+                <th className="text-right px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periods.map(p => (
+                <tr key={p.id} className="border-t border-hairline">
+                  <td className="px-3 py-2">{p.label}</td>
+                  <td className="px-3 py-2 tabular">{p.year_month}</td>
+                  <td className="px-3 py-2 tabular">{p.due_date}</td>
+                  <td className="px-3 py-2 tabular">{p.remind_days_before}</td>
+                  <td className="px-3 py-2">
+                    <Chip tone={p.is_closed ? "neutral" : "brand"}>
+                      {p.is_closed ? "ปิดแล้ว" : "เปิดรับ"}
+                    </Chip>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(p)}>
+                      <Pencil size={12} />แก้ไข
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => remove(p.id)}>
+                      <Trash2 size={12} />ลบ
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {(creating || editing) && (
+        <SubmissionPeriodModal
+          termId={termId}
+          initial={editing}
+          onClose={() => { setCreating(false); setEditing(null); }}
+          onSaved={async () => { await refresh(); setCreating(false); setEditing(null); }}
+        />
+      )}
+    </Panel>
+  );
+}
+
+function SubmissionPeriodModal({
+  termId, initial, onClose, onSaved,
+}: {
+  termId: string;
+  initial: SubmissionPeriod | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState<SubmissionPeriod>(
+    initial ?? {
+      id: "",
+      term_id: termId,
+      year_month: "",
+      due_date: "",
+      label: "",
+      remind_days_before: 3,
+      is_closed: false,
+    },
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true); setError(null);
+    try {
+      await api.post("/submission-periods", { ...draft, term_id: termId });
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={initial ? "แก้ไขรอบเบิกจ่าย" : "เพิ่มรอบเบิกจ่าย"}>
+      <div className="space-y-3 p-4">
+        <FieldGroup label="ป้ายกำกับ (แสดงบน UI)">
+          <TextInput value={draft.label}
+                     placeholder="เช่น มิถุนายน 2569"
+                     onChange={e => setDraft({ ...draft, label: e.target.value })} />
+        </FieldGroup>
+        <FieldGroup label="รหัสเดือน (year-month)">
+          <TextInput value={draft.year_month}
+                     placeholder="2569-06"
+                     onChange={e => setDraft({ ...draft, year_month: e.target.value })} />
+        </FieldGroup>
+        <FieldGroup label="กำหนดส่ง">
+          <TextInput type="date" value={draft.due_date}
+                     onChange={e => setDraft({ ...draft, due_date: e.target.value })} />
+        </FieldGroup>
+        <FieldGroup label="แจ้งเตือนล่วงหน้า (วัน)">
+          <TextInput type="number" min={0} value={draft.remind_days_before}
+                     onChange={e => setDraft({ ...draft, remind_days_before: Number(e.target.value) })} />
+        </FieldGroup>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={draft.is_closed}
+                 onChange={e => setDraft({ ...draft, is_closed: e.target.checked })} />
+          ปิดรับแล้ว (ไม่ส่ง reminder อีก)
+        </label>
+        {error && (
+          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+          <Button variant="primary" onClick={save} disabled={saving}>
+            <Save size={14} />บันทึก
+          </Button>
+        </div>
       </div>
     </Modal>
   );

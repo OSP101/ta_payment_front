@@ -35,6 +35,11 @@ function validateRow(w: WorkLog): string | null {
   if (Math.abs(span - w.hours) > 0.25) {
     return `จำนวนชั่วโมง (${w.hours}) ไม่ตรงกับช่วงเวลา ${w.start_time}–${w.end_time} (${span.toFixed(1)} ชม.)`;
   }
+  // Q&A rule 2: "อื่นๆ" must be tagged with the parent session type so the
+  // server can enforce the per-session credit-hour cap.
+  if (w.activity === "other" && w.parent_kind !== "lecture" && w.parent_kind !== "lab") {
+    return "กรุณาระบุประเภทกิจกรรมหลัก (บรรยาย/ปฏิบัติการ) สำหรับกิจกรรมอื่นๆ";
+  }
   return null;
 }
 
@@ -42,8 +47,17 @@ interface Assignment { id: string; course_code: string; course_name: string; }
 interface WorkLog {
   id: string; assignment_id: string;
   work_date: string; start_time: string; end_time: string;
-  hours: number; activity: string; room?: string; note?: string; status: string;
+  hours: number; activity: string;
+  // parent_kind is required (lecture|lab) when activity === "other" so the
+  // server can enforce the per-session credit-hour cap (Q&A rule 2).
+  parent_kind?: "lecture" | "lab" | null;
+  room?: string; note?: string; status: string;
 }
+
+const PARENT_KIND_LABEL: Record<string, string> = {
+  lecture: "คู่กับบรรยาย",
+  lab: "คู่กับปฏิบัติการ",
+};
 
 const ACTIVITY_LABEL: Record<string, string> = {
   lecture: "บรรยาย",
@@ -178,13 +192,43 @@ export default function WorklogPage() {
       id: "activity", label: "กิจกรรม",
       render: l => {
         const w = view(l);
-        return w.status === "draft" ? (
-          <Select value={w.activity} onChange={e => patch(l, { activity: e.target.value })}>
-            {Object.entries(ACTIVITY_LABEL).map(([v, label]) => (
-              <option key={v} value={v}>{label}</option>
-            ))}
-          </Select>
-        ) : (ACTIVITY_LABEL[w.activity] ?? w.activity);
+        if (w.status !== "draft") {
+          const label = ACTIVITY_LABEL[w.activity] ?? w.activity;
+          if (w.activity === "other" && (w.parent_kind === "lecture" || w.parent_kind === "lab")) {
+            return `${label} (${PARENT_KIND_LABEL[w.parent_kind]})`;
+          }
+          return label;
+        }
+        return (
+          <div className="flex flex-col gap-1">
+            <Select
+              value={w.activity}
+              onChange={e => {
+                const next = e.target.value;
+                // When leaving 'other', drop parent_kind so it doesn't stick
+                // in the payload and re-trigger the server-side check.
+                patch(l, next === "other"
+                  ? { activity: next, parent_kind: w.parent_kind ?? "lecture" }
+                  : { activity: next, parent_kind: null });
+              }}
+            >
+              {Object.entries(ACTIVITY_LABEL).map(([v, label]) => (
+                <option key={v} value={v}>{label}</option>
+              ))}
+            </Select>
+            {w.activity === "other" && (
+              <Select
+                value={w.parent_kind ?? "lecture"}
+                onChange={e => patch(l, { parent_kind: e.target.value as "lecture" | "lab" })}
+                aria-label="ประเภทกิจกรรมหลัก"
+              >
+                {Object.entries(PARENT_KIND_LABEL).map(([v, label]) => (
+                  <option key={v} value={v}>{label}</option>
+                ))}
+              </Select>
+            )}
+          </div>
+        );
       },
     },
     {

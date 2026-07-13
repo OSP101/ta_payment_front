@@ -11,7 +11,7 @@ interface Budget {
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
-  credits: number; lecture_credits: number; lab_credits: number; hours_cap: number;
+  credits: number; lecture_credits: number; lab_credits: number;
   per_course_max: number; used_baht: number; remaining_baht: number; over_budget: boolean;
   weekly_workload_hours: number; monthly_pay_baht: number; term_pay_baht: number;
   weekly_workload_regular: number; monthly_pay_regular: number; term_pay_regular: number;
@@ -98,11 +98,10 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
           )}
 
           <Panel title="ข้อมูลวิชา" className="mb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <Info k="หน่วยกิต (Lec/Lab)" v={`${b.credits} (${b.lecture_credits}/${b.lab_credits})`} />
-              <Info k="เพดานชั่วโมง" v={`${b.hours_cap} ชม.`} />
               <Info k="เพดานงบ/วิชา" v={`${b.per_course_max.toLocaleString()} บ.`} />
-              <Info k="แนะนำ TA ตรี / บัณฑิต" v={<Chip tone="brand">{b.suggested_tas.undergrad} / {b.suggested_tas.graduate}</Chip>} />
+              <Info k="จำนวน TA ตรี / บัณฑิต" v={<Chip tone="brand">{b.suggested_tas.undergrad} / {b.suggested_tas.graduate}</Chip>} />
             </div>
           </Panel>
 

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar } from "lucide-react";
+import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check } from "lucide-react";
 import { api, type Term, type Me } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import ScheduleGrid, {
@@ -11,7 +11,10 @@ import ScheduleGrid, {
 import {
   PageHeader, Panel, Select, Modal, Button, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog,
 } from "../../components/ui";
-import { LockedActionButton, useTAApproval } from "../TAGate";
+// Schedule editing is intentionally NOT gated behind TA approval — the user
+// asked to unblock this page so students can lay out their timetable while
+// their documents are still under review. LockedActionButton / useTAApproval
+// still apply to worklog + document-submission flows elsewhere.
 
 // Day-of-week labels: Sun=0..Sat=6
 const DOW_LABEL = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
@@ -52,10 +55,57 @@ function emptyBlockFields(): Pick<Block, "course_code" | "course_name" | "kind" 
   return { course_code: "", course_name: "", kind: "", sec_no: "", note: "" };
 }
 
+// SaveStatus is the small pill in the page header that tells the user which
+// state auto-save is in. Kept intentionally compact — a single row of icon +
+// label — because it sits next to the term picker + action buttons.
+function SaveStatus({
+  saving, dirty, savedAgo, error,
+}: {
+  saving: boolean;
+  dirty: boolean;
+  savedAgo: string;
+  error: string | null;
+}) {
+  if (error) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft rounded-md px-2 py-1"
+            title={error}>
+        <CloudOff size={13} />
+        <span className="truncate max-w-[16rem]">บันทึกไม่สำเร็จ — จะลองใหม่อัตโนมัติ</span>
+      </span>
+    );
+  }
+  if (saving) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+        <Cloud size={13} className="animate-pulse" />
+        <span>กำลังบันทึกอัตโนมัติ…</span>
+      </span>
+    );
+  }
+  if (dirty) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-muted"
+            title="ระบบจะบันทึกอัตโนมัติภายในไม่กี่วินาที">
+        <Cloud size={13} />
+        <span>กำลังจะบันทึกอัตโนมัติ…</span>
+      </span>
+    );
+  }
+  if (savedAgo) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+        <Check size={13} className="text-success" />
+        <span>บันทึกล่าสุด {savedAgo}</span>
+      </span>
+    );
+  }
+  return null;
+}
+
 type EditorMode = { kind: "closed" } | { kind: "create"; draft: Partial<Block> } | { kind: "edit"; id: string };
 
 export default function TASchedulePage() {
-  const { approved } = useTAApproval();
   const { data: me } = useSWR<Me>("/me");
   // WBA (no-regular-schedule) mode is only valid for year-4+ undergraduates.
   // The backend enforces this; we mirror it here so the checkbox is disabled
@@ -90,9 +140,24 @@ export default function TASchedulePage() {
   const [pendingTerm, setPendingTerm] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  function requestTermChange(next: string) {
+  // Auto-save state. `savedAt` is the wall-clock of the last successful write
+  // so the header can render "บันทึกล่าสุด X วินาทีที่แล้ว".
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // Debounce window: 1.5s of quiet after the last mutation before we flush.
+  // Long enough that a drag-resize sequence doesn't trigger N saves; short
+  // enough that closing the tab within it is very unlikely.
+  const AUTOSAVE_DELAY_MS = 1500;
+
+  // Term change: if the current term still has unsaved edits, flush the
+  // auto-save first so nothing is lost. The user isn't asked — the pending
+  // dialog is now only used when the flush itself fails.
+  async function requestTermChange(next: string) {
     if (!next || next === termId) return;
-    if (dirty) { setPendingTerm(next); return; }
+    if (dirty) {
+      const ok = await save(true);
+      if (!ok) { setPendingTerm(next); return; }
+    }
     switchTerm(next);
   }
   function switchTerm(next: string) {
@@ -113,9 +178,11 @@ export default function TASchedulePage() {
     [local],
   );
 
-  // Highlight blocks that overlap another block on same day
+  // Track which blocks share a time slot with another — used only as an
+  // informational "ซ้อน" chip on the list. Overlapping schedules are allowed
+  // (per lecturer request: two sections of the same course meeting together).
   const overlappingIds = useMemo(() => {
-    const bad = new Set<string>();
+    const stacked = new Set<string>();
     const byDay = new Map<number, Block[]>();
     for (const b of regularBlocks) {
       const arr = byDay.get(b.day_of_week) ?? [];
@@ -125,12 +192,12 @@ export default function TASchedulePage() {
       for (let i = 0; i < arr.length; i++) {
         for (let j = i + 1; j < arr.length; j++) {
           if (overlaps(arr[i].start_time, arr[i].end_time, arr[j].start_time, arr[j].end_time)) {
-            bad.add(arr[i].id); bad.add(arr[j].id);
+            stacked.add(arr[i].id); stacked.add(arr[j].id);
           }
         }
       }
     }
-    return bad;
+    return stacked;
   }, [regularBlocks]);
 
   function openCreate(draft?: DraftRange) {
@@ -143,6 +210,18 @@ export default function TASchedulePage() {
         ...emptyBlockFields(),
       },
     });
+  }
+
+  function moveBlock(id: string, day: number, start: string, end: string) {
+    const existing = local.find(b => b.id === id);
+    if (!existing) return;
+    upsertBlock({ ...existing, day_of_week: day, start_time: start, end_time: end });
+  }
+
+  function resizeBlock(id: string, start: string, end: string) {
+    const existing = local.find(b => b.id === id);
+    if (!existing) return;
+    upsertBlock({ ...existing, start_time: start, end_time: end });
   }
   function openEdit(id: string) {
     if (local.find(b => b.id === id)?.is_wba) return; // WBA block is not directly editable
@@ -188,33 +267,88 @@ export default function TASchedulePage() {
     }
   }
 
-  async function save() {
-    if (!termId) return;
+  // save(silent) — silent=true skips toast, used by the debounced auto-save.
+  // Invalid rows are surfaced via the header's saveError instead so the user
+  // sees them without an intrusive toast on every keystroke.
+  async function save(silent = false): Promise<boolean> {
+    if (!termId) return false;
     for (const b of local) {
       if (b.is_wba) continue;
       if (!inRange(b.start_time) || !inRange(b.end_time)) {
-        notify.error(`คาบ ${b.start_time}–${b.end_time} อยู่นอกช่วง ${String(START_HR).padStart(2,"0")}:00–${String(END_HR).padStart(2,"0")}:00`);
-        return;
+        const msg = `คาบ ${b.start_time}–${b.end_time} อยู่นอกช่วง ${String(START_HR).padStart(2,"0")}:00–${String(END_HR).padStart(2,"0")}:00`;
+        setSaveError(msg);
+        if (!silent) notify.error(msg);
+        return false;
       }
       if (parseHM(b.start_time) >= parseHM(b.end_time)) {
-        notify.error(`คาบ ${blockTitle(b) || "คาบเรียน"} เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`);
-        return;
+        const msg = `คาบ ${blockTitle(b) || "คาบเรียน"} เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`;
+        setSaveError(msg);
+        if (!silent) notify.error(msg);
+        return false;
       }
     }
-    if (overlappingIds.size > 0) {
-      notify.error("มีคาบเรียนทับซ้อนกัน โปรดแก้ไขก่อนบันทึก");
-      return;
-    }
+    // Overlapping blocks are allowed — two sections of the same course often
+    // share a time slot when co-taught. Only invalid time ranges block save.
     setSaving(true);
+    setSaveError(null);
     try {
       await api.put(`/me/schedule?term_id=${termId}`, local);
       clearDirty();
-      notify.success("บันทึกตารางเรียนเรียบร้อย");
+      setSavedAt(Date.now());
+      if (!silent) notify.success("บันทึกตารางเรียนเรียบร้อย");
       mutate((k) => typeof k === "string" && k.startsWith("/me/schedule"));
+      return true;
     } catch (e) {
-      notify.error(e);
+      const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+      setSaveError(msg);
+      if (!silent) notify.error(e);
+      return false;
     } finally { setSaving(false); }
   }
+
+  // Debounced auto-save. Fires 1.5s after the last edit — a drag-move that
+  // emits many intermediate updates coalesces into a single write. The ref
+  // holds the latest handler so the timeout always sees fresh `local`.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    if (!dirty || !termId) return;
+    const t = setTimeout(() => { saveRef.current(true); }, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [local, dirty, termId]);
+
+  // Safety net for the debounce window: if the user closes the tab or navigates
+  // to another origin while dirty, the browser prompts them to stay. The
+  // auto-save timer will normally fire well before they finish reading it.
+  useEffect(() => {
+    if (!dirty) return;
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      // Modern browsers ignore the returnValue string and show their own copy,
+      // but assigning any truthy value is still required to trigger the dialog.
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
+  // Human-readable "just now / X seconds ago" for the header indicator.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!savedAt) return;
+    const t = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(t);
+  }, [savedAt]);
+  const savedAgoLabel = useMemo(() => {
+    if (!savedAt) return "";
+    const s = Math.max(0, Math.floor((now - savedAt) / 1000));
+    if (s < 10) return "เมื่อสักครู่";
+    if (s < 60) return `${s} วินาทีที่แล้ว`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} นาทีที่แล้ว`;
+    const h = Math.floor(m / 60);
+    return `${h} ชั่วโมงที่แล้ว`;
+  }, [savedAt, now]);
 
   const editingBlock: Block | null =
     editor.kind === "edit" ? (local.find(b => b.id === editor.id) ?? null) : null;
@@ -226,36 +360,31 @@ export default function TASchedulePage() {
         description="บันทึกตารางเรียนต่อภาคการศึกษา เพื่อใช้ตรวจสอบไม่ให้ทับซ้อนกับตารางสอนที่อาจารย์จะมอบหมาย · ลากบนตารางหรือกดปุ่มเพิ่มคาบเพื่อกรอกข้อมูล"
         actions={
           <>
+            <SaveStatus
+              saving={saving}
+              dirty={dirty}
+              savedAgo={savedAgoLabel}
+              error={saveError}
+            />
             <Select value={termId} onChange={e => requestTermChange(e.target.value)} className="max-w-xs">
               {terms?.map(t => (<option key={t.id} value={t.id}>{t.academic_year}/{t.semester}</option>))}
             </Select>
             <Button variant="secondary" onClick={() => openCreate()} disabled={isWba}>
               <Plus size={14} /> เพิ่มคาบเรียน
             </Button>
-            <LockedActionButton variant="primary" onClick={save} disabled={saving || overlappingIds.size > 0}>
-              <Save size={14} /> {saving ? "กำลังบันทึก…" : "บันทึก"}
-            </LockedActionButton>
+            <Button variant="primary" onClick={() => save(false)} disabled={saving || !dirty}>
+              <Save size={14} /> บันทึกทันที
+            </Button>
           </>
         }
       />
-
-      {dirty && (
-        <div className="mb-3 text-xs text-warning-soft-foreground">
-          * มีการแก้ไขที่ยังไม่ได้บันทึก — กด “บันทึก” เพื่อจัดเก็บ
-        </div>
-      )}
-      {!approved && (
-        <div className="mb-3 text-xs text-muted">
-          * ปุ่มบันทึกจะปลดล็อกหลังเจ้าหน้าที่อนุมัติเอกสารในโปรไฟล์
-        </div>
-      )}
       {overlappingIds.size > 0 && (
         <div className="mb-3">
           <Alert
-            status="warning"
-            icon={<AlertTriangle size={16} />}
-            title="พบคาบเรียนทับซ้อน"
-            description="โปรดแก้ไขคาบที่ไฮไลต์ให้ไม่ทับซ้อนก่อนบันทึก"
+            status="accent"
+            icon={<Layers size={16} />}
+            title="มีคาบเรียนที่จัดชั้นซ้อนกัน"
+            description="ระบบจะซ้อนคาบที่ใช้เวลาเดียวกันให้อัตโนมัติ — สามารถบันทึกได้ปกติ (ใช้กรณีสองเซคชันเรียนพร้อมกัน)"
           />
         </div>
       )}
@@ -273,7 +402,8 @@ export default function TASchedulePage() {
           blocks={local}
           onCreateDraft={openCreate}
           onSelectBlock={openEdit}
-          disabled={!approved}
+          onMoveBlock={moveBlock}
+          onResizeBlock={resizeBlock}
         />
       )}
 
@@ -290,10 +420,10 @@ export default function TASchedulePage() {
           ) : (
             <div className="divide-y divide-[var(--hairline)]">
               {regularBlocks.map(b => {
-                const bad = overlappingIds.has(b.id);
+                const stacked = overlappingIds.has(b.id);
                 const heading = blockTitle(b);
                 return (
-                  <div key={b.id} className={"flex items-center gap-3 px-4 py-2.5 " + (bad ? "bg-amber-50" : "")}>
+                  <div key={b.id} className="flex items-center gap-3 px-4 py-2.5">
                     <div className="w-20 shrink-0 text-sm text-slate-700">{DOW_LABEL[b.day_of_week]}</div>
                     <div className="w-28 shrink-0 text-sm tabular-nums text-slate-700">
                       {b.start_time}–{b.end_time}
@@ -308,9 +438,9 @@ export default function TASchedulePage() {
                         {b.note && <span className="truncate">{b.note}</span>}
                       </div>
                     </div>
-                    {bad && (
-                      <span className="text-xs text-amber-700 inline-flex items-center gap-1">
-                        <AlertTriangle size={12} /> ทับซ้อน
+                    {stacked && (
+                      <span className="text-xs text-slate-500 inline-flex items-center gap-1">
+                        <Layers size={12} /> ซ้อน
                       </span>
                     )}
                     <Button variant="ghost" size="sm" onClick={() => openEdit(b.id)} aria-label="แก้ไข">
@@ -381,7 +511,7 @@ export default function TASchedulePage() {
         onConfirm={() => { if (pendingTerm) switchTerm(pendingTerm); }}
         danger
         title="เปลี่ยนภาคการศึกษา"
-        message="มีการแก้ไขตารางที่ยังไม่ได้บันทึก หากเปลี่ยนภาคการศึกษาตอนนี้ การแก้ไขจะหายไป ต้องการดำเนินการต่อหรือไม่?"
+        message="บันทึกตารางอัตโนมัติล้มเหลว หากเปลี่ยนภาคการศึกษาตอนนี้ การแก้ไขล่าสุดจะหายไป ต้องการดำเนินการต่อหรือไม่?"
         confirmLabel="เปลี่ยนโดยไม่บันทึก"
       />
     </div>
@@ -459,7 +589,8 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
     const other = checkOverlap(candidate);
     if (other) {
       const otherTitle = blockTitle(other) || "คาบเรียน";
-      setOverlapWarn(`ทับซ้อนกับ "${otherTitle}" ${other.start_time}–${other.end_time}`);
+      // Informational — overlap is allowed (two sections meeting together).
+      setOverlapWarn(`จะซ้อนกับ "${otherTitle}" ${other.start_time}–${other.end_time} — ระบบจะจัดชั้นให้ในตาราง`);
     }
   }, [isOpen, isEdit, block?.id, termId, courseCode, courseName, kind, secNo, dow, start, end, note, checkOverlap]);
 
@@ -619,7 +750,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
         </FieldGroup>
 
         {overlapWarn && !error && (
-          <Alert status="warning" icon={<AlertTriangle size={14} />} title={overlapWarn} />
+          <Alert status="accent" icon={<Layers size={14} />} title={overlapWarn} />
         )}
         {error && (
           <Alert status="danger" icon={<AlertTriangle size={14} />} title={error} />

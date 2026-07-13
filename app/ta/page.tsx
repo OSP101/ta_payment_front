@@ -3,11 +3,32 @@ import useSWR from "swr";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, Users, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw } from "lucide-react";
+import { BookOpen, Users, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw, Wallet } from "lucide-react";
 import type { Term } from "../lib/api";
 import {
-  PageHeader, Panel, StatCard, EmptyState, Chip, SelectField, Spinner, Button, type SelectOption,
+  PageHeader, Panel, StatCard, EmptyState, Chip, SelectField, Spinner, Button, type SelectOption, type ChipTone,
 } from "../components/ui";
+
+interface TAStatus {
+  teaching_course_id: string;
+  stage: "draft" | "submitted" | "approved" | "exported";
+  hours_approved: number;
+  hours_pending: number;
+  estimated_baht: number;
+}
+
+const STAGE_LABEL: Record<TAStatus["stage"], string> = {
+  draft: "แบบร่าง",
+  submitted: "รออนุมัติ",
+  approved: "อนุมัติแล้ว",
+  exported: "ส่งออกแล้ว",
+};
+const STAGE_TONE: Record<TAStatus["stage"], ChipTone> = {
+  draft: "neutral",
+  submitted: "warn",
+  approved: "success",
+  exported: "brand",
+};
 
 interface TC {
   id: string; code: string; name_th: string;
@@ -98,6 +119,14 @@ export default function TAHome() {
     mutate: reloadCourses,
   } = useSWR<TC[]>(defaultTerm ? `/me/ta-courses?term_id=${defaultTerm}` : null);
 
+  const { data: status } = useSWR<TAStatus[]>("/dashboard/ta/me");
+  const statusById = useMemo(() => {
+    const m = new Map<string, TAStatus>();
+    (status ?? []).forEach(s => m.set(s.teaching_course_id, s));
+    return m;
+  }, [status]);
+  const totalEstimated = (status ?? []).reduce((a, s) => a + s.estimated_baht, 0);
+
   function setYear(y: string) {
     const list = byYear.find(([yr]) => String(yr) === y)?.[1] ?? [];
     const nextTerm = list.find(t => t.is_active)?.id ?? list[0]?.id ?? "";
@@ -185,6 +214,12 @@ export default function TAHome() {
               value={totalStudents}
               icon={<Users size={18} />}
             />
+            <StatCard
+              label="ยอดเงินโดยประมาณรวม"
+              value={`฿${totalEstimated.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+              icon={<Wallet size={18} />}
+              tone="success"
+            />
           </div>
 
           <Panel
@@ -207,7 +242,7 @@ export default function TAHome() {
               <div className="flex items-center justify-center gap-3 py-12 text-sm text-muted">
                 <Spinner size="sm" /> กำลังโหลดรายวิชา…
               </div>
-            ) : courses.length === 0 ? (
+            ) : !courses || courses.length === 0 ? (
               <EmptyState
                 icon={<BookOpen size={28} />}
                 title="ยังไม่มีวิชาในภาคเรียนนี้"
@@ -215,30 +250,43 @@ export default function TAHome() {
               />
             ) : (
               <ul className="divide-y divide-[var(--hairline)]">
-                {courses!.map(c => (
-                  <li key={c.id}>
-                    <Link
-                      href={`/ta/worklog?course=${c.id}`}
-                      className="flex items-center gap-4 px-5 py-4 hover:bg-surface-secondary transition-colors group"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
-                        <BookOpen size={18} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold tabular">{c.code}</span>
-                          <span className="text-foreground">{c.name_th}</span>
+                {courses!.map(c => {
+                  const st = statusById.get(c.id);
+                  return (
+                    <li key={c.id}>
+                      <Link
+                        href={`/ta/worklog?course=${c.id}`}
+                        className="flex items-center gap-4 px-5 py-4 hover:bg-surface-secondary transition-colors group"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
+                          <BookOpen size={18} />
                         </div>
-                        <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
-                          <span>นักศึกษารวม {c.num_students} คน</span>
-                          {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
-                          {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold tabular">{c.code}</span>
+                            <span className="text-foreground">{c.name_th}</span>
+                            {st && <Chip tone={STAGE_TONE[st.stage]}>{STAGE_LABEL[st.stage]}</Chip>}
+                          </div>
+                          <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
+                            <span>นักศึกษารวม {c.num_students} คน</span>
+                            {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
+                            {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
+                            {st && (
+                              <>
+                                <span>· อนุมัติ {st.hours_approved.toFixed(1)} ชม.</span>
+                                {st.hours_pending > 0 && <span>· รอ {st.hours_pending.toFixed(1)} ชม.</span>}
+                                <span className="text-success font-medium">
+                                  · ประมาณ ฿{st.estimated_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />
-                    </Link>
-                  </li>
-                ))}
+                        <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Panel>

@@ -8,7 +8,7 @@ import {
   DatePicker, DateField, Calendar, I18nProvider, toast,
 } from "@heroui/react";
 import { parseDate, type DateValue } from "@internationalized/date";
-import { BookPlus, CircleAlert, Clock, Check, ChevronRight, ChevronDown } from "lucide-react";
+import { BookPlus, CircleAlert, Clock, Check, Plus, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
@@ -39,16 +39,10 @@ interface Draft {
   faculty_course_id: string;
   starts_on: string;
   ends_on: string;
-  midterm_lecture_date: string;
-  midterm_lab_date: string;
-  final_lecture_date: string;
-  final_lab_date: string;
   regular_sections: number;
   special_sections: number;
-  // Keyed by sec_no. Empty string = not specified (server saves 0).
-  student_counts: Record<string, string>;
-  // Keyed by sec_no. Empty array = no schedule specified — lecturer can
-  // fill in later via the settings page.
+  // Keyed by sec_no. Section schedules are required at course-open time —
+  // TAs consume them immediately for time-clock validation.
   schedules: Record<string, SectionScheduleRow[]>;
 }
 
@@ -56,27 +50,22 @@ const EMPTY: Draft = {
   faculty_course_id: "",
   starts_on: "",
   ends_on: "",
-  midterm_lecture_date: "",
-  midterm_lab_date: "",
-  final_lecture_date: "",
-  final_lab_date: "",
   regular_sections: 1,
   special_sections: 0,
-  student_counts: {},
   schedules: {},
 };
 
-// KKU convention: regular sections numbered 1..N, special sections start at 801.
-// Tweak here if your faculty uses a different numbering scheme.
+// CP KKU numbering: sec_no runs continuously across tracks — regular gets 1..N,
+// special continues N+1..N+M. (Existing courses in the DB may still carry the
+// legacy 801+ scheme; only new courses use this continuous scheme.)
 function regularSecNos(n: number): string[] {
   return Array.from({ length: n }, (_, i) => String(i + 1));
 }
-function specialSecNos(n: number): string[] {
-  return Array.from({ length: n }, (_, i) => String(801 + i));
+function specialSecNos(n: number, regular: number): string[] {
+  return Array.from({ length: n }, (_, i) => String(regular + i + 1));
 }
 function buildSections(
   regular: number, special: number,
-  counts: Record<string, string>,
   schedules: Record<string, SectionScheduleRow[]>,
 ): {
   sec_no: string;
@@ -84,15 +73,18 @@ function buildSections(
   num_students: number;
   schedules: ReturnType<typeof toApiPayload>;
 }[] {
+  // num_students starts at 0 — staff is the source of truth for enrolment,
+  // so the lecturer's "open course" flow no longer captures it. Staff fills
+  // it via the sections settings page before the export batch runs.
   const one = (sec_no: string, track: "regular" | "special") => ({
     sec_no,
     track,
-    num_students: Number(counts[sec_no] || 0),
+    num_students: 0,
     schedules: toApiPayload(schedules[sec_no] ?? []),
   });
   return [
     ...regularSecNos(regular).map(n => one(n, "regular")),
-    ...specialSecNos(special).map(n => one(n, "special")),
+    ...specialSecNos(special, regular).map(n => one(n, "special")),
   ];
 }
 
@@ -110,18 +102,41 @@ export default function OpenCourseModal({
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Special sections are opt-in — regular is primary, special reveals via
+  // "+ เปิดภาคพิเศษด้วย" so the UI stops treating them as equal peers.
+  const [showSpecial, setShowSpecial] = useState(false);
 
   // Reset every time the modal is (re)opened.
-  useEffect(() => { if (open) { setDraft(EMPTY); setErr(null); } }, [open]);
+  useEffect(() => {
+    if (open) { setDraft(EMPTY); setErr(null); setShowSpecial(false); }
+  }, [open]);
 
   const activeFcs = useMemo(() => (fcs ?? []).filter(fc => fc.is_active), [fcs]);
   const selected = activeFcs.find(fc => fc.id === draft.faculty_course_id);
 
+  // Which meeting kinds the selected course actually has — drives what the
+  // schedule editor lets the lecturer pick. See [[schedule-kind-rules]].
+  const allowedKinds = useMemo<("lecture" | "lab")[]>(() => {
+    if (!selected) return ["lecture", "lab"];
+    const k: ("lecture" | "lab")[] = [];
+    if (selected.lecture_hrs > 0) k.push("lecture");
+    if (selected.lab_hrs > 0) k.push("lab");
+    return k.length > 0 ? k : ["lecture", "lab"];
+  }, [selected]);
+
   const totalSections = draft.regular_sections + draft.special_sections;
+
+  // All active section numbers — used to gate "every section has a schedule".
+  const allSecNos = useMemo(() => [
+    ...regularSecNos(draft.regular_sections),
+    ...specialSecNos(draft.special_sections, draft.regular_sections),
+  ], [draft.regular_sections, draft.special_sections]);
 
   const scheduleBlocked = Object.values(draft.schedules).some(rows =>
     rows.length > 0 && validateRows(rows).hasBlockingError,
   );
+  const scheduleComplete =
+    totalSections > 0 && allSecNos.every(sec => (draft.schedules[sec] ?? []).length > 0);
 
   const dateError =
     draft.starts_on && draft.ends_on && draft.ends_on < draft.starts_on
@@ -133,15 +148,9 @@ export default function OpenCourseModal({
   const step1Done = !!draft.faculty_course_id;
   const step2Done = step1Done && !!draft.starts_on && !!draft.ends_on && !dateError;
   const step3Done = step2Done && totalSections > 0;
+  const step4Done = step3Done && scheduleComplete && !scheduleBlocked;
 
-  const canSubmit =
-    !!draft.faculty_course_id &&
-    !!draft.starts_on &&
-    !!draft.ends_on &&
-    !dateError &&
-    totalSections > 0 &&
-    !scheduleBlocked &&
-    !saving;
+  const canSubmit = step4Done && !saving;
 
   async function submit() {
     if (!canSubmit) return;
@@ -153,13 +162,8 @@ export default function OpenCourseModal({
         term_id: termId,
         starts_on: draft.starts_on,
         ends_on: draft.ends_on,
-        midterm_lecture_date: draft.midterm_lecture_date || undefined,
-        midterm_lab_date: draft.midterm_lab_date || undefined,
-        final_lecture_date: draft.final_lecture_date || undefined,
-        final_lab_date: draft.final_lab_date || undefined,
         sections: buildSections(
-          draft.regular_sections, draft.special_sections,
-          draft.student_counts, draft.schedules,
+          draft.regular_sections, draft.special_sections, draft.schedules,
         ),
       };
       const res = await api.post<{ id: string }>("/teaching-courses", body);
@@ -236,7 +240,9 @@ export default function OpenCourseModal({
           </StepCard>
         )}
 
-        {/* Step 3 — revealed after Step 2 */}
+        {/* Step 3 — revealed after Step 2. Two columns side-by-side: regular on
+            the left is primary; the right column is either the "+ เปิดภาคพิเศษ"
+            opt-in or the special input once toggled on. */}
         {step2Done && (
           <StepCard n={3} title="กลุ่มเรียน (section)" done={step3Done}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -244,7 +250,7 @@ export default function OpenCourseModal({
                 label={<span className="inline-flex items-center gap-2">ภาคปกติ <Chip tone="brand">regular</Chip></span>}
                 hint={
                   draft.regular_sections > 0
-                    ? `จะสร้าง sec ${Array.from({ length: draft.regular_sections }, (_, i) => i + 1).join(", ")}`
+                    ? `จะสร้าง sec ${regularSecNos(draft.regular_sections).join(", ")}`
                     : "ยังไม่เปิด section ภาคปกติ"
                 }
               >
@@ -255,99 +261,77 @@ export default function OpenCourseModal({
                   className="max-w-[140px]"
                 />
               </FieldGroup>
-              <FieldGroup
-                label={<span className="inline-flex items-center gap-2">ภาคพิเศษ <Chip tone="warn">special</Chip></span>}
-                hint={
-                  draft.special_sections > 0
-                    ? `จะสร้าง sec ${Array.from({ length: draft.special_sections }, (_, i) => 801 + i).join(", ")}`
-                    : "ยังไม่เปิด section ภาคพิเศษ"
-                }
-              >
-                <TextInput
-                  type="number" min={0} max={99} step={1}
-                  value={draft.special_sections}
-                  onChange={e => setDraft(d => ({ ...d, special_sections: clampSectionCount(e.target.value) }))}
-                  className="max-w-[140px]"
-                />
-              </FieldGroup>
+
+              {!showSpecial ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSpecial(true);
+                    setDraft(d => ({ ...d, special_sections: d.special_sections || 1 }));
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border text-xs font-medium text-muted hover:text-accent hover:border-accent min-h-19"
+                >
+                  <Plus size={14} />เปิด section ภาคพิเศษด้วย
+                </button>
+              ) : (
+                <FieldGroup
+                  label={
+                    <span className="inline-flex items-center gap-2 w-full">
+                      ภาคพิเศษ <Chip tone="warn">special</Chip>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSpecial(false);
+                          setDraft(d => ({ ...d, special_sections: 0 }));
+                        }}
+                        className="ms-auto inline-flex items-center gap-1 text-xs text-muted hover:text-danger"
+                        aria-label="ยกเลิกภาคพิเศษ"
+                      >
+                        <X size={12} />ยกเลิก
+                      </button>
+                    </span>
+                  }
+                  hint={
+                    draft.special_sections > 0
+                      ? `จะสร้าง sec ${specialSecNos(draft.special_sections, draft.regular_sections).join(", ")}`
+                      : "ยังไม่กำหนดจำนวน"
+                  }
+                >
+                  <TextInput
+                    type="number" min={0} max={99} step={1}
+                    value={draft.special_sections}
+                    onChange={e => setDraft(d => ({ ...d, special_sections: clampSectionCount(e.target.value) }))}
+                    className="max-w-[140px]"
+                  />
+                </FieldGroup>
+              )}
             </div>
+
             {totalSections > 0 && (
-              <div className="text-xs text-muted mt-2">
+              <div className="text-xs text-muted mt-3 pt-3 border-t border-border">
                 รวมทั้งหมด <b className="tabular">{totalSections}</b> section
               </div>
             )}
           </StepCard>
         )}
 
-        {/* Optional block — revealed after Step 3 */}
+        {/* Step 4 — schedule is required: TA time-clock validation reads it
+            immediately. Staff fills num_students later on the sections page. */}
         {step3Done && (
-          <div className="rounded-lg border border-border bg-surface-secondary/30 p-3">
-            <div className="text-xs font-semibold text-muted mb-2">
-              รายละเอียดเพิ่มเติม <span className="font-normal">(ไม่บังคับ — กรอกที่นี่ หรือมาแก้ในหน้าจัดการวิชาภายหลังก็ได้)</span>
+          <StepCard n={4} title="ตารางเวลาเรียนต่อ section" done={step4Done}>
+            <div className="text-xs text-muted mb-2">
+              กดที่ section เพื่อกำหนดวัน-เวลาเรียน — ต้องกรอกครบทุก section
             </div>
-            <div className="space-y-2">
-              <Collapsible
-                title="จำนวนนักศึกษาต่อ section"
-                summary={studentCountsSummary(draft.student_counts, totalSections)}
-              >
-                <SectionStudentCounts
-                  regularSecs={regularSecNos(draft.regular_sections)}
-                  specialSecs={specialSecNos(draft.special_sections)}
-                  counts={draft.student_counts}
-                  onChange={(sec, v) =>
-                    setDraft(d => ({ ...d, student_counts: { ...d.student_counts, [sec]: v } }))
-                  }
-                />
-              </Collapsible>
-
-              <Collapsible
-                title="ตารางเวลาเรียน"
-                summary={schedulesSummary(draft.schedules, totalSections)}
-              >
-                <SectionSchedulesPanel
-                  regularSecs={regularSecNos(draft.regular_sections)}
-                  specialSecs={specialSecNos(draft.special_sections)}
-                  schedules={draft.schedules}
-                  onChange={(sec, rows) =>
-                    setDraft(d => ({ ...d, schedules: { ...d.schedules, [sec]: rows } }))
-                  }
-                />
-              </Collapsible>
-
-              <Collapsible
-                title="วันสอบ"
-                summary={examSummary(draft)}
-                warn="TA จะสร้างการลงบันทึกเวลาไม่ได้จนกว่าจะกรอกครบ"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <FieldGroup label={<span>สอบกลางภาค <Chip tone="brand">บรรยาย</Chip></span>}>
-                    <ThaiDateField
-                      value={draft.midterm_lecture_date}
-                      onChange={v => setDraft(d => ({ ...d, midterm_lecture_date: v }))}
-                    />
-                  </FieldGroup>
-                  <FieldGroup label={<span>สอบกลางภาค <Chip tone="warn">ปฏิบัติการ</Chip></span>}>
-                    <ThaiDateField
-                      value={draft.midterm_lab_date}
-                      onChange={v => setDraft(d => ({ ...d, midterm_lab_date: v }))}
-                    />
-                  </FieldGroup>
-                  <FieldGroup label={<span>สอบปลายภาค <Chip tone="brand">บรรยาย</Chip></span>}>
-                    <ThaiDateField
-                      value={draft.final_lecture_date}
-                      onChange={v => setDraft(d => ({ ...d, final_lecture_date: v }))}
-                    />
-                  </FieldGroup>
-                  <FieldGroup label={<span>สอบปลายภาค <Chip tone="warn">ปฏิบัติการ</Chip></span>}>
-                    <ThaiDateField
-                      value={draft.final_lab_date}
-                      onChange={v => setDraft(d => ({ ...d, final_lab_date: v }))}
-                    />
-                  </FieldGroup>
-                </div>
-              </Collapsible>
-            </div>
-          </div>
+            <SectionSchedulesPanel
+              regularSecs={regularSecNos(draft.regular_sections)}
+              specialSecs={specialSecNos(draft.special_sections, draft.regular_sections)}
+              schedules={draft.schedules}
+              allowedKinds={allowedKinds}
+              onChange={(sec, rows) =>
+                setDraft(d => ({ ...d, schedules: { ...d.schedules, [sec]: rows } }))
+              }
+            />
+          </StepCard>
         )}
 
         {err && (
@@ -358,68 +342,13 @@ export default function OpenCourseModal({
   );
 }
 
-function SectionStudentCounts({
-  regularSecs, specialSecs, counts, onChange,
-}: {
-  regularSecs: string[];
-  specialSecs: string[];
-  counts: Record<string, string>;
-  onChange: (sec: string, v: string) => void;
-}) {
-  return (
-    <div className="rounded-lg border border-border p-3 space-y-3 bg-surface-secondary/40">
-      <div className="text-xs text-muted">
-        <b>จำนวนนักศึกษาต่อ section</b> — ไม่บังคับ ถ้ายังไม่ทราบให้เว้นว่างไว้แล้วมาแก้ในหน้าตั้งค่าภายหลัง
-      </div>
-
-      {regularSecs.length > 0 && (
-        <SecCountGrid title="ภาคปกติ" tone="brand" secs={regularSecs} counts={counts} onChange={onChange} />
-      )}
-      {specialSecs.length > 0 && (
-        <SecCountGrid title="ภาคพิเศษ" tone="warn" secs={specialSecs} counts={counts} onChange={onChange} />
-      )}
-    </div>
-  );
-}
-
-function SecCountGrid({
-  title, tone, secs, counts, onChange,
-}: {
-  title: string;
-  tone: "brand" | "warn";
-  secs: string[];
-  counts: Record<string, string>;
-  onChange: (sec: string, v: string) => void;
-}) {
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
-        <Chip tone={tone}>{title}</Chip>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-        {secs.map(sec => (
-          <div key={sec} className="flex items-center gap-2">
-            <span className="text-xs text-muted tabular w-14 shrink-0">Sec {sec}</span>
-            <TextInput
-              type="number" min={0} max={9999}
-              value={counts[sec] ?? ""}
-              onChange={e => onChange(sec, e.target.value)}
-              placeholder="—"
-              className="text-right"
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function SectionSchedulesPanel({
-  regularSecs, specialSecs, schedules, onChange,
+  regularSecs, specialSecs, schedules, allowedKinds, onChange,
 }: {
   regularSecs: string[];
   specialSecs: string[];
   schedules: Record<string, SectionScheduleRow[]>;
+  allowedKinds: ("lecture" | "lab")[];
   onChange: (sec: string, rows: SectionScheduleRow[]) => void;
 }) {
   const allSecs = [
@@ -429,12 +358,8 @@ function SectionSchedulesPanel({
   const [openSec, setOpenSec] = useState<string | null>(null);
 
   return (
-    <div className="rounded-lg border border-border p-3 space-y-2 bg-surface-secondary/40">
-      <div className="text-xs text-muted">
-        <b>ตารางเวลาเรียนต่อ section</b> — ไม่บังคับ กดที่ section เพื่อกำหนดวัน-เวลาเรียน
-      </div>
-      <div className="divide-y divide-border rounded-md border border-border bg-surface">
-        {allSecs.map(({ sec, track }) => {
+    <div className="divide-y divide-border rounded-md border border-border bg-surface">
+      {allSecs.map(({ sec, track }) => {
           const rows = schedules[sec] ?? [];
           const isOpen = openSec === sec;
           return (
@@ -449,10 +374,13 @@ function SectionSchedulesPanel({
                 <Chip tone={track === "special" ? "warn" : "brand"}>
                   {track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
                 </Chip>
-                <span className="text-xs text-muted ms-auto">
+                <span className={
+                  "text-xs ms-auto " +
+                  (rows.length > 0 ? "text-muted" : "text-warning font-medium")
+                }>
                   {rows.length > 0
                     ? `${rows.length} คาบ`
-                    : "ยังไม่กำหนด"}
+                    : "ต้องกำหนด"}
                 </span>
               </button>
               {isOpen && (
@@ -460,6 +388,7 @@ function SectionSchedulesPanel({
                   <SectionScheduleEditor
                     value={rows}
                     onChange={next => onChange(sec, next)}
+                    allowedKinds={allowedKinds}
                     compact
                   />
                 </div>
@@ -467,7 +396,6 @@ function SectionSchedulesPanel({
             </div>
           );
         })}
-      </div>
     </div>
   );
 }
@@ -499,60 +427,6 @@ function StepCard({
       {children}
     </div>
   );
-}
-
-function Collapsible({
-  title, summary, warn, children,
-}: {
-  title: string;
-  summary?: string;
-  warn?: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-md border border-border bg-surface">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-secondary/50 transition-colors"
-      >
-        {open ? <ChevronDown size={14} className="text-muted shrink-0" /> : <ChevronRight size={14} className="text-muted shrink-0" />}
-        <span className="text-sm font-medium">{title}</span>
-        {summary && <span className="text-xs text-muted ms-auto">{summary}</span>}
-      </button>
-      {open && (
-        <div className="p-3 border-t border-border space-y-3">
-          {warn && (
-            <div className="text-xs text-warning">
-              {warn}
-            </div>
-          )}
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function studentCountsSummary(counts: Record<string, string>, total: number): string {
-  const filled = Object.values(counts).filter(v => v.trim() !== "" && Number(v) > 0).length;
-  if (filled === 0) return "ยังไม่กรอก";
-  return `กรอกแล้ว ${filled}/${total} section`;
-}
-
-function schedulesSummary(schedules: Record<string, SectionScheduleRow[]>, total: number): string {
-  const filled = Object.values(schedules).filter(rows => rows.length > 0).length;
-  if (filled === 0) return "ยังไม่กำหนด";
-  return `กำหนดแล้ว ${filled}/${total} section`;
-}
-
-function examSummary(d: Draft): string {
-  const filled = [d.midterm_lecture_date, d.midterm_lab_date, d.final_lecture_date, d.final_lab_date]
-    .filter(v => !!v).length;
-  if (filled === 0) return "ยังไม่กำหนด";
-  return `กรอกแล้ว ${filled}/4`;
 }
 
 function CourseAutocomplete({

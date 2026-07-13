@@ -10,6 +10,7 @@ import {
   Settings,
   ScrollText,
   Bell,
+  ClipboardEdit,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
@@ -32,6 +33,7 @@ const nav: NavSection[] = [
     items: [
       { label: "ตรวจสอบเอกสาร", href: "/staff/review", icon: FileCheck2 },
       { label: "รายการคำขอ TA", href: "/staff/approvals", icon: ClipboardCheck },
+      { label: "แก้ไขบันทึกเวลา", href: "/staff/worklog", icon: ClipboardEdit },
     ],
   },
   {

@@ -1,6 +1,51 @@
 "use client";
 import { Plus, Trash2, Clock, AlertTriangle } from "lucide-react";
-import { Button, Chip, Select, TextInput, FieldGroup, Alert } from "./ui";
+import { TimeField, type TimeValue } from "@heroui/react";
+import { Time } from "@internationalized/date";
+import { Button, Select, Alert } from "./ui";
+
+// Parse "HH:MM" or "HH:MM:SS" into a TimeValue; empty/malformed → null.
+function parseHM(s: string): TimeValue | null {
+  if (!s) return null;
+  const parts = s.split(":");
+  if (parts.length < 2) return null;
+  const h = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return new Time(h, m);
+}
+
+function formatHM(v: TimeValue | null): string {
+  if (!v) return "";
+  return `${String(v.hour).padStart(2, "0")}:${String(v.minute).padStart(2, "0")}`;
+}
+
+// TimeField locked to 24-hour so lecturers can't accidentally pick 10:30 PM
+// when they meant 10:30 AM (see incident 2026-07-14). Emits "HH:MM" strings
+// to stay drop-in compatible with the existing SectionScheduleRow shape.
+function Hour24TimeInput({
+  value, onChange, disabled, ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  ariaLabel: string;
+}) {
+  return (
+    <TimeField
+      value={parseHM(value)}
+      onChange={v => onChange(formatHM(v))}
+      isDisabled={disabled}
+      hourCycle={24}
+      aria-label={ariaLabel}
+      fullWidth
+    >
+      <TimeField.Group fullWidth>
+        <TimeField.Input>{s => <TimeField.Segment segment={s} />}</TimeField.Input>
+      </TimeField.Group>
+    </TimeField>
+  );
+}
 
 // Persisted rows have a uuid `id`; unsaved drafts leave it undefined so the
 // parent can identify them without minting server-side UUIDs on the client.
@@ -48,20 +93,39 @@ function findInvalidRange(rows: SectionScheduleRow[]): number[] {
   return bad;
 }
 
+// Business rule: each kind (lecture/lab) allowed at most once per section —
+// the credit format (e.g. 3(3-0-6)) means each kind's period covers all of
+// that kind's weekly hours in one block. See [[schedule-kind-rules]].
+function findDuplicateKind(rows: SectionScheduleRow[]): number[] {
+  const firstIdx = new Map<string, number>();
+  const bad = new Set<number>();
+  rows.forEach((r, i) => {
+    const prev = firstIdx.get(r.kind);
+    if (prev === undefined) firstIdx.set(r.kind, i);
+    else { bad.add(prev); bad.add(i); }
+  });
+  return [...bad];
+}
+
 export interface EditorErrors {
   overlapIdx: number[];
   invalidIdx: number[];
+  duplicateKindIdx: number[];
   hasBlockingError: boolean;
 }
 
 export function validateRows(rows: SectionScheduleRow[]): EditorErrors {
   const overlapIdx = findOverlap(rows);
   const invalidIdx = findInvalidRange(rows);
+  const duplicateKindIdx = findDuplicateKind(rows);
   const incomplete = rows.some(r => !r.start_time || !r.end_time);
   return {
     overlapIdx,
     invalidIdx,
-    hasBlockingError: overlapIdx.length > 0 || invalidIdx.length > 0 || incomplete,
+    duplicateKindIdx,
+    hasBlockingError:
+      overlapIdx.length > 0 || invalidIdx.length > 0 ||
+      duplicateKindIdx.length > 0 || incomplete,
   };
 }
 
@@ -70,6 +134,7 @@ export default function SectionScheduleEditor({
   onChange,
   disabled = false,
   compact = false,
+  allowedKinds,
 }: {
   value: SectionScheduleRow[];
   onChange: (rows: SectionScheduleRow[]) => void;
@@ -77,8 +142,17 @@ export default function SectionScheduleEditor({
   // compact hides the "จำนวนคาบ" header row — useful inside the OpenCourseModal
   // where a section already sits inside its own container.
   compact?: boolean;
+  // Which meeting kinds the course actually has (from lecture_hrs/lab_hrs).
+  // Omit or pass [] to allow both — kept optional for backward compat.
+  allowedKinds?: ("lecture" | "lab")[];
 }) {
   const errors = validateRows(value);
+
+  const kinds: ("lecture" | "lab")[] =
+    allowedKinds && allowedKinds.length > 0 ? allowedKinds : ["lecture", "lab"];
+  const usedKinds = new Set(value.map(r => r.kind));
+  const nextAvailableKind = kinds.find(k => !usedKinds.has(k)) ?? kinds[0];
+  const canAddMore = kinds.some(k => !usedKinds.has(k));
 
   function updateRow(i: number, patch: Partial<SectionScheduleRow>) {
     const next = value.map((r, idx) => (idx === i ? { ...r, ...patch } : r));
@@ -88,9 +162,10 @@ export default function SectionScheduleEditor({
     onChange(value.filter((_, idx) => idx !== i));
   }
   function addRow() {
+    if (!canAddMore) return;
     onChange([
       ...value,
-      { kind: "lecture", day_of_week: 1, start_time: "09:00", end_time: "12:00", room: "" },
+      { kind: nextAvailableKind, day_of_week: 1, start_time: "09:00", end_time: "12:00", room: "" },
     ]);
   }
 
@@ -104,7 +179,7 @@ export default function SectionScheduleEditor({
               ? "ยังไม่มีคาบเรียน"
               : <>ทั้งหมด <b className="tabular">{value.length}</b> คาบ / สัปดาห์</>}
           </div>
-          <Button variant="ghost" size="sm" onClick={addRow} disabled={disabled}>
+          <Button variant="ghost" size="sm" onClick={addRow} disabled={disabled || !canAddMore}>
             <Plus size={13} />เพิ่มคาบ
           </Button>
         </div>
@@ -119,12 +194,13 @@ export default function SectionScheduleEditor({
           {value.map((row, i) => {
             const invalid = errors.invalidIdx.includes(i);
             const overlap = errors.overlapIdx.includes(i);
+            const dupKind = errors.duplicateKindIdx.includes(i);
             return (
               <div
                 key={row.id ?? i}
                 className={
-                  "grid grid-cols-[110px_1fr_1fr_1fr_1fr_auto] gap-2 items-center rounded-lg border p-2 " +
-                  (invalid || overlap ? "border-danger/50 bg-danger-soft/20" : "border-border")
+                  "grid grid-cols-[110px_1fr_1fr_1fr_auto] gap-2 items-center rounded-lg border p-2 " +
+                  (invalid || overlap || dupKind ? "border-danger/50 bg-danger-soft/20" : "border-border")
                 }
               >
                 <Select
@@ -132,8 +208,14 @@ export default function SectionScheduleEditor({
                   onChange={e => updateRow(i, { kind: e.target.value as "lecture" | "lab" })}
                   disabled={disabled}
                 >
-                  <option value="lecture">บรรยาย</option>
-                  <option value="lab">ปฏิบัติการ</option>
+                  {kinds.map(k => {
+                    const usedByOther = value.some((r, idx) => idx !== i && r.kind === k);
+                    return (
+                      <option key={k} value={k} disabled={usedByOther}>
+                        {k === "lab" ? "ปฏิบัติการ" : "บรรยาย"}
+                      </option>
+                    );
+                  })}
                 </Select>
                 <Select
                   value={String(row.day_of_week)}
@@ -144,27 +226,17 @@ export default function SectionScheduleEditor({
                     <option key={d} value={d}>{DOW_LABEL[d]}</option>
                   ))}
                 </Select>
-                <TextInput
-                  type="time"
+                <Hour24TimeInput
                   value={normalizeHM(row.start_time)}
-                  onChange={e => updateRow(i, { start_time: e.target.value })}
+                  onChange={v => updateRow(i, { start_time: v })}
                   disabled={disabled}
-                  aria-label="เวลาเริ่ม"
+                  ariaLabel="เวลาเริ่ม"
                 />
-                <TextInput
-                  type="time"
+                <Hour24TimeInput
                   value={normalizeHM(row.end_time)}
-                  onChange={e => updateRow(i, { end_time: e.target.value })}
+                  onChange={v => updateRow(i, { end_time: v })}
                   disabled={disabled}
-                  aria-label="เวลาสิ้นสุด"
-                />
-                <TextInput
-                  type="text"
-                  placeholder="ห้อง (ไม่บังคับ)"
-                  value={row.room ?? ""}
-                  onChange={e => updateRow(i, { room: e.target.value })}
-                  disabled={disabled}
-                  aria-label="ห้อง"
+                  ariaLabel="เวลาสิ้นสุด"
                 />
                 <Button
                   variant="danger-soft" size="sm"
@@ -180,7 +252,7 @@ export default function SectionScheduleEditor({
         </div>
       )}
 
-      {compact && (
+      {compact && canAddMore && (
         <div className="pt-1">
           <Button variant="ghost" size="sm" onClick={addRow} disabled={disabled}>
             <Plus size={13} />เพิ่มคาบ
@@ -188,6 +260,14 @@ export default function SectionScheduleEditor({
         </div>
       )}
 
+      {errors.duplicateKindIdx.length > 0 && (
+        <Alert
+          status="danger"
+          icon={<AlertTriangle size={14} />}
+          title="รูปแบบคาบซ้ำ"
+          description="แต่ละ section มีบรรยาย/ปฏิบัติการอย่างละ 1 คาบเท่านั้น"
+        />
+      )}
       {errors.invalidIdx.length > 0 && (
         <Alert
           status="danger"
@@ -200,8 +280,23 @@ export default function SectionScheduleEditor({
         <Alert
           status="danger"
           icon={<AlertTriangle size={14} />}
-          title="มีคาบที่ทับซ้อนกันในวันเดียวกัน"
-          description="สอง section คาบเดียวกันเรียนพร้อมกันไม่ได้"
+          title="คาบใน section นี้ทับซ้อนกัน"
+          description={
+            <>
+              <div>ตรวจดู AM/PM ให้ตรง — คาบที่ชนกัน:</div>
+              <ul className="mt-1 list-disc ps-5 space-y-0.5">
+                {errors.overlapIdx.map(i => {
+                  const r = value[i];
+                  return (
+                    <li key={i} className="tabular">
+                      {r.kind === "lab" ? "ปฏิบัติการ" : "บรรยาย"} · {DOW_LABEL[r.day_of_week]}{" "}
+                      {normalizeHM(r.start_time)}–{normalizeHM(r.end_time)}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          }
         />
       )}
     </div>

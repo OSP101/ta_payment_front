@@ -3,10 +3,10 @@ import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarX2, BookPlus, CircleAlert } from "lucide-react";
+import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarX2, BookPlus, CircleAlert, Wallet, ClipboardCheck } from "lucide-react";
 import type { Term } from "../../lib/api";
 import {
-  PageHeader, Panel, StatCard, EmptyState, Chip, Button, SelectField, Alert, type SelectOption,
+  PageHeader, Panel, StatCard, EmptyState, Chip, Button, SelectField, Alert, ProgressBar, type SelectOption,
 } from "../../components/ui";
 import OpenCourseModal from "./OpenCourseModal";
 
@@ -15,6 +15,16 @@ interface TC {
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
+}
+
+interface LecturerCourseStatus {
+  teaching_course_id: string;
+  ta_count: number;
+  hours_pending_approval: number;
+  hours_approved: number;
+  estimated_baht: number;
+  budget_max: number;
+  budget_used: number;
 }
 
 const SEMESTER_LABELS: Record<number, string> = {
@@ -98,6 +108,16 @@ export default function LecturerHome() {
 
   const coursesKey = defaultTerm ? `/teaching-courses?term_id=${defaultTerm}` : null;
   const { data: courses, error: coursesError } = useSWR<TC[]>(coursesKey);
+
+  const overviewKey = defaultTerm ? `/dashboard/lecturer/me?term_id=${defaultTerm}` : null;
+  const { data: overview } = useSWR<LecturerCourseStatus[]>(overviewKey);
+  const overviewById = useMemo(() => {
+    const m = new Map<string, LecturerCourseStatus>();
+    (overview ?? []).forEach(o => m.set(o.teaching_course_id, o));
+    return m;
+  }, [overview]);
+  const totalPending = (overview ?? []).reduce((a, o) => a + o.hours_pending_approval, 0);
+  const totalEstimated = (overview ?? []).reduce((a, o) => a + o.estimated_baht, 0);
 
   function setYear(y: string) {
     const list = byYear.find(([yr]) => String(yr) === y)?.[1] ?? [];
@@ -226,7 +246,7 @@ export default function LecturerHome() {
         </Panel>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <StatCard
               label="ภาคเรียนที่เลือก"
               value={termDisplay || "—"}
@@ -239,9 +259,16 @@ export default function LecturerHome() {
               icon={<BookOpen size={18} />}
             />
             <StatCard
-              label="นักศึกษาลงทะเบียนรวม"
-              value={courses === undefined ? (coursesError ? "—" : "…") : totalStudents}
-              icon={<Users size={18} />}
+              label="รอลงนามอนุมัติ"
+              value={`${totalPending.toFixed(1)} ชม.`}
+              icon={<ClipboardCheck size={18} />}
+              tone={totalPending > 0 ? "warn" : "default"}
+            />
+            <StatCard
+              label="ยอดเงินโดยประมาณ"
+              value={`฿${totalEstimated.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+              icon={<Wallet size={18} />}
+              tone="success"
             />
           </div>
 
@@ -286,30 +313,102 @@ export default function LecturerHome() {
               />
             ) : (
               <ul className="divide-y divide-[var(--hairline)]">
-                {courses.map(c => (
-                  <li key={c.id}>
-                    <Link
-                      href={`/lecturer/courses/${c.id}`}
-                      className="flex items-center gap-4 px-5 py-4 hover:bg-surface-secondary transition-colors group"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
-                        <BookOpen size={18} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold tabular">{c.code}</span>
-                          <span className="text-foreground">{c.name_th}</span>
+                {courses.map(c => {
+                  const ov = overviewById.get(c.id);
+                  const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+                  const hasBudget = !!ov && ov.budget_max > 0;
+                  const pctRaw = hasBudget ? (ov!.budget_used / ov!.budget_max) * 100 : 0;
+                  const pct = Math.round(pctRaw);
+                  const over = pctRaw > 100;
+                  const budgetTone: "success" | "warn" | "danger" =
+                    over || pctRaw >= 90 ? "danger" : pctRaw >= 70 ? "warn" : "success";
+                  const pending = ov?.hours_pending_approval ?? 0;
+                  const hasTa = (ov?.ta_count ?? 0) > 0;
+                  return (
+                    <li key={c.id}>
+                      <Link
+                        href={`/lecturer/courses/${c.id}`}
+                        className="flex items-center gap-4 px-5 py-4 hover:bg-surface-secondary transition-colors group"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
+                          <BookOpen size={18} />
                         </div>
-                        <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
-                          <span>นักศึกษารวม {c.num_students} คน</span>
-                          {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
-                          {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
+                        <div className="min-w-0 flex-1 flex flex-col md:flex-row md:items-center gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-2 flex-wrap">
+                              <span className="font-semibold tabular">{c.code}</span>
+                              <span className="text-foreground truncate">{c.name_th}</span>
+                            </div>
+                            <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
+                              <span>นักศึกษา {c.num_students} คน</span>
+                              {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
+                              {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
+                              {ov && (
+                                <>
+                                  <span>· TA {ov.ta_count} คน</span>
+                                  <span>· อนุมัติ {ov.hours_approved.toFixed(1)} ชม.</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="md:w-56 shrink-0 flex flex-col gap-1.5">
+                            {pending > 0 ? (
+                              <div className="flex md:justify-end">
+                                <Chip tone="warn">
+                                  <span className="inline-flex items-center gap-1">
+                                    <ClipboardCheck size={12} />
+                                    รอลงนาม {pending.toFixed(1)} ชม.
+                                  </span>
+                                </Chip>
+                              </div>
+                            ) : ov && !hasTa ? (
+                              <div className="flex md:justify-end">
+                                <Chip tone="neutral">
+                                  <span className="inline-flex items-center gap-1">
+                                    <Users size={12} />
+                                    ยังไม่มี TA
+                                  </span>
+                                </Chip>
+                              </div>
+                            ) : null}
+
+                            {hasBudget ? (
+                              <div className="w-full">
+                                <div className="flex items-baseline justify-between text-xs">
+                                  <span className="inline-flex items-center gap-1 text-muted">
+                                    <Wallet size={12} /> งบ
+                                  </span>
+                                  <span className="tabular text-foreground">
+                                    <span className={
+                                      budgetTone === "danger" ? "text-danger font-medium"
+                                        : budgetTone === "warn" ? "text-warning font-medium"
+                                        : "font-medium"
+                                    }>
+                                      ฿{fmt(ov!.budget_used)}
+                                    </span>
+                                    <span className="text-muted"> / ฿{fmt(ov!.budget_max)}</span>
+                                  </span>
+                                </div>
+                                <div className="mt-1">
+                                  <ProgressBar value={Math.min(100, pctRaw)} tone={budgetTone} />
+                                </div>
+                                <div className="text-[10px] text-muted text-right mt-0.5 tabular">
+                                  {over ? `เกินงบ ${pct - 100}%` : `${pct}%`}
+                                </div>
+                              </div>
+                            ) : ov ? (
+                              <div className="text-xs text-muted md:text-right italic inline-flex md:justify-end items-center gap-1">
+                                <Wallet size={12} /> ยังไม่ตั้งงบ
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                      <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />
-                    </Link>
-                  </li>
-                ))}
+                        <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Panel>

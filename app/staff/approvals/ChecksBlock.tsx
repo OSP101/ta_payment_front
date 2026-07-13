@@ -1,10 +1,14 @@
 "use client";
-import { Check, X } from "lucide-react";
+import { Check, X, AlertTriangle } from "lucide-react";
 
 interface DecisionCheck {
   rule: string;
   ta?: string;
   passed: boolean;
+  // warning=true means "failed, but informational only" — staff should notice
+  // and follow up (e.g. docs not yet approved), but the request itself is not
+  // blocked by it.
+  warning?: boolean;
   message: string;
 }
 
@@ -55,23 +59,31 @@ export function ChecksBlock({ checks }: { checks: DecisionCheck[] }) {
             {RULE_LABEL[rule] ?? rule}
           </div>
           <ul>
-            {list.map((c, i) => (
-              <li
-                key={i}
-                className={
-                  "flex items-start gap-2 px-3 py-1.5 text-xs " +
-                  (c.passed ? "text-emerald-800" : "text-red-800 bg-red-50/40")
-                }
-              >
-                <span className={
-                  "mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full " +
-                  (c.passed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")
-                }>
-                  {c.passed ? <Check size={10} /> : <X size={10} />}
-                </span>
-                <span>{c.message}</span>
-              </li>
-            ))}
+            {list.map((c, i) => {
+              const warn = !c.passed && c.warning;
+              const bad = !c.passed && !c.warning;
+              const rowCls = c.passed
+                ? "text-emerald-800"
+                : warn
+                ? "text-amber-800 bg-amber-50/50"
+                : "text-red-800 bg-red-50/40";
+              const iconCls = c.passed
+                ? "bg-emerald-100 text-emerald-700"
+                : warn
+                ? "bg-amber-100 text-amber-700"
+                : "bg-red-100 text-red-700";
+              return (
+                <li key={i} className={"flex items-start gap-2 px-3 py-1.5 text-xs " + rowCls}>
+                  <span className={"mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full " + iconCls}>
+                    {c.passed ? <Check size={10} /> : warn ? <AlertTriangle size={10} /> : <X size={10} />}
+                  </span>
+                  <span>
+                    {c.message}
+                    {warn && <span className="ml-1 text-[10px] uppercase tracking-wide">· ต้องติดตาม</span>}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </li>
       ))}

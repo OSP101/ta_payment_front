@@ -115,9 +115,10 @@ function validateProfile(p: Profile): string | null {
   if (nid.length !== 13) {
     return "เลขบัตรประชาชนต้องมี 13 หลัก";
   }
-  if (!isValidThaiID(nid)) {
-    return "เลขบัตรประชาชนไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง";
-  }
+  // Note: `isValidThaiID` (mod-11 check-digit) is used only for the field-level
+  // *warning* (see nidChecksumWarn below). It's advisory, not blocking — some
+  // legitimate old IDs / test data don't satisfy the check, and staff review
+  // the physical card copy anyway.
   const bank = findBank(p.bank_name);
   if (!bank) {
     return "โปรดเลือกธนาคารจากรายการ";
@@ -428,11 +429,15 @@ function ProfileStep({
     touched.phone && phoneDigits.length > 0 && phoneDigits.length !== 9 && phoneDigits.length !== 10
       ? `กรอก ${phoneDigits.length} หลัก (ต้องมี 9-10 หลัก)`
       : undefined;
+  // Hard error: length only. The mod-11 mismatch is a soft warning (nidChecksumWarn)
+  // shown as amber hint text — it flags likely typos without blocking save.
   const nidErr =
-    touched.national_id && nidDigits.length > 0
-      ? (nidDigits.length !== 13
-          ? `กรอก ${nidDigits.length}/13 หลัก`
-          : (!isValidThaiID(nidDigits) ? "เลขบัตรประชาชนไม่ถูกต้อง" : undefined))
+    touched.national_id && nidDigits.length > 0 && nidDigits.length !== 13
+      ? `กรอก ${nidDigits.length}/13 หลัก`
+      : undefined;
+  const nidChecksumWarn =
+    touched.national_id && nidDigits.length === 13 && !isValidThaiID(nidDigits)
+      ? "หลักตรวจสอบไม่ตรงกับ 12 หลักแรก — โปรดตรวจว่าพิมพ์ถูกทุกหลัก (บันทึกได้ปกติหากยืนยันว่าถูกต้อง)"
       : undefined;
   const branchCodeErr =
     touched.branch_code && form.branch_code.length > 0 && form.branch_code.length !== 4
@@ -501,7 +506,13 @@ function ProfileStep({
         </FieldGroup>
         <FieldGroup
           label="เลขบัตรประชาชน (13 หลัก)"
-          hint={nidDigits.length > 0 && !nidErr ? `กรอกครบ ${nidDigits.length}/13` : undefined}
+          hint={
+            nidChecksumWarn
+              ? <span className="text-warning">{nidChecksumWarn}</span>
+              : nidDigits.length > 0 && !nidErr
+                ? `กรอกครบ ${nidDigits.length}/13`
+                : undefined
+          }
           error={nidErr}
         >
           <TextInput value={form.national_id}
@@ -575,6 +586,20 @@ function ProfileStep({
           />
         </FieldGroup>
       </div>
+
+      {/* Inline error summary — pinned right above the save button so users
+          don't need to hunt for a top-right toast when a field is missing.
+          Only shown after the user has interacted with at least one field. */}
+      {formErr && Object.values(touched).some(Boolean) && (
+        <div className="mt-4">
+          <Alert
+            status="danger"
+            icon={<AlertTriangle size={16} />}
+            title="กรอกข้อมูลไม่ครบถ้วน"
+            description={formErr}
+          />
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 items-center mt-4 pt-4 border-t border-[var(--hairline)]">
         <Button variant="primary" onClick={save} disabled={saving} isPending={saving}>

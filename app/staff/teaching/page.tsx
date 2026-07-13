@@ -222,7 +222,7 @@ function NumStudentsEditor({
 
 interface Budget {
   per_course_max: number; used_baht: number; remaining_baht: number;
-  over_budget: boolean; hours_cap: number;
+  over_budget: boolean;
 }
 function BudgetBadge({ id }: { id: string }) {
   const { data } = useSWR<Budget>(`/teaching-courses/${id}/budget`);
@@ -230,7 +230,7 @@ function BudgetBadge({ id }: { id: string }) {
   const tone = data.over_budget ? "danger" : data.remaining_baht < data.per_course_max * 0.1 ? "warn" : "success";
   return (
     <Chip tone={tone}>
-      {data.used_baht.toFixed(0)}/{data.per_course_max.toFixed(0)} บ. · {data.hours_cap} ชม.
+      {data.used_baht.toFixed(0)}/{data.per_course_max.toFixed(0)} บ.
     </Chip>
   );
 }
