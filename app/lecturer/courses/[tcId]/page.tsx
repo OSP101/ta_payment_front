@@ -10,6 +10,7 @@ import { ApiError } from "../../../lib/api";
 import {
   PageHeader, Panel, Button, Chip, EmptyState, Alert, ProgressBar,
 } from "../../../components/ui";
+import { CourseSubmissionPanel } from "../../../components/CourseSubmissionPanel";
 import { type TARequestRow } from "../../RequestsTable";
 
 interface Section {
@@ -61,6 +62,11 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
 
   const regularSecs = (course?.sections ?? []).filter(s => s.track === "regular").length;
   const specialSecs = (course?.sections ?? []).filter(s => s.track === "special").length;
+
+  // จำนวน TA จริงในรายวิชา = รวม TA จากคำขอที่อนุมัติแล้ว (ไม่ใช่จำนวนสูงสุดที่งบรองรับ)
+  const approvedTaCount = courseReqs
+    .filter(r => r.status === "approved")
+    .reduce((sum, r) => sum + (r.ta_count ?? 0), 0);
 
   return (
     <div>
@@ -130,6 +136,12 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
                   ({regularSecs} ปกติ / {specialSecs} พิเศษ)
                 </span>
               </InfoItem>
+              <Divider />
+              <InfoItem label="TA ในรายวิชา">
+                <span className="text-lg font-semibold tabular-nums">{approvedTaCount}</span>
+                <span className="text-muted ml-1">คน</span>
+                <span className="text-xs text-muted ml-2">(อนุมัติแล้ว)</span>
+              </InfoItem>
               {budget && (
                 <>
                   <Divider />
@@ -138,17 +150,6 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
                     <span className="text-xs text-muted ml-2">
                       (Lec {budget.lecture_credits} / Lab {budget.lab_credits})
                     </span>
-                  </InfoItem>
-                  <Divider />
-                  <InfoItem label="จำนวน TA">
-                    <span className="text-lg font-semibold tabular-nums">
-                      {budget.suggested_tas.undergrad}
-                    </span>
-                    <span className="text-xs text-muted ml-1">ตรี</span>
-                    <span className="text-lg font-semibold tabular-nums ml-2">
-                      {budget.suggested_tas.graduate}
-                    </span>
-                    <span className="text-xs text-muted ml-1">บัณฑิต</span>
                   </InfoItem>
                 </>
               )}
@@ -176,6 +177,11 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
             <BudgetStatusCard tcId={tcId} budget={budget} />
             <RequestStatusCard tcId={tcId} counts={reqCounts} total={courseReqs.length} />
             <ReportStatusCard tcId={tcId} count={pendingReports.length} loading={pending === undefined} />
+          </div>
+
+          {/* Monthly reimbursement status, grouped per TA */}
+          <div className="mb-4">
+            <CourseSubmissionPanel tcId={tcId} role="lecturer" />
           </div>
 
           {/* Sections — compact inline chips */}
@@ -284,7 +290,7 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
     return (
       <StatusCardShell
         icon={<Wallet size={16} />}
-        title="งบประมาณ"
+        title="งบประมาณโดยประมาณ"
         href={`/lecturer/courses/${tcId}/budget`}
         hrefLabel="คำนวณงบ / ดูรายละเอียด"
       >
@@ -301,7 +307,7 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
   return (
     <StatusCardShell
       icon={<Wallet size={16} />}
-      title="งบประมาณ"
+      title="งบประมาณโดยประมาณ"
       tone={tone}
       href={`/lecturer/courses/${tcId}/budget`}
       hrefLabel="คำนวณงบ / ดูรายละเอียด"
@@ -332,6 +338,7 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
           ฿{budget.remaining_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>
       </div>
+      <div className="text-[11px] text-muted mt-1">ตัวเลขโดยประมาณ (ไม่แน่นอน)</div>
     </StatusCardShell>
   );
 }

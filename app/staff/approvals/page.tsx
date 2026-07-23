@@ -3,7 +3,7 @@ import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2, XCircle, ChevronDown, Users, BookOpenCheck, FileCheck2, CalendarCheck2,
-  ShieldCheck, ShieldAlert, ClipboardList, Cpu,
+  ShieldCheck, ShieldAlert, ClipboardList,
 } from "lucide-react";
 import { Accordion } from "@heroui/react";
 import { type Term } from "../../lib/api";
@@ -210,27 +210,12 @@ export default function TARequestsPage() {
 
 function RequestHeader({ req }: { req: RequestSummary }) {
   const meta = STATUS_META[req.status] ?? { tone: "neutral" as const, label: req.status };
-  const isSystem = req.decided_by == null;
-  const when = req.decided_at ?? req.submitted_at;
   return (
     <div className="flex flex-1 flex-wrap items-center gap-2 pr-2 text-left">
       <Chip tone={meta.tone}>{meta.label}</Chip>
       <span className="font-semibold tabular-nums">{req.course_code}</span>
       <span className="text-(--ink-2) truncate max-w-[24rem]">{req.course_name}</span>
       <span className="text-xs text-(--ink-3)">อ. {req.lecturer_name}</span>
-      <Chip tone="neutral"><Users size={12} /> TA {req.ta_count}</Chip>
-      {when && (
-        <span className="ml-auto text-xs text-(--ink-3) whitespace-nowrap">
-          {isSystem ? (
-            <span className="inline-flex items-center gap-1">
-              <Cpu size={11} /> ระบบตัดสิน
-            </span>
-          ) : "พิจารณาเมื่อ"} {new Date(when).toLocaleString("th-TH", {
-            year: "numeric", month: "short", day: "numeric",
-            hour: "2-digit", minute: "2-digit",
-          })}
-        </span>
-      )}
     </div>
   );
 }
@@ -260,12 +245,34 @@ function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) 
         )}
       </div>
 
-      <section>
-        <h4 className="text-xs font-semibold text-(--ink-2) mb-2 flex items-center gap-1.5">
-          <ClipboardList size={13} /> การตรวจสอบของระบบ
-        </h4>
-        <ChecksBlock checks={checks} />
-      </section>
+      {/* The full per-TA checklist is long, so collapse it into an accordion.
+          Default-collapsed when everything passed (the banner above already says
+          so); auto-expanded when there's a blocker/warning so the officer sees
+          why without an extra click. */}
+      <Accordion
+        defaultExpandedKeys={allPass ? [] : ["checks"]}
+        className="w-full rounded-md border border-(--hairline) overflow-hidden"
+      >
+        <Accordion.Item id="checks">
+          <Accordion.Heading>
+            <Accordion.Trigger className="flex items-center gap-1.5 w-full px-3 py-2 text-xs font-semibold text-(--ink-2)">
+              <ClipboardList size={13} /> การตรวจสอบของระบบ
+              <span className={
+                "ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium " +
+                (allPass ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")
+              }>
+                {passCount}/{checks.length}
+              </span>
+              <Accordion.Indicator className="ml-auto" />
+            </Accordion.Trigger>
+          </Accordion.Heading>
+          <Accordion.Panel>
+            <Accordion.Body className="px-3 pb-3">
+              <ChecksBlock checks={checks} />
+            </Accordion.Body>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
 
       <section>
         <h4 className="text-xs font-semibold text-(--ink-2) mb-2 flex items-center gap-1.5">

@@ -1,7 +1,7 @@
 "use client";
 import useSWR from "swr";
 import { useMemo } from "react";
-import { PageHeader, Chip } from "../../components/ui";
+import { PageHeader, Chip, TipWrap } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 
 interface Row {
@@ -43,9 +43,9 @@ function buildColumns(resolveActor: (id: string) => string | null): DataColumn<R
               ? <Chip tone="neutral">{ROLE_LABEL[r.actor_role] ?? r.actor_role}</Chip>
               : <span className="text-(--ink-4)">-</span>}
             {r.actor_id && (
-              <span className="ml-2 text-(--ink-3) font-mono" title={r.actor_id}>
+              <TipWrap content={r.actor_id} className="ml-2 text-(--ink-3) font-mono">
                 {name ?? r.actor_id.slice(0, 8)}
-              </span>
+              </TipWrap>
             )}
           </span>
         );

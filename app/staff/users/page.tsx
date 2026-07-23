@@ -9,6 +9,7 @@ import {
 } from "@heroui/react";
 import { Check, Copy, KeyRound, Pencil, Plus, UserCheck, UserX } from "lucide-react";
 import { api } from "../../lib/api";
+import { THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
 import {
   Alert, Button, Chip, FieldGroup, Modal,
@@ -33,7 +34,8 @@ interface User {
   account_no?: string | null;
 }
 
-const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว", "อาจารย์", "อ. ดร.", "ดร. ผศ.", "ดร. รศ.", "ดร. ศ."];
+// ตำแหน่งทางวิชาการนำหน้าคุณวุฒิเสมอ (เช่น "รศ. ดร." ไม่ใช่ "ดร. รศ.")
+const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว", "อาจารย์", "อ. ดร.", "ผศ. ดร.", "รศ. ดร.", "ศ. ดร."];
 const STUDY_LEVELS: { value: string; label: string }[] = [
   { value: "undergrad", label: "ปริญญาตรี" },
   { value: "master", label: "ปริญญาโท" },
@@ -81,10 +83,13 @@ function vName(v: string, label: string): string | null {
 function vPhone(v: string): string | null {
   const s = v.trim();
   if (!s) return null;
-  if (!/^[0-9\-+ ()]{6,20}$/.test(s)) return "รูปแบบเบอร์โทรไม่ถูกต้อง";
-  const digits = s.replace(/\D/g, "");
-  if (digits.length < 9 || digits.length > 12) return "เบอร์โทรควรมี 9–12 หลัก";
+  // เบอร์โทรศัพท์ไทย: ตัวเลข 10 หลัก ขึ้นต้นด้วย 0
+  if (!/^0\d{9}$/.test(s)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก (ขึ้นต้นด้วย 0)";
   return null;
+}
+/** เก็บเฉพาะตัวเลข ตัดให้เหลือไม่เกิน 10 หลัก — ใช้กับช่องเบอร์โทร */
+function onlyPhoneDigits(v: string): string {
+  return v.replace(/\D/g, "").slice(0, 10);
 }
 function vAccountNo(v: string): string | null {
   const s = v.trim();
@@ -335,7 +340,7 @@ export default function UsersPage() {
 
 function CreateUserModal({ open, onClose, existingEmails }: { open: boolean; onClose: () => void; existingEmails: string[] }) {
   const [form, setForm] = useState({
-    email: "", title: "นาย", first_name: "", last_name: "",
+    email: "", title: "นาย", first_name: "", last_name: "", phone: "",
     role: "ta", study_level: "undergrad", study_year: "",
   });
   const [showErrors, setShowErrors] = useState(false);
@@ -345,7 +350,7 @@ function CreateUserModal({ open, onClose, existingEmails }: { open: boolean; onC
 
   useEffect(() => {
     if (open) {
-      setForm({ email: "", title: "นาย", first_name: "", last_name: "", role: "ta", study_level: "undergrad", study_year: "" });
+      setForm({ email: "", title: "นาย", first_name: "", last_name: "", phone: "", role: "ta", study_level: "undergrad", study_year: "" });
       setErr(null); setTempPassword(null); setShowErrors(false);
     }
   }, [open]);
@@ -362,6 +367,7 @@ function CreateUserModal({ open, onClose, existingEmails }: { open: boolean; onC
     last_name: vName(form.last_name, "นามสกุล"),
     role: vSelect(form.role, ROLE_OPTIONS),
     study_level: form.role === "ta" ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
+    phone: vPhone(form.phone),
   }), [form, existingEmails]);
   const hasErrors = Object.values(errors).some(Boolean);
 
@@ -375,6 +381,7 @@ function CreateUserModal({ open, onClose, existingEmails }: { open: boolean; onC
         title: form.title,
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
+        phone: form.phone.trim() || undefined,
         roles: [form.role],
         study_level: form.role === "ta" ? form.study_level : undefined,
         study_year: showYear && form.study_year ? Number(form.study_year) : undefined,
@@ -431,6 +438,10 @@ function CreateUserModal({ open, onClose, existingEmails }: { open: boolean; onC
               error={errors.last_name} show={showErrors}
             />
           </div>
+          <VField label="เบอร์โทรศัพท์" type="tel" placeholder="0812345678"
+            value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v) })}
+            error={errors.phone} show={showErrors}
+          />
           <div className="grid grid-cols-2 gap-3">
             <VSelect label="สิทธิ์การใช้งาน" value={form.role}
               onChange={v => setForm({ ...form, role: v })}
@@ -490,6 +501,10 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // ธนาคารเลือกจากรายการมาตรฐาน; "อื่นๆ" เปิดช่องพิมพ์เองสำหรับธนาคารที่ไม่มีในรายการ
+  const [bankCustom, setBankCustom] = useState(
+    () => !!(user.bank_name && !THAI_BANKS.some(b => b.name === user.bank_name)),
+  );
 
   const isTa = form.roles.includes("ta");
   const errors = useMemo(() => ({
@@ -604,8 +619,8 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                   <option value="4">ปี 4</option>
                 </VSelect>
               )}
-              <VField label="เบอร์โทร" placeholder="0812345678"
-                value={form.phone} onChange={v => setForm({ ...form, phone: v })}
+              <VField label="เบอร์โทรศัพท์" type="tel" placeholder="0812345678"
+                value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v) })}
                 error={errors.phone} show={showErrors}
               />
             </div>
@@ -615,15 +630,33 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         <div>
           <div className="text-xs text-muted mb-2">ข้อมูลบัญชีธนาคาร</div>
           <div className="grid grid-cols-2 gap-3">
-            <VField label="ธนาคาร" value={form.bank_name}
-              onChange={v => setForm({ ...form, bank_name: v })}
-              error={null} show={showErrors}
-            />
+            <div>
+              <VSelect label="ธนาคาร"
+                value={bankCustom ? "__other__" : form.bank_name}
+                onChange={v => {
+                  if (v === "__other__") { setBankCustom(true); setForm({ ...form, bank_name: "" }); }
+                  else { setBankCustom(false); setForm({ ...form, bank_name: v }); }
+                }}
+                error={null} show={showErrors}
+              >
+                <option value="">— เลือกธนาคาร —</option>
+                {THAI_BANKS.map(b => <option key={b.code} value={b.name}>{b.name}</option>)}
+                <option value="__other__">อื่นๆ (ระบุเอง)</option>
+              </VSelect>
+              {bankCustom && (
+                <div className="mt-2">
+                  <VField label="ระบุชื่อธนาคาร" placeholder="ชื่อธนาคาร"
+                    value={form.bank_name} onChange={v => setForm({ ...form, bank_name: v })}
+                    error={null} show={showErrors}
+                  />
+                </div>
+              )}
+            </div>
             <VField label="เลขที่บัญชี" value={form.account_no}
               onChange={v => setForm({ ...form, account_no: v })}
               error={errors.account_no} show={showErrors}
             />
-            <VField label="รหัสสาขา" value={form.branch_code}
+            <VField label="รหัสสาขาธนาคาร" value={form.branch_code}
               onChange={v => setForm({ ...form, branch_code: v })}
               error={errors.branch_code} show={showErrors}
             />

@@ -3,37 +3,32 @@ import useSWR, { mutate } from "swr";
 import { useMemo, useState } from "react";
 import { Tabs, SearchField, InputGroup, Label, TextField, FieldError } from "@heroui/react";
 import {
-  Clock, CheckCircle2, XCircle, Download, Clock3, Trash2, Eye, EyeOff, Shield,
+  Clock, CheckCircle2, Download, Clock3, Trash2, Eye, EyeOff, Shield,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, StatusChip, Spinner, Alert, TabLabel, Modal, Chip,
+  PageHeader, Panel, Button, IconButton, StatusChip, Spinner, Alert, TabLabel, Modal, Chip,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { ReviewRow } from "./ReviewRow";
 import { PreviewDrawer } from "./PreviewDrawer";
 import { DOC_KIND_LABEL, fmtDate, daysUntil, type Pending, type Doc } from "./types";
 
-type Bucket = "pending" | "approved" | "rejected";
+type Bucket = "pending" | "approved";
 
 const BUCKETS: { id: Bucket; label: string; icon: React.ReactNode }[] = [
   { id: "pending",  label: "รอตรวจ",     icon: <Clock size={14} /> },
   { id: "approved", label: "อนุมัติแล้ว", icon: <CheckCircle2 size={14} /> },
-  { id: "rejected", label: "ปฏิเสธ",     icon: <XCircle size={14} /> },
 ];
 
 export default function ReviewPage() {
   const [bucket, setBucket] = useState<Bucket>("pending");
   const pending  = useSWR<Pending[]>("/ta-review?status=pending");
   const approved = useSWR<Pending[]>("/ta-review?status=approved");
-  const rejected = useSWR<Pending[]>("/ta-review?status=rejected");
-  const byBucket = { pending, approved, rejected } as const;
-  const current = byBucket[bucket];
   const counts = {
     pending:  pending.data?.length ?? 0,
     approved: approved.data?.length ?? 0,
-    rejected: rejected.data?.length ?? 0,
   };
 
   // Drawer preview state — a single doc from a single user at a time.
@@ -48,14 +43,13 @@ export default function ReviewPage() {
   function revalidateAll() {
     mutate("/ta-review?status=pending");
     mutate("/ta-review?status=approved");
-    mutate("/ta-review?status=rejected");
   }
 
   return (
     <div>
       <PageHeader
         title="ตรวจสอบเอกสาร TA"
-        description="ดูข้อมูลและเอกสารทั้งหมดของ TA ในแถวเดียว — กด 'อนุมัติทั้งชุด' หรือปฏิเสธพร้อมเหตุผลได้ทันที"
+        description="กดที่ชื่อ TA เพื่อดูรายละเอียด — ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่อผ่านครบทุกไฟล์จึงยืนยันอนุมัติผู้ใช้"
       />
 
       <Panel padded={false}>
@@ -94,15 +88,6 @@ export default function ReviewPage() {
               onRetry={() => approved.mutate()}
               bucket="approved"
               onRedownload={u => setRedownloadFor(u)}
-            />
-          </Tabs.Panel>
-          <Tabs.Panel id="rejected">
-            <DecidedTable
-              data={rejected.data}
-              loading={rejected.isLoading}
-              error={rejected.error}
-              onRetry={() => rejected.mutate()}
-              bucket="rejected"
             />
           </Tabs.Panel>
         </Tabs>
@@ -214,7 +199,6 @@ function DecidedTable({
   const emptyText = {
     pending:  "ไม่มีเอกสารที่รอตรวจ",
     approved: "ยังไม่มีรายการที่อนุมัติ",
-    rejected: "ยังไม่มีรายการที่ถูกปฏิเสธ",
   }[bucket];
 
   const columns: DataColumn<Pending>[] = [
@@ -414,15 +398,14 @@ function RedownloadModal({
                 onKeyDown={e => { if (e.key === "Enter") submit(); }}
               />
               <InputGroup.Suffix className="pr-0">
-                <Button
+                <IconButton
                   variant="ghost"
                   size="sm"
-                  isIconOnly
                   onClick={() => setShowPw(v => !v)}
-                  aria-label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                  label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
                 >
                   {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-                </Button>
+                </IconButton>
               </InputGroup.Suffix>
             </InputGroup>
             {err && <FieldError>{err}</FieldError>}

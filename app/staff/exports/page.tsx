@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import useSWR, { mutate } from "swr";
-import { Download, Package, Lock, CheckCircle2, AlertTriangle, History, FileSignature } from "lucide-react";
+import useSWR from "swr";
+import { useRouter } from "next/navigation";
+import { Package, CheckCircle2, AlertTriangle, History, FileSignature, ChevronRight } from "lucide-react";
 import { api, errMessage, type Term } from "../../lib/api";
 import { notify } from "../../lib/notify";
-import { PageHeader, Panel, Button, Select, EmptyState, Chip, ConfirmDialog, TextInput } from "../../components/ui";
+import { PageHeader, Panel, Button, Select, EmptyState, Chip, ConfirmDialog, TextInput, DatePicker } from "../../components/ui";
 
 interface TC { id: string; code: string; name_th: string; num_students: number; exported_at?: string | null; }
 
@@ -35,6 +36,7 @@ interface ExportBatch {
 type Tab = "package" | "appointment";
 
 export default function ExportsPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("package");
   const { data: terms } = useSWR<Term[]>("/terms");
   const [termId, setTermId] = useState<string>("");
@@ -46,23 +48,8 @@ export default function ExportsPage() {
   const summaryKey = termId ? `/exports/summary?term_id=${termId}` : null;
   const { data: summary } = useSWR<CourseSummary[]>(summaryKey);
 
-  // Course pending export confirmation. The ZIP export permanently locks the
-  // course from further edits, so we gate the download behind a warning.
-  const [confirmTarget, setConfirmTarget] = useState<TC | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  // Clicking a course opens its workspace (view/edit worklog + verify + export).
   const [historyFor, setHistoryFor] = useState<string | null>(null);
-
-  function startExport() {
-    if (!confirmTarget) return;
-    setDownloading(true);
-    window.location.href = `/api/v1/exports/course/${confirmTarget.id}.zip`;
-    setTimeout(() => {
-      if (coursesKey) mutate(coursesKey);
-      if (summaryKey) mutate(summaryKey);
-      setDownloading(false);
-      setConfirmTarget(null);
-    }, 1200);
-  }
 
   // Merge summary onto courses so a single row shows exportable status +
   // budget snapshot. courses is the source of truth; summary is enrichment.
@@ -105,9 +92,9 @@ export default function ExportsPage() {
                   <th className="text-left px-3 py-2">วิชา</th>
                   <th className="text-right px-3 py-2">งบ / ใช้ไปแล้ว</th>
                   <th className="text-right px-3 py-2">คงเหลือ</th>
-                  <th className="text-left px-3 py-2">TA</th>
-                  <th className="text-left px-3 py-2">เดือนที่ยัง pending</th>
-                  <th className="text-right px-3 py-2">Actions</th>
+                  <th className="text-center px-3 py-2">TA</th>
+                  <th className="text-left px-3 py-2">ส่งออกล่าสุด</th>
+                  <th className="text-right px-3 py-2">การดำเนินการ</th>
                 </tr>
               </thead>
               <tbody>
@@ -115,7 +102,11 @@ export default function ExportsPage() {
                   const s = summaryById.get(c.id);
                   const exported = !!c.exported_at;
                   return (
-                    <tr key={c.id} className="border-t border-hairline">
+                    <tr
+                      key={c.id}
+                      className="border-t border-hairline cursor-pointer hover:bg-surface-secondary transition-colors"
+                      onClick={() => router.push(`/staff/exports/${c.id}`)}
+                    >
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-8 h-8 rounded-lg bg-[var(--brand-soft)] text-[var(--brand)] flex items-center justify-center shrink-0">
@@ -143,24 +134,24 @@ export default function ExportsPage() {
                           )
                         ) : "—"}
                       </td>
-                      <td className="px-3 py-2">{s?.ta_count ?? 0}</td>
-                      <td className="px-3 py-2">
-                        {s?.pending_months && s.pending_months.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {s.pending_months.map(m => (
-                              <Chip key={m} tone="warn">{m}</Chip>
-                            ))}
-                          </div>
+                      <td className="px-3 py-2 text-center tabular">{s?.ta_count ?? 0}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {exported ? (
+                          <Chip tone="success"><CheckCircle2 size={11} /> ส่งออกแล้ว</Chip>
                         ) : (
-                          <Chip tone="success"><CheckCircle2 size={11} /> ครบ</Chip>
+                          <span className="text-ink-3">ยังไม่ส่งออก</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <Button variant="ghost" size="sm" onClick={() => setHistoryFor(c.id)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={e => { e.stopPropagation(); setHistoryFor(c.id); }}
+                        >
                           <History size={12} />ประวัติ
                         </Button>
-                        <Button variant="secondary" size="sm" onClick={() => setConfirmTarget(c)}>
-                          {exported ? <Download size={12} /> : <Lock size={12} />} ZIP
+                        <Button variant="primary" size="sm" onClick={() => router.push(`/staff/exports/${c.id}`)}>
+                          เปิด <ChevronRight size={12} />
                         </Button>
                       </td>
                     </tr>
@@ -173,31 +164,9 @@ export default function ExportsPage() {
       </Panel>
 
       <p className="text-xs text-[var(--ink-3)]">
-        แต่ละไฟล์ .xlsx ในซิปมี 3 sheet (หน้าปะ / บันทึกเวลา / ตารางสอน+งาน) พร้อม .pdf ตามประกาศ — folder ตั้งชื่อตาม convention รหัสวิชา/ชื่อ TA
+        คลิกที่วิชาเพื่อเปิดหน้าจัดการ — ดู/แก้ไขบันทึกเวลา ตรวจสอบยอดเบิกจ่าย และส่งออก ZIP (การส่งออกจะล็อกเดือนที่อนุมัติครบ)
       </p>
       </>)}
-
-      <ConfirmDialog
-        open={!!confirmTarget}
-        onClose={() => setConfirmTarget(null)}
-        onConfirm={startExport}
-        isPending={downloading}
-        danger={!confirmTarget?.exported_at}
-        icon={<Lock size={20} />}
-        title="ยืนยันการส่งออก ZIP"
-        confirmLabel="ส่งออกและดาวน์โหลด"
-        message={
-          confirmTarget?.exported_at ? (
-            <p className="text-sm text-muted">
-              รายวิชานี้ถูกส่งออก (ล็อก) ไปแล้ว — ดาวน์โหลดซ้ำได้โดยไม่มีผลกระทบเพิ่มเติม
-            </p>
-          ) : (
-            <p className="text-sm text-muted">
-              การส่งออกจะล็อกรายวิชานี้ ไม่สามารถแก้ไข section/ตารางได้อีก การกระทำนี้ย้อนกลับไม่ได้
-            </p>
-          )
-        }
-      />
 
       {historyFor && (
         <HistoryDialog tcId={historyFor} onClose={() => setHistoryFor(null)} />
@@ -229,18 +198,36 @@ interface AdminOfficer {
   is_active: boolean;
 }
 
+const THAI_MONTHS = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+// Preview how the backend will render an ISO date in Thai government style
+// (day + Thai month + Buddhist-era year). withEra adds "พ.ศ.".
+function thaiDatePreview(iso: string, withEra: boolean): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return "";
+  const [, y, mo, d] = m;
+  const month = THAI_MONTHS[Number(mo) - 1];
+  const beYear = Number(y) + 543;
+  return `${Number(d)} ${month} ${withEra ? "พ.ศ. " : ""}${beYear}`;
+}
+
 function AppointmentSection({ termId }: { termId: string }) {
   const { data: officers } = useSWR<AdminOfficer[]>("/settings/admin-officers");
-  const [orderNo, setOrderNo] = useState("");
-  const [orderDate, setOrderDate] = useState("");
-  const [effectiveDate, setEffectiveDate] = useState("");
+  // Order number is "N/YYYY" — two fields joined by "/".
+  const [orderNoNum, setOrderNoNum] = useState("");
+  const [orderNoYear, setOrderNoYear] = useState("");
+  const [orderDate, setOrderDate] = useState("");       // ISO YYYY-MM-DD
+  const [effectiveDate, setEffectiveDate] = useState(""); // ISO YYYY-MM-DD
   const [signerId, setSignerId] = useState("");
   const [busy, setBusy] = useState(false);
 
   const deans = (officers ?? []).filter(o => o.is_active);
+  const orderNo = `${orderNoNum.trim()}/${orderNoYear.trim()}`;
 
   async function generate() {
-    if (!orderNo || !orderDate || !effectiveDate || !signerId) {
+    if (!orderNoNum.trim() || !orderNoYear.trim() || !orderDate || !effectiveDate || !signerId) {
       notify.error("กรุณากรอกข้อมูลให้ครบทุกช่อง");
       return;
     }
@@ -256,7 +243,7 @@ function AppointmentSection({ termId }: { termId: string }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `appointment-order-${orderNo}.zip`;
+      a.download = `appointment-order-${orderNoNum.trim()}-${orderNoYear.trim()}.zip`;
       a.click();
       URL.revokeObjectURL(url);
       notify.success("สร้างเอกสารสำเร็จ");
@@ -271,17 +258,39 @@ function AppointmentSection({ termId }: { termId: string }) {
     <Panel className="mb-3">
       <div className="max-w-2xl space-y-3">
         <p className="text-sm text-ink-3">
-          กรอกข้อมูลของคำสั่งแต่งตั้งทีเอ ระบบจะดึงรายชื่อทีเอทั้งหมดที่ได้รับอนุมัติในภาคเรียนนี้ พร้อมสถานะ &quot;เก่า/ใหม่&quot; อัตโนมัติ และสร้าง PDF + DOCX ให้
+          กรอกข้อมูลของคำสั่งแต่งตั้งทีเอ ระบบจะดึงรายชื่อทีเอทั้งหมดที่ได้รับอนุมัติในภาคเรียนนี้ จัดกลุ่มตามระดับการศึกษาและรายวิชา (บัญชีแนบท้าย) ตามรูปแบบคำสั่งของวิทยาลัย และสร้างเป็น PDF + DOCX ให้
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+          {/* คำสั่งที่ — one compact "N / ปี" unit inside a single bordered box */}
           <div>
-            <label className="block text-xs text-ink-2 mb-1">คำสั่งที่ (เลขที่คำสั่ง)</label>
-            <TextInput value={orderNo} onChange={e => setOrderNo(e.target.value)} placeholder="เช่น 6/2569" />
+            <label className="block text-xs text-ink-2 mb-1.5">คำสั่งที่ (เลขที่คำสั่ง)</label>
+            <div className="flex h-9 items-center rounded-lg border border-border bg-surface px-2 focus-within:border-brand transition-colors">
+              <input
+                value={orderNoNum}
+                onChange={e => setOrderNoNum(e.target.value.replace(/\D/g, ""))}
+                placeholder="6"
+                inputMode="numeric"
+                aria-label="เลขที่คำสั่ง"
+                className="w-14 bg-transparent text-center text-sm outline-none"
+              />
+              <span className="text-ink-3 px-1">/</span>
+              <input
+                value={orderNoYear}
+                onChange={e => setOrderNoYear(e.target.value.replace(/\D/g, ""))}
+                placeholder="2569"
+                inputMode="numeric"
+                maxLength={4}
+                aria-label="ปี พ.ศ. ของคำสั่ง"
+                className="flex-1 min-w-0 bg-transparent text-sm outline-none"
+              />
+            </div>
           </div>
+
+          {/* ผู้ลงนาม */}
           <div>
-            <label className="block text-xs text-ink-2 mb-1">ผู้ลงนาม (คณบดี)</label>
-            <Select value={signerId} onChange={e => setSignerId(e.target.value)}>
+            <label className="block text-xs text-ink-2 mb-1.5">ผู้ลงนาม (คณบดี)</label>
+            <Select value={signerId} onChange={e => setSignerId(e.target.value)} className="w-full">
               <option value="">— เลือกผู้ลงนาม —</option>
               {deans.map(o => (
                 <option key={o.id} value={o.id}>
@@ -290,13 +299,23 @@ function AppointmentSection({ termId }: { termId: string }) {
               ))}
             </Select>
           </div>
+
+          {/* วันที่สั่ง */}
           <div>
-            <label className="block text-xs text-ink-2 mb-1">วันที่สั่ง (พ.ศ.)</label>
-            <TextInput value={orderDate} onChange={e => setOrderDate(e.target.value)} placeholder="เช่น 24 มกราคม 2569" />
+            <label className="block text-xs text-ink-2 mb-1.5">วันที่สั่ง</label>
+            <DatePicker value={orderDate} onChange={setOrderDate} label="วันที่สั่ง" className="w-full" />
+            <p className="text-xs text-brand mt-1 h-4">
+              {orderDate && thaiDatePreview(orderDate, true)}
+            </p>
           </div>
+
+          {/* มีผลตั้งแต่วันที่ */}
           <div>
-            <label className="block text-xs text-ink-2 mb-1">วันที่ทำการ (พ.ศ.)</label>
-            <TextInput value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} placeholder="เช่น 24 มกราคม 2569" />
+            <label className="block text-xs text-ink-2 mb-1.5">มีผลตั้งแต่วันที่</label>
+            <DatePicker value={effectiveDate} onChange={setEffectiveDate} label="มีผลตั้งแต่วันที่" className="w-full" />
+            <p className="text-xs text-brand mt-1 h-4">
+              {effectiveDate && thaiDatePreview(effectiveDate, false)}
+            </p>
           </div>
         </div>
 

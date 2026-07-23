@@ -1,4 +1,6 @@
 "use client";
+import { AlertCircle } from "lucide-react";
+import { Tooltip, Button } from "@heroui/react";
 import { Chip } from "../components/ui";
 import { DataTable, type DataColumn } from "../components/DataTable";
 
@@ -12,6 +14,7 @@ export interface TARequestRow {
   submitted_at?: string;
   decided_at?: string;
   ta_count?: number;
+  is_late?: boolean;
 }
 
 const STATUS_MAP: Record<string, { tone: "success" | "warn" | "danger" | "info" | "neutral"; label: string }> = {
@@ -51,7 +54,12 @@ const columns: DataColumn<TARequestRow>[] = [
   {
     id: "status", label: "สถานะ", sortable: true,
     sortValue: r => STATUS_LABEL[r.status] ?? r.status,
-    render: r => <RequestStatusChip status={r.status} />,
+    render: r => (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <RequestStatusChip status={r.status} />
+        {r.is_late && <Chip tone="warn">ล่าช้า</Chip>}
+      </div>
+    ),
   },
   {
     id: "decided_at", label: "วันที่พิจารณา",
@@ -60,8 +68,24 @@ const columns: DataColumn<TARequestRow>[] = [
   },
   {
     id: "reason", label: "หมายเหตุ",
+    className: "w-16 text-center",
     render: r => r.reject_reason
-      ? <span className="text-xs text-red-600">{r.reject_reason}</span>
+      ? (
+        <Tooltip delay={0}>
+          <Button
+            isIconOnly
+            variant="tertiary"
+            size="sm"
+            aria-label="ดูเหตุผล"
+            className="text-red-600 hover:bg-red-50"
+          >
+            <AlertCircle size={16} />
+          </Button>
+          <Tooltip.Content className="max-w-xs text-xs whitespace-pre-line">
+            {r.reject_reason}
+          </Tooltip.Content>
+        </Tooltip>
+      )
       : <span className="text-xs text-muted">-</span>,
   },
 ];

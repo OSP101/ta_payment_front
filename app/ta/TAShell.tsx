@@ -1,5 +1,5 @@
 "use client";
-import { IdCard, CalendarDays, FileText, Bell, Megaphone, CalendarClock } from "lucide-react";
+import { IdCard, CalendarDays, FileText, Bell, Megaphone, CalendarClock, Route } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
@@ -15,6 +15,7 @@ const userMenuItems: UserMenuItem[] = [
   { id: "schedule",  label: "ตารางเรียนของฉัน",   href: "/ta/schedule",      icon: CalendarDays },
   { id: "docs",      label: "เอกสารของฉัน",       href: "/ta/documents",     icon: FileText },
   { id: "reminders", label: "แจ้งเตือนรายเดือน",   href: "/ta/reminders",     icon: CalendarClock },
+  { id: "progress",  label: "ความคืบหน้าเอกสาร",   href: "/document-progress", icon: Route },
   { id: "announce",  label: "ประกาศ",              href: "/announcements",    icon: Megaphone },
   { id: "notif",     label: "การเตือน",           href: "/ta/notifications", icon: Bell },
 ];

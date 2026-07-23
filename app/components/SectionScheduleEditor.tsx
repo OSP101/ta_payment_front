@@ -2,7 +2,7 @@
 import { Plus, Trash2, Clock, AlertTriangle } from "lucide-react";
 import { TimeField, type TimeValue } from "@heroui/react";
 import { Time } from "@internationalized/date";
-import { Button, Select, Alert } from "./ui";
+import { Button, IconButton, Select, Alert } from "./ui";
 
 // Parse "HH:MM" or "HH:MM:SS" into a TimeValue; empty/malformed → null.
 function parseHM(s: string): TimeValue | null {
@@ -238,14 +238,14 @@ export default function SectionScheduleEditor({
                   disabled={disabled}
                   ariaLabel="เวลาสิ้นสุด"
                 />
-                <Button
+                <IconButton
+                  label="ลบคาบ"
                   variant="danger-soft" size="sm"
                   onClick={() => removeRow(i)}
                   disabled={disabled}
-                  aria-label="ลบคาบ"
                 >
                   <Trash2 size={13} />
-                </Button>
+                </IconButton>
               </div>
             );
           })}

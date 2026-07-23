@@ -6,17 +6,17 @@ import {
   AlertTriangle, Save, Upload, Download, CheckCircle2, Circle, XCircle,
   IdCard, Wallet, FileSignature, CreditCard, BookOpen,
 } from "lucide-react";
-import { api } from "../../lib/api";
-import { notify } from "../../lib/notify";
+import { api } from "../../../lib/api";
+import { notify } from "../../../lib/notify";
 import {
   THAI_BANKS, findBank, normalizeAccountNo, normalizeNationalID, STUDENT_ID_PATTERN,
-} from "../../lib/banks";
-import { THAI_PREFIXES, isThaiPrefix } from "../../lib/prefixes";
-import Signature from "../../components/Signature";
+} from "../../../lib/banks";
+import { THAI_PREFIXES, isThaiPrefix } from "../../../lib/prefixes";
+import Signature from "../../../components/Signature";
 import {
   PageHeader, Panel, Button, TextInput, FieldGroup, StatusChip, Alert, Chip,
   SelectField,
-} from "../../components/ui";
+} from "../../../components/ui";
 /* -------------------------------------------------------------------------- */
 /* Upload constraints — enforced in the browser so users get instant feedback  */
 /* and again on the server (see maxDocBytes / kind checks) for real safety.    */

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
+import { Tooltip as HTooltip } from "@heroui/react";
 
 export type BlockKind = "" | "lecture" | "lab";
 
@@ -394,49 +395,61 @@ export default function ScheduleGrid({
                   b.sec_no ? `sec ${b.sec_no}` : "",
                   KIND_LABEL[b.kind],
                 ].filter(Boolean).join(" · ");
+                const tipText = `${heading}${meta ? " · " + meta : ""} · ${b.start_time}–${b.end_time}`;
                 return (
-                  <div
-                    key={b.id}
-                    data-block
-                    onPointerDown={e => startMove(e, b)}
-                    className="absolute rounded-md text-white text-xs overflow-hidden hover:brightness-110 shadow-sm"
-                    style={{
-                      left: pct(startMin / TOTAL_MIN),
-                      width: pct(Math.max(SLOT_MIN, endMin - startMin) / TOTAL_MIN),
-                      top: dayIdx * ROW_PX + 2 + lane * laneH,
-                      height: laneH - 2,
-                      background: "var(--brand)",
-                      cursor: disabled ? "default" : "grab",
-                    }}
-                    title={`${heading}${meta ? " · " + meta : ""} · ${b.start_time}–${b.end_time}`}
-                  >
-                    {/* left resize handle */}
-                    {!disabled && (
-                      <div
-                        data-handle
-                        onPointerDown={e => startResize(e, b, "left")}
-                        className="absolute left-0 top-0 bottom-0 hover:bg-white/20"
-                        style={{ width: EDGE_HANDLE_PX, cursor: "ew-resize" }}
-                        title="ลากเพื่อขยับเวลาเริ่ม"
-                      />
-                    )}
-                    <div className="px-1.5 py-1 pointer-events-none">
-                      <div className="font-medium truncate">{heading}</div>
-                      <div className="opacity-90 tabular-nums text-[10px] leading-tight truncate">
-                        {b.start_time}–{b.end_time}{meta ? " · " + meta : ""}
+                  <HTooltip key={b.id} delay={200}>
+                    <HTooltip.Trigger
+                      data-block
+                      onPointerDown={e => startMove(e, b)}
+                      className="absolute rounded-md text-white text-xs overflow-hidden hover:brightness-110 shadow-sm"
+                      style={{
+                        left: pct(startMin / TOTAL_MIN),
+                        width: pct(Math.max(SLOT_MIN, endMin - startMin) / TOTAL_MIN),
+                        top: dayIdx * ROW_PX + 2 + lane * laneH,
+                        height: laneH - 2,
+                        background: "var(--brand)",
+                        cursor: disabled ? "default" : "grab",
+                      }}
+                    >
+                      {/* left resize handle */}
+                      {!disabled && (
+                        <HTooltip delay={200}>
+                          <HTooltip.Trigger
+                            data-handle
+                            onPointerDown={e => startResize(e, b, "left")}
+                            className="absolute left-0 top-0 bottom-0 hover:bg-white/20"
+                            style={{ width: EDGE_HANDLE_PX, cursor: "ew-resize" }}
+                          />
+                          <HTooltip.Content>
+                            <div className="text-xs">ลากเพื่อขยับเวลาเริ่ม</div>
+                          </HTooltip.Content>
+                        </HTooltip>
+                      )}
+                      <div className="px-1.5 py-1 pointer-events-none">
+                        <div className="font-medium truncate">{heading}</div>
+                        <div className="opacity-90 tabular-nums text-[10px] leading-tight truncate">
+                          {b.start_time}–{b.end_time}{meta ? " · " + meta : ""}
+                        </div>
                       </div>
-                    </div>
-                    {/* right resize handle */}
-                    {!disabled && (
-                      <div
-                        data-handle
-                        onPointerDown={e => startResize(e, b, "right")}
-                        className="absolute right-0 top-0 bottom-0 hover:bg-white/20"
-                        style={{ width: EDGE_HANDLE_PX, cursor: "ew-resize" }}
-                        title="ลากเพื่อขยับเวลาสิ้นสุด"
-                      />
-                    )}
-                  </div>
+                      {/* right resize handle */}
+                      {!disabled && (
+                        <HTooltip delay={200}>
+                          <HTooltip.Trigger
+                            data-handle
+                            onPointerDown={e => startResize(e, b, "right")}
+                            className="absolute right-0 top-0 bottom-0 hover:bg-white/20"
+                            style={{ width: EDGE_HANDLE_PX, cursor: "ew-resize" }}
+                          />
+                          <HTooltip.Content>
+                            <div className="text-xs">ลากเพื่อขยับเวลาสิ้นสุด</div>
+                          </HTooltip.Content>
+                        </HTooltip>
+                      )}
+                    </HTooltip.Trigger>
+                    <HTooltip.Content>
+                      <div className="text-xs">{tipText}</div>
+                    </HTooltip.Content>
+                  </HTooltip>
                 );
               });
             })}

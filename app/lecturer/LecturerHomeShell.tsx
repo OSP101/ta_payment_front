@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar, Button, Dropdown, Label, Link as HLink } from "@heroui/react";
-import { ChevronDown, LogOut, Megaphone } from "lucide-react";
+import { ChevronDown, LogOut, Megaphone, Route } from "lucide-react";
 import type { Me } from "../lib/api";
 import { api } from "../lib/api";
 import NotificationBell from "../components/NotificationBell";
@@ -42,6 +42,11 @@ export default function LecturerHomeShell({
         </div>
 
         <div className="flex-1" />
+
+        <HLink href="/document-progress" className="hidden md:inline-flex text-sm">
+          <Route size={14} className="me-1" />
+          ความคืบหน้าเอกสาร
+        </HLink>
 
         <HLink href="/announcements" className="hidden md:inline-flex text-sm">
           <Megaphone size={14} className="me-1" />

@@ -3,7 +3,7 @@ import { createContext, useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AlertTriangle, ArrowRight } from "lucide-react";
-import { Alert, Button } from "../components/ui";
+import { Alert, Button, TipWrap } from "../components/ui";
 
 // TAApprovalContext lets any TA-scoped component (pages, sidebar bell, etc.)
 // know whether the current user's profile has been approved. It is provided
@@ -43,14 +43,14 @@ export function LockedActionButton({
       {children}
     </Button>
   );
-  // When the lock is due to pending approval, explain why via a native tooltip.
-  // A disabled button doesn't emit hover events, so the title lives on a
-  // wrapping span (which still receives them) and doubles as an aria label.
+  // When the lock is due to pending approval, explain why via a HeroUI tooltip.
+  // A disabled button doesn't emit hover events, so the trigger lives on a
+  // wrapping span (which still receives them).
   if (!approved) {
     return (
-      <span title={LOCKED_REASON} aria-label={LOCKED_REASON} className="inline-flex">
+      <TipWrap content={LOCKED_REASON} className="inline-flex">
         {button}
-      </span>
+      </TipWrap>
     );
   }
   return button;

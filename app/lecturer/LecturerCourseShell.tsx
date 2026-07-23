@@ -1,5 +1,5 @@
 "use client";
-import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell, ShieldAlert } from "lucide-react";
+import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell, ShieldAlert, CalendarOff } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
@@ -25,6 +25,7 @@ export default function LecturerCourseShell({
         { label: "ภาพรวมวิชา", href: `/lecturer/courses/${tcId}`, icon: LayoutDashboard, exact: true },
         { label: "ส่งคำขอ TA", href: `/lecturer/courses/${tcId}/request`, icon: Send },
         { label: "อนุมัติรายงาน TA", href: `/lecturer/courses/${tcId}/reports`, icon: ClipboardCheck },
+        { label: "วันหยุดและวันชดเชย", href: `/lecturer/courses/${tcId}/holidays`, icon: CalendarOff },
         { label: "ตั้งค่ารายวิชา", href: `/lecturer/courses/${tcId}/settings`, icon: Settings },
       ],
     },

@@ -3,11 +3,66 @@ import useSWR from "swr";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, Users, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw, Wallet } from "lucide-react";
-import type { Term } from "../lib/api";
+import { BookOpen, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw, Wallet } from "lucide-react";
+import type { Term } from "../../lib/api";
 import {
   PageHeader, Panel, StatCard, EmptyState, Chip, SelectField, Spinner, Button, type SelectOption, type ChipTone,
-} from "../components/ui";
+} from "../../components/ui";
+type SubmissionStage =
+  | "pending"
+  | "exported"
+  | "finance_sent"
+  | "skipped";
+
+interface SubmissionRow {
+  period_id: string;
+  label: string;
+  year_month: string;        // '2569-06' — Buddhist year + submission month
+  starts_on: string;         // 'YYYY-MM-DD' — window opens (Gregorian)
+  due_date: string;          // 'YYYY-MM-DD'
+  is_closed: boolean;
+  teaching_course_id: string;
+  status: SubmissionStage;
+  // Worklog readiness for the period's month — lets the badge reflect the
+  // daily-approval track instead of showing a bare "รอ TA ยืนยันเวลา" that
+  // contradicts an already-approved (or empty) month.
+  worklog_total: number;
+  worklog_unapproved: number;
+  worklog_approved_hrs: number;
+}
+
+const SUBMISSION_LABEL: Record<SubmissionStage, string> = {
+  pending:      "รอดำเนินการ",
+  exported:     "ส่งออกแล้ว รอส่งการเงิน",
+  finance_sent: "ส่งการเงินแล้ว",
+  skipped:      "ข้ามรอบนี้",
+};
+
+const SUBMISSION_TONE: Record<SubmissionStage, ChipTone> = {
+  pending:      "warn",
+  exported:     "brand",
+  finance_sent: "success",
+  skipped:      "neutral",
+};
+
+// submissionBadge derives the label+tone actually shown for a period. There is
+// no TA "confirm" step anymore — the lecturer's daily worklog approval is the
+// review, then staff export (lock) and send to finance. While a month is still
+// pending we fold in the worklog-approval state so the TA sees what's happening:
+//   pending + window not open yet    → "ยังไม่ถึงรอบ" (neutral — nothing to do)
+//   pending + no worklog in month    → "ไม่มีรายการเดือนนี้" (neutral)
+//   pending + un-approved worklog     → "รออาจารย์อนุมัติงาน" (info)
+//   pending + all approved            → "รอเจ้าหน้าที่ส่งออก" (info — staff's turn)
+// exported / finance_sent keep their own label so the payout progress shows.
+function submissionBadge(r: SubmissionRow, today: string): { label: string; tone: ChipTone } {
+  if (r.status === "pending") {
+    if (r.starts_on > today)      return { label: "ยังไม่ถึงรอบ", tone: "neutral" };
+    if (r.worklog_total === 0)    return { label: "ไม่มีรายการเดือนนี้", tone: "neutral" };
+    if (r.worklog_unapproved > 0) return { label: "รออาจารย์อนุมัติงาน", tone: "info" };
+    return { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
+  }
+  return { label: SUBMISSION_LABEL[r.status], tone: SUBMISSION_TONE[r.status] };
+}
 
 interface TAStatus {
   teaching_course_id: string;
@@ -16,19 +71,6 @@ interface TAStatus {
   hours_pending: number;
   estimated_baht: number;
 }
-
-const STAGE_LABEL: Record<TAStatus["stage"], string> = {
-  draft: "แบบร่าง",
-  submitted: "รออนุมัติ",
-  approved: "อนุมัติแล้ว",
-  exported: "ส่งออกแล้ว",
-};
-const STAGE_TONE: Record<TAStatus["stage"], ChipTone> = {
-  draft: "neutral",
-  submitted: "warn",
-  approved: "success",
-  exported: "brand",
-};
 
 interface TC {
   id: string; code: string; name_th: string;
@@ -127,6 +169,43 @@ export default function TAHome() {
   }, [status]);
   const totalEstimated = (status ?? []).reduce((a, s) => a + s.estimated_baht, 0);
 
+  // Local calendar date (YYYY-MM-DD) to compare against a period's Gregorian
+  // window. Computed once; the badge only needs day-granularity.
+  const today = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+
+  // Per-course monthly submission rows so the home page can show the current
+  // step without the TA having to click into /ta/reminders.
+  const { data: submissions } = useSWR<SubmissionRow[]>("/me/submission-periods");
+  const currentByCourse = useMemo(() => {
+    // Surface the single period a TA most needs to see: the OLDEST month not yet
+    // finished, so signing one month keeps that month on the card (now reading
+    // "รออาจารย์ลงนาม") instead of the card jumping to the next pending month and
+    // looking perpetually stuck. A month whose window hasn't opened is never
+    // actionable, so it only wins when there's nothing open left to do.
+    //   tier 2 — not finished, window open  → the live bottleneck
+    //   tier 1 — not finished, window future → coming up, can't act yet
+    //   tier 0 — finished (finance_sent/skipped)
+    const isDone = (r: SubmissionRow) => r.status === "finance_sent" || r.status === "skipped";
+    const tier = (r: SubmissionRow) => (isDone(r) ? 0 : r.starts_on <= today ? 2 : 1);
+    const key = (r: SubmissionRow) => r.starts_on || r.due_date;
+    // Within a not-finished tier prefer the oldest month; among finished ones
+    // prefer the newest so the card reflects the most recent payout.
+    const better = (r: SubmissionRow, prev: SubmissionRow) => {
+      const tr = tier(r), tp = tier(prev);
+      if (tr !== tp) return tr > tp;
+      return tr === 0 ? key(r) > key(prev) : key(r) < key(prev);
+    };
+    const map = new Map<string, SubmissionRow>();
+    for (const r of submissions ?? []) {
+      const prev = map.get(r.teaching_course_id);
+      if (!prev || better(r, prev)) map.set(r.teaching_course_id, r);
+    }
+    return map;
+  }, [submissions, today]);
+
   function setYear(y: string) {
     const list = byYear.find(([yr]) => String(yr) === y)?.[1] ?? [];
     const nextTerm = list.find(t => t.is_active)?.id ?? list[0]?.id ?? "";
@@ -145,7 +224,6 @@ export default function TAHome() {
   const termsLoaded = terms !== undefined;
   const noTerms = termsLoaded && terms!.length === 0;
 
-  const totalStudents = (courses ?? []).reduce((a, c) => a + (c.num_students ?? 0), 0);
   const activeTerm = yearTerms.find(t => t.id === defaultTerm);
   const termDisplay = activeTerm
     ? `${activeTerm.academic_year}/${activeTerm.semester} — ${SEMESTER_LABELS[activeTerm.semester] ?? ""}`
@@ -210,11 +288,6 @@ export default function TAHome() {
               icon={<BookOpen size={18} />}
             />
             <StatCard
-              label="นักศึกษาลงทะเบียนรวม"
-              value={totalStudents}
-              icon={<Users size={18} />}
-            />
-            <StatCard
               label="ยอดเงินโดยประมาณรวม"
               value={`฿${totalEstimated.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
               icon={<Wallet size={18} />}
@@ -252,10 +325,11 @@ export default function TAHome() {
               <ul className="divide-y divide-[var(--hairline)]">
                 {courses!.map(c => {
                   const st = statusById.get(c.id);
+                  const sub = currentByCourse.get(c.id);
                   return (
                     <li key={c.id}>
                       <Link
-                        href={`/ta/worklog?course=${c.id}`}
+                        href={`/ta/courses/${c.id}`}
                         className="flex items-center gap-4 px-5 py-4 hover:bg-surface-secondary transition-colors group"
                       >
                         <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
@@ -265,7 +339,6 @@ export default function TAHome() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold tabular">{c.code}</span>
                             <span className="text-foreground">{c.name_th}</span>
-                            {st && <Chip tone={STAGE_TONE[st.stage]}>{STAGE_LABEL[st.stage]}</Chip>}
                           </div>
                           <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
                             <span>นักศึกษารวม {c.num_students} คน</span>
@@ -281,6 +354,22 @@ export default function TAHome() {
                               </>
                             )}
                           </div>
+                        </div>
+                        <div className="hidden md:flex flex-col items-end gap-1 w-56 shrink-0">
+                          {sub ? (
+                            <>
+                              {(() => {
+                                const b = submissionBadge(sub, today);
+                                return <Chip tone={b.tone}>{b.label}</Chip>;
+                              })()}
+                              <div className="text-[11px] text-muted text-right truncate max-w-full">
+                                รอบ {sub.label}
+                                {sub.is_closed ? " (ปิดแล้ว)" : ` · ครบกำหนด ${sub.due_date}`}
+                              </div>
+                            </>
+                          ) : (
+                            <Chip tone="neutral">ยังไม่เปิดรอบเบิกจ่าย</Chip>
+                          )}
                         </div>
                         <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />
                       </Link>

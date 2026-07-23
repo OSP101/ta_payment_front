@@ -4,7 +4,7 @@ import useSWR, { mutate } from "swr";
 import { AlertTriangle, Info as InfoIcon, Sparkles, HelpCircle, CircleAlert } from "lucide-react";
 import { Breadcrumbs } from "@heroui/react";
 import { ApiError } from "../../../../lib/api";
-import { PageHeader, Panel, Chip, EmptyState, Alert, Button } from "../../../../components/ui";
+import { PageHeader, Panel, Chip, EmptyState, Alert, Button, IconButton } from "../../../../components/ui";
 import { FormulaHelpModal } from "../../../../components/formula-help";
 
 interface Budget {
@@ -204,9 +204,9 @@ function TrackPanel({
     <Panel
       title={<span className="flex items-center gap-2">{title}<Chip tone={tone}>{students} คน</Chip></span>}
       actions={
-        <Button variant="ghost" size="sm" isIconOnly onClick={onHelp} aria-label="ดูวิธีคิด">
+        <IconButton label="ดูวิธีคิด" variant="ghost" size="sm" onClick={onHelp}>
           <InfoIcon size={16} />
-        </Button>
+        </IconButton>
       }
     >
       <div className="space-y-2 text-sm">

@@ -8,8 +8,10 @@ import {
   ClipboardCheck,
   Wallet,
   ArrowUpRight,
+  AlertTriangle,
 } from "lucide-react";
-import { PageHeader, Panel, StatCard, ProgressBar, Chip } from "../components/ui";
+import { PageHeader, Panel, StatCard, ProgressBar, Chip, Button } from "../components/ui";
+import { type Term } from "../lib/api";
 
 interface Executive {
   total_courses: number;
@@ -20,8 +22,25 @@ interface Executive {
   budget_used: number;
 }
 
+interface TCLite {
+  num_students_regular: number;
+  num_students_special: number;
+  has_special: boolean;
+}
+
 export default function StaffDashboard() {
   const { data } = useSWR<Executive>("/dashboard/executive");
+  // Reminder: courses in the active term whose enrolled student count is still
+  // unfilled. Budget (and export) depend on it, so surface it up front so staff
+  // don't discover it only when an export is blocked.
+  const { data: terms } = useSWR<Term[]>("/terms");
+  const activeTerm = terms?.find(t => t.is_active) ?? terms?.[0];
+  const { data: termCourses } = useSWR<TCLite[]>(
+    activeTerm ? `/teaching-courses?term_id=${activeTerm.id}` : null,
+  );
+  const missingCount = (termCourses ?? []).filter(
+    c => c.num_students_regular === 0 || (c.has_special && c.num_students_special === 0),
+  ).length;
   const s = data ?? {
     total_courses: 0, courses_with_ta: 0, total_tas: 0,
     pending_reviews: 0, budget_allocated: 0, budget_used: 0,
@@ -35,6 +54,18 @@ export default function StaffDashboard() {
         title="แดชบอร์ดผู้ดูแลระบบ"
         description="ภาพรวมการดำเนินงานของระบบ TA Payment"
       />
+
+      {missingCount > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50/70 dark:border-amber-700 dark:bg-amber-950/30 px-4 py-3">
+          <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          <span className="text-sm text-amber-900 dark:text-amber-100">
+            มี <b>{missingCount}</b> วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา — ต้องกรอกก่อนจึงจะส่งออกเอกสารเบิกจ่ายได้ (งบคำนวณจากจำนวนนักศึกษา)
+          </span>
+          <Link href="/staff/teaching" className="ms-auto">
+            <Button variant="primary" size="sm">กรอกจำนวนนักศึกษา</Button>
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
         <StatCard label="วิชาที่เปิดสอน" value={s.total_courses} icon={<BookOpen size={18} />} tone="brand" />
@@ -97,8 +128,8 @@ export default function StaffDashboard() {
         <Panel title="คู่มือระบบ" description="ลิงก์เอกสารและเวิร์กโฟลว์">
           <ul className="space-y-2 text-sm">
             <li className="text-[var(--ink-2)]">• เจ้าหน้าที่นำเข้าตารางสอนจาก Excel → อาจารย์ขอ TA → เจ้าหน้าที่อนุมัติ</li>
-            <li className="text-[var(--ink-2)]">• TA กรอกข้อมูล/เอกสาร → เจ้าหน้าที่ตรวจ → บันทึกเวลา → อาจารย์อนุมัติ</li>
-            <li className="text-[var(--ink-2)]">• สิ้นเทอมส่งออก ZIP แบ่งตามรายวิชาเพื่อเบิกจ่าย</li>
+            <li className="text-[var(--ink-2)]">• TA กรอกข้อมูล/เอกสาร + บันทึกเวลาปฏิบัติงาน → อาจารย์อนุมัติ/ปฏิเสธรายวัน (คือการตรวจจริง — ไม่มีการเซ็นในระบบ)</li>
+            <li className="text-[var(--ink-2)]">• อนุมัติครบ → เจ้าหน้าที่ตรวจสอบและส่งออกไฟล์ ZIP (ล็อกบันทึกเวลาของเดือนนั้น) → ยืนยันส่งการเงิน</li>
           </ul>
         </Panel>
       </div>

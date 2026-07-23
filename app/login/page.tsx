@@ -2,30 +2,33 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Alert,
   Button,
   Card,
   FieldError,
-  Input,
   InputGroup,
   Label,
   Separator,
   Spinner,
   TextField,
 } from "@heroui/react";
-import { LogIn, Eye, EyeOff, Shield, ShieldAlert } from "lucide-react";
+import { LogIn, Eye, EyeOff, Shield } from "lucide-react";
+import { IconButton } from "../components/ui";
 import { api, errMessage, type Me } from "../lib/api";
 import { notify } from "../lib/notify";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const THAI_RE = /[฀-๿]/;
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [touched, setTouched] = useState<{ email: boolean; password: boolean }>({
+    email: false,
+    password: false,
+  });
   const [loading, setLoading] = useState(false);
   const [ssoUrl, setSsoUrl] = useState<string | null>(null);
 
@@ -46,7 +49,6 @@ export default function LoginPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null);
 
     if (fieldErrors.email || fieldErrors.password) {
       setShowErrors(true);
@@ -71,12 +73,7 @@ export default function LoginPage() {
       }
       router.refresh();
     } catch (e) {
-      const msg = errMessage(e);
-      setErr(msg);
-      // A Toast with the specific reason so the user notices even when focus is
-      // elsewhere. 401 = wrong creds; 0/408/5xx carry human-readable Thai
-      // messages from api.ts already.
-      notify.error(msg);
+      notify.error(errMessage(e));
     } finally {
       setLoading(false);
     }
@@ -131,13 +128,25 @@ export default function LoginPage() {
                   type="email"
                   isRequired
                   value={email}
-                  onChange={(v) => { setEmail(v); if (err) setErr(null); }}
-                  isInvalid={showErrors && !!fieldErrors.email}
+                  onChange={setEmail}
+                  onBlur={() => setTouched(t => ({ ...t, email: true }))}
+                  isInvalid={(touched.email || showErrors) && !!fieldErrors.email}
                 >
                   <Label>อีเมล</Label>
-                  <Input placeholder="you@kkumail.com" autoComplete="email" />
-                  {showErrors && fieldErrors.email && (
+                  <InputGroup>
+                    <InputGroup.Input
+                      placeholder="you@kkumail.com"
+                      autoComplete="email"
+                      lang="en"
+                    />
+                  </InputGroup>
+                  {(touched.email || showErrors) && fieldErrors.email && (
                     <FieldError>{fieldErrors.email}</FieldError>
+                  )}
+                  {THAI_RE.test(email) && (
+                    <p className="text-xs text-warning mt-1">
+                      ตรวจพบอักษรไทย — กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN
+                    </p>
                   )}
                 </TextField>
 
@@ -145,43 +154,37 @@ export default function LoginPage() {
                   name="password"
                   isRequired
                   value={password}
-                  onChange={(v) => { setPassword(v); if (err) setErr(null); }}
-                  isInvalid={showErrors && !!fieldErrors.password}
+                  onChange={setPassword}
+                  onBlur={() => setTouched(t => ({ ...t, password: true }))}
+                  isInvalid={(touched.password || showErrors) && !!fieldErrors.password}
                 >
                   <Label>รหัสผ่าน</Label>
                   <InputGroup>
                     <InputGroup.Input
                       type={showPw ? "text" : "password"}
                       autoComplete="current-password"
+                      lang="en"
                     />
                     <InputGroup.Suffix className="pr-0">
-                      <Button
-                        isIconOnly
+                      <IconButton
                         size="sm"
                         variant="ghost"
-                        aria-label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                        label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
                         onPress={() => setShowPw(!showPw)}
                       >
                         {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                      </Button>
+                      </IconButton>
                     </InputGroup.Suffix>
                   </InputGroup>
-                  {showErrors && fieldErrors.password && (
+                  {(touched.password || showErrors) && fieldErrors.password && (
                     <FieldError>{fieldErrors.password}</FieldError>
                   )}
+                  {THAI_RE.test(password) && (
+                    <p className="text-xs text-warning mt-1">
+                      ตรวจพบอักษรไทยในรหัสผ่าน — กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN
+                    </p>
+                  )}
                 </TextField>
-
-                {err && (
-                  <Alert status="danger">
-                    <Alert.Indicator>
-                      <ShieldAlert size={16} />
-                    </Alert.Indicator>
-                    <Alert.Content>
-                      <Alert.Title>เข้าสู่ระบบไม่สำเร็จ</Alert.Title>
-                      <Alert.Description>{err}</Alert.Description>
-                    </Alert.Content>
-                  </Alert>
-                )}
 
                 <Button type="submit" size="lg" fullWidth isPending={loading}>
                   {loading ? <Spinner color="current" size="sm" /> : <LogIn />}

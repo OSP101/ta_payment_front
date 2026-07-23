@@ -2,11 +2,13 @@
 import { use, useEffect, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Breadcrumbs, toast } from "@heroui/react";
-import { Save, Lock, Clock, CircleAlert, ArrowLeft } from "lucide-react";
+import { Save, Lock, Clock, CircleAlert, ArrowLeft, Trash2 } from "lucide-react";
 import { api } from "../../../lib/api";
+import { notify } from "../../../lib/notify";
 import {
-  PageHeader, Panel, Button, Chip, Alert, EmptyState,
+  PageHeader, Panel, Button, Chip, Alert, EmptyState, ConfirmDialog,
 } from "../../../components/ui";
 import SectionScheduleEditor, {
   type SectionScheduleRow, validateRows, toApiPayload, ScheduleSummary,
@@ -35,8 +37,27 @@ interface TC {
 
 export default function StaffTeachingCoursePage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
+  const router = useRouter();
   const { data: tc } = useSWR<TC>(`/teaching-courses/${tcId}`);
   const locked = !!tc?.exported_at;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteCourse() {
+    setDeleting(true);
+    try {
+      await api.del(`/teaching-courses/${tcId}`);
+      await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
+      toast.success("ลบรายวิชาแล้ว");
+      router.push("/staff/teaching");
+    } catch (e) {
+      // Backend returns a clear Thai reason when the course has data.
+      notify.error(e);
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const sortedSecs = [...(tc?.sections ?? [])].sort((a, b) => {
     if (a.track !== b.track) return a.track === "regular" ? -1 : 1;
@@ -99,6 +120,44 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
           </div>
         )}
       </Panel>
+
+      {/* Danger zone — remove a course opened by mistake. The server refuses if
+          the course has any TA / worklog / export data. */}
+      <div className="mt-6 rounded-lg border border-danger/30 bg-danger/5 p-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-danger">ลบรายวิชานี้</div>
+            <div className="text-xs text-muted mt-0.5">
+              ลบได้เฉพาะวิชาที่เปิดผิด/ยังไม่มีข้อมูล — ถ้ามี TA, บันทึกเวลา หรือส่งออกแล้ว ระบบจะไม่ให้ลบ
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            className="ms-auto text-danger hover:bg-danger/10"
+            onClick={() => setConfirmDelete(true)}
+            disabled={deleting}
+          >
+            <Trash2 size={14} /> ลบรายวิชา
+          </Button>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={deleteCourse}
+        isPending={deleting}
+        danger
+        icon={<Trash2 size={20} />}
+        title="ยืนยันการลบรายวิชา"
+        confirmLabel="ลบรายวิชา"
+        message={
+          <p className="text-sm text-muted">
+            จะลบรายวิชา <b>{tc ? `${tc.code} — ${tc.name_th}` : ""}</b> พร้อม section และตารางเวลาทั้งหมด
+            การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
+          </p>
+        }
+      />
     </div>
   );
 }

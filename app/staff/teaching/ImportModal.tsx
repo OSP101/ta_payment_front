@@ -7,7 +7,7 @@ import {
   ChevronRight, Loader2, Info,
 } from "lucide-react";
 import { api } from "../../lib/api";
-import { Modal, Button, Chip, FieldGroup, Alert } from "../../components/ui";
+import { Modal, Button, Chip, FieldGroup, Alert, TipWrap } from "../../components/ui";
 
 interface PreviewCourse {
   code: string;
@@ -303,9 +303,9 @@ function PreviewRow({
         {c.status === "new" && <span className="text-emerald-700">จะสร้าง</span>}
         {c.status === "existing" && <span>ข้าม (มีอยู่แล้ว)</span>}
         {c.status === "missing_catalog" && (
-          <span className="inline-flex items-center gap-1" title={c.note}>
+          <TipWrap content={c.note} className="inline-flex items-center gap-1">
             <Info size={11} /> ข้าม
-          </span>
+          </TipWrap>
         )}
         {c.status === "unmatched_officer" && (
           <div className="inline-flex flex-col gap-0.5">

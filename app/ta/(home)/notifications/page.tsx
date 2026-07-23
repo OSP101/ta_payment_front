@@ -1,5 +1,5 @@
 "use client";
-import NotificationsList from "../../components/NotificationsList";
+import NotificationsList from "../../../components/NotificationsList";
 
 // The approval reminder is intentionally NOT rendered here: the layout-level
 // <TAApprovalBanner> (see ./TAGate) already shows a status-aware banner on this

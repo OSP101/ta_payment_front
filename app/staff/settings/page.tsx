@@ -2,7 +2,7 @@
 import useSWR, { mutate } from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, Power, PowerOff } from "lucide-react";
+import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, CalendarPlus, Power, PowerOff } from "lucide-react";
 import {
   Tabs, Pagination, toast, Accordion, Switch,
   DatePicker, DateField, Calendar, I18nProvider,
@@ -10,8 +10,9 @@ import {
 import { parseDate, parseDateTime, type DateValue } from "@internationalized/date";
 import { api } from "../../lib/api";
 import {
-  PageHeader, Panel, Button, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select,
+  PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select, ConfirmDialog, TipWrap,
 } from "../../components/ui";
+import { RefreshCw } from "lucide-react";
 import { FormulaHelpModal } from "../../components/formula-help";
 
 interface Rate {
@@ -39,15 +40,25 @@ interface Rate {
 }
 interface FC {
   id?: string; code: string; name_th: string; name_en?: string;
+  // "undergrad" (ปริญญาตรี) | "graduate" (บัณฑิตศึกษา) — groups the appointment order.
+  level?: string;
   credits: number; lecture_hrs: number; lab_hrs: number; self_hrs: number; is_active: boolean;
 }
+
+const COURSE_LEVEL_TH: Record<string, string> = {
+  undergrad: "ปริญญาตรี", graduate: "บัณฑิตศึกษา",
+};
 
 export default function SettingsPage() {
   const params = useSearchParams();
   // Allow deep-linking to a specific tab, e.g. /staff/settings?tab=terms
   const tabParam = params.get("tab");
-  const initialTab = ["rate", "courses", "terms", "windows", "periods", "admins"].includes(tabParam ?? "")
-    ? (tabParam as string)
+  // "windows" and "periods" are kept as valid aliases so old deep-links still
+  // land on the merged calendar tab instead of a 404.
+  const rawTab = tabParam ?? "";
+  const normalised = rawTab === "windows" || rawTab === "periods" ? "calendar" : rawTab;
+  const initialTab = ["rate", "courses", "terms", "calendar", "admins"].includes(normalised)
+    ? normalised
     : "rate";
   return (
     <div>
@@ -58,8 +69,7 @@ export default function SettingsPage() {
             <Tabs.Tab id="rate">อัตราค่าตอบแทน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="courses">รายวิชา<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="terms">ภาคเรียน<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="windows">ระยะเวลารับสมัคร TA<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="periods">ระยะเวลาเบิกจ่ายรายเดือน<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="calendar">ปฏิทินเทอม<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
@@ -73,11 +83,11 @@ export default function SettingsPage() {
         <Tabs.Panel id="terms" className="pt-6">
           <TermsSection />
         </Tabs.Panel>
-        <Tabs.Panel id="windows" className="pt-6">
-          <RequestWindowsSection />
-        </Tabs.Panel>
-        <Tabs.Panel id="periods" className="pt-6">
-          <SubmissionPeriodsSection />
+        <Tabs.Panel id="calendar" className="pt-6">
+          <div className="space-y-6">
+            <RequestWindowsSection />
+            <SubmissionPeriodsSection />
+          </div>
         </Tabs.Panel>
         <Tabs.Panel id="admins" className="pt-6">
           <AdminOfficersSection />
@@ -442,7 +452,10 @@ function FacultyCoursesSection() {
                 <tr>
                   <th>รหัส</th>
                   <th>ชื่อ</th>
-                  <th className="tabular" title="หน่วยกิต(บรรยาย-ปฏิบัติ-ศึกษาเอง)">หน่วยกิต (REG)</th>
+                  <th>ระดับ</th>
+                  <th className="tabular">
+                    <TipWrap content="หน่วยกิต(บรรยาย-ปฏิบัติ-ศึกษาเอง)">หน่วยกิต (REG)</TipWrap>
+                  </th>
                   <th>สถานะ</th>
                   <th className="actions" />
                 </tr>
@@ -451,7 +464,15 @@ function FacultyCoursesSection() {
                 {pageItems.map(c => (
                   <tr key={c.id} className={!c.is_active ? "opacity-60" : ""}>
                     <td className="font-medium tabular">{c.code}</td>
-                    <td>{c.name_th}</td>
+                    <td>
+                      <div>{c.name_th}</div>
+                      {c.name_en && <div className="text-xs text-muted">{c.name_en}</div>}
+                    </td>
+                    <td>
+                      <Chip tone={c.level === "graduate" ? "info" : "neutral"}>
+                        {COURSE_LEVEL_TH[c.level ?? "undergrad"]}
+                      </Chip>
+                    </td>
                     <td className="tabular font-medium">
                       {c.credits}({c.lecture_hrs}-{c.lab_hrs}-{c.self_hrs})
                     </td>
@@ -546,7 +567,8 @@ function FacultyCourseFormModal({
 }) {
   const isEdit = editing !== null;
   const empty: FC = {
-    code: "", name_th: "", credits: 3, lecture_hrs: 3, lab_hrs: 0, self_hrs: 6, is_active: true,
+    code: "", name_th: "", name_en: "", level: "undergrad",
+    credits: 3, lecture_hrs: 3, lab_hrs: 0, self_hrs: 6, is_active: true,
   };
   const [draft, setDraft] = useState<FC>(empty);
   const [saving, setSaving] = useState(false);
@@ -584,6 +606,8 @@ function FacultyCourseFormModal({
   const noChange = isEdit && editing &&
     codeTrim === editing.code &&
     nameTrim === editing.name_th &&
+    (draft.name_en ?? "").trim() === (editing.name_en ?? "").trim() &&
+    (draft.level ?? "undergrad") === (editing.level ?? "undergrad") &&
     draft.credits === editing.credits &&
     draft.lecture_hrs === editing.lecture_hrs &&
     draft.lab_hrs === editing.lab_hrs &&
@@ -602,6 +626,8 @@ function FacultyCourseFormModal({
         ...draft,
         code: codeTrim,
         name_th: nameTrim,
+        name_en: (draft.name_en ?? "").trim() || null,
+        level: draft.level ?? "undergrad",
         // In edit mode, keep the existing id so backend does UPDATE (not INSERT).
         ...(isEdit && editing ? { id: editing.id } : {}),
       };
@@ -655,11 +681,32 @@ function FacultyCourseFormModal({
             </FieldGroup>
           </div>
           <div className="col-span-4 sm:col-span-3">
-            <FieldGroup label="ชื่อวิชา (TH)">
+            <FieldGroup label="ชื่อวิชา (ไทย)">
               <TextInput
                 value={draft.name_th}
                 onChange={e => setDraft({ ...draft, name_th: e.target.value })}
-                placeholder="เช่น SOFTWARE TESTING AND QUALITY ASSURANCE"
+                placeholder="เช่น การทดสอบและประกันคุณภาพซอฟต์แวร์"
+              />
+            </FieldGroup>
+          </div>
+          <div className="col-span-4 sm:col-span-1">
+            <FieldGroup label="ระดับที่สอน" hint="ใช้จัดกลุ่มในใบแต่งตั้งทีเอ">
+              <select
+                className="w-full h-9 rounded-lg border border-border bg-surface px-3 text-sm"
+                value={draft.level ?? "undergrad"}
+                onChange={e => setDraft({ ...draft, level: e.target.value })}
+              >
+                <option value="undergrad">ปริญญาตรี</option>
+                <option value="graduate">บัณฑิตศึกษา</option>
+              </select>
+            </FieldGroup>
+          </div>
+          <div className="col-span-4 sm:col-span-3">
+            <FieldGroup label="ชื่อวิชา (อังกฤษ)" hint="สำหรับอาจารย์/ทีเอต่างชาติ และใช้ในใบแต่งตั้งทีเอ">
+              <TextInput
+                value={draft.name_en ?? ""}
+                onChange={e => setDraft({ ...draft, name_en: e.target.value })}
+                placeholder="e.g. Software Testing and Quality Assurance"
               />
             </FieldGroup>
           </div>
@@ -955,6 +1002,10 @@ function TermsSection() {
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
   const [prefillYear, setPrefillYear] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Term | null>(null);
+  // After a successful term save, ask staff whether to pull BOT holidays for
+  // the calendar year(s) the term covers. Null = no prompt open.
+  const [syncPromptFor, setSyncPromptFor] = useState<{ startY: number; endY: number } | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [yearFilter, setYearFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Track whether we've done the initial auto-expand so subsequent data
@@ -1042,13 +1093,50 @@ function TermsSection() {
     setEditingTerm(t);
     setFormOpen(true);
   }
-  function onSavedTerm(label: string, mode: "add" | "edit") {
+  function onSavedTerm(label: string, mode: "add" | "edit", saved: Term) {
     setFormOpen(false);
     // Once a real term exists for that year, drop the pending marker.
     if (prefillYear !== null) {
       setPendingYears(ys => ys.filter(y => y !== prefillYear));
     }
     toast.success(mode === "edit" ? `แก้ไข${label} เรียบร้อยแล้ว` : `เพิ่ม${label} เรียบร้อยแล้ว`);
+    // Prompt to sync BOT holidays for the calendar years this term covers.
+    // Only when we have both dates — an edit that skipped date fields still
+    // has them from `editing`, so this normally always runs.
+    if (saved.starts_on && saved.ends_on) {
+      const startY = new Date(saved.starts_on + "T00:00:00").getFullYear();
+      const endY = new Date(saved.ends_on + "T00:00:00").getFullYear();
+      if (Number.isFinite(startY) && Number.isFinite(endY) && startY <= endY) {
+        setSyncPromptFor({ startY, endY });
+      }
+    }
+  }
+
+  async function handleSyncBOT() {
+    if (!syncPromptFor) return;
+    const { startY, endY } = syncPromptFor;
+    setSyncing(true);
+    try {
+      const res = await api.post<{
+        years: { year: number; fetched: number; inserted: number; updated: number; skipped: number; error?: string }[];
+        total: { fetched: number; inserted: number; updated: number; skipped: number };
+      }>(`/holidays/sync-from-bot?start_year=${startY}&end_year=${endY}`);
+      const failed = res.years.filter(y => y.error);
+      const yearsLabel = res.years.map(y => y.year + 543).join(", ");
+      if (failed.length === 0) {
+        toast.success(
+          `ซิงก์วันหยุดจาก BOT สำเร็จ (ปี พ.ศ. ${yearsLabel}) — เพิ่มใหม่ ${res.total.inserted}, อัปเดต ${res.total.updated}, ข้าม ${res.total.skipped}`,
+        );
+      } else {
+        const failLabel = failed.map(y => `พ.ศ. ${y.year + 543} (${y.error})`).join(", ");
+        toast.danger(`ซิงก์บางส่วนล้มเหลว: ${failLabel} — สำเร็จ: เพิ่ม ${res.total.inserted} / อัปเดต ${res.total.updated}`);
+      }
+      setSyncPromptFor(null);
+    } catch (e) {
+      toast.danger((e as Error).message || "ซิงก์จาก BOT ไม่สำเร็จ");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   return (
@@ -1182,12 +1270,12 @@ function TermsSection() {
                                     </td>
                                     <td className="actions">
                                       <div className="inline-flex gap-1">
-                                        <Button variant="ghost" size="sm" onClick={() => openEdit(t)}>
-                                          <Pencil size={13} />แก้ไข
-                                        </Button>
-                                        <Button variant="danger-soft" size="sm" onClick={() => setDeleteTarget(t)}>
-                                          <Trash2 size={13} />ลบ
-                                        </Button>
+                                        <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => openEdit(t)}>
+                                          <Pencil size={13} />
+                                        </IconButton>
+                                        <IconButton label="ลบ" variant="danger-soft" size="sm" onClick={() => setDeleteTarget(t)}>
+                                          <Trash2 size={13} />
+                                        </IconButton>
                                       </div>
                                     </td>
                                   </tr>
@@ -1246,6 +1334,25 @@ function TermsSection() {
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onDone={label => { setDeleteTarget(null); toast.success(`ลบ${label} เรียบร้อยแล้ว`); }}
+      />
+
+      <ConfirmDialog
+        open={syncPromptFor !== null}
+        onClose={() => setSyncPromptFor(null)}
+        onConfirm={handleSyncBOT}
+        isPending={syncing}
+        icon={<RefreshCw size={18} />}
+        title="ดึงวันหยุดราชการจาก BOT?"
+        confirmLabel="ดึงเลย"
+        cancelLabel="ข้าม"
+        message={
+          syncPromptFor
+            ? `เทอมนี้ครอบคลุมปี พ.ศ. ${syncPromptFor.startY === syncPromptFor.endY
+                ? syncPromptFor.startY + 543
+                : `${syncPromptFor.startY + 543}, ${syncPromptFor.endY + 543}`
+              } — ต้องการดึงวันหยุด (จันทรคติ + วันชดเชย) จากธนาคารแห่งประเทศไทยเลยไหม? ถ้าข้าม สามารถซิงก์ทีหลังได้ที่หน้าจัดการวันหยุด`
+            : ""
+        }
       />
     </Panel>
   );
@@ -1345,7 +1452,7 @@ function TermFormModal({
   lockedYear: number | null;
   existing: Term[];
   activeCount: number;
-  onSaved: (label: string, mode: "add" | "edit") => void;
+  onSaved: (label: string, mode: "add" | "edit", saved: Term) => void;
 }) {
   const isEdit = editing !== null;
   const yearIsLocked = isEdit || lockedYear !== null;
@@ -1469,7 +1576,7 @@ function TermFormModal({
       };
       await api.post("/terms", payload);
       await mutateAllTerms();
-      onSaved(termLabel(draft), isEdit ? "edit" : "add");
+      onSaved(termLabel(draft), isEdit ? "edit" : "add", payload);
       setConfirming(false);
     } catch (e) {
       setError((e as Error).message || "บันทึกไม่สำเร็จ");
@@ -2151,20 +2258,22 @@ function RequestWindowsSection() {
                       <span className="text-xs">{w.is_open ? "เปิด" : "ปิด"}</span>
                     </Switch.Content>
                   </Switch>
-                  <Button
+                  <IconButton
+                    label="แก้ไข"
                     variant="ghost"
                     size="sm"
                     onClick={() => { setEditing(w); setFormOpen(true); }}
                   >
-                    <Pencil size={14} /> แก้ไข
-                  </Button>
-                  <Button
+                    <Pencil size={14} />
+                  </IconButton>
+                  <IconButton
+                    label="ลบ"
                     variant="ghost"
                     size="sm"
                     onClick={() => setDeleteTarget(w)}
                   >
-                    <Trash2 size={14} /> ลบ
-                  </Button>
+                    <Trash2 size={14} />
+                  </IconButton>
                 </div>
               </div>
             );
@@ -2412,7 +2521,16 @@ interface AdminOfficer {
   is_active: boolean;
 }
 
-const PREFIX_PRESETS = ["", "อาจารย์", "ดร.", "ผศ.", "ผศ.ดร.", "รศ.", "รศ.ดร.", "ศ.", "ศ.ดร."] as const;
+// Full Thai academic titles (except "ดร." which has no long form). The value
+// is stored verbatim and concatenated before the name in the appointment order,
+// so titles without a trailing "." attach directly to the name
+// ("รองศาสตราจารย์" + "สมชาย") the way the registrar template writes them.
+const PREFIX_PRESETS = [
+  "", "อาจารย์", "ดร.",
+  "ผู้ช่วยศาสตราจารย์", "ผู้ช่วยศาสตราจารย์ ดร.",
+  "รองศาสตราจารย์", "รองศาสตราจารย์ ดร.",
+  "ศาสตราจารย์", "ศาสตราจารย์ ดร.",
+] as const;
 
 function AdminOfficersSection() {
   const { data } = useSWR<AdminOfficer[]>("/settings/admin-officers?include_inactive=1");
@@ -2720,6 +2838,7 @@ interface SubmissionPeriod {
   id: string;
   term_id: string;
   year_month: string;
+  starts_on: string;
   due_date: string;
   label: string;
   remind_days_before: number;
@@ -2744,29 +2863,49 @@ function SubmissionPeriodsSection() {
   const [creating, setCreating] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [editing, setEditing] = useState<SubmissionPeriod | null>(null);
+  const [seedConfirm, setSeedConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SubmissionPeriod | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const selectedTerm = (terms ?? []).find(t => t.id === termId);
+  const seedSemester = selectedTerm?.semester ?? 1;
+  const seedMonthsLabel = seedSemester === 1 ? "มิ.ย.–ต.ค." : "พ.ย.–มี.ค.";
+  const existingMonths = new Set((periods ?? []).map(p => p.year_month));
+  const seedTemplateMonths =
+    seedSemester === 1 ? [6, 7, 8, 9, 10] : [11, 12, 1, 2, 3];
+  const seedYearBase = selectedTerm?.academic_year ?? 0;
+  const seedWillCreate = seedTemplateMonths.filter(m => {
+    const y = seedSemester === 2 && (m === 1 || m === 2 || m === 3)
+      ? seedYearBase + 1
+      : seedYearBase;
+    const ym = `${y}-${String(m).padStart(2, "0")}`;
+    return !existingMonths.has(ym);
+  }).length;
 
   async function bulkSeed() {
     if (!termId) return;
-    if (!confirm("สร้าง 5 เดือนตามประกาศ (มิ.ย.–ต.ค.) สำหรับภาคเรียนนี้?")) return;
     setSeeding(true);
     try {
       await api.post(`/submission-periods/bulk-for-term/${termId}`, {});
       await refresh();
-      toast.success("สร้างระยะเวลา 5 เดือนเรียบร้อย");
+      toast.success("สร้างระยะเวลารายเดือนเรียบร้อย");
+      setSeedConfirm(false);
     } catch (e) {
       toast.danger("สร้างไม่สำเร็จ", { description: (e as Error).message });
     } finally { setSeeding(false); }
   }
 
-  async function remove(id: string) {
-    if (!confirm("ลบระยะเวลานี้? สถานะการเซ็นของ TA ที่ผูกอยู่จะถูกลบไปด้วย")) return;
+  async function doDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.del(`/submission-periods/${id}`);
+      await api.del(`/submission-periods/${deleteTarget.id}`);
       await refresh();
       toast.success("ลบเรียบร้อย");
+      setDeleteTarget(null);
     } catch (e) {
       toast.danger("ลบไม่สำเร็จ", { description: (e as Error).message });
-    }
+    } finally { setDeleting(false); }
   }
 
   return (
@@ -2775,7 +2914,7 @@ function SubmissionPeriodsSection() {
       description="รอบเบิกจ่ายต่อเดือน (ประกาศ 2569: มิ.ย.–ต.ค.) — ระบบส่ง reminder ผ่าน email/in-app ให้ TA อัตโนมัติก่อนวันครบกำหนด"
       actions={
         <>
-          <Button variant="secondary" onClick={bulkSeed} disabled={!termId || seeding}>
+          <Button variant="secondary" onClick={() => setSeedConfirm(true)} disabled={!termId || seeding}>
             <Plus size={14} />สร้างอัตโนมัติ 5 เดือน
           </Button>
           <Button variant="primary" onClick={() => setCreating(true)} disabled={!termId}>
@@ -2810,7 +2949,7 @@ function SubmissionPeriodsSection() {
               <tr>
                 <th className="text-left px-3 py-2">ป้ายกำกับ</th>
                 <th className="text-left px-3 py-2">รหัสเดือน</th>
-                <th className="text-left px-3 py-2">กำหนดส่ง</th>
+                <th className="text-left px-3 py-2">ช่วงเวลา (เปิด → ปิด)</th>
                 <th className="text-left px-3 py-2">แจ้งเตือน (วัน)</th>
                 <th className="text-left px-3 py-2">สถานะ</th>
                 <th className="text-right px-3 py-2">Actions</th>
@@ -2821,7 +2960,9 @@ function SubmissionPeriodsSection() {
                 <tr key={p.id} className="border-t border-hairline">
                   <td className="px-3 py-2">{p.label}</td>
                   <td className="px-3 py-2 tabular">{p.year_month}</td>
-                  <td className="px-3 py-2 tabular">{p.due_date}</td>
+                  <td className="px-3 py-2 tabular whitespace-nowrap">
+                    {p.starts_on} → {p.due_date}
+                  </td>
                   <td className="px-3 py-2 tabular">{p.remind_days_before}</td>
                   <td className="px-3 py-2">
                     <Chip tone={p.is_closed ? "neutral" : "brand"}>
@@ -2829,12 +2970,12 @@ function SubmissionPeriodsSection() {
                     </Chip>
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(p)}>
-                      <Pencil size={12} />แก้ไข
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => remove(p.id)}>
-                      <Trash2 size={12} />ลบ
-                    </Button>
+                    <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => setEditing(p)}>
+                      <Pencil size={12} />
+                    </IconButton>
+                    <IconButton label="ลบ" variant="ghost" size="sm" onClick={() => setDeleteTarget(p)}>
+                      <Trash2 size={12} />
+                    </IconButton>
                   </td>
                 </tr>
               ))}
@@ -2851,6 +2992,64 @@ function SubmissionPeriodsSection() {
           onSaved={async () => { await refresh(); setCreating(false); setEditing(null); }}
         />
       )}
+
+      <Modal
+        open={seedConfirm}
+        onClose={() => !seeding && setSeedConfirm(false)}
+        title="สร้างระยะเวลาเบิกจ่ายอัตโนมัติ"
+        icon={<CalendarPlus size={20} />}
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setSeedConfirm(false)} disabled={seeding}>
+              ยกเลิก
+            </Button>
+            <Button variant="primary" onClick={bulkSeed} isPending={seeding} disabled={seedWillCreate === 0}>
+              <Plus size={14} />
+              {seedWillCreate === 0
+                ? "ไม่มีเดือนใหม่ให้สร้าง"
+                : `สร้าง ${seedWillCreate} เดือน`}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-sm">
+          <p>
+            ระบบจะสร้างรอบเบิกจ่ายรายเดือนตามเทมเพลตของภาคเรียน{" "}
+            <b>{selectedTerm ? termLabel(selectedTerm) : ""}</b> โดยอัตโนมัติ
+          </p>
+          <ul className="rounded-md border border-hairline bg-slate-50 dark:bg-slate-900/40 px-3 py-2 space-y-1 text-xs">
+            <li>· ครอบคลุมเดือน <b>{seedMonthsLabel}</b> (5 รอบ)</li>
+            <li>· วันเปิดรอบ = วันที่ 1 ของแต่ละเดือน</li>
+            <li>· กำหนดส่งตามประกาศ 2569 (3 เดือนแรกครบ 31 ก.ค. · ที่เหลือ +5 วัน)</li>
+            <li>· ส่ง reminder ให้ TA ล่วงหน้า 3 วันก่อนครบกำหนด</li>
+          </ul>
+          {seedWillCreate < seedTemplateMonths.length && (
+            <Alert
+              status="warning"
+              icon={<CircleAlert size={14} />}
+              title={
+                seedWillCreate === 0
+                  ? "มีรอบครบทุกเดือนแล้ว"
+                  : `จะข้าม ${seedTemplateMonths.length - seedWillCreate} เดือนที่มีอยู่แล้ว`
+              }
+              description="ระบบจะไม่ทับรอบเดิม — เดือนที่มีอยู่แล้วต้องแก้จากปุ่ม “แก้ไข” ในตารางแทน"
+            />
+          )}
+        </div>
+      </Modal>
+
+      <ConfirmSaveModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={doDelete}
+        saving={deleting}
+        variant="danger"
+        confirmLabel="ลบรอบนี้"
+        confirmIcon={<Trash2 size={14} />}
+        title={deleteTarget ? `ลบรอบ "${deleteTarget.label}"?` : "ลบรอบเบิกจ่าย?"}
+        description="สถานะการเซ็น/ลงนามของ TA และอาจารย์ที่ผูกอยู่กับรอบนี้จะถูกลบทั้งหมด — หากมี TA เซ็นไปแล้ว จะไม่สามารถกู้กลับได้"
+      />
     </Panel>
   );
 }
@@ -2868,6 +3067,7 @@ function SubmissionPeriodModal({
       id: "",
       term_id: termId,
       year_month: "",
+      starts_on: "",
       due_date: "",
       label: "",
       remind_days_before: 3,
@@ -2900,9 +3100,15 @@ function SubmissionPeriodModal({
                      placeholder="2569-06"
                      onChange={e => setDraft({ ...draft, year_month: e.target.value })} />
         </FieldGroup>
-        <FieldGroup label="กำหนดส่ง">
-          <TextInput type="date" value={draft.due_date}
-                     onChange={e => setDraft({ ...draft, due_date: e.target.value })} />
+        <FieldGroup label="วันเปิดรอบ (TA เริ่มเซ็นได้)">
+          <TermDateField label="วันเปิดรอบ"
+                         value={draft.starts_on}
+                         onChange={v => setDraft({ ...draft, starts_on: v })} />
+        </FieldGroup>
+        <FieldGroup label="กำหนดส่ง (วันสุดท้ายที่เซ็นได้)">
+          <TermDateField label="กำหนดส่ง"
+                         value={draft.due_date}
+                         onChange={v => setDraft({ ...draft, due_date: v })} />
         </FieldGroup>
         <FieldGroup label="แจ้งเตือนล่วงหน้า (วัน)">
           <TextInput type="number" min={0} value={draft.remind_days_before}

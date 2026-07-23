@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
-import { Save, CalendarPlus, Settings, BookPlus, CheckCircle2, FileSpreadsheet } from "lucide-react";
+import { Save, CalendarPlus, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2 } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api, type Term } from "../../lib/api";
+import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, Select, TextInput, Chip, EmptyState,
+  PageHeader, Panel, Button, IconButton, Select, TextInput, Chip, EmptyState, ConfirmDialog,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import OpenCourseModal from "../../lecturer/(home)/OpenCourseModal";
@@ -17,7 +18,17 @@ interface TC {
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
+  // has_special = the course has ≥1 special-track section (runs a special
+  // program). When false, the "นศ. พิเศษ" field is not applicable and is locked.
+  has_special: boolean;
   exported_at?: string | null;
+}
+
+// needsStudentCount reports whether staff still has to fill in a student count
+// for the course: the regular count is always required; the special count is
+// required only when the course runs a special program (has_special).
+function needsStudentCount(c: TC): boolean {
+  return c.num_students_regular === 0 || (c.has_special && c.num_students_special === 0);
 }
 
 export default function TeachingPage() {
@@ -36,6 +47,13 @@ export default function TeachingPage() {
   const { data: courses } = useSWR<TC[]>(termId ? `/teaching-courses?term_id=${termId}` : null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [onlyMissing, setOnlyMissing] = useState(false);
+
+  // A course "needs attention" when a required student count is still 0: the
+  // regular count always, plus the special count when the course runs a special
+  // program. Drives the filter chip + count below.
+  const missingCourses = (courses ?? []).filter(needsStudentCount);
+  const shownCourses = onlyMissing ? missingCourses : courses;
 
   const activeTerm = terms?.find(t => t.id === termId);
   const termLabel = activeTerm ? `${activeTerm.academic_year}/${activeTerm.semester}` : "";
@@ -84,9 +102,27 @@ export default function TeachingPage() {
       ) : (
         <Panel padded={false}>
           <div className="p-4">
+            {/* Missing-count reminder: staff often forget to fill the enrolled
+                student count (the budget depends on it, and export is blocked
+                without it). One click filters the list down to the offenders. */}
+            {missingCourses.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/30 px-3 py-2 text-sm">
+                <span className="text-amber-800 dark:text-amber-200">
+                  มี <b>{missingCourses.length}</b> วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา — ต้องกรอกก่อนจึงจะส่งออกได้
+                </span>
+                <Button
+                  variant={onlyMissing ? "primary" : "secondary"}
+                  size="sm"
+                  className="ms-auto"
+                  onClick={() => setOnlyMissing(v => !v)}
+                >
+                  {onlyMissing ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่กรอก"}
+                </Button>
+              </div>
+            )}
             <DataTable
               ariaLabel="วิชาที่เปิดสอน"
-              rows={courses}
+              rows={shownCourses}
               loading={!!termId && !courses}
               rowKey={c => c.id}
               searchFn={c => `${c.code} ${c.name_th}`}
@@ -107,6 +143,7 @@ export default function TeachingPage() {
         termId={termId}
         termLabel={termLabel}
         redirectBase="/staff/teaching"
+        pickLecturers
       />
 
       <ImportModal
@@ -141,12 +178,8 @@ const courseColumns: DataColumn<TC>[] = [
     ),
   },
   {
-    id: "regular", label: "นศ. ปกติ",
-    render: c => <NumStudentsEditor id={c.id} track="regular" value={c.num_students_regular} />,
-  },
-  {
-    id: "special", label: "นศ. พิเศษ",
-    render: c => <NumStudentsEditor id={c.id} track="special" value={c.num_students_special} />,
+    id: "students", label: "จำนวนนักศึกษา (ปกติ / พิเศษ)",
+    render: c => <StudentCountsEditor course={c} />,
   },
   {
     id: "budget", label: "งบประมาณ",
@@ -156,66 +189,172 @@ const courseColumns: DataColumn<TC>[] = [
     id: "actions", label: <span className="sr-only">การจัดการ</span>,
     className: "text-right",
     render: c => (
-      // Open the lecturer view in a new tab so staff can operate on the course
-      // on behalf of the lecturer. The lecturer shell shows an admin banner
-      // when the visitor has admin/staff role.
-      <Link href={`/lecturer/courses/${c.id}`} target="_blank" rel="noopener noreferrer">
-        <Button variant="ghost" size="sm"><Settings size={14} /> จัดการ</Button>
-      </Link>
+      <div className="inline-flex items-center gap-1 whitespace-nowrap">
+        {/* Open the lecturer view in a new tab so staff can operate on the
+            course on behalf of the lecturer. The lecturer shell shows an admin
+            banner when the visitor has admin/staff role. */}
+        <Link href={`/lecturer/courses/${c.id}`} target="_blank" rel="noopener noreferrer">
+          <IconButton label="จัดการ" variant="ghost" size="sm"><Settings size={14} /></IconButton>
+        </Link>
+        <DeleteCourseButton course={c} />
+      </div>
     ),
   },
 ];
 
-function NumStudentsEditor({
-  id, track, value,
-}: { id: string; track: "regular" | "special"; value: number }) {
-  // Keep the raw string so an empty field isn't silently coerced to 0.
-  const [v, setV] = useState(String(value));
-  const [saving, setSaving] = useState(false);
-  useEffect(() => { setV(String(value)); }, [value]);
+// DeleteCourseButton removes a mistakenly-opened course straight from the list.
+// The server refuses (with a clear reason) if the course has any TA / worklog /
+// export data, so no data is ever lost.
+function DeleteCourseButton({ course }: { course: TC }) {
+  const [confirm, setConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const num = Number(v);
-  const invalid = v.trim() === "" || !Number.isInteger(num) || num < 0;
-  const dirty = !invalid && num !== value;
+  async function del() {
+    setDeleting(true);
+    try {
+      await api.del(`/teaching-courses/${course.id}`);
+      await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
+      toast.success("ลบรายวิชาแล้ว", { description: `${course.code} — ${course.name_th}` });
+      setConfirm(false);
+    } catch (e) {
+      notify.error(e); // backend returns a clear Thai reason when it has data
+      setConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
-    <div className="inline-flex flex-col items-end gap-0.5">
-      <div className="inline-flex items-center gap-2">
+    <>
+      <IconButton
+        label={`ลบรายวิชา ${course.code}`}
+        variant="ghost"
+        size="sm"
+        className="text-danger hover:bg-danger/10"
+        onClick={() => setConfirm(true)}
+        disabled={deleting}
+      >
+        <Trash2 size={14} />
+      </IconButton>
+      <ConfirmDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        onConfirm={del}
+        isPending={deleting}
+        danger
+        icon={<Trash2 size={20} />}
+        title="ยืนยันการลบรายวิชา"
+        confirmLabel="ลบรายวิชา"
+        message={
+          <p className="text-sm text-muted">
+            จะลบรายวิชา <b>{course.code} — {course.name_th}</b> พร้อม section และตารางเวลาทั้งหมด
+            การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
+          </p>
+        }
+      />
+    </>
+  );
+}
+
+// StudentCountsEditor edits a course's regular + special student counts in one
+// place with a SINGLE save button (sends only the changed field(s)). The special
+// input is locked when the course has no special program.
+function StudentCountsEditor({ course }: { course: TC }) {
+  // Keep raw strings so an empty field isn't silently coerced to 0.
+  const [reg, setReg] = useState(String(course.num_students_regular));
+  const [spc, setSpc] = useState(String(course.num_students_special));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    setReg(String(course.num_students_regular));
+    setSpc(String(course.num_students_special));
+  }, [course.num_students_regular, course.num_students_special]);
+
+  const hasSpecial = course.has_special;
+  const regNum = Number(reg);
+  const spcNum = Number(spc);
+  const regInvalid = reg.trim() === "" || !Number.isInteger(regNum) || regNum < 0;
+  const spcInvalid = hasSpecial && (spc.trim() === "" || !Number.isInteger(spcNum) || spcNum < 0);
+  const regDirty = !regInvalid && regNum !== course.num_students_regular;
+  const spcDirty = hasSpecial && !spcInvalid && spcNum !== course.num_students_special;
+  const dirty = regDirty || spcDirty;
+  const invalid = regInvalid || spcInvalid;
+  const regNeeds = !regDirty && !regInvalid && course.num_students_regular === 0;
+  const spcNeeds = hasSpecial && !spcDirty && !spcInvalid && course.num_students_special === 0;
+
+  async function save() {
+    if (invalid || !dirty) return;
+    setSaving(true);
+    try {
+      const body: Record<string, number> = {};
+      if (regDirty) body.num_students_regular = regNum;
+      if (spcDirty) body.num_students_special = spcNum;
+      await api.patch(`/teaching-courses/${course.id}/num-students`, body);
+      await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
+      toast.success("บันทึกจำนวนนักศึกษาแล้ว", { description: course.code });
+    } catch (e) {
+      toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const field = (
+    label: string,
+    node: ReactNode,
+    hint: string | null,
+    hintDanger?: boolean,
+  ) => (
+    <div className="flex w-16 flex-col items-stretch gap-0.5">
+      <span className="text-[10px] leading-none text-ink-3">{label}</span>
+      {node}
+      <span className={
+        "text-[10px] leading-none text-center truncate " +
+        (hintDanger ? "text-danger" : "text-amber-600 dark:text-amber-400")
+      }>
+        {hint ?? " "}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="inline-flex items-start gap-2">
+      {field("ปกติ",
         <TextInput
-          type="number" min={0} step={1} className="w-20 text-right"
-          aria-invalid={invalid || undefined}
-          value={v} onChange={e => setV(e.target.value)}
-        />
+          type="number" min={0} step={1} className="w-full text-right"
+          aria-invalid={regInvalid || undefined}
+          value={reg} onChange={e => setReg(e.target.value)}
+        />,
+        regInvalid ? "ต้อง ≥ 0" : regNeeds ? "ยังไม่กรอก" : null,
+        regInvalid,
+      )}
+      {field("พิเศษ",
+        hasSpecial ? (
+          <TextInput
+            type="number" min={0} step={1} className="w-full text-right"
+            aria-invalid={spcInvalid || undefined}
+            value={spc} onChange={e => setSpc(e.target.value)}
+          />
+        ) : (
+          <div
+            className="w-full rounded-lg border border-hairline bg-slate-50/70 dark:bg-slate-900/30 px-2 py-2 text-center text-ink-3 select-none"
+            title="วิชานี้ไม่มีโครงการพิเศษ (ระบบตรวจจากกลุ่มเรียนตอนเปิดวิชา)"
+          >—</div>
+        ),
+        hasSpecial ? (spcInvalid ? "ต้อง ≥ 0" : spcNeeds ? "ยังไม่กรอก" : null) : "ไม่มีพิเศษ",
+        hasSpecial && spcInvalid,
+      )}
+      {/* single save button for the row; transparent label keeps it aligned with the inputs */}
+      <div className="flex flex-col items-start gap-0.5">
+        <span className="text-[10px] leading-none select-none">{" "}</span>
         <Button
           variant={dirty ? "primary" : "ghost"} size="sm"
           disabled={!dirty || invalid || saving}
           isPending={saving}
-          onClick={async () => {
-            if (invalid) return;
-            const body = track === "regular"
-              ? { num_students_regular: num }
-              : { num_students_special: num };
-            setSaving(true);
-            try {
-              await api.patch(`/teaching-courses/${id}/num-students`, body);
-              await mutate((k: string) => k.startsWith("/teaching-courses"));
-              toast.success(
-                `บันทึกจำนวน นศ. ${track === "regular" ? "ปกติ" : "พิเศษ"} เรียบร้อยแล้ว`,
-                { description: `${num} คน` },
-              );
-            } catch (e) {
-              toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
-            } finally {
-              setSaving(false);
-            }
-          }}
+          onClick={save}
         >
           <Save size={13} />บันทึก
         </Button>
       </div>
-      {invalid && (
-        <span className="text-[11px] text-danger">ต้องเป็นจำนวนเต็ม ≥ 0</span>
-      )}
     </div>
   );
 }

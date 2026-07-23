@@ -4,10 +4,8 @@ import useSWR, { mutate } from "swr";
 import { useRouter } from "next/navigation";
 import type { Key } from "@heroui/react";
 import {
-  Autocomplete, EmptyState, Label, ListBox, SearchField, useFilter,
-  DatePicker, DateField, Calendar, I18nProvider, toast,
+  Autocomplete, EmptyState, Label, ListBox, SearchField, useFilter, toast,
 } from "@heroui/react";
-import { parseDate, type DateValue } from "@internationalized/date";
 import { BookPlus, CircleAlert, Clock, Check, Plus, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
@@ -37,8 +35,9 @@ interface FC {
 
 interface Draft {
   faculty_course_id: string;
-  starts_on: string;
-  ends_on: string;
+  // Teaching lecturer(s). Only collected when a non-lecturer (staff) opens the
+  // course — a lecturer opening their own course is auto-assigned server-side.
+  lecturer_ids: string[];
   regular_sections: number;
   special_sections: number;
   // Keyed by sec_no. Section schedules are required at course-open time —
@@ -48,12 +47,22 @@ interface Draft {
 
 const EMPTY: Draft = {
   faculty_course_id: "",
-  starts_on: "",
-  ends_on: "",
+  lecturer_ids: [],
   regular_sections: 1,
   special_sections: 0,
   schedules: {},
 };
+
+interface LecturerUser {
+  id: string;
+  title?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email: string;
+}
+function lecturerName(u: LecturerUser): string {
+  return [u.title, u.first_name, u.last_name].filter(Boolean).join(" ") || u.email;
+}
 
 // CP KKU numbering: sec_no runs continuously across tracks — regular gets 1..N,
 // special continues N+1..N+M. (Existing courses in the DB may still carry the
@@ -90,15 +99,23 @@ function buildSections(
 
 export default function OpenCourseModal({
   open, onClose, termId, termLabel, redirectBase = "/lecturer/courses",
+  pickLecturers = false,
 }: {
   open: boolean;
   onClose: () => void;
   termId: string;
   termLabel: string;
   redirectBase?: string;
+  // When true (staff opening a course), the form collects the teaching
+  // lecturer(s) instead of silently attributing the course to the opener.
+  pickLecturers?: boolean;
 }) {
   const router = useRouter();
   const { data: fcs } = useSWR<FC[]>(open ? "/faculty-courses" : null);
+  const { data: lecturerData } = useSWR<{ items: LecturerUser[] }>(
+    open && pickLecturers ? "/users?role=lecturer&limit=200" : null,
+  );
+  const lecturers = useMemo(() => lecturerData?.items ?? [], [lecturerData]);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -138,30 +155,31 @@ export default function OpenCourseModal({
   const scheduleComplete =
     totalSections > 0 && allSecNos.every(sec => (draft.schedules[sec] ?? []).length > 0);
 
-  const dateError =
-    draft.starts_on && draft.ends_on && draft.ends_on < draft.starts_on
-      ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่มสอน"
-      : null;
-
   // Progressive reveal gates: each step unlocks the next only when its
-  // required fields are filled cleanly.
+  // required fields are filled cleanly. When pickLecturers is on, an extra
+  // "อาจารย์ผู้สอน" step sits between course and sections (shifting numbers).
   const step1Done = !!draft.faculty_course_id;
-  const step2Done = step1Done && !!draft.starts_on && !!draft.ends_on && !dateError;
-  const step3Done = step2Done && totalSections > 0;
-  const step4Done = step3Done && scheduleComplete && !scheduleBlocked;
+  const lecturersDone = !pickLecturers || draft.lecturer_ids.length > 0;
+  const sectionsReady = step1Done && lecturersDone;
+  const sectionsDone = sectionsReady && totalSections > 0;
+  const step3Done = sectionsDone && scheduleComplete && !scheduleBlocked;
+  const secStepNo = pickLecturers ? 3 : 2;
+  const schedStepNo = pickLecturers ? 4 : 3;
 
-  const canSubmit = step4Done && !saving;
+  const canSubmit = step3Done && !saving;
 
   async function submit() {
     if (!canSubmit) return;
     setSaving(true);
     setErr(null);
     try {
+      // starts_on/ends_on omitted — staff fills the teaching window later.
+      // Backend columns are nullable and worklog validation defaults to an
+      // unbounded window when null.
       const body = {
         faculty_course_id: draft.faculty_course_id,
         term_id: termId,
-        starts_on: draft.starts_on,
-        ends_on: draft.ends_on,
+        ...(pickLecturers ? { lecturer_ids: draft.lecturer_ids } : {}),
         sections: buildSections(
           draft.regular_sections, draft.special_sections, draft.schedules,
         ),
@@ -220,31 +238,26 @@ export default function OpenCourseModal({
           )}
         </StepCard>
 
-        {/* Step 2 — revealed after Step 1 */}
-        {step1Done && (
-          <StepCard n={2} title="ช่วงเวลาเรียน" done={step2Done}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <FieldGroup label="วันเริ่มสอน">
-                <ThaiDateField
-                  value={draft.starts_on}
-                  onChange={v => setDraft(d => ({ ...d, starts_on: v }))}
-                />
-              </FieldGroup>
-              <FieldGroup label="วันสิ้นสุด" error={dateError ?? undefined}>
-                <ThaiDateField
-                  value={draft.ends_on}
-                  onChange={v => setDraft(d => ({ ...d, ends_on: v }))}
-                />
-              </FieldGroup>
+        {/* Lecturer step — staff-only. A lecturer opening their own course is
+            auto-assigned server-side and never sees this. */}
+        {pickLecturers && step1Done && (
+          <StepCard n={2} title="อาจารย์ผู้สอน" done={lecturersDone}>
+            <div className="text-xs text-muted mb-2">
+              เลือกอาจารย์ผู้สอนของรายวิชานี้ (เลือกได้มากกว่า 1 คน)
             </div>
+            <LecturerPicker
+              lecturers={lecturers}
+              selected={draft.lecturer_ids}
+              onChange={ids => setDraft(d => ({ ...d, lecturer_ids: ids }))}
+            />
           </StepCard>
         )}
 
-        {/* Step 3 — revealed after Step 2. Two columns side-by-side: regular on
-            the left is primary; the right column is either the "+ เปิดภาคพิเศษ"
-            opt-in or the special input once toggled on. */}
-        {step2Done && (
-          <StepCard n={3} title="กลุ่มเรียน (section)" done={step3Done}>
+        {/* Sections — revealed after course (+ lecturer, if staff). Two columns
+            side-by-side: regular on the left is primary; the right column is
+            either the "+ เปิดภาคพิเศษ" opt-in or the special input once on. */}
+        {sectionsReady && (
+          <StepCard n={secStepNo} title="กลุ่มเรียน (section)" done={sectionsDone}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <FieldGroup
                 label={<span className="inline-flex items-center gap-2">ภาคปกติ <Chip tone="brand">regular</Chip></span>}
@@ -315,10 +328,10 @@ export default function OpenCourseModal({
           </StepCard>
         )}
 
-        {/* Step 4 — schedule is required: TA time-clock validation reads it
-            immediately. Staff fills num_students later on the sections page. */}
-        {step3Done && (
-          <StepCard n={4} title="ตารางเวลาเรียนต่อ section" done={step4Done}>
+        {/* Schedule — required: TA time-clock validation reads it immediately.
+            Staff fills num_students + course dates later. */}
+        {sectionsDone && (
+          <StepCard n={schedStepNo} title="ตารางเวลาเรียนต่อ section" done={step3Done}>
             <div className="text-xs text-muted mb-2">
               กดที่ section เพื่อกำหนดวัน-เวลาเรียน — ต้องกรอกครบทุก section
             </div>
@@ -429,6 +442,101 @@ function StepCard({
   );
 }
 
+// LecturerPicker — add lecturers via autocomplete, shown as removable chips.
+// At least one is required (gated by the parent's lecturersDone).
+function LecturerPicker({
+  lecturers, selected, onChange,
+}: {
+  lecturers: LecturerUser[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const byId = useMemo(() => new Map(lecturers.map(u => [u.id, u])), [lecturers]);
+  const available = lecturers.filter(u => !selected.includes(u.id));
+  return (
+    <div>
+      {/* key remounts the autocomplete after each pick so it clears its input */}
+      <LecturerAutocomplete
+        key={selected.length}
+        items={available}
+        onPick={id => { if (id && !selected.includes(id)) onChange([...selected, id]); }}
+      />
+      {selected.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {selected.map(id => {
+            const u = byId.get(id);
+            return (
+              <Chip key={id} tone="brand">
+                {u ? lecturerName(u) : id}
+                <button
+                  type="button"
+                  onClick={() => onChange(selected.filter(x => x !== id))}
+                  className="ms-1 inline-flex hover:text-danger"
+                  aria-label="เอาออก"
+                >
+                  <X size={11} />
+                </button>
+              </Chip>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-xs text-warning font-medium mt-2">ยังไม่ได้เลือกอาจารย์ — ต้องเลือกอย่างน้อย 1 คน</div>
+      )}
+    </div>
+  );
+}
+
+function LecturerAutocomplete({
+  items, onPick,
+}: {
+  items: LecturerUser[];
+  onPick: (id: string) => void;
+}) {
+  const { contains } = useFilter({ sensitivity: "base" });
+  return (
+    <Autocomplete
+      className="w-full"
+      placeholder="พิมพ์ค้นหาอาจารย์…"
+      selectionMode="single"
+      value={null}
+      onChange={(k: Key | Key[] | null) => onPick(String(k ?? ""))}
+    >
+      <Label className="sr-only">อาจารย์ผู้สอน</Label>
+      <Autocomplete.Trigger>
+        <Autocomplete.Value />
+        <Autocomplete.ClearButton />
+        <Autocomplete.Indicator />
+      </Autocomplete.Trigger>
+      <Autocomplete.Popover>
+        <Autocomplete.Filter filter={contains}>
+          <SearchField autoFocus name="search" variant="secondary">
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="ค้นหาอาจารย์…" />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
+          <ListBox
+            className="max-h-[280px] overflow-y-auto"
+            renderEmptyState={() => <EmptyState>ไม่พบอาจารย์</EmptyState>}
+          >
+            {items.map(u => (
+              <ListBox.Item key={u.id} id={u.id} textValue={`${lecturerName(u)} ${u.email}`}>
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{lecturerName(u)}</div>
+                  <div className="text-xs text-muted truncate">{u.email}</div>
+                </div>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Autocomplete.Filter>
+      </Autocomplete.Popover>
+    </Autocomplete>
+  );
+}
+
 function CourseAutocomplete({
   items, value, onChange,
 }: {
@@ -480,57 +588,3 @@ function CourseAutocomplete({
   );
 }
 
-function ThaiDateField({
-  value, onChange,
-}: {
-  value: string;
-  onChange: (iso: string) => void;
-}) {
-  let dv: DateValue | null = null;
-  if (value) {
-    try { dv = parseDate(value); } catch { dv = null; }
-  }
-  return (
-    <I18nProvider locale="th-TH">
-      <DatePicker
-        aria-label="date"
-        value={dv}
-        onChange={v => onChange(v ? v.toString() : "")}
-      >
-        <DateField.Group fullWidth>
-          <DateField.Input>
-            {segment => <DateField.Segment segment={segment} />}
-          </DateField.Input>
-          <DateField.Suffix>
-            <DatePicker.Trigger>
-              <DatePicker.TriggerIndicator />
-            </DatePicker.Trigger>
-          </DateField.Suffix>
-        </DateField.Group>
-        <DatePicker.Popover>
-          <Calendar>
-            <Calendar.Header>
-              <Calendar.YearPickerTrigger>
-                <Calendar.YearPickerTriggerHeading />
-                <Calendar.YearPickerTriggerIndicator />
-              </Calendar.YearPickerTrigger>
-              <Calendar.NavButton slot="previous" />
-              <Calendar.NavButton slot="next" />
-            </Calendar.Header>
-            <Calendar.Grid>
-              <Calendar.GridHeader>
-                {day => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-              </Calendar.GridHeader>
-              <Calendar.GridBody>{date => <Calendar.Cell date={date} />}</Calendar.GridBody>
-            </Calendar.Grid>
-            <Calendar.YearPickerGrid>
-              <Calendar.YearPickerGridBody>
-                {({ year }) => <Calendar.YearPickerCell year={year} />}
-              </Calendar.YearPickerGridBody>
-            </Calendar.YearPickerGrid>
-          </Calendar>
-        </DatePicker.Popover>
-      </DatePicker>
-    </I18nProvider>
-  );
-}

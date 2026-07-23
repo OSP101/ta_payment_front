@@ -20,9 +20,110 @@ import {
   Avatar as HAvatar,
   EmptyState as HEmptyState,
   Spinner as HSpinner,
+  TimeField as HTimeField,
+  DatePicker as HDatePicker,
+  DateField as HDateField,
+  Calendar as HCalendar,
+  Tooltip as HTooltip,
   type Key,
+  type TimeValue,
 } from "@heroui/react";
+import { Info } from "lucide-react";
+import { I18nProvider } from "react-aria-components";
+import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
 import type React from "react";
+import { Children, isValidElement } from "react";
+
+/* -------------------------------------------------------------------------- */
+/* Tooltip helpers                                                            */
+/* -------------------------------------------------------------------------- */
+
+// Shared tooltip wrapper — replaces native HTML `title=` so hints work on
+// touch (long-press) and keyboard focus, not just mouse hover. Content is
+// rendered inside `<HTooltip.Content>` with a max width and pre-line spacing
+// so multi-line hints look reasonable.
+//
+// `Tip` expects a focusable trigger child (button, a, input). For plain
+// spans/divs/table cells use `TipWrap`, which wraps the child in
+// `<HTooltip.Trigger>` (a focusable role="button" div) so hover + long-press
+// still register.
+export function Tip({
+  content,
+  children,
+  delay = 0,
+  placement,
+}: {
+  content?: React.ReactNode;
+  children: React.ReactNode;
+  delay?: number;
+  placement?: "top" | "bottom" | "left" | "right" | "start" | "end";
+}) {
+  if (content === null || content === undefined || content === false || content === "") {
+    return <>{children}</>;
+  }
+  return (
+    <HTooltip delay={delay}>
+      {children}
+      <HTooltip.Content placement={placement}>
+        <div className="max-w-xs text-xs leading-relaxed whitespace-pre-line">{content}</div>
+      </HTooltip.Content>
+    </HTooltip>
+  );
+}
+
+export function TipWrap({
+  content,
+  children,
+  delay = 0,
+  placement,
+  className,
+}: {
+  content?: React.ReactNode;
+  children: React.ReactNode;
+  delay?: number;
+  placement?: "top" | "bottom" | "left" | "right" | "start" | "end";
+  className?: string;
+}) {
+  if (content === null || content === undefined || content === false || content === "") {
+    return <>{children}</>;
+  }
+  return (
+    <HTooltip delay={delay}>
+      <HTooltip.Trigger className={className}>{children}</HTooltip.Trigger>
+      <HTooltip.Content placement={placement}>
+        <div className="max-w-xs text-xs leading-relaxed whitespace-pre-line">{content}</div>
+      </HTooltip.Content>
+    </HTooltip>
+  );
+}
+
+// InfoTip renders an "i" icon that reveals `content` on hover/focus/long-press.
+// Used for occasional-read guidance next to titles or field labels.
+export function InfoTip({
+  content,
+  size = 14,
+  className,
+}: {
+  content?: React.ReactNode;
+  size?: number;
+  className?: string;
+}) {
+  if (!content) return null;
+  return (
+    <Tip content={content}>
+      <button
+        type="button"
+        aria-label="คำอธิบาย"
+        className={
+          "inline-flex items-center justify-center text-muted hover:text-foreground transition-colors rounded-full " +
+          (className ?? "")
+        }
+      >
+        <Info size={size} />
+      </button>
+    </Tip>
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /* Page header                                                                */
@@ -31,11 +132,16 @@ import type React from "react";
 export function PageHeader({
   title,
   description,
+  info,
   breadcrumb,
   actions,
 }: {
   title: string;
   description?: string;
+  // Optional tooltip content rendered on an "i" icon next to the title.
+  // Preferred over `description` for anything the reader only occasionally
+  // needs — keeps the header visually clean without hiding the explanation.
+  info?: React.ReactNode;
   breadcrumb?: string;
   actions?: React.ReactNode;
 }) {
@@ -43,7 +149,10 @@ export function PageHeader({
     <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
       <div className="min-w-0">
         {breadcrumb && <div className="text-xs text-muted mb-1">{breadcrumb}</div>}
-        <h1 className="text-2xl font-semibold text-foreground tracking-tight">{title}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">{title}</h1>
+          {info && <InfoTip content={info} size={16} />}
+        </div>
         {description && <p className="text-sm text-muted mt-1">{description}</p>}
       </div>
       {actions && <div className="flex gap-2 flex-wrap">{actions}</div>}
@@ -58,6 +167,7 @@ export function PageHeader({
 export function Panel({
   title,
   description,
+  info,
   actions,
   padded = true,
   className = "",
@@ -66,21 +176,32 @@ export function Panel({
 }: {
   title?: React.ReactNode;
   description?: React.ReactNode;
+  // Same intent as PageHeader.info — put occasional-read guidance behind an
+  // "i" icon so the panel header stays visually calm. When both `description`
+  // and `info` are set, description still renders (info supplements it).
+  info?: React.ReactNode;
   actions?: React.ReactNode;
   padded?: boolean;
   className?: string;
   variant?: "default" | "secondary" | "tertiary" | "transparent";
   children: React.ReactNode;
 }) {
-  const hasHeader = title || description || actions;
+  const hasHeader = title || description || actions || info;
   return (
     <HCard variant={variant} className={className}>
       {hasHeader && (
         <HCard.Header>
           <div className="w-full min-w-0">
-            {(title || actions) && (
+            {(title || actions || info) && (
               <div className="flex items-center justify-between gap-3 min-w-0">
-                {title && <HCard.Title className="text-base flex-1 min-w-0">{title}</HCard.Title>}
+                {(title || info) && (
+                  <HCard.Title className="text-base flex-1 min-w-0">
+                    <span className="inline-flex items-center gap-2">
+                      {title}
+                      {info && <InfoTip content={info} />}
+                    </span>
+                  </HCard.Title>
+                )}
                 {actions && <div className="flex gap-2 flex-wrap shrink-0">{actions}</div>}
               </div>
             )}
@@ -191,7 +312,24 @@ const CHIP_COLOR: Record<ChipTone, "accent" | "success" | "warning" | "danger" |
 };
 
 export function Chip({ tone = "neutral", children }: { tone?: ChipTone; children: React.ReactNode }) {
-  return <HChip color={CHIP_COLOR[tone]}><HChip.Label>{children}</HChip.Label></HChip>;
+  // HeroUI expects a leading icon to be a DIRECT child of <Chip>, with only the
+  // text inside <Chip.Label> (see docs "with-icons"). Callers pass icons inline
+  // (`<Chip><Icon/> text</Chip>`); splitting the leading element(s) out here
+  // fixes the icon/text alignment everywhere without touching each call site.
+  const kids = Children.toArray(children);
+  const leadingIcons: React.ReactNode[] = [];
+  const rest: React.ReactNode[] = [];
+  let seenText = false;
+  for (const k of kids) {
+    if (!seenText && isValidElement(k)) leadingIcons.push(k);
+    else { seenText = true; rest.push(k); }
+  }
+  return (
+    <HChip color={CHIP_COLOR[tone]}>
+      {leadingIcons}
+      <HChip.Label>{rest}</HChip.Label>
+    </HChip>
+  );
 }
 
 export function StatusChip({ status }: { status: string }) {
@@ -229,6 +367,7 @@ export interface ButtonProps {
   className?: string;
   children?: React.ReactNode;
   slot?: string;
+  title?: string;
   "aria-label"?: string;
 }
 
@@ -282,6 +421,31 @@ export function Button({
   );
 }
 
+/**
+ * IconButton — the app-wide standard for icon-only action buttons (repeated
+ * table-row actions, toolbar controls, etc.). Enforces accessibility by
+ * construction: `label` becomes BOTH the aria-label (screen readers) and the
+ * native `title` (hover tooltip), so an icon-only button can never ship without
+ * a name. Use this instead of `<Button isIconOnly>` so every icon-only button
+ * is labelled the same way.
+ *
+ * Convention: page/form/primary/save/destructive-confirm buttons keep icon+text
+ * (`<Button>`); dense repeated row actions use `<IconButton label="…">`.
+ */
+export function IconButton({
+  label,
+  children,
+  ...props
+}: Omit<ButtonProps, "isIconOnly" | "aria-label"> & { label: string }) {
+  return (
+    <Tip content={label} delay={400}>
+      <Button {...props} isIconOnly aria-label={label}>
+        {children}
+      </Button>
+    </Tip>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Input primitives                                                           */
 /* -------------------------------------------------------------------------- */
@@ -290,8 +454,156 @@ type ExtraInputProps = { fullWidth?: boolean; variant?: "primary" | "secondary" 
 export function TextInput(
   props: Omit<React.InputHTMLAttributes<HTMLInputElement>, "className" | "style"> & ExtraInputProps & { className?: string; style?: React.CSSProperties },
 ) {
-  return <HInput {...(props as React.ComponentProps<typeof HInput>)} />;
+  // Force 24-hour clock for time inputs regardless of the user's OS locale.
+  // Chrome/Edge honor the input-level `lang` attribute for time formatting,
+  // and en-GB uses 24h — matches how the whole system stores and reasons
+  // about times (HH:MM 24h). Callers can still override by passing lang.
+  const withLang =
+    props.type === "time" && props.lang === undefined ? { ...props, lang: "en-GB" } : props;
+  return <HInput {...(withLang as React.ComponentProps<typeof HInput>)} />;
 }
+
+/**
+ * Segmented 24-hour time picker built on HeroUI's TimeField. Speaks the same
+ * "HH:MM" string protocol the rest of the app uses (matches Go time.Time and
+ * <input type="time"> so callers can stay uniform). Renders as a labeled group
+ * matching the other HeroUI form components on the page.
+ */
+export function TimePicker({
+  value,
+  onChange,
+  label,
+  className,
+  isDisabled,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  label?: string;
+  className?: string;
+  isDisabled?: boolean;
+  autoFocus?: boolean;
+}) {
+  const parsed: Time | null = (() => {
+    if (!value) return null;
+    try { return parseTime(value.length === 5 ? value + ":00" : value); }
+    catch { return null; }
+  })();
+  const toString = (v: TimeValue | null): string => {
+    if (!v) return "";
+    return `${String(v.hour).padStart(2, "0")}:${String(v.minute).padStart(2, "0")}`;
+  };
+  return (
+    <HTimeField
+      className={className}
+      hourCycle={24}
+      value={parsed}
+      onChange={v => onChange(toString(v))}
+      isDisabled={isDisabled}
+      autoFocus={autoFocus}
+      aria-label={label ?? "time"}
+    >
+      <HTimeField.Group>
+        <HTimeField.Input>
+          {(segment) => <HTimeField.Segment segment={segment} />}
+        </HTimeField.Input>
+      </HTimeField.Group>
+    </HTimeField>
+  );
+}
+
+/**
+ * Segmented date picker with a calendar popover. Locked to en-GB locale so
+ * segments render as dd/mm/yyyy regardless of the user's browser locale —
+ * consistent with how the whole system stores dates (ISO YYYY-MM-DD) and
+ * matches the Thai date preview shown alongside the input in the worklog UI.
+ * Speaks the same "YYYY-MM-DD" string protocol as <input type="date">.
+ */
+export function DatePicker({
+  value,
+  onChange,
+  label,
+  className,
+  isDisabled,
+  autoFocus,
+  minValue,
+  maxValue,
+}: {
+  value: string;
+  onChange: (nextIso: string) => void;
+  label?: string;
+  className?: string;
+  isDisabled?: boolean;
+  autoFocus?: boolean;
+  /** Earliest selectable date, ISO "YYYY-MM-DD". */
+  minValue?: string;
+  /** Latest selectable date, ISO "YYYY-MM-DD". */
+  maxValue?: string;
+}) {
+  const parsed: DateValue | null = (() => {
+    if (!value) return null;
+    try { return parseDate(value); } catch { return null; }
+  })();
+  const parseBound = (s?: string): DateValue | undefined => {
+    if (!s) return undefined;
+    try { return parseDate(s); } catch { return undefined; }
+  };
+  const toIso = (v: DateValue | null): string => {
+    if (!v) return "";
+    return `${v.year}-${String(v.month).padStart(2, "0")}-${String(v.day).padStart(2, "0")}`;
+  };
+  return (
+    <I18nProvider locale="en-GB">
+      <HDatePicker
+        className={className}
+        value={parsed}
+        onChange={v => onChange(toIso(v))}
+        isDisabled={isDisabled}
+        autoFocus={autoFocus}
+        minValue={parseBound(minValue)}
+        maxValue={parseBound(maxValue)}
+        aria-label={label ?? "date"}
+      >
+        <HDateField.Group>
+          <HDateField.Input>
+            {segment => <HDateField.Segment segment={segment} />}
+          </HDateField.Input>
+          <HDateField.Suffix>
+            <HDatePicker.Trigger>
+              <HDatePicker.TriggerIndicator />
+            </HDatePicker.Trigger>
+          </HDateField.Suffix>
+        </HDateField.Group>
+        <HDatePicker.Popover>
+          <HCalendar aria-label={label ?? "เลือกวันที่"}>
+            <HCalendar.Header>
+              <HCalendar.YearPickerTrigger>
+                <HCalendar.YearPickerTriggerHeading />
+                <HCalendar.YearPickerTriggerIndicator />
+              </HCalendar.YearPickerTrigger>
+              <HCalendar.NavButton slot="previous" />
+              <HCalendar.NavButton slot="next" />
+            </HCalendar.Header>
+            <HCalendar.Grid>
+              <HCalendar.GridHeader>
+                {day => <HCalendar.HeaderCell>{day}</HCalendar.HeaderCell>}
+              </HCalendar.GridHeader>
+              <HCalendar.GridBody>
+                {date => <HCalendar.Cell date={date} />}
+              </HCalendar.GridBody>
+            </HCalendar.Grid>
+            <HCalendar.YearPickerGrid>
+              <HCalendar.YearPickerGridBody>
+                {({ year }) => <HCalendar.YearPickerCell year={year} />}
+              </HCalendar.YearPickerGridBody>
+            </HCalendar.YearPickerGrid>
+          </HCalendar>
+        </HDatePicker.Popover>
+      </HDatePicker>
+    </I18nProvider>
+  );
+}
+
 export function TextArea(
   props: Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "className" | "style"> & ExtraInputProps & { className?: string; style?: React.CSSProperties },
 ) {

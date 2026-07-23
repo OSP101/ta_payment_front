@@ -1,16 +1,17 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check } from "lucide-react";
-import { api, type Term, type Me } from "../../lib/api";
-import { notify } from "../../lib/notify";
+import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp } from "lucide-react";
+import { api, type Term, type Me } from "../../../lib/api";
+import { notify } from "../../../lib/notify";
+import { icsToBlocks, type IcsImportResult } from "../../../lib/ics";
 import ScheduleGrid, {
   type Block, type BlockKind, type DraftRange,
   KIND_LABEL, blockTitle,
-} from "../../components/ScheduleGrid";
+} from "../../../components/ScheduleGrid";
 import {
-  PageHeader, Panel, Select, Modal, Button, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog,
-} from "../../components/ui";
+  PageHeader, Panel, Select, Modal, Button, IconButton, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog, TipWrap,
+} from "../../../components/ui";
 // Schedule editing is intentionally NOT gated behind TA approval — the user
 // asked to unblock this page so students can lay out their timetable while
 // their documents are still under review. LockedActionButton / useTAApproval
@@ -68,11 +69,10 @@ function SaveStatus({
 }) {
   if (error) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft rounded-md px-2 py-1"
-            title={error}>
+      <TipWrap content={error} className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft rounded-md px-2 py-1">
         <CloudOff size={13} />
         <span className="truncate max-w-[16rem]">บันทึกไม่สำเร็จ — จะลองใหม่อัตโนมัติ</span>
-      </span>
+      </TipWrap>
     );
   }
   if (saving) {
@@ -85,11 +85,10 @@ function SaveStatus({
   }
   if (dirty) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-muted"
-            title="ระบบจะบันทึกอัตโนมัติภายในไม่กี่วินาที">
+      <TipWrap content="ระบบจะบันทึกอัตโนมัติภายในไม่กี่วินาที" className="inline-flex items-center gap-1.5 text-xs text-muted">
         <Cloud size={13} />
         <span>กำลังจะบันทึกอัตโนมัติ…</span>
-      </span>
+      </TipWrap>
     );
   }
   if (savedAgo) {
@@ -139,6 +138,7 @@ export default function TASchedulePage() {
   const [editor, setEditor] = useState<EditorMode>({ kind: "closed" });
   const [pendingTerm, setPendingTerm] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Auto-save state. `savedAt` is the wall-clock of the last successful write
   // so the header can render "บันทึกล่าสุด X วินาทีที่แล้ว".
@@ -240,6 +240,16 @@ export default function TASchedulePage() {
   function removeBlock(id: string) {
     markDirty();
     setLocal(prev => prev.filter(b => b.id !== id));
+  }
+
+  // Replace all local blocks with the .ics import result. This intentionally
+  // drops any is_wba row too — user confirmed "replace all" over "merge", and
+  // an .ics with regular classes is inherently incompatible with WBA mode.
+  function applyImport(result: IcsImportResult) {
+    markDirty();
+    setLocal(result.blocks.map(b => ({ ...b, term_id: termId })));
+    setImportOpen(false);
+    notify.success(`นำเข้าตารางเรียนแล้ว ${result.blocks.length} คาบ`);
   }
 
   function toggleWba(on: boolean) {
@@ -369,6 +379,9 @@ export default function TASchedulePage() {
             <Select value={termId} onChange={e => requestTermChange(e.target.value)} className="max-w-xs">
               {terms?.map(t => (<option key={t.id} value={t.id}>{t.academic_year}/{t.semester}</option>))}
             </Select>
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              <FileUp size={14} /> อัปโหลด .ics
+            </Button>
             <Button variant="secondary" onClick={() => openCreate()} disabled={isWba}>
               <Plus size={14} /> เพิ่มคาบเรียน
             </Button>
@@ -443,12 +456,12 @@ export default function TASchedulePage() {
                         <Layers size={12} /> ซ้อน
                       </span>
                     )}
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(b.id)} aria-label="แก้ไข">
+                    <IconButton variant="ghost" size="sm" onClick={() => openEdit(b.id)} label="แก้ไข">
                       <Pencil size={14} />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteId(b.id)} aria-label="ลบ">
+                    </IconButton>
+                    <IconButton variant="ghost" size="sm" onClick={() => setConfirmDeleteId(b.id)} label="ลบ">
                       <Trash2 size={14} />
-                    </Button>
+                    </IconButton>
                   </div>
                 );
               })}
@@ -503,6 +516,13 @@ export default function TASchedulePage() {
         title="ลบคาบเรียน"
         message="ต้องการลบคาบเรียนนี้ออกจากตารางหรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก"
         confirmLabel="ลบ"
+      />
+
+      <IcsImportModal
+        open={importOpen}
+        termId={termId}
+        onClose={() => setImportOpen(false)}
+        onImport={applyImport}
       />
 
       <ConfirmDialog
@@ -768,5 +788,168 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
       confirmLabel="ลบ"
     />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// IcsImportModal — pick a KKU REG .ics file, preview parsed blocks, confirm.
+// Confirm replaces all local blocks for the current term (user chose "replace
+// all" over "merge" — grid state is fully rewritten from the file).
+// ---------------------------------------------------------------------------
+
+interface IcsImportModalProps {
+  open: boolean;
+  termId: string;
+  onClose: () => void;
+  onImport: (result: IcsImportResult) => void;
+}
+
+function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps) {
+  const [fileName, setFileName] = useState<string>("");
+  const [result, setResult] = useState<IcsImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Reset every time the modal opens so a stale preview from a previous file
+  // never bleeds into a new import session.
+  useEffect(() => {
+    if (!open) return;
+    setFileName("");
+    setResult(null);
+    setError(null);
+    setParsing(false);
+    if (fileRef.current) fileRef.current.value = "";
+  }, [open]);
+
+  async function handleFile(file: File) {
+    setParsing(true);
+    setError(null);
+    setResult(null);
+    setFileName(file.name);
+    try {
+      const text = await file.text();
+      const parsed = icsToBlocks(text, termId);
+      if (parsed.eventsTotal === 0) {
+        setError("ไม่พบเหตุการณ์ในไฟล์ (VEVENT) — โปรดตรวจว่าไฟล์เป็น .ics ที่ถูกต้อง");
+      } else if (parsed.blocks.length === 0) {
+        setError("อ่านไฟล์ได้แต่ไม่พบคาบเรียนที่นำเข้าได้ — ทั้งหมดอาจเป็นเหตุการณ์สอบหรืออยู่นอกช่วง 08:00–20:00");
+      }
+      setResult(parsed);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "อ่านไฟล์ไม่สำเร็จ");
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  }
+
+  const canImport = !!result && result.blocks.length > 0 && !parsing && !!termId;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="อัปโหลดตารางเรียนจาก KKU REG (.ics)"
+      icon={<FileUp size={18} />}
+      size="xl"
+      footer={
+        <div className="flex items-center justify-between w-full gap-2">
+          <div className="text-xs text-muted">
+            {result && result.blocks.length > 0
+              ? `จะแทนที่คาบเรียนทั้งหมดในภาคการศึกษานี้ด้วย ${result.blocks.length} คาบที่นำเข้า`
+              : ""}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+            <Button
+              variant="primary"
+              onClick={() => result && onImport(result)}
+              disabled={!canImport}
+            >
+              <Upload size={14} /> นำเข้า
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-muted">
+          ดาวน์โหลดไฟล์ตารางเรียน (.ics) จากระบบทะเบียน (reg.kku.ac.th) แล้วเลือกไฟล์ที่นี่
+          ระบบจะดึงคาบเรียนประจำสัปดาห์ให้อัตโนมัติ
+        </p>
+
+        <label className="flex flex-col gap-2 rounded-md border border-dashed border-[var(--hairline)] p-4 hover:bg-slate-50 cursor-pointer">
+          <div className="flex items-center gap-2 text-sm">
+            <FileUp size={16} className="text-muted" />
+            <span className="font-medium">{fileName || "เลือกไฟล์ .ics"}</span>
+            {parsing && <span className="text-xs text-muted">— กำลังอ่าน…</span>}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".ics,text/calendar"
+            onChange={onPick}
+            className="text-xs text-muted file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border file:border-[var(--hairline)] file:bg-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-slate-50"
+          />
+        </label>
+
+        {error && (
+          <Alert status="danger" icon={<AlertTriangle size={14} />} title={error} />
+        )}
+
+        {result && (
+          <IcsPreview result={result} />
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function IcsPreview({ result }: { result: IcsImportResult }) {
+  const summaryBits: string[] = [];
+  if (result.blocks.length) summaryBits.push(`คาบเรียนรายสัปดาห์ ${result.blocks.length} คาบ`);
+  if (result.duplicatesCollapsed) summaryBits.push(`รวมเหตุการณ์ซ้ำ ${result.duplicatesCollapsed} รายการ`);
+  if (result.examSkipped) summaryBits.push(`ข้ามการสอบ ${result.examSkipped} รายการ`);
+  if (result.outOfRangeSkipped) summaryBits.push(`ข้ามเวลานอกช่วง ${result.outOfRangeSkipped} รายการ`);
+  if (result.malformedSkipped) summaryBits.push(`ข้ามข้อมูลไม่สมบูรณ์ ${result.malformedSkipped} รายการ`);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="text-xs text-muted">{summaryBits.join(" · ")}</div>
+      {result.blocks.length > 0 && (
+        <div className="max-h-72 overflow-auto rounded-md border border-[var(--hairline)]">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs text-muted sticky top-0">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">วัน</th>
+                <th className="text-left px-3 py-2 font-medium">เวลา</th>
+                <th className="text-left px-3 py-2 font-medium">รหัสวิชา</th>
+                <th className="text-left px-3 py-2 font-medium">Sec</th>
+                <th className="text-left px-3 py-2 font-medium">ห้อง</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--hairline)]">
+              {result.blocks.map(b => (
+                <tr key={b.id}>
+                  <td className="px-3 py-1.5">{DOW_LABEL[b.day_of_week]}</td>
+                  <td className="px-3 py-1.5 tabular-nums">{b.start_time}–{b.end_time}</td>
+                  <td className="px-3 py-1.5 font-medium">{b.course_code}</td>
+                  <td className="px-3 py-1.5 tabular-nums">{b.sec_no}</td>
+                  <td className="px-3 py-1.5 text-muted truncate max-w-[16rem]">{b.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-xs text-muted">
+        หลังนำเข้า ระบบจะเว้นช่อง “ประเภท” (บรรยาย/ปฏิบัติการ) ไว้ให้ผู้ใช้เลือกภายหลัง
+      </p>
+    </div>
   );
 }

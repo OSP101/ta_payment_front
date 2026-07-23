@@ -22,7 +22,7 @@ import {
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
-  PageHeader, Panel, Button, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
+  PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 
@@ -31,7 +31,15 @@ import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 /* -------------------------------------------------------------------------- */
 
 interface Section { id: string; sec_no: string; track: string; }
-interface TA { id: string; first_name: string; last_name: string; email: string; study_level?: string; }
+interface TA {
+  id: string; first_name: string; last_name: string; email: string; study_level?: string;
+  // From /ta-requests/candidates — how many courses this TA is already approved
+  // for this term, whether they've hit the 3-course cap, and whether they are
+  // already an approved TA of THIS course (all make them unselectable).
+  approved_course_count?: number;
+  at_quota?: boolean;
+  already_in_course?: boolean;
+}
 interface SectionConflict { section_id: string; messages: string[]; }
 interface ConflictsResp { conflicts: SectionConflict[]; }
 interface Assignment {
@@ -63,6 +71,9 @@ interface RequestWindow {
 type WindowState =
   | { phase: "none" }
   | { phase: "open"; window: RequestWindow; closesAt: number; remainingMs: number }
+  // "late": the window opened and is still toggled on, but the deadline passed.
+  // Submissions are still accepted — they are flagged ล่าช้า server-side.
+  | { phase: "late"; window: RequestWindow; closedAt: number }
   | { phase: "upcoming"; window: RequestWindow; opensAt: number; untilMs: number }
   | { phase: "closed"; lastWindow?: RequestWindow };
 
@@ -103,7 +114,8 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
 
   const windowState = useWindowState(windows);
   const windowLoading = !!course?.term_id && !windows;
-  const canSend = windowLoading || windowState.phase === "open";
+  // Both "open" and "late" allow sending; late requests are accepted but flagged.
+  const canSend = windowLoading || windowState.phase === "open" || windowState.phase === "late";
 
   return (
     <div>
@@ -167,7 +179,15 @@ function RequestFormModal({
   onClose: () => void;
   onSubmitted: () => void;
 }) {
-  const { data: tas } = useSWR<{ items: TA[] }>(open ? "/users?role=ta&limit=200" : null);
+  // Candidates carry each TA's approved-course count so we can keep those who
+  // already hit the 3-course cap out of the picker (prevents over-quota requests
+  // up front, instead of a reject at submit time).
+  const candidatesKey = open && tcId ? `/ta-requests/candidates?teaching_course_id=${tcId}` : null;
+  const { data: tas } = useSWR<{ items: TA[] }>(candidatesKey);
+  // Hide TAs who can't be added: already an approved TA of this course, or who
+  // would exceed the 3-course cap by taking this one.
+  const hidden = (t: TA) => !!t.at_quota || !!t.already_in_course;
+  const selectableTas = useMemo(() => (tas?.items ?? []).filter(t => !hidden(t)), [tas]);
 
   // Q&A rule 3: default reimburse_scope from the course's credit hours.
   //   lecture-only → "lecture"; lab-only → "lab"; both → "both".
@@ -431,7 +451,7 @@ function RequestFormModal({
                         n={idx + 1}
                         assignment={a}
                         sections={course?.sections ?? []}
-                        tas={(tas?.items ?? []).filter(t => !takenElsewhere.has(t.id))}
+                        tas={selectableTas.filter(t => !takenElsewhere.has(t.id))}
                         scope={scope}
                         lectureHrs={course?.lecture_hrs ?? 0}
                         labHrs={course?.lab_hrs ?? 0}
@@ -459,7 +479,9 @@ function RequestFormModal({
         open={creatingTa}
         onClose={() => setCreatingTa(false)}
         onCreated={ta => {
-          mutate("/users?role=ta&limit=200");
+          // Refresh the candidate list so the new TA (0 courses → not at quota)
+          // appears immediately.
+          if (candidatesKey) mutate(candidatesKey);
           addAssignment(undefined, ta.id, ta.study_level ?? "undergrad");
         }}
       />
@@ -619,9 +641,9 @@ function AssignmentBlock({
             <span className="text-xs text-ink-3">ยังไม่ได้เลือก TA</span>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={onRemove} aria-label="ลบ">
+        <IconButton label="ลบ" variant="ghost" size="sm" onClick={onRemove}>
           <Trash2 size={14} />
-        </Button>
+        </IconButton>
       </div>
 
       <div className="p-3 space-y-3">
@@ -920,7 +942,7 @@ function SectionPicker({
     >
       <Label className="text-sm font-medium">
         Section <span className="text-red-500">*</span>{" "}
-        <span className="text-xs text-ink-3 font-normal">(เลือกได้มากกว่า 1 กลุ่ม)</span>
+        <span className="text-xs text-ink-3 font-normal">(เลือกได้หลายกลุ่ม รวมกลุ่มที่สอนพร้อมกันเวลาเดียว)</span>
       </Label>
       <div className="flex flex-wrap gap-2 mt-1">
         {sections.map(s => {
@@ -1284,6 +1306,17 @@ function useWindowState(windows: RequestWindow[] | undefined): WindowState {
       return { phase: "open", window: active, closesAt: c, remainingMs: c - now };
     }
 
+    // A window that opened and is still switched on but is past its deadline —
+    // late submissions are still accepted (flagged server-side).
+    const late = windows
+      .filter(w => w.is_open
+        && new Date(w.opens_at).getTime() <= now
+        && new Date(w.closes_at).getTime() < now)
+      .sort((a, b) => new Date(b.closes_at).getTime() - new Date(a.closes_at).getTime())[0];
+    if (late) {
+      return { phase: "late", window: late, closedAt: new Date(late.closes_at).getTime() };
+    }
+
     const upcoming = windows
       .filter(w => w.is_open && new Date(w.opens_at).getTime() > now)
       .sort((a, b) => new Date(a.opens_at).getTime() - new Date(b.opens_at).getTime())[0];
@@ -1345,6 +1378,22 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
           <div className={"text-xs " + (urgent ? "text-amber-800" : "text-emerald-800")}>
             ปิดรับ: {formatThaiDateTime(state.window.closes_at)}
             {state.window.note ? ` · ${state.window.note}` : ""}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.phase === "late") {
+    return (
+      <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center gap-3">
+        <Chip tone="warn"><AlertCircle size={12} /> เลยกำหนดรับสมัคร</Chip>
+        <div className="flex flex-col min-w-0">
+          <div className="text-sm font-medium text-amber-900">
+            หมดเวลารับสมัครแล้ว — ยังส่งคำขอได้ แต่จะถูกทำเครื่องหมายว่า “ล่าช้า”
+          </div>
+          <div className="text-xs text-amber-800">
+            กำหนดปิดรับ: {formatThaiDateTime(state.window.closes_at)}
           </div>
         </div>
       </div>

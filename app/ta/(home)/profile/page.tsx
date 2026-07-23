@@ -2,8 +2,8 @@
 import useSWR from "swr";
 import Link from "next/link";
 import { KeyRound, ShieldCheck, Smartphone, User, ArrowRight, Clock } from "lucide-react";
-import type { Me } from "../../lib/api";
-import { PageHeader, Panel, Button, Chip } from "../../components/ui";
+import type { Me } from "../../../lib/api";
+import { PageHeader, Panel, Button, Chip } from "../../../components/ui";
 
 // Account settings: identity, sign-in, and security. Documents (bank info,
 // signature, ID copies, etc.) live on the separate /ta/documents page —

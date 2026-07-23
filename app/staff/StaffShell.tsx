@@ -10,7 +10,8 @@ import {
   Settings,
   ScrollText,
   Bell,
-  ClipboardEdit,
+  CalendarOff,
+  Route,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
@@ -33,19 +34,20 @@ const nav: NavSection[] = [
     items: [
       { label: "ตรวจสอบเอกสาร", href: "/staff/review", icon: FileCheck2 },
       { label: "รายการคำขอ TA", href: "/staff/approvals", icon: ClipboardCheck },
-      { label: "แก้ไขบันทึกเวลา", href: "/staff/worklog", icon: ClipboardEdit },
     ],
   },
   {
     title: "ปฏิบัติงาน",
     items: [
       { label: "ส่งออกเอกสาร", href: "/staff/exports", icon: Download },
+      { label: "อัปเดตความคืบหน้า", href: "/staff/progress", icon: Route },
       { label: "ประชาสัมพันธ์", href: "/staff/announce", icon: Megaphone },
     ],
   },
   {
     title: "ระบบ",
     items: [
+      { label: "วันหยุดราชการ", href: "/staff/holidays", icon: CalendarOff },
       { label: "ตั้งค่า", href: "/staff/settings", icon: Settings },
       { label: "Audit Log", href: "/staff/audit", icon: ScrollText },
     ],

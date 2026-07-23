@@ -1,14 +1,13 @@
 "use client";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarX2, BookPlus, CircleAlert, Wallet, ClipboardCheck } from "lucide-react";
+import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarX2, CircleAlert, Wallet, ClipboardCheck } from "lucide-react";
 import type { Term } from "../../lib/api";
 import {
-  PageHeader, Panel, StatCard, EmptyState, Chip, Button, SelectField, Alert, ProgressBar, type SelectOption,
+  PageHeader, Panel, EmptyState, Chip, Button, SelectField, Alert, type SelectOption,
 } from "../../components/ui";
-import OpenCourseModal from "./OpenCourseModal";
 
 interface TC {
   id: string; code: string; name_th: string;
@@ -20,6 +19,7 @@ interface TC {
 interface LecturerCourseStatus {
   teaching_course_id: string;
   ta_count: number;
+  ta_pending_count: number;
   hours_pending_approval: number;
   hours_approved: number;
   estimated_baht: number;
@@ -38,7 +38,6 @@ export default function LecturerHome() {
   const params = useSearchParams();
   const yearParam = params.get("year");
   const termParam = params.get("term");
-  const [openModal, setOpenModal] = useState(false);
 
   const { data: terms, error: termsError } = useSWR<Term[]>("/terms");
 
@@ -116,8 +115,6 @@ export default function LecturerHome() {
     (overview ?? []).forEach(o => m.set(o.teaching_course_id, o));
     return m;
   }, [overview]);
-  const totalPending = (overview ?? []).reduce((a, o) => a + o.hours_pending_approval, 0);
-  const totalEstimated = (overview ?? []).reduce((a, o) => a + o.estimated_baht, 0);
 
   function setYear(y: string) {
     const list = byYear.find(([yr]) => String(yr) === y)?.[1] ?? [];
@@ -216,13 +213,6 @@ export default function LecturerHome() {
                 isDisabled={yearTerms.length === 0}
                 className="min-w-[180px]"
               />
-              <Button
-                variant="primary"
-                onClick={() => setOpenModal(true)}
-                disabled={!defaultTerm}
-              >
-                <BookPlus size={16} />เปิดรายวิชา
-              </Button>
             </div>
           )
         }
@@ -246,32 +236,6 @@ export default function LecturerHome() {
         </Panel>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatCard
-              label="ภาคเรียนที่เลือก"
-              value={termDisplay || "—"}
-              icon={<CalendarClock size={18} />}
-              tone="brand"
-            />
-            <StatCard
-              label="วิชาที่รับผิดชอบ"
-              value={courses === undefined ? (coursesError ? "—" : "…") : courses.length}
-              icon={<BookOpen size={18} />}
-            />
-            <StatCard
-              label="รอลงนามอนุมัติ"
-              value={`${totalPending.toFixed(1)} ชม.`}
-              icon={<ClipboardCheck size={18} />}
-              tone={totalPending > 0 ? "warn" : "default"}
-            />
-            <StatCard
-              label="ยอดเงินโดยประมาณ"
-              value={`฿${totalEstimated.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-              icon={<Wallet size={18} />}
-              tone="success"
-            />
-          </div>
-
           <Panel
             title="รายวิชาในภาคเรียนนี้"
             description="คลิกที่วิชาเพื่อเข้าหน้าจัดการ — ส่งคำขอ TA, คำนวณงบ, อนุมัติรายงาน"
@@ -322,7 +286,8 @@ export default function LecturerHome() {
                   const over = pctRaw > 100;
                   const budgetTone: "success" | "warn" | "danger" =
                     over || pctRaw >= 90 ? "danger" : pctRaw >= 70 ? "warn" : "success";
-                  const pending = ov?.hours_pending_approval ?? 0;
+                  const pendingPeople = ov?.ta_pending_count ?? 0;
+                  const pendingHours = ov?.hours_pending_approval ?? 0;
                   const hasTa = (ov?.ta_count ?? 0) > 0;
                   return (
                     <li key={c.id}>
@@ -352,55 +317,46 @@ export default function LecturerHome() {
                             </div>
                           </div>
 
-                          <div className="md:w-56 shrink-0 flex flex-col gap-1.5">
-                            {pending > 0 ? (
-                              <div className="flex md:justify-end">
-                                <Chip tone="warn">
-                                  <span className="inline-flex items-center gap-1">
-                                    <ClipboardCheck size={12} />
-                                    รอลงนาม {pending.toFixed(1)} ชม.
-                                  </span>
-                                </Chip>
-                              </div>
-                            ) : ov && !hasTa ? (
-                              <div className="flex md:justify-end">
-                                <Chip tone="neutral">
-                                  <span className="inline-flex items-center gap-1">
-                                    <Users size={12} />
-                                    ยังไม่มี TA
-                                  </span>
-                                </Chip>
-                              </div>
-                            ) : null}
-
+                          <div className="shrink-0 flex flex-wrap gap-1.5 md:justify-end items-center">
+                            {pendingPeople > 0 && (
+                              <Chip tone="warn">
+                                <span
+                                  className="inline-flex items-center gap-1"
+                                  title={`รวม ${pendingHours.toFixed(1)} ชม. รอตรวจ`}
+                                >
+                                  <ClipboardCheck size={12} />
+                                  รอตรวจ {pendingPeople} คน
+                                </span>
+                              </Chip>
+                            )}
+                            {ov && !hasTa && (
+                              <Chip tone="neutral">
+                                <span className="inline-flex items-center gap-1">
+                                  <Users size={12} />
+                                  ยังไม่มี TA
+                                </span>
+                              </Chip>
+                            )}
                             {hasBudget ? (
-                              <div className="w-full">
-                                <div className="flex items-baseline justify-between text-xs">
-                                  <span className="inline-flex items-center gap-1 text-muted">
-                                    <Wallet size={12} /> งบ
-                                  </span>
-                                  <span className="tabular text-foreground">
-                                    <span className={
-                                      budgetTone === "danger" ? "text-danger font-medium"
-                                        : budgetTone === "warn" ? "text-warning font-medium"
-                                        : "font-medium"
-                                    }>
-                                      ฿{fmt(ov!.budget_used)}
-                                    </span>
-                                    <span className="text-muted"> / ฿{fmt(ov!.budget_max)}</span>
-                                  </span>
-                                </div>
-                                <div className="mt-1">
-                                  <ProgressBar value={Math.min(100, pctRaw)} tone={budgetTone} />
-                                </div>
-                                <div className="text-[10px] text-muted text-right mt-0.5 tabular">
-                                  {over ? `เกินงบ ${pct - 100}%` : `${pct}%`}
-                                </div>
-                              </div>
+                              <Chip tone={budgetTone}>
+                                <span
+                                  className="inline-flex items-center gap-1 tabular"
+                                  title={`ใช้ ฿${fmt(ov!.budget_used)} / ฿${fmt(ov!.budget_max)}`}
+                                >
+                                  <Wallet size={12} />
+                                  งบ {over ? `เกิน ${pct - 100}%` : `${pct}%`}
+                                </span>
+                              </Chip>
                             ) : ov ? (
-                              <div className="text-xs text-muted md:text-right italic inline-flex md:justify-end items-center gap-1">
-                                <Wallet size={12} /> ยังไม่ตั้งงบ
-                              </div>
+                              <Chip tone="neutral">
+                                <span
+                                  className="inline-flex items-center gap-1"
+                                  title="งบเบิกจ่ายจะคำนวณให้อัตโนมัติ หลังเจ้าหน้าที่กรอกจำนวนนักศึกษาของวิชานี้ (ยังไม่ใช่สิ่งที่อาจารย์ต้องทำ)"
+                                >
+                                  <Wallet size={12} />
+                                  รอเจ้าหน้าที่กรอกจำนวนนักศึกษา
+                                </span>
+                              </Chip>
                             ) : null}
                           </div>
                         </div>
@@ -426,13 +382,6 @@ export default function LecturerHome() {
               </a>
             </div>
           )}
-
-          <OpenCourseModal
-            open={openModal}
-            onClose={() => setOpenModal(false)}
-            termId={defaultTerm}
-            termLabel={termDisplay}
-          />
         </>
       )}
     </div>

@@ -6,7 +6,7 @@ import { Dropdown } from "@heroui/react";
 import { Bell, BellRing, Check } from "lucide-react";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Button } from "./ui";
+import { IconButton } from "./ui";
 
 interface Notif {
   id: string;
@@ -53,11 +53,10 @@ export default function NotificationBell({
 
   return (
     <Dropdown>
-      <Button
+      <IconButton
         variant="ghost"
-        isIconOnly
         size="sm"
-        aria-label={show ? `การเตือน ${unread.length} รายการ` : "การเตือน"}
+        label={show ? `การเตือน ${unread.length} รายการ` : "การเตือน"}
         className="relative"
       >
         {show ? <BellRing size={18} /> : <Bell size={18} />}
@@ -69,7 +68,7 @@ export default function NotificationBell({
             {unread.length > 9 ? "9+" : unread.length}
           </span>
         )}
-      </Button>
+      </IconButton>
 
       <Dropdown.Popover className="min-w-[320px] max-w-[380px]">
         <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">

@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, Button, Card, FieldError, Input, InputGroup, Label, TextField } from "@heroui/react";
+import { IconButton } from "../components/ui";
 import { Check, Eye, EyeOff, KeyRound, ShieldAlert, X } from "lucide-react";
 import { api, errMessage } from "../lib/api";
 
@@ -76,15 +77,14 @@ export default function ChangePasswordPage() {
                 <InputGroup>
                   <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="new-password" />
                   <InputGroup.Suffix className="pr-0">
-                    <Button
-                      isIconOnly
+                    <IconButton
                       size="sm"
                       variant="ghost"
-                      aria-label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                      label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
                       onPress={() => setShowPw(!showPw)}
                     >
                       {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </Button>
+                    </IconButton>
                   </InputGroup.Suffix>
                 </InputGroup>
                 <div className="mt-1.5 flex flex-col gap-1">
