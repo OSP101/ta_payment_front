@@ -1,12 +1,12 @@
 "use client";
 import { use, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Breadcrumbs } from "@heroui/react";
 import { CalendarOff, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MapPin } from "lucide-react";
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Modal, Chip, Alert, ConfirmDialog, EmptyState,
+  DatePicker, TimePicker,
 } from "../../../../components/ui";
 
 interface Makeup {
@@ -134,14 +134,6 @@ export default function LecturerHolidaysPage({ params }: { params: Promise<{ tcI
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/lecturer">รายวิชาที่สอน</Breadcrumbs.Item>
-        <Breadcrumbs.Item href={`/lecturer/courses/${tcId}`}>
-          {course ? `${course.code} — ${course.name_th}` : "…"}
-        </Breadcrumbs.Item>
-        <Breadcrumbs.Item>วันหยุดและวันชดเชย</Breadcrumbs.Item>
-      </Breadcrumbs>
-
       <PageHeader
         title="วันหยุดและวันชดเชย"
         description="วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ และสถานะการกำหนดวันชดเชย — TA จะลงชั่วโมงคาบที่ตกวันหยุดไม่ได้จนกว่าคุณจะกำหนดวันชดเชย"
@@ -152,12 +144,20 @@ export default function LecturerHolidaysPage({ params }: { params: Promise<{ tcI
         }
       />
 
+      {/* ไม่ใช่แค่ "แจ้งให้ทราบ" — ถ้าไม่ทำ TA เสียเงินจริง จึงใช้ระดับ danger
+          และบอกผลที่ตามมาให้ชัดตั้งแต่บรรทัดแรก */}
       {unresolvedCount > 0 && (
         <Alert
-          status="warning"
+          status="danger"
           icon={<AlertTriangle size={16} />}
-          title={`ยังมี ${unresolvedCount} คาบที่รอกำหนดวันชดเชย`}
-          description="กด 'กำหนดวันชดเชย' ในแต่ละคาบ เพื่อให้ TA สามารถลงเวลาปฏิบัติงานได้"
+          title={`ต้องดำเนินการ: ${unresolvedCount} คาบยังไม่ได้กำหนดวันชดเชย`}
+          description={
+            <>
+              คาบเหล่านี้ตรงกับวันหยุด ระบบจะ<b>ข้ามวันนั้นในบันทึกเวลา</b> —
+              {" "}<b>TA จะลงเวลาไม่ได้ และเบิกค่าตอบแทนของคาบนั้นไม่ได้</b>
+              {" "}จนกว่าคุณจะกดปุ่ม “กำหนดวันชดเชย” ในทุกคาบด้านล่าง
+            </>
+          }
         />
       )}
 
@@ -422,15 +422,15 @@ function MakeupFormModal({
         </div>
 
         <FieldGroup label="วันที่ชดเชย">
-          <TextInput type="date" value={date} onChange={e => setDate(e.target.value)} autoFocus />
+          <DatePicker value={date} onChange={setDate} label="วันที่ชดเชย" autoFocus />
         </FieldGroup>
 
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup label="เวลาเริ่ม">
-            <TextInput type="time" step={60 * 30} value={start} onChange={e => setStart(e.target.value)} />
+            <TimePicker value={start} onChange={setStart} label="เวลาเริ่ม" />
           </FieldGroup>
           <FieldGroup label="เวลาสิ้นสุด">
-            <TextInput type="time" step={60 * 30} value={end} onChange={e => setEnd(e.target.value)} />
+            <TimePicker value={end} onChange={setEnd} label="เวลาสิ้นสุด" />
           </FieldGroup>
         </div>
 
@@ -531,19 +531,27 @@ function ManualMakeupModal({
         </FieldGroup>
 
         <FieldGroup label="วันเดิมที่งดสอน">
-          <TextInput type="date" value={originalDate} onChange={e => setOriginalDate(e.target.value)} />
+          <DatePicker value={originalDate} onChange={setOriginalDate} label="วันเดิมที่งดสอน" />
         </FieldGroup>
 
         <FieldGroup label="วันที่ชดเชย">
-          <TextInput type="date" value={date} onChange={e => setDate(e.target.value)} />
+          <DatePicker value={date} onChange={setDate} label="วันที่ชดเชย" />
         </FieldGroup>
 
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup label="เวลาเริ่ม">
-            <TextInput type="time" step={60 * 30} value={start || defaultSlot?.start_time?.slice(0, 5) || ""} onChange={e => setStart(e.target.value)} />
+            <TimePicker
+              value={start || defaultSlot?.start_time?.slice(0, 5) || ""}
+              onChange={setStart}
+              label="เวลาเริ่ม"
+            />
           </FieldGroup>
           <FieldGroup label="เวลาสิ้นสุด">
-            <TextInput type="time" step={60 * 30} value={end || defaultSlot?.end_time?.slice(0, 5) || ""} onChange={e => setEnd(e.target.value)} />
+            <TimePicker
+              value={end || defaultSlot?.end_time?.slice(0, 5) || ""}
+              onChange={setEnd}
+              label="เวลาสิ้นสุด"
+            />
           </FieldGroup>
         </div>
 

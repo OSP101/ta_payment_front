@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Breadcrumbs, Tabs, toast } from "@heroui/react";
+import { Tabs, toast } from "@heroui/react";
 import {
   CircleAlert, Clock, LayoutGrid, Lock, Plus, Save, Trash2, Users,
 } from "lucide-react";
@@ -54,14 +54,6 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/lecturer">รายวิชาที่สอน</Breadcrumbs.Item>
-        <Breadcrumbs.Item href={`/lecturer/courses/${tcId}`}>
-          {tc ? `${tc.code} — ${tc.name_th}` : "…"}
-        </Breadcrumbs.Item>
-        <Breadcrumbs.Item>ตั้งค่ารายวิชา</Breadcrumbs.Item>
-      </Breadcrumbs>
-
       <PageHeader
         title="ตั้งค่ารายวิชา"
         description={tc ? `${tc.code} — ${tc.name_th}` : undefined}

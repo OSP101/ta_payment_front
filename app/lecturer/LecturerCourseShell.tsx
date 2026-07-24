@@ -1,9 +1,13 @@
 "use client";
+import useSWR from "swr";
 import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell, ShieldAlert, CalendarOff } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
+import CourseSwitcher from "../components/CourseSwitcher";
 import { Alert } from "../components/ui";
+
+interface CourseMakeupInfo { unresolved_makeups?: number }
 
 export default function LecturerCourseShell({
   me, tcId, courseCode, children,
@@ -13,6 +17,13 @@ export default function LecturerCourseShell({
   courseCode?: string;
   children: React.ReactNode;
 }) {
+  // คาบที่ตกวันหยุดและยังไม่กำหนดวันชดเชย — ถ้าไม่ทำ ระบบจะข้ามวันนั้น
+  // และ TA ลงเวลาไม่ได้ (= เบิกเงินไม่ได้) จึงติดตัวนับไว้ที่เมนูให้เห็นทุกหน้า
+  const { data: courseInfo } = useSWR<CourseMakeupInfo>(
+    tcId ? `/teaching-courses/${tcId}` : null,
+  );
+  const pendingMakeups = courseInfo?.unresolved_makeups ?? 0;
+
   const nav: NavSection[] = [
     {
       items: [
@@ -25,7 +36,13 @@ export default function LecturerCourseShell({
         { label: "ภาพรวมวิชา", href: `/lecturer/courses/${tcId}`, icon: LayoutDashboard, exact: true },
         { label: "ส่งคำขอ TA", href: `/lecturer/courses/${tcId}/request`, icon: Send },
         { label: "อนุมัติรายงาน TA", href: `/lecturer/courses/${tcId}/reports`, icon: ClipboardCheck },
-        { label: "วันหยุดและวันชดเชย", href: `/lecturer/courses/${tcId}/holidays`, icon: CalendarOff },
+        {
+          label: "วันหยุดและวันชดเชย",
+          href: `/lecturer/courses/${tcId}/holidays`,
+          icon: CalendarOff,
+          badge: pendingMakeups,
+          badgeLabel: "รอกำหนดวันชดเชย",
+        },
         { label: "ตั้งค่ารายวิชา", href: `/lecturer/courses/${tcId}/settings`, icon: Settings },
       ],
     },
@@ -55,6 +72,7 @@ export default function LecturerCourseShell({
       brandTitle={brandTitle}
       nav={nav}
       userMenuItems={userMenuItems}
+      topBarLeft={<CourseSwitcher tcId={tcId} />}
       topBarAccessory={<NotificationBell />}
     >
       {impersonating && (

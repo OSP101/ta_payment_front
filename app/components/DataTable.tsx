@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Pagination, SearchField, Table, type SortDescriptor,
+  Pagination, Table, type SortDescriptor,
 } from "@heroui/react";
-import { EmptyState, SelectField, Spinner, Alert, Button, type SelectOption } from "./ui";
+import { EmptyState, SearchField, SelectField, Spinner, Alert, Button, type SelectOption } from "./ui";
 
 /* -------------------------------------------------------------------------- */
 /* DataTable — reusable HeroUI table with search / filters / sort / pagination */
@@ -54,6 +54,12 @@ interface DataTableProps<T> {
   onRetry?: () => void;
   /** Extra toolbar content rendered to the right of search/filters. */
   toolbarExtra?: React.ReactNode;
+  /**
+   * Minimum table width (any CSS length). Below this the ScrollContainer
+   * scrolls horizontally instead of squeezing columns until the text wraps to
+   * three lines. Set it on wide tables — omit for tables that fit anywhere.
+   */
+  minWidth?: string;
 }
 
 // React Aria selection keys must be non-empty; callers use "" for the
@@ -79,7 +85,7 @@ export function DataTable<T>({
   searchFn, searchPlaceholder = "ค้นหา…",
   filters, initialFilterValues, pageSize = 10, initialSort,
   emptyTitle = "ไม่มีข้อมูล", emptyDescription,
-  loading, error, onRetry, toolbarExtra,
+  loading, error, onRetry, toolbarExtra, minWidth,
 }: DataTableProps<T>) {
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>(initialFilterValues ?? {});
@@ -154,15 +160,9 @@ export function DataTable<T>({
             <SearchField
               value={query}
               onChange={setQuery}
-              aria-label={searchPlaceholder}
-              className="w-full sm:w-72"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input placeholder={searchPlaceholder} />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
+              ariaLabel={searchPlaceholder}
+              placeholder={searchPlaceholder}
+            />
           )}
           {(filters ?? []).map(f => (
             <SelectField
@@ -193,6 +193,7 @@ export function DataTable<T>({
             aria-label={ariaLabel}
             sortDescriptor={sort}
             onSortChange={setSort}
+            style={minWidth ? { minWidth } : undefined}
           >
             <Table.Header>
               {columns.map(c =>

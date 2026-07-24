@@ -2,7 +2,6 @@
 import { use, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { Breadcrumbs } from "@heroui/react";
 import { ArrowLeft, ClipboardEdit, FileCheck2 } from "lucide-react";
 import { PageHeader, Panel } from "../../../components/ui";
 import { StaffWorklogEditor } from "../../../components/StaffWorklogEditor";
@@ -42,10 +41,6 @@ export default function StaffCourseWorkspace({ params }: { params: Promise<{ tcI
         <ArrowLeft size={16} /> กลับไปรายการวิชา (ส่งออกเอกสาร)
       </Link>
 
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/staff/exports">ส่งออกเอกสาร</Breadcrumbs.Item>
-        <Breadcrumbs.Item>{tc ? `${tc.code} — ${tc.name_th}` : "…"}</Breadcrumbs.Item>
-      </Breadcrumbs>
 
       <PageHeader
         title={tc ? `${tc.code} — ${tc.name_th}` : "…"}

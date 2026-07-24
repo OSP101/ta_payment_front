@@ -8,7 +8,7 @@ import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { Button, StatusChip, Spinner, Panel, Chip, Select, TextArea, FieldGroup } from "../../components/ui";
 import type { Pending, Doc, Profile } from "./types";
-import { DOC_KIND_LABEL, fmtDate, daysUntil } from "./types";
+import { DOC_KIND_LABEL, REJECT_PRESETS, OTHER_PRESET, fmtDate, daysUntil } from "./types";
 
 interface DetailResp {
   documents: Doc[] | null;
@@ -17,15 +17,35 @@ interface DetailResp {
 
 const REQUIRED_KINDS = ["national_id", "bank_book", "creditor_form"];
 
-// Preset rejection reasons the officer can pick without typing. "อื่นๆ" opens
-// a free-text box so unusual problems can still be described.
-const REJECT_PRESETS = [
-  "เอกสารไม่ชัด / อ่านไม่ออก",
-  "ยังไม่เซ็นชื่อ",
-  "แนบผิดไฟล์ / ไม่ตรงประเภทเอกสาร",
-  "อื่นๆ (ระบุเอง)",
-];
-const OTHER_PRESET = "อื่นๆ (ระบุเอง)";
+// Short labels for the collapsed-header per-file status pills — the full
+// DOC_KIND_LABEL names are too long to line up three across the row.
+const DOC_SHORT_LABEL: Record<string, string> = {
+  national_id:   "บัตร ปชช.",
+  bank_book:     "สมุดบัญชี",
+  creditor_form: "ฟอร์มเจ้าหนี้",
+};
+
+/** Traffic-light status of each required file, shown in the collapsed header so
+ * the officer knows which document still needs a look without expanding:
+ * เขียว = ผ่าน, เหลือง = รอตรวจ, แดง = ตีกลับ, เทา = ยังไม่ส่ง. */
+function FileStatusPills({ docs }: { docs: Doc[] }) {
+  const current = docs.filter(d => !d.superseded);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {REQUIRED_KINDS.map(kind => {
+        const status = current.find(d => d.kind === kind)?.status ?? "missing";
+        const label = DOC_SHORT_LABEL[kind] ?? kind;
+        if (status === "approved")
+          return <Chip key={kind} tone="success"><Check size={12} /> {label}</Chip>;
+        if (status === "rejected")
+          return <Chip key={kind} tone="danger"><X size={12} /> {label}</Chip>;
+        if (status === "missing")
+          return <Chip key={kind} tone="neutral"><FileText size={12} /> {label}: ยังไม่ส่ง</Chip>;
+        return <Chip key={kind} tone="warn"><Clock3 size={12} /> {label}</Chip>;
+      })}
+    </div>
+  );
+}
 
 /** One collapsible card per TA. Collapsed by default so the list stays short;
  * expand to see the profile grid + each document with its own
@@ -136,9 +156,14 @@ export function ReviewRow({
             <RefreshCw size={12} /> ส่งแก้ไขใหม่ (รอบ {profile?.current_round})
           </Chip>
         )}
-        <Chip tone={allApproved ? "success" : "neutral"}>
-          ผ่านแล้ว {approvedCount}/{REQUIRED_KINDS.length} ไฟล์
-        </Chip>
+        {/* Per-file status so the officer sees which document is still pending
+            without expanding the card. Falls back to a plain count while the
+            detail (docs) is still loading. */}
+        {isLoading ? (
+          <Chip tone="neutral">ผ่านแล้ว {approvedCount}/{REQUIRED_KINDS.length} ไฟล์</Chip>
+        ) : (
+          <FileStatusPills docs={docs} />
+        )}
         <StatusChip status={user.status} />
         {user.submitted_at && (
           <div className="text-xs text-muted whitespace-nowrap">ส่ง: {fmtDate(user.submitted_at)}</div>
@@ -150,8 +175,6 @@ export function ReviewRow({
           <div className="p-6 flex justify-center border-t border-(--hairline)"><Spinner /></div>
         ) : (
           <div className="p-4 space-y-4 border-t border-(--hairline)">
-            {profile && <ProfileGrid profile={profile} />}
-
             <div>
               <div className="text-xs font-medium uppercase tracking-wider text-muted mb-2">
                 เอกสารที่แนบ — ตรวจและตัดสินทีละไฟล์
@@ -207,33 +230,6 @@ export function ReviewRow({
         )
       )}
     </Panel>
-  );
-}
-
-function ProfileGrid({ profile }: { profile: Profile }) {
-  const cells: [string, string | undefined][] = [
-    ["คำนำหน้า",       profile.prefix],
-    ["เลขบัตรประชาชน", profile.national_id],
-    ["ธนาคาร",         profile.bank_name],
-    ["เลขที่บัญชี",     profile.account_no],
-    ["ชื่อบัญชี",       profile.account_name],
-  ];
-  const filled = cells.filter(([, v]) => v && v.length > 0);
-  if (filled.length === 0) return null;
-  return (
-    <div>
-      <div className="text-xs font-medium uppercase tracking-wider text-muted mb-2">
-        ข้อมูลบัญชี
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-2 text-sm">
-        {filled.map(([k, v]) => (
-          <div key={k} className="flex flex-col min-w-0">
-            <span className="text-xs text-muted">{k}</span>
-            <span className="text-foreground tabular-nums truncate">{v}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

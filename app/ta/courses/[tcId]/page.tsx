@@ -3,7 +3,6 @@ import { use, useMemo } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { BookOpen, Clock, Wallet, CalendarClock, ArrowRight, MapPin, AlertTriangle, CircleAlert } from "lucide-react";
-import { Breadcrumbs } from "@heroui/react";
 import { ApiError } from "../../../lib/api";
 import {
   PageHeader, Panel, StatCard, EmptyState, Chip, Alert, Button, type ChipTone,
@@ -103,11 +102,6 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/ta">รายวิชาที่ฉันเป็น TA</Breadcrumbs.Item>
-        <Breadcrumbs.Item>{course ? `${course.code} — ${course.name_th}` : "…"}</Breadcrumbs.Item>
-      </Breadcrumbs>
-
       <PageHeader
         title={course ? `${course.code} — ${course.name_th}` : "รายวิชา"}
         description="ภาพรวมสถานะภาระงาน TA ในรายวิชานี้"

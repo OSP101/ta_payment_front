@@ -4,13 +4,14 @@ import useSWR, { mutate } from "swr";
 import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp } from "lucide-react";
 import { api, type Term, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
-import { icsToBlocks, type IcsImportResult } from "../../../lib/ics";
+import { icsToBlocks, applyClassKinds, type IcsImportResult, type ClassKindRow } from "../../../lib/ics";
 import ScheduleGrid, {
   type Block, type BlockKind, type DraftRange,
   KIND_LABEL, blockTitle,
 } from "../../../components/ScheduleGrid";
 import {
   PageHeader, Panel, Select, Modal, Button, IconButton, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog, TipWrap,
+  TimePicker, Chip,
 } from "../../../components/ui";
 // Schedule editing is intentionally NOT gated behind TA approval — the user
 // asked to unblock this page so students can lay out their timetable while
@@ -742,20 +743,10 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
 
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup label="เริ่ม">
-            <TextInput
-              type="time" value={start} onChange={e => setStart(e.target.value)}
-              step={60 * 30}
-              min={`${String(START_HR).padStart(2, "0")}:00`}
-              max={`${String(END_HR).padStart(2, "0")}:00`}
-            />
+            <TimePicker value={start} onChange={setStart} label="เริ่ม" />
           </FieldGroup>
           <FieldGroup label="สิ้นสุด">
-            <TextInput
-              type="time" value={end} onChange={e => setEnd(e.target.value)}
-              step={60 * 30}
-              min={`${String(START_HR).padStart(2, "0")}:00`}
-              max={`${String(END_HR).padStart(2, "0")}:00`}
-            />
+            <TimePicker value={end} onChange={setEnd} label="สิ้นสุด" />
           </FieldGroup>
         </div>
 
@@ -829,7 +820,15 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
     setFileName(file.name);
     try {
       const text = await file.text();
-      const parsed = icsToBlocks(text, termId);
+      let parsed = icsToBlocks(text, termId);
+      // .ics ของ REG ไม่มีข้อมูลว่าคาบไหนบรรยาย/ปฏิบัติการ — เทียบกับตารางสอน
+      // ที่นำเข้าจากไฟล์ทะเบียนในระบบ (ซึ่งระบุ Lec/Lab ไว้) เพื่อเติมให้อัตโนมัติ
+      try {
+        const table = await api.get<ClassKindRow[]>(`/class-kinds?term_id=${termId}`);
+        parsed = applyClassKinds(parsed, table ?? []);
+      } catch {
+        // ดึงตารางไม่ได้ก็ยังนำเข้าได้ตามปกติ แค่ต้องเลือกประเภทเอง
+      }
       if (parsed.eventsTotal === 0) {
         setError("ไม่พบเหตุการณ์ในไฟล์ (VEVENT) — โปรดตรวจว่าไฟล์เป็น .ics ที่ถูกต้อง");
       } else if (parsed.blocks.length === 0) {
@@ -917,6 +916,8 @@ function IcsPreview({ result }: { result: IcsImportResult }) {
   if (result.examSkipped) summaryBits.push(`ข้ามการสอบ ${result.examSkipped} รายการ`);
   if (result.outOfRangeSkipped) summaryBits.push(`ข้ามเวลานอกช่วง ${result.outOfRangeSkipped} รายการ`);
   if (result.malformedSkipped) summaryBits.push(`ข้ามข้อมูลไม่สมบูรณ์ ${result.malformedSkipped} รายการ`);
+  if (result.kindResolved) summaryBits.push(`ระบุประเภทให้อัตโนมัติ ${result.kindResolved} คาบ`);
+  const unresolved = result.blocks.filter(b => !b.kind).length;
 
   return (
     <div className="flex flex-col gap-2">
@@ -930,6 +931,7 @@ function IcsPreview({ result }: { result: IcsImportResult }) {
                 <th className="text-left px-3 py-2 font-medium">เวลา</th>
                 <th className="text-left px-3 py-2 font-medium">รหัสวิชา</th>
                 <th className="text-left px-3 py-2 font-medium">Sec</th>
+                <th className="text-left px-3 py-2 font-medium">ประเภท</th>
                 <th className="text-left px-3 py-2 font-medium">ห้อง</th>
               </tr>
             </thead>
@@ -940,6 +942,11 @@ function IcsPreview({ result }: { result: IcsImportResult }) {
                   <td className="px-3 py-1.5 tabular-nums">{b.start_time}–{b.end_time}</td>
                   <td className="px-3 py-1.5 font-medium">{b.course_code}</td>
                   <td className="px-3 py-1.5 tabular-nums">{b.sec_no}</td>
+                  <td className="px-3 py-1.5">
+                    {b.kind
+                      ? <Chip tone={b.kind === "lab" ? "warn" : "brand"}>{KIND_LABEL[b.kind]}</Chip>
+                      : <span className="text-xs text-muted">— เลือกเอง</span>}
+                  </td>
                   <td className="px-3 py-1.5 text-muted truncate max-w-[16rem]">{b.note}</td>
                 </tr>
               ))}
@@ -948,7 +955,9 @@ function IcsPreview({ result }: { result: IcsImportResult }) {
         </div>
       )}
       <p className="text-xs text-muted">
-        หลังนำเข้า ระบบจะเว้นช่อง “ประเภท” (บรรยาย/ปฏิบัติการ) ไว้ให้ผู้ใช้เลือกภายหลัง
+        {unresolved === 0
+          ? "ระบุประเภท (บรรยาย/ปฏิบัติการ) ให้ครบทุกคาบแล้วจากตารางสอนในระบบ — แก้ไขภายหลังได้"
+          : `ไฟล์ .ics ของระบบทะเบียนไม่ได้ระบุประเภทคาบ ระบบจึงเทียบกับตารางสอนในระบบให้ — ยังเหลือ ${unresolved} คาบที่ต้องเลือกประเภทเอง`}
       </p>
     </div>
   );

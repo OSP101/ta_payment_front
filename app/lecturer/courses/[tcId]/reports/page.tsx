@@ -1,12 +1,12 @@
 "use client";
 import useSWR, { mutate } from "swr";
-import { use, useEffect, useMemo, useState } from "react";
-import { Check, X, CircleAlert, Clock, ChevronRight, Eye, History } from "lucide-react";
-import { Breadcrumbs } from "@heroui/react";
+import { Fragment, use, useMemo, useState } from "react";
+import { Accordion, type Key } from "@heroui/react";
+import { Check, X, CircleAlert, Clock, ChevronDown, History } from "lucide-react";
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
-  PageHeader, Panel, Button, EmptyState, Modal, TextArea, FieldGroup, Alert, ConfirmDialog, Spinner,
+  PageHeader, Panel, Button, EmptyState, TextArea, FieldGroup, Alert, Spinner,
   StatusChip,
 } from "../../../../components/ui";
 
@@ -91,6 +91,48 @@ function formatMonthTH(key: string): string {
   return `${MONTH_TH_LONG[m - 1]} ${y + 543}`;
 }
 
+/** สัปดาห์เริ่มวันจันทร์ — คืนคีย์เป็นวันจันทร์ของสัปดาห์นั้น (YYYY-MM-DD) */
+function weekStart(iso: string): string {
+  const [y, m, d] = (iso ?? "").split("-").map(Number);
+  if (!y || !m || !d) return iso ?? "";
+  const dt = new Date(y, m - 1, d);
+  const shift = (dt.getDay() + 6) % 7; // อา.=6, จ.=0
+  dt.setDate(dt.getDate() - shift);
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${dt.getFullYear()}-${mm}-${dd}`;
+}
+
+interface WeekGroup { key: string; label: string; hours: number; items: WorkLog[] }
+
+/** จัดรายการในเดือนหนึ่งเป็นสัปดาห์ — ใช้เป็นตัวคั่นสายตาเบา ๆ ในตาราง */
+function groupByWeek(items: WorkLog[]): WeekGroup[] {
+  const buckets = new Map<string, WorkLog[]>();
+  for (const r of items) {
+    const k = weekStart(r.work_date);
+    const arr = buckets.get(k);
+    if (arr) arr.push(r);
+    else buckets.set(k, [r]);
+  }
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, list]) => {
+      const first = list[0]?.work_date ?? key;
+      const last = list[list.length - 1]?.work_date ?? key;
+      const dayOf = (iso: string) => Number(iso.split("-")[2]);
+      const monthOf = (iso: string) => MONTH_TH_SHORT[Number(iso.split("-")[1]) - 1] ?? "";
+      const label = first === last
+        ? `สัปดาห์ ${dayOf(first)} ${monthOf(first)}`
+        : `สัปดาห์ ${dayOf(first)}–${dayOf(last)} ${monthOf(last)}`;
+      return {
+        key,
+        label,
+        hours: list.reduce((s, i) => s + (i.hours || 0), 0),
+        items: list,
+      };
+    });
+}
+
 const PENDING_KEY = "/reports/pending";
 
 export default function ReportsPage({ params }: { params: Promise<{ tcId: string }> }) {
@@ -102,64 +144,41 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
   const historyKey = `/teaching-courses/${tcId}/approval-history`;
   const { data: history, isLoading: historyLoading } = useSWR<ApprovalHistoryEntry[]>(historyKey);
 
-  const data = (all ?? []).filter(
-    a => a.teaching_course_id === tcId || a.course_code === course?.code,
+  const data = useMemo(
+    () => (all ?? []).filter(a => a.teaching_course_id === tcId || a.course_code === course?.code),
+    [all, tcId, course?.code],
   );
 
-  const [rejectId, setRejectId] = useState<string | null>(null);
-  const [approveTarget, setApproveTarget] = useState<Assignment | null>(null);
-  // detailTarget opens the read-only worklog viewer so the lecturer can
-  // double-check what the TA actually submitted before pressing approve.
-  const [detailTarget, setDetailTarget] = useState<Assignment | null>(null);
-  // While a request is in flight for a given row, disable its buttons so a
-  // double-click can't fire the mutation twice.
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  // Accordion แทน Modal เดิม (ผู้ใช้ขอ) — คุม expanded เองเพื่อให้ยิง fetch
+  // รายละเอียดเฉพาะ TA ที่กดเปิดจริง ๆ
+  const [expanded, setExpanded] = useState<Set<Key>>(new Set());
+  // key = `${assignmentId}|${YYYY-MM}` — ทุกการตัดสินผูกกับ "เดือน" เดียว
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
 
-  function worklogSummary(a: Assignment): string | undefined {
-    const parts: string[] = [];
-    if (typeof a.total_hours === "number") parts.push(`${a.total_hours} ชม.`);
-    if (a.period_label) parts.push(a.period_label);
-    return parts.length ? parts.join(" · ") : undefined;
-  }
-
-  async function approve(id: string) {
-    setPendingId(id);
+  async function decideMonth(
+    a: Assignment, ym: string, kind: "approve" | "reject", reason?: string,
+  ) {
+    setPendingKey(`${a.id}|${ym}`);
     try {
-      await api.post(`/assignments/${id}/worklog/approve`);
-      notify.success("อนุมัติรายงานบันทึกเวลาเรียบร้อยแล้ว");
-      setApproveTarget(null);
-      setDetailTarget(null);
-      await Promise.all([mutate(PENDING_KEY), mutate(historyKey)]);
+      await api.post(`/assignments/${a.id}/worklog/${kind}`,
+        kind === "approve" ? { year_month: ym } : { reason, year_month: ym });
+      notify.success(
+        kind === "approve"
+          ? `อนุมัติบันทึกเวลาเดือน${formatMonthTH(ym)} เรียบร้อยแล้ว`
+          : `ส่งกลับให้ TA แก้ไขเดือน${formatMonthTH(ym)} แล้ว`,
+      );
+      await Promise.all([
+        mutate(PENDING_KEY), mutate(historyKey), mutate(`/assignments/${a.id}/worklog`),
+      ]);
     } catch (e) {
       notify.error(e);
     } finally {
-      setPendingId(null);
-    }
-  }
-  async function confirmReject(id: string, reason: string) {
-    setPendingId(id);
-    try {
-      await api.post(`/assignments/${id}/worklog/reject`, { reason });
-      notify.success("ส่งกลับให้ TA แก้ไขเรียบร้อยแล้ว");
-      setRejectId(null);
-      setDetailTarget(null);
-      await Promise.all([mutate(PENDING_KEY), mutate(historyKey)]);
-    } catch (e) {
-      notify.error(e);
-    } finally {
-      setPendingId(null);
+      setPendingKey(null);
     }
   }
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/lecturer">รายวิชาที่สอน</Breadcrumbs.Item>
-        <Breadcrumbs.Item href={`/lecturer/courses/${tcId}`}>
-          {course ? `${course.code} — ${course.name_th}` : "…"}
-        </Breadcrumbs.Item>
-        <Breadcrumbs.Item>อนุมัติรายงาน TA</Breadcrumbs.Item>
-      </Breadcrumbs>
       <PageHeader
         title="อนุมัติรายงานบันทึกเวลา TA"
         description={course ? `${course.code} — ${course.name_th}` : "รายการที่ TA กดส่งขออนุมัติ"}
@@ -191,61 +210,49 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
             description="เมื่อ TA ในวิชานี้ส่งบันทึกเวลา จะปรากฏที่นี่"
           />
         ) : (
-          <ul className="divide-y divide-(--hairline)">
-            {data.map(a => {
-              const summary = worklogSummary(a);
-              const busy = pendingId === a.id;
-              return (
-                <li key={a.id}>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setDetailTarget(a)}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setDetailTarget(a);
-                      }
-                    }}
-                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left cursor-pointer hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    aria-label={`ดูรายละเอียดบันทึกเวลาของ ${a.ta_name}`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm truncate">{a.ta_name}</div>
-                      <div className="text-xs text-muted flex items-center gap-2 flex-wrap">
-                        <span>{a.course_code}</span>
-                        {summary && (
-                          <span className="inline-flex items-center gap-1">
-                            <Clock size={11} />{summary}
+          <div className="p-2">
+            <Accordion
+              allowsMultipleExpanded
+              expandedKeys={expanded}
+              onExpandedChange={setExpanded}
+              className="w-full"
+            >
+              {data.map(a => (
+                <Accordion.Item key={a.id} id={a.id}>
+                  <Accordion.Heading>
+                    <Accordion.Trigger>
+                      <div className="flex flex-1 flex-wrap items-center gap-2 pr-2 text-left">
+                        <span className="text-sm font-medium">{a.ta_name}</span>
+                        <span className="text-xs text-muted">{a.course_code}</span>
+                        {typeof a.total_hours === "number" && (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted">
+                            <Clock size={11} /> รอพิจารณา {a.total_hours} ชม.
                           </span>
                         )}
-                        <span className="inline-flex items-center gap-1 text-accent">
-                          <Eye size={11} /> ดูรายละเอียด
-                        </span>
+                        {a.period_label && (
+                          <span className="text-xs text-muted">· {a.period_label}</span>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                      <Button
-                        variant="primary" size="sm"
-                        onClick={() => setApproveTarget(a)}
-                        disabled={busy}
-                      >
-                        <Check size={14} /> อนุมัติ
-                      </Button>
-                      <Button
-                        variant="danger-soft" size="sm"
-                        onClick={() => setRejectId(a.id)}
-                        disabled={busy}
-                      >
-                        <X size={14} /> ไม่อนุมัติ
-                      </Button>
-                      <ChevronRight size={16} className="text-muted" />
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                      <Accordion.Indicator>
+                        <ChevronDown size={16} />
+                      </Accordion.Indicator>
+                    </Accordion.Trigger>
+                  </Accordion.Heading>
+                  <Accordion.Panel>
+                    <Accordion.Body>
+                      {expanded.has(a.id) && (
+                        <WorklogMonths
+                          assignment={a}
+                          pendingKey={pendingKey}
+                          onDecide={(ym, kind, reason) => decideMonth(a, ym, kind, reason)}
+                        />
+                      )}
+                    </Accordion.Body>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              ))}
+            </Accordion>
+          </div>
         )}
       </Panel>
 
@@ -255,64 +262,26 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
           loading={historyLoading && history === undefined}
         />
       </div>
-
-      <WorklogDetailModal
-        assignment={detailTarget}
-        pending={!!detailTarget && pendingId === detailTarget.id}
-        onClose={() => setDetailTarget(null)}
-        onApprove={() => detailTarget && setApproveTarget(detailTarget)}
-        onReject={() => detailTarget && setRejectId(detailTarget.id)}
-      />
-
-      <ConfirmDialog
-        open={!!approveTarget}
-        onClose={() => setApproveTarget(null)}
-        onConfirm={() => approveTarget && approve(approveTarget.id)}
-        title="ยืนยันการอนุมัติรายงาน"
-        message={
-          approveTarget
-            ? `อนุมัติบันทึกเวลาของ ${approveTarget.ta_name} (${approveTarget.course_code})${
-                worklogSummary(approveTarget) ? ` — ${worklogSummary(approveTarget)}` : ""
-              }? เมื่ออนุมัติแล้วรายการจะถูกส่งต่อและไม่สามารถย้อนกลับได้`
-            : undefined
-        }
-        confirmLabel="อนุมัติ"
-        isPending={!!approveTarget && pendingId === approveTarget.id}
-      />
-
-      <RejectModal
-        id={rejectId}
-        pending={!!rejectId && pendingId === rejectId}
-        onClose={() => setRejectId(null)}
-        onConfirm={confirmReject}
-      />
     </div>
   );
 }
 
-// WorklogDetailModal renders every entry the TA submitted so the lecturer
-// can double-check dates, hours, and activity kinds before pressing อนุมัติ.
-// Read-only — approve/reject buttons in the footer hand back to the parent's
-// existing confirm dialogs so the mutation flow stays unified.
-function WorklogDetailModal({
-  assignment, pending, onClose, onApprove, onReject,
+/* -------------------------------------------------------------------------- */
+/* รายละเอียดของ TA หนึ่งคน — แบ่งเป็นเดือน และตัดสินทีละเดือน                 */
+/* -------------------------------------------------------------------------- */
+
+function WorklogMonths({
+  assignment, pendingKey, onDecide,
 }: {
-  assignment: Assignment | null;
-  pending: boolean;
-  onClose: () => void;
-  onApprove: () => void;
-  onReject: () => void;
+  assignment: Assignment;
+  pendingKey: string | null;
+  onDecide: (ym: string, kind: "approve" | "reject", reason?: string) => void;
 }) {
-  // Only fetch when open — SWR's null key convention. Lecturer/staff/admin
-  // are all authorized by the /assignments/:id/worklog endpoint's server
-  // side gate (assertCanView), so no extra permission plumbing needed here.
-  const { data: logs, isLoading } = useSWR<WorkLog[]>(
-    assignment ? `/assignments/${assignment.id}/worklog` : null,
-  );
-  // Show every entry — draft/submitted/approved — so the lecturer sees the
-  // full picture. The pending-review batch (status=submitted) is what the
-  // Approve/Reject buttons act on, but any lingering drafts or previously
-  // approved rows deserve visibility too.
+  const { data: logs, isLoading } = useSWR<WorkLog[]>(`/assignments/${assignment.id}/worklog`);
+  // เดือนที่กำลังกรอกเหตุผลส่งกลับ — ฟอร์มแทรกในเดือนนั้น ไม่เด้ง Modal ซ้อน
+  const [rejectYm, setRejectYm] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+
   const rows = useMemo(() => {
     const arr = [...(logs ?? [])];
     arr.sort((a, b) => {
@@ -321,10 +290,9 @@ function WorklogDetailModal({
     });
     return arr;
   }, [logs]);
-  // Group into month sections so the modal mirrors the TA's own worklog
-  // view (name > month > entries). Each section shows a per-month subtotal
-  // limited to submitted rows so the lecturer immediately sees the impact
-  // of the approval decision within that month.
+
+  // แสดงทุกสถานะ (draft/submitted/approved) ให้เห็นภาพรวม แต่ปุ่มของเดือนไหน
+  // จะมีผลกับแถว submitted ของเดือนนั้นเท่านั้น
   const months = useMemo(() => {
     const buckets = new Map<string, WorkLog[]>();
     for (const r of rows) {
@@ -340,123 +308,141 @@ function WorklogDetailModal({
         const submittedRows = items.filter(i => i.status === "submitted");
         return {
           key,
-          items,
+          weeks: groupByWeek(items),
+          count: items.length,
           submittedHours: submittedRows.reduce((s, i) => s + (i.hours || 0), 0),
           submittedCount: submittedRows.length,
         };
       });
   }, [rows]);
-  const submittedTotal = rows
-    .filter(r => r.status === "submitted")
-    .reduce((s, r) => s + (r.hours || 0), 0);
-  const submittedCount = rows.filter(r => r.status === "submitted").length;
+
+  if (isLoading && !logs) {
+    return (
+      <div className="py-6 flex flex-col items-center gap-2 text-muted">
+        <Spinner />
+        <div className="text-xs">กำลังโหลดรายการ…</div>
+      </div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        title="ไม่มีรายการบันทึกเวลา"
+        description="TA คนนี้ยังไม่ได้กรอกบันทึกเวลาใด ๆ"
+      />
+    );
+  }
 
   return (
-    <Modal
-      open={!!assignment}
-      onClose={onClose}
-      size="xl"
-      title={assignment ? `บันทึกเวลาของ ${assignment.ta_name}` : "รายละเอียดบันทึกเวลา"}
-      footer={
-        <div className="flex justify-between gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={pending}>ปิด</Button>
-          <div className="flex gap-2">
-            <Button variant="danger-soft" onClick={onReject} disabled={pending}>
-              <X size={14} /> ไม่อนุมัติ
-            </Button>
-            <Button variant="primary" onClick={onApprove} disabled={pending}>
-              <Check size={14} /> อนุมัติ
-            </Button>
-          </div>
-        </div>
-      }
-    >
-      {assignment && (
-        <div className="flex flex-col gap-3">
-          <div className="rounded-lg bg-surface-secondary border border-(--hairline) px-3 py-2 text-xs text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>รายวิชา: <span className="font-semibold text-foreground">{assignment.course_code}</span></span>
-            {typeof assignment.total_hours === "number" && (
-              <span>· รวม (รอพิจารณา): <span className="font-semibold text-foreground tabular">{submittedTotal.toFixed(1)}</span> ชม.</span>
-            )}
-            <span>· {submittedCount} รายการที่รอพิจารณา (จากทั้งหมด {rows.length})</span>
-            {assignment.period_label && <span>· {assignment.period_label}</span>}
-          </div>
-
-          {isLoading && !logs ? (
-            <div className="py-8 flex flex-col items-center gap-2 text-muted">
-              <Spinner />
-              <div className="text-xs">กำลังโหลดรายการ…</div>
-            </div>
-          ) : rows.length === 0 ? (
-            <EmptyState
-              title="ไม่มีรายการบันทึกเวลา"
-              description="TA คนนี้ยังไม่ได้กรอกบันทึกเวลาใด ๆ"
-            />
-          ) : (
-            <div className="flex flex-col gap-3">
-              {months.map(mo => (
-                <div key={mo.key} className="border border-(--hairline) rounded-lg overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 px-3 py-2 bg-surface-secondary text-sm">
-                    <div className="font-semibold">{formatMonthTH(mo.key)}</div>
-                    <div className="text-xs text-muted flex items-center gap-2">
-                      <span>{mo.items.length} รายการ</span>
-                      {mo.submittedCount > 0 && (
-                        <>
-                          <span>·</span>
-                          <span>
-                            รอพิจารณา{" "}
-                            <span className="font-semibold text-foreground tabular">
-                              {mo.submittedHours.toFixed(1)}
-                            </span>{" "}
-                            ชม.
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <table className="w-full text-sm">
-                    <thead className="text-xs text-muted border-b border-(--hairline)">
-                      <tr>
-                        <th className="text-left px-3 py-2 whitespace-nowrap">วันที่</th>
-                        <th className="text-left px-3 py-2 whitespace-nowrap">เวลา</th>
-                        <th className="text-right px-3 py-2 whitespace-nowrap">ชม.</th>
-                        <th className="text-left px-3 py-2 whitespace-nowrap">กิจกรรม</th>
-                        <th className="text-left px-3 py-2">หมายเหตุ</th>
-                        <th className="text-left px-3 py-2 whitespace-nowrap">สถานะ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-(--hairline)">
-                      {mo.items.map(r => {
-                        const activityLabel = ACTIVITY_LABEL[r.activity] ?? r.activity;
-                        const parentKindLabel =
-                          r.activity === "other" && (r.parent_kind === "lecture" || r.parent_kind === "lab")
-                            ? ` (${PARENT_KIND_LABEL[r.parent_kind]})`
-                            : "";
-                        // Dim rows that aren't in this pending batch so the
-                        // lecturer's eye lands on what they're deciding on.
-                        const dim = r.status !== "submitted";
-                        return (
-                          <tr key={r.id} className={dim ? "text-muted" : ""}>
-                            <td className="px-3 py-2 whitespace-nowrap">{formatWorkDate(r.work_date)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap tabular">{r.start_time}–{r.end_time}</td>
-                            <td className="px-3 py-2 text-right tabular">{r.hours.toFixed(1)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{activityLabel}{parentKindLabel}</td>
-                            <td className="px-3 py-2">{r.note ?? ""}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">
-                              <StatusChip status={r.status} />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+    <div className="flex flex-col gap-3">
+      {months.map(mo => {
+        const busy = pendingKey === `${assignment.id}|${mo.key}`;
+        const actionable = mo.submittedCount > 0;
+        return (
+          <div key={mo.key} className="overflow-hidden rounded-lg border border-(--hairline)">
+            {/* หัวเดือน + ปุ่มตัดสินเฉพาะเดือนนั้น (ไม่ใช่อนุมัติทั้งก้อน) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-surface-secondary px-3 py-2">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <span className="text-sm font-semibold">{formatMonthTH(mo.key)}</span>
+                <span className="text-xs text-muted">
+                  {mo.count} รายการ
+                  {actionable ? ` · รอพิจารณา ${mo.submittedHours.toFixed(1)} ชม.` : ""}
+                </span>
+              </div>
+              {actionable ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="danger-soft" size="sm" disabled={busy}
+                    onClick={() => { setRejectYm(rejectYm === mo.key ? null : mo.key); setReason(""); }}
+                  >
+                    <X size={14} /> ไม่อนุมัติเดือนนี้
+                  </Button>
+                  <Button
+                    variant="primary" size="sm" disabled={busy} isPending={busy}
+                    onClick={() => onDecide(mo.key, "approve")}
+                  >
+                    <Check size={14} /> อนุมัติเดือนนี้
+                  </Button>
                 </div>
-              ))}
+              ) : (
+                <span className="text-xs text-muted">ไม่มีรายการรอพิจารณา</span>
+              )}
             </div>
-          )}
-        </div>
-      )}
-    </Modal>
+
+            {rejectYm === mo.key && (
+              <div className="border-b border-(--hairline) px-3 py-2">
+                <FieldGroup label={`เหตุผลที่ส่งกลับ — ${formatMonthTH(mo.key)}`}>
+                  <TextArea
+                    rows={2}
+                    value={reason}
+                    onChange={e => setReason(e.target.value)}
+                    placeholder="เช่น ชั่วโมงวันที่ 5 ไม่ตรงกับตารางสอน"
+                  />
+                </FieldGroup>
+                <div className="mt-2 flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setRejectYm(null)}>ยกเลิก</Button>
+                  <Button
+                    variant="danger" size="sm"
+                    disabled={!reason.trim() || busy}
+                    isPending={busy}
+                    onClick={() => { onDecide(mo.key, "reject", reason.trim()); setRejectYm(null); }}
+                  >
+                    ส่งกลับให้แก้ไข
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <table className="w-full text-sm">
+              <thead className="border-b border-(--hairline) text-xs text-muted">
+                <tr>
+                  <th className="whitespace-nowrap px-3 py-2 text-left">วันที่</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left">เวลา</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-right">ชม.</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left">กิจกรรม</th>
+                  <th className="px-3 py-2 text-left">หมายเหตุ</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-(--hairline)">
+                {mo.weeks.map(wk => (
+                  <Fragment key={wk.key}>
+                    {/* ป้ายสัปดาห์ — จงใจให้จาง เป็นตัวคั่นสายตา ไม่ใช่หัวข้อเด่น */}
+                    <tr>
+                      <td colSpan={6} className="px-3 pt-2 pb-0.5 text-[11px] text-muted">
+                        {wk.label} · <span className="tabular">{wk.hours.toFixed(1)} ชม.</span>
+                      </td>
+                    </tr>
+                    {wk.items.map(r => {
+                      const activityLabel = ACTIVITY_LABEL[r.activity] ?? r.activity;
+                      const parentKindLabel =
+                        r.activity === "other" && (r.parent_kind === "lecture" || r.parent_kind === "lab")
+                          ? ` (${PARENT_KIND_LABEL[r.parent_kind]})`
+                          : "";
+                      // แถวที่ไม่ได้อยู่ในรอบพิจารณานี้ทำให้จาง เพื่อให้สายตาไป
+                      // ที่รายการที่กำลังตัดสิน
+                      const dim = r.status !== "submitted";
+                      return (
+                        <tr key={r.id} className={dim ? "text-muted" : ""}>
+                          <td className="whitespace-nowrap px-3 py-2">{formatWorkDate(r.work_date)}</td>
+                          <td className="whitespace-nowrap px-3 py-2 tabular">{r.start_time}–{r.end_time}</td>
+                          <td className="px-3 py-2 text-right tabular">{r.hours.toFixed(1)}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{activityLabel}{parentKindLabel}</td>
+                          <td className="px-3 py-2">{r.note ?? ""}</td>
+                          <td className="whitespace-nowrap px-3 py-2">
+                            <StatusChip status={r.status} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -546,38 +532,5 @@ function ApprovalHistoryPanel({
         </ul>
       )}
     </Panel>
-  );
-}
-
-function RejectModal({
-  id, pending, onClose, onConfirm,
-}: {
-  id: string | null;
-  pending: boolean;
-  onClose: () => void;
-  onConfirm: (id: string, reason: string) => void;
-}) {
-  const [reason, setReason] = useState("");
-  // Clear the reason whenever the target changes so it isn't carried over from
-  // a previously rejected TA.
-  useEffect(() => { if (id) setReason(""); }, [id]);
-  return (
-    <Modal open={!!id} onClose={onClose} title="เหตุผลการไม่อนุมัติ"
-      footer={<>
-        <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
-        <Button
-          variant="primary"
-          onClick={() => id && onConfirm(id, reason)}
-          disabled={!reason.trim() || pending}
-          isPending={pending}
-        >
-          ยืนยัน
-        </Button>
-      </>}
-    >
-      <FieldGroup label="เหตุผล (บังคับ)">
-        <TextArea rows={4} value={reason} onChange={e => setReason(e.target.value)} />
-      </FieldGroup>
-    </Modal>
   );
 }

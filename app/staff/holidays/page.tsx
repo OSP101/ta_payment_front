@@ -7,6 +7,7 @@ import { notify } from "../../lib/notify";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, Select, Modal, FieldGroup, EmptyState,
   Chip, ConfirmDialog, Alert, type ChipTone,
+  DatePicker,
 } from "../../components/ui";
 
 interface Holiday {
@@ -365,7 +366,7 @@ function HolidayFormModal({
           label={<>วันที่<RequiredMark /></>}
           hint={isEdit ? "แก้วันที่ไม่ได้ — ต้องลบแล้วเพิ่มใหม่ (เพื่อรักษา audit)" : undefined}
         >
-          <TextInput type="date" value={date} onChange={e => setDate(e.target.value)} disabled={isEdit} />
+          <DatePicker value={date} onChange={setDate} label="วันที่" isDisabled={isEdit} />
         </FieldGroup>
         <FieldGroup label={<>ชื่อวันหยุด (ไทย)<RequiredMark /></>}>
           <TextInput value={nameTH} onChange={e => setNameTH(e.target.value)} placeholder="เช่น วันแม่แห่งชาติ" autoFocus />

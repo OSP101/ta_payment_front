@@ -1,14 +1,14 @@
 "use client";
 import useSWR, { mutate } from "swr";
 import { useMemo, useState } from "react";
-import { Tabs, SearchField, InputGroup, Label, TextField, FieldError } from "@heroui/react";
+import { Tabs, InputGroup, Label, TextField, FieldError } from "@heroui/react";
 import {
   Clock, CheckCircle2, Download, Clock3, Trash2, Eye, EyeOff, Shield,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, StatusChip, Spinner, Alert, TabLabel, Modal, Chip,
+  PageHeader, Panel, Button, IconButton, StatusChip, Spinner, Alert, TabLabel, Modal, Chip, SearchField,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { ReviewRow } from "./ReviewRow";
@@ -35,6 +35,7 @@ export default function ReviewPage() {
   const [preview, setPreview] = useState<
     { userId: string; doc: Doc } | null
   >(null);
+  const [drawerBusy, setDrawerBusy] = useState(false);
 
   // Password-gated re-download state. Non-null when the confirm modal is
   // open; carries just the target user id so the modal is self-contained.
@@ -43,6 +44,42 @@ export default function ReviewPage() {
   function revalidateAll() {
     mutate("/ta-review?status=pending");
     mutate("/ta-review?status=approved");
+  }
+
+  // Approve / reject straight from the preview drawer footer — same endpoints
+  // the file card uses; the row's SWR key is revalidated so both views agree.
+  async function approveFromDrawer() {
+    if (!preview || drawerBusy) return;
+    setDrawerBusy(true);
+    try {
+      await api.post(`/ta-review/docs/${preview.doc.id}`, { approve: true, reason: "" });
+      notify.success("อนุมัติเอกสารแล้ว");
+      mutate(`/ta-review/${preview.userId}/docs`);
+      revalidateAll();
+      setPreview(null);
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setDrawerBusy(false);
+    }
+  }
+
+  async function rejectFromDrawer(reason: string) {
+    if (!preview || drawerBusy) return;
+    setDrawerBusy(true);
+    try {
+      await api.post(`/ta-review/${preview.userId}/reject-batch`, {
+        items: [{ doc_id: preview.doc.id, reason }],
+      });
+      notify.success("ตีกลับเอกสารเรียบร้อยแล้ว");
+      mutate(`/ta-review/${preview.userId}/docs`);
+      revalidateAll();
+      setPreview(null);
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setDrawerBusy(false);
+    }
   }
 
   return (
@@ -102,10 +139,14 @@ export default function ReviewPage() {
                 filename: preview.doc.filename,
                 kind: preview.doc.kind,
                 kindLabel: DOC_KIND_LABEL[preview.doc.kind] ?? preview.doc.kind,
+                status: preview.doc.status,
               }
             : null
         }
-        onClose={() => setPreview(null)}
+        busy={drawerBusy}
+        onApprove={approveFromDrawer}
+        onReject={rejectFromDrawer}
+        onClose={() => { if (!drawerBusy) setPreview(null); }}
       />
 
       <RedownloadModal
@@ -159,9 +200,12 @@ function PendingList({
   return (
     <div className="p-4">
       <div className="mb-3">
-        <SearchField value={q} onChange={setQ} aria-label="ค้นหาชื่อ / อีเมล">
-          <SearchField.Input placeholder="ค้นหาชื่อ / อีเมล…" />
-        </SearchField>
+        <SearchField
+          value={q}
+          onChange={setQ}
+          ariaLabel="ค้นหาชื่อ / อีเมล"
+          placeholder="ค้นหาชื่อ / อีเมล…"
+        />
       </div>
       {filtered.length === 0 ? (
         <div className="text-sm text-muted py-6 text-center">

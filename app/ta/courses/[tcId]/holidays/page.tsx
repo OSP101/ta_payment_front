@@ -1,7 +1,6 @@
 "use client";
 import { use, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Breadcrumbs } from "@heroui/react";
 import { CalendarOff, CheckCircle2, AlertTriangle, Bell, MapPin, Send } from "lucide-react";
 import { api, ApiError } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
@@ -63,14 +62,6 @@ export default function TAHolidaysPage({ params }: { params: Promise<{ tcId: str
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/ta">รายวิชาที่ฉันเป็น TA</Breadcrumbs.Item>
-        <Breadcrumbs.Item href={`/ta/courses/${tcId}`}>
-          {course ? `${course.code} — ${course.name_th}` : "…"}
-        </Breadcrumbs.Item>
-        <Breadcrumbs.Item>วันหยุดและวันชดเชย</Breadcrumbs.Item>
-      </Breadcrumbs>
-
       <PageHeader
         title="วันหยุดและวันชดเชย"
         description="วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ — ถ้าอาจารย์ยังไม่กำหนดวันชดเชย คุณจะลงเวลาปฏิบัติงานของคาบนั้นไม่ได้"

@@ -38,17 +38,6 @@ interface Rate {
   grad_regular_daily_hour_cap: number;  // บัณฑิต ปกติ 6 hrs/วัน
   note?: string;
 }
-interface FC {
-  id?: string; code: string; name_th: string; name_en?: string;
-  // "undergrad" (ปริญญาตรี) | "graduate" (บัณฑิตศึกษา) — groups the appointment order.
-  level?: string;
-  credits: number; lecture_hrs: number; lab_hrs: number; self_hrs: number; is_active: boolean;
-}
-
-const COURSE_LEVEL_TH: Record<string, string> = {
-  undergrad: "ปริญญาตรี", graduate: "บัณฑิตศึกษา",
-};
-
 export default function SettingsPage() {
   const params = useSearchParams();
   // Allow deep-linking to a specific tab, e.g. /staff/settings?tab=terms
@@ -57,7 +46,7 @@ export default function SettingsPage() {
   // land on the merged calendar tab instead of a 404.
   const rawTab = tabParam ?? "";
   const normalised = rawTab === "windows" || rawTab === "periods" ? "calendar" : rawTab;
-  const initialTab = ["rate", "courses", "terms", "calendar", "admins"].includes(normalised)
+  const initialTab = ["rate", "terms", "calendar", "admins"].includes(normalised)
     ? normalised
     : "rate";
   return (
@@ -67,7 +56,6 @@ export default function SettingsPage() {
         <Tabs.ListContainer>
           <Tabs.List aria-label="หมวดตั้งค่า">
             <Tabs.Tab id="rate">อัตราค่าตอบแทน<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="courses">รายวิชา<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="terms">ภาคเรียน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="calendar">ปฏิทินเทอม<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
@@ -76,9 +64,6 @@ export default function SettingsPage() {
 
         <Tabs.Panel id="rate" className="pt-6">
           <PayRateSection />
-        </Tabs.Panel>
-        <Tabs.Panel id="courses" className="pt-6">
-          <FacultyCoursesSection />
         </Tabs.Panel>
         <Tabs.Panel id="terms" className="pt-6">
           <TermsSection />
@@ -361,497 +346,6 @@ function PayRateSection() {
         }}
       />
     </Panel>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Faculty courses                                                            */
-/* -------------------------------------------------------------------------- */
-
-const PAGE_SIZE = 10;
-
-function FacultyCoursesSection() {
-  const { data } = useSWR<FC[]>("/faculty-courses");
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<FC | null>(null);
-  const [deactivateTarget, setDeactivateTarget] = useState<FC | null>(null);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
-  const [page, setPage] = useState(1);
-
-  function openAdd() { setEditingCourse(null); setFormOpen(true); }
-  function openEdit(c: FC) { setEditingCourse(c); setFormOpen(true); }
-
-  const all = data ?? [];
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return all.filter(c => {
-      if (statusFilter === "active" && !c.is_active) return false;
-      if (statusFilter === "inactive" && c.is_active) return false;
-      if (q === "") return true;
-      return (
-        c.code.toLowerCase().includes(q) ||
-        c.name_th.toLowerCase().includes(q) ||
-        (c.name_en?.toLowerCase().includes(q) ?? false)
-      );
-    });
-  }, [all, search, statusFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const startIdx = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const endIdx = Math.min(currentPage * PAGE_SIZE, filtered.length);
-
-  // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); }, [search, statusFilter]);
-
-  return (
-    <Panel
-      title="รายวิชาของคณะ"
-      description="รายวิชาหลักสูตรที่ใช้อ้างอิงการเปิดสอน"
-      actions={
-        <Button variant="primary" onClick={openAdd}>
-          <Plus size={14} />เพิ่มวิชา
-        </Button>
-      }
-    >
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <div className="flex-1 min-w-[220px]">
-          <SearchField
-            value={search}
-            onChange={setSearch}
-            placeholder="ค้นหารหัสหรือชื่อวิชา…"
-            ariaLabel="ค้นหารายวิชา"
-          />
-        </div>
-        <FieldGroup label="สถานะ">
-          <Select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="min-w-[140px]"
-          >
-            <option value="active">เปิดใช้งาน</option>
-            <option value="inactive">ปิดใช้งาน</option>
-            <option value="all">ทั้งหมด</option>
-          </Select>
-        </FieldGroup>
-      </div>
-
-      {all.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีรายวิชา — กด "เพิ่มวิชา" เพื่อเริ่ม</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-sm text-muted py-4">
-          ไม่พบรายวิชาที่ตรงกับ "{search}"{statusFilter !== "all" && ` (สถานะ: ${statusFilter === "active" ? "เปิดใช้งาน" : "ปิดใช้งาน"})`}
-        </div>
-      ) : (
-        <>
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="data-table w-full">
-              <thead>
-                <tr>
-                  <th>รหัส</th>
-                  <th>ชื่อ</th>
-                  <th>ระดับ</th>
-                  <th className="tabular">
-                    <TipWrap content="หน่วยกิต(บรรยาย-ปฏิบัติ-ศึกษาเอง)">หน่วยกิต (REG)</TipWrap>
-                  </th>
-                  <th>สถานะ</th>
-                  <th className="actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {pageItems.map(c => (
-                  <tr key={c.id} className={!c.is_active ? "opacity-60" : ""}>
-                    <td className="font-medium tabular">{c.code}</td>
-                    <td>
-                      <div>{c.name_th}</div>
-                      {c.name_en && <div className="text-xs text-muted">{c.name_en}</div>}
-                    </td>
-                    <td>
-                      <Chip tone={c.level === "graduate" ? "info" : "neutral"}>
-                        {COURSE_LEVEL_TH[c.level ?? "undergrad"]}
-                      </Chip>
-                    </td>
-                    <td className="tabular font-medium">
-                      {c.credits}({c.lecture_hrs}-{c.lab_hrs}-{c.self_hrs})
-                    </td>
-                    <td>
-                      {c.is_active
-                        ? <Chip tone="success">เปิดใช้งาน</Chip>
-                        : <Chip tone="neutral">ปิดใช้งาน</Chip>}
-                    </td>
-                    <td className="actions">
-                      <div className="inline-flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(c)}>
-                          <Pencil size={13} /> แก้ไข
-                        </Button>
-                        {c.is_active && (
-                          <Button variant="danger-soft" size="sm" onClick={() => setDeactivateTarget(c)}>
-                            <Trash2 size={13} /> ปิด
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-xs text-muted tabular">
-              แสดง {startIdx}–{endIdx} จาก {filtered.length} รายการ
-            </div>
-            {totalPages > 1 && (
-              <Pagination size="sm">
-                <Pagination.Content>
-                  <Pagination.Item>
-                    <Pagination.Previous
-                      isDisabled={currentPage === 1}
-                      onPress={() => setPage(p => Math.max(1, p - 1))}
-                    >
-                      <Pagination.PreviousIcon />
-                    </Pagination.Previous>
-                  </Pagination.Item>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                    <Pagination.Item key={p}>
-                      <Pagination.Link isActive={p === currentPage} onPress={() => setPage(p)}>
-                        {p}
-                      </Pagination.Link>
-                    </Pagination.Item>
-                  ))}
-                  <Pagination.Item>
-                    <Pagination.Next
-                      isDisabled={currentPage === totalPages}
-                      onPress={() => setPage(p => Math.min(totalPages, p + 1))}
-                    >
-                      <Pagination.NextIcon />
-                    </Pagination.Next>
-                  </Pagination.Item>
-                </Pagination.Content>
-              </Pagination>
-            )}
-          </div>
-        </>
-      )}
-
-      <FacultyCourseFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        editing={editingCourse}
-        existing={data ?? []}
-        onSaved={(code, mode) => {
-          setFormOpen(false);
-          toast.success(mode === "edit" ? `แก้ไขวิชา ${code} เรียบร้อยแล้ว` : `เพิ่มวิชา ${code} เรียบร้อยแล้ว`);
-        }}
-      />
-
-      <FacultyCourseDeactivateModal
-        target={deactivateTarget}
-        onClose={() => setDeactivateTarget(null)}
-        onDone={code => { setDeactivateTarget(null); toast.success(`ปิดใช้งานวิชา ${code} เรียบร้อยแล้ว`); }}
-      />
-    </Panel>
-  );
-}
-
-function FacultyCourseFormModal({
-  open, onClose, editing, existing, onSaved,
-}: {
-  open: boolean;
-  onClose: () => void;
-  editing: FC | null;                       // null = add mode
-  existing: FC[];
-  onSaved: (code: string, mode: "add" | "edit") => void;
-}) {
-  const isEdit = editing !== null;
-  const empty: FC = {
-    code: "", name_th: "", name_en: "", level: "undergrad",
-    credits: 3, lecture_hrs: 3, lab_hrs: 0, self_hrs: 6, is_active: true,
-  };
-  const [draft, setDraft] = useState<FC>(empty);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setDraft(editing ?? empty);
-      setError(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editing]);
-
-  const codeTrim = draft.code.trim();
-  const nameTrim = draft.name_th.trim();
-
-  const codeError =
-    codeTrim === "" ? null :
-    codeTrim.length < 3 ? "รหัสวิชาสั้นเกินไป" :
-    codeTrim.length > 20 ? "รหัสวิชายาวเกินไป" :
-    null;
-  // Duplicate check — case-insensitive, includes ACTIVE + INACTIVE, excludes self (in edit mode).
-  const duplicate = codeTrim
-    ? existing.find(c =>
-        c.code.toLowerCase() === codeTrim.toLowerCase() &&
-        (!isEdit || c.id !== editing!.id))
-    : null;
-  const creditsError =
-    !Number.isInteger(draft.credits) || draft.credits <= 0 ? "หน่วยกิตต้องเป็นจำนวนเต็ม > 0" :
-    draft.credits > 30 ? "หน่วยกิตดูสูงเกินไป" : null;
-  const hoursError =
-    draft.lecture_hrs < 0 || draft.lab_hrs < 0 || draft.self_hrs < 0
-      ? "ชั่วโมงต้องไม่เป็นค่าลบ" : null;
-
-  const noChange = isEdit && editing &&
-    codeTrim === editing.code &&
-    nameTrim === editing.name_th &&
-    (draft.name_en ?? "").trim() === (editing.name_en ?? "").trim() &&
-    (draft.level ?? "undergrad") === (editing.level ?? "undergrad") &&
-    draft.credits === editing.credits &&
-    draft.lecture_hrs === editing.lecture_hrs &&
-    draft.lab_hrs === editing.lab_hrs &&
-    draft.self_hrs === editing.self_hrs;
-
-  const canSave =
-    codeTrim !== "" && nameTrim !== "" &&
-    !codeError && !creditsError && !hoursError && !duplicate && !noChange;
-
-  async function save() {
-    if (!canSave) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const payload = {
-        ...draft,
-        code: codeTrim,
-        name_th: nameTrim,
-        name_en: (draft.name_en ?? "").trim() || null,
-        level: draft.level ?? "undergrad",
-        // In edit mode, keep the existing id so backend does UPDATE (not INSERT).
-        ...(isEdit && editing ? { id: editing.id } : {}),
-      };
-      await api.post("/faculty-courses", payload);
-      await mutate("/faculty-courses");
-      onSaved(codeTrim, isEdit ? "edit" : "add");
-    } catch (e) {
-      setError((e as Error).message || "บันทึกไม่สำเร็จ");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const regFormat = `${draft.credits}(${draft.lecture_hrs}-${draft.lab_hrs}-${draft.self_hrs})`;
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={
-        <span className="inline-flex items-center gap-2">
-          {isEdit ? <Pencil size={18} /> : <Plus size={18} />}
-          {isEdit ? `แก้ไขวิชา ${editing!.code}` : "เพิ่มวิชาใหม่"}
-        </span>
-      }
-      size="lg"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
-            {isEdit ? <><Save size={14} />บันทึกการแก้ไข</> : <><Plus size={14} />เพิ่มวิชา</>}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <div className="grid grid-cols-4 gap-3">
-          <div className="col-span-4 sm:col-span-1">
-            <FieldGroup
-              label="รหัสวิชา"
-              hint="6–8 ตัว · ห้ามซ้ำกับที่มีอยู่ (รวมทั้งที่ปิดใช้งาน)"
-              error={codeError ?? undefined}
-            >
-              <TextInput
-                value={draft.code}
-                onChange={e => setDraft({ ...draft, code: e.target.value })}
-                placeholder="342235"
-                maxLength={20}
-                autoFocus={!isEdit}
-              />
-            </FieldGroup>
-          </div>
-          <div className="col-span-4 sm:col-span-3">
-            <FieldGroup label="ชื่อวิชา (ไทย)">
-              <TextInput
-                value={draft.name_th}
-                onChange={e => setDraft({ ...draft, name_th: e.target.value })}
-                placeholder="เช่น การทดสอบและประกันคุณภาพซอฟต์แวร์"
-              />
-            </FieldGroup>
-          </div>
-          <div className="col-span-4 sm:col-span-1">
-            <FieldGroup label="ระดับที่สอน" hint="ใช้จัดกลุ่มในใบแต่งตั้งทีเอ">
-              <select
-                className="w-full h-9 rounded-lg border border-border bg-surface px-3 text-sm"
-                value={draft.level ?? "undergrad"}
-                onChange={e => setDraft({ ...draft, level: e.target.value })}
-              >
-                <option value="undergrad">ปริญญาตรี</option>
-                <option value="graduate">บัณฑิตศึกษา</option>
-              </select>
-            </FieldGroup>
-          </div>
-          <div className="col-span-4 sm:col-span-3">
-            <FieldGroup label="ชื่อวิชา (อังกฤษ)" hint="สำหรับอาจารย์/ทีเอต่างชาติ และใช้ในใบแต่งตั้งทีเอ">
-              <TextInput
-                value={draft.name_en ?? ""}
-                onChange={e => setDraft({ ...draft, name_en: e.target.value })}
-                placeholder="e.g. Software Testing and Quality Assurance"
-              />
-            </FieldGroup>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <FieldGroup label="หน่วยกิต" error={creditsError ?? undefined}>
-            <TextInput type="number" min={1} max={30} step={1}
-              value={draft.credits}
-              onChange={e => setDraft({ ...draft, credits: Number(e.target.value) })} />
-          </FieldGroup>
-          <FieldGroup label="ชม.บรรยาย" error={hoursError ?? undefined}>
-            <TextInput type="number" min={0}
-              value={draft.lecture_hrs}
-              onChange={e => setDraft({ ...draft, lecture_hrs: Number(e.target.value) })} />
-          </FieldGroup>
-          <FieldGroup label="ชม.ปฏิบัติ">
-            <TextInput type="number" min={0}
-              value={draft.lab_hrs}
-              onChange={e => setDraft({ ...draft, lab_hrs: Number(e.target.value) })} />
-          </FieldGroup>
-          <FieldGroup label="ชม.ศึกษาเอง">
-            <TextInput type="number" min={0}
-              value={draft.self_hrs}
-              onChange={e => setDraft({ ...draft, self_hrs: Number(e.target.value) })} />
-          </FieldGroup>
-        </div>
-
-        <div className="rounded-lg border border-border bg-accent-soft/40 p-3 flex items-center gap-3">
-          <div className="text-xs text-muted uppercase tracking-wider">ตามรูปแบบ REG</div>
-          <div className="text-lg font-semibold tabular">{regFormat}</div>
-          <div className="text-xs text-muted ml-auto">= หน่วยกิต(บรรยาย-ปฏิบัติ-ศึกษาเอง)</div>
-        </div>
-
-        {duplicate && (
-          <Alert
-            status="danger"
-            icon={<CircleAlert size={16} />}
-            title={`รหัสวิชา ${duplicate.code} มีอยู่แล้ว`}
-            description={`ชื่อปัจจุบัน: ${duplicate.name_th} (${duplicate.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}) — โปรดใช้รหัสอื่น`}
-          />
-        )}
-
-        {noChange && (
-          <div className="text-xs text-muted">ยังไม่มีการเปลี่ยนแปลง</div>
-        )}
-
-        {error && (
-          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function FacultyCourseDeactivateModal({
-  target, onClose, onDone,
-}: {
-  target: FC | null;
-  onClose: () => void;
-  onDone: (code: string) => void;
-}) {
-  const open = target !== null;
-  const [typed, setTyped] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) { setTyped(""); setError(null); }
-  }, [open]);
-
-  if (!target) {
-    return (
-      <Modal open={false} onClose={onClose} title="">
-        <span />
-      </Modal>
-    );
-  }
-
-  const codeMatch = typed.trim() === target.code;
-
-  async function doDeactivate() {
-    if (!codeMatch || !target) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await api.del(`/faculty-courses/${target.id}`);
-      await mutate("/faculty-courses");
-      onDone(target.code);
-    } catch (e) {
-      setError((e as Error).message || "ปิดใช้งานไม่สำเร็จ");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="ยืนยันปิดใช้งานวิชา"
-      icon={<CircleAlert size={20} />}
-      size="md"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="danger" onClick={doDeactivate} disabled={!codeMatch || saving} isPending={saving}>
-            <Trash2 size={14} />ปิดใช้งาน
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <div className="rounded-lg border border-border bg-slate-50 p-3">
-          <div className="text-xs text-muted mb-1">วิชาที่จะปิดใช้งาน</div>
-          <div className="tabular font-medium">{target.code}</div>
-          <div className="text-sm">{target.name_th}</div>
-          <div className="text-xs text-muted mt-1 tabular">
-            REG: {target.credits}({target.lecture_hrs}-{target.lab_hrs}-{target.self_hrs})
-          </div>
-        </div>
-
-        <div className="text-sm">
-          การปิดใช้งานจะทำให้วิชานี้ไม่แสดงในตัวเลือกเปิดสอนใหม่ (ข้อมูลเก่ายังคงอยู่)
-          — เพื่อยืนยัน กรุณาพิมพ์รหัสวิชา <b className="tabular">{target.code}</b> ด้านล่าง
-        </div>
-
-        <FieldGroup label={`พิมพ์รหัสวิชา "${target.code}" เพื่อยืนยัน`}>
-          <TextInput
-            value={typed}
-            onChange={e => setTyped(e.target.value)}
-            placeholder={target.code}
-            autoFocus
-          />
-        </FieldGroup>
-
-        {typed.trim() !== "" && !codeMatch && (
-          <div className="text-xs text-red-600">รหัสวิชาไม่ตรง</div>
-        )}
-
-        {error && (
-          <Alert status="danger" icon={<CircleAlert size={16} />} title="ปิดใช้งานไม่สำเร็จ" description={error} />
-        )}
-      </div>
-    </Modal>
   );
 }
 
@@ -1154,14 +648,12 @@ function TermsSection() {
       ) : (
         <div className="space-y-3">
           <div className="flex items-end gap-3 flex-wrap">
-            <div className="flex-1 min-w-[220px] max-w-sm">
-              <SearchField
-                value={yearFilter}
-                onChange={setYearFilter}
-                placeholder="ค้นหาปีการศึกษา… (เช่น 2568)"
-                ariaLabel="ค้นหาปีการศึกษา"
-              />
-            </div>
+            <SearchField
+              value={yearFilter}
+              onChange={setYearFilter}
+              placeholder="ค้นหาปีการศึกษา… (เช่น 2568)"
+              ariaLabel="ค้นหาปีการศึกษา"
+            />
             <div className="text-xs text-muted tabular ms-auto">
               {yearFilter.trim()
                 ? `พบ ${visibleGroups.length} ปี`
@@ -2075,16 +1567,12 @@ interface RequestWindow {
   note?: string | null;
 }
 
+// กำหนดส่งไม่ได้ "ปิดรับ" อีกต่อไป — มีแค่ 2 สถานะเดียวกับฝั่งอาจารย์:
+// ยังไม่ถึงกำหนด (ส่งแล้วนับว่าทันเวลา) กับ เลยกำหนด (ส่งได้ แต่นับว่าล่าช้า)
 function windowStatus(w: RequestWindow, now = Date.now()) {
-  const opens = new Date(w.opens_at).getTime();
   const closes = new Date(w.closes_at).getTime();
-  if (!w.is_open) {
-    if (now > closes) return { tone: "neutral" as const, label: "หมดเวลา + ปิดไว้" };
-    return { tone: "warn" as const, label: "ปิดชั่วคราว" };
-  }
-  if (now < opens) return { tone: "info" as const, label: "ยังไม่เริ่ม" };
-  if (now > closes) return { tone: "neutral" as const, label: "หมดเวลาแล้ว" };
-  return { tone: "success" as const, label: "กำลังเปิดรับสมัคร" };
+  if (now > closes) return { tone: "warn" as const, label: "เลยกำหนด — คำขอใหม่นับเป็นส่งช้า" };
+  return { tone: "success" as const, label: "ยังไม่ถึงกำหนด — ส่งทันเวลา" };
 }
 
 function RequestWindowsSection() {
@@ -2103,27 +1591,13 @@ function RequestWindowsSection() {
   const [editing, setEditing] = useState<RequestWindow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RequestWindow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  // Double-fire guards for the per-row Switch and the "เปิดด่วน" quick action.
-  const [togglingId, setTogglingId] = useState<string | null>(null);
+  // Double-fire guard for the "กำหนดส่งใน 30 วัน" quick action.
   const [quickOpening, setQuickOpening] = useState(false);
 
   const noTerms = terms !== undefined && terms.length === 0;
   const term = terms?.find(t => t.id === termId);
   const list = windows ?? [];
 
-  async function toggleOpen(w: RequestWindow, next: boolean) {
-    if (togglingId) return;
-    setTogglingId(w.id);
-    try {
-      await api.post("/ta-request/windows", { ...w, is_open: next });
-      await mutate(swrKey);
-      toast.success(next ? "เปิดรับคำขอแล้ว" : "ปิดรับคำขอชั่วคราว");
-    } catch (e) {
-      toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
-    } finally {
-      setTogglingId(null);
-    }
-  }
 
   async function quickOpen30Days() {
     if (!termId || quickOpening) return;
@@ -2166,7 +1640,7 @@ function RequestWindowsSection() {
   return (
     <Panel
       title="ระยะเวลารับสมัคร TA"
-      description="กำหนดช่วงเวลาที่อาจารย์สามารถยื่นคำขอ TA ในแต่ละภาคเรียน — นอกช่วงนี้ระบบจะไม่รับคำขอ"
+      description="กำหนดวันส่งคำขอ TA ของแต่ละภาคเรียน — ไม่มีการปิดรับ เลยกำหนดแล้วอาจารย์ยังส่งได้ แต่คำขอจะถูกทำเครื่องหมายว่า “ส่งช้า” และการเบิกจ่ายจะล่าช้าตาม"
       actions={
         !noTerms && (
           <>
@@ -2205,10 +1679,10 @@ function RequestWindowsSection() {
           <CalendarDays size={28} className="text-muted" />
           <div>
             <div className="text-sm font-medium">
-              ยังไม่ได้เปิดรับคำขอ TA สำหรับ {term?.academic_year}/{term?.semester}
+              ยังไม่ได้กำหนดวันส่งคำขอ TA สำหรับ {term?.academic_year}/{term?.semester}
             </div>
             <div className="text-xs text-muted mt-1">
-              อาจารย์จะยังไม่สามารถส่งคำขอในภาคเรียนนี้ได้จนกว่าจะกำหนดช่วงเวลา
+              อาจารย์ยังส่งคำขอได้ตามปกติ และจะนับเป็น “ทันเวลา” ทั้งหมดจนกว่าจะกำหนดวันส่ง
             </div>
           </div>
           <div className="flex gap-2">
@@ -2216,7 +1690,7 @@ function RequestWindowsSection() {
               variant="secondary"
               onClick={() => { setEditing(null); setFormOpen(true); }}
             >
-              <CalendarDays size={14} /> กำหนดช่วงเวลาเอง
+              <CalendarDays size={14} /> กำหนดวันเอง
             </Button>
             <Button
               variant="primary"
@@ -2224,7 +1698,7 @@ function RequestWindowsSection() {
               disabled={quickOpening}
               isPending={quickOpening}
             >
-              <Power size={14} /> เปิดรับสมัครทันที (30 วัน)
+              <Power size={14} /> กำหนดส่งใน 30 วัน
             </Button>
           </div>
         </div>
@@ -2245,19 +1719,6 @@ function RequestWindowsSection() {
                   {w.note && <div className="text-xs text-muted truncate">{w.note}</div>}
                 </div>
                 <div className="ms-auto flex items-center gap-2">
-                  <Switch
-                    isSelected={w.is_open}
-                    onChange={sel => toggleOpen(w, sel)}
-                    isDisabled={togglingId === w.id}
-                    aria-label={w.is_open ? "ปิดชั่วคราว" : "เปิดรับ"}
-                  >
-                    <Switch.Content>
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                      <span className="text-xs">{w.is_open ? "เปิด" : "ปิด"}</span>
-                    </Switch.Content>
-                  </Switch>
                   <IconButton
                     label="แก้ไข"
                     variant="ghost"

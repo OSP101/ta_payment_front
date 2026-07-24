@@ -2,7 +2,6 @@
 import { use, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { AlertTriangle, Info as InfoIcon, Sparkles, HelpCircle, CircleAlert } from "lucide-react";
-import { Breadcrumbs } from "@heroui/react";
 import { ApiError } from "../../../../lib/api";
 import { PageHeader, Panel, Chip, EmptyState, Alert, Button, IconButton } from "../../../../components/ui";
 import { FormulaHelpModal } from "../../../../components/formula-help";
@@ -39,13 +38,6 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/lecturer">รายวิชาที่สอน</Breadcrumbs.Item>
-        <Breadcrumbs.Item href={`/lecturer/courses/${tcId}`}>
-          {courseName ? `${courseName.code} — ${courseName.name_th}` : "…"}
-        </Breadcrumbs.Item>
-        <Breadcrumbs.Item>คำนวณงบประมาณ</Breadcrumbs.Item>
-      </Breadcrumbs>
       <PageHeader
         title="โปรแกรมคำนวณงบ TA"
         description={courseName ? `${courseName.code} — ${courseName.name_th}` : "ประเมินภาระงาน จำนวน TA และงบประมาณ"}

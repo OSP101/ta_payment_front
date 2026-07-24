@@ -2,12 +2,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
-import { Save, CalendarPlus, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2 } from "lucide-react";
+import { Save, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api, type Term } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, Select, TextInput, Chip, EmptyState, ConfirmDialog,
+  PageHeader, Panel, Button, IconButton, Select, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import OpenCourseModal from "../../lecturer/(home)/OpenCourseModal";
@@ -15,12 +15,19 @@ import ImportModal from "./ImportModal";
 
 interface TC {
   id: string; code: string; name_th: string; term_id: string;
+  credits: number; lecture_hrs: number; lab_hrs: number; self_hrs: number;
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
   // has_special = the course has ≥1 special-track section (runs a special
   // program). When false, the "นศ. พิเศษ" field is not applicable and is locked.
   has_special: boolean;
+  // has_missing_schedule = ≥1 section has no class timetable (registrar "WBA").
+  // Such a course cannot accept a TA request until the schedule is filled in.
+  has_missing_schedule: boolean;
+  num_sections_regular: number;
+  num_sections_special: number;
+  lecturer_names?: string;
   exported_at?: string | null;
 }
 
@@ -48,12 +55,18 @@ export default function TeachingPage() {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [onlyMissing, setOnlyMissing] = useState(false);
+  const [onlyWba, setOnlyWba] = useState(false);
+  // Course whose student counts are being edited in the modal (null = closed).
+  const [editStudents, setEditStudents] = useState<TC | null>(null);
 
   // A course "needs attention" when a required student count is still 0: the
   // regular count always, plus the special count when the course runs a special
   // program. Drives the filter chip + count below.
   const missingCourses = (courses ?? []).filter(needsStudentCount);
-  const shownCourses = onlyMissing ? missingCourses : courses;
+  // WBA courses: the registrar file carried no timetable — the lecturer/staff
+  // must fill it in before the course can accept a TA request.
+  const wbaCourses = (courses ?? []).filter(c => c.has_missing_schedule);
+  const shownCourses = onlyMissing ? missingCourses : onlyWba ? wbaCourses : courses;
 
   const activeTerm = terms?.find(t => t.id === termId);
   const termLabel = activeTerm ? `${activeTerm.academic_year}/${activeTerm.semester}` : "";
@@ -114,9 +127,27 @@ export default function TeachingPage() {
                   variant={onlyMissing ? "primary" : "secondary"}
                   size="sm"
                   className="ms-auto"
-                  onClick={() => setOnlyMissing(v => !v)}
+                  onClick={() => { setOnlyMissing(v => !v); setOnlyWba(false); }}
                 >
                   {onlyMissing ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่กรอก"}
+                </Button>
+              </div>
+            )}
+            {/* WBA reminder: the registrar file had no timetable for these
+                courses — the lecturer (or staff on their behalf) must fill the
+                section schedules in, otherwise TA requests are blocked. */}
+            {wbaCourses.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
+                <span className="text-red-800 dark:text-red-200">
+                  มี <b>{wbaCourses.length}</b> วิชาที่ยังไม่ระบุเวลาเรียน (WBA) — อาจารย์หรือเจ้าหน้าที่ต้องกรอกตารางเรียนก่อน จึงจะส่งคำขอ TA ได้
+                </span>
+                <Button
+                  variant={onlyWba ? "primary" : "secondary"}
+                  size="sm"
+                  className="ms-auto"
+                  onClick={() => { setOnlyWba(v => !v); setOnlyMissing(false); }}
+                >
+                  {onlyWba ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่มีตาราง"}
                 </Button>
               </div>
             )}
@@ -131,7 +162,10 @@ export default function TeachingPage() {
               pageSize={10}
               emptyTitle="ยังไม่มีวิชาในภาคเรียนนี้"
               emptyDescription="กดปุ่ม “เปิดรายวิชา” เพื่อสร้างวิชาใหม่"
-              columns={courseColumns}
+              // 8 คอลัมน์ — ถ้าไม่กันความกว้างขั้นต่ำไว้ ชื่อวิชาจะถูกบีบจนตัดเป็น
+              // 3 บรรทัด อ่านยาก สู้ให้เลื่อนตารางแนวนอนแทน
+              minWidth="1080px"
+              columns={makeCourseColumns(setEditStudents)}
             />
           </div>
         </Panel>
@@ -152,55 +186,113 @@ export default function TeachingPage() {
         termId={termId}
         termLabel={termLabel}
       />
+
+      <StudentCountsModal course={editStudents} onClose={() => setEditStudents(null)} />
     </div>
   );
 }
 
-const courseColumns: DataColumn<TC>[] = [
-  {
-    id: "code", label: "รหัสวิชา", sortable: true, isRowHeader: true,
-    sortValue: c => c.code,
-    className: "font-medium tabular-nums",
-    render: c => c.code,
-  },
-  {
-    id: "name", label: "ชื่อวิชา", sortable: true,
-    sortValue: c => c.name_th,
-    render: c => (
-      <span className="inline-flex items-center gap-2">
-        {c.name_th}
-        {c.exported_at && (
-          <Chip tone="success">
-            <span className="inline-flex items-center gap-1"><CheckCircle2 size={11} /> ส่งออกแล้ว</span>
-          </Chip>
-        )}
-      </span>
-    ),
-  },
-  {
-    id: "students", label: "จำนวนนักศึกษา (ปกติ / พิเศษ)",
-    render: c => <StudentCountsEditor course={c} />,
-  },
-  {
-    id: "budget", label: "งบประมาณ",
-    render: c => <BudgetBadge id={c.id} />,
-  },
-  {
-    id: "actions", label: <span className="sr-only">การจัดการ</span>,
-    className: "text-right",
-    render: c => (
-      <div className="inline-flex items-center gap-1 whitespace-nowrap">
-        {/* Open the lecturer view in a new tab so staff can operate on the
-            course on behalf of the lecturer. The lecturer shell shows an admin
-            banner when the visitor has admin/staff role. */}
-        <Link href={`/lecturer/courses/${c.id}`} target="_blank" rel="noopener noreferrer">
-          <IconButton label="จัดการ" variant="ghost" size="sm"><Settings size={14} /></IconButton>
-        </Link>
-        <DeleteCourseButton course={c} />
-      </div>
-    ),
-  },
-];
+// Column factory — the students column needs the page's "open edit modal"
+// callback, so the columns are built per render instead of as a module const.
+function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
+  return [
+    {
+      id: "code", label: "รหัสวิชา", sortable: true, isRowHeader: true,
+      sortValue: c => c.code,
+      className: "font-medium tabular-nums whitespace-nowrap",
+      render: c => c.code,
+    },
+    {
+      id: "name", label: "ชื่อวิชา", sortable: true,
+      sortValue: c => c.name_th,
+      // ชื่อวิชาเป็นคอลัมน์ยืดหยุ่นตัวเดียว ถ้าปล่อยให้ตัดบรรทัดจะโดนบีบเหลือ
+      // 3-4 บรรทัดจนอ่านยาก — ให้เลื่อนตารางแนวนอนแทนการตัดคำ
+      className: "whitespace-nowrap",
+      render: c => (
+        <span className="inline-flex items-center gap-2">
+          {c.name_th}
+          {c.exported_at && (
+            <Chip tone="success">
+              <span className="inline-flex items-center gap-1"><CheckCircle2 size={11} /> ส่งออกแล้ว</span>
+            </Chip>
+          )}
+          {c.has_missing_schedule && (
+            <Chip tone="warn">
+              <span className="inline-flex items-center gap-1"><CalendarOff size={11} /> ยังไม่ระบุเวลาเรียน</span>
+            </Chip>
+          )}
+        </span>
+      ),
+    },
+    {
+      id: "credits", label: "หน่วยกิต", sortable: true,
+      sortValue: c => c.credits,
+      className: "tabular-nums whitespace-nowrap",
+      render: c => `${c.credits} (${c.lecture_hrs}-${c.lab_hrs}-${c.self_hrs})`,
+    },
+    {
+      id: "lecturers", label: "อาจารย์ผู้สอน",
+      render: c => c.lecturer_names ? (
+        <span className="block max-w-[180px] truncate" title={c.lecturer_names}>
+          {c.lecturer_names}
+        </span>
+      ) : (
+        <span className="text-warning text-xs">ยังไม่ผูกอาจารย์</span>
+      ),
+    },
+    {
+      id: "sections", label: "Sec (ปกติ / พิเศษ)",
+      className: "tabular-nums whitespace-nowrap",
+      // แสดง "x / y" เสมอ แม้ฝั่งใดเป็น 0 — ทุกแถวอ่านด้วยรูปแบบเดียวกัน
+      render: c => (
+        <span title={`ภาคปกติ ${c.num_sections_regular} sec · ภาคพิเศษ ${c.num_sections_special} sec`}>
+          {c.num_sections_regular} / {c.num_sections_special}
+        </span>
+      ),
+    },
+    {
+      id: "students", label: "นักศึกษา (ปกติ / พิเศษ)",
+      render: c => {
+        const missing = needsStudentCount(c);
+        return (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <Users size={13} className="text-muted shrink-0" />
+            <span className="tabular-nums" title={`ภาคปกติ ${c.num_students_regular} คน · ภาคพิเศษ ${c.num_students_special} คน`}>
+              {c.num_students_regular} / {c.num_students_special}
+            </span>
+            {missing && <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">ยังไม่กรอก</span>}
+            <IconButton
+              label={`แก้ไขจำนวนนักศึกษา ${c.code}`}
+              variant="ghost" size="sm"
+              onClick={() => onEditStudents(c)}
+            >
+              <Pencil size={13} />
+            </IconButton>
+          </span>
+        );
+      },
+    },
+    {
+      id: "budget", label: "งบประมาณ (ใช้ไป / ทั้งหมด)",
+      render: c => <BudgetBadge id={c.id} />,
+    },
+    {
+      id: "actions", label: <span className="sr-only">การจัดการ</span>,
+      className: "text-right",
+      render: c => (
+        <div className="inline-flex items-center gap-1 whitespace-nowrap">
+          {/* Open the lecturer view in a new tab so staff can operate on the
+              course on behalf of the lecturer. The lecturer shell shows an admin
+              banner when the visitor has admin/staff role. */}
+          <Link href={`/lecturer/courses/${c.id}`} target="_blank" rel="noopener noreferrer">
+            <IconButton label="จัดการ" variant="ghost" size="sm"><Settings size={14} /></IconButton>
+          </Link>
+          <DeleteCourseButton course={c} />
+        </div>
+      ),
+    },
+  ];
+}
 
 // DeleteCourseButton removes a mistakenly-opened course straight from the list.
 // The server refuses (with a clear reason) if the course has any TA / worklog /
@@ -259,30 +351,32 @@ function DeleteCourseButton({ course }: { course: TC }) {
 // StudentCountsEditor edits a course's regular + special student counts in one
 // place with a SINGLE save button (sends only the changed field(s)). The special
 // input is locked when the course has no special program.
-function StudentCountsEditor({ course }: { course: TC }) {
+// StudentCountsModal — edit a course's enrolment in a dialog instead of inline
+// inputs; the table row only displays the numbers plus a pencil button.
+function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: () => void }) {
   // Keep raw strings so an empty field isn't silently coerced to 0.
-  const [reg, setReg] = useState(String(course.num_students_regular));
-  const [spc, setSpc] = useState(String(course.num_students_special));
+  const [reg, setReg] = useState("");
+  const [spc, setSpc] = useState("");
   const [saving, setSaving] = useState(false);
   useEffect(() => {
-    setReg(String(course.num_students_regular));
-    setSpc(String(course.num_students_special));
-  }, [course.num_students_regular, course.num_students_special]);
+    if (course) {
+      setReg(String(course.num_students_regular));
+      setSpc(String(course.num_students_special));
+    }
+  }, [course]);
 
-  const hasSpecial = course.has_special;
+  const hasSpecial = !!course?.has_special;
   const regNum = Number(reg);
   const spcNum = Number(spc);
   const regInvalid = reg.trim() === "" || !Number.isInteger(regNum) || regNum < 0;
   const spcInvalid = hasSpecial && (spc.trim() === "" || !Number.isInteger(spcNum) || spcNum < 0);
-  const regDirty = !regInvalid && regNum !== course.num_students_regular;
-  const spcDirty = hasSpecial && !spcInvalid && spcNum !== course.num_students_special;
+  const regDirty = !!course && !regInvalid && regNum !== course.num_students_regular;
+  const spcDirty = !!course && hasSpecial && !spcInvalid && spcNum !== course.num_students_special;
   const dirty = regDirty || spcDirty;
   const invalid = regInvalid || spcInvalid;
-  const regNeeds = !regDirty && !regInvalid && course.num_students_regular === 0;
-  const spcNeeds = hasSpecial && !spcDirty && !spcInvalid && course.num_students_special === 0;
 
   async function save() {
-    if (invalid || !dirty) return;
+    if (!course || invalid || !dirty) return;
     setSaving(true);
     try {
       const body: Record<string, number> = {};
@@ -291,6 +385,7 @@ function StudentCountsEditor({ course }: { course: TC }) {
       await api.patch(`/teaching-courses/${course.id}/num-students`, body);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
       toast.success("บันทึกจำนวนนักศึกษาแล้ว", { description: course.code });
+      onClose();
     } catch (e) {
       toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
     } finally {
@@ -298,79 +393,87 @@ function StudentCountsEditor({ course }: { course: TC }) {
     }
   }
 
-  const field = (
-    label: string,
-    node: ReactNode,
-    hint: string | null,
-    hintDanger?: boolean,
-  ) => (
-    <div className="flex w-16 flex-col items-stretch gap-0.5">
-      <span className="text-[10px] leading-none text-ink-3">{label}</span>
-      {node}
-      <span className={
-        "text-[10px] leading-none text-center truncate " +
-        (hintDanger ? "text-danger" : "text-amber-600 dark:text-amber-400")
-      }>
-        {hint ?? " "}
-      </span>
-    </div>
-  );
-
   return (
-    <div className="inline-flex items-start gap-2">
-      {field("ปกติ",
-        <TextInput
-          type="number" min={0} step={1} className="w-full text-right"
-          aria-invalid={regInvalid || undefined}
-          value={reg} onChange={e => setReg(e.target.value)}
-        />,
-        regInvalid ? "ต้อง ≥ 0" : regNeeds ? "ยังไม่กรอก" : null,
-        regInvalid,
+    <Modal
+      open={!!course}
+      onClose={() => { if (!saving) onClose(); }}
+      size="sm"
+      icon={<Users size={18} />}
+      title={course ? `แก้ไขจำนวนนักศึกษา · ${course.code}` : ""}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="primary" onClick={save} disabled={!dirty || invalid || saving} isPending={saving}>
+            <Save size={14} />บันทึก
+          </Button>
+        </>
+      }
+    >
+      {course && (
+        <div className="space-y-3">
+          <div className="text-xs text-muted">{course.name_th}</div>
+          <div className="grid grid-cols-2 gap-3">
+            <FieldGroup
+              label="ภาคปกติ"
+              error={regInvalid ? "ต้องเป็นจำนวนเต็ม ≥ 0" : undefined}
+            >
+              <TextInput
+                type="number" min={0} step={1}
+                aria-invalid={regInvalid || undefined}
+                value={reg} onChange={e => setReg(e.target.value)}
+                className="text-right tabular"
+              />
+            </FieldGroup>
+            <FieldGroup
+              label="ภาคพิเศษ"
+              hint={hasSpecial ? undefined : "วิชานี้ไม่มีโครงการพิเศษ"}
+              error={spcInvalid ? "ต้องเป็นจำนวนเต็ม ≥ 0" : undefined}
+            >
+              {hasSpecial ? (
+                <TextInput
+                  type="number" min={0} step={1}
+                  aria-invalid={spcInvalid || undefined}
+                  value={spc} onChange={e => setSpc(e.target.value)}
+                  className="text-right tabular"
+                />
+              ) : (
+                <div className="h-9 rounded-lg border border-border bg-surface-secondary px-3 flex items-center justify-center text-muted select-none">
+                  —
+                </div>
+              )}
+            </FieldGroup>
+          </div>
+          <div className="text-xs text-muted">
+            จำนวนนักศึกษาใช้คำนวณงบประมาณโดยประมาณของวิชา — ต้องกรอกก่อนจึงจะส่งออกเอกสารได้
+          </div>
+        </div>
       )}
-      {field("พิเศษ",
-        hasSpecial ? (
-          <TextInput
-            type="number" min={0} step={1} className="w-full text-right"
-            aria-invalid={spcInvalid || undefined}
-            value={spc} onChange={e => setSpc(e.target.value)}
-          />
-        ) : (
-          <div
-            className="w-full rounded-lg border border-hairline bg-slate-50/70 dark:bg-slate-900/30 px-2 py-2 text-center text-ink-3 select-none"
-            title="วิชานี้ไม่มีโครงการพิเศษ (ระบบตรวจจากกลุ่มเรียนตอนเปิดวิชา)"
-          >—</div>
-        ),
-        hasSpecial ? (spcInvalid ? "ต้อง ≥ 0" : spcNeeds ? "ยังไม่กรอก" : null) : "ไม่มีพิเศษ",
-        hasSpecial && spcInvalid,
-      )}
-      {/* single save button for the row; transparent label keeps it aligned with the inputs */}
-      <div className="flex flex-col items-start gap-0.5">
-        <span className="text-[10px] leading-none select-none">{" "}</span>
-        <Button
-          variant={dirty ? "primary" : "ghost"} size="sm"
-          disabled={!dirty || invalid || saving}
-          isPending={saving}
-          onClick={save}
-        >
-          <Save size={13} />บันทึก
-        </Button>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
 interface Budget {
   per_course_max: number; used_baht: number; remaining_baht: number;
   over_budget: boolean;
+  term_pay_regular: number; term_pay_special: number;
 }
+// BudgetBadge — used/ceiling chip plus the ceiling split by track (ปกติ/พิเศษ),
+// so staff can see how the course budget divides across the two pools.
 function BudgetBadge({ id }: { id: string }) {
   const { data } = useSWR<Budget>(`/teaching-courses/${id}/budget`);
   if (!data) return <span className="text-[var(--ink-4)] text-xs">…</span>;
   const tone = data.over_budget ? "danger" : data.remaining_baht < data.per_course_max * 0.1 ? "warn" : "success";
+  const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
   return (
-    <Chip tone={tone}>
-      {data.used_baht.toFixed(0)}/{data.per_course_max.toFixed(0)} บ.
-    </Chip>
+    <div className="flex flex-col items-start gap-1 whitespace-nowrap">
+      <Chip tone={tone}>
+        {fmt(data.used_baht)}/{fmt(data.per_course_max)} บ.
+      </Chip>
+      {/* บรรทัดล่าง = แบ่งเพดานงบตามภาค (รวมกันได้เท่ากับตัวหลังของ chip) */}
+      <span className="text-[11px] text-muted tabular-nums">
+        ปกติ {fmt(data.term_pay_regular)} · พิเศษ {fmt(data.term_pay_special)} บ.
+      </span>
+    </div>
   );
 }
 

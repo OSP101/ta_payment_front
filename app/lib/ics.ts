@@ -19,6 +19,72 @@ export interface IcsImportResult {
   eventsTotal: number;
   /** VEVENTs that collapsed into an existing weekly slot (recurring copies). */
   duplicatesCollapsed: number;
+  /** Blocks whose ประเภท (บรรยาย/ปฏิบัติการ) was resolved from the timetable. */
+  kindResolved: number;
+}
+
+/**
+ * One row of the term timetable from `/class-kinds`. The .ics from KKU REG has
+ * NO lecture/lab marker — SUMMARY is just "code (credits) sec" — so the only
+ * way to fill ประเภท automatically is to match each imported slot against the
+ * registrar data already in this system (which does label Lec/Lab).
+ */
+export interface ClassKindRow {
+  code: string;
+  sec_no: string;
+  kind: BlockKind;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+/**
+ * Resolve a block's kind from the timetable. Tightest match first so a course
+ * that meets twice on the same day (lecture then lab) still resolves correctly:
+ *   1. same course + sec + day + exact start time
+ *   2. same course + sec + day + overlapping time (REG rounds odd minutes)
+ *   3. same course + sec, and every slot of that section shares one kind
+ * Anything looser is left blank on purpose — a wrong ประเภท is worse than an
+ * empty one, since it drives which activities the TA may bill.
+ */
+function resolveKind(b: Block, table: ClassKindRow[]): BlockKind | "" {
+  const code = b.course_code.toUpperCase();
+  const sameSection = table.filter(
+    r => r.code.toUpperCase() === code && r.sec_no === b.sec_no,
+  );
+  if (sameSection.length === 0) return "";
+
+  const sameDay = sameSection.filter(r => r.day_of_week === b.day_of_week);
+  const exact = sameDay.find(r => r.start_time === b.start_time);
+  if (exact) return exact.kind;
+
+  const bStart = parseHM(b.start_time);
+  const bEnd = parseHM(b.end_time);
+  const overlapping = sameDay.filter(
+    r => parseHM(r.start_time) < bEnd && bStart < parseHM(r.end_time),
+  );
+  if (overlapping.length === 1) return overlapping[0].kind;
+
+  const kinds = new Set(sameSection.map(r => r.kind));
+  if (kinds.size === 1) return [...kinds][0];
+  return "";
+}
+
+/**
+ * Fill in the ประเภท of already-parsed blocks from the term timetable. Kept
+ * separate from `icsToBlocks` so parsing stays synchronous and testable while
+ * the timetable is fetched over the network.
+ */
+export function applyClassKinds(result: IcsImportResult, table: ClassKindRow[]): IcsImportResult {
+  if (!table.length) return result;
+  let kindResolved = 0;
+  const blocks = result.blocks.map(b => {
+    const kind = resolveKind(b, table);
+    if (!kind) return b;
+    kindResolved++;
+    return { ...b, kind };
+  });
+  return { ...result, blocks, kindResolved };
 }
 
 // The schedule grid clamps to 08:00–20:00 Bangkok time; anything outside is
@@ -212,6 +278,7 @@ export function icsToBlocks(text: string, termId: string): IcsImportResult {
     malformedSkipped,
     eventsTotal: events.length,
     duplicatesCollapsed,
+    kindResolved: 0,
   };
 }
 

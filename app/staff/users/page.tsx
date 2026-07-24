@@ -608,7 +608,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 </VSelect>
               )}
               {isTa && form.study_level === "undergrad" && (
-                <VSelect label="ชั้นปี (จำเป็นสำหรับ WBA ปี 4)" value={form.study_year}
+                <VSelect label="ชั้นปี (ระบบคำนวณอัตโนมัติจากรหัส นศ. เมื่อมี)" value={form.study_year}
                   onChange={v => setForm({ ...form, study_year: v })}
                   error={null} show={showErrors}
                 >

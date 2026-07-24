@@ -10,7 +10,7 @@ import { BookPlus, CircleAlert, Clock, Check, Plus, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  Modal, Button, FieldGroup, TextInput, Alert, Chip,
+  Modal, Button, FieldGroup, TextInput, Alert, Chip, Select,
 } from "../../components/ui";
 
 // Clamp a typed section count to a whole number in [0, 99] — blocks decimals,
@@ -22,19 +22,17 @@ import SectionScheduleEditor, {
   type SectionScheduleRow, toApiPayload, validateRows,
 } from "../../components/SectionScheduleEditor";
 
-interface FC {
-  id: string;
+interface Draft {
+  // Course identity, typed in directly — there is no central catalog. This is
+  // the manual "reserve course" path for courses not in the imported file.
+  // English-only naming policy: no Thai name field.
   code: string;
-  name_th: string;
+  name_en: string;
+  level: "undergrad" | "graduate";
   credits: number;
   lecture_hrs: number;
   lab_hrs: number;
   self_hrs: number;
-  is_active: boolean;
-}
-
-interface Draft {
-  faculty_course_id: string;
   // Teaching lecturer(s). Only collected when a non-lecturer (staff) opens the
   // course — a lecturer opening their own course is auto-assigned server-side.
   lecturer_ids: string[];
@@ -43,15 +41,39 @@ interface Draft {
   // Keyed by sec_no. Section schedules are required at course-open time —
   // TAs consume them immediately for time-clock validation.
   schedules: Record<string, SectionScheduleRow[]>;
+  // Keyed by sec_no. Student count per section — drives the budget estimate.
+  students: Record<string, number>;
 }
 
 const EMPTY: Draft = {
-  faculty_course_id: "",
+  code: "",
+  name_en: "",
+  level: "undergrad",
+  credits: 3,
+  lecture_hrs: 3,
+  lab_hrs: 0,
+  self_hrs: 6,
   lecturer_ids: [],
   regular_sections: 1,
   special_sections: 0,
   schedules: {},
+  students: {},
 };
+
+// Clamp a typed hour/credit value to a whole number in [0, 30].
+function clampHrs(v: string): number {
+  return Math.min(30, Math.max(0, Math.floor(Number(v) || 0)));
+}
+
+// KKU course-code formats: legacy = 6 digits ("342233"); current = 2 uppercase
+// letters + 6 digits ("CP353201", "SC363001"). Backend enforces the same rule.
+const COURSE_CODE_RE = /^(?:[A-Z]{2}\d{6}|\d{6})$/;
+
+// Strip everything that can never be part of a course code — whitespace, Thai
+// characters, symbols — uppercase what remains, and cap at max length (2+6).
+function sanitizeCode(v: string): string {
+  return v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+}
 
 interface LecturerUser {
   id: string;
@@ -76,19 +98,19 @@ function specialSecNos(n: number, regular: number): string[] {
 function buildSections(
   regular: number, special: number,
   schedules: Record<string, SectionScheduleRow[]>,
+  students: Record<string, number>,
 ): {
   sec_no: string;
   track: "regular" | "special";
   num_students: number;
   schedules: ReturnType<typeof toApiPayload>;
 }[] {
-  // num_students starts at 0 — staff is the source of truth for enrolment,
-  // so the lecturer's "open course" flow no longer captures it. Staff fills
-  // it via the sections settings page before the export batch runs.
+  // num_students is captured per section on the form (drives budget). Missing
+  // entries default to 0 so a course can still open before enrolment is known.
   const one = (sec_no: string, track: "regular" | "special") => ({
     sec_no,
     track,
-    num_students: 0,
+    num_students: students[sec_no] ?? 0,
     schedules: toApiPayload(schedules[sec_no] ?? []),
   });
   return [
@@ -111,9 +133,16 @@ export default function OpenCourseModal({
   pickLecturers?: boolean;
 }) {
   const router = useRouter();
-  const { data: fcs } = useSWR<FC[]>(open ? "/faculty-courses" : null);
   const { data: lecturerData } = useSWR<{ items: LecturerUser[] }>(
     open && pickLecturers ? "/users?role=lecturer&limit=200" : null,
+  );
+  // Courses already open this term — powers the live duplicate-code check so
+  // the user learns about a clash while typing, not on submit.
+  const { data: openCourses } = useSWR<{ code: string }[]>(
+    open && termId ? `/teaching-courses?term_id=${termId}` : null,
+  );
+  const existingCodes = useMemo(
+    () => new Set((openCourses ?? []).map(c => c.code)), [openCourses],
   );
   const lecturers = useMemo(() => lecturerData?.items ?? [], [lecturerData]);
   const [draft, setDraft] = useState<Draft>(EMPTY);
@@ -128,18 +157,14 @@ export default function OpenCourseModal({
     if (open) { setDraft(EMPTY); setErr(null); setShowSpecial(false); }
   }, [open]);
 
-  const activeFcs = useMemo(() => (fcs ?? []).filter(fc => fc.is_active), [fcs]);
-  const selected = activeFcs.find(fc => fc.id === draft.faculty_course_id);
-
-  // Which meeting kinds the selected course actually has — drives what the
-  // schedule editor lets the lecturer pick. See [[schedule-kind-rules]].
+  // Which meeting kinds the typed course has — drives what the schedule editor
+  // lets the lecturer pick. See [[schedule-kind-rules]].
   const allowedKinds = useMemo<("lecture" | "lab")[]>(() => {
-    if (!selected) return ["lecture", "lab"];
     const k: ("lecture" | "lab")[] = [];
-    if (selected.lecture_hrs > 0) k.push("lecture");
-    if (selected.lab_hrs > 0) k.push("lab");
+    if (draft.lecture_hrs > 0) k.push("lecture");
+    if (draft.lab_hrs > 0) k.push("lab");
     return k.length > 0 ? k : ["lecture", "lab"];
-  }, [selected]);
+  }, [draft.lecture_hrs, draft.lab_hrs]);
 
   const totalSections = draft.regular_sections + draft.special_sections;
 
@@ -154,15 +179,35 @@ export default function OpenCourseModal({
   );
   const scheduleComplete =
     totalSections > 0 && allSecNos.every(sec => (draft.schedules[sec] ?? []).length > 0);
+  // Student count is required per section — guards against opening a course
+  // with no enrolment (budget would be 0). Each section must be ≥ 1.
+  const studentsComplete =
+    totalSections > 0 && allSecNos.every(sec => (draft.students[sec] ?? 0) >= 1);
+
+  // Running enrolment totals, shown so staff can sanity-check against the file.
+  const totalRegularStudents = regularSecNos(draft.regular_sections)
+    .reduce((sum, sec) => sum + (draft.students[sec] ?? 0), 0);
+  const totalSpecialStudents = specialSecNos(draft.special_sections, draft.regular_sections)
+    .reduce((sum, sec) => sum + (draft.students[sec] ?? 0), 0);
+
+  // Course-code gate: format must match (legacy 6-digit or XX+6-digit) AND the
+  // code must not already be open in this term. codeError doubles as the
+  // inline message under the field.
+  const codeValid = COURSE_CODE_RE.test(draft.code);
+  const codeDuplicate = codeValid && existingCodes.has(draft.code);
+  const codeError =
+    draft.code === "" ? null
+    : !codeValid ? "รูปแบบรหัสไม่ถูกต้อง — ต้องเป็นตัวเลข 6 หลัก (เช่น 342233) หรือตัวอักษรพิมพ์ใหญ่ 2 ตัวตามด้วยตัวเลข 6 หลัก (เช่น CP353201)"
+    : codeDuplicate ? "วิชารหัสนี้เปิดอยู่แล้วในเทอมนี้ — เปิดซ้ำไม่ได้" : null;
 
   // Progressive reveal gates: each step unlocks the next only when its
   // required fields are filled cleanly. When pickLecturers is on, an extra
   // "อาจารย์ผู้สอน" step sits between course and sections (shifting numbers).
-  const step1Done = !!draft.faculty_course_id;
+  const step1Done = codeValid && !codeDuplicate;
   const lecturersDone = !pickLecturers || draft.lecturer_ids.length > 0;
   const sectionsReady = step1Done && lecturersDone;
   const sectionsDone = sectionsReady && totalSections > 0;
-  const step3Done = sectionsDone && scheduleComplete && !scheduleBlocked;
+  const step3Done = sectionsDone && scheduleComplete && studentsComplete && !scheduleBlocked;
   const secStepNo = pickLecturers ? 3 : 2;
   const schedStepNo = pickLecturers ? 4 : 3;
 
@@ -176,18 +221,26 @@ export default function OpenCourseModal({
       // starts_on/ends_on omitted — staff fills the teaching window later.
       // Backend columns are nullable and worklog validation defaults to an
       // unbounded window when null.
+      // English-only naming: name_th is omitted — the backend falls back to
+      // the English name (then the code) for the NOT NULL display column.
       const body = {
-        faculty_course_id: draft.faculty_course_id,
         term_id: termId,
+        code: draft.code,
+        name_en: draft.name_en.trim() || undefined,
+        level: draft.level,
+        credits: draft.credits,
+        lecture_hrs: draft.lecture_hrs,
+        lab_hrs: draft.lab_hrs,
+        self_hrs: draft.self_hrs,
         ...(pickLecturers ? { lecturer_ids: draft.lecturer_ids } : {}),
         sections: buildSections(
-          draft.regular_sections, draft.special_sections, draft.schedules,
+          draft.regular_sections, draft.special_sections, draft.schedules, draft.students,
         ),
       };
       const res = await api.post<{ id: string }>("/teaching-courses", body);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
       toast.success("เปิดรายวิชาเรียบร้อยแล้ว", {
-        description: selected ? `${selected.code} — ${selected.name_th}` : undefined,
+        description: `${draft.code} — ${draft.name_en.trim() || "(ไม่ระบุชื่อ)"}`,
       });
       onClose();
       router.push(`${redirectBase}/${res.id}`);
@@ -218,24 +271,62 @@ export default function OpenCourseModal({
       }
     >
       <div className="space-y-3">
-        {/* Step 1 — always visible */}
-        <StepCard n={1} title="เลือกวิชา" done={!!draft.faculty_course_id}>
-          <CourseAutocomplete
-            items={activeFcs}
-            value={draft.faculty_course_id}
-            onChange={id => setDraft(d => ({ ...d, faculty_course_id: id }))}
-          />
-          {selected && (
-            <div className="mt-2 rounded-lg border border-border bg-accent-soft/30 p-3 flex items-center gap-3">
-              <div className="text-sm">
-                <div className="font-semibold tabular">{selected.code}</div>
-                <div className="text-xs text-muted mt-0.5">{selected.name_th}</div>
-              </div>
-              <div className="text-xs text-muted ms-auto tabular">
-                {selected.credits}({selected.lecture_hrs}-{selected.lab_hrs}-{selected.self_hrs}) หน่วยกิต
-              </div>
-            </div>
-          )}
+        {/* Step 1 — always visible. Manual course entry (reserve courses not in
+            the imported registrar file). */}
+        <StepCard n={1} title="ข้อมูลวิชา" done={step1Done}>
+          <div className="text-xs text-muted mb-3">
+            สำหรับวิชาที่ไม่มีในไฟล์นำเข้า — กรอกรหัสและข้อมูลหน่วยกิตเอง
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <FieldGroup
+              label="รหัสวิชา"
+              hint={codeError ? undefined : "ตัวเลข 6 หลัก หรือ ตัวอักษรใหญ่ 2 ตัว + ตัวเลข 6 หลัก เช่น CP353201"}
+              error={codeError}
+            >
+              <TextInput
+                value={draft.code}
+                onChange={e => setDraft(d => ({ ...d, code: sanitizeCode(e.target.value) }))}
+                placeholder="CP353201"
+                className={"tabular" + (codeError ? " ring-1 ring-danger" : "")}
+              />
+            </FieldGroup>
+            <FieldGroup label="ระดับ">
+              <Select
+                value={draft.level}
+                onChange={e => setDraft(d => ({ ...d, level: e.target.value as Draft["level"] }))}
+              >
+                <option value="undergrad">ปริญญาตรี</option>
+                <option value="graduate">บัณฑิตศึกษา</option>
+              </Select>
+            </FieldGroup>
+          </div>
+          <div className="mt-3">
+            <FieldGroup label="ชื่อวิชา (อังกฤษ)">
+              <TextInput
+                value={draft.name_en}
+                onChange={e => setDraft(d => ({ ...d, name_en: e.target.value }))}
+                placeholder="WEB PROGRAMMING"
+              />
+            </FieldGroup>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+            <FieldGroup label="หน่วยกิต">
+              <TextInput type="number" min={0} max={30} step={1} value={draft.credits}
+                onChange={e => setDraft(d => ({ ...d, credits: clampHrs(e.target.value) }))} />
+            </FieldGroup>
+            <FieldGroup label="ชม.บรรยาย" hint="lecture">
+              <TextInput type="number" min={0} max={30} step={1} value={draft.lecture_hrs}
+                onChange={e => setDraft(d => ({ ...d, lecture_hrs: clampHrs(e.target.value) }))} />
+            </FieldGroup>
+            <FieldGroup label="ชม.ปฏิบัติ" hint="lab">
+              <TextInput type="number" min={0} max={30} step={1} value={draft.lab_hrs}
+                onChange={e => setDraft(d => ({ ...d, lab_hrs: clampHrs(e.target.value) }))} />
+            </FieldGroup>
+            <FieldGroup label="ชม.ศึกษาเอง" hint="self">
+              <TextInput type="number" min={0} max={30} step={1} value={draft.self_hrs}
+                onChange={e => setDraft(d => ({ ...d, self_hrs: clampHrs(e.target.value) }))} />
+            </FieldGroup>
+          </div>
         </StepCard>
 
         {/* Lecturer step — staff-only. A lecturer opening their own course is
@@ -328,22 +419,41 @@ export default function OpenCourseModal({
           </StepCard>
         )}
 
-        {/* Schedule — required: TA time-clock validation reads it immediately.
-            Staff fills num_students + course dates later. */}
+        {/* Schedule + enrolment — schedule is required (TA time-clock reads it);
+            per-section student count drives the budget estimate. */}
         {sectionsDone && (
-          <StepCard n={schedStepNo} title="ตารางเวลาเรียนต่อ section" done={step3Done}>
+          <StepCard n={schedStepNo} title="จำนวนนักศึกษา + ตารางเรียนต่อ section" done={step3Done}>
             <div className="text-xs text-muted mb-2">
-              กดที่ section เพื่อกำหนดวัน-เวลาเรียน — ต้องกรอกครบทุก section
+              กรอกจำนวนนักศึกษาของแต่ละ section (จำเป็น) แล้วกดที่ section เพื่อกำหนดวัน-เวลาเรียน (ต้องมีตารางครบทุก section)
             </div>
             <SectionSchedulesPanel
               regularSecs={regularSecNos(draft.regular_sections)}
               specialSecs={specialSecNos(draft.special_sections, draft.regular_sections)}
               schedules={draft.schedules}
+              students={draft.students}
               allowedKinds={allowedKinds}
               onChange={(sec, rows) =>
                 setDraft(d => ({ ...d, schedules: { ...d.schedules, [sec]: rows } }))
               }
+              onStudentsChange={(sec, n) =>
+                setDraft(d => ({ ...d, students: { ...d.students, [sec]: n } }))
+              }
             />
+            <div className="flex items-center gap-3 text-xs mt-3 pt-3 border-t border-border">
+              <span className="text-muted">รวมนักศึกษา</span>
+              <Chip tone="brand">ปกติ {totalRegularStudents} คน</Chip>
+              {draft.special_sections > 0 && (
+                <Chip tone="warn">พิเศษ {totalSpecialStudents} คน</Chip>
+              )}
+              <span className="ms-auto font-medium tabular">
+                รวม {totalRegularStudents + totalSpecialStudents} คน
+              </span>
+            </div>
+            {!studentsComplete && (
+              <div className="text-xs text-warning font-medium mt-2">
+                ⚠ กรุณากรอกจำนวนนักศึกษาให้ครบทุก section (อย่างน้อย 1 คน) ก่อนเปิดรายวิชา
+              </div>
+            )}
           </StepCard>
         )}
 
@@ -356,13 +466,15 @@ export default function OpenCourseModal({
 }
 
 function SectionSchedulesPanel({
-  regularSecs, specialSecs, schedules, allowedKinds, onChange,
+  regularSecs, specialSecs, schedules, students, allowedKinds, onChange, onStudentsChange,
 }: {
   regularSecs: string[];
   specialSecs: string[];
   schedules: Record<string, SectionScheduleRow[]>;
+  students: Record<string, number>;
   allowedKinds: ("lecture" | "lab")[];
   onChange: (sec: string, rows: SectionScheduleRow[]) => void;
+  onStudentsChange: (sec: string, n: number) => void;
 }) {
   const allSecs = [
     ...regularSecs.map(n => ({ sec: n, track: "regular" as const })),
@@ -377,25 +489,40 @@ function SectionSchedulesPanel({
           const isOpen = openSec === sec;
           return (
             <div key={sec} className="p-2">
-              <button
-                type="button"
-                onClick={() => setOpenSec(isOpen ? null : sec)}
-                className="w-full flex items-center gap-2 text-left"
-              >
-                <Clock size={13} className="text-muted" />
-                <span className="text-sm font-medium tabular">Sec {sec}</span>
-                <Chip tone={track === "special" ? "warn" : "brand"}>
-                  {track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
-                </Chip>
-                <span className={
-                  "text-xs ms-auto " +
-                  (rows.length > 0 ? "text-muted" : "text-warning font-medium")
-                }>
-                  {rows.length > 0
-                    ? `${rows.length} คาบ`
-                    : "ต้องกำหนด"}
-                </span>
-              </button>
+              <div className="w-full flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenSec(isOpen ? null : sec)}
+                  className="flex items-center gap-2 text-left min-w-0"
+                >
+                  <Clock size={13} className="text-muted shrink-0" />
+                  <span className="text-sm font-medium tabular">Sec {sec}</span>
+                  <Chip tone={track === "special" ? "warn" : "brand"}>
+                    {track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
+                  </Chip>
+                </button>
+                {/* Per-section enrolment — stops row toggle from firing. */}
+                <label className="ms-auto flex items-center gap-1.5 text-xs"
+                       onClick={e => e.stopPropagation()}>
+                  <span className={(students[sec] ?? 0) < 1 ? "text-warning font-medium" : "text-muted"}>นศ.</span>
+                  <TextInput
+                    type="number" min={0} max={999} step={1}
+                    value={students[sec] ?? 0}
+                    onChange={e => onStudentsChange(sec, Math.min(999, Math.max(0, Math.floor(Number(e.target.value) || 0))))}
+                    className={"w-[72px] tabular" + ((students[sec] ?? 0) < 1 ? " ring-1 ring-warning" : "")}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setOpenSec(isOpen ? null : sec)}
+                  className={
+                    "text-xs shrink-0 " +
+                    (rows.length > 0 ? "text-muted" : "text-warning font-medium")
+                  }
+                >
+                  {rows.length > 0 ? `${rows.length} คาบ` : "ต้องกำหนดตาราง"}
+                </button>
+              </div>
               {isOpen && (
                 <div className="mt-2">
                   <SectionScheduleEditor
@@ -537,54 +664,4 @@ function LecturerAutocomplete({
   );
 }
 
-function CourseAutocomplete({
-  items, value, onChange,
-}: {
-  items: FC[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  const { contains } = useFilter({ sensitivity: "base" });
-  return (
-    <Autocomplete
-      className="w-full"
-      placeholder="พิมพ์ค้นหารหัสหรือชื่อวิชา…"
-      selectionMode="single"
-      value={value || null}
-      onChange={(k: Key | Key[] | null) => onChange(String(k ?? ""))}
-    >
-      <Label className="sr-only">รายวิชา</Label>
-      <Autocomplete.Trigger>
-        <Autocomplete.Value />
-        <Autocomplete.ClearButton />
-        <Autocomplete.Indicator />
-      </Autocomplete.Trigger>
-      <Autocomplete.Popover>
-        <Autocomplete.Filter filter={contains}>
-          <SearchField autoFocus name="search" variant="secondary">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input placeholder="ค้นหาวิชา…" />
-              <SearchField.ClearButton />
-            </SearchField.Group>
-          </SearchField>
-          <ListBox
-            className="max-h-[320px] overflow-y-auto"
-            renderEmptyState={() => <EmptyState>ไม่พบรายวิชา</EmptyState>}
-          >
-            {items.map(fc => (
-              <ListBox.Item key={fc.id} id={fc.id} textValue={`${fc.code} ${fc.name_th}`}>
-                <div className="min-w-0">
-                  <div className="tabular font-medium">{fc.code}</div>
-                  <div className="text-xs text-muted truncate">{fc.name_th}</div>
-                </div>
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
-          </ListBox>
-        </Autocomplete.Filter>
-      </Autocomplete.Popover>
-    </Autocomplete>
-  );
-}
 

@@ -3,7 +3,7 @@ import { use, useEffect, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Breadcrumbs, toast } from "@heroui/react";
+import { toast } from "@heroui/react";
 import { Save, Lock, Clock, CircleAlert, ArrowLeft, Trash2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
@@ -68,13 +68,6 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/staff/teaching">วิชาที่เปิดสอน</Breadcrumbs.Item>
-        <Breadcrumbs.Item>
-          {tc ? `${tc.code} — ${tc.name_th}` : "…"}
-        </Breadcrumbs.Item>
-      </Breadcrumbs>
-
       <PageHeader
         title={tc ? `${tc.code} — ${tc.name_th}` : "…"}
         description={tc ? `นักศึกษา ${tc.num_students} คน (ปกติ ${tc.num_students_regular} · พิเศษ ${tc.num_students_special})` : undefined}

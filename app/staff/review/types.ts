@@ -39,6 +39,17 @@ export interface Profile {
   current_round?: number;
 }
 
+// Preset rejection reasons the officer can pick without typing. "อื่นๆ" opens
+// a free-text box so unusual problems can still be described. Shared by the
+// per-file card (ReviewRow) and the preview drawer footer.
+export const REJECT_PRESETS = [
+  "เอกสารไม่ชัด / อ่านไม่ออก",
+  "ยังไม่เซ็นชื่อ",
+  "แนบผิดไฟล์ / ไม่ตรงประเภทเอกสาร",
+  "อื่นๆ (ระบุเอง)",
+];
+export const OTHER_PRESET = "อื่นๆ (ระบุเอง)";
+
 export const DOC_KIND_LABEL: Record<string, string> = {
   national_id:   "สำเนาบัตรประชาชน",
   bank_book:     "สำเนาสมุดบัญชีธนาคาร",

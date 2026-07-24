@@ -1,12 +1,12 @@
 "use client";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import {
   Plus, Send, Trash2, ClipboardList, Wallet, CheckCircle2, AlertCircle, Info,
-  UserPlus, Copy, CalendarClock, Clock,
+  UserPlus, Copy, CalendarClock, CalendarOff, Clock,
 } from "lucide-react";
 import {
-  Breadcrumbs,
   RadioGroup, Radio, Description, Label,
   NumberField,
   Checkbox, CheckboxGroup,
@@ -22,9 +22,10 @@ import {
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
+  PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
+import { TaBudgetCalculator } from "../../../../components/TaBudgetCalculator";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                       */
@@ -68,17 +69,30 @@ interface RequestWindow {
   note?: string | null;
 }
 
+// มีแค่ 2 สถานะเท่านั้น — "ส่งทันเวลา" กับ "ส่งช้า" (ไม่มีการปิดรับ)
+// กำหนดเวลาเป็นแค่ข้อมูล ไม่ได้ใช้บล็อกการส่ง: เลยกำหนดแล้วก็ยังส่งได้
+// แต่คำขอจะถูกทำเครื่องหมาย "ล่าช้า" และการเบิกจ่ายจะช้าตามไปด้วย
 type WindowState =
-  | { phase: "none" }
-  | { phase: "open"; window: RequestWindow; closesAt: number; remainingMs: number }
-  // "late": the window opened and is still toggled on, but the deadline passed.
-  // Submissions are still accepted — they are flagged ล่าช้า server-side.
-  | { phase: "late"; window: RequestWindow; closedAt: number }
-  | { phase: "upcoming"; window: RequestWindow; opensAt: number; untilMs: number }
-  | { phase: "closed"; lastWindow?: RequestWindow };
+  | { phase: "ontime"; window?: RequestWindow; remainingMs?: number }
+  | { phase: "late"; window: RequestWindow; closedAt: number };
 
 const GRAD_MIN_HRS = 10;
 const GRAD_MAX_HRS = 12;
+// ประกาศ 731/2565 + 1080/2565 คุมเป็น "ชม./วัน" แต่ฟอร์มกรอกเป็น "ชม./สัปดาห์"
+// จึงแปลงด้วยจำนวนวันทำการ (ต้องตรงกับ workingDaysPerWeek ฝั่ง backend ไม่งั้น
+// ฟอร์มจะยอมให้กรอกแล้วไปโดนตีกลับตอนส่ง)
+const WORKING_DAYS_PER_WEEK = 5;
+/** เพดาน ชม./วัน ตามระดับ+ภาค — บัณฑิตภาคพิเศษเหมาจ่าย ไม่คิดรายชั่วโมง */
+function dailyHourCap(level: string, track: string, r?: PayRateCaps): number {
+  const isGrad = level === "master" || level === "phd";
+  if (isGrad) return track === "special" ? 24 : (r?.grad_regular_daily_hour_cap ?? 6);
+  return track === "special" ? (r?.ug_special_daily_hour_cap ?? 6) : (r?.ug_regular_daily_hour_cap ?? 7);
+}
+interface PayRateCaps {
+  ug_regular_daily_hour_cap: number;
+  ug_special_daily_hour_cap: number;
+  grad_regular_daily_hour_cap: number;
+}
 
 const emptyWorkload = (): Assignment["workload"] => ({
   help_teach_hrs: 0, help_teach_desc: "",
@@ -93,11 +107,21 @@ const emptyWorkload = (): Assignment["workload"] => ({
 /* Main page                                                                   */
 /* -------------------------------------------------------------------------- */
 
+interface CourseBudget {
+  per_course_max: number;
+  used_baht: number;
+  remaining_baht: number;
+  over_budget: boolean;
+}
+
 export default function RequestPage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
   const { data: course } = useSWR<{
     id: string; code: string; name_th: string; term_id?: string;
     lecture_hrs?: number; lab_hrs?: number;
+    // ≥1 section without a timetable (registrar "WBA") — backend rejects TA
+    // requests for the course until the schedule is filled in.
+    has_missing_schedule?: boolean;
     sections?: Section[];
   }>(
     tcId ? `/teaching-courses/${tcId}` : null,
@@ -106,7 +130,9 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
   const { data: windows } = useSWR<RequestWindow[]>(
     course?.term_id ? `/ta-request/windows?term_id=${course.term_id}` : null,
   );
-  const [formOpen, setFormOpen] = useState(false);
+  const { data: budget } = useSWR<CourseBudget>(
+    tcId ? `/teaching-courses/${tcId}/budget` : null,
+  );
 
   const courseReqs = (allReqs ?? []).filter(
     r => r.teaching_course_id === tcId || r.course_code === course?.code,
@@ -114,76 +140,113 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
 
   const windowState = useWindowState(windows);
   const windowLoading = !!course?.term_id && !windows;
-  // Both "open" and "late" allow sending; late requests are accepted but flagged.
-  const canSend = windowLoading || windowState.phase === "open" || windowState.phase === "late";
+  // WBA gate mirrors the backend: no TA request until every section has a
+  // timetable — worklog validation and budget math both read it.
+  const wbaBlocked = !!course?.has_missing_schedule;
+  // ไม่มีการปิดรับคำขอ — กำหนดเวลาแค่ตัดสินว่า "ทันเวลา" หรือ "ส่งช้า"
+  // สิ่งเดียวที่บล็อกการส่งคือ WBA (ยังไม่มีตารางเรียน)
+  const canSend = !wbaBlocked;
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/lecturer">รายวิชาที่สอน</Breadcrumbs.Item>
-        <Breadcrumbs.Item href={`/lecturer/courses/${tcId}`}>
-          {course ? `${course.code} — ${course.name_th}` : "…"}
-        </Breadcrumbs.Item>
-        <Breadcrumbs.Item>คำขอ TA</Breadcrumbs.Item>
-      </Breadcrumbs>
-
       <PageHeader
         title="คำขอผู้ช่วยสอน"
         description={course
-          ? `${course.code} — ${course.name_th} · ประวัติคำขอทั้งหมดของวิชานี้`
-          : "ประวัติคำขอทั้งหมดของวิชานี้"}
-        actions={
-          <Button
-            variant="primary"
-            onClick={() => setFormOpen(true)}
-            disabled={!canSend}
-          >
-            <Send size={16} /> ส่งคำขอ TA
-          </Button>
-        }
+          ? `${course.code} — ${course.name_th} · กรอกแบบฟอร์มด้านล่างเพื่อขอ TA`
+          : "กรอกแบบฟอร์มด้านล่างเพื่อขอ TA"}
       />
 
       <WindowStatusBanner state={windowState} loading={windowLoading} />
 
-      <RequestsTable rows={courseReqs} loading={!allReqs} />
+      {/* WBA block: registrar file had no timetable for this course — filling
+          the section schedules (ตั้งค่ารายวิชา) unblocks TA requests. */}
+      {wbaBlocked && (
+        <div className="mb-4">
+          <Alert
+            status="danger"
+            icon={<CalendarOff size={16} />}
+            title="ยังส่งคำขอ TA ไม่ได้ — วิชานี้ยังไม่ระบุเวลาเรียน (WBA)"
+            description="มี section ที่ยังไม่มีตารางเรียน กรุณากรอกวัน-เวลาเรียนให้ครบทุก section ก่อน แล้วจึงกลับมาส่งคำขอ TA"
+            action={
+              <Link href={`/lecturer/courses/${tcId}/settings`}>
+                <Button variant="secondary" size="sm">ไปกรอกตารางเรียน</Button>
+              </Link>
+            }
+          />
+        </div>
+      )}
 
-      <RequestFormModal
-        open={formOpen}
-        tcId={tcId}
-        course={course}
-        onClose={() => setFormOpen(false)}
-        onSubmitted={() => {
-          setFormOpen(false);
-          mutate("/ta-requests");
-          toast.success("ส่งคำขอ TA เรียบร้อยแล้ว", { description: "รอเจ้าหน้าที่ตรวจสอบและอนุมัติ" });
-        }}
+      {/* Inline request form (no modal, always visible — the professor asked for
+          the form to be right there, not behind a button). */}
+      {!wbaBlocked && (
+        <RequestFormSection
+          tcId={tcId}
+          course={course}
+          budget={budget}
+          canSend={canSend}
+          late={windowState.phase === "late"}
+          onSubmitted={() => {
+            mutate("/ta-requests");
+            toast.success("ส่งคำขอ TA เรียบร้อยแล้ว", { description: "รอเจ้าหน้าที่ตรวจสอบและอนุมัติ" });
+          }}
+        />
+      )}
+
+      <RequestsTable rows={courseReqs} loading={!allReqs} />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Budget forecast — course budget summary shown before submitting a request  */
+/* -------------------------------------------------------------------------- */
+
+function BudgetForecast({ budget }: { budget: CourseBudget }) {
+  const fmt = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return (
+    <div className="mb-4">
+      <Alert
+        status="warning"
+        icon={<Wallet size={16} />}
+        title="งบวิชานี้เกินเพดานแล้ว (โดยประมาณ)"
+        description={
+          <>
+            ใช้ไปแล้ว ~{fmt(budget.used_baht)} จากเพดาน ~{fmt(budget.per_course_max)} —
+            {" "}ถ้าเพิ่ม TA อีก การเบิกจ่ายอาจไม่ครบตามที่ควรได้{" "}
+            <b>รบกวนแจ้งนักศึกษาให้ทราบล่วงหน้า</b>
+          </>
+        }
       />
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* Request form modal                                                          */
+/* Request form (inline — no modal)                                            */
 /* -------------------------------------------------------------------------- */
 
-function RequestFormModal({
-  open, tcId, course, onClose, onSubmitted,
+function RequestFormSection({
+  tcId, course, budget, canSend, late, onSubmitted,
 }: {
-  open: boolean;
   tcId: string;
   course?: {
     id: string; code: string; name_th: string;
     lecture_hrs?: number; lab_hrs?: number;
     sections?: Section[];
   };
-  onClose: () => void;
+  budget?: CourseBudget;
+  /** false = นอกช่วงเปิดรับคำขอ — ฟอร์มยังกรอก/คำนวณได้ แต่ส่งไม่ได้ */
+  canSend?: boolean;
+  late?: boolean;
   onSubmitted: () => void;
 }) {
   // Candidates carry each TA's approved-course count so we can keep those who
   // already hit the 3-course cap out of the picker (prevents over-quota requests
   // up front, instead of a reject at submit time).
-  const candidatesKey = open && tcId ? `/ta-requests/candidates?teaching_course_id=${tcId}` : null;
+  const candidatesKey = tcId ? `/ta-requests/candidates?teaching_course_id=${tcId}` : null;
   const { data: tas } = useSWR<{ items: TA[] }>(candidatesKey);
+  // เพดาน ชม./วัน ตามประกาศ — ใช้กันไม่ให้กรอกภาระงานที่ลงบันทึกเวลาจริงไม่ได้
+  const { data: payCaps } = useSWR<PayRateCaps>("/settings/pay-rate");
   // Hide TAs who can't be added: already an approved TA of this course, or who
   // would exceed the 3-course cap by taking this one.
   const hidden = (t: TA) => !!t.at_quota || !!t.already_in_course;
@@ -217,14 +280,11 @@ function RequestFormModal({
     });
   }, []);
 
-  // Fresh form every time the modal opens.
+  // The section mounts fresh each time the lecturer opens it, so state starts
+  // empty. Re-derive the default scope once the course data loads.
   useEffect(() => {
-    if (!open) return;
-    setAssignments([]);
     setScope(defaultScope);
-    setErr(null);
-    setConflictsByTa({});
-  }, [open, course?.id, defaultScope]);
+  }, [defaultScope]);
 
   /* --- derived --------------------------------------------------------- */
   const firstSectionId = course?.sections?.[0]?.id ?? "";
@@ -233,8 +293,19 @@ function RequestFormModal({
   // Grad TAs must land in [10, 12] hr/week (regulation for บัณฑิตศึกษา);
   // undergrad just needs > 0. The >12 side is prevented via per-field caps so
   // here we only need to gate the lower bound.
+  const weeklyCapFor = useCallback((a: Assignment) => {
+    const tracks = (course?.sections ?? [])
+      .filter(s => a.section_ids.includes(s.id))
+      .map(s => s.track);
+    // หลาย section คนละภาค → ยึดเพดานที่เข้มกว่า
+    const caps = tracks.map(t => dailyHourCap(a.level, t, payCaps));
+    const daily = caps.length ? Math.min(...caps) : dailyHourCap(a.level, "regular", payCaps);
+    return daily * WORKING_DAYS_PER_WEEK;
+  }, [course?.sections, payCaps]);
+
   const workloadOk = assignments.length > 0 && assignments.every(a => {
     const t = sumWorkload(a);
+    if (t > weeklyCapFor(a)) return false; // ลงบันทึกเวลาจริงไม่ได้ตามเพดาน ชม./วัน
     if (a.level === "master" || a.level === "phd") return t >= GRAD_MIN_HRS && t <= GRAD_MAX_HRS;
     return t > 0;
   });
@@ -329,34 +400,39 @@ function RequestFormModal({
     { n: 3, label: "ภาระงาน", icon: <CheckCircle2 size={14} />, ok: workloadOk },
   ];
 
+  const scopeLabel = scope === "lecture" ? "บรรยาย" : scope === "lab" ? "ปฏิบัติการ" : "บรรยาย+ปฏิบัติการ";
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="ส่งคำขอผู้ช่วยสอน"
-      icon={<Send size={18} />}
-      size="2xl"
-      footer={
-        <div className="flex flex-wrap items-center justify-between w-full gap-3">
-          <div className="flex items-center gap-3 text-xs text-ink-3">
-            <span>เพิ่มแล้ว <b className="text-ink-1">{assignments.length}</b> คน</span>
-            <span>เบิก <b className="text-ink-1">{scope === "lecture" ? "บรรยาย" : scope === "lab" ? "ปฏิบัติการ" : "บรรยาย+ปฏิบัติการ"}</b></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
-            <Button
-              variant="primary"
-              onClick={submit}
-              disabled={!canSubmit || pending}
-              isPending={pending}
-            >
-              <Send size={16} />
-              {pending ? "กำลังส่ง…" : `ส่งคำขอ (${assignments.length} คน)`}
-            </Button>
-          </div>
+    <Panel className="mb-4">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
+          <Send size={16} />
         </div>
-      }
-    >
+        <div className="min-w-0">
+          <div className="font-semibold">ส่งคำขอผู้ช่วยสอน</div>
+          <div className="text-xs text-muted">ทำทีละขั้นตามหมายเลข แล้วกด “ส่งคำขอ” ด้านล่าง</div>
+        </div>
+      </div>
+
+      {late && (
+        <div className="mb-4">
+          <Alert
+            status="warning"
+            icon={<AlertCircle size={16} />}
+            title="คำขอนี้จะถูกนับเป็น “ส่งช้า”"
+            description="เลยกำหนดส่งแล้ว — ยังส่งได้ตามปกติ แต่คำขอจะถูกทำเครื่องหมายว่าล่าช้า และการเบิกจ่ายค่าตอบแทนของ TA จะล่าช้าไปด้วย"
+          />
+        </div>
+      )}
+
+      {/* เครื่องคิดเลขงบ — ให้อาจารย์ลองคำนวณก่อนตัดสินใจว่าจะรับ TA กี่คน */}
+      <TaBudgetCalculator
+        tcId={tcId}
+        hasSpecialSection={(course?.sections ?? []).some(s => s.track === "special")}
+      />
+
+      {/* เตือนเฉพาะกรณีงบจริงเกินเพดานแล้ว — ตัวเลขปกติอยู่ในเครื่องคิดเลขข้างบน */}
+      {budget?.over_budget && <BudgetForecast budget={budget} />}
+
       {/* Step progress indicator */}
       <div className="rounded-xl border border-border bg-panel p-3 mb-4 overflow-x-auto">
         <ol className="flex items-center gap-2 min-w-max">
@@ -433,6 +509,20 @@ function RequestFormModal({
                 </div>
               </div>
 
+              {/* Inline create-TA panel (no stacked modal) */}
+              {creatingTa && (
+                <CreateTaPanel
+                  onClose={() => setCreatingTa(false)}
+                  onCreated={ta => {
+                    // Refresh candidates so the new TA (0 courses → not at quota)
+                    // appears immediately, then auto-add + close the panel.
+                    if (candidatesKey) mutate(candidatesKey);
+                    addAssignment(undefined, ta.id, ta.study_level ?? "undergrad");
+                    setCreatingTa(false);
+                  }}
+                />
+              )}
+
               {/* Unified assignment list */}
               {assignments.length === 0 ? (
                 <div className="text-xs text-ink-3 text-center py-8 border border-dashed border-hairline rounded-lg">
@@ -453,6 +543,7 @@ function RequestFormModal({
                         sections={course?.sections ?? []}
                         tas={selectableTas.filter(t => !takenElsewhere.has(t.id))}
                         scope={scope}
+                        weeklyCap={weeklyCapFor(a)}
                         lectureHrs={course?.lecture_hrs ?? 0}
                         labHrs={course?.lab_hrs ?? 0}
                         tcId={tcId}
@@ -474,18 +565,32 @@ function RequestFormModal({
         )}
       </div>
 
-      {/* Create-TA modal (stacked on top of the form modal) */}
-      <CreateTaModal
-        open={creatingTa}
-        onClose={() => setCreatingTa(false)}
-        onCreated={ta => {
-          // Refresh the candidate list so the new TA (0 courses → not at quota)
-          // appears immediately.
-          if (candidatesKey) mutate(candidatesKey);
-          addAssignment(undefined, ta.id, ta.study_level ?? "undergrad");
-        }}
-      />
-    </Modal>
+      {/* Inline footer */}
+      <div className="mt-4 pt-3 border-t border-hairline flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 text-xs text-ink-3">
+          <span>เพิ่มแล้ว <b className="text-ink-1">{assignments.length}</b> คน</span>
+          <span>เบิก <b className="text-ink-1">{scopeLabel}</b></span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => { setAssignments([]); setErr(null); }}
+            disabled={assignments.length === 0}
+          >
+            ล้างฟอร์ม
+          </Button>
+          <Button
+            variant="primary"
+            onClick={submit}
+            disabled={!canSubmit || pending || canSend === false}
+            isPending={pending}
+          >
+            <Send size={16} />
+            {pending ? "กำลังส่ง…" : `ส่งคำขอ (${assignments.length} คน)`}
+          </Button>
+        </div>
+      </div>
+    </Panel>
   );
 }
 
@@ -571,7 +676,7 @@ function sumWorkload(a: Assignment): number {
 }
 
 function AssignmentBlock({
-  idx, n, assignment: a, sections, tas, scope, lectureHrs, labHrs, tcId, onConflicts, onUpdate, onWorkload, onRemove,
+  idx, n, assignment: a, sections, tas, scope, weeklyCap, lectureHrs, labHrs, tcId, onConflicts, onUpdate, onWorkload, onRemove,
 }: {
   idx: number;
   n: number;
@@ -579,6 +684,8 @@ function AssignmentBlock({
   sections: Section[];
   tas: TA[];
   scope: "lecture" | "lab" | "both";
+  /** เพดาน ชม./สัปดาห์ = เพดาน ชม./วัน ตามประกาศ × วันทำการ */
+  weeklyCap: number;
   lectureHrs: number;
   labHrs: number;
   tcId: string;
@@ -740,8 +847,12 @@ function AssignmentBlock({
         {(() => {
           const gradUnder = isGrad && total < GRAD_MIN_HRS;
           const gradOver = isGrad && total > GRAD_MAX_HRS;
-          const bad = gradUnder || gradOver || (!isGrad && total === 0);
-          const msg = gradUnder
+          // เกินเพดานรายวันตามประกาศ → ลงบันทึกเวลาจริงไม่ได้ ต้องบล็อก
+          const overDaily = total > weeklyCap;
+          const bad = gradUnder || gradOver || overDaily || (!isGrad && total === 0);
+          const msg = overDaily
+            ? `เกิน ${weeklyCap.toFixed(0)} ชม./สัปดาห์ ที่ลงบันทึกเวลาได้จริง (เพดาน ${(weeklyCap / WORKING_DAYS_PER_WEEK).toFixed(0)} ชม./วัน ตามประกาศ × ${WORKING_DAYS_PER_WEEK} วันทำการ)`
+            : gradUnder
             ? `ต้องกรอกอย่างน้อย ${GRAD_MIN_HRS} ชม./สัปดาห์ ตามระเบียบบัณฑิตศึกษา — ยังส่งคำขอไม่ได้`
             : gradOver
             ? `เกินขีดจำกัด ${GRAD_MAX_HRS} ชม./สัปดาห์`
@@ -1093,10 +1204,9 @@ const STUDY_LEVELS: { value: string; label: string }[] = [
 ];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-function CreateTaModal({
-  open, onClose, onCreated,
+function CreateTaPanel({
+  onClose, onCreated,
 }: {
-  open: boolean;
   onClose: () => void;
   onCreated: (ta: TA) => void;
 }) {
@@ -1107,13 +1217,6 @@ function CreateTaModal({
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [created, setCreated] = useState<{ user: TA; temp_password: string } | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setForm({ email: "", title: "นาย", first_name: "", last_name: "", study_level: "undergrad" });
-      setErr(null); setCreated(null); setShowErrors(false);
-    }
-  }, [open]);
 
   const errors = useMemo(() => ({
     email: !form.email.trim()
@@ -1148,39 +1251,29 @@ function CreateTaModal({
     }
   }
 
-  function useAndClose() {
+  function useAndAdd() {
     if (created) onCreated(created.user);
-    onClose();
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={created ? "สร้างบัญชี TA สำเร็จ" : "สร้างบัญชี TA ใหม่"}
-      size="lg"
-      icon={<UserPlus size={18} />}
-      footer={
-        created ? (
-          <>
-            <Button variant="ghost" onClick={onClose}>ปิด</Button>
-            <Button variant="primary" onClick={useAndClose}>
+    <div className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3">
+      <div className="flex items-center gap-2 mb-3">
+        <UserPlus size={16} className="text-accent" />
+        <div className="font-medium text-sm">
+          {created ? "สร้างบัญชี TA สำเร็จ" : "สร้างบัญชี TA ใหม่"}
+        </div>
+      </div>
+
+      {created ? (
+        <div className="space-y-3">
+          <TempPasswordPanel email={created.user.email} password={created.temp_password} />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={onClose}>ปิด</Button>
+            <Button variant="primary" size="sm" onClick={useAndAdd}>
               <Plus size={14} /> เพิ่มเข้ารายวิชานี้
             </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
-            <Button variant="primary" onClick={submit}
-              disabled={pending || (showErrors && hasErrors)} isPending={pending}>
-              สร้างบัญชี
-            </Button>
-          </>
-        )
-      }
-    >
-      {created ? (
-        <TempPasswordPanel email={created.user.email} password={created.temp_password} />
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           <Alert
@@ -1215,9 +1308,16 @@ function CreateTaModal({
             </Select>
           </FieldGroup>
           {err && <Alert status="danger" title="สร้างบัญชีไม่สำเร็จ" description={err} />}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={onClose}>ยกเลิก</Button>
+            <Button variant="primary" size="sm" onClick={submit}
+              disabled={pending || (showErrors && hasErrors)} isPending={pending}>
+              สร้างบัญชี
+            </Button>
+          </div>
         </div>
       )}
-    </Modal>
+    </div>
   );
 }
 
@@ -1293,42 +1393,19 @@ function useWindowState(windows: RequestWindow[] | undefined): WindowState {
   }, []);
 
   return useMemo<WindowState>(() => {
-    if (!windows || windows.length === 0) return { phase: "none" };
+    // ไม่มีการกำหนดช่วงเวลา = ไม่มีกำหนดส่งให้เลย → ถือว่าทันเวลาเสมอ
+    if (!windows || windows.length === 0) return { phase: "ontime" };
 
-    const active = windows.find(w => {
-      if (!w.is_open) return false;
-      const o = new Date(w.opens_at).getTime();
-      const c = new Date(w.closes_at).getTime();
-      return o <= now && now <= c;
-    });
-    if (active) {
-      const c = new Date(active.closes_at).getTime();
-      return { phase: "open", window: active, closesAt: c, remainingMs: c - now };
-    }
-
-    // A window that opened and is still switched on but is past its deadline —
-    // late submissions are still accepted (flagged server-side).
-    const late = windows
-      .filter(w => w.is_open
-        && new Date(w.opens_at).getTime() <= now
-        && new Date(w.closes_at).getTime() < now)
-      .sort((a, b) => new Date(b.closes_at).getTime() - new Date(a.closes_at).getTime())[0];
-    if (late) {
-      return { phase: "late", window: late, closedAt: new Date(late.closes_at).getTime() };
-    }
-
-    const upcoming = windows
-      .filter(w => w.is_open && new Date(w.opens_at).getTime() > now)
-      .sort((a, b) => new Date(a.opens_at).getTime() - new Date(b.opens_at).getTime())[0];
-    if (upcoming) {
-      const o = new Date(upcoming.opens_at).getTime();
-      return { phase: "upcoming", window: upcoming, opensAt: o, untilMs: o - now };
-    }
-
-    const last = windows
+    // ยึดกำหนดปิดรับที่ช้าที่สุดของเทอมเป็นเส้นตาย (ตรงกับ backend)
+    const deadline = windows
       .slice()
       .sort((a, b) => new Date(b.closes_at).getTime() - new Date(a.closes_at).getTime())[0];
-    return { phase: "closed", lastWindow: last };
+    const closesAt = new Date(deadline.closes_at).getTime();
+
+    if (now > closesAt) {
+      return { phase: "late", window: deadline, closedAt: closesAt };
+    }
+    return { phase: "ontime", window: deadline, remainingMs: closesAt - now };
   }, [windows, now]);
 }
 
@@ -1356,27 +1433,17 @@ function formatThaiDateTime(iso: string): string {
 function WindowStatusBanner({ state, loading }: { state: WindowState; loading: boolean }) {
   if (loading) return null;
 
-  if (state.phase === "open") {
-    const urgent = state.remainingMs < 24 * 60 * 60 * 1000;
+  // ส่งช้า — ยังส่งได้ตามปกติ แต่ต้องรู้ว่าเงินจะออกช้า
+  if (state.phase === "late") {
     return (
-      <div
-        className={
-          "mb-3 rounded-lg border px-4 py-3 flex flex-wrap items-center gap-3 " +
-          (urgent
-            ? "border-amber-300 bg-amber-50"
-            : "border-emerald-300 bg-emerald-50")
-        }
-      >
-        <Chip tone={urgent ? "warn" : "success"}>
-          <CheckCircle2 size={12} /> เปิดรับคำขอ
-        </Chip>
+      <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center gap-3">
+        <Chip tone="warn"><AlertCircle size={12} /> ส่งช้า</Chip>
         <div className="flex flex-col min-w-0">
-          <div className={"text-sm font-medium " + (urgent ? "text-amber-900" : "text-emerald-900")}>
-            <Clock size={14} className="inline -mt-0.5 mr-1" />
-            เหลืออีก {formatRemaining(state.remainingMs)} จะปิดรับ
+          <div className="text-sm font-medium text-amber-900">
+            เลยกำหนดแล้ว — ส่งคำขอได้ตามปกติ แต่จะถูกทำเครื่องหมายว่า “ล่าช้า”
           </div>
-          <div className={"text-xs " + (urgent ? "text-amber-800" : "text-emerald-800")}>
-            ปิดรับ: {formatThaiDateTime(state.window.closes_at)}
+          <div className="text-xs text-amber-800">
+            <b>การเบิกจ่ายค่าตอบแทนจะล่าช้าไปด้วย</b> · กำหนดเดิม: {formatThaiDateTime(state.window.closes_at)}
             {state.window.note ? ` · ${state.window.note}` : ""}
           </div>
         </div>
@@ -1384,59 +1451,30 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
     );
   }
 
-  if (state.phase === "late") {
-    return (
-      <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center gap-3">
-        <Chip tone="warn"><AlertCircle size={12} /> เลยกำหนดรับสมัคร</Chip>
-        <div className="flex flex-col min-w-0">
-          <div className="text-sm font-medium text-amber-900">
-            หมดเวลารับสมัครแล้ว — ยังส่งคำขอได้ แต่จะถูกทำเครื่องหมายว่า “ล่าช้า”
-          </div>
-          <div className="text-xs text-amber-800">
-            กำหนดปิดรับ: {formatThaiDateTime(state.window.closes_at)}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.phase === "upcoming") {
-    return (
-      <div className="mb-3 rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 flex flex-wrap items-center gap-3">
-        <Chip tone="info"><CalendarClock size={12} /> ยังไม่เปิดรับ</Chip>
-        <div className="flex flex-col min-w-0">
-          <div className="text-sm font-medium text-sky-900">
-            จะเปิดรับใน {formatRemaining(state.untilMs)}
-          </div>
-          <div className="text-xs text-sky-800">
-            เปิดรับ: {formatThaiDateTime(state.window.opens_at)}
-            {" → "}
-            ปิดรับ: {formatThaiDateTime(state.window.closes_at)}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.phase === "closed") {
-    return (
-      <div className="mb-3 rounded-lg border border-hairline bg-slate-50 px-4 py-3 flex flex-wrap items-center gap-3">
-        <Chip tone="neutral"><AlertCircle size={12} /> ปิดรับคำขอแล้ว</Chip>
-        <div className="text-sm text-ink-2">
-          {state.lastWindow
-            ? `ช่วงล่าสุดปิดรับเมื่อ ${formatThaiDateTime(state.lastWindow.closes_at)}`
-            : "ไม่มีช่วงเวลารับสมัครที่เปิดอยู่"}
-          {" — โปรดติดต่อเจ้าหน้าที่หากต้องการยื่นคำขอ"}
-        </div>
-      </div>
-    );
-  }
-
+  // ส่งทันเวลา — ถ้าไม่มีกำหนดเลย ก็ทันเวลาเสมอ
+  const urgent = state.remainingMs !== undefined && state.remainingMs < 24 * 60 * 60 * 1000;
   return (
-    <div className="mb-3 rounded-lg border border-hairline bg-slate-50 px-4 py-3 flex flex-wrap items-center gap-3">
-      <Chip tone="neutral"><AlertCircle size={12} /> ยังไม่กำหนดช่วงเวลารับสมัคร</Chip>
-      <div className="text-sm text-ink-2">
-        เจ้าหน้าที่ยังไม่ได้กำหนดช่วงเวลารับคำขอ TA สำหรับภาคเรียนนี้
+    <div className={
+      "mb-3 rounded-lg border px-4 py-3 flex flex-wrap items-center gap-3 " +
+      (urgent ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50")
+    }>
+      <Chip tone={urgent ? "warn" : "success"}>
+        <CheckCircle2 size={12} /> ส่งทันเวลา
+      </Chip>
+      <div className="flex flex-col min-w-0">
+        <div className={"text-sm font-medium " + (urgent ? "text-amber-900" : "text-emerald-900")}>
+          <Clock size={14} className="inline -mt-0.5 mr-1" />
+          {state.window && state.remainingMs !== undefined
+            ? `เหลืออีก ${formatRemaining(state.remainingMs)} ถึงกำหนดส่ง`
+            : "ไม่มีกำหนดส่ง — ส่งคำขอได้ตลอด"}
+        </div>
+        <div className={"text-xs " + (urgent ? "text-amber-800" : "text-emerald-800")}>
+          {state.window
+            ? <>กำหนดส่ง: {formatThaiDateTime(state.window.closes_at)}
+                {state.window.note ? ` · ${state.window.note}` : ""}
+                {" · หลังกำหนดยังส่งได้ แต่จะนับเป็น“ส่งช้า”"}</>
+            : "เจ้าหน้าที่ยังไม่ได้กำหนดวันส่งสำหรับภาคเรียนนี้"}
+        </div>
       </div>
     </div>
   );

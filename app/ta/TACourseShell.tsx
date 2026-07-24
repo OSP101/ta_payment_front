@@ -6,6 +6,7 @@ import {
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
+import CourseSwitcher from "../components/CourseSwitcher";
 import { TAApprovalBanner } from "./TAGate";
 
 // Per-course sidebar for TAs — same app-level Shell pattern as the lecturer's
@@ -49,6 +50,9 @@ export default function TACourseShell({
       brandTitle="TA Payment"
       nav={nav}
       userMenuItems={userMenuItems}
+      // สลับวิชาได้จากแถบบนเหมือนฝั่งอาจารย์ — รายการมาจาก /me/ta-courses
+      // (เฉพาะวิชาที่ตัวเองเป็น TA) ไม่ใช่ทุกวิชาในเทอม
+      topBarLeft={<CourseSwitcher tcId={tcId} siblingsPath="/me/ta-courses" />}
       topBarAccessory={<NotificationBell seeAllHref="/ta/notifications" />}
     >
       <TAApprovalBanner />

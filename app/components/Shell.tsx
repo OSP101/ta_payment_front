@@ -26,6 +26,10 @@ export interface NavItem {
   icon?: React.ComponentType<{ className?: string; size?: number }>;
   external?: boolean;
   exact?: boolean;
+  /** ตัวเลขค้างที่ต้องทำ — แสดงเป็นตัวนับสีแดงท้ายเมนู (0/undefined = ไม่แสดง) */
+  badge?: number;
+  /** คำอธิบายของ badge สำหรับ screen reader เช่น "รอกำหนดวันชดเชย" */
+  badgeLabel?: string;
 }
 export interface NavSection {
   title?: string;
@@ -50,6 +54,9 @@ interface Props {
   // Custom slot rendered in the header just left of the avatar dropdown —
   // typically a notification bell or similar contextual control.
   topBarAccessory?: React.ReactNode;
+  // Optional control rendered in the header's left area in place of the page
+  // title — e.g. a course switcher that stays put while you move between pages.
+  topBarLeft?: React.ReactNode;
   // When true, the sidebar and mobile drawer are omitted — used for a
   // browse-oriented "home" that mimics the lecturer's shell.
   hideSidebar?: boolean;
@@ -62,6 +69,7 @@ export default function Shell({
   nav,
   userMenuItems,
   topBarAccessory,
+  topBarLeft,
   hideSidebar = false,
   children,
 }: Props) {
@@ -154,6 +162,7 @@ export default function Shell({
           onOpenMobile={() => setMobileOpen(true)}
           userMenuItems={userMenuItems}
           topBarAccessory={topBarAccessory}
+          topBarLeft={topBarLeft}
           showMobileMenu={!hideSidebar}
           showBrandInHeader={hideSidebar}
         />
@@ -240,6 +249,14 @@ function NavRow({
     <Link href={item.href} className={cls} onClick={onClick}>
       {Icon && <Icon size={16} />}
       <span className="flex-1">{item.label}</span>
+      {!!item.badge && item.badge > 0 && (
+        <span
+          className="inline-flex min-w-5 items-center justify-center rounded-full bg-danger px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white"
+          aria-label={`${item.badgeLabel ?? "ค้างอยู่"} ${item.badge} รายการ`}
+        >
+          {item.badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -266,6 +283,7 @@ function TopBar({
   onOpenMobile,
   userMenuItems,
   topBarAccessory,
+  topBarLeft,
   showMobileMenu = true,
   showBrandInHeader = false,
 }: {
@@ -276,6 +294,7 @@ function TopBar({
   onOpenMobile: () => void;
   userMenuItems?: UserMenuItem[];
   topBarAccessory?: React.ReactNode;
+  topBarLeft?: React.ReactNode;
   showMobileMenu?: boolean;
   showBrandInHeader?: boolean;
 }) {
@@ -296,6 +315,8 @@ function TopBar({
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <BrandMark brandTitle={brandTitle} />
         </div>
+      ) : topBarLeft ? (
+        <div className="flex-1 min-w-0 flex items-center">{topBarLeft}</div>
       ) : (
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-foreground truncate">{title}</div>

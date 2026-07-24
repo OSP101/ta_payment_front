@@ -57,7 +57,10 @@ const columns: DataColumn<TARequestRow>[] = [
     render: r => (
       <div className="flex flex-wrap items-center gap-1.5">
         <RequestStatusChip status={r.status} />
-        {r.is_late && <Chip tone="warn">ล่าช้า</Chip>}
+        {/* การส่งมี 2 แบบเท่านั้น — ทันเวลา หรือ ช้า (ช้า = เบิกจ่ายช้าตาม) */}
+        {r.is_late
+          ? <Chip tone="warn">ส่งช้า</Chip>
+          : <Chip tone="success">ส่งทันเวลา</Chip>}
       </div>
     ),
   },

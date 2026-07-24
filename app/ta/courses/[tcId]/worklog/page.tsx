@@ -3,7 +3,6 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check } from "lucide-react";
-import { Breadcrumbs } from "@heroui/react";
 import { api, type Me } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
@@ -1148,14 +1147,6 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/ta">รายวิชาที่ฉันเป็น TA</Breadcrumbs.Item>
-        <Breadcrumbs.Item href={`/ta/courses/${tcId}`}>
-          {course ? `${course.code} — ${course.name_th}` : "…"}
-        </Breadcrumbs.Item>
-        <Breadcrumbs.Item>ลงเวลาปฏิบัติงาน</Breadcrumbs.Item>
-      </Breadcrumbs>
-
       <PageHeader
         title="บันทึกเวลาปฏิบัติงาน"
         info={

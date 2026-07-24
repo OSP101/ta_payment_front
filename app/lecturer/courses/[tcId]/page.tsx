@@ -2,9 +2,9 @@
 import { use } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { Breadcrumbs } from "@heroui/react";
 import {
   ArrowRight, ChevronLeft, CircleAlert, Wallet, Send, ClipboardCheck, AlertTriangle,
+  CalendarOff,
 } from "lucide-react";
 import { ApiError } from "../../../lib/api";
 import {
@@ -18,6 +18,8 @@ interface Section {
 }
 interface TC {
   id: string; code: string; name_th: string; term_id: string;
+  /** คาบที่ตรงวันหยุดและยังไม่กำหนดวันชดเชย */
+  unresolved_makeups?: number;
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
@@ -31,8 +33,16 @@ interface Budget {
   credits: number;
   lecture_credits: number;
   lab_credits: number;
+  /** งบโดยประมาณทั้งเทอม แยกตามภาค (ปกติ/พิเศษ) — รวมกันได้ = per_course_max */
+  term_pay_regular: number;
+  term_pay_special: number;
+  num_students_regular: number;
+  num_students_special: number;
   suggested_tas: { undergrad: number; graduate: number };
 }
+
+/** 12,345 ฿ — ตัดเศษสตางค์ทิ้ง เพราะเป็นตัวเลข "โดยประมาณ" อยู่แล้ว */
+const baht = (n: number) => Math.round(n).toLocaleString("th-TH");
 interface PendingReport {
   id: string;
   course_code: string;
@@ -70,11 +80,6 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
 
   return (
     <div>
-      <Breadcrumbs className="mb-3">
-        <Breadcrumbs.Item href="/lecturer">รายวิชาที่สอน</Breadcrumbs.Item>
-        <Breadcrumbs.Item>{course ? `${course.code} — ${course.name_th}` : "…"}</Breadcrumbs.Item>
-      </Breadcrumbs>
-
       <PageHeader
         title={course ? `${course.code} — ${course.name_th}` : "รายวิชา"}
         description="ภาพรวมสถานะและข้อมูลของรายวิชานี้"
@@ -155,6 +160,23 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
               )}
             </div>
           </Panel>
+
+          {/* วันชดเชยค้าง = TA ลงเวลาวันนั้นไม่ได้ → เบิกไม่ได้ ต้องดันให้เห็นตั้งแต่หน้าแรก */}
+          {!!course.unresolved_makeups && course.unresolved_makeups > 0 && (
+            <div className="mb-4">
+              <Alert
+                status="danger"
+                icon={<CalendarOff size={16} />}
+                title={`ต้องกำหนดวันชดเชย ${course.unresolved_makeups} คาบ`}
+                description="คาบเหล่านี้ตรงกับวันหยุด — ถ้ายังไม่กำหนดวันชดเชย ระบบจะข้ามวันนั้น TA จะลงเวลาไม่ได้และเบิกค่าตอบแทนส่วนนี้ไม่ได้"
+                action={
+                  <Link href={`/lecturer/courses/${tcId}/holidays`}>
+                    <Button variant="primary" size="sm">กำหนดวันชดเชย</Button>
+                  </Link>
+                }
+              />
+            </div>
+          )}
 
           {budget?.over_budget && (
             <div className="mb-4">
@@ -312,34 +334,58 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
       href={`/lecturer/courses/${tcId}/budget`}
       hrefLabel="คำนวณงบ / ดูรายละเอียด"
     >
-      <div className="flex items-baseline justify-between mb-1">
-        <div>
-          <span className="text-xl font-semibold tabular-nums">
-            ฿{budget.used_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </span>
-          <span className="text-xs text-muted ml-1">
-            / ฿{budget.per_course_max.toLocaleString()}
-          </span>
-        </div>
-        <span className={
-          "text-xs font-medium tabular-nums " +
-          (budget.over_budget ? "text-red-600" : "text-muted")
-        }>
-          {pct.toFixed(0)}%
+      {/* งบทั้งเทอมของรายวิชา (โดยประมาณ) + แยกภาคปกติ/ภาคพิเศษ */}
+      <div className="flex items-baseline justify-between mb-2">
+        <span className="text-sm text-muted">งบทั้งเทอม</span>
+        <span className="text-xl font-semibold tabular-nums">
+          ~{baht(budget.per_course_max)} <span className="text-sm font-normal text-muted">บ.</span>
         </span>
       </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <TrackBudget
+          label="ภาคปกติ"
+          amount={budget.term_pay_regular}
+          students={budget.num_students_regular}
+        />
+        <TrackBudget
+          label="ภาคพิเศษ"
+          amount={budget.term_pay_special}
+          students={budget.num_students_special}
+        />
+      </div>
+
       <ProgressBar value={pct} tone={tone} />
       <div className="text-xs text-muted mt-2">
-        คงเหลือ{" "}
-        <span className={
-          "font-semibold tabular-nums " +
-          (budget.over_budget ? "text-red-600" : "text-emerald-700")
-        }>
-          ฿{budget.remaining_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-        </span>
+        ใช้ไปแล้ว ~{baht(budget.used_baht)} บ. ({pct.toFixed(0)}%)
+        {budget.over_budget
+          ? " — เกินเพดานงบ (โดยประมาณ)"
+          : pct >= 80
+          ? " — ใกล้เต็มงบ (โดยประมาณ)"
+          : ""}
       </div>
-      <div className="text-[11px] text-muted mt-1">ตัวเลขโดยประมาณ (ไม่แน่นอน)</div>
     </StatusCardShell>
+  );
+}
+
+/** งบแยกรายภาค — จำนวน นศ. บอกที่มาของตัวเลข (0 คน = ไม่มีภาคนั้น) */
+function TrackBudget({
+  label, amount, students,
+}: {
+  label: string; amount: number; students: number;
+}) {
+  return (
+    <div className="rounded-lg border border-(--hairline) px-2.5 py-2">
+      <div className="text-[11px] text-muted">{label}</div>
+      <div className={
+        "text-sm font-semibold tabular-nums " + (students === 0 ? "text-muted" : "")
+      }>
+        ~{baht(amount)} <span className="text-[11px] font-normal text-muted">บ.</span>
+      </div>
+      <div className="text-[11px] text-muted">
+        {students === 0 ? "ไม่มีนักศึกษา" : `${students} คน`}
+      </div>
+    </div>
   );
 }
 

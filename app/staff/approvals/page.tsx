@@ -163,7 +163,6 @@ export default function TARequestsPage() {
             value={q}
             onChange={setQ}
             placeholder="ค้นหารหัส/ชื่อวิชา/อาจารย์…"
-            className="flex-1 min-w-[16rem]"
           />
 
           <div className="ml-auto flex gap-2 text-xs">

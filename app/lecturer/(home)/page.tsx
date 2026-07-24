@@ -3,7 +3,7 @@ import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarX2, CircleAlert, Wallet, ClipboardCheck } from "lucide-react";
+import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarOff, CalendarX2, CircleAlert, Wallet, ClipboardCheck } from "lucide-react";
 import type { Term } from "../../lib/api";
 import {
   PageHeader, Panel, EmptyState, Chip, Button, SelectField, Alert, type SelectOption,
@@ -14,6 +14,11 @@ interface TC {
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
+  // ≥1 section has no timetable (registrar "WBA") — TA requests are blocked
+  // until the lecturer/staff fills the schedule in.
+  has_missing_schedule?: boolean;
+  /** คาบที่ตรงวันหยุดและยังไม่กำหนดวันชดเชย — ต้องทำ ไม่งั้น TA เบิกวันนั้นไม่ได้ */
+  unresolved_makeups?: number;
 }
 
 interface LecturerCourseStatus {
@@ -241,6 +246,45 @@ export default function LecturerHome() {
             description="คลิกที่วิชาเพื่อเข้าหน้าจัดการ — ส่งคำขอ TA, คำนวณงบ, อนุมัติรายงาน"
             padded={false}
           >
+            {/* WBA reminder: courses whose registrar timetable said "will be
+                arranged" block TA requests until the schedule is filled in. */}
+            {(courses ?? []).some(c => c.has_missing_schedule) && (
+              <div className="mx-4 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
+                <CalendarOff size={15} className="text-red-700 dark:text-red-300 shrink-0" />
+                <span className="text-red-800 dark:text-red-200">
+                  มี <b>{(courses ?? []).filter(c => c.has_missing_schedule).length}</b> วิชาที่ยังไม่ระบุเวลาเรียน (WBA) —
+                  ต้องกรอกตารางเรียนในหน้า “ตั้งค่ารายวิชา” ก่อน จึงจะส่งคำขอ TA ได้
+                </span>
+              </div>
+            )}
+            {/* วันชดเชยค้าง — แจ้งเฉพาะวิชาที่มีคาบตรงวันหยุดจริง ๆ เท่านั้น
+                (ไม่ตรง = ไม่ต้องรบกวน) เพราะถ้าไม่กำหนด ระบบจะข้ามวันนั้น
+                และ TA จะเบิกค่าตอบแทนของวันนั้นไม่ได้ */}
+            {(courses ?? []).some(c => (c.unresolved_makeups ?? 0) > 0) && (
+              <div className="mx-4 mt-4 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CalendarOff size={15} className="shrink-0 text-red-700 dark:text-red-300" />
+                  <span className="text-red-800 dark:text-red-200">
+                    <b>ต้องกำหนดวันชดเชย</b> — มีคาบที่ตรงกับวันหยุดและยังไม่ได้กำหนดวันชดเชย
+                    ถ้าไม่ทำ ระบบจะข้ามวันนั้น <b>TA จะลงเวลาและเบิกค่าตอบแทนของวันนั้นไม่ได้</b>
+                  </span>
+                </div>
+                <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 pl-6 text-xs text-red-800 dark:text-red-200">
+                  {(courses ?? [])
+                    .filter(c => (c.unresolved_makeups ?? 0) > 0)
+                    .map(c => (
+                      <li key={c.id}>
+                        <Link
+                          href={`/lecturer/courses/${c.id}/holidays`}
+                          className="underline underline-offset-2 hover:no-underline"
+                        >
+                          {c.code} — ค้าง {c.unresolved_makeups} คาบ
+                        </Link>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
             {coursesError && courses === undefined ? (
               <div className="p-4">
                 <Alert
@@ -279,7 +323,6 @@ export default function LecturerHome() {
               <ul className="divide-y divide-[var(--hairline)]">
                 {courses.map(c => {
                   const ov = overviewById.get(c.id);
-                  const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
                   const hasBudget = !!ov && ov.budget_max > 0;
                   const pctRaw = hasBudget ? (ov!.budget_used / ov!.budget_max) * 100 : 0;
                   const pct = Math.round(pctRaw);
@@ -318,6 +361,28 @@ export default function LecturerHome() {
                           </div>
 
                           <div className="shrink-0 flex flex-wrap gap-1.5 md:justify-end items-center">
+                            {c.has_missing_schedule && (
+                              <Chip tone="danger">
+                                <span
+                                  className="inline-flex items-center gap-1"
+                                  title="มี section ที่ยังไม่ระบุเวลาเรียน — ต้องกรอกตารางก่อน จึงจะส่งคำขอ TA ได้"
+                                >
+                                  <CalendarOff size={12} />
+                                  ยังไม่ระบุเวลาเรียน
+                                </span>
+                              </Chip>
+                            )}
+                            {!!c.unresolved_makeups && c.unresolved_makeups > 0 && (
+                              <Chip tone="danger">
+                                <span
+                                  className="inline-flex items-center gap-1"
+                                  title="คาบที่ตรงวันหยุด — ถ้าไม่กำหนดวันชดเชย TA จะลงเวลาและเบิกวันนั้นไม่ได้"
+                                >
+                                  <CalendarOff size={12} />
+                                  ต้องกำหนดวันชดเชย {c.unresolved_makeups} คาบ
+                                </span>
+                              </Chip>
+                            )}
                             {pendingPeople > 0 && (
                               <Chip tone="warn">
                                 <span
@@ -341,10 +406,10 @@ export default function LecturerHome() {
                               <Chip tone={budgetTone}>
                                 <span
                                   className="inline-flex items-center gap-1 tabular"
-                                  title={`ใช้ ฿${fmt(ov!.budget_used)} / ฿${fmt(ov!.budget_max)}`}
+                                  title="สัดส่วนการใช้งบโดยประมาณ (ไม่ระบุตัวเลขจริง)"
                                 >
                                   <Wallet size={12} />
-                                  งบ {over ? `เกิน ${pct - 100}%` : `${pct}%`}
+                                  งบ ~{over ? `เกิน ${pct - 100}%` : `${pct}%`}
                                 </span>
                               </Chip>
                             ) : ov ? (

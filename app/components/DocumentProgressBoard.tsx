@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Check, RotateCcw, Lock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Check, RotateCcw, Lock, AlertTriangle, CheckCircle2, Mail, Circle } from "lucide-react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Panel, Button, Chip, TextArea, EmptyState, Spinner } from "./ui";
@@ -189,6 +189,136 @@ export function DocumentProgressBoard({
           )}
         </div>
       </Panel>
+
+      {/* Per-course signature checklist — who hasn't signed yet */}
+      <SignatureChecklistPanel termId={termId} canEdit={canEdit} />
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Per-course signature checklist (B3)                                        */
+/* -------------------------------------------------------------------------- */
+
+interface SignatureItem {
+  teaching_course_id: string;
+  code: string;
+  name_th: string;
+  exported: boolean;
+  role: string;
+  role_label: string;
+  responsible: string;
+  signed_at?: string | null;
+}
+
+function SignatureChecklistPanel({ termId, canEdit }: { termId: string; canEdit: boolean }) {
+  const key = termId ? `/document-progress/checklist?term_id=${termId}` : null;
+  const { data, isLoading } = useSWR<SignatureItem[]>(key);
+  const [busy, setBusy] = useState(false);
+
+  const byCourse = useMemo(() => {
+    const m = new Map<string, { code: string; name_th: string; items: SignatureItem[] }>();
+    for (const it of data ?? []) {
+      const g = m.get(it.teaching_course_id) ?? { code: it.code, name_th: it.name_th, items: [] };
+      g.items.push(it);
+      m.set(it.teaching_course_id, g);
+    }
+    return Array.from(m.entries());
+  }, [data]);
+
+  const pendingCount = (data ?? []).filter(i => !i.signed_at).length;
+
+  async function toggle(tcId: string, role: string, signed: boolean) {
+    setBusy(true);
+    try {
+      await api.post(`/document-progress/checklist/${tcId}`, { role, signed });
+      if (key) mutate(key);
+    } catch (e) {
+      notify.error(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remind() {
+    setBusy(true);
+    try {
+      const res = await api.post<{ notified: number }>(`/document-progress/${termId}/remind`);
+      notify.success(`ส่งอีเมลแจ้งเตือนแล้ว ${res.notified} ท่าน`);
+    } catch (e) {
+      notify.error(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (isLoading || !data) {
+    return <Panel><div className="flex items-center gap-2 py-6 justify-center text-sm text-muted"><Spinner size="sm" /> กำลังโหลด…</div></Panel>;
+  }
+  if (byCourse.length === 0) {
+    return (
+      <Panel>
+        <EmptyState title="ยังไม่มีรายวิชาที่มี TA ในเทอมนี้" description="เมื่อมีคำขอ TA ที่อนุมัติแล้ว รายการรอลงนามจะแสดงที่นี่" />
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel padded={false}>
+      <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-hairline">
+        <div className="font-semibold">รายการรอลงนาม (รายวิชา)</div>
+        {pendingCount > 0
+          ? <Chip tone="warn">ค้าง {pendingCount} รายการ</Chip>
+          : <Chip tone="success"><Check size={12} /> เซ็นครบทุกวิชา</Chip>}
+        {canEdit && (
+          <Button variant="secondary" size="sm" className="ml-auto" onClick={remind} disabled={busy || pendingCount === 0}>
+            <Mail size={14} /> ส่งอีเมลเตือนอาจารย์ที่ยังไม่เซ็น
+          </Button>
+        )}
+      </div>
+      <div className="divide-y divide-hairline">
+        {byCourse.map(([tcId, g]) => (
+          <div key={tcId} className="px-4 py-3">
+            <div className="text-sm font-medium mb-2">
+              <span className="tabular">{g.code}</span> <span className="text-ink-2">{g.name_th}</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              {g.items.map(it => {
+                const signed = !!it.signed_at;
+                return (
+                  <button
+                    key={it.role}
+                    type="button"
+                    disabled={!canEdit || busy}
+                    onClick={() => canEdit && toggle(tcId, it.role, !signed)}
+                    title={canEdit ? (signed ? "คลิกเพื่อยกเลิกการเซ็น" : "คลิกเพื่อทำเครื่องหมายว่าเซ็นแล้ว") : undefined}
+                    className={
+                      "flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition " +
+                      (signed
+                        ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30"
+                        : "border-hairline bg-panel") +
+                      (canEdit ? " hover:border-accent cursor-pointer" : " cursor-default")
+                    }
+                  >
+                    {signed
+                      ? <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                      : <Circle size={16} className="text-ink-3 shrink-0 mt-0.5" />}
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium">{it.role_label}</div>
+                      <div className="text-[11px] text-muted truncate">
+                        {it.responsible || "—"}
+                      </div>
+                      <div className={"text-[11px] " + (signed ? "text-emerald-700" : "text-amber-700")}>
+                        {signed ? "เซ็นแล้ว" : "ยังไม่เซ็น"}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }

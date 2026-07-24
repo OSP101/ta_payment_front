@@ -3,22 +3,23 @@ import { useState } from "react";
 import { mutate } from "swr";
 import { toast } from "@heroui/react";
 import {
-  CheckCircle2, Upload, AlertTriangle, XCircle, FileSpreadsheet,
-  ChevronRight, Loader2, Info,
+  CheckCircle2, Upload, AlertTriangle, FileSpreadsheet,
+  ChevronRight, Loader2,
 } from "lucide-react";
 import { api } from "../../lib/api";
-import { Modal, Button, Chip, FieldGroup, Alert, TipWrap } from "../../components/ui";
+import { Modal, Button, Chip, FieldGroup, Alert } from "../../components/ui";
 
 interface PreviewCourse {
   code: string;
   name: string;
-  status: "new" | "existing" | "missing_catalog" | "unmatched_officer";
+  status: "new" | "existing" | "unmatched_officer";
   section_count: number;
   schedule_count: number;
   officer_raw: string;
-  officer_names: string[];
-  matched_lecturer_ids: string[];
-  unmatched_names?: string[];
+  // อาจเป็น null ได้ — Go marshal nil slice เป็น null (ไม่ใช่ []) จึงต้องกันทุกจุด
+  officer_names: string[] | null;
+  matched_lecturer_ids: string[] | null;
+  unmatched_names?: string[] | null;
   note?: string;
 }
 
@@ -28,7 +29,6 @@ interface Preview {
   new_count: number;
   existing_count: number;
   blocked_count: number;
-  missing_catalog_count: number;
 }
 
 interface CommitResult {
@@ -177,7 +177,7 @@ export default function ImportModal({
       {phase === "upload" && (
         <FieldGroup
           label="ไฟล์ Excel"
-          hint="ไฟล์รูปแบบ 'รายวิชาที่เปิดสอน-<เทอม>-<ปี>.xlsx' ที่ได้รับจากมหาวิทยาลัย (ระบบจะอ่านจากชีต 'Normalized')"
+          hint="ไฟล์ 'รายวิชาที่เปิดสอน-<เทอม>-<ปี>.xlsx' จากระบบทะเบียน — ระบบสร้างวิชาจากไฟล์โดยตรง (อ่านชีต 'Normalized' หรือไฟล์ดิบ 'sysTitle' ก็ได้)"
         >
           <input
             type="file"
@@ -226,7 +226,7 @@ function PreviewSummary({ p, decisions }: { p: Preview; decisions: Record<string
   return (
     <span className="inline-flex items-center gap-2">
       <span>จะสร้าง <b className="text-(--ink-1)">{willCreate}</b></span>
-      <span>· ข้าม {p.existing_count + p.missing_catalog_count + p.courses.filter(c => c.status === "unmatched_officer" && decisions[c.code] === "skip").length}</span>
+      <span>· ข้าม {p.existing_count + p.courses.filter(c => c.status === "unmatched_officer" && decisions[c.code] === "skip").length}</span>
     </span>
   );
 }
@@ -240,11 +240,10 @@ function PreviewTable({
 }) {
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
-        <SummaryChip tone="success" label="ใหม่" count={p.new_count} icon={<CheckCircle2 size={12} />} />
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <SummaryChip tone="success" label="ใหม่ (จะสร้าง)" count={p.new_count} icon={<CheckCircle2 size={12} />} />
         <SummaryChip tone="neutral" label="มีแล้ว ข้าม" count={p.existing_count} />
         <SummaryChip tone="warn" label="ต้องตัดสินใจ" count={p.blocked_count} icon={<AlertTriangle size={12} />} />
-        <SummaryChip tone="danger" label="ไม่มีในบัญชีรายวิชา" count={p.missing_catalog_count} icon={<XCircle size={12} />} />
       </div>
 
       <div className="overflow-x-auto rounded-md border border-(--hairline)">
@@ -285,7 +284,6 @@ function PreviewRow({
 }) {
   const isSkipped =
     c.status === "existing"
-    || c.status === "missing_catalog"
     || (c.status === "unmatched_officer" && decision === "skip");
   return (
     <tr className={isSkipped ? "bg-slate-50/40 text-(--ink-3)" : ""}>
@@ -302,11 +300,6 @@ function PreviewRow({
       <td className="px-2 py-1.5">
         {c.status === "new" && <span className="text-emerald-700">จะสร้าง</span>}
         {c.status === "existing" && <span>ข้าม (มีอยู่แล้ว)</span>}
-        {c.status === "missing_catalog" && (
-          <TipWrap content={c.note} className="inline-flex items-center gap-1">
-            <Info size={11} /> ข้าม
-          </TipWrap>
-        )}
         {c.status === "unmatched_officer" && (
           <div className="inline-flex flex-col gap-0.5">
             <label className="inline-flex items-center gap-1">
@@ -335,18 +328,20 @@ function PreviewRow({
 }
 
 function OfficerCell({ c }: { c: PreviewCourse }) {
-  if (c.status === "missing_catalog") return <span className="text-(--ink-4)">—</span>;
-  if (c.officer_names.length === 0 && (c.unmatched_names?.length ?? 0) === 0) {
+  const officers = c.officer_names ?? [];
+  const matched = c.matched_lecturer_ids ?? [];
+  const unmatched = c.unmatched_names ?? [];
+  if (officers.length === 0 && unmatched.length === 0) {
     return <span className="text-(--ink-4)">(ไม่ระบุ)</span>;
   }
   return (
     <div className="flex flex-wrap gap-1">
-      {c.matched_lecturer_ids.length > 0 && (
+      {matched.length > 0 && (
         <Chip tone="success">
-          <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} /> {c.matched_lecturer_ids.length} คน</span>
+          <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} /> {matched.length} คน</span>
         </Chip>
       )}
-      {(c.unmatched_names ?? []).map(n => (
+      {unmatched.map(n => (
         <Chip key={n} tone="warn">
           <span className="inline-flex items-center gap-1"><AlertTriangle size={10} /> {n}</span>
         </Chip>
@@ -359,7 +354,6 @@ function StatusChip({ status }: { status: PreviewCourse["status"] }) {
   switch (status) {
     case "new": return <Chip tone="success">ใหม่</Chip>;
     case "existing": return <Chip tone="neutral">มีแล้ว</Chip>;
-    case "missing_catalog": return <Chip tone="danger">ไม่มีในบัญชี</Chip>;
     case "unmatched_officer": return <Chip tone="warn">ต้องตัดสินใจ</Chip>;
   }
 }

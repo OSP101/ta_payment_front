@@ -3,10 +3,10 @@ import useSWR from "swr";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw, Wallet } from "lucide-react";
+import { BookOpen, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw } from "lucide-react";
 import type { Term } from "../../lib/api";
 import {
-  PageHeader, Panel, StatCard, EmptyState, Chip, SelectField, Spinner, Button, type SelectOption, type ChipTone,
+  PageHeader, Panel, EmptyState, Chip, SelectField, Spinner, Button, type SelectOption, type ChipTone,
 } from "../../components/ui";
 type SubmissionStage =
   | "pending"
@@ -167,7 +167,6 @@ export default function TAHome() {
     (status ?? []).forEach(s => m.set(s.teaching_course_id, s));
     return m;
   }, [status]);
-  const totalEstimated = (status ?? []).reduce((a, s) => a + s.estimated_baht, 0);
 
   // Local calendar date (YYYY-MM-DD) to compare against a period's Gregorian
   // window. Computed once; the badge only needs day-granularity.
@@ -275,26 +274,6 @@ export default function TAHome() {
         </Panel>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-            <StatCard
-              label="ภาคเรียนที่เลือก"
-              value={termDisplay || "—"}
-              icon={<CalendarClock size={18} />}
-              tone="brand"
-            />
-            <StatCard
-              label="วิชาที่เป็น TA"
-              value={courses?.length ?? 0}
-              icon={<BookOpen size={18} />}
-            />
-            <StatCard
-              label="ยอดเงินโดยประมาณรวม"
-              value={`฿${totalEstimated.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-              icon={<Wallet size={18} />}
-              tone="success"
-            />
-          </div>
-
           <Panel
             title="รายวิชาในภาคเรียนนี้"
             description="คลิกเพื่อดูตารางเรียน/บันทึกเวลาปฏิบัติงาน"

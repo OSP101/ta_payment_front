@@ -154,6 +154,12 @@ export default function ScheduleGrid({
   disabled,
 }: Props) {
   const [drag, setDrag] = useState<DragState>({ kind: "idle" });
+  // Mirror of `drag` for the pointerup handler. The parent callbacks below must
+  // NOT run inside a setDrag() updater — React executes updaters during the
+  // render phase, so a parent setState there warns "Cannot update a component
+  // while rendering a different component" (and can drop the update).
+  const dragRef = useRef<DragState>(drag);
+  dragRef.current = drag;
   const timelineRef = useRef<HTMLDivElement | null>(null);
 
   const hours = useMemo(() => Array.from({ length: HOURS + 1 }, (_, i) => START_HR + i), []);
@@ -220,40 +226,39 @@ export default function ScheduleGrid({
     }
 
     function onUp() {
-      setDrag(prev => {
-        if (prev.kind === "creating") {
-          const startSlot = Math.min(prev.startSlot, prev.endSlot);
-          const endSlot = Math.max(prev.startSlot, prev.endSlot);
-          const dayIdx = prev.endDayIdx; // whichever row the drag ended in
-          if (endSlot - startSlot >= 1) {
-            onCreateDraft({
-              day_of_week: DAY_INDEX[dayIdx],
-              start_time: slotToTime(startSlot),
-              end_time: slotToTime(endSlot),
-            });
-          }
-        } else if (prev.kind === "moving") {
-          if (!prev.hasMoved) {
-            // No effective drag → treat as click.
-            onSelectBlock(prev.id);
-          } else if (onMoveBlock) {
-            onMoveBlock(
-              prev.id,
-              DAY_INDEX[prev.dayIdx],
-              slotToTime(prev.startSlot),
-              slotToTime(prev.startSlot + prev.durationSlots),
-            );
-          }
-        } else if (prev.kind === "resizing") {
-          if (prev.hasMoved && onResizeBlock) {
-            onResizeBlock(prev.id, slotToTime(prev.startSlot), slotToTime(prev.endSlot));
-          } else {
-            // Trivial resize (pointer never left the edge) → open editor.
-            onSelectBlock(prev.id);
-          }
+      const prev = dragRef.current;
+      setDrag({ kind: "idle" });
+      if (prev.kind === "creating") {
+        const startSlot = Math.min(prev.startSlot, prev.endSlot);
+        const endSlot = Math.max(prev.startSlot, prev.endSlot);
+        const dayIdx = prev.endDayIdx; // whichever row the drag ended in
+        if (endSlot - startSlot >= 1) {
+          onCreateDraft({
+            day_of_week: DAY_INDEX[dayIdx],
+            start_time: slotToTime(startSlot),
+            end_time: slotToTime(endSlot),
+          });
         }
-        return { kind: "idle" };
-      });
+      } else if (prev.kind === "moving") {
+        if (!prev.hasMoved) {
+          // No effective drag → treat as click.
+          onSelectBlock(prev.id);
+        } else if (onMoveBlock) {
+          onMoveBlock(
+            prev.id,
+            DAY_INDEX[prev.dayIdx],
+            slotToTime(prev.startSlot),
+            slotToTime(prev.startSlot + prev.durationSlots),
+          );
+        }
+      } else if (prev.kind === "resizing") {
+        if (prev.hasMoved && onResizeBlock) {
+          onResizeBlock(prev.id, slotToTime(prev.startSlot), slotToTime(prev.endSlot));
+        } else {
+          // Trivial resize (pointer never left the edge) → open editor.
+          onSelectBlock(prev.id);
+        }
+      }
     }
 
     window.addEventListener("pointermove", onMove);

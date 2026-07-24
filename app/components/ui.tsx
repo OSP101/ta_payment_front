@@ -650,7 +650,10 @@ export function FieldGroup({
       {label && <HLabel>{label}</HLabel>}
       {children}
       {hint && !error && <HDescription>{hint}</HDescription>}
-      {error && <HFieldError>{error}</HFieldError>}
+      {/* Plain div, not HeroUI FieldError: FieldError only renders inside a
+          field marked invalid via react-aria validation, and FieldGroup is a
+          context-free wrapper — the message would silently disappear. */}
+      {error && <div className="text-xs text-danger">{error}</div>}
     </div>
   );
 }
@@ -913,6 +916,12 @@ export function Alert({
 /* Search field                                                               */
 /* -------------------------------------------------------------------------- */
 
+// House standard for every search box: full width on phones, a fixed 18rem
+// (288px) from the `sm` breakpoint up. Search inputs stretched to the full
+// container read as form fields and hurt scannability, so callers should keep
+// this default — pass `className` only when a layout genuinely needs otherwise.
+const SEARCH_FIELD_WIDTH = "w-full sm:w-72";
+
 export function SearchField({
   value,
   onChange,
@@ -927,7 +936,12 @@ export function SearchField({
   className?: string;
 }) {
   return (
-    <HSearchField value={value} onChange={onChange} aria-label={ariaLabel ?? "ค้นหา"} className={className}>
+    <HSearchField
+      value={value}
+      onChange={onChange}
+      aria-label={ariaLabel ?? "ค้นหา"}
+      className={className ?? SEARCH_FIELD_WIDTH}
+    >
       <HSearchField.Group>
         <HSearchField.SearchIcon />
         <HSearchField.Input placeholder={placeholder} />
