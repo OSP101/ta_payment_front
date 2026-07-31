@@ -2,7 +2,7 @@
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check } from "lucide-react";
+import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid } from "lucide-react";
 import { api, type Me } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
@@ -176,6 +176,13 @@ interface Assignment {
   // Total hours loggable across the whole term for this assignment =
   // weekly workload total × weeks-in-term. 0 when no workload form is filed.
   term_hour_ceiling: number;
+  // Work-log tallies for THIS assignment, so every section a TA holds can show
+  // its own state at once. unsent_count is draft+rejected — exactly what
+  // "ส่งอนุมัติ" would send for that section.
+  unsent_count: number;
+  submitted_count: number;
+  approved_count: number;
+  hours_logged: number;
 }
 interface SectionScheduleSlot {
   id: string;
@@ -227,6 +234,9 @@ interface HolidayImpactSection {
 interface HolidayImpact {
   original_date: string;
   holiday_name_th: string;
+  /** Closure window ("HH:MM"); absent = closed all day. */
+  holiday_start?: string;
+  holiday_end?: string;
   affected_sections: HolidayImpactSection[];
 }
 interface HolidayImpactsResponse {
@@ -234,15 +244,50 @@ interface HolidayImpactsResponse {
   unresolved_count: number;
 }
 
+// One closure on one date. A faculty holiday may cover only part of the day, so
+// "is this a holiday?" is only answerable together with the hours being logged.
+interface HolidayWindow {
+  name: string;
+  start: string | null; // "HH:MM", null = all day
+  end: string | null;
+}
+
 // Derived per-date lookup: given a work_date, tell the modal + row renderer
-// whether it's a holiday, whether it's some section's approved makeup day, and
-// whether the original class day was shifted elsewhere (so lecture/lab logging
-// should point the TA at the makeup date instead).
+// which closures fall on it, whether it's some section's approved makeup day,
+// and whether the original class day was shifted elsewhere (so lecture/lab
+// logging should point the TA at the makeup date instead).
 interface DateStatus {
-  holidayName: string | null;      // set if this date is a public holiday
+  holidays: HolidayWindow[];       // closures on this date; empty = a normal day
   isMakeupDay: boolean;            // set if this date is any section's makeup
   shiftedTo: string | null;        // if this date is a filed original_date
   hasUnresolvedForThisSection: boolean; // relevant for the current section
+}
+
+// The closure covering [start, end), or null when the entry's hours fall outside
+// every closure on that date. Mirrors holidaySet.overlapping in
+// internal/service/worklog.go — half-open on both ends, so an entry starting at
+// 12:00 is clear of a closure ending at 12:00. An entry with no times yet is
+// treated as covering the day, which is the honest answer before the TA has
+// picked hours: it warns, and the server re-decides on save.
+function holidayCovering(
+  status: DateStatus | undefined,
+  start: string,
+  end: string,
+): HolidayWindow | null {
+  if (!status) return null;
+  const s = start || "00:00";
+  const e = end || "24:00";
+  for (const h of status.holidays) {
+    if (!h.start || !h.end) return h;
+    if (h.start < e && h.end > s) return h;
+  }
+  return null;
+}
+
+// "ชื่อวันหยุด 08:00–12:00" — the hours matter in a refusal: told only the name,
+// a TA whose lab starts after the closure cannot tell a rule from a bug.
+function holidayLabel(h: HolidayWindow): string {
+  return h.start && h.end ? `${h.name} ${h.start}–${h.end}` : h.name;
 }
 
 function buildDateIndex(
@@ -253,12 +298,22 @@ function buildDateIndex(
   if (!impacts) return idx;
   for (const imp of impacts) {
     const status: DateStatus = idx.get(imp.original_date) ?? {
-      holidayName: null,
+      holidays: [],
       isMakeupDay: false,
       shiftedTo: null,
       hasUnresolvedForThisSection: false,
     };
-    status.holidayName = imp.holiday_name_th;
+    // One date can carry several closures (a national holiday plus a faculty
+    // window, or two faculty windows), and the API returns one impact per
+    // closure — so accumulate instead of overwriting.
+    const win: HolidayWindow = {
+      name: imp.holiday_name_th,
+      start: imp.holiday_start?.slice(0, 5) ?? null,
+      end: imp.holiday_end?.slice(0, 5) ?? null,
+    };
+    if (!status.holidays.some(h => h.name === win.name && h.start === win.start)) {
+      status.holidays.push(win);
+    }
     // A single holiday × multiple sections: the "shifted-to" is per-section
     // so we can only surface it meaningfully when we know which section the
     // TA is currently logging under.
@@ -280,7 +335,7 @@ function buildDateIndex(
     for (const sec of imp.affected_sections) {
       if (sec.makeup && sec.section_id === currentSectionID) {
         const existing = idx.get(sec.makeup.makeup_date) ?? {
-          holidayName: null,
+          holidays: [],
           isMakeupDay: false,
           shiftedTo: null,
           hasUnresolvedForThisSection: false,
@@ -304,6 +359,21 @@ interface WorkLog {
   // TA-facing UI can surface a "why" modal on entry. All rejected rows in
   // the same assignment carry the same string — Reject() stamps them all.
   reject_reason?: string | null;
+}
+
+/** One reason auto-generation refused a set of sessions, with how many. */
+interface SkipGroup {
+  reason: string;
+  count: number;
+}
+
+/**
+ * POST /worklog/generate returns what it created AND what it left out, so a
+ * short list can be explained rather than looking like a failure.
+ */
+interface GenerateResult {
+  entries: WorkLog[];
+  skipped_own_class: SkipGroup[] | null;
 }
 
 // Draft payload for the "add row" modal — same shape as WorkLog but without
@@ -834,8 +904,16 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const activeScope = activeAssignment?.reimburse_scope;
   const canGenerate = !!activeAssignment?.has_schedule;
 
+  // Refetches the visible log AND the per-section tallies. The tallies drive the
+  // section cards and the sidebar badge, so leaving them stale meant a section
+  // still advertising rows the TA had just sent — the cards would have been
+  // decoration rather than status.
   const revalidate = () =>
-    mutate((k) => typeof k === "string" && k.startsWith(`/assignments/${aid}/worklog`));
+    mutate(
+      (k) =>
+        typeof k === "string" &&
+        (k.startsWith(`/assignments/${aid}/worklog`) || k.startsWith("/me/assignments")),
+    );
 
   async function saveRow(l: WorkLog) {
     const w = view(l);
@@ -859,12 +937,27 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     if (!aid) return;
     setGenerating(true);
     try {
-      const created = await api.post<WorkLog[]>(`/assignments/${aid}/worklog/generate`);
-      const n = Array.isArray(created) ? created.length : 0;
+      const res = await api.post<GenerateResult>(`/assignments/${aid}/worklog/generate`);
+      const n = res?.entries?.length ?? 0;
+      const skipped = res?.skipped_own_class ?? [];
       await revalidate();
+
+      // Sessions dropped because the TA's own class runs at the same time.
+      // Reported separately from the count so "ได้น้อยกว่าที่คิด" has a reason
+      // attached instead of looking like a malfunction.
+      const skippedTotal = skipped.reduce((sum, s) => sum + s.count, 0);
+      if (skippedTotal > 0) {
+        notify.info(
+          `ข้ามไป ${skippedTotal} คาบ เพราะตรงกับตารางเรียนของคุณ — ` +
+            skipped.map(s => `${s.reason} (${s.count} คาบ)`).join(", "),
+        );
+      }
+
       if (n === 0) {
         notify.info(
-          "ยังไม่ได้สร้างรายการใด — อาจเป็นเพราะ section นี้ยังไม่มีตารางสอนในระบบ หรือทุกคาบตกวันหยุด/สอบ/สุดสัปดาห์ ลองตรวจในหน้า 'วันหยุดและวันชดเชย' หรือให้อาจารย์เพิ่มตารางสอนของ section",
+          skippedTotal > 0
+            ? "ไม่ได้สร้างรายการใดเลย เพราะทุกคาบตรงกับตารางเรียนของคุณ — หากตารางเรียนไม่ถูกต้อง ให้แก้ที่หน้า 'ตารางเรียนของฉัน'"
+            : "ยังไม่ได้สร้างรายการใด — อาจเป็นเพราะ section นี้ยังไม่มีตารางสอนในระบบ หรือทุกคาบตกวันหยุด/สอบ/สุดสัปดาห์ ลองตรวจในหน้า 'วันหยุดและวันชดเชย' หรือให้อาจารย์เพิ่มตารางสอนของ section",
         );
       } else {
         notify.success(`สร้างรายการอัตโนมัติเรียบร้อย (${n} รายการ)`);
@@ -936,7 +1029,23 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     setSubmitting(true);
     try {
       await api.post(`/assignments/${aid}/worklog/submit`);
-      notify.success("ส่งให้อาจารย์อนุมัติแล้ว");
+      // Name the section, and — the point of the whole change — say what is
+      // still outstanding elsewhere. This is the moment the TA believes they are
+      // finished, so it is the only moment where the reminder lands.
+      const others = (assignments ?? []).filter(a => a.id !== aid && a.unsent_count > 0);
+      if (showMultiSection && others.length > 0) {
+        notify.success(
+          `ส่ง sec ${activeAssignment?.sec_no ?? ""} เรียบร้อย — ยังเหลือ ` +
+          others.map(a => `sec ${a.sec_no} (${a.unsent_count} รายการ)`).join(", ") +
+          " ที่ยังไม่ได้ส่ง",
+        );
+      } else {
+        notify.success(
+          showMultiSection
+            ? `ส่ง sec ${activeAssignment?.sec_no ?? ""} ให้อาจารย์อนุมัติแล้ว`
+            : "ส่งให้อาจารย์อนุมัติแล้ว",
+        );
+      }
       revalidate();
     } catch (e) {
       notify.error(e);
@@ -1139,6 +1248,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // any worklog entry (the server enforces this too — this just guides the TA).
   const needStudentCount = !!course && (course.num_students ?? 0) <= 0;
 
+  // Sections OTHER than the one on screen that still have unsent rows — the
+  // thing a TA cannot see from here and therefore forgets.
+  const otherUnsent = (assignments ?? []).filter(a => a.id !== aid && a.unsent_count > 0);
+
   // Term-total hour ceiling for the selected assignment (workload × weeks).
   const selectedAssignment = assignments?.find(a => a.id === aid);
   const termCeiling = selectedAssignment?.term_hour_ceiling ?? 0;
@@ -1163,15 +1276,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 <ChevronLeft size={14} /> ภาพรวมวิชา
               </Button>
             </Link> */}
-            {showMultiSection && (
-              <Select value={aid} onChange={e => setAid(e.target.value)} className="max-w-xs">
-                {assignments!.map(a => (
-                  <option key={a.id} value={a.id}>
-                    sec {a.sec_no} ({a.track === "special" ? "พิเศษ" : "ปกติ"})
-                  </option>
-                ))}
-              </Select>
-            )}
+            {/* No section dropdown here any more — see SectionStrip below. A
+                control that only changes which pile the OTHER buttons act on has
+                no business sitting among them looking like one of them. */}
             <LockedActionButton variant="secondary" onClick={() => setShowAdd(true)} disabled={!aid || creating || needStudentCount}>
               <Plus size={14} /> เพิ่มรายการ
             </LockedActionButton>
@@ -1199,14 +1306,19 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 <Wand2 size={14} /> สร้างอัตโนมัติ
               </LockedActionButton>
             </TipWrap>
-            <LockedActionButton
-              variant="primary"
-              onClick={() => setConfirmSubmit(true)}
-              isPending={submitting}
-              disabled={submitting || !canSubmit}
-            >
-              <Send size={14} /> ส่งอนุมัติ
-            </LockedActionButton>
+            {/* With several sections the submit button lives on each section's
+                card instead: on the toolbar it reads as "submit the course", which
+                is what let a TA send one section and believe they were done. */}
+            {!showMultiSection && (
+              <LockedActionButton
+                variant="primary"
+                onClick={() => setConfirmSubmit(true)}
+                isPending={submitting}
+                disabled={submitting || !canSubmit}
+              >
+                <Send size={14} /> ส่งอนุมัติ
+              </LockedActionButton>
+            )}
           </>
         }
       />
@@ -1219,6 +1331,17 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             (ยอดเบิกจ่ายคำนวณจากจำนวนนักศึกษา)
           </span>
         </div>
+      )}
+
+      {showMultiSection && assignments && (
+        <SectionStrip
+          assignments={assignments}
+          activeId={aid}
+          onSelect={setAid}
+          onSubmit={() => setConfirmSubmit(true)}
+          submitting={submitting}
+          canSubmitActive={canSubmit}
+        />
       )}
 
       {termCeiling > 0 && (
@@ -1385,9 +1508,38 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         title="ส่งบันทึกเวลาให้อาจารย์อนุมัติ"
         confirmLabel={`ส่งอนุมัติ (${submittableCount} รายการ)`}
         message={
-          hasUnsaved
-            ? `จะส่งรายการฉบับร่างและรายการที่ไม่ผ่านทั้งหมด ${submittableCount} รายการให้อาจารย์พิจารณา — แต่ยังมีรายการที่แก้ไขแล้วแต่ยังไม่ได้บันทึก จะไม่ถูกส่งด้วย โปรดบันทึกก่อนหากต้องการรวมไปด้วย ต้องการส่งต่อหรือไม่?`
-            : `จะส่งรายการฉบับร่างและรายการที่ไม่ผ่านทั้งหมด ${submittableCount} รายการให้อาจารย์พิจารณาพร้อมกัน (รวมถึงรายการที่ยังไม่ได้แก้ไข) เมื่อส่งแล้วจะไม่สามารถแก้ไขได้จนกว่าอาจารย์จะพิจารณา ต้องการส่งหรือไม่?`
+          /* The last screen before an irreversible hand-off, so it spells out the
+             scope: which section is going, and which sections are staying behind.
+             "ทั้งหมด" in the old copy was true of one section and read as true of
+             the course. */
+          <div className="space-y-2 text-sm">
+            <p className="text-muted">
+              {showMultiSection && activeAssignment ? (
+                <>
+                  จะส่งเฉพาะ{" "}
+                  <b className="font-medium text-foreground">
+                    sec {activeAssignment.sec_no} ({activeAssignment.track === "special" ? "พิเศษ" : "ปกติ"})
+                  </b>{" "}
+                  จำนวน {submittableCount} รายการ ให้อาจารย์พิจารณา
+                </>
+              ) : (
+                <>จะส่งรายการฉบับร่างและรายการที่ไม่ผ่านทั้งหมด {submittableCount} รายการให้อาจารย์พิจารณา</>
+              )}
+              {" "}เมื่อส่งแล้วจะแก้ไขไม่ได้จนกว่าอาจารย์จะพิจารณา
+            </p>
+            {hasUnsaved && (
+              <p className="text-amber-700">
+                มีรายการที่แก้ไขแล้วแต่ยังไม่ได้บันทึก — จะไม่ถูกส่งไปด้วย โปรดบันทึกก่อนหากต้องการรวมไปด้วย
+              </p>
+            )}
+            {otherUnsent.length > 0 && (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
+                กลุ่มอื่นจะไม่ถูกส่งไปด้วย —{" "}
+                {otherUnsent.map(a => `sec ${a.sec_no} (${a.unsent_count} รายการ)`).join(", ")}{" "}
+                ต้องกดส่งแยกอีกครั้ง
+              </p>
+            )}
+          </div>
         }
       />
 
@@ -2020,6 +2172,8 @@ function AddWorklogModal({
 
         <HolidayHint
           workDate={workDate}
+          startTime={start}
+          endTime={end}
           activity={activity}
           parentKind={parentKind}
           dateIndex={dateIndex}
@@ -2186,6 +2340,161 @@ function BulkDeleteModal({
         )}
       </div>
     </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* SectionStrip — one card per section the TA holds on this course             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A TA can assist several sections of one course, and EVERY action on this page
+ * — add, auto-generate, delete drafts, submit — is scoped to one of them. That
+ * used to be expressed by a single dropdown sitting among the action buttons,
+ * which reads as a view filter rather than "you have two separate jobs here":
+ * the other section was invisible until you opened the menu, its state was
+ * invisible even then, and after submitting one the screen looked finished.
+ *
+ * So each section gets a card carrying its own state — and, crucially, its own
+ * submit button. While the submit button sits on the shared toolbar it will read
+ * as "submit the course" no matter how it is labelled; moving it onto the card
+ * makes its scope self-evident, and TWO submit buttons say "submit twice" better
+ * than any sentence could.
+ *
+ * Sized for the real data: TAs hold 2 sections (9 cases) or 3 (1 case), and no
+ * course has more than 4 — a horizontal strip fits without wrapping games.
+ */
+function SectionStrip({
+  assignments, activeId, onSelect, onSubmit, submitting, canSubmitActive,
+}: {
+  assignments: Assignment[];
+  activeId: string;
+  onSelect: (id: string) => void;
+  /** Opens the confirm dialog for the ACTIVE section. */
+  onSubmit: () => void;
+  submitting: boolean;
+  canSubmitActive: boolean;
+}) {
+  return (
+    <div className="mb-4">
+      <div className="mb-2 flex items-center gap-2 text-sm text-muted">
+        <LayoutGrid size={15} className="shrink-0" />
+        <span>
+          วิชานี้คุณดูแล <b className="font-medium text-foreground">{assignments.length} กลุ่ม</b>{" "}
+          — บันทึกเวลาและส่งอนุมัติ <b className="font-medium text-foreground">แยกกันแต่ละกลุ่ม</b>
+        </span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {assignments.map(a => {
+          const active = a.id === activeId;
+          const used = a.hours_logged ?? 0;
+          const ceiling = a.term_hour_ceiling ?? 0;
+          const pct = ceiling > 0 ? Math.min(100, (used / ceiling) * 100) : 0;
+          return (
+            <div
+              key={a.id}
+              className={
+                "rounded-xl bg-surface p-3 transition-colors " +
+                (active
+                  ? "border-2 border-[var(--brand)]"
+                  : "border border-[var(--hairline)] hover:border-[var(--ink-3)]")
+              }
+            >
+              {/* The whole card is the switch target, not just a link: the card
+                  IS the section, and a small hit area on a card-sized object is
+                  the kind of thing people miss. */}
+              <button
+                type="button"
+                onClick={() => onSelect(a.id)}
+                className="w-full text-left"
+                aria-current={active ? "true" : undefined}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={"text-sm font-medium " + (active ? "" : "text-muted")}>
+                    sec {a.sec_no} · {a.track === "special" ? "พิเศษ" : "ปกติ"}
+                  </span>
+                  {active && <Chip tone="brand">กำลังดู</Chip>}
+                </div>
+
+                <div className="mt-1.5 text-sm">
+                  <SectionStateLine a={a} />
+                </div>
+
+                {ceiling > 0 && (
+                  <>
+                    <div className="mt-1 text-xs text-muted tabular">
+                      {used.toFixed(1)} / {ceiling.toFixed(1)} ชม.
+                    </div>
+                    <div className="mt-1.5 h-1 rounded-full bg-surface-secondary overflow-hidden">
+                      <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+                    </div>
+                  </>
+                )}
+              </button>
+
+              <div className="mt-2.5">
+                {active ? (
+                  <LockedActionButton
+                    variant="primary"
+                    size="sm"
+                    className="w-full"
+                    onClick={onSubmit}
+                    isPending={submitting}
+                    disabled={submitting || !canSubmitActive}
+                  >
+                    <Send size={13} /> ส่งอนุมัติ sec {a.sec_no}
+                  </LockedActionButton>
+                ) : (
+                  <Button variant="secondary" size="sm" className="w-full" onClick={() => onSelect(a.id)}>
+                    เปิดกลุ่มนี้
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One line describing where a section stands. Ordered by what the TA has to act
+ * on: anything unsent outranks anything already handed over, because the unsent
+ * pile is the only one that can be forgotten.
+ */
+function SectionStateLine({ a }: { a: Assignment }) {
+  if (a.unsent_count > 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-amber-700">
+        <Pencil size={14} className="shrink-0" />
+        ยังไม่ได้ส่ง {a.unsent_count} รายการ
+      </span>
+    );
+  }
+  if (a.submitted_count > 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-muted">
+        <Clock size={14} className="shrink-0" />
+        ส่งแล้ว {a.submitted_count} รายการ · รออาจารย์
+      </span>
+    );
+  }
+  if (a.approved_count > 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-success-soft-foreground">
+        <CheckCircle2 size={14} className="shrink-0" />
+        อนุมัติแล้ว {a.approved_count} รายการ
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-muted">
+      <Clock size={14} className="shrink-0" />
+      ยังไม่มีรายการ
+    </span>
   );
 }
 
@@ -2419,23 +2728,26 @@ function MonthTable({
         </thead>
         <tbody>
           {rows.map(r => {
-            // Row-level holiday context: work_date matching a holiday date gets
-            // a "🏖" chip in the "วันที่" column so the TA sees at a glance that
-            // this row landed on a public holiday. We render the chip via a
-            // wrapper only for the row-header column (id="work_date") so it
-            // doesn't clutter other cells.
+            // Row-level holiday context: a row whose HOURS fall inside a closure
+            // gets a "🏖" chip in the "วันที่" column so the TA sees at a glance
+            // why it will be refused. Matched on the row's times, not just its
+            // date — a 13:00 lab on a morning-only faculty closure is a normal
+            // row and must not be flagged. We render the chip via a wrapper only
+            // for the row-header column (id="work_date") so it doesn't clutter
+            // other cells.
             const status = dateIndex?.get(r.work_date);
+            const holiday = holidayCovering(status, r.start_time ?? "", r.end_time ?? "");
             return (
               <tr key={r.id} className="border-t border-(--hairline)">
                 {columns.map(col => (
                   <td key={col.id} className={"px-3 py-2 align-middle " + (col.className ?? "")}>
                     {col.render(r)}
-                    {col.id === "work_date" && status?.holidayName && (
+                    {col.id === "work_date" && holiday && (
                       <div className="mt-1">
-                        <Chip tone="danger">🏖 {status.holidayName}</Chip>
+                        <Chip tone="danger">🏖 {holidayLabel(holiday)}</Chip>
                       </div>
                     )}
-                    {col.id === "work_date" && status?.isMakeupDay && !status?.holidayName && (
+                    {col.id === "work_date" && status?.isMakeupDay && !holiday && (
                       <div className="mt-1">
                         <Chip tone="info">📅 วันชดเชย</Chip>
                       </div>
@@ -2458,9 +2770,13 @@ function MonthTable({
 /* -------------------------------------------------------------------------- */
 
 function HolidayHint({
-  workDate, activity, parentKind, dateIndex, tcId,
+  workDate, startTime, endTime, activity, parentKind, dateIndex, tcId,
 }: {
   workDate: string;
+  /** The entry's hours. A partial-day closure only blocks what it overlaps, so
+   *  the hint cannot be decided from the date alone. */
+  startTime: string;
+  endTime: string;
   activity: string;
   parentKind: "lecture" | "lab";
   dateIndex: Map<string, DateStatus>;
@@ -2469,11 +2785,12 @@ function HolidayHint({
   if (!workDate) return null;
   const status = dateIndex.get(workDate);
   if (!status) return null;
+  const holiday = holidayCovering(status, startTime, endTime);
 
   // If the day is another section's approved makeup date, everything is fine —
   // surface it as a positive info hint so the TA understands why a Saturday is
   // allowed.
-  if (status.isMakeupDay && !status.holidayName) {
+  if (status.isMakeupDay && !holiday) {
     return (
       <Alert status="accent" title="วันนี้เป็นวันชดเชยที่อาจารย์กำหนดไว้" />
     );
@@ -2492,10 +2809,22 @@ function HolidayHint({
     );
   }
 
-  if (!status.holidayName) return null;
+  // Hours that fall outside every closure on the date are ordinary work — this
+  // is the case the partial-day holiday exists for, so it must produce no
+  // warning at all, not a softened one.
+  if (!holiday) {
+    const partialOnDate = status.holidays.find(h => h.start && h.end);
+    if (!partialOnDate) return null;
+    return (
+      <Alert
+        status="accent"
+        title={`วันนี้หยุดเฉพาะช่วง ${partialOnDate.start}–${partialOnDate.end} (${partialOnDate.name}) — ช่วงเวลาที่คุณเลือกอยู่นอกช่วงหยุด จึงลงเวลาได้ตามปกติ`}
+      />
+    );
+  }
 
-  // Holiday date. Decide allow/block per activity — mirrors the server.
-  const holidayName = status.holidayName;
+  // Holiday hours. Decide allow/block per activity — mirrors the server.
+  const isPartial = !!(holiday.start && holiday.end);
   const canDoOnHoliday =
     activity === "review" ||
     (activity === "other" && parentKind === "lecture");
@@ -2504,7 +2833,7 @@ function HolidayHint({
       <Alert
         status="accent"
         icon={<AlertTriangle size={14} />}
-        title={`วันนี้เป็นวันหยุด (${holidayName}) — อนุญาตเฉพาะ${activity === "review" ? "การตรวจงาน" : "งานอื่นๆ ที่คู่กับบรรยาย"}`}
+        title={`ช่วงเวลานี้ตรงกับวันหยุด (${holidayLabel(holiday)}) — อนุญาตเฉพาะ${activity === "review" ? "การตรวจงาน" : "งานอื่นๆ ที่คู่กับบรรยาย"}`}
       />
     );
   }
@@ -2514,9 +2843,18 @@ function HolidayHint({
     <Alert
       status="danger"
       icon={<AlertTriangle size={14} />}
-      title={`วันนี้เป็นวันหยุด (${holidayName}) — อาจารย์ยังไม่ได้กำหนดวันชดเชย`}
+      title={isPartial
+        ? `เวลา ${startTime || "—"}–${endTime || "—"} อยู่ในช่วงวันหยุด (${holidayLabel(holiday)})`
+        : `วันนี้เป็นวันหยุด (${holiday.name}) — อาจารย์ยังไม่ได้กำหนดวันชดเชย`}
       description={
-        link ? (
+        isPartial ? (
+          // The cheapest fix for a partial closure is usually to move the entry a
+          // few hours, not to wait on a makeup — lead with that.
+          <span>
+            ลงเวลาได้เฉพาะช่วงที่ไม่คาบเกี่ยวกับ {holiday.start}–{holiday.end} — หรือรอให้อาจารย์กำหนดวันชดเชย
+            {link && <> · <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a></>}
+          </span>
+        ) : link ? (
           <span>
             คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ — <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a> เพื่อแจ้งอาจารย์
           </span>

@@ -3,10 +3,16 @@ import useSWR from "swr";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw } from "lucide-react";
-import type { Term } from "../../lib/api";
 import {
-  PageHeader, Panel, EmptyState, Chip, SelectField, Spinner, Button, type SelectOption, type ChipTone,
+  BookOpen, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw,
+  FileCheck2,
+} from "lucide-react";
+import type { Term } from "../../lib/api";
+import AnnouncementFeed from "../../components/AnnouncementFeed";
+import OnboardingChecklistCard from "../OnboardingChecklistCard";
+import {
+  PageHeader, Panel, EmptyState, Chip, SelectField, Spinner, Button,
+  Alert, type SelectOption, type ChipTone,
 } from "../../components/ui";
 type SubmissionStage =
   | "pending"
@@ -85,6 +91,29 @@ const SEMESTER_LABELS: Record<number, string> = {
   3: "ภาคฤดูร้อน",
 };
 
+/** national_id + bank_book + creditor_form — see service.DocKinds. */
+const REQUIRED_DOC_COUNT = 3;
+
+interface DocRow {
+  id: string;
+  kind: string;
+  status: string;
+  reject_reason?: string | null;
+}
+
+/**
+ * Render a 'YYYY-MM-DD' due date the way the rest of the app does — Thai
+ * month, Buddhist year. Raw ISO dates read as machine output next to
+ * "28 ก.ค. 2569" elsewhere, and 2026 vs 2569 invites a double-take about
+ * which calendar a deadline is in.
+ */
+function thDueDate(iso?: string): string {
+  if (!iso) return "-";
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function TAHome() {
   const router = useRouter();
   const params = useSearchParams();
@@ -162,6 +191,9 @@ export default function TAHome() {
   } = useSWR<TC[]>(defaultTerm ? `/me/ta-courses?term_id=${defaultTerm}` : null);
 
   const { data: status } = useSWR<TAStatus[]>("/dashboard/ta/me");
+  // Document state drives the "ต้องดำเนินการ" band — a rejected file is the
+  // one thing that silently blocks payout for every course at once.
+  const { data: docs } = useSWR<DocRow[]>("/me/documents");
   const statusById = useMemo(() => {
     const m = new Map<string, TAStatus>();
     (status ?? []).forEach(s => m.set(s.teaching_course_id, s));
@@ -231,8 +263,8 @@ export default function TAHome() {
   return (
     <div>
       <PageHeader
-        title="รายวิชาที่ฉันเป็น TA"
-        description="เลือกปีการศึกษาและภาคเรียน เพื่อดูรายวิชาที่คุณได้รับมอบหมายเป็นผู้ช่วยสอน"
+        title="หน้าหลักของฉัน"
+        description="รายวิชาที่รับเป็น TA และสิ่งที่ต้องดำเนินการในภาคเรียนนี้"
         actions={
           noTerms ? null : (
             <div className="flex gap-2 items-end flex-wrap">
@@ -274,11 +306,20 @@ export default function TAHome() {
         </Panel>
       ) : (
         <>
-          <Panel
-            title="รายวิชาในภาคเรียนนี้"
-            description="คลิกเพื่อดูตารางเรียน/บันทึกเวลาปฏิบัติงาน"
-            padded={false}
-          >
+          {/* Setup first: until these are done the TA cannot log hours, so the
+              course list below is academic. Above AlertsSection because those
+              are recurring term chores, this is a one-time prerequisite. */}
+          <OnboardingChecklistCard />
+
+          <AlertsSection
+            docs={docs}
+            submissions={submissions}
+            courses={courses}
+            today={today}
+          />
+
+          <SectionHeading>รายวิชาที่ฉันเป็น TA</SectionHeading>
+          <Panel padded={false}>
             {coursesError ? (
               <EmptyState
                 icon={<AlertTriangle size={28} />}
@@ -301,65 +342,214 @@ export default function TAHome() {
                 description="อาจารย์ยังไม่ได้เสนอชื่อคุณเป็น TA หรือคำขอยังอยู่ระหว่างการพิจารณา"
               />
             ) : (
-              <ul className="divide-y divide-[var(--hairline)]">
-                {courses!.map(c => {
-                  const st = statusById.get(c.id);
-                  const sub = currentByCourse.get(c.id);
-                  return (
-                    <li key={c.id}>
-                      <Link
-                        href={`/ta/courses/${c.id}`}
-                        className="flex items-center gap-4 px-5 py-4 hover:bg-surface-secondary transition-colors group"
-                      >
-                        <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
-                          <BookOpen size={18} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold tabular">{c.code}</span>
-                            <span className="text-foreground">{c.name_th}</span>
-                          </div>
-                          <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
-                            <span>นักศึกษารวม {c.num_students} คน</span>
-                            {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
-                            {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
-                            {st && (
-                              <>
-                                <span>· อนุมัติ {st.hours_approved.toFixed(1)} ชม.</span>
-                                {st.hours_pending > 0 && <span>· รอ {st.hours_pending.toFixed(1)} ชม.</span>}
-                                <span className="text-success font-medium">
-                                  · ประมาณ ฿{st.estimated_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="hidden md:flex flex-col items-end gap-1 w-56 shrink-0">
-                          {sub ? (
-                            <>
-                              {(() => {
-                                const b = submissionBadge(sub, today);
-                                return <Chip tone={b.tone}>{b.label}</Chip>;
-                              })()}
-                              <div className="text-[11px] text-muted text-right truncate max-w-full">
-                                รอบ {sub.label}
-                                {sub.is_closed ? " (ปิดแล้ว)" : ` · ครบกำหนด ${sub.due_date}`}
-                              </div>
-                            </>
-                          ) : (
-                            <Chip tone="neutral">ยังไม่เปิดรอบเบิกจ่าย</Chip>
-                          )}
-                        </div>
-                        <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              // Card grid rather than table rows: each course carries several
+              // independent facts (hours, money, submission step) that a row
+              // squeezes into one line and truncates first on narrow screens.
+              <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                {courses!.map(c => (
+                  <CourseCard
+                    key={c.id}
+                    course={c}
+                    status={statusById.get(c.id)}
+                    submission={currentByCourse.get(c.id)}
+                    today={today}
+                  />
+                ))}
+              </div>
             )}
           </Panel>
+
+          {/* Announcements sit beside the courses rather than under them: a TA
+              with no course assigned yet sees an otherwise empty page, and the
+              faculty's news is the one thing that is still worth reading. The
+              feed renders its own "ยังไม่มีประกาศ" state, so the card is always
+              present and the page never changes shape. */}
+          <SectionHeading
+            action={
+              <Link
+                href="/announcements"
+                className="text-xs font-medium text-muted underline underline-offset-2 hover:text-foreground"
+              >
+                ดูทั้งหมด
+              </Link>
+            }
+          >
+            ประชาสัมพันธ์
+          </SectionHeading>
+          {/* title={null}, not undefined: the prop defaults to "ประชาสัมพันธ์"
+              when undefined, which would print the heading twice — once here
+              and once inside the card. null is falsy so Panel drops its header
+              entirely, matching the courses section above. */}
+          <AnnouncementFeed title={null} compact limit={5} />
         </>
       )}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Section pieces                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** Small-caps heading that separates the page into scannable bands. */
+function SectionHeading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <div className="mb-2 mt-6 flex items-center justify-between gap-3 first:mt-0">
+      <h2 className="text-sm font-semibold text-foreground">{children}</h2>
+      {action}
+    </div>
+  );
+}
+
+/**
+ * What the TA is spending against their limits. Every number here is one the
+ * system enforces elsewhere, so seeing it early explains a later refusal
+ * instead of leaving it to be discovered at the work-log screen.
+ */
+// UsageSection (the "ภาพรวมของฉัน" stat cards) was removed at the lecturers'
+// request. Everything it showed is available where it is actionable: the quota
+// and hours on each course card below, the document status on /ta/documents.
+// A row of counters at the top of the page repeated all of it without giving
+// the TA anything to do about any of it.
+
+/**
+ * Things that need the TA to act. Rendered only when there is something —
+ * a permanent "all clear" panel trains people to skip the region entirely.
+ */
+function AlertsSection({
+  docs, submissions, courses, today,
+}: {
+  docs?: DocRow[];
+  submissions?: SubmissionRow[];
+  courses?: TC[];
+  today: string;
+}) {
+  const rejected = (docs ?? []).filter(d => d.status === "rejected");
+  // "ต้องดำเนินการ" means the TA has to do something. Waiting for staff is not
+  // that. This block used to count APPROVED documents and then title the alert
+  // "ยังส่งเอกสารไม่ครบ" with a "ไปส่งเอกสาร" link — so a TA who had sent all
+  // three files was told to go send them, every visit, until an officer got
+  // round to reviewing. Count what the TA controls: files not yet sent.
+  const notSent = REQUIRED_DOC_COUNT - (docs ?? []).filter(
+    d => d.status !== "rejected" && d.status !== "needs_fix").length;
+
+  // Only months whose window has opened can be acted on.
+  const dueSoon = (submissions ?? []).filter(
+    r => r.status === "pending" && !r.is_closed && r.starts_on <= today && r.worklog_unapproved > 0,
+  );
+
+  const hasCourses = (courses?.length ?? 0) > 0;
+  if (rejected.length === 0 && notSent <= 0 && dueSoon.length === 0) return null;
+
+  return (
+    <>
+      <SectionHeading>ต้องดำเนินการ</SectionHeading>
+      <div className="space-y-2">
+        {rejected.length > 0 && (
+          <Alert
+            status="danger"
+            icon={<AlertTriangle size={16} />}
+            title={`มีเอกสารถูกตีกลับ ${rejected.length} รายการ`}
+            description={rejected.map(d => d.reject_reason).filter(Boolean).join(" · ") || "เจ้าหน้าที่ขอให้แก้ไขและส่งใหม่"}
+            action={
+              <Link href="/ta/documents" className="text-sm font-medium underline underline-offset-2">
+                ไปแก้เอกสาร
+              </Link>
+            }
+          />
+        )}
+        {notSent > 0 && rejected.length === 0 && (
+          <Alert
+            status="warning"
+            icon={<FileCheck2 size={16} />}
+            title={`ยังส่งเอกสารไม่ครบ (ขาดอีก ${notSent} รายการ)`}
+            description={
+              hasCourses
+                ? "ต้องผ่านครบทั้ง 3 ไฟล์ ก่อนจึงจะเบิกค่าตอบแทนได้"
+                : "เตรียมเอกสารไว้ล่วงหน้าได้ แม้ยังไม่ได้รับมอบหมายวิชา"
+            }
+            action={
+              <Link href="/ta/documents" className="text-sm font-medium underline underline-offset-2">
+                ไปส่งเอกสาร
+              </Link>
+            }
+          />
+        )}
+        {dueSoon.map(r => (
+          <Alert
+            key={r.period_id + r.teaching_course_id}
+            status="warning"
+            icon={<CalendarClock size={16} />}
+            title={`รอบ ${r.label} ยังมีบันทึกเวลาที่อาจารย์ไม่ได้อนุมัติ ${r.worklog_unapproved} รายการ`}
+            description={`ครบกำหนด ${thDueDate(r.due_date)} — ถ้าเลยกำหนด เดือนนี้จะถูกปิดและแก้ไม่ได้`}
+            action={
+              <Link
+                href={`/ta/courses/${r.teaching_course_id}/worklog`}
+                className="text-sm font-medium underline underline-offset-2"
+              >
+                เปิดบันทึกเวลา
+              </Link>
+            }
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** One course, with its independent facts given room to breathe. */
+function CourseCard({
+  course, status, submission, today,
+}: {
+  course: TC;
+  status?: TAStatus;
+  submission?: SubmissionRow;
+  today: string;
+}) {
+  const badge = submission ? submissionBadge(submission, today) : null;
+  return (
+    <Link
+      href={`/ta/courses/${course.id}`}
+      className="group flex flex-col rounded-xl border border-[var(--hairline)] bg-surface p-4 transition-colors hover:bg-surface-secondary"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
+          <BookOpen size={17} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-semibold tabular">{course.code}</div>
+          <div className="truncate text-xs text-muted">{course.name_th}</div>
+        </div>
+        <ArrowRight
+          size={15}
+          className="mt-1 shrink-0 text-muted transition-colors group-hover:text-accent"
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+        <span>นักศึกษา {course.num_students} คน</span>
+        {status && (
+          <>
+            <span>· อนุมัติ {status.hours_approved.toFixed(1)} ชม.</span>
+            {status.hours_pending > 0 && <span>· รอ {status.hours_pending.toFixed(1)} ชม.</span>}
+          </>
+        )}
+      </div>
+
+      {status && (
+        <div className="mt-2 text-sm font-medium text-success">
+          ฿{status.estimated_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--hairline)] pt-3">
+        {badge ? <Chip tone={badge.tone}>{badge.label}</Chip> : <Chip tone="neutral">ยังไม่เปิดรอบเบิกจ่าย</Chip>}
+        {submission && (
+          <span className="truncate text-[11px] text-muted">
+            {submission.is_closed ? "ปิดแล้ว" : `ครบกำหนด ${thDueDate(submission.due_date)}`}
+          </span>
+        )}
+      </div>
+    </Link>
   );
 }

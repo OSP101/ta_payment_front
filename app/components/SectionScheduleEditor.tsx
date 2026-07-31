@@ -179,15 +179,21 @@ export default function SectionScheduleEditor({
               ? "ยังไม่มีคาบเรียน"
               : <>ทั้งหมด <b className="tabular">{value.length}</b> คาบ / สัปดาห์</>}
           </div>
-          <Button variant="ghost" size="sm" onClick={addRow} disabled={disabled || !canAddMore}>
-            <Plus size={13} />เพิ่มคาบ
-          </Button>
+          {/* Hidden rather than disabled when read-only: a greyed "เพิ่มคาบ"
+              next to a greyed trash icon reads as "broken", not "view only". */}
+          {!disabled && (
+            <Button variant="ghost" size="sm" onClick={addRow} disabled={!canAddMore}>
+              <Plus size={13} />เพิ่มคาบ
+            </Button>
+          )}
         </div>
       )}
 
       {value.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted">
-          ยังไม่มีคาบเรียน — กด &quot;เพิ่มคาบ&quot; เพื่อกำหนดวัน-เวลา
+          {disabled
+            ? "ยังไม่มีคาบเรียน"
+            : <>ยังไม่มีคาบเรียน — กด &quot;เพิ่มคาบ&quot; เพื่อกำหนดวัน-เวลา</>}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -238,23 +244,24 @@ export default function SectionScheduleEditor({
                   disabled={disabled}
                   ariaLabel="เวลาสิ้นสุด"
                 />
-                <IconButton
-                  label="ลบคาบ"
-                  variant="danger-soft" size="sm"
-                  onClick={() => removeRow(i)}
-                  disabled={disabled}
-                >
-                  <Trash2 size={13} />
-                </IconButton>
+                {!disabled && (
+                  <IconButton
+                    label="ลบคาบ"
+                    variant="danger-soft" size="sm"
+                    onClick={() => removeRow(i)}
+                  >
+                    <Trash2 size={13} />
+                  </IconButton>
+                )}
               </div>
             );
           })}
         </div>
       )}
 
-      {compact && canAddMore && (
+      {compact && canAddMore && !disabled && (
         <div className="pt-1">
-          <Button variant="ghost" size="sm" onClick={addRow} disabled={disabled}>
+          <Button variant="ghost" size="sm" onClick={addRow}>
             <Plus size={13} />เพิ่มคาบ
           </Button>
         </div>

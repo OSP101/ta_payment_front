@@ -4,14 +4,22 @@ import useSWR from "swr";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { type Term, type Me } from "../lib/api";
-import { PageHeader, Select } from "../components/ui";
+import { PageHeader } from "../components/ui";
+import TermSelect from "../components/TermSelect";
 import { DocumentProgressBoard } from "../components/DocumentProgressBoard";
 
 export default function DocumentProgressPage() {
   const { data: terms } = useSWR<Term[]>("/terms");
   const { data: me } = useSWR<Me>("/me");
   const [termId, setTermId] = useState("");
-  useEffect(() => { if (!termId && terms?.length) setTermId(terms[0].id); }, [terms, termId]);
+  // Default to the ACTIVE term, not terms[0] ("the newest term that exists").
+  // Those differ the moment staff create next semester ahead of time, and this
+  // page is cross-role — a TA and an officer looking at it should not silently
+  // be reading different terms.
+  useEffect(() => {
+    if (termId || !terms?.length) return;
+    setTermId((terms.find(t => t.is_active) ?? terms[0]).id);
+  }, [terms, termId]);
 
   // Stage 5 ("คณบดีลงนาม") is visible only to lecturer/staff/admin — not TAs.
   const showFinalStage = (me?.roles ?? []).some(r => ["lecturer", "staff", "admin"].includes(r));
@@ -26,9 +34,7 @@ export default function DocumentProgressPage() {
           title="ความคืบหน้าเอกสารเบิกจ่าย"
           description="ติดตามว่าเอกสารของแต่ละวิชาเดินทางไปถึงขั้นไหนแล้ว — อัปเดตโดยเจ้าหน้าที่"
           actions={
-            <Select value={termId} onChange={e => setTermId(e.target.value)} className="max-w-xs">
-              {terms?.map(t => (<option key={t.id} value={t.id}>{t.academic_year}/{t.semester}</option>))}
-            </Select>
+            <TermSelect terms={terms} value={termId} onChange={setTermId} />
           }
         />
         <DocumentProgressBoard termId={termId} canEdit={false} showFinalStage={showFinalStage} />

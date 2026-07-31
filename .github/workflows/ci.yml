@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` installs exactly what package-lock.json pins and fails if the
+      # lockfile and package.json have drifted apart.
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      # npm install rewrites the HeroUI block in CLAUDE.md and the hash in
+      # skills-lock.json, and does so differently on Windows and macOS. Report
+      # the drift without failing the build — it is tooling churn, not a defect,
+      # but a silent rewrite is worth seeing in the log.
+      - name: Report generated-file drift
+        if: always()
+        run: git diff --stat -- CLAUDE.md skills-lock.json || true

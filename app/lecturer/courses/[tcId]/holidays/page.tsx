@@ -1,5 +1,5 @@
 "use client";
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { CalendarOff, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MapPin } from "lucide-react";
 import { api } from "../../../../lib/api";
@@ -30,6 +30,11 @@ interface HolidayImpact {
   original_date: string;
   day_of_week: number;
   holiday_name_th: string;
+  /** Closure window ("HH:MM"); absent = closed all day. A คณะ holiday often
+   *  covers only part of the day, and only the periods it overlaps appear in
+   *  affected_sections. */
+  holiday_start?: string;
+  holiday_end?: string;
   affected_sections: AffectedSection[];
 }
 interface ImpactsResponse {
@@ -76,6 +81,20 @@ function formatThaiDate(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   if (Number.isNaN(d.getTime())) return iso;
   return `${d.getDate()} ${MONTH_TH[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
+
+/** "08:00–12:00" for a partial closure, null when the day is closed outright.
+ *  Null rather than "ทั้งวัน" so callers can omit the chip entirely — labelling
+ *  every national holiday would drown the few that are partial. */
+function holidayWindowLabel(imp: HolidayImpact): string | null {
+  if (!imp.holiday_start || !imp.holiday_end) return null;
+  return `${imp.holiday_start.slice(0, 5)}–${imp.holiday_end.slice(0, 5)}`;
+}
+
+/** A date can now carry two closures (a morning ceremony and an evening event),
+ *  each its own panel — so the React key has to include the window. */
+function impactKey(imp: HolidayImpact): string {
+  return `${imp.original_date}|${imp.holiday_start ?? "all"}`;
 }
 
 export default function LecturerHolidaysPage({ params }: { params: Promise<{ tcId: string }> }) {
@@ -178,15 +197,21 @@ export default function LecturerHolidaysPage({ params }: { params: Promise<{ tcI
           <div className="flex flex-col gap-3">
             {impacts.impacts.map(imp => (
               <Panel
-                key={imp.original_date}
+                key={impactKey(imp)}
                 title={
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 flex-wrap">
                     <span className="text-base">{formatThaiDate(imp.original_date)}</span>
                     <span className="text-xs text-muted">({DOW_TH[imp.day_of_week]})</span>
                     <Chip tone="danger">{imp.holiday_name_th}</Chip>
+                    {holidayWindowLabel(imp) && <Chip tone="info">🕒 {holidayWindowLabel(imp)}</Chip>}
                   </span>
                 }
-                description={`มี ${imp.affected_sections.length} คาบที่ได้รับผลกระทบ`}
+                description={holidayWindowLabel(imp)
+                  // Say what is NOT cancelled too: with a partial closure the
+                  // lecturer's cheapest fix is often a slot later the same day,
+                  // and nothing else on the page would tell them that is legal.
+                  ? `หยุดเฉพาะช่วง ${holidayWindowLabel(imp)} · มี ${imp.affected_sections.length} คาบที่คาบเกี่ยวกับช่วงนี้ — คาบนอกช่วงยังเรียนตามปกติ และกำหนดเป็นเวลาชดเชยในวันเดียวกันได้`
+                  : `มี ${imp.affected_sections.length} คาบที่ได้รับผลกระทบ`}
                 padded={false}
               >
                 <div className="divide-y divide-(--hairline)">
@@ -338,9 +363,14 @@ export default function LecturerHolidaysPage({ params }: { params: Promise<{ tcI
 }
 
 // ---------------------------------------------------------------------------
-// MakeupFormModal — add or replace a makeup for the given (section, original_date).
-// Because backend enforces UNIQUE(section, original_date), "edit" is really
-// delete-then-insert — we do that here in two steps so the audit trail keeps
+// MakeupFormModal — add or replace a makeup for ONE PERIOD of a cancelled day,
+// identified by (section, original_date, kind). A section that teaches a lecture
+// and a lab on the same day gets two independent makeups at their own times; the
+// backend used to key this per day, which meant filing one silently claimed to
+// cover the other. See migration 0055.
+//
+// Because the backend enforces UNIQUE(section, original_date, kind), "edit" is
+// really delete-then-insert — done here in two steps so the audit trail keeps
 // both events.
 // ---------------------------------------------------------------------------
 
@@ -364,6 +394,7 @@ function MakeupFormModal({
   const [error, setError] = useState<string | null>(null);
 
   const original = useMemo(() => formatThaiDate(impact.original_date), [impact.original_date]);
+  const closedWindow = holidayWindowLabel(impact);
 
   async function handleSave() {
     setError(null);
@@ -380,6 +411,9 @@ function MakeupFormModal({
       await api.post(`/teaching-courses/${tcId}/makeup/${section.section_id}`, {
         original_date: impact.original_date,
         makeup_date: date,
+        // Which period this replaces. Without it the backend cannot tell the
+        // lecture's makeup from the lab's.
+        kind: section.kind,
         start_time: start,
         end_time: end,
         note: note || null,
@@ -412,7 +446,7 @@ function MakeupFormModal({
           <div>
             <span>วันเดิม: </span>
             <span className="font-semibold text-foreground">{original}</span>
-            <span className="ml-2">({impact.holiday_name_th})</span>
+            <span className="ml-2">({impact.holiday_name_th}{closedWindow ? ` · หยุด ${closedWindow}` : ""})</span>
           </div>
           <div>
             <span>section {section.sec_no} · </span>
@@ -420,6 +454,18 @@ function MakeupFormModal({
             <span> · {section.start_time.slice(0, 5)}–{section.end_time.slice(0, 5)}</span>
           </div>
         </div>
+
+        {/* The whole point of a partial closure: the replacement slot may be the
+            same date, outside the closed hours. Nothing else on this screen says
+            so, and the natural assumption is that the date is off-limits. */}
+        {closedWindow && (
+          <Alert
+            status="accent"
+            icon={<CalendarOff size={14} />}
+            title={`วันนี้หยุดเฉพาะช่วง ${closedWindow}`}
+            description="ชดเชยในวันเดิมได้ ถ้าเลือกเวลาที่ไม่คาบเกี่ยวกับช่วงที่หยุด — หรือจะเลือกวันอื่นก็ได้"
+          />
+        )}
 
         <FieldGroup label="วันที่ชดเชย">
           <DatePicker value={date} onChange={setDate} label="วันที่ชดเชย" autoFocus />
@@ -460,6 +506,7 @@ function ManualMakeupModal({
 }) {
   const [sectionId, setSectionId] = useState(sections[0]?.id ?? "");
   const [originalDate, setOriginalDate] = useState("");
+  const [kind, setKind] = useState<"lecture" | "lab" | "">("");
   const [date, setDate] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -468,13 +515,36 @@ function ManualMakeupModal({
   const [error, setError] = useState<string | null>(null);
 
   const section = sections.find(s => s.id === sectionId);
-  // Prefill the times from the section's first scheduled slot as a convenience.
-  const defaultSlot = section?.schedules?.[0];
+
+  // The periods this section actually teaches on the chosen day. A makeup
+  // replaces ONE of them (see migration 0055), and the backend refuses a kind the
+  // section does not teach that weekday — so offer only the real options rather
+  // than letting the lecturer pick one that will be rejected.
+  const periods = useMemo(() => {
+    if (!section || !originalDate) return [];
+    const dow = new Date(`${originalDate}T00:00:00`).getDay();
+    return (section.schedules ?? []).filter(sc => sc.day_of_week === dow);
+  }, [section, originalDate]);
+
+  // Auto-select when there is nothing to choose, and drop a stale choice when the
+  // date or section changes to one that doesn't offer it.
+  useEffect(() => {
+    if (periods.length === 1) { setKind(periods[0].kind); return; }
+    if (kind && !periods.some(p => p.kind === kind)) setKind("");
+  }, [periods, kind]);
+
+  // Prefill the times from the chosen period.
+  const defaultSlot = periods.find(p => p.kind === kind) ?? periods[0];
 
   async function handleSave() {
     setError(null);
     if (!sectionId) { setError("กรุณาเลือก section"); return; }
     if (!originalDate) { setError("กรุณาระบุวันเดิมที่งดสอน"); return; }
+    if (periods.length === 0) {
+      setError("กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก — ตรวจสอบวันเดิมที่งดสอนอีกครั้ง");
+      return;
+    }
+    if (!kind) { setError("กรุณาเลือกคาบที่ต้องการชดเชย"); return; }
     if (!date) { setError("กรุณาระบุวันชดเชย"); return; }
     const st = start || defaultSlot?.start_time?.slice(0, 5) || "";
     const et = end || defaultSlot?.end_time?.slice(0, 5) || "";
@@ -484,6 +554,7 @@ function ManualMakeupModal({
       await api.post(`/teaching-courses/${tcId}/makeup/${sectionId}`, {
         original_date: originalDate,
         makeup_date: date,
+        kind,
         start_time: st,
         end_time: et,
         note: note || null,
@@ -532,6 +603,31 @@ function ManualMakeupModal({
 
         <FieldGroup label="วันเดิมที่งดสอน">
           <DatePicker value={originalDate} onChange={setOriginalDate} label="วันเดิมที่งดสอน" />
+        </FieldGroup>
+
+        {/* One makeup per period. A section that teaches บรรยาย and ปฏิบัติการ on
+            the same day needs one for each, at their own times. */}
+        <FieldGroup
+          label="คาบที่ชดเชย"
+          hint={originalDate && periods.length === 0
+            ? "กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก"
+            : periods.length > 1
+              ? "วันนั้นมีหลายคาบ — เลือกคาบที่งด (คาบอื่นกำหนดแยกได้)"
+              : undefined}
+        >
+          <select
+            className="w-full h-9 rounded-lg border border-(--hairline) bg-surface px-3 text-sm"
+            value={kind}
+            onChange={e => setKind(e.target.value as "lecture" | "lab" | "")}
+            disabled={!originalDate || periods.length === 0}
+          >
+            <option value="">{originalDate ? "— เลือกคาบ —" : "— เลือกวันเดิมก่อน —"}</option>
+            {periods.map(p => (
+              <option key={p.id} value={p.kind}>
+                {KIND_LABEL[p.kind]} {p.start_time.slice(0, 5)}–{p.end_time.slice(0, 5)}
+              </option>
+            ))}
+          </select>
         </FieldGroup>
 
         <FieldGroup label="วันที่ชดเชย">

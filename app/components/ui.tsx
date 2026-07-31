@@ -28,6 +28,7 @@ import {
   type Key,
   type TimeValue,
 } from "@heroui/react";
+import Link from "next/link";
 import { Info } from "lucide-react";
 import { I18nProvider } from "react-aria-components";
 import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
@@ -228,12 +229,17 @@ export function StatCard({
   hint,
   icon,
   tone = "default",
+  href,
+  className = "",
 }: {
   label: string;
   value: React.ReactNode;
   hint?: React.ReactNode;
   icon?: React.ReactNode;
   tone?: "default" | "brand" | "warn" | "danger" | "success";
+  /** Makes the whole card the link to the page that clears this number. */
+  href?: string;
+  className?: string;
 }) {
   const iconBg = {
     default: "bg-default text-foreground",
@@ -242,20 +248,28 @@ export function StatCard({
     danger: "bg-danger-soft text-danger-soft-foreground",
     success: "bg-success-soft text-success-soft-foreground",
   }[tone];
-  return (
-    <HCard variant="default" className="p-4 flex flex-row items-start gap-3">
+  const card = (
+    <HCard
+      variant="default"
+      className={`p-4 flex flex-row items-start gap-3 h-full ${href ? "transition-shadow hover:shadow-md" : ""} ${className}`}
+    >
       {icon && (
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>
           {icon}
         </div>
       )}
+      {/* line-clamp, not truncate: at the 2-column mobile breakpoint a card is
+          ~115px wide, so any Thai label past ~14 characters became
+          "แบบฟอร์มหนี้ร…" — present but unreadable. Two lines fit every label
+          the app uses, and h-full keeps a taller card level with its row. */}
       <div className="min-w-0 flex-1">
-        <div className="text-xs text-muted truncate">{label}</div>
+        <div className="text-xs text-muted line-clamp-2">{label}</div>
         <div className="mt-1 text-2xl font-semibold leading-tight tabular-nums">{value}</div>
-        {hint && <div className="text-xs text-muted mt-1 truncate">{hint}</div>}
+        {hint && <div className="text-xs text-muted mt-1 line-clamp-2">{hint}</div>}
       </div>
     </HCard>
   );
+  return href ? <Link href={href} className="block">{card}</Link> : card;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -325,7 +339,13 @@ export function Chip({ tone = "neutral", children }: { tone?: ChipTone; children
     else { seenText = true; rest.push(k); }
   }
   return (
-    <HChip color={CHIP_COLOR[tone]}>
+    // `soft` rather than the HeroUI default `secondary`. The lecturers reported
+    // that status chips and buttons were hard to tell apart, and `secondary`
+    // gives a chip a solid fill plus a border — the exact costume a secondary
+    // button wears. A soft tint reads as a label: something the screen is
+    // telling you, not something you can press. Buttons keep their solid fills,
+    // so the two families no longer overlap.
+    <HChip color={CHIP_COLOR[tone]} variant="soft">
       {leadingIcons}
       <HChip.Label>{rest}</HChip.Label>
     </HChip>
@@ -369,6 +389,16 @@ export interface ButtonProps {
   slot?: string;
   title?: string;
   "aria-label"?: string;
+  /**
+   * Render the button as a different DOM element — the escape hatch for
+   * "looks like a button, behaves like a link".
+   *
+   * Wrapping a <Button> in a next/link <Link> does NOT work: the press handler
+   * consumes the click, so the anchor's own default never runs and
+   * `target="_blank"` is silently ignored — the page navigates in place. Pass
+   * `render` and put the href on the element the button actually becomes.
+   */
+  render?: React.ComponentProps<typeof HButton>["render"];
 }
 
 export function Button({
@@ -476,6 +506,8 @@ export function TimePicker({
   className,
   isDisabled,
   autoFocus,
+  minValue,
+  maxValue,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -483,6 +515,10 @@ export function TimePicker({
   className?: string;
   isDisabled?: boolean;
   autoFocus?: boolean;
+  /** "HH:MM" bounds. Segments outside the range are flagged as invalid, and
+   *  the up/down arrows stop at the edge instead of wrapping to 00. */
+  minValue?: string;
+  maxValue?: string;
 }) {
   const parsed: Time | null = (() => {
     if (!value) return null;
@@ -493,6 +529,10 @@ export function TimePicker({
     if (!v) return "";
     return `${String(v.hour).padStart(2, "0")}:${String(v.minute).padStart(2, "0")}`;
   };
+  const bound = (v?: string): Time | null => {
+    if (!v) return null;
+    try { return parseTime(v.length === 5 ? v + ":00" : v); } catch { return null; }
+  };
   return (
     <HTimeField
       className={className}
@@ -501,6 +541,8 @@ export function TimePicker({
       onChange={v => onChange(toString(v))}
       isDisabled={isDisabled}
       autoFocus={autoFocus}
+      minValue={bound(minValue)}
+      maxValue={bound(maxValue)}
       aria-label={label ?? "time"}
     >
       <HTimeField.Group>

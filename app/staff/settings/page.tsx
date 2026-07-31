@@ -9,6 +9,7 @@ import {
 } from "@heroui/react";
 import { parseDate, parseDateTime, type DateValue } from "@internationalized/date";
 import { api } from "../../lib/api";
+import { useTerm, useTermKey } from "../TermContext";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select, ConfirmDialog, TipWrap,
 } from "../../components/ui";
@@ -25,7 +26,6 @@ interface Rate {
   baseline_students_lecture: number;
   baseline_students_lab: number;
   ug_workload_rate_regular: number;
-  ug_workload_rate_special: number;
   term_months: number;
   ug_max_hours_per_day: number;
   max_courses_per_student: number;
@@ -98,7 +98,9 @@ function PayRateSection() {
     graduate_regular: 50, graduate_special_lumpsum: 4000,
     ug_lecture_hours_per_credit: 3, ug_lab_hours_per_credit: 4.5,
     baseline_students_lecture: 60, baseline_students_lab: 30,
-    ug_workload_rate_regular: 200, ug_workload_rate_special: 250,
+    // 300 = 50%×200 (ตรี) + 50%×400 (บัณฑิต) per the faculty workbook;
+    // applied to both tracks, which differ only in student count.
+    ug_workload_rate_regular: 300,
     term_months: 4,
     ug_max_hours_per_day: 7,
     max_courses_per_student: 3,
@@ -1576,15 +1578,12 @@ function windowStatus(w: RequestWindow, now = Date.now()) {
 }
 
 function RequestWindowsSection() {
-  const { data: terms } = useSWR<Term[]>("/terms");
-  const [termId, setTermId] = useState<string>("");
-  useEffect(() => {
-    if (termId || !terms?.length) return;
-    const pick = terms.find(t => t.is_active) ?? terms[0];
-    if (pick?.id) setTermId(pick.id);
-  }, [terms, termId]);
-
-  const swrKey = termId ? `/ta-request/windows?term_id=${termId}` : null;
+  // Follows the shell's term switcher like every other term-scoped staff view.
+  // This section used to carry its own <Select>, which meant the settings page
+  // could show one term in the top bar and a different one here — the exact
+  // disagreement the shared switcher was introduced to remove.
+  const { terms, termId } = useTerm();
+  const swrKey = useTermKey("/ta-request/windows");
   const { data: windows } = useSWR<RequestWindow[]>(swrKey);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -1643,26 +1642,13 @@ function RequestWindowsSection() {
       description="กำหนดวันส่งคำขอ TA ของแต่ละภาคเรียน — ไม่มีการปิดรับ เลยกำหนดแล้วอาจารย์ยังส่งได้ แต่คำขอจะถูกทำเครื่องหมายว่า “ส่งช้า” และการเบิกจ่ายจะล่าช้าตาม"
       actions={
         !noTerms && (
-          <>
-            <Select
-              value={termId}
-              onChange={e => setTermId(e.target.value)}
-              className="max-w-xs"
-            >
-              {terms?.map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.academic_year}/{t.semester}{t.is_active ? " (active)" : ""}
-                </option>
-              ))}
-            </Select>
-            <Button
-              variant="primary"
-              disabled={!termId}
-              onClick={() => { setEditing(null); setFormOpen(true); }}
-            >
-              <Plus size={14} /> เพิ่มช่วงเวลา
-            </Button>
-          </>
+          <Button
+            variant="primary"
+            disabled={!termId}
+            onClick={() => { setEditing(null); setFormOpen(true); }}
+          >
+            <Plus size={14} /> เพิ่มช่วงเวลา
+          </Button>
         )
       }
     >
@@ -2307,18 +2293,10 @@ interface SubmissionPeriod {
 }
 
 function SubmissionPeriodsSection() {
-  const { data: terms } = useSWR<Term[]>("/terms");
-  const [termId, setTermId] = useState<string>("");
-
-  // Default to the active term when the terms list arrives.
-  useEffect(() => {
-    if (termId || !terms || terms.length === 0) return;
-    const active = terms.find(t => t.is_active) ?? terms[0];
-    if (active.id) setTermId(active.id);
-  }, [terms, termId]);
-
+  // Follows the shell's term switcher, like every other term-scoped staff view.
+  const { term, termId } = useTerm();
   const { data: periods, mutate: refresh } = useSWR<SubmissionPeriod[]>(
-    termId ? `/submission-periods?term_id=${termId}` : null,
+    useTermKey("/submission-periods"),
   );
 
   const [creating, setCreating] = useState(false);
@@ -2328,7 +2306,7 @@ function SubmissionPeriodsSection() {
   const [deleteTarget, setDeleteTarget] = useState<SubmissionPeriod | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const selectedTerm = (terms ?? []).find(t => t.id === termId);
+  const selectedTerm = term;
   const seedSemester = selectedTerm?.semester ?? 1;
   const seedMonthsLabel = seedSemester === 1 ? "มิ.ย.–ต.ค." : "พ.ย.–มี.ค.";
   const existingMonths = new Set((periods ?? []).map(p => p.year_month));
@@ -2384,21 +2362,8 @@ function SubmissionPeriodsSection() {
         </>
       }
     >
-      <div className="mb-4 max-w-md">
-        <FieldGroup label="ภาคเรียน">
-          <Select value={termId} onChange={e => setTermId(e.target.value)}>
-            <option value="">— เลือกภาคเรียน —</option>
-            {(terms ?? []).map(t => (
-              <option key={t.id} value={t.id!}>
-                {termLabel(t)}{t.is_active ? " · ใช้งาน" : ""}
-              </option>
-            ))}
-          </Select>
-        </FieldGroup>
-      </div>
-
       {!termId ? (
-        <div className="text-sm text-muted py-4">เลือกภาคเรียนเพื่อดูรายการรอบเบิกจ่าย</div>
+        <div className="text-sm text-muted py-4">ยังไม่มีภาคเรียนในระบบ — สร้างที่แท็บ "ภาคเรียน" ก่อน</div>
       ) : !periods ? (
         <div className="text-sm text-muted py-4">กำลังโหลด…</div>
       ) : periods.length === 0 ? (

@@ -1,45 +1,69 @@
 "use client";
+import { Suspense } from "react";
+import useSWR from "swr";
 import {
   LayoutDashboard,
   Users,
   BookOpen,
-  ClipboardCheck,
-  FileCheck2,
-  Download,
   Megaphone,
   Settings,
   ScrollText,
   Bell,
   CalendarOff,
   Route,
+  IdCard,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
+import { type Executive, emptyExecutive } from "./types";
+import { TermProvider, useTerm } from "./TermContext";
+import TermSwitcher from "./TermSwitcher";
 
-const nav: NavSection[] = [
+// The four steps a payment actually travels through, in order. Numbered
+// instead of iconned at the lecturers' request: icons made every entry look
+// equally urgent and said nothing about what has to happen first, so staff had
+// to learn the sequence from a colleague rather than from the screen.
+//
+// Step 3 finally gives /staff/worklog a home. The page has existed since the
+// staff worklog editor shipped but was reachable only by typing the URL, which
+// is why the review step was being done outside the system.
+// Badges answer the question the numbered steps could not: the order of work
+// was readable, but nothing said whether any of it was waiting. A queue could
+// sit untouched for a week and the sidebar looked identical to a clear one.
+const buildNav = (s: Executive): NavSection[] => [
   {
     title: "ภาพรวม",
     items: [{ label: "แดชบอร์ด", href: "/staff", icon: LayoutDashboard }],
   },
   {
-    title: "จัดการ",
+    title: "สิ่งที่ต้องทำ",
     items: [
-      { label: "จัดการผู้ใช้", href: "/staff/users", icon: Users },
-      { label: "วิชาที่เปิดสอน", href: "/staff/teaching", icon: BookOpen },
+      { step: 1, label: "ตรวจคำร้องขอ TA", href: "/staff/approvals",
+        badge: s.pending_ta_requests, badgeLabel: "คำร้องรอตรวจ" },
+      { step: 2, label: "ตรวจแบบฟอร์มใบแจ้งหนี้", href: "/staff/review",
+        badge: s.pending_reviews, badgeLabel: "แบบฟอร์มรอตรวจ" },
+      { step: 3, label: "ตรวจเบิกจ่ายค่าตอบแทน", href: "/staff/worklog",
+        badge: s.pending_payout_reviews, badgeLabel: "เบิกจ่ายรอตรวจ" },
+      { step: 4, label: "ส่งออกเอกสาร", href: "/staff/exports",
+        badge: s.ready_to_export, badgeLabel: "ตรวจแล้วรอส่งออก" },
     ],
   },
   {
-    title: "การอนุมัติ",
+    title: "จัดการ",
     items: [
-      { label: "ตรวจสอบเอกสาร", href: "/staff/review", icon: FileCheck2 },
-      { label: "รายการคำขอ TA", href: "/staff/approvals", icon: ClipboardCheck },
+      { label: "จัดการผู้ใช้", href: "/staff/users", icon: Users },
+      // No badge here on purpose. Badges are reserved for the "สิ่งที่ต้องทำ"
+      // group so a red dot always means "a step of the workflow is waiting on
+      // you". Missing student counts are a blocker, but they are surfaced by
+      // the dashboard's to-do panel; putting a count on a reference page too
+      // spreads the signal thin and makes the whole sidebar feel noisy.
+      { label: "วิชาที่เปิดสอน", href: "/staff/teaching", icon: BookOpen },
     ],
   },
   {
     title: "ปฏิบัติงาน",
     items: [
-      { label: "ส่งออกเอกสาร", href: "/staff/exports", icon: Download },
       { label: "อัปเดตความคืบหน้า", href: "/staff/progress", icon: Route },
       { label: "ประชาสัมพันธ์", href: "/staff/announce", icon: Megaphone },
     ],
@@ -55,17 +79,37 @@ const nav: NavSection[] = [
 ];
 
 const userMenuItems: UserMenuItem[] = [
+  { id: "account",  label: "ตั้งค่าบัญชี", href: "/account",     icon: IdCard },
   { id: "announce", label: "ประกาศ",   href: "/announcements",  icon: Megaphone },
   { id: "notif",    label: "การเตือน", href: "/notifications",  icon: Bell },
 ];
 
 export default function StaffShell({ me, children }: { me: Me; children: React.ReactNode }) {
   return (
+    // TermProvider wraps the Shell, not just the page: the term switcher lives
+    // in the top bar, so the chrome needs the context too.
+    <Suspense fallback={null}>
+      <TermProvider>
+        <StaffShellInner me={me}>{children}</StaffShellInner>
+      </TermProvider>
+    </Suspense>
+  );
+}
+
+function StaffShellInner({ me, children }: { me: Me; children: React.ReactNode }) {
+  const { termId } = useTerm();
+  // Badge counts follow the selected term, same as every page below — a badge
+  // that counted the active term while the page showed 2568/2 would be worse
+  // than no badge at all.
+  const { data } = useSWR<Executive>(termId ? `/dashboard/executive?term_id=${termId}` : null);
+  const nav = buildNav(data ?? emptyExecutive);
+  return (
     <Shell
       me={me}
       brandTitle="TA Payment"
       nav={nav}
       userMenuItems={userMenuItems}
+      topBarScope={<TermSwitcher />}
       topBarAccessory={<NotificationBell />}
     >
       {children}

@@ -18,6 +18,7 @@ const RULE_LABEL: Record<string, string> = {
   cap:            "ไม่เกิน 3 วิชา/ภาค",
   duplicate:      "ไม่ซ้ำในวิชานี้",
   own_conflict:   "ไม่ทับตารางเรียนของ TA",
+  clash_trimmed:  "คาบที่ถูกตัดออก",
   cross_conflict: "ไม่ทับกับวิชาอื่นที่สอน",
   intra_conflict: "sections ในคำขอไม่ทับกันเอง",
   workload:       "ภาระงาน",
@@ -30,7 +31,7 @@ const RULE_LABEL: Record<string, string> = {
 function group(checks: DecisionCheck[]): [string, DecisionCheck[]][] {
   const order = [
     "docs", "schedule", "cap", "duplicate",
-    "own_conflict", "cross_conflict", "intra_conflict",
+    "own_conflict", "clash_trimmed", "cross_conflict", "intra_conflict",
     "workload", "section",
   ];
   const buckets: Record<string, DecisionCheck[]> = {};

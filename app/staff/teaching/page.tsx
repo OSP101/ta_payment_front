@@ -4,13 +4,14 @@ import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import { Save, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users } from "lucide-react";
 import { toast } from "@heroui/react";
-import { api, type Term } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useTerm, useTermKey } from "../TermContext";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, Select, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
+  PageHeader, Panel, Button, IconButton, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
-import OpenCourseModal from "../../lecturer/(home)/OpenCourseModal";
+import OpenCourseModal from "./OpenCourseModal";
 import ImportModal from "./ImportModal";
 
 interface TC {
@@ -39,19 +40,16 @@ function needsStudentCount(c: TC): boolean {
 }
 
 export default function TeachingPage() {
-  const { data: terms } = useSWR<Term[]>("/terms");
-  const [termId, setTermId] = useState<string>("");
-
-  useEffect(() => {
-    if (!termId && terms && terms.length) setTermId(terms[0].id);
-  }, [terms, termId]);
+  // Term comes from the shell's switcher — see TermContext. This page used to
+  // default to terms[0] ("the newest term that exists"), which is not the same
+  // thing as the active term the dashboard showed.
+  const { terms, termId, term, loaded } = useTerm();
 
   // Gate: the whole teaching flow depends on at least one academic term existing.
-  // `terms === undefined` = still loading; empty array = confirmed none created yet.
-  const termsLoaded = terms !== undefined;
-  const noTerms = termsLoaded && terms.length === 0;
+  // `loaded` distinguishes "still loading" from "confirmed none created yet".
+  const noTerms = loaded && (terms?.length ?? 0) === 0;
 
-  const { data: courses } = useSWR<TC[]>(termId ? `/teaching-courses?term_id=${termId}` : null);
+  const { data: courses } = useSWR<TC[]>(useTermKey("/teaching-courses"));
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [onlyMissing, setOnlyMissing] = useState(false);
@@ -68,8 +66,7 @@ export default function TeachingPage() {
   const wbaCourses = (courses ?? []).filter(c => c.has_missing_schedule);
   const shownCourses = onlyMissing ? missingCourses : onlyWba ? wbaCourses : courses;
 
-  const activeTerm = terms?.find(t => t.id === termId);
-  const termLabel = activeTerm ? `${activeTerm.academic_year}/${activeTerm.semester}` : "";
+  const termLabel = term ? `${term.academic_year}/${term.semester}` : "";
 
   return (
     <div>
@@ -79,13 +76,6 @@ export default function TeachingPage() {
         actions={
           noTerms ? null : (
             <>
-              <Select value={termId} onChange={e => setTermId(e.target.value)} className="max-w-xs">
-                {terms?.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.academic_year}/{t.semester}{t.is_active ? " (active)" : ""}
-                  </option>
-                ))}
-              </Select>
               <Button variant="secondary" disabled={!termId} onClick={() => setImporting(true)}>
                 <FileSpreadsheet size={16} /> นำเข้า Excel
               </Button>
@@ -282,11 +272,32 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
       render: c => (
         <div className="inline-flex items-center gap-1 whitespace-nowrap">
           {/* Open the lecturer view in a new tab so staff can operate on the
-              course on behalf of the lecturer. The lecturer shell shows an admin
-              banner when the visitor has admin/staff role. */}
-          <Link href={`/lecturer/courses/${c.id}`} target="_blank" rel="noopener noreferrer">
-            <IconButton label="จัดการ" variant="ghost" size="sm"><Settings size={14} /></IconButton>
-          </Link>
+              course on behalf of the lecturer without losing their place in
+              this list. The lecturer shell shows an admin banner when the
+              visitor has admin/staff role.
+
+              The button IS the anchor (render), not a button inside one: nested
+              in a <Link> the press handler ate the click and target="_blank"
+              never applied — it navigated in place. As a real anchor,
+              middle-click and "open in new tab" work too. */}
+          <IconButton
+            label="จัดการ (แท็บใหม่)"
+            variant="ghost"
+            size="sm"
+            render={props => (
+              <a
+                // The render props are typed for the <button> this normally is;
+                // only the ref type actually differs, and at runtime it just
+                // holds whichever DOM node we rendered.
+                {...(props as unknown as React.ComponentProps<"a">)}
+                href={`/lecturer/courses/${c.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            )}
+          >
+            <Settings size={14} />
+          </IconButton>
           <DeleteCourseButton course={c} />
         </div>
       ),

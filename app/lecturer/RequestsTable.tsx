@@ -15,6 +15,10 @@ export interface TARequestRow {
   decided_at?: string;
   ta_count?: number;
   is_late?: boolean;
+  /** Sections whose sessions partly clash with the TA's own timetable. */
+  trimmed_count?: number;
+  /** Sections the TA lost entirely for the same reason. */
+  dropped_count?: number;
 }
 
 const STATUS_MAP: Record<string, { tone: "success" | "warn" | "danger" | "info" | "neutral"; label: string }> = {
@@ -61,6 +65,14 @@ const columns: DataColumn<TARequestRow>[] = [
         {r.is_late
           ? <Chip tone="warn">ส่งช้า</Chip>
           : <Chip tone="success">ส่งทันเวลา</Chip>}
+        {/* "อนุมัติแล้ว" on its own would hide the fact that the TA's own
+            timetable removed some sessions. Say it on the row. */}
+        {(r.trimmed_count ?? 0) > 0 && (
+          <Chip tone="warn">ตัดบางคาบ {r.trimmed_count} กลุ่ม</Chip>
+        )}
+        {(r.dropped_count ?? 0) > 0 && (
+          <Chip tone="danger">ตัดออก {r.dropped_count} กลุ่ม</Chip>
+        )}
       </div>
     ),
   },

@@ -1,6 +1,5 @@
 import { getTAProfileStatus, requireRole } from "../lib/session";
 import { TAApprovalProvider } from "./TAGate";
-import OnboardingBlocker from "./OnboardingBlocker";
 
 // Auth + approval context only. The actual sidebar shell lives one level down —
 // TAShell in (home)/layout.tsx for the shallow feature nav, TACourseShell in
@@ -13,7 +12,6 @@ export default async function TALayout({ children }: { children: React.ReactNode
   return (
     <TAApprovalProvider approved={approved} status={profileStatus}>
       {children}
-      <OnboardingBlocker />
     </TAApprovalProvider>
   );
 }

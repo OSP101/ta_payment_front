@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp } from "lucide-react";
+import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp, Lock } from "lucide-react";
 import { api, type Term, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import { icsToBlocks, applyClassKinds, type IcsImportResult, type ClassKindRow } from "../../../lib/ics";
+import TermSelect from "../../../components/TermSelect";
 import ScheduleGrid, {
   type Block, type BlockKind, type DraftRange,
   KIND_LABEL, blockTitle,
@@ -24,6 +25,11 @@ const DOW_OPTIONS = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun preferred display order
 
 const START_HR = 8;
 const END_HR = 20;
+// Same bounds as strings, for the time pickers. Outside this range the block
+// would be drawn off the grid, so the field refuses it instead of letting the
+// user find out at save time.
+const GRID_START = `${String(START_HR).padStart(2, "0")}:00`;
+const GRID_END = `${String(END_HR).padStart(2, "0")}:00`;
 
 // Field constraints — kept in sync with backend validation in ReplaceClasses.
 // Course code at KKU is typically a 6–7 digit number; letters/hyphens are
@@ -33,8 +39,16 @@ const COURSE_CODE_MAX = 16;
 const COURSE_NAME_MAX = 120;
 const SEC_NO_MAX = 8;
 const NOTE_MAX = 200;
-const COURSE_CODE_RE = /^[A-Za-z0-9-]*$/;
+// Per-character filters used while typing. A space fails both, so a stray
+// space — typed or pasted — is dropped rather than saved.
+const COURSE_CODE_RE = /^[A-Za-z0-9]*$/;
 const SEC_NO_RE = /^[0-9]*$/;
+
+// Full-value rule, checked on save. KKU course codes are either six digits
+// (old style, e.g. 322201) or a faculty prefix plus six digits (new style,
+// e.g. SC363001, CP020002). Verified against all 127 course codes currently
+// in teaching_courses — every one matches.
+const COURSE_CODE_FORMAT = /^[A-Z]{0,4}[0-9]{6}$/;
 
 function parseHM(t: string): number { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
 function inRange(t: string): boolean {
@@ -119,7 +133,15 @@ export default function TASchedulePage() {
     }
   }, [terms, termId]);
 
-  const { data: blocks } = useSWR<Block[]>(termId ? `/me/schedule?term_id=${termId}` : null);
+  interface ScheduleResp { blocks: Block[]; locked: boolean; lock_reason: string }
+  const { data: sched } = useSWR<ScheduleResp>(termId ? `/me/schedule?term_id=${termId}` : null);
+  const blocks = sched?.blocks;
+  // Read-only once staff have exported this term's payout documents. The
+  // schedule feeds the clash rules that decided which hours were payable, so
+  // changing it after the paperwork left would contradict a document already
+  // in the finance office. Past terms stay browsable — just frozen.
+  const locked = sched?.locked === true;
+  const lockReason = sched?.lock_reason ?? "";
   const [local, setLocal] = useState<Block[]>([]);
 
   // Track unsaved local edits. While dirty we must NOT let a background SWR
@@ -371,37 +393,43 @@ export default function TASchedulePage() {
         description="บันทึกตารางเรียนต่อภาคการศึกษา เพื่อใช้ตรวจสอบไม่ให้ทับซ้อนกับตารางสอนที่อาจารย์จะมอบหมาย · ลากบนตารางหรือกดปุ่มเพิ่มคาบเพื่อกรอกข้อมูล"
         actions={
           <>
-            <SaveStatus
-              saving={saving}
-              dirty={dirty}
-              savedAgo={savedAgoLabel}
-              error={saveError}
-            />
-            <Select value={termId} onChange={e => requestTermChange(e.target.value)} className="max-w-xs">
-              {terms?.map(t => (<option key={t.id} value={t.id}>{t.academic_year}/{t.semester}</option>))}
-            </Select>
-            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            {!locked && (
+              <SaveStatus
+                saving={saving}
+                dirty={dirty}
+                savedAgo={savedAgoLabel}
+                error={saveError}
+              />
+            )}
+            <TermSelect terms={terms} value={termId} onChange={requestTermChange} />
+            <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={locked}>
               <FileUp size={14} /> อัปโหลด .ics
             </Button>
-            <Button variant="secondary" onClick={() => openCreate()} disabled={isWba}>
+            <Button variant="secondary" onClick={() => openCreate()} disabled={isWba || locked}>
               <Plus size={14} /> เพิ่มคาบเรียน
             </Button>
-            <Button variant="primary" onClick={() => save(false)} disabled={saving || !dirty}>
+            <Button variant="primary" onClick={() => save(false)} disabled={saving || !dirty || locked}>
               <Save size={14} /> บันทึกทันที
             </Button>
           </>
         }
       />
-      {overlappingIds.size > 0 && (
+      {locked && (
         <div className="mb-3">
           <Alert
-            status="accent"
-            icon={<Layers size={16} />}
-            title="มีคาบเรียนที่จัดชั้นซ้อนกัน"
-            description="ระบบจะซ้อนคาบที่ใช้เวลาเดียวกันให้อัตโนมัติ — สามารถบันทึกได้ปกติ (ใช้กรณีสองเซคชันเรียนพร้อมกัน)"
+            status="warning"
+            icon={<Lock size={16} />}
+            title="ภาคเรียนนี้ปิดการแก้ไขแล้ว"
+            description={lockReason}
           />
         </div>
       )}
+
+      {/* No page-level "มีคาบเรียนที่จัดชั้นซ้อนกัน" banner: overlapping is
+          allowed and needs no action, so a standing alert about it only pushed
+          the grid down and trained people to skip the alert row. The per-block
+          "ซ้อน" chip in the list below still marks which ones stack, and the
+          editor still says so while you are creating the overlap. */}
 
       {isWba ? (
         <Panel>
@@ -414,10 +442,13 @@ export default function TASchedulePage() {
       ) : (
         <ScheduleGrid
           blocks={local}
-          onCreateDraft={openCreate}
-          onSelectBlock={openEdit}
-          onMoveBlock={moveBlock}
-          onResizeBlock={resizeBlock}
+          // Locked: the grid still renders so past terms can be read, but every
+          // mutating gesture — drag-to-create, move, resize, click-to-edit — is
+          // disconnected rather than merely discouraged.
+          onCreateDraft={locked ? () => {} : openCreate}
+          onSelectBlock={locked ? () => {} : openEdit}
+          onMoveBlock={locked ? undefined : moveBlock}
+          onResizeBlock={locked ? undefined : resizeBlock}
         />
       )}
 
@@ -457,12 +488,16 @@ export default function TASchedulePage() {
                         <Layers size={12} /> ซ้อน
                       </span>
                     )}
-                    <IconButton variant="ghost" size="sm" onClick={() => openEdit(b.id)} label="แก้ไข">
-                      <Pencil size={14} />
-                    </IconButton>
-                    <IconButton variant="ghost" size="sm" onClick={() => setConfirmDeleteId(b.id)} label="ลบ">
-                      <Trash2 size={14} />
-                    </IconButton>
+                    {!locked && (
+                      <>
+                        <IconButton variant="ghost" size="sm" onClick={() => openEdit(b.id)} label="แก้ไข">
+                          <Pencil size={14} />
+                        </IconButton>
+                        <IconButton variant="ghost" size="sm" onClick={() => setConfirmDeleteId(b.id)} label="ลบ">
+                          <Trash2 size={14} />
+                        </IconButton>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -472,11 +507,11 @@ export default function TASchedulePage() {
       )}
 
       <Panel title="กรณีพิเศษ" className="mt-4">
-        <label className={"flex items-center gap-2 text-sm " + (canWba || isWba ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
+        <label className={"flex items-center gap-2 text-sm " + ((canWba || isWba) && !locked ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
           <input
             type="checkbox"
             checked={isWba}
-            disabled={!canWba && !isWba}
+            disabled={locked || (!canWba && !isWba)}
             onChange={e => toggleWba(e.target.checked)}
           />
           <span>ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)</span>
@@ -625,12 +660,13 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
       setError("โปรดระบุรหัสวิชาหรือชื่อวิชาอย่างน้อยหนึ่งอย่าง");
       return;
     }
-    if (code && !COURSE_CODE_RE.test(code)) {
-      setError("รหัสวิชาใช้ได้เฉพาะตัวอักษร A–Z, ตัวเลข และเครื่องหมาย -");
+    if (code && !COURSE_CODE_FORMAT.test(code)) {
+      setError("รหัสวิชาต้องเป็นตัวเลข 6 หลัก (เช่น 322201) หรือมีตัวอักษรนำหน้าแล้วตามด้วยตัวเลข 6 หลัก (เช่น SC363001)");
       return;
     }
-    if (sec && !SEC_NO_RE.test(sec)) {
-      setError("Section ใช้ได้เฉพาะตัวเลข 0–9");
+    // "ตัวเลขตั้งแต่ 1 ขึ้นไป" — "01" is fine (it is 1), "0" and "00" are not.
+    if (sec && (!SEC_NO_RE.test(sec) || Number(sec) < 1)) {
+      setError("Section ต้องเป็นตัวเลขตั้งแต่ 1 ขึ้นไป");
       return;
     }
     if (code.length > COURSE_CODE_MAX) { setError(`รหัสวิชายาวได้ไม่เกิน ${COURSE_CODE_MAX} ตัวอักษร`); return; }
@@ -688,7 +724,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
     >
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-3 gap-3">
-          <FieldGroup label="รหัสวิชา" hint="ตัวเลข/ตัวอักษร A–Z">
+          <FieldGroup label="รหัสวิชา" hint="ตัวเลข 6 หลัก หรือ อักษรนำหน้า + ตัวเลข 6 หลัก">
             <TextInput
               value={courseCode}
               onChange={e => setCourseCode(sanitize(e.target.value.toUpperCase(), COURSE_CODE_RE, COURSE_CODE_MAX))}
@@ -720,7 +756,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
               <option value="lab">ปฏิบัติการ</option>
             </Select>
           </FieldGroup>
-          <FieldGroup label="Section" hint="ตัวเลข 0–9 เท่านั้น">
+          <FieldGroup label="Section" hint="ตัวเลขตั้งแต่ 1 ขึ้นไป">
             <TextInput
               value={secNo}
               onChange={e => setSecNo(sanitize(e.target.value, SEC_NO_RE, SEC_NO_MAX))}
@@ -743,10 +779,12 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
 
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup label="เริ่ม">
-            <TimePicker value={start} onChange={setStart} label="เริ่ม" />
+            <TimePicker value={start} onChange={setStart} label="เริ่ม"
+                        minValue={GRID_START} maxValue={GRID_END} />
           </FieldGroup>
           <FieldGroup label="สิ้นสุด">
-            <TimePicker value={end} onChange={setEnd} label="สิ้นสุด" />
+            <TimePicker value={end} onChange={setEnd} label="สิ้นสุด"
+                        minValue={GRID_START} maxValue={GRID_END} />
           </FieldGroup>
         </div>
 

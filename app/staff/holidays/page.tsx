@@ -7,7 +7,7 @@ import { notify } from "../../lib/notify";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, Select, Modal, FieldGroup, EmptyState,
   Chip, ConfirmDialog, Alert, type ChipTone,
-  DatePicker,
+  DatePicker, TimePicker,
 } from "../../components/ui";
 
 interface Holiday {
@@ -17,7 +17,26 @@ interface Holiday {
   name_en?: string;
   source: "national" | "university" | "faculty" | "custom";
   note?: string;
+  /** "HH:MM" window. Both absent = closed all day (every national/university
+   *  holiday, and the only shape that existed before migration 0058). When set,
+   *  only class periods overlapping the window are blocked. */
+  start_time?: string;
+  end_time?: string;
   created_at: string;
+}
+
+// Which holiday types may be entered as a partial day. A national or university
+// holiday closes the whole institution; a คณะ closure is the one that routinely
+// occupies only part of the day (a morning ceremony, an afternoon sports event),
+// which is exactly the case this form exists to capture. The API accepts a
+// window on any source — this is a data-entry guardrail, not a rule.
+const PARTIAL_DAY_SOURCES: Holiday["source"][] = ["faculty"];
+
+// "09:00–12:00" or "ทั้งวัน" — one renderer so the table, the form preview and
+// the confirm dialog cannot disagree.
+function windowLabel(h: { start_time?: string; end_time?: string }): string {
+  if (!h.start_time || !h.end_time) return "ทั้งวัน";
+  return `${h.start_time.slice(0, 5)}–${h.end_time.slice(0, 5)}`;
 }
 
 const SOURCE_LABEL: Record<Holiday["source"], string> = {
@@ -262,8 +281,13 @@ function MonthSection({
             <div key={h.id} className="flex items-center gap-3 p-4">
               <div className="w-64 shrink-0">
                 <div className="text-sm font-medium">{formatThaiDate(h.holiday_date)}</div>
-                <div className="text-xs text-muted mt-0.5">
+                <div className="text-xs text-muted mt-0.5 flex items-center gap-1 flex-wrap">
                   <Chip tone={SOURCE_TONE[h.source]}>{SOURCE_LABEL[h.source]}</Chip>
+                  {/* Only labelled when partial: tagging every national holiday
+                      "ทั้งวัน" would bury the handful of rows that aren't. */}
+                  {h.start_time && h.end_time && (
+                    <Chip tone="info">🕒 {windowLabel(h)}</Chip>
+                  )}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
@@ -303,6 +327,12 @@ function HolidayFormModal({
   const [nameEN, setNameEN] = useState(initial?.name_en ?? "");
   const [source, setSource] = useState<Holiday["source"]>(initial?.source ?? "custom");
   const [note, setNote] = useState(initial?.note ?? "");
+  // Whole-day vs partial. Derived from the row on open rather than kept on the
+  // server as a third state: "has a window" is the same fact, and two ways to
+  // say it drift apart.
+  const [partial, setPartial] = useState(!!initial?.start_time);
+  const [startTime, setStartTime] = useState(initial?.start_time?.slice(0, 5) ?? "08:00");
+  const [endTime, setEndTime] = useState(initial?.end_time?.slice(0, 5) ?? "12:00");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -314,14 +344,32 @@ function HolidayFormModal({
     setNameEN(initial?.name_en ?? "");
     setSource(initial?.source ?? "custom");
     setNote(initial?.note ?? "");
+    setPartial(!!initial?.start_time);
+    setStartTime(initial?.start_time?.slice(0, 5) ?? "08:00");
+    setEndTime(initial?.end_time?.slice(0, 5) ?? "12:00");
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial?.id]);
+
+  // The window is offered for คณะ closures (see PARTIAL_DAY_SOURCES) and kept
+  // visible for any existing row that already carries one, so an edit can never
+  // silently erase a window the UI decided not to render.
+  const canBePartial = PARTIAL_DAY_SOURCES.includes(source) || !!initial?.start_time;
+  const usePartial = partial && canBePartial;
 
   async function handleSave() {
     setError(null);
     if (!date) { setError("กรุณาระบุวันที่"); return; }
     if (!nameTH.trim()) { setError("กรุณาระบุชื่อวันหยุด"); return; }
+    if (usePartial) {
+      if (!startTime || !endTime) { setError("กรุณาระบุเวลาเริ่มและเวลาสิ้นสุดของช่วงวันหยุด"); return; }
+      if (startTime >= endTime) { setError("เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม"); return; }
+    }
+    // null (not omitted) so switching a partial holiday back to ทั้งวัน clears
+    // the stored window instead of leaving the old one in place.
+    const window = usePartial
+      ? { start_time: startTime, end_time: endTime }
+      : { start_time: null, end_time: null };
     setSaving(true);
     try {
       if (isEdit && initial) {
@@ -329,6 +377,7 @@ function HolidayFormModal({
           name_th: nameTH.trim(),
           name_en: nameEN.trim() || null,
           note: note.trim() || null,
+          ...window,
         });
       } else {
         await api.post("/holidays", {
@@ -337,6 +386,7 @@ function HolidayFormModal({
           name_en: nameEN.trim() || null,
           source,
           note: note.trim() || null,
+          ...window,
         });
       }
       await onSaved();
@@ -374,11 +424,50 @@ function HolidayFormModal({
         <FieldGroup label="ชื่อวันหยุด (อังกฤษ, ระบุก็ได้)">
           <TextInput value={nameEN} onChange={e => setNameEN(e.target.value)} placeholder="e.g. Mother's Day" />
         </FieldGroup>
-        <FieldGroup label={<>ประเภท<RequiredMark /></>}>
+        <FieldGroup
+          label={<>ประเภท<RequiredMark /></>}
+          hint={PARTIAL_DAY_SOURCES.includes(source)
+            ? "วันหยุดของคณะมักไม่ได้หยุดทั้งวัน — ระบุช่วงเวลาได้ด้านล่าง"
+            : undefined}
+        >
           <Select value={source} onChange={e => setSource(e.target.value as Holiday["source"])} disabled={isEdit}>
             {SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
         </FieldGroup>
+
+        {/* Partial-day window. Offered for คณะ closures, where a whole-day row is
+            usually wrong: an activity runs in the morning and the afternoon still
+            teaches. Recorded as all-day, the system cancels both periods and then
+            refuses the obvious makeup slot — the free half of the same day. */}
+        {canBePartial && (
+          <FieldGroup
+            label="ช่วงเวลาที่หยุด"
+            hint={usePartial
+              ? "คาบเรียนที่คาบเกี่ยวกับช่วงนี้เท่านั้นที่จะถูกงด — คาบนอกช่วงยังเรียนและลงเวลาได้ตามปกติ และใช้เป็นเวลาชดเชยในวันเดียวกันได้"
+              : "หยุดทั้งวัน — ทุกคาบของวันนี้จะถูกงด"}
+          >
+            <div className="flex flex-col gap-2">
+              <Select
+                value={usePartial ? "partial" : "all"}
+                onChange={e => setPartial(e.target.value === "partial")}
+              >
+                <option value="all">หยุดทั้งวัน</option>
+                <option value="partial">ระบุช่วงเวลา (หยุดบางช่วง)</option>
+              </Select>
+              {usePartial && (
+                <div className="grid grid-cols-2 gap-3">
+                  <FieldGroup label="เวลาเริ่ม">
+                    <TimePicker value={startTime} onChange={setStartTime} label="เวลาเริ่มของช่วงวันหยุด" />
+                  </FieldGroup>
+                  <FieldGroup label="เวลาสิ้นสุด">
+                    <TimePicker value={endTime} onChange={setEndTime} label="เวลาสิ้นสุดของช่วงวันหยุด" />
+                  </FieldGroup>
+                </div>
+              )}
+            </div>
+          </FieldGroup>
+        )}
+
         <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
           <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น ประกาศเพิ่มจาก ครม. เมื่อ ..." />
         </FieldGroup>
@@ -409,15 +498,40 @@ function BulkImportModal({
     setError(null);
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     if (lines.length === 0) { setError("กรุณาระบุอย่างน้อย 1 บรรทัด"); return; }
-    // Parse each line as "YYYY-MM-DD | ชื่อวันหยุด" or "YYYY-MM-DD ชื่อวันหยุด"
-    const rows: { holiday_date: string; name_th: string; source: string }[] = [];
+    // Parse each line as "YYYY-MM-DD | ชื่อวันหยุด", optionally followed by a
+    // "| HH:MM-HH:MM" window for a partial-day closure. Without the optional
+    // third field, pasting a คณะ calendar would flatten every half-day activity
+    // into a full-day closure — the exact mistake the single-entry form now
+    // avoids.
+    const rows: {
+      holiday_date: string; name_th: string; source: string;
+      start_time?: string; end_time?: string;
+    }[] = [];
+    const pad = (t: string) => (t.length === 4 ? "0" + t : t);
     for (const line of lines) {
       const m = /^(\d{4}-\d{2}-\d{2})\s*[|\t\s]\s*(.+)$/.exec(line);
       if (!m) {
         setError(`บรรทัดไม่ถูกต้อง: "${line}" — รูปแบบต้องเป็น "YYYY-MM-DD | ชื่อวันหยุด"`);
         return;
       }
-      rows.push({ holiday_date: m[1], name_th: m[2].trim(), source });
+      let nameTH = m[2].trim();
+      const win = /^(.*?)\s*\|\s*(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/.exec(nameTH);
+      if (!win) {
+        rows.push({ holiday_date: m[1], name_th: nameTH, source });
+        continue;
+      }
+      nameTH = win[1].trim();
+      const start = pad(win[2]);
+      const end = pad(win[3]);
+      if (!nameTH) {
+        setError(`บรรทัดไม่ถูกต้อง: "${line}" — ขาดชื่อวันหยุด`);
+        return;
+      }
+      if (start >= end) {
+        setError(`บรรทัดไม่ถูกต้อง: "${line}" — เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`);
+        return;
+      }
+      rows.push({ holiday_date: m[1], name_th: nameTH, source, start_time: start, end_time: end });
     }
     setBusy(true);
     try {
@@ -448,14 +562,14 @@ function BulkImportModal({
       <div className="flex flex-col gap-3">
         <FieldGroup
           label="รายการ (บรรทัดละ 1 วันหยุด)"
-          hint="รูปแบบ: YYYY-MM-DD | ชื่อวันหยุด (คั่นด้วย | หรือ tab หรือ space)"
+          hint="รูปแบบ: YYYY-MM-DD | ชื่อวันหยุด — เติม | HH:MM-HH:MM ต่อท้ายถ้าหยุดแค่บางช่วง (เว้นไว้ = หยุดทั้งวัน)"
         >
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
             rows={10}
             className="w-full rounded-lg border border-(--hairline) px-3 py-2 font-mono text-sm bg-surface"
-            placeholder="2027-01-01 | วันขึ้นปีใหม่&#10;2027-04-13 | วันสงกรานต์&#10;2027-04-14 | วันสงกรานต์"
+            placeholder="2027-01-01 | วันขึ้นปีใหม่&#10;2027-04-13 | วันสงกรานต์&#10;2027-08-12 | กีฬาสีคณะ | 08:00-12:00"
           />
         </FieldGroup>
         <FieldGroup label="ประเภทของรายการทั้งหมด">

@@ -58,7 +58,7 @@ export function LockedActionButton({
 
 // Persistent banner shown at the top of every TA page (except the profile
 // page and the home course-list, which already communicate this via their
-// own UI + the bottom-right OnboardingBlocker).
+// own UI + the inline OnboardingChecklistCard).
 export function TAApprovalBanner() {
   const { approved, status } = useTAApproval();
   const pathname = usePathname();

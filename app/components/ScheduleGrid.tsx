@@ -71,7 +71,18 @@ const SLOTS_PER_HR = 60 / SLOT_MIN;
 const HOURS = END_HR - START_HR;
 const SLOTS = HOURS * SLOTS_PER_HR;
 const TOTAL_MIN = HOURS * 60;
-const ROW_PX = 64; // taller so overlap lanes stay readable
+const ROW_PX = 72; // taller so overlap lanes stay readable
+
+// Height kept clear at the bottom of every day row so a drag can always START
+// on empty canvas.
+//
+// Blocks used to fill the row, and a pointer-down on one begins a MOVE, not a
+// create — so a TA whose Monday 10:00 slot was taken had no way to add a
+// second class at the same time. That is the "ย่อขนาดของช่องเวลาที่สร้าง
+// เพื่อให้สามารถสร้างอีกวิชาในเวลาเดียวกันได้" from the 24/07/2026 meeting:
+// the created block gets shorter so the strip beneath it stays grabbable.
+// Reserving space beats a modifier key, which does not exist on touch.
+const CREATE_STRIP_PX = 14;
 const MIN_TIMELINE_PX = 720;
 const EDGE_HANDLE_PX = 8; // pointer hit-zone at the left/right of a block for resize
 const CLICK_MOVE_THRESHOLD_SLOTS = 1; // <1 slot of movement counts as a click, not a drag
@@ -375,6 +386,22 @@ export default function ScheduleGrid({
                 style={{ top: i * ROW_PX, height: ROW_PX }}
               />
             ))}
+            {/* The reserved create strip, tinted so it reads as usable canvas
+                rather than as padding. Pointer events pass through to the
+                timeline underneath, which starts the create-drag. */}
+            {!disabled && DAYS_LONG.map((_, i) => (
+              <div
+                key={"strip" + i}
+                aria-hidden
+                className="absolute left-0 right-0 pointer-events-none"
+                style={{
+                  top: (i + 1) * ROW_PX - CREATE_STRIP_PX - 1,
+                  height: CREATE_STRIP_PX,
+                  background:
+                    "repeating-linear-gradient(45deg, rgba(0,0,0,0.035) 0 6px, transparent 6px 12px)",
+                }}
+              />
+            ))}
             {/* hour grid lines */}
             {Array.from({ length: HOURS - 1 }, (_, i) => (
               <div key={"h" + i} className="absolute top-0 bottom-0 pointer-events-none"
@@ -394,7 +421,7 @@ export default function ScheduleGrid({
                 if (previewInFlightId === b.id) return null; // rendered by preview branch below
                 const startMin = parseTime(b.start_time) - START_HR * 60;
                 const endMin = parseTime(b.end_time) - START_HR * 60;
-                const laneH = (ROW_PX - 4) / laneCount;
+                const laneH = (ROW_PX - 4 - CREATE_STRIP_PX) / laneCount;
                 const heading = blockTitle(b) || "คาบเรียน";
                 const meta = [
                   b.sec_no ? `sec ${b.sec_no}` : "",
@@ -516,7 +543,7 @@ export default function ScheduleGrid({
         </div>
       </div>
       <div className="text-[11px] text-muted px-3 py-2 border-t border-[var(--hairline)]">
-        ลากในพื้นที่ว่างเพื่อสร้างคาบใหม่ · ลากคาบเพื่อย้ายวัน/เวลา · จับขอบซ้ายหรือขวาของคาบเพื่อขยาย/หด · คลิกเพื่อแก้ไขรายละเอียด · คาบที่ซ้อนกันจะถูกจัดชั้นให้อัตโนมัติ
+        ลากในพื้นที่ว่างเพื่อสร้างคาบใหม่ · ลากคาบเพื่อย้ายวัน/เวลา · จับขอบซ้ายหรือขวาของคาบเพื่อขยาย/หด · คลิกเพื่อแก้ไขรายละเอียด · คาบที่ซ้อนกันจะถูกจัดชั้นให้อัตโนมัติ · <span className="whitespace-nowrap">หากเวลานั้นมีคาบอยู่แล้ว ให้ลากที่<b>แถบลายทางด้านล่างของแถว</b>เพื่อสร้างคาบซ้อนเวลาเดียวกัน</span>
       </div>
     </div>
   );

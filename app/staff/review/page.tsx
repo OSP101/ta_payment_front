@@ -3,7 +3,8 @@ import useSWR, { mutate } from "swr";
 import { useMemo, useState } from "react";
 import { Tabs, InputGroup, Label, TextField, FieldError } from "@heroui/react";
 import {
-  Clock, CheckCircle2, Download, Clock3, Trash2, Eye, EyeOff, Shield,
+  Clock, CheckCircle2, Download, Clock3, Trash2, Eye, EyeOff, Shield, ChevronRight, Lock,
+  AlertTriangle,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
@@ -11,9 +12,8 @@ import {
   PageHeader, Panel, Button, IconButton, StatusChip, Spinner, Alert, TabLabel, Modal, Chip, SearchField,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
-import { ReviewRow } from "./ReviewRow";
-import { PreviewDrawer } from "./PreviewDrawer";
-import { DOC_KIND_LABEL, fmtDate, daysUntil, type Pending, type Doc } from "./types";
+import { ReviewWorkspace } from "./ReviewWorkspace";
+import { fmtDate, daysUntil, type Pending } from "./types";
 
 type Bucket = "pending" | "approved";
 
@@ -26,16 +26,20 @@ export default function ReviewPage() {
   const [bucket, setBucket] = useState<Bucket>("pending");
   const pending  = useSWR<Pending[]>("/ta-review?status=pending");
   const approved = useSWR<Pending[]>("/ta-review?status=approved");
+  // TAs who saved the profile form but have not uploaded all three documents.
+  // They are deliberately NOT in the pending queue — the officer has nothing to
+  // review — but they must stay visible somewhere, or someone who stalls at 2 of
+  // 3 files is invisible to staff until they happen to finish.
+  const incomplete = useSWR<Pending[]>("/ta-review?status=incomplete");
   const counts = {
     pending:  pending.data?.length ?? 0,
     approved: approved.data?.length ?? 0,
   };
 
-  // Drawer preview state — a single doc from a single user at a time.
-  const [preview, setPreview] = useState<
-    { userId: string; doc: Doc } | null
-  >(null);
-  const [drawerBusy, setDrawerBusy] = useState(false);
+  // Which submitter the full-screen workspace opened on. null = closed. The
+  // workspace keeps its own selection after that, so the officer can move
+  // between people without returning to this list.
+  const [workspaceFor, setWorkspaceFor] = useState<string | null>(null);
 
   // Password-gated re-download state. Non-null when the confirm modal is
   // open; carries just the target user id so the modal is self-contained.
@@ -44,50 +48,23 @@ export default function ReviewPage() {
   function revalidateAll() {
     mutate("/ta-review?status=pending");
     mutate("/ta-review?status=approved");
-  }
-
-  // Approve / reject straight from the preview drawer footer — same endpoints
-  // the file card uses; the row's SWR key is revalidated so both views agree.
-  async function approveFromDrawer() {
-    if (!preview || drawerBusy) return;
-    setDrawerBusy(true);
-    try {
-      await api.post(`/ta-review/docs/${preview.doc.id}`, { approve: true, reason: "" });
-      notify.success("อนุมัติเอกสารแล้ว");
-      mutate(`/ta-review/${preview.userId}/docs`);
-      revalidateAll();
-      setPreview(null);
-    } catch (e) {
-      notify.error(e);
-    } finally {
-      setDrawerBusy(false);
-    }
-  }
-
-  async function rejectFromDrawer(reason: string) {
-    if (!preview || drawerBusy) return;
-    setDrawerBusy(true);
-    try {
-      await api.post(`/ta-review/${preview.userId}/reject-batch`, {
-        items: [{ doc_id: preview.doc.id, reason }],
-      });
-      notify.success("ตีกลับเอกสารเรียบร้อยแล้ว");
-      mutate(`/ta-review/${preview.userId}/docs`);
-      revalidateAll();
-      setPreview(null);
-    } catch (e) {
-      notify.error(e);
-    } finally {
-      setDrawerBusy(false);
-    }
+    // Included because a decision can move somebody between these buckets: a
+    // rejected document that the TA replaces leaves them briefly incomplete.
+    mutate("/ta-review?status=incomplete");
   }
 
   return (
     <div>
       <PageHeader
         title="ตรวจสอบเอกสาร TA"
-        description="กดที่ชื่อ TA เพื่อดูรายละเอียด — ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่อผ่านครบทุกไฟล์จึงยืนยันอนุมัติผู้ใช้"
+        description="กดที่ชื่อ TA เพื่อดูรายละเอียด — ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่ออนุมัติครบทั้ง 3 ไฟล์ ระบบจะอนุมัติผู้ใช้ให้อัตโนมัติ"
       />
+
+      {/* Approval is now a by-product of approving the third document, so an
+          officer can finish reviewing without ever downloading — and the files
+          are purged after 7 days. This is the nudge that used to be implicit in
+          the old combined "อนุมัติและดาวน์โหลด" click. */}
+      <NotDownloadedNotice people={approved.data} />
 
       <Panel padded={false}>
         <Tabs
@@ -113,8 +90,8 @@ export default function ReviewPage() {
               loading={pending.isLoading}
               error={pending.error}
               onRetry={() => pending.mutate()}
-              onPreview={(userId, doc) => setPreview({ userId, doc })}
-              onChanged={revalidateAll}
+              onOpen={id => setWorkspaceFor(id)}
+              incomplete={incomplete.data}
             />
           </Tabs.Panel>
           <Tabs.Panel id="approved">
@@ -130,23 +107,12 @@ export default function ReviewPage() {
         </Tabs>
       </Panel>
 
-      <PreviewDrawer
-        userId={preview?.userId ?? null}
-        doc={
-          preview
-            ? {
-                id: preview.doc.id,
-                filename: preview.doc.filename,
-                kind: preview.doc.kind,
-                kindLabel: DOC_KIND_LABEL[preview.doc.kind] ?? preview.doc.kind,
-                status: preview.doc.status,
-              }
-            : null
-        }
-        busy={drawerBusy}
-        onApprove={approveFromDrawer}
-        onReject={rejectFromDrawer}
-        onClose={() => { if (!drawerBusy) setPreview(null); }}
+      <ReviewWorkspace
+        open={workspaceFor !== null}
+        people={pending.data ?? []}
+        initialUserId={workspaceFor}
+        onClose={() => setWorkspaceFor(null)}
+        onChanged={revalidateAll}
       />
 
       <RedownloadModal
@@ -158,18 +124,49 @@ export default function ReviewPage() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* "Don't forget to download" — approval no longer downloads anything          */
+/* -------------------------------------------------------------------------- */
+
+function NotDownloadedNotice({ people }: { people?: Pending[] }) {
+  // ever_downloaded, NOT downloads_used. The bulk download is exempt from the
+  // quota, so it leaves downloads_used at 0 — and this notice used to keep naming
+  // people whose documents the officer had just saved in one bulk click. A
+  // reminder that fires after you have complied is one you learn to ignore, and
+  // the thing it guards is a 7-day purge.
+  const pendingDownload = (people ?? []).filter(
+    p => !p.all_files_deleted && !p.ever_downloaded,
+  );
+  if (pendingDownload.length === 0) return null;
+
+  const names = pendingDownload.slice(0, 3).map(p => p.full_name).join(", ");
+  const more = pendingDownload.length - 3;
+
+  return (
+    <div className="mb-4">
+      <Alert
+        status="warning"
+        icon={<AlertTriangle size={18} />}
+        title={`มี ${pendingDownload.length} คนที่อนุมัติแล้วแต่ยังไม่ได้ดาวน์โหลดเอกสาร`}
+        description={`${names}${more > 0 ? ` และอีก ${more} คน` : ""} — ไฟล์จะถูกลบอัตโนมัติภายใน 7 วันนับจากวันอนุมัติ กรุณาดาวน์โหลดเก็บไว้ก่อนถึงกำหนด`}
+      />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Pending bucket — one always-expanded card per user, no modal               */
 /* -------------------------------------------------------------------------- */
 
 function PendingList({
-  data, loading, error, onRetry, onPreview, onChanged,
+  data, loading, error, onRetry, onOpen, incomplete,
 }: {
   data?: Pending[];
   loading: boolean;
   error?: unknown;
   onRetry?: () => void;
-  onPreview: (userId: string, doc: Doc) => void;
-  onChanged: () => void;
+  onOpen: (userId: string) => void;
+  /** Submitted-but-not-complete TAs, shown as a nudge list below the queue. */
+  incomplete?: Pending[];
 }) {
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
@@ -212,14 +209,103 @@ function PendingList({
           {q ? "ไม่พบผลลัพธ์" : "ไม่มีเอกสารที่รอตรวจ"}
         </div>
       ) : (
-        filtered.map(u => (
-          <ReviewRow
-            key={u.user_id}
-            user={u}
-            onPreview={d => onPreview(u.user_id, d)}
-            onChanged={onChanged}
-          />
-        ))
+        <ul className="divide-y divide-[var(--hairline)] rounded-lg border border-[var(--hairline)]">
+          {filtered.map(u => (
+            <li key={u.user_id}>
+              {/* Clicking the name opens the full-screen workspace. The old
+                  accordion expanded in place, which meant reviewing three
+                  files across three drawers and then collapsing to reach the
+                  next person. */}
+              <button
+                type="button"
+                onClick={() => onOpen(u.user_id)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-secondary"
+              >
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground/10 text-xs font-semibold">
+                  {u.full_name.trim().charAt(0)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{u.full_name}</span>
+                  <span className="block truncate text-xs text-muted">{u.email}</span>
+                </span>
+                {/* The queue mixes two states — never looked at yet, and sent
+                    back and waiting on the TA. Without the chip they were
+                    indistinguishable until the officer opened the row. */}
+                <StatusChip status={u.status} />
+                <ChevronRight size={16} className="shrink-0 text-muted" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <IncompleteList people={incomplete} />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Owes documents — every TA who is not ready to review, in one place          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The queue above only lists TAs whose three documents are all in, because
+ * opening someone with 1 of 3 files wastes the officer's click and there is
+ * nothing to decide. That filtering is only safe if the people it removes stay
+ * findable — hence this section.
+ *
+ * It covers every TA who still owes documents, INCLUDING the ones who never
+ * opened the form. Those have no ta_profiles row at all, so before this they were
+ * invisible on every screen: not in the queue, not in a rejected list, nowhere.
+ * A TA who never starts is the most likely one to be forgotten, which makes them
+ * the most important to show.
+ *
+ * Deliberately not a tab and not clickable: there is nothing to review, so the
+ * only useful actions are reading the count and chasing the person. Making it
+ * look like the queue would invite officers to open rows that have no documents.
+ */
+function IncompleteList({ people }: { people?: Pending[] }) {
+  const [open, setOpen] = useState(false);
+  if (!people || people.length === 0) return null;
+
+  const notStarted = people.filter(u => (u.docs_in ?? 0) === 0).length;
+
+  return (
+    <div className="mt-4 rounded-lg border border-[var(--hairline)] bg-surface-secondary">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex w-full items-center gap-2 px-4 py-3 text-left"
+      >
+        <Clock3 size={14} className="shrink-0 text-muted" />
+        <span className="flex-1 text-sm">
+          มี <span className="font-medium">{people.length}</span> คนยังส่งเอกสารไม่ครบ
+          {notStarted > 0 && (
+            <span className="text-muted"> — ในนั้น {notStarted} คนยังไม่ส่งอะไรเลย</span>
+          )}
+        </span>
+        <span className="text-xs text-muted">{open ? "ซ่อน" : "ดูรายชื่อ"}</span>
+      </button>
+      {open && (
+        <ul className="divide-y divide-[var(--hairline)] border-t border-[var(--hairline)]">
+          {people.map(u => {
+            const n = u.docs_in ?? 0;
+            return (
+              <li key={u.user_id} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm">{u.full_name}</span>
+                  <span className="block truncate text-xs text-muted">{u.email}</span>
+                </span>
+                {/* "0/3" reads as progress on something started. For a TA who has
+                    not opened the form at all, say so — it is a different
+                    conversation from one who is a file short. */}
+                <Chip tone={n === 0 ? "danger" : "warn"}>
+                  {n === 0 ? "ยังไม่ส่งอะไรเลย" : `ส่งแล้ว ${n}/3`}
+                </Chip>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
@@ -278,14 +364,7 @@ function DecidedTable({
           id: "actions", label: <span className="sr-only">การจัดการ</span>,
           className: "text-right" as const,
           render: (u: Pending) => (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onRedownload(u)}
-              disabled={u.all_files_deleted}
-            >
-              <Download size={14} /> ZIP
-            </Button>
+            <DownloadCell person={u} onRedownload={onRedownload} />
           ),
         } satisfies DataColumn<Pending>]
       : []),
@@ -346,6 +425,60 @@ function RetentionChip({ user }: { user: Pending }) {
     <span className="inline-flex items-center gap-1 text-xs text-muted">
       <Clock3 size={12} /> เหลือ {days} วัน
     </span>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Download quota — the bundle holds PII, so copies are rationed per round     */
+/* -------------------------------------------------------------------------- */
+
+// Falls back to "allowance available" when the server didn't send the fields
+// (an older API build): the server is the enforcer, so a missing number must
+// not disable a button the officer is in fact allowed to press.
+function downloadsLeft(u: Pending): number | null {
+  if (u.downloads_limit == null || u.downloads_used == null) return null;
+  return Math.max(0, u.downloads_limit - u.downloads_used);
+}
+
+// DownloadCell is the whole actions cell: the download affordance plus the
+// quota state.
+//
+// When the quota is spent the button is REMOVED rather than disabled. A greyed
+// button invites clicking and explains nothing, and here there is nothing to
+// try: the allowance is gone for this submission round and cannot be handed
+// back. So the cell states that instead of showing a dead control.
+function DownloadCell({
+  person, onRedownload,
+}: {
+  person: Pending;
+  onRedownload?: (u: Pending) => void;
+}) {
+  const left = downloadsLeft(person);
+
+  if (left === 0) {
+    return (
+      <Chip tone="danger">
+        <Lock size={12} /> ดาวน์โหลดครบ {person.downloads_limit} ครั้งแล้ว
+      </Chip>
+    );
+  }
+
+  return (
+    <div className="inline-flex items-center gap-2">
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => onRedownload?.(person)}
+        disabled={person.all_files_deleted}
+      >
+        <Lock size={14} /> ดาวน์โหลด
+      </Button>
+      {left !== null && !person.all_files_deleted && (
+        <span className={"text-xs " + (left === 1 ? "text-warning-soft-foreground" : "text-muted")}>
+          เหลือ {left}/{person.downloads_limit} ครั้ง
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -423,9 +556,24 @@ function RedownloadModal({
       {target && (
         <div className="space-y-4">
           <div className="text-sm text-muted">
-            ไฟล์ ZIP ของ <span className="font-medium text-foreground">{target.full_name}</span> มีข้อมูลส่วนบุคคล (เลขบัตร ปชช. / เลขบัญชี)
+            เอกสารของ <span className="font-medium text-foreground">{target.full_name}</span> มีข้อมูลส่วนบุคคล (เลขบัตร ปชช. / เลขบัญชี)
             กรุณากรอกรหัสผ่านของคุณเพื่อยืนยันตัวตน
           </div>
+          {/* Restated at the point of no return: this is the click that spends
+              the allowance, and "เหลือ 1 ครั้ง" means something different here
+              than it does on a row the officer is only scanning past. */}
+          {downloadsLeft(target) !== null && (
+            <Alert
+              status={downloadsLeft(target) === 1 ? "warning" : "default"}
+              icon={<Lock size={16} />}
+              title={`ครั้งนี้จะเป็นครั้งที่ ${(target.downloads_used ?? 0) + 1} จาก ${target.downloads_limit}`}
+              description={
+                downloadsLeft(target) === 1
+                  ? "เป็นครั้งสุดท้าย — หลังจากนี้จะดาวน์โหลดไม่ได้อีก และไม่มีวิธีขอเพิ่ม กรุณาเก็บไฟล์ให้เรียบร้อย"
+                  : "ระบบจำกัดจำนวนการดาวน์โหลดต่อ TA หนึ่งคน เพื่อคุมจำนวนสำเนาที่ออกจากระบบ — ใช้ครบแล้วขอเพิ่มไม่ได้"
+              }
+            />
+          )}
           <TextField
             name="officer-password"
             isRequired

@@ -28,14 +28,10 @@ interface User {
   study_year?: number | null;
   roles: string[];
   is_active: boolean;
-  bank_name?: string | null;
-  bank_branch?: string | null;
-  branch_code?: string | null;
-  account_no?: string | null;
 }
 
 // ตำแหน่งทางวิชาการนำหน้าคุณวุฒิเสมอ (เช่น "รศ. ดร." ไม่ใช่ "ดร. รศ.")
-const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว", "อาจารย์", "อ. ดร.", "ผศ. ดร.", "รศ. ดร.", "ศ. ดร."];
+const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว", "อาจารย์", "อ. ดร.", "ผศ.", "ผศ. ดร.", "รศ. ดร.", "ศ. ดร."];
 const STUDY_LEVELS: { value: string; label: string }[] = [
   { value: "undergrad", label: "ปริญญาตรี" },
   { value: "master", label: "ปริญญาโท" },
@@ -493,19 +489,10 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     roles: [...user.roles],
     study_level: user.study_level ?? "undergrad",
     study_year: user.study_year != null ? String(user.study_year) : "",
-    bank_name: user.bank_name ?? "",
-    bank_branch: user.bank_branch ?? "",
-    branch_code: user.branch_code ?? "",
-    account_no: user.account_no ?? "",
   });
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  // ธนาคารเลือกจากรายการมาตรฐาน; "อื่นๆ" เปิดช่องพิมพ์เองสำหรับธนาคารที่ไม่มีในรายการ
-  const [bankCustom, setBankCustom] = useState(
-    () => !!(user.bank_name && !THAI_BANKS.some(b => b.name === user.bank_name)),
-  );
-
   const isTa = form.roles.includes("ta");
   const errors = useMemo(() => ({
     email: vEmail(form.email),
@@ -515,8 +502,6 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     roles: form.roles.length === 0 ? "เลือกบทบาทอย่างน้อยหนึ่งอย่าง" : null,
     study_level: form.roles.includes("ta") ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
     phone: vPhone(form.phone),
-    account_no: vAccountNo(form.account_no),
-    branch_code: vBranchCode(form.branch_code),
   }), [form]);
   const hasErrors = Object.values(errors).some(Boolean);
 
@@ -540,10 +525,6 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         study_year: isTa && form.study_level === "undergrad"
           ? (form.study_year ? Number(form.study_year) : 0)
           : 0,
-        bank_name: form.bank_name.trim(),
-        bank_branch: form.bank_branch.trim(),
-        branch_code: form.branch_code.trim(),
-        account_no: form.account_no.trim(),
       });
       mutate((k: string) => k.startsWith("/users"));
       onClose();
@@ -627,45 +608,9 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
           </div>
         </div>
 
-        <div>
-          <div className="text-xs text-muted mb-2">ข้อมูลบัญชีธนาคาร</div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <VSelect label="ธนาคาร"
-                value={bankCustom ? "__other__" : form.bank_name}
-                onChange={v => {
-                  if (v === "__other__") { setBankCustom(true); setForm({ ...form, bank_name: "" }); }
-                  else { setBankCustom(false); setForm({ ...form, bank_name: v }); }
-                }}
-                error={null} show={showErrors}
-              >
-                <option value="">— เลือกธนาคาร —</option>
-                {THAI_BANKS.map(b => <option key={b.code} value={b.name}>{b.name}</option>)}
-                <option value="__other__">อื่นๆ (ระบุเอง)</option>
-              </VSelect>
-              {bankCustom && (
-                <div className="mt-2">
-                  <VField label="ระบุชื่อธนาคาร" placeholder="ชื่อธนาคาร"
-                    value={form.bank_name} onChange={v => setForm({ ...form, bank_name: v })}
-                    error={null} show={showErrors}
-                  />
-                </div>
-              )}
-            </div>
-            <VField label="เลขที่บัญชี" value={form.account_no}
-              onChange={v => setForm({ ...form, account_no: v })}
-              error={errors.account_no} show={showErrors}
-            />
-            <VField label="รหัสสาขาธนาคาร" value={form.branch_code}
-              onChange={v => setForm({ ...form, branch_code: v })}
-              error={errors.branch_code} show={showErrors}
-            />
-            <VField label="ชื่อสาขา" value={form.bank_branch}
-              onChange={v => setForm({ ...form, bank_branch: v })}
-              error={null} show={showErrors}
-            />
-          </div>
-        </div>
+        {/* ข้อมูลบัญชีธนาคารถูกถอดออก — ระบบไม่จัดเก็บลงฐานข้อมูลแล้ว (PDPA,
+            migration 0047) เจ้าหน้าที่ดูจากไฟล์แบบฟอร์มเจ้าหนี้ที่ TA ส่งมา
+            ในหน้า "ตรวจสอบแบบฟอร์มใบแจ้งหนี้" แทน */}
 
         {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
       </div>

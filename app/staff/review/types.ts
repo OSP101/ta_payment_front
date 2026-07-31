@@ -11,6 +11,20 @@ export interface Pending {
   /** True when the retention job has already purged every current
    * approved doc — disables the re-download action in the FE. */
   all_files_deleted?: boolean;
+  /** Per-round download quota. The bundle carries PII, so the number of
+   * copies that may leave the system is capped; showing what is left beats
+   * letting the officer find out by being refused. */
+  downloads_used?: number;
+  downloads_limit?: number;
+  /** Whether these documents have EVER left the system, bulk downloads
+   * included. Not the same as downloads_used > 0: the bulk download is exempt
+   * from the quota, so it advances this and not that. The "don't forget to
+   * download" reminder must use this one. */
+  ever_downloaded?: boolean;
+  /** How many of the three required documents are currently uploaded. Only
+   * meaningful in the incomplete bucket, where it is what distinguishes
+   * "has not started" from "one file to go". */
+  docs_in?: number;
 }
 
 export interface Doc {
@@ -32,16 +46,14 @@ export interface Profile {
   status: string;
   reject_reason?: string | null;
   prefix?: string;
-  national_id?: string;
-  bank_name?: string;
-  account_no?: string;
-  account_name?: string;
+  // No bank/ID fields: they are never stored (PDPA, migration 0047). Staff read
+  // them from the creditor-form PDF in the review workspace.
   current_round?: number;
 }
 
 // Preset rejection reasons the officer can pick without typing. "อื่นๆ" opens
-// a free-text box so unusual problems can still be described. Shared by the
-// per-file card (ReviewRow) and the preview drawer footer.
+// a free-text box so unusual problems can still be described. Used by each
+// document panel in the full-screen review workspace.
 export const REJECT_PRESETS = [
   "เอกสารไม่ชัด / อ่านไม่ออก",
   "ยังไม่เซ็นชื่อ",

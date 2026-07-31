@@ -1,5 +1,5 @@
 "use client";
-import { AlertTriangle, BookOpenCheck, CalendarCheck2, FileCheck2 } from "lucide-react";
+import { AlertTriangle, BookOpenCheck, CalendarCheck2, CalendarClock, FileCheck2 } from "lucide-react";
 import { Chip } from "../../components/ui";
 
 interface AssignmentDetail {
@@ -14,6 +14,10 @@ interface AssignmentDetail {
   has_schedule: boolean;
   approved_course_count: number;
   warnings: string[];
+  /** 'active' | 'trimmed' | 'dropped' — outcome of the deferred decision. */
+  state?: string;
+  /** Why sessions were trimmed or the section dropped, in Thai. */
+  state_reason?: string;
 }
 
 interface RequestDetail {
@@ -52,6 +56,11 @@ function TaCard({ a }: { a: AssignmentDetail }) {
         <Chip tone="neutral">Sec {a.section_no}</Chip>
         <Chip tone={a.level === "undergrad" ? "neutral" : "brand"}>{LEVEL_LABEL[a.level] ?? a.level}</Chip>
         <Chip tone="neutral">{a.total_hrs.toFixed(1)} ชม./สัปดาห์</Chip>
+        {/* An approved request can still hide a section the TA cannot fully
+            cover. Say so on the row itself — otherwise the only visible signal
+            is a green verdict. */}
+        {a.state === "trimmed" && <Chip tone="warn">ตัดบางคาบ</Chip>}
+        {a.state === "dropped" && <Chip tone="danger">ตัดออกทั้งกลุ่ม</Chip>}
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
@@ -76,6 +85,14 @@ function TaCard({ a }: { a: AssignmentDetail }) {
           <BookOpenCheck size={10} /> เป็น TA แล้ว {a.approved_course_count}/3 วิชา
         </span>
       </div>
+
+      {a.state_reason && (
+        <div className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 border border-amber-200 px-2 py-1.5 text-[11px] text-amber-900">
+          <CalendarClock size={11} className="mt-0.5 shrink-0" />
+          {/* Multi-line since the reason now names each clashing session. */}
+          <span className="whitespace-pre-line">{a.state_reason}</span>
+        </div>
+      )}
 
       {blocked && (
         <ul className="mt-2 space-y-1">

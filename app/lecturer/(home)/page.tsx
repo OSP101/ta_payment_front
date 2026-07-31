@@ -175,9 +175,8 @@ export default function LecturerHome() {
     return (
       <div>
         <PageHeader title="รายวิชาที่สอน" description={pageDesc} />
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-          {[0, 1, 2].map(i => <div key={i} className="h-20 rounded-xl bg-surface-secondary animate-pulse" />)}
-        </div>
+        {/* No card-row placeholder: this page has no stat cards, so three
+            card-shaped boxes only promised something that never arrives. */}
         <Panel padded={false}>
           <div className="divide-y divide-[var(--hairline)]">
             {[0, 1, 2].map(i => (

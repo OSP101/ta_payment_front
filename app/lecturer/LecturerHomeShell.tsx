@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Avatar, Button, Dropdown, Label, Link as HLink } from "@heroui/react";
+import { Button, Dropdown, Label, Link as HLink } from "@heroui/react";
 import { ChevronDown, LogOut, Megaphone, Route } from "lucide-react";
 import type { Me } from "../lib/api";
 import { api } from "../lib/api";
 import NotificationBell from "../components/NotificationBell";
+import UserAvatar from "../components/UserAvatar";
 import { roleLabel } from "../components/Shell";
 
 export default function LecturerHomeShell({
@@ -19,7 +20,6 @@ export default function LecturerHomeShell({
     router.refresh();
   }
 
-  const initials = ((me.first_name?.[0] ?? "") + (me.last_name?.[0] ?? "")).toUpperCase() || "U";
   const fullName = [me.title, me.first_name, me.last_name].filter(Boolean).join(" ");
   const roleLbl = roleLabel(me.roles);
 
@@ -57,9 +57,7 @@ export default function LecturerHomeShell({
 
         <Dropdown>
           <Button variant="ghost" aria-label="เมนูผู้ใช้" className="px-1.5! gap-2! h-auto! py-1!">
-            <Avatar>
-              <Avatar.Fallback>{initials}</Avatar.Fallback>
-            </Avatar>
+            <UserAvatar firstName={me.first_name} lastName={me.last_name} src={me.avatar_url} />
             <div className="hidden sm:flex flex-col items-start min-w-0 leading-tight">
               <span className="text-sm font-medium text-foreground truncate max-w-40 md:max-w-56">
                 {fullName}

@@ -1,13 +1,19 @@
 "use client";
 import useSWR from "swr";
-import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell, ShieldAlert, CalendarOff } from "lucide-react";
+import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell, ShieldAlert, CalendarOff, IdCard } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
 import CourseSwitcher from "../components/CourseSwitcher";
 import { Alert } from "../components/ui";
 
-interface CourseMakeupInfo { unresolved_makeups?: number }
+interface CourseInfo {
+  unresolved_makeups?: number;
+  /** ≥1 section has no timetable (registrar "WBA") — TA requests are blocked. */
+  has_missing_schedule?: boolean;
+  num_students?: number;
+}
+interface PendingReport { teaching_course_id: string }
 
 export default function LecturerCourseShell({
   me, tcId, courseCode, children,
@@ -19,10 +25,25 @@ export default function LecturerCourseShell({
 }) {
   // คาบที่ตกวันหยุดและยังไม่กำหนดวันชดเชย — ถ้าไม่ทำ ระบบจะข้ามวันนั้น
   // และ TA ลงเวลาไม่ได้ (= เบิกเงินไม่ได้) จึงติดตัวนับไว้ที่เมนูให้เห็นทุกหน้า
-  const { data: courseInfo } = useSWR<CourseMakeupInfo>(
+  const { data: courseInfo } = useSWR<CourseInfo>(
     tcId ? `/teaching-courses/${tcId}` : null,
   );
   const pendingMakeups = courseInfo?.unresolved_makeups ?? 0;
+
+  // รายงานที่ TA ส่งมาแล้วรออาจารย์อนุมัติ — งานประจำหลักของอาจารย์ และเป็น
+  // คอขวดของการเบิกจ่าย: ถ้าไม่อนุมัติ เจ้าหน้าที่ตรวจต่อไม่ได้ทั้งเดือน
+  const { data: pending } = useSWR<PendingReport[]>("/reports/pending");
+  const pendingReports = (pending ?? []).filter(r => r.teaching_course_id === tcId).length;
+
+  // ตั้งค่ารายวิชาเป็นที่ที่แก้ทั้งสองอย่างนี้ ไอคอนจึงอยู่ตรงนั้น ไม่ใช่ตรงหน้า
+  // ที่ถูกบล็อก — บอกว่า "ต้องไปทำอะไร" มีประโยชน์กว่าบอกว่า "ตรงนี้ทำไม่ได้"
+  const missingSchedule = courseInfo?.has_missing_schedule === true;
+  const missingStudents = courseInfo !== undefined && (courseInfo.num_students ?? 0) === 0;
+  const settingsIssue = missingSchedule
+    ? "ยังไม่ระบุเวลาเรียน (WBA) — ส่งคำขอ TA ไม่ได้จนกว่าจะกรอกตารางเรียน"
+    : missingStudents
+      ? "ยังไม่ได้กรอกจำนวนนักศึกษา — คำนวณงบและเบิกจ่ายไม่ได้"
+      : undefined;
 
   const nav: NavSection[] = [
     {
@@ -35,7 +56,13 @@ export default function LecturerCourseShell({
       items: [
         { label: "ภาพรวมวิชา", href: `/lecturer/courses/${tcId}`, icon: LayoutDashboard, exact: true },
         { label: "ส่งคำขอ TA", href: `/lecturer/courses/${tcId}/request`, icon: Send },
-        { label: "อนุมัติรายงาน TA", href: `/lecturer/courses/${tcId}/reports`, icon: ClipboardCheck },
+        {
+          label: "อนุมัติรายงาน TA",
+          href: `/lecturer/courses/${tcId}/reports`,
+          icon: ClipboardCheck,
+          badge: pendingReports,
+          badgeLabel: "รออนุมัติ",
+        },
         {
           label: "วันหยุดและวันชดเชย",
           href: `/lecturer/courses/${tcId}/holidays`,
@@ -43,7 +70,13 @@ export default function LecturerCourseShell({
           badge: pendingMakeups,
           badgeLabel: "รอกำหนดวันชดเชย",
         },
-        { label: "ตั้งค่ารายวิชา", href: `/lecturer/courses/${tcId}/settings`, icon: Settings },
+        {
+          label: "ตั้งค่ารายวิชา",
+          href: `/lecturer/courses/${tcId}/settings`,
+          icon: Settings,
+          status: settingsIssue ? "warn" : undefined,
+          statusLabel: settingsIssue,
+        },
       ],
     },
     {
@@ -57,6 +90,7 @@ export default function LecturerCourseShell({
 
   const brandTitle = "TA Payment";
   const userMenuItems: UserMenuItem[] = [
+    { id: "account",  label: "ตั้งค่าบัญชี", href: "/account",     icon: IdCard },
     { id: "announce", label: "ประกาศ",   href: "/announcements",  icon: Megaphone },
     { id: "notif",    label: "การเตือน", href: "/notifications",  icon: Bell },
   ];

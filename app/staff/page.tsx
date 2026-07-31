@@ -6,82 +6,115 @@ import {
   GraduationCap,
   Users,
   ClipboardCheck,
+  FileText,
   Wallet,
   ArrowUpRight,
   AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { PageHeader, Panel, StatCard, ProgressBar, Chip, Button } from "../components/ui";
-import { type Term } from "../lib/api";
+import { type Executive, emptyExecutive } from "./types";
+import { useTermKey } from "./TermContext";
 
-interface Executive {
-  total_courses: number;
-  courses_with_ta: number;
-  total_tas: number;
-  pending_reviews: number;
-  budget_allocated: number;
-  budget_used: number;
-}
-
-interface TCLite {
-  num_students_regular: number;
-  num_students_special: number;
-  has_special: boolean;
+// One row of the "สิ่งที่ต้องทำตอนนี้" panel. `blocker` marks work that stops
+// a later step rather than being a step itself — it is listed first because
+// clearing the queues below it will not help until it is done.
+interface Todo {
+  count: number;
+  step?: number;
+  title: string;
+  detail: string;
+  href: string;
+  action: string;
+  blocker?: boolean;
 }
 
 export default function StaffDashboard() {
-  const { data } = useSWR<Executive>("/dashboard/executive");
-  // Reminder: courses in the active term whose enrolled student count is still
-  // unfilled. Budget (and export) depend on it, so surface it up front so staff
-  // don't discover it only when an export is blocked.
-  const { data: terms } = useSWR<Term[]>("/terms");
-  const activeTerm = terms?.find(t => t.is_active) ?? terms?.[0];
-  const { data: termCourses } = useSWR<TCLite[]>(
-    activeTerm ? `/teaching-courses?term_id=${activeTerm.id}` : null,
-  );
-  const missingCount = (termCourses ?? []).filter(
-    c => c.num_students_regular === 0 || (c.has_special && c.num_students_special === 0),
-  ).length;
-  const s = data ?? {
-    total_courses: 0, courses_with_ta: 0, total_tas: 0,
-    pending_reviews: 0, budget_allocated: 0, budget_used: 0,
-  };
+  // Same key StaffShell uses, so SWR dedupes it into one request and the badges
+  // can never disagree with the cards.
+  const { data } = useSWR<Executive>(useTermKey("/dashboard/executive"));
+  const s = data ?? emptyExecutive;
+
+  // The dashboard used to warn about exactly one thing (missing student
+  // counts) and stay silent about every queue, so "nothing on screen" meant
+  // both "all clear" and "nobody has looked". Every outstanding item now
+  // appears here, and an empty list says so explicitly.
+  const todos: Todo[] = [
+    {
+      count: s.missing_student_counts, blocker: true,
+      title: "ยังไม่ได้กรอกจำนวนนักศึกษา",
+      detail: "ต้องกรอกก่อนจึงจะส่งออกเอกสารเบิกจ่ายได้ (งบคำนวณจากจำนวนนักศึกษา)",
+      href: "/staff/teaching", action: "กรอกจำนวนนักศึกษา",
+    },
+    {
+      count: s.pending_ta_requests, step: 1,
+      title: "คำร้องขอ TA รอตรวจ",
+      detail: "อาจารย์ส่งคำขอมาแล้ว รออนุมัติหรือปฏิเสธ",
+      href: "/staff/approvals", action: "ตรวจคำร้อง",
+    },
+    {
+      count: s.pending_reviews, step: 2,
+      title: "แบบฟอร์มใบแจ้งหนี้รอตรวจ",
+      detail: "TA ส่งเอกสารครบแล้ว รอเจ้าหน้าที่ตรวจและอนุมัติ",
+      href: "/staff/review", action: "ตรวจเอกสาร",
+    },
+    {
+      count: s.pending_payout_reviews, step: 3,
+      title: "เบิกจ่ายค่าตอบแทนรอตรวจ",
+      detail: "อาจารย์อนุมัติชั่วโมงแล้ว รอเจ้าหน้าที่ตรวจยอดเงิน",
+      href: "/staff/worklog", action: "ตรวจเบิกจ่าย",
+    },
+    {
+      count: s.ready_to_export, step: 4,
+      title: "ตรวจแล้วรอส่งออกเอกสาร",
+      detail: "ผ่านการตรวจครบแล้ว รอสร้างไฟล์ส่งการเงิน",
+      href: "/staff/exports", action: "ส่งออกเอกสาร",
+    },
+  ].filter(t => t.count > 0);
+
   const usePct = s.budget_allocated > 0 ? (s.budget_used / s.budget_allocated) * 100 : 0;
   const budgetTone = usePct >= 90 ? "danger" : usePct >= 70 ? "warn" : "brand";
+  // Every figure below is scoped to one term, so the term belongs in the page
+  // header rather than repeated on each card.
+  const termText = s.term_label ? `ปีการศึกษา ${s.term_label}` : "";
 
   return (
     <div>
       <PageHeader
         title="แดชบอร์ดผู้ดูแลระบบ"
-        description="ภาพรวมการดำเนินงานของระบบ TA Payment"
+        description={termText
+          ? `ภาพรวมการดำเนินงาน — ${termText}`
+          : "ภาพรวมการดำเนินงานของระบบ TA Payment"}
       />
 
-      {missingCount > 0 && (
-        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50/70 dark:border-amber-700 dark:bg-amber-950/30 px-4 py-3">
-          <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
-          <span className="text-sm text-amber-900 dark:text-amber-100">
-            มี <b>{missingCount}</b> วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา — ต้องกรอกก่อนจึงจะส่งออกเอกสารเบิกจ่ายได้ (งบคำนวณจากจำนวนนักศึกษา)
-          </span>
-          <Link href="/staff/teaching" className="ms-auto">
-            <Button variant="primary" size="sm">กรอกจำนวนนักศึกษา</Button>
-          </Link>
-        </div>
-      )}
+      <TodoPanel todos={todos} loading={!data} />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
-        <StatCard label="วิชาที่เปิดสอน" value={s.total_courses} icon={<BookOpen size={18} />} tone="brand" />
-        <StatCard label="วิชาที่มี TA" value={s.courses_with_ta} icon={<GraduationCap size={18} />} tone="success"
-                  hint={s.total_courses > 0 ? `${((s.courses_with_ta / s.total_courses) * 100).toFixed(0)}% ของทั้งหมด` : undefined} />
-        <StatCard label="TA ทั้งหมด" value={s.total_tas} icon={<Users size={18} />} />
-        <StatCard label="รอตรวจเอกสาร" value={s.pending_reviews} icon={<ClipboardCheck size={18} />}
-                  tone={s.pending_reviews > 0 ? "warn" : "default"} />
+      {/* md stays at 2 columns: the sidebar is already open at that width, so a
+          3-column row leaves ~85px of text per card and clips the longer
+          labels. 3 columns only from lg. */}
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+        <StatCard label="วิชาที่เปิดสอน" value={s.total_courses} icon={<BookOpen size={18} />} tone="brand"
+                  hint={termText || undefined} />
+        <StatCard label="TA ทั้งหมด" value={s.total_tas} icon={<Users size={18} />}
+                  hint="ปฏิบัติงานในเทอมนี้" />
+        <StatCard label="วิชาที่มีการขอใช้ TA" value={s.courses_with_ta} icon={<GraduationCap size={18} />} tone="success"
+                  hint={s.total_courses > 0 ? `${((s.courses_with_ta / s.total_courses) * 100).toFixed(0)}% ของวิชาที่เปิดสอน` : undefined} />
+        {/* The two review queues live on different pages — each card links to its own. */}
+        <StatCard label="แบบฟอร์มหนี้รอตรวจ" value={s.pending_reviews} icon={<FileText size={18} />}
+                  tone={s.pending_reviews > 0 ? "warn" : "default"}
+                  hint="ขั้นที่ 2" href="/staff/review" />
+        <StatCard label="เอกสารเบิกจ่ายรอตรวจ" value={s.pending_payout_reviews} icon={<ClipboardCheck size={18} />}
+                  tone={s.pending_payout_reviews > 0 ? "warn" : "default"}
+                  hint="ขั้นที่ 3" href="/staff/worklog" />
         <StatCard label="งบใช้ / ทั้งหมด" value={`${formatBaht(s.budget_used)} / ${formatBaht(s.budget_allocated)}`}
-                  icon={<Wallet size={18} />} />
+                  icon={<Wallet size={18} />}
+                  hint={`จาก ${s.budget_courses} วิชาที่ขอใช้ TA`} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel
           title="งบประมาณคงเหลือ"
-          description="สัดส่วนการใช้งบตั้งแต่ต้นเทอม"
+          description={`เพดานรวมของ ${s.budget_courses} วิชาที่ขอใช้ TA เทียบกับที่จ่ายไปแล้ว`}
           className="lg:col-span-2"
         >
           <div className="flex justify-between text-sm mb-2">
@@ -90,7 +123,7 @@ export default function StaffDashboard() {
           </div>
           <ProgressBar value={usePct} tone={budgetTone} />
           <div className="grid grid-cols-3 gap-4 mt-5 pt-4 border-t border-[var(--hairline)]">
-            <Metric label="งบทั้งหมด" value={`${formatBaht(s.budget_allocated)} บ.`} />
+            <Metric label="เพดานงบรวม" value={`${formatBaht(s.budget_allocated)} บ.`} />
             <Metric label="ใช้ไปแล้ว" value={`${formatBaht(s.budget_used)} บ.`} />
             <Metric label="คงเหลือ" value={`${formatBaht(Math.max(0, s.budget_allocated - s.budget_used))} บ.`} />
           </div>
@@ -98,8 +131,9 @@ export default function StaffDashboard() {
 
         <Panel title="ทางลัด" description="เมนูใช้บ่อย">
           <ul className="divide-y divide-[var(--hairline)]">
-            <ShortcutRow href="/staff/review" title="ตรวจสอบเอกสาร" hint={`${s.pending_reviews} รอตรวจ`} />
             <ShortcutRow href="/staff/approvals" title="อนุมัติคำขอ TA" />
+            <ShortcutRow href="/staff/review" title="ตรวจสอบแบบฟอร์มใบแจ้งหนี้" />
+            <ShortcutRow href="/staff/worklog" title="ตรวจสอบเบิกจ่ายค่าตอบแทน" />
             <ShortcutRow href="/staff/teaching" title="วิชาที่เปิดสอน" />
             <ShortcutRow href="/staff/exports" title="ส่งออกเอกสาร" />
           </ul>
@@ -107,17 +141,20 @@ export default function StaffDashboard() {
       </div>
 
       <div className="grid gap-4 mt-4 lg:grid-cols-2">
-        <Panel title="สถานะโดยรวม">
+        {/* Deliberately no "รอตรวจ" lines here any more — those live in the
+            to-do panel at the top, and repeating them made two places to keep
+            in sync while telling the reader nothing new. */}
+        <Panel title="สถานะโดยรวม" description={`ภาพรวมของเทอม ${s.term_label || "—"}`}>
           <div className="space-y-3">
             <SummaryLine
-              label="วิชาที่ยังไม่มี TA"
+              label="วิชาที่ยังไม่ขอใช้ TA"
               chip={<Chip tone={s.total_courses - s.courses_with_ta > 0 ? "warn" : "success"}>
                 {s.total_courses - s.courses_with_ta} วิชา
               </Chip>}
             />
             <SummaryLine
-              label="เอกสารรอตรวจ"
-              chip={<Chip tone={s.pending_reviews > 0 ? "warn" : "success"}>{s.pending_reviews} รายการ</Chip>}
+              label="TA ที่ปฏิบัติงาน"
+              chip={<Chip tone={s.total_tas > 0 ? "success" : "warn"}>{s.total_tas} คน</Chip>}
             />
             <SummaryLine
               label="การใช้งบ"
@@ -139,6 +176,76 @@ export default function StaffDashboard() {
 
 function formatBaht(v: number) {
   return v >= 1000 ? (v / 1000).toFixed(1) + "k" : v.toFixed(0);
+}
+
+/* -------------------------------------------------------------------------- */
+/* สิ่งที่ต้องทำตอนนี้                                                          */
+/* -------------------------------------------------------------------------- */
+
+function TodoPanel({ todos, loading }: { todos: Todo[]; loading: boolean }) {
+  // While loading, render nothing rather than an "all clear" that may be about
+  // to turn into four outstanding items — a false all-clear is worse than a
+  // brief gap.
+  if (loading) {
+    return <div className="mb-5 h-24 rounded-xl border border-border bg-surface animate-pulse" />;
+  }
+
+  if (todos.length === 0) {
+    return (
+      <div className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/30 px-4 py-3">
+        <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <div className="text-sm text-emerald-900 dark:text-emerald-100">
+          <b>ไม่มีงานค้าง</b> — ทุกขั้นตอนดำเนินการครบแล้ว
+        </div>
+      </div>
+    );
+  }
+
+  const total = todos.reduce((n, t) => n + t.count, 0);
+  return (
+    <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+        <AlertTriangle size={17} className="text-amber-600 dark:text-amber-400 shrink-0" />
+        <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+          สิ่งที่ต้องทำตอนนี้
+        </span>
+        <span className="rounded-full bg-amber-200/70 dark:bg-amber-800/50 px-2 py-0.5 text-[11px] font-semibold text-amber-900 dark:text-amber-100">
+          {total} รายการ
+        </span>
+      </div>
+      <ul className="divide-y divide-amber-200/70 dark:divide-amber-800/40">
+        {todos.map(t => (
+          <li key={t.href}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+            <span
+              aria-hidden
+              className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-200/80 dark:bg-amber-800/60 text-[11px] font-bold text-amber-900 dark:text-amber-100"
+            >
+              {t.step ?? "!"}
+            </span>
+            {/* basis-48 keeps the text from shrinking to make room for the
+                button: on a phone the two then no longer fit side by side and
+                flex-wrap drops the button to its own line, instead of squeezing
+                the description into a four-word column. */}
+            <div className="min-w-0 flex-1 basis-48">
+              <div className="text-sm font-medium text-amber-950 dark:text-amber-50">
+                {t.title} <span className="tabular-nums">({t.count})</span>
+                {t.blocker && (
+                  <span className="ms-2 rounded bg-amber-200/80 dark:bg-amber-800/60 px-1.5 py-0.5 text-[10px] font-semibold align-middle">
+                    ติดขัด
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-amber-800/90 dark:text-amber-200/80 mt-0.5">{t.detail}</div>
+            </div>
+            <Link href={t.href} className="ms-auto shrink-0">
+              <Button variant="primary" size="sm">{t.action}</Button>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

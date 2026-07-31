@@ -29,6 +29,10 @@ interface HolidayImpact {
   original_date: string;
   day_of_week: number;
   holiday_name_th: string;
+  /** Closure window ("HH:MM"); absent = closed all day. Only periods that
+   *  overlap it are listed in affected_sections. */
+  holiday_start?: string;
+  holiday_end?: string;
   affected_sections: AffectedSection[];
 }
 interface ImpactsResponse {
@@ -48,6 +52,17 @@ function formatThaiDate(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   if (Number.isNaN(d.getTime())) return iso;
   return `${d.getDate()} ${MONTH_TH[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
+
+/** "08:00–12:00" for a partial closure, null when the whole day is closed. */
+function holidayWindowLabel(imp: HolidayImpact): string | null {
+  if (!imp.holiday_start || !imp.holiday_end) return null;
+  return `${imp.holiday_start.slice(0, 5)}–${imp.holiday_end.slice(0, 5)}`;
+}
+
+/** One date can carry two closures, each its own panel — key on the window too. */
+function impactKey(imp: HolidayImpact): string {
+  return `${imp.original_date}|${imp.holiday_start ?? "all"}`;
 }
 
 export default function TAHolidaysPage({ params }: { params: Promise<{ tcId: string }> }) {
@@ -95,18 +110,23 @@ export default function TAHolidaysPage({ params }: { params: Promise<{ tcId: str
               const unresolvedHere = imp.affected_sections.filter(s => !s.makeup).length;
               return (
                 <Panel
-                  key={imp.original_date}
+                  key={impactKey(imp)}
                   title={
                     <span className="flex items-center gap-2 flex-wrap">
                       <span className="text-base">{formatThaiDate(imp.original_date)}</span>
                       <span className="text-xs text-muted">({DOW_TH[imp.day_of_week]})</span>
                       <Chip tone="danger">{imp.holiday_name_th}</Chip>
+                      {holidayWindowLabel(imp) && <Chip tone="info">🕒 {holidayWindowLabel(imp)}</Chip>}
                     </span>
                   }
                   description={
-                    unresolvedHere > 0
+                    // With a partial closure only the overlapping periods are
+                    // listed here — say so, otherwise a TA whose afternoon lab is
+                    // missing from the list reads it as a system error.
+                    (holidayWindowLabel(imp) ? `หยุดเฉพาะช่วง ${holidayWindowLabel(imp)} · ` : "") +
+                    (unresolvedHere > 0
                       ? `${imp.affected_sections.length} คาบได้รับผลกระทบ · ${unresolvedHere} คาบยังไม่มีวันชดเชย`
-                      : `${imp.affected_sections.length} คาบได้รับผลกระทบ · อาจารย์กำหนดวันชดเชยครบแล้ว`
+                      : `${imp.affected_sections.length} คาบได้รับผลกระทบ · อาจารย์กำหนดวันชดเชยครบแล้ว`)
                   }
                   actions={
                     unresolvedHere > 0 ? (
@@ -192,7 +212,10 @@ function RemindModal({
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const label = useMemo(() => `${formatThaiDate(impact.original_date)} (${impact.holiday_name_th})`, [impact]);
+  const label = useMemo(() => {
+    const win = holidayWindowLabel(impact);
+    return `${formatThaiDate(impact.original_date)} (${impact.holiday_name_th}${win ? ` · หยุด ${win}` : ""})`;
+  }, [impact]);
 
   async function handleSend() {
     setError(null);

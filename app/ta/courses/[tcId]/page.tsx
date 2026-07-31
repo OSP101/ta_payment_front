@@ -51,6 +51,10 @@ interface Assignment {
   sec_no: string;
   track: string;
   level: string;
+  /** 'active' | 'trimmed'. Dropped sections never reach this list. */
+  state?: string;
+  /** Why some sessions of this section are unavailable, in Thai. */
+  state_reason?: string;
 }
 
 const DOW_LABEL = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -93,6 +97,12 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
     () => new Set((myAssignments ?? []).map(a => a.section_id)),
     [myAssignments],
   );
+  // Assignments where the deferred decision removed some sessions.
+  const trimmed = useMemo(
+    () => (myAssignments ?? []).filter(a => a.state === "trimmed" && a.state_reason),
+    [myAssignments],
+  );
+
   const mySections = useMemo(() => {
     const secs = (course?.sections ?? []).filter(s => mySectionIds.has(s.id));
     return secs.length > 0 ? secs : (course?.sections ?? []);
@@ -171,6 +181,33 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                 icon={<AlertTriangle size={16} />}
                 title="ยังไม่พบ assignment ของคุณในรายวิชานี้"
                 description="อาจารย์อาจยังไม่ได้ยืนยันการมอบหมาย หรือคำขอยังอยู่ระหว่างพิจารณา"
+              />
+            </div>
+          )}
+
+          {/* Sessions this TA cannot cover because their own class runs at the
+              same time. The work-log screen will refuse those entries, so the
+              reason has to be visible here rather than discovered as a rejected
+              save. */}
+          {trimmed.length > 0 && (
+            <div className="mb-4">
+              <Alert
+                status="warning"
+                icon={<CalendarClock size={16} />}
+                title="บางคาบของคุณถูกตัดออกเพราะตรงกับตารางเรียน"
+                description={
+                  <div className="space-y-2">
+                    {/* state_reason is multi-line: a heading, one bullet per
+                        clashing session, then what is still possible. */}
+                    {trimmed.map(a => (
+                      <div key={a.id} className="whitespace-pre-line">{a.state_reason}</div>
+                    ))}
+                    <div className="text-xs opacity-80 pt-1">
+                      คาบที่เหลือยังลงบันทึกเวลาได้ตามปกติ — หากตารางเรียนของคุณเปลี่ยน
+                      ให้แก้ที่หน้า “ตารางเรียนของฉัน” แล้วระบบจะคำนวณใหม่ให้
+                    </div>
+                  </div>
+                }
               />
             </div>
           )}

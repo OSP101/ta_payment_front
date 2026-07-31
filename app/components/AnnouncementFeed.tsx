@@ -41,8 +41,8 @@ export default function AnnouncementFeed({
   compact = false,
   limit,
 }: {
-  title?: string;
-  description?: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
   compact?: boolean;
   limit?: number;
 }) {

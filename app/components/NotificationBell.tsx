@@ -17,9 +17,9 @@ interface Notif {
   created_at: string;
 }
 
-// Shared bell used in every role shell. The onboarding banner (for un-approved
-// TAs) is intentionally *not* driven by this component — that lives in the
-// persistent bottom-right OnboardingBlocker so the two signals don't compete.
+// Shared bell used in every role shell. Onboarding state (for un-approved TAs)
+// is intentionally *not* driven by this component — that lives in the inline
+// OnboardingChecklistCard on the TA home so the two signals don't compete.
 export default function NotificationBell({
   seeAllHref = "/notifications",
 }: {

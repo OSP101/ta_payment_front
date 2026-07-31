@@ -22,7 +22,7 @@ import {
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert,
+  PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 import { TaBudgetCalculator } from "../../../../components/TaBudgetCalculator";
@@ -31,33 +31,86 @@ import { TaBudgetCalculator } from "../../../../components/TaBudgetCalculator";
 /* Types                                                                       */
 /* -------------------------------------------------------------------------- */
 
-interface Section { id: string; sec_no: string; track: string; }
+interface SectionSchedule { day_of_week: number; start_time: string; end_time: string; }
+interface Section {
+  id: string; sec_no: string; track: string;
+  /** Weekly meetings. Present on /teaching-courses/:id. */
+  schedules?: SectionSchedule[];
+}
+
+/**
+ * Partition sections into groups that meet at the same time — co-teaching.
+ * Mirrors TARequestService.detectCotaughtGroups so the form's totals agree
+ * with the verdict the server will reach. Those sections are one sitting, so
+ * their declared hours are the SAME hours and must be counted once.
+ */
+function cotaughtGroups(sections: Section[], picked: string[]): Map<string, number> {
+  const chosen = sections.filter(s => picked.includes(s.id));
+  const overlaps = (a: Section, b: Section) =>
+    (a.schedules ?? []).some(x =>
+      (b.schedules ?? []).some(y =>
+        x.day_of_week === y.day_of_week &&
+        x.start_time < y.end_time &&
+        y.start_time < x.end_time));
+
+  const groups = new Map<string, number>();
+  let next = 0;
+  for (const s of chosen) {
+    if (groups.has(s.id)) continue;
+    next += 1;
+    groups.set(s.id, next);
+    for (const other of chosen) {
+      if (other.id === s.id || groups.has(other.id)) continue;
+      if (overlaps(s, other)) groups.set(other.id, next);
+    }
+  }
+  return groups;
+}
 interface TA {
   id: string; first_name: string; last_name: string; email: string; study_level?: string;
-  // From /ta-requests/candidates — how many courses this TA is already approved
-  // for this term, whether they've hit the 3-course cap, and whether they are
-  // already an approved TA of THIS course (all make them unselectable).
+  // From /ta-requests/candidates — how many courses this TA is already booked
+  // for this term (a submitted request books the slot, not just an approved
+  // one), whether that hits the 3-course cap, and whether they are already on
+  // this course. The first two make them unselectable but still VISIBLE: a TA
+  // filtered out of the list reads as "no account", and lecturers were trying
+  // to create duplicates.
   approved_course_count?: number;
   at_quota?: boolean;
   already_in_course?: boolean;
+  /** false = no class timetable filed yet for this term. */
+  has_schedule?: boolean;
 }
+
+/** Why a TA cannot be picked, or null when they can. */
+function taBlockedReason(t: TA): string | null {
+  if (t.already_in_course) return "อยู่ในคำขอของวิชานี้แล้ว";
+  if (t.at_quota) return `รับสอนครบ ${MAX_COURSES_PER_TA} วิชาแล้ว`;
+  return null;
+}
+
+/** Per-term ceiling on how many courses one TA may assist. */
+const MAX_COURSES_PER_TA = 3;
 interface SectionConflict { section_id: string; messages: string[]; }
 interface ConflictsResp { conflicts: SectionConflict[]; }
+interface WorkloadFields {
+  help_teach_hrs: number; help_teach_desc: string;
+  prep_hrs: number; prep_desc: string;
+  grade_hrs: number; grade_desc: string;
+  other_hrs: number; other_desc: string;
+  check_work_hrs: number; attendance_hrs: number; ug_other_hrs: number; ug_other_desc: string;
+  lab_hrs: number;
+}
+
 interface Assignment {
-  // A TA can be assigned to multiple sections in one course; the workload
-  // hours below are the TA's declaration across all of them (shared), while
-  // section_ids drives which sections appear in worklog for that TA.
+  // A TA can cover several sections of one course. Hours are declared PER
+  // SECTION — the lecturers asked for "ชั่วโมงต่อกลุ่มเรียน" — and each
+  // section's figure is bounded by the course's weekly contact hours for that
+  // kind, i.e. the numbers inside 3(3-0-6).
   section_ids: string[];
   ta_id: string;
   level: string;
-  workload: {
-    help_teach_hrs: number; help_teach_desc: string;
-    prep_hrs: number; prep_desc: string;
-    grade_hrs: number; grade_desc: string;
-    other_hrs: number; other_desc: string;
-    check_work_hrs: number; attendance_hrs: number; ug_other_hrs: number; ug_other_desc: string;
-    lab_hrs: number;
-  };
+  /** Declared hours keyed by section id. */
+  section_workloads: Record<string, WorkloadFields>;
 }
 
 interface RequestWindow {
@@ -94,7 +147,7 @@ interface PayRateCaps {
   grad_regular_daily_hour_cap: number;
 }
 
-const emptyWorkload = (): Assignment["workload"] => ({
+const emptyWorkload = (): WorkloadFields => ({
   help_teach_hrs: 0, help_teach_desc: "",
   prep_hrs: 0, prep_desc: "",
   grade_hrs: 0, grade_desc: "",
@@ -102,6 +155,19 @@ const emptyWorkload = (): Assignment["workload"] => ({
   check_work_hrs: 0, attendance_hrs: 0, ug_other_hrs: 0, ug_other_desc: "",
   lab_hrs: 0,
 });
+
+/** Hours declared for one section, or zeroes if the lecturer hasn't filled it. */
+function workloadOf(a: Assignment, sectionId: string): WorkloadFields {
+  return a.section_workloads[sectionId] ?? emptyWorkload();
+}
+
+/** Weekly hours for one section, using only the fields its level applies to. */
+function sectionHours(w: WorkloadFields, level: string): number {
+  if (level === "master" || level === "phd") {
+    return w.help_teach_hrs + w.prep_hrs + w.grade_hrs + w.other_hrs;
+  }
+  return w.check_work_hrs + w.attendance_hrs + w.ug_other_hrs + w.lab_hrs;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Main page                                                                   */
@@ -247,10 +313,11 @@ function RequestFormSection({
   const { data: tas } = useSWR<{ items: TA[] }>(candidatesKey);
   // เพดาน ชม./วัน ตามประกาศ — ใช้กันไม่ให้กรอกภาระงานที่ลงบันทึกเวลาจริงไม่ได้
   const { data: payCaps } = useSWR<PayRateCaps>("/settings/pay-rate");
-  // Hide TAs who can't be added: already an approved TA of this course, or who
-  // would exceed the 3-course cap by taking this one.
-  const hidden = (t: TA) => !!t.at_quota || !!t.already_in_course;
-  const selectableTas = useMemo(() => (tas?.items ?? []).filter(t => !hidden(t)), [tas]);
+  // Every TA stays in the list. Those who cannot be added are shown disabled
+  // with the reason attached, because hiding them was actively harmful: a
+  // lecturer who could not find someone assumed they had no account and went
+  // off to create a duplicate, which then failed on the unique email.
+  const allTas = useMemo(() => tas?.items ?? [], [tas]);
 
   // Q&A rule 3: default reimburse_scope from the course's credit hours.
   //   lecture-only → "lecture"; lab-only → "lab"; both → "both".
@@ -303,8 +370,25 @@ function RequestFormSection({
     return daily * WORKING_DAYS_PER_WEEK;
   }, [course?.sections, payCaps]);
 
-  const workloadOk = assignments.length > 0 && assignments.every(a => {
-    const t = sumWorkload(a);
+  const secs = course?.sections ?? [];
+  const lecHrs = course?.lecture_hrs ?? 0;
+  const labHrsCourse = course?.lab_hrs ?? 0;
+
+  // Every section's declared hours must fit inside the course's weekly contact
+  // hours for that kind — the figures in 3(3-0-6). Checked here (not only on
+  // submit) so the Send button reflects the real state of the form.
+  const sectionCapsOk = assignments.every(a =>
+    a.section_ids.every(sid => {
+      const w = workloadOf(a, sid);
+      if (a.level === "master" || a.level === "phd") return true; // grad uses the 10–12 total
+      return w.check_work_hrs <= lecHrs + 0.001
+        && w.attendance_hrs <= lecHrs + 0.001
+        && w.ug_other_hrs <= lecHrs + 0.001
+        && w.lab_hrs <= labHrsCourse + 0.001;
+    }));
+
+  const workloadOk = assignments.length > 0 && sectionCapsOk && assignments.every(a => {
+    const t = sumWorkload(a, secs);
     if (t > weeklyCapFor(a)) return false; // ลงบันทึกเวลาจริงไม่ได้ตามเพดาน ชม./วัน
     if (a.level === "master" || a.level === "phd") return t >= GRAD_MIN_HRS && t <= GRAD_MAX_HRS;
     return t > 0;
@@ -323,6 +407,22 @@ function RequestFormSection({
 
   const canSubmit = taChosen && workloadOk && sectionChosen && !anyScheduleConflict;
 
+  // TAs on this form who have not filed a timetable yet. Submitting is still
+  // allowed — that is the point of the change — but the request will rest
+  // unjudged until they do, and any session that turns out to clash with their
+  // own class is dropped. The lecturer has to know that before committing.
+  const waitingOnSchedule = useMemo(() => {
+    const byId = new Map(allTas.map(t => [t.id, t]));
+    const names: string[] = [];
+    for (const a of assignments) {
+      const t = a.ta_id ? byId.get(a.ta_id) : undefined;
+      if (t && t.has_schedule === false) names.push(`${t.first_name} ${t.last_name}`);
+    }
+    return names;
+  }, [assignments, allTas]);
+
+  const [confirming, setConfirming] = useState(false);
+
   /* --- helpers --------------------------------------------------------- */
   function addAssignment(secId?: string, taId = "", level = "undergrad") {
     const initial = secId ?? firstSectionId;
@@ -330,7 +430,7 @@ function RequestFormSection({
       section_ids: initial ? [initial] : [],
       ta_id: taId,
       level,
-      workload: emptyWorkload(),
+      section_workloads: initial ? { [initial]: emptyWorkload() } : {},
     }]);
   }
   function removeAssignment(idx: number) {
@@ -339,8 +439,15 @@ function RequestFormSection({
   function updateAssign(idx: number, patch: Partial<Assignment>) {
     setAssignments(a => a.map((x, i) => i === idx ? { ...x, ...patch } : x));
   }
-  function updateWorkload(idx: number, patch: Partial<Assignment["workload"]>) {
-    setAssignments(a => a.map((x, i) => i === idx ? { ...x, workload: { ...x.workload, ...patch } } : x));
+  function updateWorkload(idx: number, sectionId: string, patch: Partial<WorkloadFields>) {
+    setAssignments(a => a.map((x, i) => {
+      if (i !== idx) return x;
+      const current = workloadOf(x, sectionId);
+      return {
+        ...x,
+        section_workloads: { ...x.section_workloads, [sectionId]: { ...current, ...patch } },
+      };
+    }));
   }
 
   async function submit() {
@@ -365,13 +472,21 @@ function RequestFormSection({
       }
       const res = await api.post<{
         id: string;
-        status: "approved" | "rejected";
+        status: "approved" | "rejected" | "submitted";
         reject_reason?: string;
       }>("/ta-requests", {
         teaching_course_id: tcId,
         reimburse_scope: scope,
         counts: [...bySection.entries()].map(([section_id, c]) => ({ section_id, ...c })),
-        assignments,
+        assignments: assignments.map(a => ({
+          section_ids: a.section_ids,
+          ta_id: a.ta_id,
+          level: a.level,
+          section_workloads: a.section_ids.map(sid => ({
+            section_id: sid,
+            workload: workloadOf(a, sid),
+          })),
+        })),
       });
       if (res.status === "rejected") {
         // Under the auto-decide model, business-rule failures come back as a
@@ -380,6 +495,13 @@ function RequestFormSection({
         const reason = res.reject_reason || "ระบบตัดสินว่าคำขอไม่ผ่านเกณฑ์";
         setErr(reason);
         notify.error(reason);
+        return;
+      }
+      if (res.status === "submitted") {
+        // Deferred decision: at least one TA has no timetable yet, so there is
+        // nothing to judge. Say so plainly rather than implying approval.
+        notify.success("ส่งคำขอแล้ว — ระบบจะตัดสินให้อัตโนมัติเมื่อ TA สร้างตารางเรียนครบทุกคน");
+        onSubmitted();
         return;
       }
       notify.success("ระบบอนุมัติคำขอเรียบร้อยแล้ว");
@@ -541,7 +663,7 @@ function RequestFormSection({
                         n={idx + 1}
                         assignment={a}
                         sections={course?.sections ?? []}
-                        tas={selectableTas.filter(t => !takenElsewhere.has(t.id))}
+                        tas={allTas.filter(t => !takenElsewhere.has(t.id))}
                         scope={scope}
                         weeklyCap={weeklyCapFor(a)}
                         lectureHrs={course?.lecture_hrs ?? 0}
@@ -559,6 +681,19 @@ function RequestFormSection({
             </div>
           )}
         </StepPanel>
+
+        {waitingOnSchedule.length > 0 && (
+          <Alert
+            status="warning"
+            title="มี TA ที่ยังไม่ได้สร้างตารางเรียน"
+            description={
+              `${waitingOnSchedule.join(", ")} ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้ — ` +
+              "ส่งคำขอได้ตามปกติ แต่ระบบจะยังไม่ตัดสินจนกว่าจะสร้างครบทุกคน " +
+              "และถ้าคาบใดตรงกับตารางเรียนของเขา คาบนั้นจะถูกตัดออกโดยอัตโนมัติ"
+            }
+            icon={<CalendarClock size={18} />}
+          />
+        )}
 
         {err && (
           <Alert status="danger" title="ส่งคำขอไม่สำเร็จ" description={err} icon={<AlertCircle size={18} />} />
@@ -581,7 +716,10 @@ function RequestFormSection({
           </Button>
           <Button
             variant="primary"
-            onClick={submit}
+            // Consequences that only bite AFTER submit (a deferred verdict,
+            // sessions dropped later, unapproved documents) are explained in a
+            // confirmation step rather than left to be discovered.
+            onClick={() => (waitingOnSchedule.length > 0 ? setConfirming(true) : submit())}
             disabled={!canSubmit || pending || canSend === false}
             isPending={pending}
           >
@@ -590,6 +728,48 @@ function RequestFormSection({
           </Button>
         </div>
       </div>
+
+      <Modal
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        title="ยืนยันการส่งคำขอ"
+        icon={<CalendarClock size={18} />}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>ย้อนกลับ</Button>
+            <Button
+              variant="primary"
+              isPending={pending}
+              onClick={() => { setConfirming(false); submit(); }}
+            >
+              <Send size={16} /> ยืนยันส่งคำขอ
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-ink-2">
+            คำขอนี้มี TA ที่ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้
+          </p>
+          <ul className="list-disc pl-5 space-y-0.5">
+            {waitingOnSchedule.map(n => (
+              <li key={n} className="font-medium text-ink-1">{n}</li>
+            ))}
+          </ul>
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1.5 text-xs text-amber-900">
+            <p className="font-semibold">สิ่งที่จะเกิดขึ้นหลังกดส่ง</p>
+            <p>• คำขอจะยังไม่ถูกตัดสิน จนกว่า TA ทุกคนในคำขอจะสร้างตารางเรียนครบ</p>
+            <p>
+              • ถ้าคาบสอนใดตรงกับตารางเรียนของ TA ระบบจะ<b>ตัดคาบนั้นออกทั้งคาบ</b>โดยอัตโนมัติ
+              เพราะเขาต้องไปเรียน — และจะแจ้งทั้งคุณและ TA
+            </p>
+            <p>• ถ้าทุกคาบตรงกับตารางเรียนของเขา TA คนนั้นจะถูกตัดออกจากวิชานี้ และคืนโควตาให้ไปรับวิชาอื่นได้</p>
+          </div>
+          <p className="text-xs text-ink-3">
+            ที่นั่งของ TA ทุกคนในคำขอถูกจองไว้ตั้งแต่ตอนกดส่ง (นับเข้าโควตา {MAX_COURSES_PER_TA} วิชา) แม้ยังไม่ได้ตัดสิน
+          </p>
+        </div>
+      </Modal>
     </Panel>
   );
 }
@@ -667,12 +847,25 @@ function ScopeRadio({ value, label, desc }: { value: string; label: string; desc
   );
 }
 
-function sumWorkload(a: Assignment): number {
-  const w = a.workload;
-  if (a.level === "master" || a.level === "phd") {
-    return w.help_teach_hrs + w.prep_hrs + w.grade_hrs + w.other_hrs;
+/**
+ * Total weekly hours this TA actually works, counting each co-taught group
+ * once. Two sections meeting in the same slot are one sitting — billing both
+ * would double-count time the person spends once. Matches the server's
+ * billableWeeklyTotal.
+ */
+function sumWorkload(a: Assignment, sections: Section[]): number {
+  const groups = cotaughtGroups(sections, a.section_ids);
+  const counted = new Set<number>();
+  let total = 0;
+  for (const sid of a.section_ids) {
+    const g = groups.get(sid);
+    if (g !== undefined) {
+      if (counted.has(g)) continue;
+      counted.add(g);
+    }
+    total += sectionHours(workloadOf(a, sid), a.level);
   }
-  return w.check_work_hrs + w.attendance_hrs + w.ug_other_hrs + w.lab_hrs;
+  return total;
 }
 
 function AssignmentBlock({
@@ -691,11 +884,17 @@ function AssignmentBlock({
   tcId: string;
   onConflicts: (taId: string, list: SectionConflict[]) => void;
   onUpdate: (idx: number, patch: Partial<Assignment>) => void;
-  onWorkload: (idx: number, patch: Partial<Assignment["workload"]>) => void;
+  onWorkload: (idx: number, sectionId: string, patch: Partial<WorkloadFields>) => void;
   onRemove: () => void;
 }) {
   const isGrad = a.level === "master" || a.level === "phd";
-  const total = sumWorkload(a);
+  const total = sumWorkload(a, sections);
+  // Which of the picked sections are taught together. Drives the "billed once"
+  // badge and keeps the total from double-counting a single sitting.
+  const coGroups = useMemo(
+    () => cotaughtGroups(sections, a.section_ids),
+    [sections, a.section_ids],
+  );
 
   // Preview schedule conflicts for this TA against every section of the
   // course. Runs whenever a TA is picked; the modal's Submit gate consumes
@@ -716,14 +915,6 @@ function AssignmentBlock({
     .map(sid => ({ sid, msgs: conflictBySection.get(sid) ?? [] }))
     .filter(x => x.msgs.length > 0);
   const blocked = pickedConflicts.length > 0;
-  // Q&A rule 1: the 10–12 hr/week range is now advisory. Payment references
-  // ตารางปฏิบัติงาน — this form's numbers are for course-planning only.
-  // Per-field cap = course credit hrs × sections the TA covers. Guards against
-  // a lecturer entering more hours than the physical class time the TA is
-  // actually present for.
-  const nSecs = a.section_ids.length;
-  const lectureCap = lectureHrs * nSecs;
-  const labCap = labHrs * nSecs;
 
   const ta = tas.find(t => t.id === a.ta_id);
 
@@ -801,46 +992,82 @@ function AssignmentBlock({
             a schedule conflict is unresolved so the lecturer must fix the
             picking before entering hours. */}
         <div className={blocked ? "opacity-50 pointer-events-none select-none" : ""}>
-        {isGrad ? (
-          // Grad regulation: total workload must sit in [10, 12] ชม./สัปดาห์.
-          // Per-field cap = value + (12 - total) so increment buttons refuse
-          // to push the sum above 12; the < 10 side is gated at submit-time.
-          (() => {
-            const gradRemaining = Math.max(0, GRAD_MAX_HRS - total);
-            const cap = (v: number) => v + gradRemaining;
-            return (
-              <div>
-                <div className="text-xs font-medium text-ink-2 mb-2">ภาระงาน (บัณฑิตศึกษา) — 10 ถึง 12 ชม./สัปดาห์</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <HrsRow label="ช่วยสอน" hrs={a.workload.help_teach_hrs} desc={a.workload.help_teach_desc}
-                    max={cap(a.workload.help_teach_hrs)}
-                    onH={v => onWorkload(idx, { help_teach_hrs: v })} onD={v => onWorkload(idx, { help_teach_desc: v })} />
-                  <HrsRow label="เตรียมการสอน" hrs={a.workload.prep_hrs} desc={a.workload.prep_desc}
-                    max={cap(a.workload.prep_hrs)}
-                    onH={v => onWorkload(idx, { prep_hrs: v })} onD={v => onWorkload(idx, { prep_desc: v })} />
-                  <HrsRow label="ตรวจแบบทดสอบ" hrs={a.workload.grade_hrs} desc={a.workload.grade_desc}
-                    max={cap(a.workload.grade_hrs)}
-                    onH={v => onWorkload(idx, { grade_hrs: v })} onD={v => onWorkload(idx, { grade_desc: v })} />
-                  <HrsRow label="อื่น ๆ" hrs={a.workload.other_hrs} desc={a.workload.other_desc}
-                    max={cap(a.workload.other_hrs)}
-                    onH={v => onWorkload(idx, { other_hrs: v })} onD={v => onWorkload(idx, { other_desc: v })} />
-                </div>
+          {a.section_ids.length === 0 ? (
+            <div className="text-xs text-ink-3 py-3 text-center border border-dashed border-hairline rounded-md">
+              เลือก section ก่อน จึงจะกำหนดชั่วโมงได้
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs font-medium text-ink-2">
+                ชั่วโมงทำงานต่อสัปดาห์ — กำหนดแยกแต่ละกลุ่มเรียน
               </div>
-            );
-          })()
-        ) : (
-          <UndergradWorkload
-            idx={idx}
-            workload={a.workload}
-            scope={scope}
-            lectureHrs={lectureHrs}
-            labHrs={labHrs}
-            lectureCap={lectureCap}
-            labCap={labCap}
-            nSecs={nSecs}
-            onWorkload={onWorkload}
-          />
-        )}
+              {a.section_ids.map(sid => {
+                const sec = sections.find(s => s.id === sid);
+                const w = workloadOf(a, sid);
+                const group = coGroups.get(sid);
+                // Sections sharing a group meet in one sitting, so the hours
+                // entered here are billed once for the whole group.
+                const mates = group === undefined ? [] : a.section_ids
+                  .filter(x => x !== sid && coGroups.get(x) === group)
+                  .map(x => sections.find(s => s.id === x)?.sec_no ?? "?");
+                return (
+                  <div key={sid} className="rounded-md border border-hairline overflow-hidden">
+                    <div className="flex items-center gap-2 flex-wrap px-3 py-1.5 bg-slate-50 border-b border-hairline">
+                      <Chip tone="neutral">Sec {sec?.sec_no ?? "—"}</Chip>
+                      {sec?.track === "special" && <span className="text-[11px] text-ink-3">ภาคพิเศษ</span>}
+                      {mates.length > 0 && (
+                        <span className="text-[11px] text-brand">
+                          สอนพร้อมกับ Sec {mates.join(", ")} — เบิกรวมเป็นก้อนเดียว
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-3">
+                      {isGrad ? (
+                        (() => {
+                          // Grad regulation bounds the TA's TOTAL at 12 h/week,
+                          // so each field may only grow by what the total has
+                          // left — computed across sections, counting a
+                          // co-taught group once.
+                          const remaining = Math.max(0, GRAD_MAX_HRS - total);
+                          const cap = (v: number) => v + remaining;
+                          return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <HrsRow label="ช่วยสอน" hrs={w.help_teach_hrs} desc={w.help_teach_desc}
+                                max={cap(w.help_teach_hrs)}
+                                onH={v => onWorkload(idx, sid, { help_teach_hrs: v })}
+                                onD={v => onWorkload(idx, sid, { help_teach_desc: v })} />
+                              <HrsRow label="เตรียมการสอน" hrs={w.prep_hrs} desc={w.prep_desc}
+                                max={cap(w.prep_hrs)}
+                                onH={v => onWorkload(idx, sid, { prep_hrs: v })}
+                                onD={v => onWorkload(idx, sid, { prep_desc: v })} />
+                              <HrsRow label="ตรวจแบบทดสอบ" hrs={w.grade_hrs} desc={w.grade_desc}
+                                max={cap(w.grade_hrs)}
+                                onH={v => onWorkload(idx, sid, { grade_hrs: v })}
+                                onD={v => onWorkload(idx, sid, { grade_desc: v })} />
+                              <HrsRow label="อื่น ๆ" hrs={w.other_hrs} desc={w.other_desc}
+                                max={cap(w.other_hrs)}
+                                onH={v => onWorkload(idx, sid, { other_hrs: v })}
+                                onD={v => onWorkload(idx, sid, { other_desc: v })} />
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <UndergradWorkload
+                          idx={idx}
+                          sectionId={sid}
+                          workload={w}
+                          scope={scope}
+                          lectureHrs={lectureHrs}
+                          labHrs={labHrs}
+                          onWorkload={onWorkload}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Total footer */}
@@ -880,35 +1107,27 @@ function AssignmentBlock({
 }
 
 function UndergradWorkload({
-  idx, workload, scope, lectureHrs, labHrs, lectureCap, labCap, nSecs, onWorkload,
+  idx, sectionId, workload, scope, lectureHrs, labHrs, onWorkload,
 }: {
   idx: number;
-  workload: Assignment["workload"];
+  sectionId: string;
+  workload: WorkloadFields;
   scope: "lecture" | "lab" | "both";
-  // Two levels of cap per category:
-  //  • lectureCap / labCap = credit_hrs × n_sections — for activities that
-  //    happen inside class time (ช่วยตรวจงาน, เช็คชื่อ, ปฏิบัติการ) whose
-  //    ceiling scales with class exposure.
-  //  • lectureHrs / labHrs = raw credit_hrs — for "อื่น ๆ" (prep, admin)
-  //    which by rule cannot exceed the course's credit hours regardless of
-  //    how many sections the TA covers.
+  // The ceiling is the course's weekly contact hours for each kind — the
+  // figures inside the Thai credit notation, e.g. 3(3-0-6) gives 3 lecture
+  // hours and 0 lab hours per week. It applies PER SECTION: a TA cannot spend
+  // more time on a group than the group actually meets, no matter how many
+  // groups they cover.
   lectureHrs: number;
   labHrs: number;
-  lectureCap: number;
-  labCap: number;
-  nSecs: number;
-  onWorkload: (idx: number, patch: Partial<Assignment["workload"]>) => void;
+  onWorkload: (idx: number, sectionId: string, patch: Partial<WorkloadFields>) => void;
 }) {
   const showLec = scope === "lecture" || scope === "both";
   const showLab = scope === "lab" || scope === "both";
-  const groupHint = (cap: number, unit: number) =>
-    nSecs === 0
-      ? "เลือก section ก่อนเพื่อกำหนดขีดจำกัด"
-      : `สูงสุด ${cap.toFixed(1)} ชม./สัปดาห์ (${unit.toFixed(1)} × ${nSecs} sec)`;
-  const otherHint = (hrs: number) =>
-    nSecs === 0
-      ? "เลือก section ก่อน"
-      : `อื่น ๆ สูงสุด ${hrs.toFixed(1)} ชม./สัปดาห์ (= หน่วยกิต)`;
+  const capHint = (hrs: number) =>
+    hrs <= 0
+      ? "วิชานี้ไม่มีชั่วโมงประเภทนี้ในหน่วยกิต"
+      : `สูงสุด ${hrs.toFixed(1)} ชม./สัปดาห์ ต่อกลุ่ม (ตามหน่วยกิตวิชา)`;
 
   return (
     <div className="space-y-3">
@@ -916,20 +1135,20 @@ function UndergradWorkload({
         <div className="rounded-md border border-hairline p-3">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <div className="text-xs font-medium text-ink-2">1. ชั่วโมงบรรยาย (ปริญญาตรี)</div>
-            <div className="text-[11px] text-ink-3">{groupHint(lectureCap, lectureHrs)}</div>
+            <div className="text-[11px] text-ink-3">{capHint(lectureHrs)}</div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <CheckHrs
               label="ช่วยตรวจงาน"
               hrs={workload.check_work_hrs}
-              max={lectureCap}
-              onH={v => onWorkload(idx, { check_work_hrs: v })}
+              max={lectureHrs}
+              onH={v => onWorkload(idx, sectionId, { check_work_hrs: v })}
             />
             <CheckHrs
               label="เช็คชื่อ / เก็บใบงาน"
               hrs={workload.attendance_hrs}
-              max={lectureCap}
-              onH={v => onWorkload(idx, { attendance_hrs: v })}
+              max={lectureHrs}
+              onH={v => onWorkload(idx, sectionId, { attendance_hrs: v })}
             />
             <div className="md:col-span-2">
               <CheckHrs
@@ -937,9 +1156,9 @@ function UndergradWorkload({
                 hrs={workload.ug_other_hrs}
                 desc={workload.ug_other_desc}
                 max={lectureHrs}
-                hint={otherHint(lectureHrs)}
-                onH={v => onWorkload(idx, { ug_other_hrs: v })}
-                onD={v => onWorkload(idx, { ug_other_desc: v })}
+                hint={capHint(lectureHrs)}
+                onH={v => onWorkload(idx, sectionId, { ug_other_hrs: v })}
+                onD={v => onWorkload(idx, sectionId, { ug_other_desc: v })}
               />
             </div>
           </div>
@@ -949,14 +1168,14 @@ function UndergradWorkload({
         <div className="rounded-md border border-hairline p-3">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <div className="text-xs font-medium text-ink-2">2. ชั่วโมงปฏิบัติการ</div>
-            <div className="text-[11px] text-ink-3">{groupHint(labCap, labHrs)}</div>
+            <div className="text-[11px] text-ink-3">{capHint(labHrs)}</div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <CheckHrs
               label="จำนวนชั่วโมง"
               hrs={workload.lab_hrs}
-              max={labCap}
-              onH={v => onWorkload(idx, { lab_hrs: v })}
+              max={labHrs}
+              onH={v => onWorkload(idx, sectionId, { lab_hrs: v })}
             />
           </div>
         </div>
@@ -1045,6 +1264,14 @@ function SectionPicker({
   conflictBySection?: Map<string, string[]>;
 }) {
   const invalid = value.length === 0;
+  // A section that clashes cannot be worked, so it must not be pickable — the
+  // server refuses it anyway (assertNoKnownClash). Disabling here turns a
+  // post-submit rejection into an obvious "you can't choose this, and here's
+  // why" at the moment of choosing.
+  const blockedIds = useMemo(
+    () => new Set([...(conflictBySection?.keys() ?? [])]),
+    [conflictBySection],
+  );
   return (
     <CheckboxGroup
       value={value}
@@ -1064,16 +1291,15 @@ function SectionPicker({
             <Checkbox
               key={s.id}
               value={s.id}
+              isDisabled={blockedIds.has(s.id)}
               aria-label={bad ? `Sec ${s.sec_no} — ${conflictMsgs?.join("; ")}` : `Sec ${s.sec_no}`}
               className={
-                "border rounded-lg px-3 py-1.5 transition-colors cursor-pointer " +
-                (bad && on
-                  ? "border-red-400 bg-red-50"
-                  : bad
-                  ? "border-red-300 bg-red-50/60"
+                "border rounded-lg px-3 py-1.5 transition-colors " +
+                (bad
+                  ? "border-red-300 bg-red-50/60 cursor-not-allowed opacity-70"
                   : on
-                  ? "border-brand/40 bg-brand-soft"
-                  : "border-border hover:bg-slate-50")
+                  ? "border-brand/40 bg-brand-soft cursor-pointer"
+                  : "border-border hover:bg-slate-50 cursor-pointer")
               }
             >
               <Checkbox.Content>
@@ -1085,7 +1311,7 @@ function SectionPicker({
                   {s.track === "special" ? (
                     <span className="text-xs text-ink-3 ml-1">· ภาคพิเศษ</span>
                   ) : null}
-                  {bad && <span className="text-[10px] text-red-600 ml-1">· ตารางทับซ้อน</span>}
+                  {bad && <span className="text-[10px] text-red-600 ml-1">· เลือกไม่ได้ — ตารางเรียนทับ</span>}
                 </span>
               </Checkbox.Content>
             </Checkbox>
@@ -1094,6 +1320,17 @@ function SectionPicker({
       </div>
       {invalid && (
         <div className="text-xs text-red-600 mt-1">กรุณาเลือก section อย่างน้อย 1 กลุ่ม</div>
+      )}
+      {blockedIds.size > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {sections
+            .filter(s => blockedIds.has(s.id))
+            .map(s => (
+              <div key={s.id} className="text-xs text-red-600">
+                Sec {s.sec_no}: {conflictBySection?.get(s.id)?.join(" · ")}
+              </div>
+            ))}
+        </div>
       )}
     </CheckboxGroup>
   );
@@ -1108,11 +1345,18 @@ function TaAutocomplete({
 }) {
   const { contains } = useFilter({ sensitivity: "base" });
   const selected = tas.find(t => t.id === value) ?? null;
+  // Blocked TAs stay in the collection so they remain searchable; react-aria
+  // renders them dimmed and unselectable via disabledKeys.
+  const disabledKeys = useMemo(
+    () => tas.filter(t => taBlockedReason(t) !== null).map(t => t.id),
+    [tas],
+  );
 
   return (
     <Autocomplete
       selectionMode="single"
       value={value || null}
+      disabledKeys={disabledKeys}
       onChange={(k: Key | null) => {
         const id = k ? String(k) : "";
         const t = tas.find(x => x.id === id);
@@ -1147,21 +1391,35 @@ function TaAutocomplete({
             </SearchField.Group>
           </SearchField>
           <ListBox renderEmptyState={() => <HEmptyState>ไม่พบ TA ที่ตรงกัน</HEmptyState>}>
-            {tas.map(t => (
-              <ListBox.Item
-                key={t.id}
-                id={t.id}
-                textValue={`${t.first_name} ${t.last_name} ${t.email}`}
-              >
-                <div className="flex flex-col min-w-0">
-                  <Label>{t.first_name} {t.last_name}</Label>
-                  <Description className="text-xs">
-                    {t.email} · {t.study_level === "master" ? "ป.โท" : t.study_level === "phd" ? "ป.เอก" : "ป.ตรี"}
-                  </Description>
-                </div>
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
+            {tas.map(t => {
+              const blocked = taBlockedReason(t);
+              const booked = t.approved_course_count ?? 0;
+              return (
+                <ListBox.Item
+                  key={t.id}
+                  id={t.id}
+                  textValue={`${t.first_name} ${t.last_name} ${t.email}`}
+                >
+                  <div className="flex flex-col min-w-0">
+                    <Label>{t.first_name} {t.last_name}</Label>
+                    <Description className="text-xs">
+                      {t.email} · {t.study_level === "master" ? "ป.โท" : t.study_level === "phd" ? "ป.เอก" : "ป.ตรี"}
+                      {/* The count is the whole point of keeping blocked TAs
+                          visible — the lecturer can see WHY, not just that the
+                          name is missing. */}
+                      <span className={"ml-1 font-medium " + (blocked ? "text-red-600" : "text-ink-2")}>
+                        · รับสอน {booked}/{MAX_COURSES_PER_TA} วิชา
+                      </span>
+                      {blocked && <span className="ml-1 text-red-600">· {blocked}</span>}
+                      {!blocked && t.has_schedule === false && (
+                        <span className="ml-1 text-amber-600">· ยังไม่ได้สร้างตารางเรียน</span>
+                      )}
+                    </Description>
+                  </div>
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              );
+            })}
           </ListBox>
         </Autocomplete.Filter>
       </Autocomplete.Popover>

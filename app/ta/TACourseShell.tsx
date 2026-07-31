@@ -1,4 +1,5 @@
 "use client";
+import useSWR from "swr";
 import {
   ArrowLeft, LayoutDashboard, Clock, CalendarOff,
   IdCard, CalendarDays, FileText, Bell, Megaphone, CalendarClock,
@@ -8,6 +9,9 @@ import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
 import CourseSwitcher from "../components/CourseSwitcher";
 import { TAApprovalBanner } from "./TAGate";
+
+// Only the fields the badge needs; the worklog page owns the full shape.
+interface AssignmentTally { id: string; unsent_count: number }
 
 // Per-course sidebar for TAs — same app-level Shell pattern as the lecturer's
 // per-course view, so the sidebar sits flush against the viewport edge.
@@ -19,6 +23,15 @@ export default function TACourseShell({
   courseCode?: string;
   children: React.ReactNode;
 }) {
+  // Rows not yet sent for approval, summed across EVERY section the TA holds on
+  // this course. A TA assisting two sections has two separate piles and can only
+  // see one of them at a time on the worklog screen, so the count that matters
+  // is the one that spans them — visible before they even open the page.
+  const { data: assignments } = useSWR<AssignmentTally[]>(
+    tcId ? `/me/assignments?teaching_course_id=${tcId}` : null,
+  );
+  const unsentTotal = (assignments ?? []).reduce((n, a) => n + (a.unsent_count ?? 0), 0);
+
   const nav: NavSection[] = [
     {
       items: [
@@ -29,7 +42,13 @@ export default function TACourseShell({
       title: courseCode ? `รายวิชา ${courseCode}` : "รายวิชา",
       items: [
         { label: "ภาพรวม", href: `/ta/courses/${tcId}`, icon: LayoutDashboard, exact: true },
-        { label: "ลงเวลาปฏิบัติงาน", href: `/ta/courses/${tcId}/worklog`, icon: Clock },
+        {
+          label: "ลงเวลาปฏิบัติงาน",
+          href: `/ta/courses/${tcId}/worklog`,
+          icon: Clock,
+          badge: unsentTotal,
+          badgeLabel: "ยังไม่ได้ส่งอนุมัติ",
+        },
         { label: "วันหยุดและวันชดเชย", href: `/ta/courses/${tcId}/holidays`, icon: CalendarOff },
       ],
     },

@@ -1,18 +1,20 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { Accordion } from "@heroui/react";
 import {
   AlertTriangle, Save, Upload, Download, CheckCircle2, Circle, XCircle,
-  IdCard, Wallet, FileSignature, CreditCard, BookOpen,
+  IdCard, Wallet, FileSignature, CreditCard, BookOpen, FileText,
 } from "lucide-react";
-import { api } from "../../../lib/api";
+import { api, type UploadProgress } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import {
   THAI_BANKS, findBank, normalizeAccountNo, normalizeNationalID, STUDENT_ID_PATTERN,
 } from "../../../lib/banks";
 import { THAI_PREFIXES, isThaiPrefix } from "../../../lib/prefixes";
 import Signature from "../../../components/Signature";
+import PdfFrame from "../../../components/PdfFrame";
+import UploadProgressModal from "../../../components/UploadProgressModal";
 import {
   PageHeader, Panel, Button, TextInput, FieldGroup, StatusChip, Alert, Chip,
   SelectField,
@@ -22,9 +24,15 @@ import {
 /* and again on the server (see maxDocBytes / kind checks) for real safety.    */
 /* -------------------------------------------------------------------------- */
 
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
-const ACCEPT_MIME = ["application/pdf", "image/jpeg", "image/png"];
-const ACCEPT_ATTR = ".pdf,.jpg,.jpeg,.png";
+// Must match maxDocBytes in internal/service/docs.go. This copy only exists so
+// the user gets told before the upload starts; the server is the enforcer.
+const MAX_UPLOAD_MB = 10;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+// PDF only, matching the server (see acceptedDocMIMEs / sniffAllowedDoc).
+// Photos were previously allowed; they are the commonest form a misfiled
+// upload takes, and the officer's combined download has to be one PDF.
+const ACCEPT_MIME = ["application/pdf"];
+const ACCEPT_ATTR = ".pdf,application/pdf";
 
 // Returns null if OK, otherwise a Thai reason describing why the file is
 // rejected. Matches the server-side kinds/limits so the user never uploads
@@ -32,14 +40,17 @@ const ACCEPT_ATTR = ".pdf,.jpg,.jpeg,.png";
 function validateUploadFile(f: File): string | null {
   if (f.size > MAX_UPLOAD_BYTES) {
     const mb = (f.size / (1024 * 1024)).toFixed(2);
-    return `ไฟล์ใหญ่เกิน 2 MB (${mb} MB) — โปรดย่อขนาดก่อนอัปโหลด`;
+    return `ไฟล์ใหญ่เกิน ${MAX_UPLOAD_MB} MB (${mb} MB) — โปรดย่อขนาดก่อนอัปโหลด`;
   }
   // Some browsers omit type for uncommon files; fall back to extension.
-  if (f.type && !ACCEPT_MIME.includes(f.type)) {
-    const ext = f.name.toLowerCase().split(".").pop() ?? "";
-    if (!["pdf", "jpg", "jpeg", "png"].includes(ext)) {
-      return "รองรับเฉพาะไฟล์ PDF, JPG, หรือ PNG เท่านั้น";
+  const ext = f.name.toLowerCase().split(".").pop() ?? "";
+  const looksPDF = f.type ? ACCEPT_MIME.includes(f.type) : ext === "pdf";
+  if (!looksPDF) {
+    // Name the likely cause: a phone photo is what people actually try first.
+    if (["jpg", "jpeg", "png", "heic", "heif", "webp"].includes(ext)) {
+      return "ตอนนี้รับเฉพาะไฟล์ PDF — ถ้าถ่ายรูปมา ให้แปลงเป็น PDF ก่อน (แอปกล้อง/สแกนบนมือถือส่วนใหญ่บันทึกเป็น PDF ได้)";
     }
+    return "รองรับเฉพาะไฟล์ PDF เท่านั้น";
   }
   return null;
 }
@@ -62,6 +73,16 @@ const emptyProfile: Profile = {
   signature_svg: "", signature_png_b64: "", status: "pending",
 };
 
+// PDPA: these never reach the database (migration 0047 dropped the columns).
+// They live in this form only, long enough to be printed into the creditor-form
+// PDF, and the server always returns them blank. Anything that re-syncs from
+// the server must therefore preserve the local value instead of adopting the
+// blank one — see the merge in ProfilePage.
+const SESSION_ONLY_FIELDS = [
+  "national_id", "bank_name", "bank_branch", "branch_code",
+  "account_no", "account_name", "signature_svg", "signature_png_b64",
+] as const satisfies readonly (keyof Profile)[];
+
 type DocKind = "creditor_form" | "national_id" | "bank_book";
 
 const STEP_META: Array<{
@@ -77,12 +98,23 @@ const STEP_META: Array<{
   { id: "bank_book",     n: 4, title: "หน้าสมุดบัญชี",                    subtitle: "หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลขบัตร ปชช.", icon: BookOpen },
 ];
 
+// Step titles by doc kind, for messages that name a specific document. Derived
+// from STEP_META so a rename cannot leave the two spellings disagreeing.
+const DOC_LABEL: Record<string, string> = Object.fromEntries(
+  STEP_META.map(s => [s.id, s.title]),
+);
+
 // A step is "done" enough to unlock the next when the user has taken the
 // concrete on-page action for it — regardless of staff review status,
 // which is a separate signal (StatusChip) shown alongside.
+// Step 1 is complete once the TA has SUBMITTED a valid form — which is what
+// `status` records. It cannot be judged from the field values any more: the
+// national ID, bank details and signature are never stored (migration 0047),
+// so on the next page load those boxes come back empty by design. Judging
+// completeness from them would mark a finished step as unfinished forever,
+// which is exactly the bug this replaced.
 function isProfileStepDone(p: Profile | undefined) {
-  if (!p) return false;
-  return validateProfile(p) === null && !!p.signature_svg;
+  return !!p && p.status !== "pending" && p.status !== "";
 }
 
 // Thai national-ID checksum (mod-11). The 13th digit is a check digit derived
@@ -198,7 +230,22 @@ export default function ProfilePage() {
   const [form, setForm] = useState<Profile>(emptyProfile);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["profile"]));
 
-  useEffect(() => { if (data) setForm(data); }, [data]);
+  // Merge, never replace. GET /me/profile CANNOT return these fields — they are
+  // not stored anywhere (migration 0047), so the server copy is structurally
+  // blank for them. save() refetches right after the PUT, so replacing the form
+  // wholesale erased the national ID / bank details the TA had just typed:
+  // step 1 reported "ไม่ครบ" seconds after saving it, and retyping looped
+  // forever. Local value wins when it has one; the server's is used only to
+  // seed an empty field (GetProfile pre-fills account_name from the user's
+  // name).
+  useEffect(() => {
+    if (!data) return;
+    setForm(prev => {
+      const next = { ...prev, ...data };
+      for (const k of SESSION_ONLY_FIELDS) next[k] = prev[k] || data[k] || "";
+      return next;
+    });
+  }, [data]);
 
   // A doc step is "done" only when a file exists AND staff hasn't sent it
   // back for fixes. Otherwise the step is either untouched or needs the TA's
@@ -209,8 +256,27 @@ export default function ProfilePage() {
   const isDocNeedsFix = (d: Doc | undefined) =>
     !!d && (d.status === "rejected" || d.status === "needs_fix");
 
-  const profileNeedsFix =
-    data?.status === "rejected" || data?.status === "needs_fix";
+  // ONLY 'rejected' is a verdict on step 1.
+  //
+  // 'needs_fix' on the profile row is written by the officer's DOCUMENT rejection
+  // (service.RejectBatch) purely so the TA gets bounced back to this page with a
+  // reason attached — it is a carrier, not a judgement on the profile data.
+  // Treating it as one marked step 1 "ต้องแก้ไข" whenever any document was sent
+  // back, which told the TA to redo the form that produced the creditor-form PDF
+  // the officer had just APPROVED. Nothing they did there was wrong, and re-saving
+  // it bumps the submission round for no reason.
+  const profileNeedsFix = data?.status === "rejected";
+
+  // What the TA actually has to fix, read off the documents themselves. The
+  // profile's own reject_reason is not reliable for this: it is only rewritten by
+  // RejectBatch, so a document rejected on its own afterwards never appears in it
+  // (observed: profile said "บัตรประชาชน: …" while the bank book was rejected too).
+  const rejectedDocs = useMemo(
+    // /me/documents only returns current rows (superseded_at IS NULL), so a
+    // replaced file cannot linger here as a stale complaint.
+    () => (docs ?? []).filter(d => d.status === "rejected" || d.status === "needs_fix"),
+    [docs],
+  );
 
   const doneMap = useMemo(() => ({
     profile:       isProfileStepDone(data ?? undefined) && !profileNeedsFix,
@@ -225,6 +291,21 @@ export default function ProfilePage() {
     national_id:   isDocNeedsFix(findDoc(docs, "national_id")),
     bank_book:     isDocNeedsFix(findDoc(docs, "bank_book")),
   }), [docs, profileNeedsFix]);
+
+  // Open the step the TA actually has to act on. "profile" is the right default
+  // for a first visit, but for someone sent back on their ID copy it opened the
+  // one step that was already accepted — which is most of why being bounced back
+  // read as "redo everything". Runs once per mount, after the first data arrives,
+  // so it never yanks a panel closed while the TA is typing in it.
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (autoOpened.current || !data || !docs) return;
+    autoOpened.current = true;
+    const first =
+      STEP_META.find(s => needsFixMap[s.id as keyof typeof needsFixMap]) ??
+      STEP_META.find(s => !doneMap[s.id as keyof typeof doneMap]);
+    if (first) setExpanded(new Set([first.id]));
+  }, [data, docs, doneMap, needsFixMap]);
 
   const doneCount = Object.values(doneMap).filter(Boolean).length;
   const total = STEP_META.length;
@@ -249,13 +330,20 @@ export default function ProfilePage() {
           />
         </div>
       )}
-      {data?.status === "needs_fix" && (
+      {/* Driven by the documents, not by profile.status: the officer may reject a
+          document one at a time, and only a batch rejection rewrites the profile
+          row — so the profile's copy of "what to fix" goes stale. Listing each
+          rejected file with its own reason is also more actionable than one
+          concatenated string. */}
+      {data?.status !== "rejected" && rejectedDocs.length > 0 && (
         <div className="mb-4">
           <Alert
             status="warning"
             icon={<AlertTriangle size={18} />}
-            title="เจ้าหน้าที่ขอให้แก้ไขบางส่วน"
-            description={data.reject_reason ?? "โปรดตรวจสอบเอกสารที่ติดสถานะ “ต้องแก้ไข” ด้านล่างและส่งใหม่"}
+            title={`เจ้าหน้าที่ขอให้แก้ไข ${rejectedDocs.length} รายการ — เฉพาะรายการที่ระบุ ส่วนอื่นที่ผ่านแล้วไม่ต้องทำใหม่`}
+            description={rejectedDocs
+              .map(d => `• ${DOC_LABEL[d.kind] ?? d.kind}: ${d.reject_reason ?? "-"}`)
+              .join("\n")}
           />
         </div>
       )}
@@ -327,8 +415,9 @@ export default function ProfilePage() {
                   />
                 ) : step.id === "creditor_form" ? (
                   <CreditorFormStep
+                    form={form}
                     doc={findDoc(docs, "creditor_form")}
-                    profileReady={doneMap.profile}
+                    profileReady={validateProfile(form) === null}
                     onDone={() => {
                       const next = STEP_META.find(s => s.n === step.n + 1)?.id;
                       if (next) setExpanded(new Set([next]));
@@ -511,7 +600,7 @@ function ProfileStep({
               ? <span className="text-warning">{nidChecksumWarn}</span>
               : nidDigits.length > 0 && !nidErr
                 ? `กรอกครบ ${nidDigits.length}/13`
-                : undefined
+                : "ระบบไม่จัดเก็บเลขบัตรลงฐานข้อมูล — ใช้พิมพ์ลงแบบฟอร์มเจ้าหนี้เท่านั้น"
           }
           error={nidErr}
         >
@@ -621,21 +710,51 @@ function ProfileStep({
 /* -------------------------------------------------------------------------- */
 
 function CreditorFormStep({
-  doc, profileReady, onDone,
-}: { doc: Doc | undefined; profileReady: boolean; onDone: () => void }) {
+  form, doc, profileReady, onDone,
+}: { form: Profile; doc: Doc | undefined; profileReady: boolean; onDone: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [showGrid, setShowGrid] = useState(false);
-  // Bump the nonce to force the iframe to re-fetch (browsers cache PDF blobs
-  // aggressively — even with Cache-Control: no-store the embedded viewer will
-  // hold onto the last render otherwise).
-  const [nonce, setNonce] = useState(() => Date.now());
+  const [previewURL, setPreviewURL] = useState<string | null>(null);
+  const [previewErr, setPreviewErr] = useState<string | null>(null);
+
+  // The preview is POSTed, not linked: the server has nothing stored to render
+  // from, so the data travels in the body. That also keeps the national ID and
+  // account number out of the URL, browser history and access logs.
+  //
+  // The blob URL is revoked whenever it is replaced and on unmount — an
+  // un-revoked object URL keeps a PDF full of PII alive in memory for the life
+  // of the tab.
+  const formKey = JSON.stringify(form);
+  useEffect(() => {
+    if (!profileReady) { setPreviewURL(null); return; }
+    let url: string | null = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        setPreviewErr(null);
+        const blob = await api.post<Blob>(
+          `/me/creditor-form/preview.pdf${showGrid ? "?grid=1" : ""}`, form);
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setPreviewURL(url);
+      } catch (e) {
+        if (!cancelled) setPreviewErr(e instanceof Error ? e.message : "สร้างตัวอย่างไม่สำเร็จ");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+    // formKey (not form) so an identical object identity change doesn't refetch.
+  }, [formKey, profileReady, showGrid]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function confirm() {
     setConfirming(true);
     try {
-      await api.post("/me/creditor-form/confirm", {});
+      await api.post("/me/creditor-form/confirm", form);
       notify.success("บันทึกเอกสารที่ระบบสร้างเรียบร้อย");
       await mutate("/me/documents");
       onDone();
@@ -661,19 +780,22 @@ function CreditorFormStep({
   async function upload() {
     if (!file) return;
     setUploading(true);
+    const name = file.name;
+    setUploadProgress({ phase: "sending", percent: 0, loaded: 0, total: file.size });
     try {
       const fd = new FormData();
       fd.append("kind", "creditor_form");
       fd.append("file", file);
-      await api.upload("/me/documents", fd);
+      await api.uploadWithProgress("/me/documents", fd, setUploadProgress);
       setFile(null);
-      notify.success("อัปโหลดเรียบร้อย");
+      notify.success(`อัปโหลด ${name} เรียบร้อย — ไฟล์ผ่านการสแกนไวรัสแล้ว`);
       await mutate("/me/documents");
       onDone();
     } catch (e) {
       notify.error(e);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -682,8 +804,10 @@ function CreditorFormStep({
       <Alert
         status="warning"
         icon={<AlertTriangle size={16} />}
-        title="กรอกข้อมูลในขั้นตอนที่ 1 ให้ครบก่อน"
-        description="ระบบจะสร้างฟอร์มให้อัตโนมัติจากข้อมูลที่บันทึกไว้"
+        title={doc ? "กรอกข้อมูลขั้นตอนที่ 1 อีกครั้งเพื่อสร้างฟอร์มใหม่" : "กรอกข้อมูลในขั้นตอนที่ 1 ให้ครบก่อน"}
+        description={doc
+          ? "ระบบไม่จัดเก็บเลขบัตร ข้อมูลธนาคาร และลายเซ็นไว้ในฐานข้อมูล (PDPA) — ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง"
+          : "ระบบจะสร้างฟอร์มจากข้อมูลที่กรอก โดยไม่บันทึกข้อมูลเหล่านั้นลงฐานข้อมูล"}
       />
     );
   }
@@ -698,25 +822,23 @@ function CreditorFormStep({
           </div>
           <button
             type="button"
-            onClick={() => { setShowGrid(g => !g); setNonce(Date.now()); }}
+            onClick={() => setShowGrid(g => !g)}
             className="text-xs text-slate-500 hover:text-slate-800"
           >
             {showGrid ? "ซ่อนตาราง" : "ตาราง (debug)"}
           </button>
-          <button
-            type="button"
-            onClick={() => setNonce(Date.now())}
-            className="text-xs text-slate-500 hover:text-slate-800"
-          >
-            รีเฟรช
-          </button>
         </div>
         <div className="border border-[var(--hairline)] rounded-md overflow-hidden bg-slate-100">
-          <iframe
-            src={`/api/v1/me/creditor-form.pdf?v=${nonce}${showGrid ? "&grid=1" : ""}`}
-            title="แบบแจ้งข้อมูลเจ้าหนี้บุคลากร (ล่วงหน้า)"
-            className="w-full h-[720px] block"
-          />
+          {previewErr ? (
+            <div className="p-4 text-sm text-danger">{previewErr}</div>
+          ) : previewURL ? (
+            <PdfFrame
+              src={previewURL}
+              title="แบบแจ้งข้อมูลเจ้าหนี้บุคลากร (ล่วงหน้า)"
+            />
+          ) : (
+            <div className="p-4 text-sm text-muted">กำลังสร้างตัวอย่าง…</div>
+          )}
         </div>
       </div>
 
@@ -736,21 +858,32 @@ function CreditorFormStep({
         <Button variant="primary" onClick={confirm} disabled={confirming}>
           <CheckCircle2 size={14} /> {confirming ? "กำลังบันทึก…" : "ยืนยันและบันทึกเอกสารนี้"}
         </Button>
-        <a href="/api/v1/creditor-form/blank.pdf" target="_blank" rel="noopener noreferrer">
-          <Button variant="secondary">
-            <Download size={14} /> ดาวน์โหลดฟอร์มเปล่า
-          </Button>
-        </a>
+        {/* The button IS the anchor. Nested inside one, the press handler eats
+            the click and target="_blank" never applies — the PDF would replace
+            this page instead of opening beside it, losing the form in progress. */}
+        <Button
+          variant="secondary"
+          render={props => (
+            <a
+              {...(props as unknown as React.ComponentProps<"a">)}
+              href="/api/v1/creditor-form/blank.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+            />
+          )}
+        >
+          <Download size={14} /> ดาวน์โหลดฟอร์มเปล่า
+        </Button>
       </div>
 
       <div className="mt-4 pt-4 border-t border-[var(--hairline)]">
         <div className="text-xs text-muted mb-2">
-          หากระบบกรอกไม่ตรง คุณกรอกลงในฟอร์มเปล่าเอง แล้วสแกน/ถ่ายรูปมาแนบที่นี่แทนได้
+          หากระบบกรอกไม่ตรง คุณกรอกลงในฟอร์มเปล่าเอง แล้วสแกนเป็นไฟล์ PDF มาแนบที่นี่แทนได้
         </div>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
           <FieldGroup
             label={doc ? "อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)" : "เลือกไฟล์ที่กรอกเอง"}
-            hint="รับเฉพาะ PDF / JPG / PNG · ขนาดไม่เกิน 2 MB"
+            hint={`รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน ${MAX_UPLOAD_MB} MB`}
           >
             <input
               type="file" accept={ACCEPT_ATTR}
@@ -763,6 +896,8 @@ function CreditorFormStep({
           </Button>
         </div>
       </div>
+
+      <UploadProgressModal progress={uploadProgress} filename={file?.name} />
     </div>
   );
 }
@@ -776,35 +911,53 @@ function DocStep({
 }: { kind: DocKind; doc: Doc | undefined; onUploaded: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  // Blob URL for the chosen file so the TA can SEE what they are about to
+  // send. Uploading the wrong document is the mistake this catches — an
+  // officer three days later is a slow and embarrassing way to find out.
+  const [previewURL, setPreviewURL] = useState<string | null>(null);
+
+  // Blob URLs are held by the document until explicitly released.
+  useEffect(() => () => { if (previewURL) URL.revokeObjectURL(previewURL); }, [previewURL]);
+
+  function setChosen(f: File | null) {
+    setPreviewURL(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return f ? URL.createObjectURL(f) : null;
+    });
+    setFile(f);
+  }
 
   function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
-    if (!f) { setFile(null); return; }
+    if (!f) { setChosen(null); return; }
     const err = validateUploadFile(f);
     if (err) {
       // Clear the native input so the rejected filename doesn't linger and
       // re-selecting the same file still re-fires onChange.
-      setFile(null); e.target.value = ""; notify.error(err); return;
+      setChosen(null); e.target.value = ""; notify.error(err); return;
     }
-    setFile(f);
+    setChosen(f);
   }
 
   async function upload() {
     if (!file) return;
     setUploading(true);
+    const name = file.name;
+    setUploadProgress({ phase: "sending", percent: 0, loaded: 0, total: file.size });
     try {
       const fd = new FormData();
       fd.append("kind", kind);
       fd.append("file", file);
-      await api.upload("/me/documents", fd);
-      setFile(null);
-      notify.success("อัปโหลดเรียบร้อย");
+      await api.uploadWithProgress("/me/documents", fd, setUploadProgress);
+      setChosen(null);
+      notify.success(`อัปโหลด ${name} เรียบร้อย — ไฟล์ผ่านการสแกนไวรัสแล้ว`);
       await mutate("/me/documents");
       onUploaded();
     } catch (e) {
       notify.error(e);
     }
-    finally { setUploading(false); }
+    finally { setUploading(false); setUploadProgress(null); }
   }
 
   return (
@@ -828,7 +981,7 @@ function DocStep({
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
         <FieldGroup
           label={doc ? "อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)" : "เลือกไฟล์"}
-          hint="รับเฉพาะ PDF / JPG / PNG · ขนาดไม่เกิน 2 MB"
+          hint={`รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน ${MAX_UPLOAD_MB} MB`}
         >
           <input
             type="file" accept={ACCEPT_ATTR}
@@ -840,6 +993,39 @@ function DocStep({
           <Upload size={14} /> {uploading ? "กำลังอัปโหลด…" : "อัปโหลด"}
         </Button>
       </div>
+
+      {/* Check-before-send. Rendered from a local blob, so nothing has left
+          the device yet and a wrong pick costs one more click instead of a
+          rejection days later. */}
+      {file && previewURL && (
+        <div className="mt-3 rounded-lg border border-[var(--hairline)] overflow-hidden">
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hairline)] bg-surface-secondary px-3 py-2">
+            <FileText size={14} className="text-muted" />
+            <span className="text-xs font-medium">ตรวจก่อนอัปโหลด</span>
+            <span className="truncate text-xs text-muted">{file.name}</span>
+            <span className="text-xs text-muted">
+              · {(file.size / 1024).toFixed(0)} KB
+            </span>
+            <button
+              type="button"
+              onClick={() => setChosen(null)}
+              className="ml-auto text-xs text-muted underline underline-offset-2 hover:text-foreground"
+            >
+              เลือกไฟล์ใหม่
+            </button>
+          </div>
+          <PdfFrame
+            src={previewURL}
+            title={`ตรวจก่อนอัปโหลด — ${file.name}`}
+          />
+          <p className="border-t border-[var(--hairline)] px-3 py-2 text-xs text-muted">
+            ตรวจว่าเป็นเอกสารที่ถูกต้องและอ่านออกชัดเจน — ถ้าอัปผิดไฟล์
+            เจ้าหน้าที่จะตีกลับและต้องส่งใหม่
+          </p>
+        </div>
+      )}
+
+      <UploadProgressModal progress={uploadProgress} filename={file?.name} />
     </div>
   );
 }

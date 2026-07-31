@@ -1,12 +1,12 @@
 "use client";
 import useSWR from "swr";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2, XCircle, ChevronDown, Users, BookOpenCheck, FileCheck2, CalendarCheck2,
   ShieldCheck, ShieldAlert, ClipboardList,
 } from "lucide-react";
 import { Accordion } from "@heroui/react";
-import { type Term } from "../../lib/api";
+import { useTerm } from "../TermContext";
 import {
   PageHeader, Panel, Chip, SearchField, SelectField,
 } from "../../components/ui";
@@ -71,38 +71,44 @@ const STATUS_META: Record<string, { tone: "success" | "danger" | "neutral"; labe
 };
 
 export default function TARequestsPage() {
+  // This page is the one exception to "the switcher is the scope". It loads
+  // every request and filters client-side, which lets staff widen to "ทุกปี /
+  // ทุกเทอม" — comparing a course against last year's request is a real part
+  // of the job here and no other page needs it. So the switcher SEEDS the
+  // filters rather than replacing them: switching term snaps them back to that
+  // term, and the officer can widen again from there.
   const { data, error } = useSWR<RequestSummary[]>("/ta-requests");
-  const { data: terms } = useSWR<Term[]>("/terms");
-
+  const { terms, term, termId } = useTerm();
   const activeTerm = terms?.find(t => t.is_active);
+
   const rows = useMemo(() => data ?? [], [data]);
 
   const yearOptions = useMemo(() => {
     const set = new Set<number>();
     rows.forEach(r => set.add(r.academic_year));
-    if (activeTerm) set.add(activeTerm.academic_year);
+    if (term) set.add(term.academic_year);
     return [...set].sort((a, b) => b - a);
-  }, [rows, activeTerm]);
+  }, [rows, term]);
   const semesterOptions = useMemo(() => {
     const set = new Set<number>();
     rows.forEach(r => set.add(r.semester));
-    if (activeTerm) set.add(activeTerm.semester);
+    if (term) set.add(term.semester);
     return [...set].sort();
-  }, [rows, activeTerm]);
+  }, [rows, term]);
 
   const [year, setYear] = useState<string>("");
   const [sem, setSem] = useState<string>("");
   const [q, setQ] = useState("");
 
-  // Default to the active term on first load only. If the officer clears them,
-  // don't re-apply — matches the pattern from the previous implementation.
-  const [seeded, setSeeded] = useState(false);
+  // Re-seed on every term change, not just the first load: the switcher is a
+  // deliberate act, so it should win over a filter the officer widened earlier.
+  const seededFor = useRef<string | null>(null);
   useEffect(() => {
-    if (seeded || !activeTerm) return;
-    setYear(String(activeTerm.academic_year));
-    setSem(String(activeTerm.semester));
-    setSeeded(true);
-  }, [activeTerm, seeded]);
+    if (!term || seededFor.current === termId) return;
+    seededFor.current = termId;
+    setYear(String(term.academic_year));
+    setSem(String(term.semester));
+  }, [term, termId]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -140,9 +146,19 @@ export default function TARequestsPage() {
             onChange={setYear}
             options={[
               { id: "", label: "ทุกปี" },
+              // Marked with the same <Chip>active</Chip> the settings page and
+              // the term switcher use — one word for one concept, so anyone who
+              // wonders what "active" means can search it and find the switch
+              // that sets it (ตั้งค่า → ภาคเรียน).
               ...yearOptions.map(y => ({
                 id: String(y),
-                label: `${y}${activeTerm?.academic_year === y ? " (ปัจจุบัน)" : ""}`,
+                textValue: String(y),
+                label: (
+                  <span className="flex items-center gap-2">
+                    <span className="tabular-nums">{y}</span>
+                    {activeTerm?.academic_year === y && <Chip tone="success">active</Chip>}
+                  </span>
+                ),
               })),
             ]}
           />
@@ -155,7 +171,13 @@ export default function TARequestsPage() {
               { id: "", label: "ทุกภาค" },
               ...semesterOptions.map(s => ({
                 id: String(s),
-                label: `${SEMESTER_LABEL[s] ?? `ภาค ${s}`}${activeTerm?.semester === s ? " (ปัจจุบัน)" : ""}`,
+                textValue: SEMESTER_LABEL[s] ?? `ภาค ${s}`,
+                label: (
+                  <span className="flex items-center gap-2">
+                    <span>{SEMESTER_LABEL[s] ?? `ภาค ${s}`}</span>
+                    {activeTerm?.semester === s && <Chip tone="success">active</Chip>}
+                  </span>
+                ),
               })),
             ]}
           />
