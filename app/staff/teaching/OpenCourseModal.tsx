@@ -9,6 +9,7 @@ import {
 import { BookPlus, CircleAlert, Clock, Check, Plus, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
+import { formatFullName } from "../../lib/prefixes";
 import {
   Modal, Button, FieldGroup, TextInput, Alert, Chip, Select,
 } from "../../components/ui";
@@ -83,7 +84,7 @@ interface LecturerUser {
   email: string;
 }
 function lecturerName(u: LecturerUser): string {
-  return [u.title, u.first_name, u.last_name].filter(Boolean).join(" ") || u.email;
+  return formatFullName(u) || u.email;
 }
 
 // CP KKU numbering: sec_no runs continuously across tracks — regular gets 1..N,

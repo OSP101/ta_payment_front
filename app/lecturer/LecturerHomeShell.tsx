@@ -1,94 +1,89 @@
 "use client";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Button, Dropdown, Label, Link as HLink } from "@heroui/react";
-import { ChevronDown, LogOut, Megaphone, Route } from "lucide-react";
+import useSWR from "swr";
+import {
+  LayoutDashboard, Route, Megaphone, Bell, IdCard,
+} from "lucide-react";
 import type { Me } from "../lib/api";
-import { api } from "../lib/api";
+import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
-import UserAvatar from "../components/UserAvatar";
-import { roleLabel } from "../components/Shell";
+
+// The lecturer's home used to be a bare header with two links buried in the top
+// bar, so /document-progress and /announcements were reachable from here and
+// nowhere else. A sidebar puts them in the same place the TA, staff and
+// per-course shells put their navigation — one layout to learn instead of four.
+//
+// The dropdown keeps what belongs to the account: who you are signed in as,
+// account settings, and sign-out (Shell adds that itself).
+
+interface PendingReport { teaching_course_id: string }
+
+const buildNav = (pendingCourses: number): NavSection[] => [
+  {
+    title: "ภาพรวม",
+    items: [
+      // Approving TA hours has no page of its own — it happens inside a course —
+      // so the count rides on the link to the course list, which is where the
+      // waiting courses are named. It is the lecturer's one recurring duty and
+      // the bottleneck of the whole payout, so it must be visible from the
+      // pages below too, not only from the home page itself.
+      {
+        label: "หน้าหลัก",
+        href: "/lecturer",
+        icon: LayoutDashboard,
+        exact: true,
+        badge: pendingCourses,
+        badgeLabel: "วิชาที่มีบันทึกเวลารออนุมัติ",
+      },
+    ],
+  },
+  {
+    title: "ของฉัน",
+    items: [
+      // /account carries the profile picture, personal details, sign-in and
+      // security — "โปรไฟล์และบัญชี" says both halves, because a label of just
+      // "โปรไฟล์" hides where the password is changed.
+      { label: "โปรไฟล์และบัญชี", href: "/account", icon: IdCard },
+    ],
+  },
+  {
+    title: "ติดตาม",
+    items: [
+      { label: "ความคืบหน้าเอกสาร", href: "/document-progress", icon: Route },
+      { label: "ประกาศ", href: "/announcements", icon: Megaphone },
+    ],
+  },
+];
+
+// Account settings moved to the sidebar above, so the dropdown keeps only what
+// has no home there. Two identical links on one screen is one too many.
+const userMenuItems: UserMenuItem[] = [
+  { id: "notif", label: "การเตือน", href: "/notifications", icon: Bell },
+];
 
 export default function LecturerHomeShell({
   me, children,
 }: { me: Me; children: React.ReactNode }) {
-  const router = useRouter();
-
-  async function logout() {
-    try { await api.post("/auth/logout"); } catch {}
-    router.push("/login");
-    router.refresh();
-  }
-
-  const fullName = [me.title, me.first_name, me.last_name].filter(Boolean).join(" ");
-  const roleLbl = roleLabel(me.roles);
+  // Same endpoint the per-course sidebar counts from, so the two cannot drift.
+  // Counted by COURSE, not by report row: the badge sits next to a link that
+  // lands on the course list, and "12" would promise twelve things to click.
+  //
+  // Staff and admin may open this page to manage on a lecturer's behalf, and
+  // the endpoint hands THEM every pending report in the faculty. That number is
+  // not their to-do list and would read as one, so they get no badge — the
+  // per-course sidebar still shows the count where it belongs to a course.
+  const isLecturer = me.roles.includes("lecturer");
+  const { data: pending } = useSWR<PendingReport[]>(isLecturer ? "/reports/pending" : null);
+  const pendingCourses = new Set((pending ?? []).map(r => r.teaching_course_id)).size;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-8 shrink-0 sticky top-0 z-30">
-        <div className="flex items-center gap-2 min-w-0">
-          <Link
-            href="/"
-            aria-label="TA Payment — ไปหน้าแรก"
-            className="flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 hover:bg-surface-secondary transition-colors"
-          >
-            <div className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent shrink-0">
-              T
-            </div>
-            <div className="font-semibold text-[15px] text-foreground leading-tight">
-              TA Payment
-            </div>
-          </Link>
-        </div>
-
-        <div className="flex-1" />
-
-        <HLink href="/document-progress" className="hidden md:inline-flex text-sm">
-          <Route size={14} className="me-1" />
-          ความคืบหน้าเอกสาร
-        </HLink>
-
-        <HLink href="/announcements" className="hidden md:inline-flex text-sm">
-          <Megaphone size={14} className="me-1" />
-          ประกาศ
-        </HLink>
-
-        <NotificationBell />
-
-        <Dropdown>
-          <Button variant="ghost" aria-label="เมนูผู้ใช้" className="px-1.5! gap-2! h-auto! py-1!">
-            <UserAvatar firstName={me.first_name} lastName={me.last_name} src={me.avatar_url} />
-            <div className="hidden sm:flex flex-col items-start min-w-0 leading-tight">
-              <span className="text-sm font-medium text-foreground truncate max-w-40 md:max-w-56">
-                {fullName}
-              </span>
-              <span className="text-xs text-muted truncate max-w-40 md:max-w-56">
-                {roleLbl}
-              </span>
-            </div>
-            <ChevronDown size={14} />
-          </Button>
-          <Dropdown.Popover>
-            <div className="px-3 py-2.5 border-b border-border">
-              <div className="text-sm font-medium text-foreground truncate max-w-55">
-                {fullName}
-              </div>
-              <div className="text-xs text-muted truncate max-w-55">{roleLbl}</div>
-              <div className="text-xs text-muted truncate max-w-55">{me.email}</div>
-            </div>
-            <Dropdown.Menu onAction={(key: React.Key) => { if (key === "logout") logout(); }}>
-              <Dropdown.Item id="logout" textValue="ออกจากระบบ" variant="danger">
-                <LogOut className="size-4 shrink-0 text-danger" />
-                <Label>ออกจากระบบ</Label>
-              </Dropdown.Item>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
-      </header>
-
-      <main className="flex-1 p-4 md:p-8 max-w-[1200px] w-full mx-auto">
-        {children}
-      </main>
-    </div>
+    <Shell
+      me={me}
+      brandTitle="TA Payment"
+      nav={buildNav(pendingCourses)}
+      userMenuItems={userMenuItems}
+      topBarAccessory={<NotificationBell />}
+    >
+      {children}
+    </Shell>
   );
 }

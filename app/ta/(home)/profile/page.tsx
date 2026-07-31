@@ -1,22 +1,9 @@
-"use client";
-import useSWR from "swr";
-import type { Me } from "../../../lib/api";
-import { PageHeader } from "../../../components/ui";
-import AccountSettings from "../../../components/AccountSettings";
+import { redirect } from "next/navigation";
 
-// Account settings: picture, identity, sign-in, and security. Documents (bank
-// info, signature, ID copies, etc.) live on the separate /ta/documents page —
-// those are workflow artifacts, not the account itself.
-export default function TAProfilePage() {
-  const { data: me } = useSWR<Me>("/me");
-
-  return (
-    <div>
-      <PageHeader
-        title="ตั้งค่าบัญชี"
-        description="จัดการรูปโปรไฟล์ ข้อมูลส่วนตัว การเข้าสู่ระบบ และความปลอดภัย"
-      />
-      <AccountSettings me={me} />
-    </div>
-  );
+// The account screen moved to /account, which now renders inside whichever
+// shell the reader belongs to — so a TA and a lecturer see the same page with
+// their own sidebar, instead of two copies that can drift apart. Kept as a
+// redirect because /ta/profile is what TAs have bookmarked.
+export default function TAProfileRedirect() {
+  redirect("/account");
 }

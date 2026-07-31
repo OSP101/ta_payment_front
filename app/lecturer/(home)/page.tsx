@@ -1,12 +1,17 @@
 "use client";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpen, Users, Calculator, ArrowRight, CalendarClock, CalendarOff, CalendarX2, CircleAlert, Wallet, ClipboardCheck } from "lucide-react";
-import type { Term } from "../../lib/api";
 import {
-  PageHeader, Panel, EmptyState, Chip, Button, SelectField, Alert, type SelectOption,
+  BookOpen, Users, ArrowRight, CalendarClock, CalendarOff, CalendarX2,
+  CircleAlert, Wallet, ClipboardCheck, Send, UserPlus, ChevronDown,
+} from "lucide-react";
+import type { Term } from "../../lib/api";
+import AnnouncementFeed from "../../components/AnnouncementFeed";
+import {
+  PageHeader, Panel, EmptyState, Chip, Button, SelectField, Alert,
+  type SelectOption, type ChipTone,
 } from "../../components/ui";
 
 interface TC {
@@ -30,6 +35,20 @@ interface LecturerCourseStatus {
   estimated_baht: number;
   budget_max: number;
   budget_used: number;
+}
+
+/**
+ * A course with no approved TA is not the same as a course nobody asked for.
+ * ta_count only counts assignments on APPROVED requests, so without the request
+ * list a course whose request is sitting with staff would read "ยังไม่ได้ส่งคำขอ"
+ * and invite the lecturer to send it a second time.
+ */
+interface TARequestRow {
+  id: string;
+  teaching_course_id: string;
+  status: string;
+  ta_count?: number;
+  submitted_at?: string;
 }
 
 const SEMESTER_LABELS: Record<number, string> = {
@@ -121,6 +140,28 @@ export default function LecturerHome() {
     return m;
   }, [overview]);
 
+  // The lecturer's own requests — used only to tell "ยังไม่ได้ส่ง" apart from
+  // "ส่งแล้ว รอเจ้าหน้าที่". Courses are already filtered by term, so matching
+  // on teaching_course_id is enough.
+  // Deduplicated with AnnouncementFeed's own fetch of the same key. Read here
+  // only to size and, when empty, pre-collapse the section around it.
+  const { data: announcements } = useSWR<unknown[]>("/announcements");
+
+  const { data: requests } = useSWR<TARequestRow[]>("/ta-requests");
+  const requestByCourse = useMemo(() => {
+    const m = new Map<string, TARequestRow>();
+    // A course can carry several requests over a term. What the card must not
+    // hide is one still waiting on staff, so a submitted row always wins;
+    // otherwise the newest decision stands (the list arrives newest-first).
+    for (const r of requests ?? []) {
+      const prev = m.get(r.teaching_course_id);
+      if (!prev || (r.status === "submitted" && prev.status !== "submitted")) {
+        m.set(r.teaching_course_id, r);
+      }
+    }
+    return m;
+  }, [requests]);
+
   function setYear(y: string) {
     const list = byYear.find(([yr]) => String(yr) === y)?.[1] ?? [];
     const nextTerm = list.find(t => t.is_active)?.id ?? list[0]?.id ?? "";
@@ -139,20 +180,21 @@ export default function LecturerHome() {
   const termsLoaded = terms !== undefined;
   const noTerms = termsLoaded && terms!.length === 0;
 
-  const totalStudents = (courses ?? []).reduce((a, c) => a + (c.num_students ?? 0), 0);
-  const activeTerm = yearTerms.find(t => t.id === defaultTerm);
-  const termDisplay = activeTerm
-    ? `${activeTerm.academic_year}/${activeTerm.semester} — ${SEMESTER_LABELS[activeTerm.semester] ?? ""}`
-    : "";
+  // Splitting by TA needs the overview. Until it lands every course would look
+  // like "ยังไม่มี TA" — a wrong claim that then rearranges itself under the
+  // reader. One undivided list is the honest intermediate state.
+  const canSplit = overview !== undefined;
+  const withTA = (courses ?? []).filter(c => (overviewById.get(c.id)?.ta_count ?? 0) > 0);
+  const withoutTA = (courses ?? []).filter(c => (overviewById.get(c.id)?.ta_count ?? 0) === 0);
 
-  const pageDesc = "เลือกปีการศึกษาและภาคเรียน เพื่อดูรายวิชาที่คุณรับผิดชอบ";
+  const pageDesc = "รายวิชาที่คุณรับผิดชอบ และสิ่งที่ต้องดำเนินการในภาคเรียนนี้";
 
   // Terms failed to load — show a real error (with retry) instead of the
   // misleading "ยังไม่มีภาคเรียน" empty state.
   if (termsError && terms === undefined) {
     return (
       <div>
-        <PageHeader title="รายวิชาที่สอน" description={pageDesc} />
+        <PageHeader title="หน้าหลักของฉัน" description={pageDesc} />
         <Panel>
           <Alert
             status="danger"
@@ -174,21 +216,9 @@ export default function LecturerHome() {
   if (!termsLoaded) {
     return (
       <div>
-        <PageHeader title="รายวิชาที่สอน" description={pageDesc} />
-        {/* No card-row placeholder: this page has no stat cards, so three
-            card-shaped boxes only promised something that never arrives. */}
+        <PageHeader title="หน้าหลักของฉัน" description={pageDesc} />
         <Panel padded={false}>
-          <div className="divide-y divide-[var(--hairline)]">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="flex items-center gap-4 px-5 py-4">
-                <div className="w-10 h-10 rounded-lg bg-surface-secondary animate-pulse shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-1/3 rounded bg-surface-secondary animate-pulse" />
-                  <div className="h-3 w-1/4 rounded bg-surface-secondary animate-pulse" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <CardGridSkeleton />
         </Panel>
       </div>
     );
@@ -197,8 +227,8 @@ export default function LecturerHome() {
   return (
     <div>
       <PageHeader
-        title="รายวิชาที่สอน"
-        description="เลือกปีการศึกษาและภาคเรียน เพื่อดูรายวิชาที่คุณรับผิดชอบ"
+        title="หน้าหลักของฉัน"
+        description={pageDesc}
         actions={
           noTerms ? null : (
             <div className="flex gap-2 items-end flex-wrap">
@@ -240,214 +270,541 @@ export default function LecturerHome() {
         </Panel>
       ) : (
         <>
-          <Panel
-            title="รายวิชาในภาคเรียนนี้"
-            description="คลิกที่วิชาเพื่อเข้าหน้าจัดการ — ส่งคำขอ TA, คำนวณงบ, อนุมัติรายงาน"
-            padded={false}
-          >
-            {/* WBA reminder: courses whose registrar timetable said "will be
-                arranged" block TA requests until the schedule is filled in. */}
-            {(courses ?? []).some(c => c.has_missing_schedule) && (
-              <div className="mx-4 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
-                <CalendarOff size={15} className="text-red-700 dark:text-red-300 shrink-0" />
-                <span className="text-red-800 dark:text-red-200">
-                  มี <b>{(courses ?? []).filter(c => c.has_missing_schedule).length}</b> วิชาที่ยังไม่ระบุเวลาเรียน (WBA) —
-                  ต้องกรอกตารางเรียนในหน้า “ตั้งค่ารายวิชา” ก่อน จึงจะส่งคำขอ TA ได้
-                </span>
-              </div>
-            )}
-            {/* วันชดเชยค้าง — แจ้งเฉพาะวิชาที่มีคาบตรงวันหยุดจริง ๆ เท่านั้น
-                (ไม่ตรง = ไม่ต้องรบกวน) เพราะถ้าไม่กำหนด ระบบจะข้ามวันนั้น
-                และ TA จะเบิกค่าตอบแทนของวันนั้นไม่ได้ */}
-            {(courses ?? []).some(c => (c.unresolved_makeups ?? 0) > 0) && (
-              <div className="mx-4 mt-4 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CalendarOff size={15} className="shrink-0 text-red-700 dark:text-red-300" />
-                  <span className="text-red-800 dark:text-red-200">
-                    <b>ต้องกำหนดวันชดเชย</b> — มีคาบที่ตรงกับวันหยุดและยังไม่ได้กำหนดวันชดเชย
-                    ถ้าไม่ทำ ระบบจะข้ามวันนั้น <b>TA จะลงเวลาและเบิกค่าตอบแทนของวันนั้นไม่ได้</b>
-                  </span>
-                </div>
-                <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 pl-6 text-xs text-red-800 dark:text-red-200">
-                  {(courses ?? [])
-                    .filter(c => (c.unresolved_makeups ?? 0) > 0)
-                    .map(c => (
-                      <li key={c.id}>
-                        <Link
-                          href={`/lecturer/courses/${c.id}/holidays`}
-                          className="underline underline-offset-2 hover:no-underline"
-                        >
-                          {c.code} — ค้าง {c.unresolved_makeups} คาบ
-                        </Link>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            )}
-            {coursesError && courses === undefined ? (
-              <div className="p-4">
-                <Alert
-                  status="danger"
-                  icon={<CircleAlert size={16} />}
-                  title="โหลดรายวิชาไม่สำเร็จ"
-                  description={(coursesError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
-                  action={
-                    coursesKey && (
-                      <Button variant="secondary" size="sm" onPress={() => mutate(coursesKey)}>
-                        ลองใหม่
-                      </Button>
-                    )
-                  }
-                />
-              </div>
-            ) : courses === undefined ? (
-              <div className="divide-y divide-[var(--hairline)]">
-                {[0, 1, 2].map(i => (
-                  <div key={i} className="flex items-center gap-4 px-5 py-4">
-                    <div className="w-10 h-10 rounded-lg bg-surface-secondary animate-pulse shrink-0" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 w-1/3 rounded bg-surface-secondary animate-pulse" />
-                      <div className="h-3 w-1/4 rounded bg-surface-secondary animate-pulse" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : courses.length === 0 ? (
-              <EmptyState
-                icon={<BookOpen size={28} />}
-                title="ยังไม่มีวิชาในภาคเรียนนี้"
-                description="ติดต่อเจ้าหน้าที่เพื่อเพิ่มวิชาที่คุณรับผิดชอบในภาคเรียนนี้"
+          <AlertsSection courses={courses} overviewById={overviewById} />
+
+          {coursesError && courses === undefined ? (
+            <Panel>
+              <Alert
+                status="danger"
+                icon={<CircleAlert size={16} />}
+                title="โหลดรายวิชาไม่สำเร็จ"
+                description={(coursesError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+                action={
+                  coursesKey && (
+                    <Button variant="secondary" size="sm" onPress={() => mutate(coursesKey)}>
+                      ลองใหม่
+                    </Button>
+                  )
+                }
               />
-            ) : (
-              <ul className="divide-y divide-[var(--hairline)]">
-                {courses.map(c => {
-                  const ov = overviewById.get(c.id);
-                  const hasBudget = !!ov && ov.budget_max > 0;
-                  const pctRaw = hasBudget ? (ov!.budget_used / ov!.budget_max) * 100 : 0;
-                  const pct = Math.round(pctRaw);
-                  const over = pctRaw > 100;
-                  const budgetTone: "success" | "warn" | "danger" =
-                    over || pctRaw >= 90 ? "danger" : pctRaw >= 70 ? "warn" : "success";
-                  const pendingPeople = ov?.ta_pending_count ?? 0;
-                  const pendingHours = ov?.hours_pending_approval ?? 0;
-                  const hasTa = (ov?.ta_count ?? 0) > 0;
-                  return (
-                    <li key={c.id}>
-                      <Link
-                        href={`/lecturer/courses/${c.id}`}
-                        className="flex items-center gap-4 px-5 py-4 hover:bg-surface-secondary transition-colors group"
-                      >
-                        <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
-                          <BookOpen size={18} />
-                        </div>
-                        <div className="min-w-0 flex-1 flex flex-col md:flex-row md:items-center gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline gap-2 flex-wrap">
-                              <span className="font-semibold tabular">{c.code}</span>
-                              <span className="text-foreground truncate">{c.name_th}</span>
-                            </div>
-                            <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
-                              <span>นักศึกษา {c.num_students} คน</span>
-                              {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
-                              {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
-                              {ov && (
-                                <>
-                                  <span>· TA {ov.ta_count} คน</span>
-                                  <span>· อนุมัติ {ov.hours_approved.toFixed(1)} ชม.</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="shrink-0 flex flex-wrap gap-1.5 md:justify-end items-center">
-                            {c.has_missing_schedule && (
-                              <Chip tone="danger">
-                                <span
-                                  className="inline-flex items-center gap-1"
-                                  title="มี section ที่ยังไม่ระบุเวลาเรียน — ต้องกรอกตารางก่อน จึงจะส่งคำขอ TA ได้"
-                                >
-                                  <CalendarOff size={12} />
-                                  ยังไม่ระบุเวลาเรียน
-                                </span>
-                              </Chip>
-                            )}
-                            {!!c.unresolved_makeups && c.unresolved_makeups > 0 && (
-                              <Chip tone="danger">
-                                <span
-                                  className="inline-flex items-center gap-1"
-                                  title="คาบที่ตรงวันหยุด — ถ้าไม่กำหนดวันชดเชย TA จะลงเวลาและเบิกวันนั้นไม่ได้"
-                                >
-                                  <CalendarOff size={12} />
-                                  ต้องกำหนดวันชดเชย {c.unresolved_makeups} คาบ
-                                </span>
-                              </Chip>
-                            )}
-                            {pendingPeople > 0 && (
-                              <Chip tone="warn">
-                                <span
-                                  className="inline-flex items-center gap-1"
-                                  title={`รวม ${pendingHours.toFixed(1)} ชม. รอตรวจ`}
-                                >
-                                  <ClipboardCheck size={12} />
-                                  รอตรวจ {pendingPeople} คน
-                                </span>
-                              </Chip>
-                            )}
-                            {ov && !hasTa && (
-                              <Chip tone="neutral">
-                                <span className="inline-flex items-center gap-1">
-                                  <Users size={12} />
-                                  ยังไม่มี TA
-                                </span>
-                              </Chip>
-                            )}
-                            {hasBudget ? (
-                              <Chip tone={budgetTone}>
-                                <span
-                                  className="inline-flex items-center gap-1 tabular"
-                                  title="สัดส่วนการใช้งบโดยประมาณ (ไม่ระบุตัวเลขจริง)"
-                                >
-                                  <Wallet size={12} />
-                                  งบ ~{over ? `เกิน ${pct - 100}%` : `${pct}%`}
-                                </span>
-                              </Chip>
-                            ) : ov ? (
-                              <Chip tone="neutral">
-                                <span
-                                  className="inline-flex items-center gap-1"
-                                  title="งบเบิกจ่ายจะคำนวณให้อัตโนมัติ หลังเจ้าหน้าที่กรอกจำนวนนักศึกษาของวิชานี้ (ยังไม่ใช่สิ่งที่อาจารย์ต้องทำ)"
-                                >
-                                  <Wallet size={12} />
-                                  รอเจ้าหน้าที่กรอกจำนวนนักศึกษา
-                                </span>
-                              </Chip>
-                            ) : null}
-                          </div>
-                        </div>
-                        <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Panel>
-
-          {(courses ?? []).length > 0 && (
-            <div className="mt-4">
-              <a
-                href="https://labtas.kku.ac.th"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors"
+            </Panel>
+          ) : (
+            <>
+              <CollapsibleSection
+                id="announcements"
+                title="ประชาสัมพันธ์"
+                // Same SWR key AnnouncementFeed uses, so this costs no extra
+                // request — it just lets the heading say how many there are and
+                // fold itself away while there are none.
+                count={announcements?.length}
+                defaultOpen={(announcements?.length ?? 0) > 0}
+                action={
+                  <Link
+                    href="/announcements"
+                    className="text-xs font-medium text-muted underline underline-offset-2 hover:text-foreground"
+                  >
+                    ดูทั้งหมด
+                  </Link>
+                }
               >
-                <Calculator size={14} />
-                เปิด LabTAS (ระบบภายนอก)
-              </a>
-            </div>
+                {/* title={null} — the prop defaults to "ประชาสัมพันธ์" when
+                    undefined, which would print the heading twice. */}
+                <AnnouncementFeed title={null} compact limit={5} />
+              </CollapsibleSection>
+
+              {courses === undefined ? (
+                <CollapsibleSection id="all" title="รายวิชาในภาคเรียนนี้">
+                  <Panel padded={false}>
+                    <CardGridSkeleton />
+                  </Panel>
+                </CollapsibleSection>
+              ) : courses.length === 0 ? (
+                <CollapsibleSection id="all" title="รายวิชาในภาคเรียนนี้">
+                  <Panel padded={false}>
+                    <EmptyState
+                      icon={<BookOpen size={28} />}
+                      title="ยังไม่มีวิชาในภาคเรียนนี้"
+                      description="ติดต่อเจ้าหน้าที่เพื่อเพิ่มวิชาที่คุณรับผิดชอบในภาคเรียนนี้"
+                    />
+                  </Panel>
+                </CollapsibleSection>
+              ) : !canSplit ? (
+                // Overview still in flight — same cards, just not yet grouped.
+                <CollapsibleSection id="all" title="รายวิชาในภาคเรียนนี้">
+                  <CourseGrid
+                    courses={courses}
+                    overviewById={overviewById}
+                    requestByCourse={requestByCourse}
+                  />
+                </CollapsibleSection>
+              ) : (
+                <>
+                  {withTA.length > 0 && (
+                    <CollapsibleSection
+                      id="with-ta"
+                      title="มี TA แล้ว"
+                      count={withTA.length}
+                      hint="คำขอผ่านแล้วและ TA เริ่มลงเวลาได้ — งานหลักคืออนุมัติบันทึกเวลาให้ทัน"
+                    >
+                      <CourseGrid
+                        courses={withTA}
+                        overviewById={overviewById}
+                        requestByCourse={requestByCourse}
+                      />
+                    </CollapsibleSection>
+                  )}
+
+                  {withoutTA.length > 0 && (
+                    <CollapsibleSection
+                      id="without-ta"
+                      title="ยังไม่มี TA"
+                      count={withoutTA.length}
+                      hint="วิชาที่ยังไม่มี TA ที่อนุมัติแล้ว — ป้ายบนการ์ดบอกว่าส่งคำขอไปหรือยัง"
+                    >
+                      <CourseGrid
+                        courses={withoutTA}
+                        overviewById={overviewById}
+                        requestByCourse={requestByCourse}
+                      />
+                    </CollapsibleSection>
+                  )}
+                </>
+              )}
+            </>
           )}
         </>
       )}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Section pieces                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** Small heading that separates the page into scannable bands. */
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="mb-2 mt-6 text-sm font-semibold text-foreground first:mt-0">
+      {children}
+    </h2>
+  );
+}
+
+const COLLAPSE_KEY = "ta-payment:lecturer-home-collapsed";
+
+/**
+ * Which sections the lecturer has opened or closed BY HAND, id → open?
+ *
+ * Presence is the point: a section the reader has never touched is absent, and
+ * follows whatever `defaultOpen` says today. Storing only the closed ones (as
+ * this did at first) cannot express "I opened this one" — so a band that
+ * auto-collapses while empty would slam shut again on every visit, no matter
+ * how many times its owner opened it.
+ *
+ * One key for the whole page rather than one per section: they are read
+ * together on every render, and a single parse keeps them consistent.
+ */
+type SectionPrefs = Record<string, boolean>;
+
+function readPrefs(): SectionPrefs {
+  try {
+    const raw = localStorage.getItem(COLLAPSE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    // Earlier builds wrote a bare array of collapsed ids. Read it rather than
+    // discarding it, so nobody's folded sections spring open on deploy.
+    if (Array.isArray(parsed)) return Object.fromEntries(parsed.map((id: string) => [id, false]));
+    return parsed && typeof parsed === "object" ? (parsed as SectionPrefs) : {};
+  } catch {
+    // Storage blocked or corrupt — fall back to the defaults.
+    return {};
+  }
+}
+
+/**
+ * A band of the page that can be folded away, with the choice remembered.
+ *
+ * Persisted because it is a working preference, not a per-visit one: a lecturer
+ * who has no course left without a TA collapses that group and means it for
+ * every visit, not just this render.
+ *
+ * `defaultOpen` is what happens BEFORE anyone expresses a preference — callers
+ * pass false for a band with nothing in it, so an empty section costs a line
+ * instead of a screenful. A hand-made choice always outranks it.
+ *
+ * `action` sits OUTSIDE the toggle button rather than inside it — a link nested
+ * in a button is invalid HTML and, in practice, clicking "ดูทั้งหมด" would also
+ * fold the section shut on the way out.
+ */
+function CollapsibleSection({
+  id, title, count, hint, action, defaultOpen = true, children,
+}: {
+  id: string;
+  title: string;
+  count?: number;
+  hint?: string;
+  action?: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  // Starts from the default on the server and on first paint, then reconciles —
+  // reading localStorage during render would make the markup disagree with the
+  // server's and React would discard the whole tree at hydration.
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => { setOpen(readPrefs()[id] ?? defaultOpen); }, [id, defaultOpen]);
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    try {
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify({ ...readPrefs(), [id]: next }));
+    } catch {
+      // Not fatal; the choice just won't survive a reload.
+    }
+  }
+
+  const bodyId = `section-${id}`;
+  return (
+    <section className="mt-6 first:mt-0">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="group -mx-1 flex min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-surface-secondary"
+        >
+          <ChevronDown
+            size={15}
+            className={`shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`}
+          />
+          <h2 className="truncate text-sm font-semibold text-foreground">{title}</h2>
+          {count !== undefined && (
+            <span className="tabular shrink-0 rounded-full bg-surface-secondary px-2 py-0.5 text-xs font-medium text-muted">
+              {count}
+            </span>
+          )}
+        </button>
+        {action}
+      </div>
+      {/* Folded away means gone, not hidden: an empty band still costs a scroll,
+          and that is the whole reason someone collapsed it. */}
+      {open && (
+        <div id={bodyId}>
+          {hint && <p className="mb-2 text-xs text-muted">{hint}</p>}
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CardGridSkeleton() {
+  return (
+    <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="rounded-xl border border-[var(--hairline)] p-4">
+          <div className="flex items-start gap-3">
+            <div className="size-9 shrink-0 animate-pulse rounded-lg bg-surface-secondary" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-1/2 animate-pulse rounded bg-surface-secondary" />
+              <div className="h-3 w-3/4 animate-pulse rounded bg-surface-secondary" />
+            </div>
+          </div>
+          <div className="mt-4 h-3 w-2/3 animate-pulse rounded bg-surface-secondary" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Things that need the lecturer to act, gathered above the course list.
+ * Rendered only when there is something — a permanent "all clear" panel trains
+ * people to skip the region entirely.
+ *
+ * The two schedule problems are blockers: a WBA section cannot receive a TA
+ * request at all, and an unresolved make-up day is silently dropped, so the TA
+ * cannot log — or be paid for — that day.
+ */
+function AlertsSection({
+  courses, overviewById,
+}: {
+  courses?: TC[];
+  overviewById: Map<string, LecturerCourseStatus>;
+}) {
+  const list = courses ?? [];
+  const wba = list.filter(c => c.has_missing_schedule);
+  const makeups = list.filter(c => (c.unresolved_makeups ?? 0) > 0);
+  const toApprove = list.filter(c => (overviewById.get(c.id)?.ta_pending_count ?? 0) > 0);
+
+  if (wba.length === 0 && makeups.length === 0 && toApprove.length === 0) return null;
+
+  return (
+    <>
+      <SectionHeading>ต้องดำเนินการ</SectionHeading>
+      <div className="space-y-2">
+        {wba.length > 0 && (
+          <Alert
+            status="danger"
+            icon={<CalendarOff size={16} />}
+            title={`ยังไม่ระบุเวลาเรียน (WBA) ${wba.length} วิชา`}
+            description={
+              <>
+                ต้องกรอกตารางเรียนในหน้า “ตั้งค่ารายวิชา” ก่อน จึงจะส่งคำขอ TA ได้
+                <CourseLinks
+                  items={wba.map(c => ({
+                    id: c.id,
+                    href: `/lecturer/courses/${c.id}/settings`,
+                    label: c.code,
+                  }))}
+                />
+              </>
+            }
+          />
+        )}
+        {makeups.length > 0 && (
+          <Alert
+            status="danger"
+            icon={<CalendarOff size={16} />}
+            title="ต้องกำหนดวันชดเชย"
+            description={
+              <>
+                มีคาบที่ตรงกับวันหยุดและยังไม่ได้กำหนดวันชดเชย ถ้าไม่ทำ ระบบจะข้ามวันนั้น
+                และ TA จะลงเวลาและเบิกค่าตอบแทนของวันนั้นไม่ได้
+                <CourseLinks
+                  items={makeups.map(c => ({
+                    id: c.id,
+                    href: `/lecturer/courses/${c.id}/holidays`,
+                    label: `${c.code} — ค้าง ${c.unresolved_makeups} คาบ`,
+                  }))}
+                />
+              </>
+            }
+          />
+        )}
+        {toApprove.length > 0 && (
+          <Alert
+            status="warning"
+            icon={<ClipboardCheck size={16} />}
+            title={`มีบันทึกเวลาของ TA รออนุมัติ ${toApprove.length} วิชา`}
+            description={
+              <>
+                เจ้าหน้าที่ตรวจและส่งเบิกต่อไม่ได้จนกว่าคุณจะอนุมัติ
+                <CourseLinks
+                  items={toApprove.map(c => {
+                    const ov = overviewById.get(c.id)!;
+                    return {
+                      id: c.id,
+                      href: `/lecturer/courses/${c.id}/reports`,
+                      label: `${c.code} — ${ov.ta_pending_count} คน (${ov.hours_pending_approval.toFixed(1)} ชม.)`,
+                    };
+                  })}
+                />
+              </>
+            }
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+/** The per-course links an alert carries, so the fix is one click from here. */
+function CourseLinks({ items }: { items: { id: string; href: string; label: string }[] }) {
+  return (
+    <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+      {items.map(i => (
+        <li key={i.id}>
+          <Link href={i.href} className="underline underline-offset-2 hover:no-underline">
+            {i.label}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Course cards                                                               */
+/* -------------------------------------------------------------------------- */
+
+function CourseGrid({
+  courses, overviewById, requestByCourse,
+}: {
+  courses: TC[];
+  overviewById: Map<string, LecturerCourseStatus>;
+  requestByCourse: Map<string, TARequestRow>;
+}) {
+  return (
+    <Panel padded={false}>
+      {/* Card grid rather than table rows: each course carries several
+          independent facts (students, TA, hours, budget, blockers) that a row
+          squeezes onto one line and truncates first on narrow screens. */}
+      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+        {courses.map(c => (
+          <CourseCard
+            key={c.id}
+            course={c}
+            ov={overviewById.get(c.id)}
+            request={requestByCourse.get(c.id)}
+          />
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+/** What a course with no approved TA is actually waiting on. */
+function requestBadge(r?: TARequestRow): { label: string; tone: ChipTone } {
+  switch (r?.status) {
+    case "submitted": return { label: "ส่งคำขอแล้ว · รอเจ้าหน้าที่", tone: "info" };
+    case "rejected":  return { label: "คำขอถูกปฏิเสธ", tone: "danger" };
+    case "cancelled": return { label: "คำขอถูกยกเลิก", tone: "neutral" };
+    case "draft":     return { label: "ฉบับร่าง ยังไม่ได้ส่ง", tone: "warn" };
+    // 'approved' with no assignment left, and no request at all, land here: in
+    // both cases what the lecturer has to do next is send one.
+    default:          return { label: "ยังไม่ได้ส่งคำขอ TA", tone: "warn" };
+  }
+}
+
+/** One course, with its independent facts given room to breathe. */
+function CourseCard({
+  course: c, ov, request,
+}: {
+  course: TC;
+  ov?: LecturerCourseStatus;
+  request?: TARequestRow;
+}) {
+  const hasTA = (ov?.ta_count ?? 0) > 0;
+  const hasBudget = !!ov && ov.budget_max > 0;
+  const pctRaw = hasBudget ? (ov!.budget_used / ov!.budget_max) * 100 : 0;
+  const pct = Math.round(pctRaw);
+  const over = pctRaw > 100;
+  const budgetTone: "success" | "warn" | "danger" =
+    over || pctRaw >= 90 ? "danger" : pctRaw >= 70 ? "warn" : "success";
+  const barFill = { success: "bg-success", warn: "bg-warning", danger: "bg-danger" }[budgetTone];
+  const barText = { success: "text-success", warn: "text-warning", danger: "text-danger" }[budgetTone];
+  const pendingPeople = ov?.ta_pending_count ?? 0;
+
+  // min-w-0 on the card: a grid item defaults to min-width:auto and refuses to
+  // shrink below its content, so on one-column phones the card grew past its
+  // grid track and pushed the whole page into a horizontal scroll.
+  return (
+    <Link
+      href={`/lecturer/courses/${c.id}`}
+      className="group flex min-w-0 flex-col rounded-xl border border-[var(--hairline)] bg-surface p-4 transition-colors hover:bg-surface-secondary"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
+          <BookOpen size={17} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-semibold tabular group-hover:underline group-hover:underline-offset-2">
+            {c.code}
+          </div>
+          <div className="truncate text-xs text-muted">{c.name_th}</div>
+        </div>
+        <ArrowRight
+          size={15}
+          className="mt-1 shrink-0 text-muted transition-colors group-hover:text-accent"
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+        <span>นักศึกษา {c.num_students} คน</span>
+        {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
+        {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
+      </div>
+
+      {/* The TA line is the one this page is grouped by, so it gets its own row
+          rather than being appended to the student counts. */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        {hasTA ? (
+          <>
+            <span className="inline-flex items-center gap-1 font-medium text-foreground">
+              <Users size={12} /> TA {ov!.ta_count} คน
+            </span>
+            <span className="text-muted">· อนุมัติแล้ว {ov!.hours_approved.toFixed(1)} ชม.</span>
+            {ov!.hours_pending_approval > 0 && (
+              <span className="text-muted">· รอตรวจ {ov!.hours_pending_approval.toFixed(1)} ชม.</span>
+            )}
+          </>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-muted">
+            <UserPlus size={12} /> ยังไม่มี TA ในวิชานี้
+          </span>
+        )}
+      </div>
+
+      {/* Budget as a share, not a figure — the exact baht live on the course's
+          own budget page, and a percentage is what tells the lecturer whether
+          there is room left for more hours. */}
+      <div className="mt-3">
+        {hasBudget ? (
+          <>
+            <div className="mb-1 flex items-center justify-between text-[11px]">
+              <span className="inline-flex items-center gap-1 text-muted">
+                <Wallet size={11} /> ใช้งบโดยประมาณ
+              </span>
+              <span className={`tabular font-medium ${barText}`}>
+                {over ? `เกิน ${pct - 100}%` : `${pct}%`}
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
+              <div
+                className={`h-full rounded-full transition-[width] ${barFill}`}
+                style={{ width: `${Math.min(100, pctRaw)}%` }}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="text-[11px] text-muted">
+            <span className="inline-flex items-center gap-1">
+              <Wallet size={11} /> รอเจ้าหน้าที่กรอกจำนวนนักศึกษา จึงจะคำนวณงบได้
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-[var(--hairline)] pt-3">
+        {c.has_missing_schedule && (
+          <Chip tone="danger">
+            <span className="inline-flex items-center gap-1">
+              <CalendarOff size={12} /> ยังไม่ระบุเวลาเรียน
+            </span>
+          </Chip>
+        )}
+        {!!c.unresolved_makeups && c.unresolved_makeups > 0 && (
+          <Chip tone="danger">
+            <span className="inline-flex items-center gap-1">
+              <CalendarOff size={12} /> ต้องกำหนดวันชดเชย {c.unresolved_makeups} คาบ
+            </span>
+          </Chip>
+        )}
+        {hasTA ? (
+          pendingPeople > 0 ? (
+            <Chip tone="warn">
+              <span className="inline-flex items-center gap-1">
+                <ClipboardCheck size={12} /> รออนุมัติ {pendingPeople} คน
+              </span>
+            </Chip>
+          ) : (
+            <Chip tone="success">
+              <span className="inline-flex items-center gap-1">
+                <ClipboardCheck size={12} /> อนุมัติครบแล้ว
+              </span>
+            </Chip>
+          )
+        ) : (
+          <Chip tone={requestBadge(request).tone}>
+            <span className="inline-flex items-center gap-1">
+              <Send size={12} /> {requestBadge(request).label}
+            </span>
+          </Chip>
+        )}
+      </div>
+    </Link>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 import {
-  LayoutDashboard, IdCard, CalendarDays, FileText, Route,
+  LayoutDashboard, IdCard, CalendarDays, FileText, Route, Megaphone,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type NavStatus, type UserMenuItem } from "../components/Shell";
@@ -25,7 +25,11 @@ const buildNav = (docsStatus?: NavStatus, docsLabel?: string,
   {
     title: "ของฉัน",
     items: [
-      { label: "โปรไฟล์", href: "/ta/profile", icon: IdCard },
+      // /account, not /ta/profile: both rendered the same component, and the
+      // shared route now carries whichever shell the reader belongs to. One
+      // page, one URL, identical for a TA and a lecturer. /ta/profile still
+      // resolves — it redirects here — so old links and bookmarks survive.
+      { label: "โปรไฟล์และบัญชี", href: "/account", icon: IdCard },
       { label: "ตารางเรียนของฉัน", href: "/ta/schedule", icon: CalendarDays,
         status: schedStatus, statusLabel: schedLabel },
       { label: "เอกสารของฉัน", href: "/ta/documents", icon: FileText,
@@ -36,6 +40,7 @@ const buildNav = (docsStatus?: NavStatus, docsLabel?: string,
     title: "ติดตาม",
     items: [
       { label: "ความคืบหน้าเอกสาร", href: "/document-progress", icon: Route },
+      { label: "ประกาศ", href: "/announcements", icon: Megaphone },
     ],
   },
 ];

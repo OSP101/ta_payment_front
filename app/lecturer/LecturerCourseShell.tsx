@@ -1,6 +1,6 @@
 "use client";
 import useSWR from "swr";
-import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, ExternalLink, Megaphone, Bell, ShieldAlert, CalendarOff, IdCard } from "lucide-react";
+import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, Megaphone, Bell, ShieldAlert, CalendarOff, IdCard } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
@@ -83,7 +83,6 @@ export default function LecturerCourseShell({
       title: "อื่น ๆ",
       items: [
         { label: "คำนวณงบ", href: `/lecturer/courses/${tcId}/budget`, icon: Calculator },
-        { label: "LabTAS", href: "https://labtas.kku.ac.th", icon: ExternalLink, external: true },
       ],
     },
   ];

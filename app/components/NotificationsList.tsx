@@ -138,6 +138,11 @@ export default function NotificationsList({
 function formatDate(iso: string) {
   try {
     const d = new Date(iso);
+    // An unparseable timestamp does NOT throw: `new Date()` yields an Invalid
+    // Date whose toLocaleString returns the literal string "Invalid Date", so
+    // the catch below never fires and that text renders straight into the row.
+    // Fall back to the raw value instead — it at least shows what arrived.
+    if (Number.isNaN(d.getTime())) return iso;
     return d.toLocaleString("th-TH", {
       year: "numeric", month: "short", day: "numeric",
       hour: "2-digit", minute: "2-digit",

@@ -91,7 +91,7 @@ function pct(n: number) { return `${n * 100}%`; }
 function timeStr(h: number, m: number) {
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
-function parseTime(t: string) {
+export function parseTime(t: string) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
@@ -106,10 +106,12 @@ function clamp(v: number, lo: number, hi: number) {
 // Assign each block a lane so overlapping blocks stack vertically inside the
 // row instead of collapsing on top of each other. Greedy: sort by start, drop
 // the block into the first lane that's free at that time.
-function packLanes(blocks: Block[]): { block: Block; lane: number; laneCount: number }[] {
+export function packLanes<T extends { start_time: string; end_time: string }>(
+  blocks: T[],
+): { block: T; lane: number; laneCount: number }[] {
   const sorted = blocks.slice().sort((a, b) => parseTime(a.start_time) - parseTime(b.start_time));
   const laneEnds: number[] = []; // last endMin per lane
-  const out: { block: Block; lane: number; laneCount: number }[] = [];
+  const out: { block: T; lane: number; laneCount: number }[] = [];
   for (const b of sorted) {
     const startMin = parseTime(b.start_time);
     const endMin = parseTime(b.end_time);
@@ -184,7 +186,7 @@ export default function ScheduleGrid({
       arr.push(b);
       byDay.set(b.day_of_week, arr);
     }
-    const packed = new Map<number, ReturnType<typeof packLanes>>();
+    const packed = new Map<number, { block: Block; lane: number; laneCount: number }[]>();
     for (const [dow, arr] of byDay) {
       packed.set(dow, packLanes(arr));
     }

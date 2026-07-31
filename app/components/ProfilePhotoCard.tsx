@@ -104,15 +104,15 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
             firstName={me.first_name}
             lastName={me.last_name}
             src={me.avatar_url}
-            className="size-24 text-xl"
+            className="size-32 text-3xl"
           />
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
             aria-label={hasPhoto ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
-            className="absolute -bottom-1 -end-1 size-8 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="absolute bottom-0 -end-0.5 size-9 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
-            <Camera size={15} />
+            <Camera size={16} />
           </button>
         </div>
 

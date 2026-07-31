@@ -11,6 +11,7 @@ import { Check, Copy, KeyRound, Pencil, Plus, UserCheck, UserX } from "lucide-re
 import { api } from "../../lib/api";
 import { THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
+import { formatFullName } from "../../lib/prefixes";
 import {
   Alert, Button, Chip, FieldGroup, Modal,
   PageHeader, Panel, Select,
@@ -28,6 +29,15 @@ interface User {
   study_year?: number | null;
   roles: string[];
   is_active: boolean;
+}
+
+/**
+ * What the search box matches against. Carries BOTH spellings of the name: the
+ * row now reads "ผศ. ดร.วรัญญา" (title runs into the given name), so someone
+ * typing what they see has to match, and so does someone typing "วรัญญา" alone.
+ */
+function userHaystack(u: User): string {
+  return `${formatFullName(u)} ${u.title ?? ""} ${u.first_name} ${u.last_name} ${u.email}`;
 }
 
 // ตำแหน่งทางวิชาการนำหน้าคุณวุฒิเสมอ (เช่น "รศ. ดร." ไม่ใช่ "ดร. รศ.")
@@ -215,7 +225,7 @@ export default function UsersPage() {
       id: "name", label: "ชื่อ", sortable: true, isRowHeader: true,
       sortValue: u => `${u.first_name} ${u.last_name}`,
       className: "font-medium",
-      render: u => [u.title, u.first_name, u.last_name].filter(Boolean).join(" "),
+      render: u => formatFullName(u),
     },
     {
       id: "email", label: "อีเมล", sortable: true,
@@ -288,7 +298,7 @@ export default function UsersPage() {
             rows={data?.items}
             loading={!data}
             rowKey={u => u.id}
-            searchFn={u => `${u.title ?? ""} ${u.first_name} ${u.last_name} ${u.email}`}
+            searchFn={userHaystack}
             searchPlaceholder="ค้นหาชื่อ / อีเมล…"
             filters={[
               {

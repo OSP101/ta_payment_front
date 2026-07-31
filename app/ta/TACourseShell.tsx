@@ -55,7 +55,7 @@ export default function TACourseShell({
   ];
 
   const userMenuItems: UserMenuItem[] = [
-    { id: "profile",   label: "โปรไฟล์",           href: "/ta/profile",       icon: IdCard },
+    { id: "profile",   label: "โปรไฟล์และบัญชี",     href: "/account",          icon: IdCard },
     { id: "schedule",  label: "ตารางเรียนของฉัน",   href: "/ta/schedule",      icon: CalendarDays },
     { id: "docs",      label: "เอกสารของฉัน",       href: "/ta/documents",     icon: FileText },
     { id: "reminders", label: "แจ้งเตือนรายเดือน",   href: "/ta/reminders",     icon: CalendarClock },

@@ -1,14 +1,17 @@
 "use client";
 import Link from "next/link";
-import { ArrowRight, Clock, KeyRound, ShieldCheck, Smartphone, User } from "lucide-react";
+import {
+  ArrowRight, Clock, GraduationCap, KeyRound, Mail, Phone, ShieldCheck, User,
+} from "lucide-react";
 import type { Me } from "../lib/api";
+import { formatFullName } from "../lib/prefixes";
 import { Button, Chip, Panel } from "./ui";
 import ProfilePhotoCard from "./ProfilePhotoCard";
 
 /**
- * The account screen's body: picture, identity, security. Shared by the TA's
- * /ta/profile and the /account route every other role reaches from the user
- * menu — one implementation so the three roles never drift apart.
+ * The account screen's body: picture, identity, security. One implementation
+ * behind one route (/account), which renders inside whichever shell the reader
+ * belongs to — so no role ever gets its own copy to drift apart from.
  */
 export default function AccountSettings({ me }: { me: Me | undefined }) {
   return (
@@ -22,14 +25,16 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
         className="mb-4"
       >
         <div className="grid md:grid-cols-2 gap-4">
-          <InfoRow icon={<User size={16} />} label="ชื่อ-นามสกุล"
-                   value={me ? `${me.title ?? ""} ${me.first_name} ${me.last_name}`.trim() : "—"} />
-          <InfoRow icon={<User size={16} />} label="อีเมล" value={me?.email ?? "—"} />
-          <InfoRow icon={<Smartphone size={16} />} label="เบอร์โทรศัพท์" value={me?.phone ?? "—"} />
+          {/* One icon per KIND of fact. อีเมล used to carry the same person
+              glyph as the name, and ระดับการศึกษา a shield — neither said
+              anything about the row it sat on. */}
+          <InfoRow icon={<User size={16} />} label="ชื่อ-นามสกุล" value={formatFullName(me) || "—"} />
+          <InfoRow icon={<Mail size={16} />} label="อีเมล" value={me?.email ?? "—"} />
+          <InfoRow icon={<Phone size={16} />} label="เบอร์โทรศัพท์" value={me?.phone ?? "—"} />
           {/* Only students have one; a lecturer's account would otherwise show
               a row that reads "—" forever. */}
           {me?.study_level && (
-            <InfoRow icon={<ShieldCheck size={16} />} label="ระดับการศึกษา" value={studyLabel(me.study_level)} />
+            <InfoRow icon={<GraduationCap size={16} />} label="ระดับการศึกษา" value={studyLabel(me.study_level)} />
           )}
         </div>
       </Panel>

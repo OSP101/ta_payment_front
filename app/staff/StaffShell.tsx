@@ -12,6 +12,7 @@ import {
   CalendarOff,
   Route,
   IdCard,
+  FileSignature,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
@@ -43,15 +44,23 @@ const buildNav = (s: Executive): NavSection[] => [
         badge: s.pending_ta_requests, badgeLabel: "คำร้องรอตรวจ" },
       { step: 2, label: "ตรวจแบบฟอร์มใบแจ้งหนี้", href: "/staff/review",
         badge: s.pending_reviews, badgeLabel: "แบบฟอร์มรอตรวจ" },
-      { step: 3, label: "ตรวจเบิกจ่ายค่าตอบแทน", href: "/staff/worklog",
-        badge: s.pending_payout_reviews, badgeLabel: "เบิกจ่ายรอตรวจ" },
-      { step: 4, label: "ส่งออกเอกสาร", href: "/staff/exports",
-        badge: s.ready_to_export, badgeLabel: "ตรวจแล้วรอส่งออก" },
+      // Steps 3 and 4 were merged on 31/07/2026. They were one errand split
+      // across two menus: an officer who finished a review was left on a screen
+      // with no way forward and had to know that a separate export menu existed.
+      // The badge is now one number in the unit the screen lists — courses with
+      // something to do — instead of two counts of two different things that
+      // could not be added together.
+      { step: 3, label: "ตรวจและส่งออกเอกสาร", href: "/staff/payouts",
+        badge: s.payout_courses_actionable, badgeLabel: "วิชาที่ทำได้ตอนนี้" },
     ],
   },
   {
     title: "จัดการ",
     items: [
+      // Printing appointment orders is a term-level act that gates everything
+      // above; it lived as a tab inside the export screen, where it read as one
+      // of the ways to export a payout package.
+      { label: "ใบแต่งตั้งทีเอ", href: "/staff/appointments", icon: FileSignature },
       { label: "จัดการผู้ใช้", href: "/staff/users", icon: Users },
       // No badge here on purpose. Badges are reserved for the "สิ่งที่ต้องทำ"
       // group so a red dot always means "a step of the workflow is waiting on

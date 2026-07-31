@@ -786,7 +786,7 @@ export function Modal({
   open: boolean;
   onClose: () => void;
   title?: React.ReactNode;
-  size?: "sm" | "md" | "lg" | "xl" | "2xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "full";
   children: React.ReactNode;
   footer?: React.ReactNode;
   icon?: React.ReactNode;
@@ -797,11 +797,19 @@ export function Modal({
     lg: "sm:max-w-lg",
     xl: "sm:max-w-2xl",
     "2xl": "sm:max-w-4xl",
+    // 3xl exists for the weekly timetable: thirteen hour columns need real
+    // width, and at 4xl the blocks were narrower than their own labels.
+    "3xl": "sm:max-w-6xl",
+    // "full" is HeroUI's own variant and is applied on Modal.Container below,
+    // not as a max-width here — see the size table in the modal docs. Hand-rolled
+    // width classes on Dialog could never remove the Container's margins, so the
+    // "full screen" modal still floated inside a gutter.
+    full: "",
   }[size];
   return (
     <HModal>
       <HModal.Backdrop isOpen={open} onOpenChange={o => { if (!o) onClose(); }}>
-        <HModal.Container>
+        <HModal.Container size={size === "full" ? "full" : undefined}>
           <HModal.Dialog className={sizeCls}>
             <HModal.CloseTrigger />
             {(title || icon) && (

@@ -1,28 +1,11 @@
 "use client";
 import { useState } from "react";
 import useSWR from "swr";
-import { Download, Lock, CheckCircle2, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { Download, Lock, CheckCircle2, AlertTriangle } from "lucide-react";
 import { errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Button, IconButton, Chip, Spinner } from "./ui";
+import { Button, Chip, Spinner } from "./ui";
 
-// maskDigits hides every digit except the last `keep`, preserving non-digit
-// characters (bank name, spaces). "ธ.ไทยพาณิชย์ 4091290303" → "…••••••0303".
-// National IDs / account numbers are sensitive; the preview masks them by
-// default and the eye toggle reveals the full value on demand.
-function maskDigits(s: string, keep = 4): string {
-  if (!s) return "";
-  const digitCount = (s.match(/\d/g) ?? []).length;
-  if (digitCount <= keep) return s;
-  let toMask = digitCount - keep;
-  let out = "";
-  for (const ch of s) {
-    if (/\d/.test(ch)) {
-      if (toMask > 0) { out += "•"; toMask--; } else out += ch;
-    } else out += ch;
-  }
-  return out;
-}
 
 // Pull the download filename out of a Content-Disposition header, handling both
 // the RFC 5987 `filename*=UTF-8''…` form and the plain `filename="…"` form.
@@ -52,8 +35,6 @@ export interface PreviewRow {
   pay_baht: number;
   actual_paid: number;
   is_returning: boolean;
-  national_id: string;
-  bank_acct: string;
   profile_ready: boolean;
   profile_issue: string;
 }
@@ -92,7 +73,6 @@ export function ExportPreviewBody({
   const [ack, setAck] = useState(false);
   const [downloading, setDownloading] = useState(false);
   // Per-row reveal state for the masked national-ID / bank-account column.
-  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const alreadyExported = !!exportedAt;
   const notReady = (data?.rows ?? []).filter(r => !r.profile_ready);
 
@@ -186,17 +166,16 @@ export function ExportPreviewBody({
           <thead className="bg-slate-50 text-ink-2">
             <tr>
               <th className="text-left px-3 py-2">ชื่อ TA</th>
-              <th className="text-left px-3 py-2">ระดับ / ภาค</th>
+              <th className="text-left px-3 py-2">ระดับ</th>
               <th className="text-right px-3 py-2">ชม.อนุมัติ</th>
               <th className="text-right px-3 py-2">เป็นเงิน</th>
               <th className="text-right px-3 py-2">จ่ายจริง</th>
               <th className="text-left px-3 py-2">ข้อมูล</th>
-              <th className="text-left px-3 py-2">เลขบัตร / บัญชี</th>
             </tr>
           </thead>
           <tbody>
             {data.rows.length === 0 ? (
-              <tr><td colSpan={7} className="px-3 py-6 text-center text-muted">ยังไม่มี TA ที่อนุมัติในวิชานี้</td></tr>
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-muted">ยังไม่มี TA ที่อนุมัติในวิชานี้</td></tr>
             ) : data.rows.map(r => (
               <tr key={r.ta_id} className="border-t border-hairline">
                 <td className="px-3 py-2">
@@ -206,7 +185,7 @@ export function ExportPreviewBody({
                   </div>
                   <div className="text-xs text-ink-3">{r.email}</div>
                 </td>
-                <td className="px-3 py-2 text-xs">{r.level_th} · {r.track_th}</td>
+                <td className="px-3 py-2 text-xs">{r.level_th}</td>
                 <td className="px-3 py-2 text-right tabular">{r.hours_total.toFixed(1)}</td>
                 <td className="px-3 py-2 text-right tabular">{fmtBaht(r.pay_baht)}</td>
                 <td className="px-3 py-2 text-right tabular">
@@ -223,25 +202,6 @@ export function ExportPreviewBody({
                     <Chip tone="warn"><AlertTriangle size={11} /> {r.profile_issue}</Chip>
                   )}
                 </td>
-                <td className="px-3 py-2 text-xs tabular text-ink-3">
-                  <div className="flex items-start gap-1.5">
-                    <div className="min-w-0">
-                      <div>{r.national_id ? (revealed[r.ta_id] ? r.national_id : maskDigits(r.national_id)) : "—"}</div>
-                      <div>{r.bank_acct ? (revealed[r.ta_id] ? r.bank_acct : maskDigits(r.bank_acct)) : "—"}</div>
-                    </div>
-                    {(r.national_id || r.bank_acct) && (
-                      <IconButton
-                        label={revealed[r.ta_id] ? "ซ่อนเลขบัตร/บัญชี" : "แสดงเลขบัตร/บัญชี"}
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setRevealed(x => ({ ...x, [r.ta_id]: !x[r.ta_id] }))}
-                        className="shrink-0"
-                      >
-                        {revealed[r.ta_id] ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </IconButton>
-                    )}
-                  </div>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -254,7 +214,7 @@ export function ExportPreviewBody({
                 </td>
                 <td className="px-3 py-2 text-right tabular">{fmtBaht(data.total_pay)}</td>
                 <td className="px-3 py-2 text-right tabular">{fmtBaht(data.total_actual)}</td>
-                <td colSpan={2}></td>
+                <td></td>
               </tr>
             </tfoot>
           )}

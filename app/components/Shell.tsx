@@ -22,6 +22,7 @@ import {
 import type { Me } from "../lib/api";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
+import { formatFullName } from "../lib/prefixes";
 import UserAvatar from "./UserAvatar";
 
 const SIDEBAR_KEY = "ta-payment:sidebar-collapsed";
@@ -491,7 +492,7 @@ function TopBar({
 }) {
   const router = useRouter();
   const menuItems = userMenuItems ?? [];
-  const fullName = [me.title, me.first_name, me.last_name].filter(Boolean).join(" ");
+  const fullName = formatFullName(me);
   const roleLbl = roleLabel(me.roles);
   return (
     <header className="h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 sticky top-0 z-30">

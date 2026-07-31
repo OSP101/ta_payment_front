@@ -13,6 +13,8 @@ export interface Executive {
   pending_reviews: number;
   pending_payout_reviews: number;
   ready_to_export: number;
+  /** Courses an officer can move today — the merged step-3/4 badge. */
+  payout_courses_actionable: number;
   budget_allocated: number;
   budget_used: number;
   budget_courses: number;
@@ -29,6 +31,7 @@ export const emptyExecutive: Executive = {
   pending_reviews: 0,
   pending_payout_reviews: 0,
   ready_to_export: 0,
+  payout_courses_actionable: 0,
   budget_allocated: 0,
   budget_used: 0,
   budget_courses: 0,

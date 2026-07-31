@@ -59,16 +59,13 @@ export default function StaffDashboard() {
       href: "/staff/review", action: "ตรวจเอกสาร",
     },
     {
-      count: s.pending_payout_reviews, step: 3,
-      title: "เบิกจ่ายค่าตอบแทนรอตรวจ",
-      detail: "อาจารย์อนุมัติชั่วโมงแล้ว รอเจ้าหน้าที่ตรวจยอดเงิน",
-      href: "/staff/worklog", action: "ตรวจเบิกจ่าย",
-    },
-    {
-      count: s.ready_to_export, step: 4,
-      title: "ตรวจแล้วรอส่งออกเอกสาร",
-      detail: "ผ่านการตรวจครบแล้ว รอสร้างไฟล์ส่งการเงิน",
-      href: "/staff/exports", action: "ส่งออกเอกสาร",
+      // One line for what used to be two. Steps 3 and 4 are the same errand and
+      // now the same screen, so two to-do cards pointing at it would only ask
+      // the officer to decide which half to click.
+      count: s.payout_courses_actionable, step: 3,
+      title: "วิชาที่รอตรวจ / รอส่งออก",
+      detail: "อาจารย์อนุมัติชั่วโมงแล้ว รอเจ้าหน้าที่ตรวจยอดเงินและส่งออกเอกสาร",
+      href: "/staff/payouts", action: "เปิดรายการ",
     },
   ].filter(t => t.count > 0);
 
@@ -103,9 +100,9 @@ export default function StaffDashboard() {
         <StatCard label="แบบฟอร์มหนี้รอตรวจ" value={s.pending_reviews} icon={<FileText size={18} />}
                   tone={s.pending_reviews > 0 ? "warn" : "default"}
                   hint="ขั้นที่ 2" href="/staff/review" />
-        <StatCard label="เอกสารเบิกจ่ายรอตรวจ" value={s.pending_payout_reviews} icon={<ClipboardCheck size={18} />}
-                  tone={s.pending_payout_reviews > 0 ? "warn" : "default"}
-                  hint="ขั้นที่ 3" href="/staff/worklog" />
+        <StatCard label="วิชาที่รอตรวจ / รอส่งออก" value={s.payout_courses_actionable} icon={<ClipboardCheck size={18} />}
+                  tone={s.payout_courses_actionable > 0 ? "warn" : "default"}
+                  hint="ขั้นที่ 3" href="/staff/payouts" />
         <StatCard label="งบใช้ / ทั้งหมด" value={`${formatBaht(s.budget_used)} / ${formatBaht(s.budget_allocated)}`}
                   icon={<Wallet size={18} />}
                   hint={`จาก ${s.budget_courses} วิชาที่ขอใช้ TA`} />
@@ -133,9 +130,9 @@ export default function StaffDashboard() {
           <ul className="divide-y divide-[var(--hairline)]">
             <ShortcutRow href="/staff/approvals" title="อนุมัติคำขอ TA" />
             <ShortcutRow href="/staff/review" title="ตรวจสอบแบบฟอร์มใบแจ้งหนี้" />
-            <ShortcutRow href="/staff/worklog" title="ตรวจสอบเบิกจ่ายค่าตอบแทน" />
+            <ShortcutRow href="/staff/payouts" title="ตรวจและส่งออกเอกสาร" />
             <ShortcutRow href="/staff/teaching" title="วิชาที่เปิดสอน" />
-            <ShortcutRow href="/staff/exports" title="ส่งออกเอกสาร" />
+            <ShortcutRow href="/staff/appointments" title="ใบแต่งตั้งทีเอ (คำสั่ง)" />
           </ul>
         </Panel>
       </div>

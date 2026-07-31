@@ -2,6 +2,25 @@
 @import "@heroui/styles";
 
 /* -------------------------------------------------------------------------- */
+/* A button must look clickable.                                              */
+/*                                                                            */
+/* Browsers give <button> the plain arrow cursor — only <a> gets the hand —   */
+/* and Tailwind's preflight does not change it. HeroUI sets it on its own      */
+/* components, so the app was inconsistent: the same-looking control read as   */
+/* clickable or not depending on whether it happened to be a HeroUI Button or  */
+/* a hand-written <button>. Fixed once here rather than per element, because   */
+/* it kept coming back one screen at a time.                                  */
+/*                                                                            */
+/* Disabled controls are excluded so the not-allowed cursor still reads as     */
+/* "you cannot press this". aria-disabled is checked too — HeroUI disables     */
+/* that way and the element stays focusable.                                  */
+/* -------------------------------------------------------------------------- */
+button:not(:disabled):not([aria-disabled="true"]),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Design tokens — Cloudflare-inspired, keeping the KKU brand blue.           */
 /* -------------------------------------------------------------------------- */
 

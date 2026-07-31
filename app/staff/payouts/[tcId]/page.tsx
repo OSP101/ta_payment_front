@@ -1,0 +1,146 @@
+"use client";
+import { use, useState } from "react";
+import useSWR, { mutate } from "swr";
+import Link from "next/link";
+import { ArrowLeft, ClipboardEdit, History } from "lucide-react";
+import { PageHeader, Panel, Button, ConfirmDialog } from "../../../components/ui";
+import { StaffWorklogEditor } from "../../../components/StaffWorklogEditor";
+import { ExportPreviewBody } from "../../../components/ExportPreviewBody";
+import { useTerm } from "../../TermContext";
+import { ReviewGrid } from "./ReviewGrid";
+
+/**
+ * One course, top to bottom: check the months, then send the package.
+ *
+ * The previous workspace put review and export behind two tabs of two different
+ * menus, so finishing a review left the officer on a screen with no way forward
+ * — they had to remember that a separate export menu existed and find the course
+ * there a second time. Here the export panel sits directly under the grid that
+ * unlocks it: when the last cell turns green the button below is already live.
+ *
+ * Editing the raw worklog is the rare case (a staff correction on a TA's behalf)
+ * and stays folded away rather than competing with the two normal ones.
+ */
+
+interface TC { id: string; code: string; name_th: string; exported_at?: string | null }
+
+interface ExportBatch {
+  id: string;
+  ta_count: number;
+  total_baht: number;
+  generated_at: string;
+  generated_by_name?: string;
+}
+
+export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tcId: string }> }) {
+  const { tcId } = use(params);
+  const { termId } = useTerm();
+  const { data: tc } = useSWR<TC>(`/teaching-courses/${tcId}`);
+  const [showEditor, setShowEditor] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Every key the review/export/send-back flows can affect, so the page stays
+  // consistent without a reload — including the list this page was opened from
+  // and the sidebar badge, which are both derived from the same rows.
+  const revalidateAll = () => {
+    mutate(`/staff/courses/${tcId}/worklogs`);
+    mutate(`/exports/course/${tcId}/preview`);
+    mutate(`/teaching-courses/${tcId}`);
+    mutate(`/teaching-courses/${tcId}/submission-timeline`);
+    if (termId) {
+      mutate(`/submission-periods/review-queue?term_id=${termId}`);
+      mutate(`/exports/summary?term_id=${termId}`);
+      mutate(`/teaching-courses?term_id=${termId}`);
+      mutate(`/dashboard/executive?term_id=${termId}`);
+    }
+  };
+
+  return (
+    <div>
+      <Link
+        href="/staff/payouts"
+        className="mb-2 inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-[var(--brand)]"
+      >
+        <ArrowLeft size={16} /> กลับไปรายการวิชา
+      </Link>
+
+      <PageHeader
+        title={tc ? `${tc.code} — ${tc.name_th}` : "…"}
+        description="ตรวจรายเดือนด้านบน แล้วส่งออกด้านล่าง"
+      />
+
+      <Panel
+        title="ตรวจรายเดือน"
+        description="แต่ละช่องคือ TA หนึ่งคนในหนึ่งเดือน — กดตัวเลขชั่วโมงเพื่อดูรายการรายวัน"
+        className="mb-3"
+      >
+        <ReviewGrid tcId={tcId} onChanged={revalidateAll} />
+      </Panel>
+
+      <Panel className="mb-3">
+        <ExportPreviewBody tcId={tcId} exportedAt={tc?.exported_at} onExported={revalidateAll} />
+      </Panel>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="ghost" size="sm" onPress={() => setShowEditor(v => !v)}>
+          <ClipboardEdit size={14} /> {showEditor ? "ซ่อนบันทึกเวลา" : "ดู/แก้ไขบันทึกเวลา"}
+        </Button>
+        <Button variant="ghost" size="sm" onPress={() => setShowHistory(true)}>
+          <History size={14} /> ประวัติการส่งออก
+        </Button>
+      </div>
+
+      {showEditor && (
+        <Panel padded={false} className="mt-2">
+          <StaffWorklogEditor tcId={tcId} onDataChange={revalidateAll} />
+        </Panel>
+      )}
+
+      {showHistory && <HistoryDialog tcId={tcId} onClose={() => setShowHistory(false)} />}
+    </div>
+  );
+}
+
+function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void }) {
+  const { data } = useSWR<ExportBatch[]>(`/exports/course/${tcId}/history`);
+  return (
+    <ConfirmDialog
+      open
+      onClose={onClose}
+      onConfirm={onClose}
+      confirmLabel="ปิด"
+      title="ประวัติการส่งออก"
+      icon={<History size={20} />}
+      message={
+        !data ? (
+          <p className="text-sm text-muted">กำลังโหลด…</p>
+        ) : data.length === 0 ? (
+          <p className="text-sm text-muted">ยังไม่เคยส่งออกวิชานี้</p>
+        ) : (
+          <div className="max-h-72 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-surface-secondary text-ink-2">
+                <tr>
+                  <th className="px-2 py-1 text-left">เวลา</th>
+                  <th className="px-2 py-1 text-left">ผู้ส่งออก</th>
+                  <th className="px-2 py-1 text-right">จำนวน TA</th>
+                  <th className="px-2 py-1 text-right">ยอดรวม</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map(b => (
+                  <tr key={b.id} className="border-t border-hairline">
+                    <td className="px-2 py-1 tabular">{b.generated_at.slice(0, 16).replace("T", " ")}</td>
+                    <td className="px-2 py-1">{b.generated_by_name}</td>
+                    <td className="px-2 py-1 text-right tabular">{b.ta_count}</td>
+                    <td className="px-2 py-1 text-right tabular">{b.total_baht.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    />
+  );
+}
