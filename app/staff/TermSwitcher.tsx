@@ -21,5 +21,9 @@ export default function TermSwitcher() {
   // page has the "create a term first" empty state).
   if (!loaded || !terms || terms.length === 0) return null;
 
-  return <TermSelect terms={terms} value={termId} onChange={setTermId} className="w-44 shrink-0" />;
+  return (
+    <div data-tour="term-switcher" className="shrink-0">
+      <TermSelect terms={terms} value={termId} onChange={setTermId} className="w-44 shrink-0" />
+    </div>
+  );
 }

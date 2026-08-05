@@ -314,7 +314,7 @@ export default function AnnouncePage() {
 
       <Tabs selectedKey={tab} onSelectionChange={(k) => setTab(String(k))}>
         <Tabs.ListContainer>
-          <Tabs.List>
+          <Tabs.List data-tour="announce-tabs">
             <Tabs.Tab id="compose"><Sparkles size={14} /> เขียน / แก้ไข</Tabs.Tab>
             <Tabs.Tab id="manage">
               <Megaphone size={14} /> จัดการประกาศ
@@ -325,7 +325,7 @@ export default function AnnouncePage() {
 
         <Tabs.Panel id="compose">
           <div ref={editorRef} className="grid gap-4 lg:grid-cols-5 mt-4">
-            <div className="lg:col-span-3 space-y-4">
+            <div data-tour="announce-composer" className="lg:col-span-3 space-y-4">
               <Composer draft={draft} setDraft={setDraft} />
               <div className="flex flex-wrap gap-2 justify-end">
                 {draft.id && (
@@ -351,7 +351,7 @@ export default function AnnouncePage() {
               </div>
             </div>
 
-            <div className="lg:col-span-2">
+            <div data-tour="announce-preview" className="lg:col-span-2">
               <Panel title="ตัวอย่างการแสดงผล" description="แสดงตามที่ผู้ใช้จะเห็นในหน้าประกาศ">
                 <AnnouncementCardPreview draft={draft} />
               </Panel>

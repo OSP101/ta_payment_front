@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
-import { AlertTriangle, FileSignature } from "lucide-react";
+import { AlertTriangle, Download, FileSignature } from "lucide-react";
 import { api, errMessage } from "../../lib/api";
 import { useTerm } from "../TermContext";
 import { notify } from "../../lib/notify";
@@ -37,6 +37,10 @@ interface AdminOfficer {
   full_name: string;
   title: string;
   is_active: boolean;
+  // Derived server-side from `title`. Never re-derive it here: the printed
+  // document decides from the same field, and two copies of the rule would
+  // eventually disagree about who signed with what authority.
+  is_dean: boolean;
 }
 
 const THAI_MONTHS = [
@@ -72,6 +76,10 @@ interface AppointmentRound {
   generated_at: string;
   generated_by?: string;
   is_late: boolean;
+  // False for orders issued before the server started keeping a copy of the
+  // rendered document. Those can never be re-issued, so the button is absent
+  // rather than present-and-failing.
+  can_reprint: boolean;
 }
 
 function AppointmentSection({ termId }: { termId: string }) {
@@ -89,9 +97,42 @@ function AppointmentSection({ termId }: { termId: string }) {
   const [effectiveDate, setEffectiveDate] = useState(""); // ISO YYYY-MM-DD
   const [signerId, setSignerId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reprinting, setReprinting] = useState<string | null>(null);
 
   const deans = (officers ?? []).filter(o => o.is_active);
   const orderNo = `${orderNoNum.trim()}/${orderNoYear.trim()}`;
+  // A คำสั่ง is issued under the dean's authority. When a deputy signs it, the
+  // document prints the acting form — so the screen has to say so BEFORE the
+  // paper is generated, not after someone notices on the printout.
+  const signer = deans.find(o => o.id === signerId);
+  const acting = signer && !signer.is_dean;
+  const deanSeat = deans.find(o => o.is_dean)?.title ?? "คณบดีวิทยาลัยการคอมพิวเตอร์";
+
+  /**
+   * Fetch an already-issued order again.
+   *
+   * Deliberately does NOT revalidate the preview or the round list afterwards:
+   * nothing changed. A copy that quietly refreshed the screen would suggest it
+   * had done something, and the one thing staff must be sure of here is that
+   * asking for the paper again cannot alter who is appointed.
+   */
+  async function reprint(r: AppointmentRound) {
+    setReprinting(r.id);
+    try {
+      const blob: Blob = await api.get(`/exports/appointment-order/rounds/${r.id}/download`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `appointment-order-${r.order_no.replace("/", "-")}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      notify.success(`ดาวน์โหลดคำสั่งที่ ${r.order_no} (ฉบับเดิม) แล้ว`);
+    } catch (e) {
+      notify.error(errMessage(e));
+    } finally {
+      setReprinting(null);
+    }
+  }
 
   async function generate() {
     if (!orderNoNum.trim() || !orderNoYear.trim() || !orderDate || !effectiveDate || !signerId) {
@@ -136,7 +177,7 @@ function AppointmentSection({ termId }: { termId: string }) {
         {/* Round membership. Named before printing, because paper cannot be
             recalled and a course left out has to be chased, not discovered. */}
         {preview && (
-          <div className="rounded-lg border border-border bg-surface-secondary p-3 space-y-2">
+          <div data-tour="appt-round" className="rounded-lg border border-border bg-surface-secondary p-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium">
                 รอบที่ {preview.next_round}
@@ -179,7 +220,7 @@ function AppointmentSection({ termId }: { termId: string }) {
         )}
 
         {!!rounds?.items?.length && (
-          <details className="rounded-lg border border-border p-3">
+          <details data-tour="appt-history" className="rounded-lg border border-border p-3">
             <summary className="cursor-pointer text-sm font-medium">
               คำสั่งที่ออกไปแล้ว ({rounds.items.length} รอบ)
             </summary>
@@ -194,13 +235,34 @@ function AppointmentSection({ termId }: { termId: string }) {
                   <span>· {thaiDatePreview(r.order_date, false) || r.order_date}</span>
                   <span>· {r.ta_count} รายชื่อ</span>
                   {r.generated_by && <span>· โดย {r.generated_by}</span>}
+                  {/* Pushed to the right so it never reads as part of the
+                      sentence describing the round. */}
+                  <span className="ml-auto">
+                    {r.can_reprint ? (
+                      <button
+                        type="button"
+                        onClick={() => void reprint(r)}
+                        disabled={reprinting !== null}
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] hover:border-brand hover:text-brand disabled:opacity-40"
+                      >
+                        <Download size={11} />
+                        {reprinting === r.id ? "กำลังดาวน์โหลด…" : "ดาวน์โหลดฉบับเดิม"}
+                      </button>
+                    ) : (
+                      // Not a disabled button: nothing the user can do will ever
+                      // enable it, and a greyed control invites them to try.
+                      <span className="text-[11px] text-ink-3">
+                        ออกก่อนระบบเก็บสำเนา — ดาวน์โหลดซ้ำไม่ได้
+                      </span>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
           </details>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+        <div data-tour="appt-form" className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
           {/* คำสั่งที่ — one compact "N / ปี" unit inside a single bordered box */}
           <div>
             <label className="block text-xs text-ink-2 mb-1.5">คำสั่งที่ (เลขที่คำสั่ง)</label>
@@ -228,7 +290,9 @@ function AppointmentSection({ termId }: { termId: string }) {
 
           {/* ผู้ลงนาม */}
           <div>
-            <label className="block text-xs text-ink-2 mb-1.5">ผู้ลงนาม (คณบดี)</label>
+            <label className="block text-xs text-ink-2 mb-1.5">
+              ผู้ลงนาม (คณบดี หรือผู้รักษาการแทน)
+            </label>
             <Select
               value={signerId}
               onChange={e => setSignerId(e.target.value)}
@@ -245,6 +309,22 @@ function AppointmentSection({ termId }: { termId: string }) {
             {/* Without a roster the form fills in fine and only fails at submit
                 with "ไม่พบข้อมูลผู้ลงนาม" — which reads as a bug rather than
                 as missing setup. Say it here, with the way out. */}
+            {/* Show the block as it will print, not just a warning about it.
+                "รักษาการแทน" is a claim about authority — staff should be
+                able to check the exact three lines against the seat they think
+                is vacant before committing them to paper. */}
+            {acting && (
+              <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50/60 px-2 py-1.5">
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-900">
+                  <AlertTriangle size={12} /> ผู้ลงนามไม่ใช่คณบดี — จะพิมพ์เป็น “รักษาการแทน”
+                </div>
+                <div className="mt-1 text-center text-[11px] leading-tight text-amber-900/90">
+                  <div>({signer!.academic_prefix ?? ""}{signer!.full_name})</div>
+                  <div>{signer!.title} รักษาการแทน</div>
+                  <div>{deanSeat}</div>
+                </div>
+              </div>
+            )}
             {officers && deans.length === 0 && (
               <p className="mt-1 text-xs text-amber-700">
                 ยังไม่มีรายชื่อผู้ลงนามในระบบ — เพิ่มได้ที่{" "}
@@ -274,7 +354,7 @@ function AppointmentSection({ termId }: { termId: string }) {
           </div>
         </div>
 
-        <div className="flex justify-end">
+        <div data-tour="appt-generate" className="flex justify-end">
           <Button variant="primary" onClick={generate} disabled={busy}>
             <FileSignature size={14} /> {busy ? "กำลังสร้าง…" : "สร้าง PDF + DOCX"}
           </Button>

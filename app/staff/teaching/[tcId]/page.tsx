@@ -95,6 +95,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
 
       <Panel
         title="Section และตารางเวลาเรียน"
+        data-tour="course-sections"
         description="รายชื่อ section ปกติมาจากไฟล์ทะเบียน — เพิ่มเองเมื่อไฟล์ตกหล่น อาจารย์แก้ส่วนนี้ไม่ได้"
         actions={
           !locked && (
@@ -150,7 +151,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
 
       {/* Danger zone — remove a course opened by mistake. The server refuses if
           the course has any TA / worklog / export data. */}
-      <div className="mt-6 rounded-lg border border-danger/30 bg-danger/5 p-4">
+      <div data-tour="course-danger" className="mt-6 rounded-lg border border-danger/30 bg-danger/5 p-4">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-danger">ลบรายวิชานี้</div>

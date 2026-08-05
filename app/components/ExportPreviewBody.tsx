@@ -49,7 +49,16 @@ export interface ExportPreview {
   over_budget: boolean;
   prorated: boolean;
   all_ready: boolean;
+  blockers: ExportBlocker[];
+  /** Server's answer to "may this be downloaded". Never re-derive it here. */
+  can_export: boolean;
   rows: PreviewRow[];
+}
+export interface ExportBlocker {
+  kind: "waiting_ta" | "waiting_lecturer" | "unreviewed";
+  ta_name: string;
+  months: string[];
+  rows?: number;
 }
 
 export const fmtBaht = (n: number) =>
@@ -75,6 +84,7 @@ export function ExportPreviewBody({
   // Per-row reveal state for the masked national-ID / bank-account column.
   const alreadyExported = !!exportedAt;
   const notReady = (data?.rows ?? []).filter(r => !r.profile_ready);
+  const blockers = data?.blockers ?? [];
 
   async function download() {
     // Fetch the ZIP as a blob (not window.location) so a backend error surfaces
@@ -117,7 +127,11 @@ export function ExportPreviewBody({
     }
   }
 
-  const canDownload = !!data?.all_ready && (alreadyExported || ack) && !downloading;
+  // can_export is the SERVER's verdict — profiles ready AND every month through
+  // all three stages. Downloading rebuilds the file from live data and locks
+  // whatever is newly complete, so "already exported" is not a pass: a
+  // re-download while work is still moving would freeze a different document.
+  const canDownload = !!data?.can_export && (alreadyExported || ack) && !downloading;
 
   if (isLoading || (!data && !error)) {
     return (
@@ -141,7 +155,7 @@ export function ExportPreviewBody({
         <SummaryStat label="งบรายวิชา" value={data.budget_max > 0 ? fmtBaht(data.budget_max) : "ไม่จำกัด"} />
         <SummaryStat label="รวมที่คำนวณได้" value={fmtBaht(data.total_pay)} />
         <SummaryStat
-          label="จ่ายจริง (หลังเกลี่ยงบ)"
+          label="จ่ายจริง (หลังตัดเดือนที่เกินงบ)"
           value={fmtBaht(data.total_actual)}
           tone={data.prorated ? "warn" : undefined}
         />
@@ -158,6 +172,19 @@ export function ExportPreviewBody({
         <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
           <b>ยังดาวน์โหลดไม่ได้</b> — มี TA ที่ข้อมูลไม่พร้อม {notReady.length} คน:{" "}
           {notReady.map(r => `${r.full_name} (${r.profile_issue})`).join(", ")} — โปรดให้ TA แก้ไขหรือเจ้าหน้าที่อนุมัติเอกสารก่อน
+        </div>
+      )}
+
+      {blockers.length > 0 && (
+        <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
+          <b>ยังดาวน์โหลดไม่ได้</b> — ต้องผ่านครบทุกขั้นก่อน เพราะการดาวน์โหลดจะล็อกตัวเลขทันที
+          <ul className="mt-1 list-disc pl-4 space-y-0.5">
+            {blockers.map((b, i) => (
+              <li key={i}>
+                {b.ta_name} — {blockerText(b)} ({b.months.join(", ")})
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -229,16 +256,17 @@ export function ExportPreviewBody({
           </span>
         </label>
       )}
-      {alreadyExported && (
+      {alreadyExported && blockers.length === 0 && (
         <p className="text-xs text-ink-3">
           วิชานี้เคยส่งออก (ล็อก) แล้ว — ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม
         </p>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
-        <span className="text-xs text-ink-3">
-          หากตัวเลขไม่ถูกต้อง ให้ไปแก้ที่แท็บ “บันทึกเวลา” ก่อน แล้วกลับมาที่แท็บนี้ (ตัวเลขอัปเดตอัตโนมัติ)
-        </span>
+      {/* No "go fix it in the timesheet tab" hint here: once a month is exported
+          the timesheet is locked for every role, so the advice would send the
+          reader to a screen that refuses them. Unlocking is the staff/admin
+          reversal, not something this panel can offer. */}
+      <div className="flex justify-end pt-1">
         <Button variant="primary" onClick={download} disabled={!canDownload} className="shrink-0">
           {alreadyExported ? <Download size={14} /> : <Lock size={14} />}
           {downloading
@@ -250,6 +278,12 @@ export function ExportPreviewBody({
       </div>
     </div>
   );
+}
+
+function blockerText(b: ExportBlocker) {
+  if (b.kind === "waiting_ta") return `ยังไม่ส่งบันทึกเวลา ${b.rows ?? 0} รายการ`;
+  if (b.kind === "waiting_lecturer") return `รออาจารย์อนุมัติ ${b.rows ?? 0} รายการ`;
+  return "ยังไม่ได้ตรวจสอบเบิกจ่าย";
 }
 
 function SummaryStat({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {

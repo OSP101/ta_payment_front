@@ -23,14 +23,20 @@ export interface TermProgress {
   note?: string | null;
   updated_by_name?: string | null;
   updated_at?: string | null;
+  /** The one step the officer may take, and whether its signatures are in. */
+  next_stage: number;
+  can_advance: boolean;
+  signers_missing?: string[];
+  /** Role signing at the current stage — "" for 4/5, which nobody signs. */
+  current_role?: string;
 }
 
-const STAGES: { n: number; label: string; atKey: keyof TermProgress }[] = [
-  { n: 1, label: "TA เซ็นครบ", atKey: "ta_signed_at" },
-  { n: 2, label: "อาจารย์เซ็นครบ", atKey: "lecturer_signed_at" },
-  { n: 3, label: "ผู้รับรองเซ็นครบ", atKey: "certifier_signed_at" },
-  { n: 4, label: "ส่งการเงินแล้ว", atKey: "sent_finance_at" },
-  { n: 5, label: "คณบดีลงนาม", atKey: "sent_treasury_at" },
+const STAGES: { n: number; label: string; atKey: keyof TermProgress; role?: string; who: string }[] = [
+  { n: 1, label: "TA เซ็นครบ", atKey: "ta_signed_at", role: "ta", who: "TA ทุกคนที่สอนในวิชานั้น" },
+  { n: 2, label: "อาจารย์เซ็นครบ", atKey: "lecturer_signed_at", role: "lecturer", who: "อาจารย์ผู้ส่งคำขอ" },
+  { n: 3, label: "ผู้รับรองเซ็นครบ", atKey: "certifier_signed_at", role: "certifier", who: "หัวหน้าสาขาวิชา" },
+  { n: 4, label: "ส่งการเงินแล้ว", atKey: "sent_finance_at", who: "เจ้าหน้าที่นำส่ง" },
+  { n: 5, label: "คณบดีลงนาม", atKey: "sent_treasury_at", who: "คณบดี" },
 ];
 
 function fmt(iso?: string | null): string {
@@ -86,7 +92,7 @@ export function DocumentProgressBoard({
   return (
     <div className="space-y-3">
       {/* Export readiness gate */}
-      <Panel>
+      <Panel data-tour="progress-gate">
         {p.all_exported ? (
           <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 size={18} />
@@ -119,7 +125,7 @@ export function DocumentProgressBoard({
       </Panel>
 
       {/* The single term-level stepper */}
-      <Panel padded={false}>
+      <Panel padded={false} data-tour="progress-stepper">
         <div className="px-4 py-3 flex items-center gap-3 border-b border-hairline">
           <div className="font-semibold">การเดินเอกสารของทั้งเทอม</div>
           <div className="ml-auto">
@@ -136,7 +142,24 @@ export function DocumentProgressBoard({
             {visibleStages.map((st, i) => {
               const reached = p.stage >= st.n;
               const isCurrent = p.stage === st.n;
+              // The paper moves one desk at a time. Only the very next step is
+              // offered, and only once its signatures are in — the server says
+              // so via can_advance, and refuses anything else, so the circle
+              // must not offer what SetStage would reject.
               const at = p[st.atKey] as string | null | undefined;
+              const isNext = st.n === p.stage + 1;
+              const canClick =
+                stepsEnabled && !busy && (isCurrent || (isNext && p.can_advance));
+              const blockedNext = stepsEnabled && isNext && !p.can_advance;
+              const title = !stepsEnabled
+                ? "ต้องส่งออกเอกสารครบทุกวิชาก่อน"
+                : isCurrent
+                ? "คลิกเพื่อย้อนขั้นนี้"
+                : blockedNext
+                ? `ยังกดไม่ได้ — ${st.who}ยังเซ็นไม่ครบ`
+                : isNext
+                ? "คลิกเพื่อยืนยันว่าขั้นนี้เสร็จแล้ว"
+                : "ต้องทำขั้นก่อนหน้าให้เสร็จก่อน";
               return (
                 <div key={st.n} className="flex-1 flex flex-col items-center relative">
                   {i > 0 && (
@@ -144,25 +167,40 @@ export function DocumentProgressBoard({
                   )}
                   <button
                     type="button"
-                    disabled={!stepsEnabled || busy}
-                    onClick={() => stepsEnabled && setStage(isCurrent ? st.n - 1 : st.n)}
-                    title={stepsEnabled ? (isCurrent ? "คลิกเพื่อย้อนขั้นนี้" : "คลิกเพื่อตั้งเป็นขั้นนี้") : "ต้องส่งออกเอกสารครบทุกวิชาก่อน"}
+                    disabled={!canClick}
+                    onClick={() => canClick && setStage(isCurrent ? st.n - 1 : st.n)}
+                    title={title}
                     className={
                       "relative z-10 grid place-items-center w-8 h-8 rounded-full transition-colors " +
-                      (reached ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400") +
-                      (stepsEnabled ? " cursor-pointer hover:ring-2 hover:ring-emerald-300" : " cursor-not-allowed") +
+                      (reached
+                        ? "bg-emerald-500 text-white"
+                        : blockedNext
+                        ? "bg-amber-100 text-amber-700 ring-2 ring-amber-300 dark:bg-amber-950/40 dark:text-amber-300"
+                        : isNext
+                        ? "bg-white text-accent ring-2 ring-accent dark:bg-slate-900"
+                        : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400") +
+                      (canClick ? " cursor-pointer hover:ring-2 hover:ring-emerald-300" : " cursor-not-allowed") +
                       (isCurrent ? " ring-2 ring-emerald-400" : "")
                     }
                   >
                     {reached ? <Check size={16} strokeWidth={3} /> : <span className="text-xs font-semibold">{st.n}</span>}
                   </button>
-                  <div className={"mt-2 text-center text-xs px-1 " + (reached ? "text-ink-1 font-medium" : "text-ink-3")}>{st.label}</div>
+                  <div className={"mt-2 text-center text-xs px-1 " + (reached ? "text-ink-1 font-medium" : isNext ? "text-ink-1 font-medium" : "text-ink-3")}>{st.label}</div>
+                  <div className="text-[10px] text-muted text-center px-1">{st.who}</div>
                   {reached && at && <div className="text-[10px] text-muted tabular mt-0.5">{fmt(at)}</div>}
                 </div>
               );
             })}
           </div>
         </div>
+
+        {p.all_exported && !done && p.current_role && !p.can_advance && (p.signers_missing?.length ?? 0) > 0 && (
+          <div className="mx-4 mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+            <b>ยังไปขั้นถัดไปไม่ได้</b> — เหลืออีก {p.signers_missing!.length} รายที่ยังไม่เซ็น:{" "}
+            {p.signers_missing!.slice(0, 4).join(" · ")}
+            {p.signers_missing!.length > 4 && ` และอีก ${p.signers_missing!.length - 4} ราย`}
+          </div>
+        )}
 
         <div className="px-4 pb-3 space-y-2">
           {canEdit ? (
@@ -190,8 +228,16 @@ export function DocumentProgressBoard({
         </div>
       </Panel>
 
-      {/* Per-course signature checklist — who hasn't signed yet */}
-      <SignatureChecklistPanel termId={termId} canEdit={canEdit} />
+      {/* Only the people the CURRENT stage is waiting on. Showing all three
+          roles at once was the old shape and it buried the actual question —
+          the officer wants one list: who do I chase today. */}
+      <SignatureChecklistPanel
+        termId={termId}
+        canEdit={canEdit}
+        stage={p.stage}
+        role={p.current_role ?? ""}
+        allExported={p.all_exported}
+      />
     </div>
   );
 }
@@ -207,32 +253,61 @@ interface SignatureItem {
   exported: boolean;
   role: string;
   role_label: string;
+  /** The person. Absent for the certifier, who is one officer per course. */
+  signer_id?: string | null;
   responsible: string;
   signed_at?: string | null;
 }
 
-function SignatureChecklistPanel({ termId, canEdit }: { termId: string; canEdit: boolean }) {
+function SignatureChecklistPanel({
+  termId, canEdit, stage, role, allExported,
+}: {
+  termId: string;
+  canEdit: boolean;
+  /** Current term stage — the panel shows whoever signs at stage + 1. */
+  stage: number;
+  /** Role signing next, from the server. "" once nobody signs (stages 4-5). */
+  role: string;
+  allExported: boolean;
+}) {
   const key = termId ? `/document-progress/checklist?term_id=${termId}` : null;
   const { data, isLoading } = useSWR<SignatureItem[]>(key);
   const [busy, setBusy] = useState(false);
 
+  const stageInfo = STAGES.find(st => st.n === stage + 1);
+  // Only this stage's people. The panel is a work queue, not an archive: a TA
+  // who signed in stage 1 is not something the officer needs to look at while
+  // chasing the lecturer.
+  const items = useMemo(
+    () => (data ?? []).filter(i => role !== "" && i.role === role),
+    [data, role],
+  );
+
   const byCourse = useMemo(() => {
     const m = new Map<string, { code: string; name_th: string; items: SignatureItem[] }>();
-    for (const it of data ?? []) {
+    for (const it of items) {
       const g = m.get(it.teaching_course_id) ?? { code: it.code, name_th: it.name_th, items: [] };
       g.items.push(it);
       m.set(it.teaching_course_id, g);
     }
     return Array.from(m.entries());
-  }, [data]);
+  }, [items]);
 
-  const pendingCount = (data ?? []).filter(i => !i.signed_at).length;
+  const pendingCount = items.filter(i => !i.signed_at).length;
+  const signedCount = items.length - pendingCount;
 
-  async function toggle(tcId: string, role: string, signed: boolean) {
+  async function toggle(it: SignatureItem, signed: boolean) {
     setBusy(true);
     try {
-      await api.post(`/document-progress/checklist/${tcId}`, { role, signed });
+      await api.post(`/document-progress/checklist/${it.teaching_course_id}`, {
+        role: it.role,
+        signer_id: it.signer_id ?? null,
+        signed,
+      });
       if (key) mutate(key);
+      // The stepper's can_advance depends on these ticks, so it has to refetch
+      // too — otherwise the circle stays amber after the last name is ticked.
+      mutate(`/document-progress?term_id=${termId}`);
     } catch (e) {
       notify.error(errMessage(e));
     } finally {
@@ -255,6 +330,22 @@ function SignatureChecklistPanel({ termId, canEdit }: { termId: string; canEdit:
   if (isLoading || !data) {
     return <Panel><div className="flex items-center gap-2 py-6 justify-center text-sm text-muted"><Spinner size="sm" /> กำลังโหลด…</div></Panel>;
   }
+  if (!allExported) return null;
+  if (role === "") {
+    // Stages 4 and 5 are things the officer does, not sheets anybody signs.
+    return (
+      <Panel>
+        <EmptyState
+          title={stage >= 5 ? "เดินเอกสารครบทุกขั้นแล้ว" : "ขั้นนี้ไม่มีรายการให้เซ็น"}
+          description={
+            stage >= 5
+              ? "คณบดีลงนามแล้ว — จบกระบวนการของเทอมนี้"
+              : "เป็นขั้นที่เจ้าหน้าที่ดำเนินการเอง กดที่วงกลมขั้นถัดไปเมื่อทำเสร็จ"
+          }
+        />
+      </Panel>
+    );
+  }
   if (byCourse.length === 0) {
     return (
       <Panel>
@@ -264,60 +355,69 @@ function SignatureChecklistPanel({ termId, canEdit }: { termId: string; canEdit:
   }
 
   return (
-    <Panel padded={false}>
+    <Panel padded={false} data-tour="progress-checklist">
       <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-hairline">
-        <div className="font-semibold">รายการรอลงนาม (รายวิชา)</div>
+        <div>
+          <div className="font-semibold">
+            ขั้นที่ {stage + 1} · {stageInfo?.label ?? ""}
+          </div>
+          <div className="text-xs text-muted">รอ{stageInfo?.who ?? ""}ลงนาม — ติ๊กทีละคนเมื่อได้ลายเซ็นแล้ว</div>
+        </div>
         {pendingCount > 0
-          ? <Chip tone="warn">ค้าง {pendingCount} รายการ</Chip>
-          : <Chip tone="success"><Check size={12} /> เซ็นครบทุกวิชา</Chip>}
-        {canEdit && (
+          ? <Chip tone="warn">เซ็นแล้ว {signedCount}/{items.length}</Chip>
+          : <Chip tone="success"><Check size={12} /> ครบแล้ว {items.length}/{items.length} — กดขั้นถัดไปได้</Chip>}
+        {canEdit && role === "lecturer" && (
           <Button variant="secondary" size="sm" className="ml-auto" onClick={remind} disabled={busy || pendingCount === 0}>
             <Mail size={14} /> ส่งอีเมลเตือนอาจารย์ที่ยังไม่เซ็น
           </Button>
         )}
       </div>
       <div className="divide-y divide-hairline">
-        {byCourse.map(([tcId, g]) => (
-          <div key={tcId} className="px-4 py-3">
-            <div className="text-sm font-medium mb-2">
-              <span className="tabular">{g.code}</span> <span className="text-ink-2">{g.name_th}</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              {g.items.map(it => {
-                const signed = !!it.signed_at;
-                return (
-                  <button
-                    key={it.role}
-                    type="button"
-                    disabled={!canEdit || busy}
-                    onClick={() => canEdit && toggle(tcId, it.role, !signed)}
-                    title={canEdit ? (signed ? "คลิกเพื่อยกเลิกการเซ็น" : "คลิกเพื่อทำเครื่องหมายว่าเซ็นแล้ว") : undefined}
-                    className={
-                      "flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition " +
-                      (signed
-                        ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30"
-                        : "border-hairline bg-panel") +
-                      (canEdit ? " hover:border-accent cursor-pointer" : " cursor-default")
-                    }
-                  >
-                    {signed
-                      ? <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
-                      : <Circle size={16} className="text-ink-3 shrink-0 mt-0.5" />}
-                    <div className="min-w-0">
-                      <div className="text-xs font-medium">{it.role_label}</div>
-                      <div className="text-[11px] text-muted truncate">
-                        {it.responsible || "—"}
+        {byCourse.map(([tcId, g]) => {
+          const left = g.items.filter(i => !i.signed_at).length;
+          return (
+            <div key={tcId} className="px-4 py-3">
+              <div className="text-sm font-medium mb-2 flex flex-wrap items-center gap-2">
+                <span className="tabular">{g.code}</span>
+                <span className="text-ink-2 font-normal">{g.name_th}</span>
+                {left === 0
+                  ? <Chip tone="success"><Check size={12} /> ครบ</Chip>
+                  : <Chip tone="warn">เหลือ {left}/{g.items.length}</Chip>}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {g.items.map(it => {
+                  const signed = !!it.signed_at;
+                  return (
+                    <button
+                      key={it.role + (it.signer_id ?? "")}
+                      type="button"
+                      disabled={!canEdit || busy}
+                      onClick={() => canEdit && toggle(it, !signed)}
+                      title={canEdit ? (signed ? "คลิกเพื่อยกเลิกการเซ็น" : "คลิกเพื่อทำเครื่องหมายว่าเซ็นแล้ว") : undefined}
+                      className={
+                        "flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition " +
+                        (signed
+                          ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30"
+                          : "border-hairline bg-panel") +
+                        (canEdit ? " hover:border-accent cursor-pointer" : " cursor-default")
+                      }
+                    >
+                      {signed
+                        ? <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                        : <Circle size={16} className="text-ink-3 shrink-0 mt-0.5" />}
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium truncate">{it.responsible || "—"}</div>
+                        <div className={"text-[11px] " + (signed ? "text-emerald-700" : "text-amber-700")}>
+                          {signed ? `เซ็นแล้ว · ${fmt(it.signed_at)}` : "ยังไม่เซ็น"}
+                        </div>
                       </div>
-                      <div className={"text-[11px] " + (signed ? "text-emerald-700" : "text-amber-700")}>
-                        {signed ? "เซ็นแล้ว" : "ยังไม่เซ็น"}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Panel>
   );

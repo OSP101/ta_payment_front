@@ -11,7 +11,8 @@ import CourseSwitcher from "../components/CourseSwitcher";
 import { TAApprovalBanner } from "./TAGate";
 
 // Only the fields the badge needs; the worklog page owns the full shape.
-interface AssignmentTally { id: string; unsent_count: number }
+interface AssignmentTally { id: string; submittable_count: number }
+interface CourseInfo { unresolved_makeups?: number }
 
 // Per-course sidebar for TAs — same app-level Shell pattern as the lecturer's
 // per-course view, so the sidebar sits flush against the viewport edge.
@@ -23,14 +24,26 @@ export default function TACourseShell({
   courseCode?: string;
   children: React.ReactNode;
 }) {
-  // Rows not yet sent for approval, summed across EVERY section the TA holds on
-  // this course. A TA assisting two sections has two separate piles and can only
-  // see one of them at a time on the worklog screen, so the count that matters
-  // is the one that spans them — visible before they even open the page.
+  // Rows the TA can still SEND, summed across every section they hold on this
+  // course. A TA assisting two sections has two separate piles and can only see
+  // one of them at a time on the worklog screen, so the count that matters is
+  // the one that spans them — visible before they even open the page.
+  //
+  // Deliberately not unsent_count: a period that closed with rows unsent is
+  // settled (ไม่ประสงค์ลงเวลา), and a badge counting them nags forever about
+  // something nobody can act on.
   const { data: assignments } = useSWR<AssignmentTally[]>(
     tcId ? `/me/assignments?teaching_course_id=${tcId}` : null,
   );
-  const unsentTotal = (assignments ?? []).reduce((n, a) => n + (a.unsent_count ?? 0), 0);
+  const unsentTotal = (assignments ?? []).reduce((n, a) => n + (a.submittable_count ?? 0), 0);
+
+  // คาบที่ตกวันหยุดและยังไม่มีวันชดเชย — เดิมนับไว้เฉพาะเมนูของอาจารย์ เพราะ TA
+  // ทำอะไรไม่ได้นอกจากรอ ตอนนี้ TA กำหนดวันชดเชยเองได้แล้ว ตัวเลขนี้จึงเป็นงาน
+  // ที่ทำได้จริง (และเป็นเงื่อนไขว่าจะลงเวลาคาบนั้นได้หรือไม่) จึงติดไว้ด้วย
+  const { data: courseInfo } = useSWR<CourseInfo>(
+    tcId ? `/teaching-courses/${tcId}` : null,
+  );
+  const pendingMakeups = courseInfo?.unresolved_makeups ?? 0;
 
   const nav: NavSection[] = [
     {
@@ -49,7 +62,13 @@ export default function TACourseShell({
           badge: unsentTotal,
           badgeLabel: "ยังไม่ได้ส่งอนุมัติ",
         },
-        { label: "วันหยุดและวันชดเชย", href: `/ta/courses/${tcId}/holidays`, icon: CalendarOff },
+        {
+          label: "วันหยุดและวันชดเชย",
+          href: `/ta/courses/${tcId}/holidays`,
+          icon: CalendarOff,
+          badge: pendingMakeups,
+          badgeLabel: "รอกำหนดวันชดเชย",
+        },
       ],
     },
   ];

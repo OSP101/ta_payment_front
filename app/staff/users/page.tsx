@@ -6,6 +6,7 @@ import {
   Input as HInput,
   Label as HLabel,
   TextField as HTextField,
+  type SortDescriptor,
 } from "@heroui/react";
 import { Check, Copy, KeyRound, Pencil, Plus, UserCheck, UserX } from "lucide-react";
 import { api } from "../../lib/api";
@@ -17,6 +18,16 @@ import {
   PageHeader, Panel, Select,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
+
+/** Returns `value` after it has stopped changing for `ms`. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return settled;
+}
 
 interface User {
   id: string;
@@ -208,17 +219,64 @@ function RolesField({
 
 /* -------------------------------------------------------------------------- */
 
+const PAGE_SIZE = 15;
+
+/** Maps a sortable column to the key the API understands. */
+const SORT_KEY: Record<string, string> = { name: "name", email: "email" };
+
 export default function UsersPage() {
-  const { data } = useSWR<{ items: User[]; total: number }>("/users?limit=500");
+  // Search / filters / sort / page live here rather than inside DataTable,
+  // because each one has to reach the API: the table now shows one page at a
+  // time and cannot answer "which 15 of 51" on its own.
+  const [query, setQuery] = useState("");
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [sort, setSort] = useState<SortDescriptor>({ column: "name", direction: "ascending" });
+  const [page, setPage] = useState(1);
+
+  // Typing hits the API on every keystroke otherwise. The debounce is on the
+  // value that goes INTO the request, not on the input, so the box stays
+  // responsive while the fetch lags a moment behind.
+  const debouncedQuery = useDebounced(query, 300);
+
+  // Reduce every input to a primitive before it reaches a dependency array.
+  // `sort` is an object and React Aria hands back a fresh one on each change,
+  // so depending on its identity re-ran the effects below on every render.
+  const sortKey = SORT_KEY[String(sort.column)] ?? "name";
+  const sortDir = sort.direction === "descending" ? "desc" : "asc";
+  const roleFilter = filterValues.role ?? "";
+  const statusFilter = filterValues.active ?? "";
+  const trimmedQuery = debouncedQuery.trim();
+
+  const listKey = useMemo(() => {
+    const p = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String((page - 1) * PAGE_SIZE),
+      sort: sortKey,
+      dir: sortDir,
+    });
+    if (trimmedQuery) p.set("q", trimmedQuery);
+    if (roleFilter) p.set("role", roleFilter);
+    if (statusFilter) p.set("status", statusFilter);
+    return `/users?${p.toString()}`;
+  }, [page, sortKey, sortDir, trimmedQuery, roleFilter, statusFilter]);
+
+  const { data, isLoading, error } = useSWR<{ items: User[]; total: number }>(listKey, {
+    // Each page is its own SWR key with no cached data, so without this the
+    // table blanks to a spinner on every page step instead of holding the old
+    // rows while the next page arrives.
+    keepPreviousData: true,
+  });
+
+  // Anything that changes WHICH rows match has to send the user back to page 1
+  // — otherwise a search narrowing 51 rows to 2 leaves them stranded on page 3
+  // looking at an empty table.
+  useEffect(() => { setPage(1); }, [trimmedQuery, roleFilter, statusFilter, sortKey, sortDir]);
+
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [resetting, setResetting] = useState<User | null>(null);
   const [deactivating, setDeactivating] = useState<User | null>(null);
   const [reactivating, setReactivating] = useState<User | null>(null);
-  const existingEmails = useMemo(
-    () => (data?.items ?? []).map(u => u.email.toLowerCase()),
-    [data],
-  );
 
   const columns: DataColumn<User>[] = [
     {
@@ -285,18 +343,22 @@ export default function UsersPage() {
         title="จัดการผู้ใช้"
         description={data?.total ? `ทั้งหมด ${data.total} รายชื่อ` : "ผู้ใช้ทั้งหมดในระบบ"}
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            <Plus size={16} /> สร้างผู้ใช้
-          </Button>
+          <span data-tour="users-create">
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              <Plus size={16} /> สร้างผู้ใช้
+            </Button>
+          </span>
         }
       />
 
-      <Panel padded={false}>
+      <Panel padded={false} data-tour="users-table">
         <div className="p-4">
           <DataTable
             ariaLabel="ผู้ใช้ทั้งหมดในระบบ"
             rows={data?.items}
-            loading={!data}
+            loading={isLoading}
+            error={error}
+            onRetry={() => mutate(listKey)}
             rowKey={u => u.id}
             searchFn={userHaystack}
             searchPlaceholder="ค้นหาชื่อ / อีเมล…"
@@ -311,6 +373,8 @@ export default function UsersPage() {
                   { id: "lecturer", label: "อาจารย์" },
                   { id: "ta", label: "ผู้ช่วยสอน (TA)" },
                 ],
+                // Unused in server mode — the API applies these. Kept so the
+                // component keeps working if the table is ever taken off it.
                 predicate: (u, v) => u.roles.includes(v),
               },
               {
@@ -324,16 +388,26 @@ export default function UsersPage() {
                 predicate: (u, v) => (v === "active" ? u.is_active : !u.is_active),
               },
             ]}
-            initialSort={{ column: "name", direction: "ascending" }}
-            pageSize={15}
+            pageSize={PAGE_SIZE}
             emptyTitle="ไม่พบผู้ใช้"
             emptyDescription="ลองปรับเงื่อนไขการค้นหา"
             columns={columns}
+            server={{
+              total: data?.total ?? 0,
+              page,
+              onPageChange: setPage,
+              query,
+              onQueryChange: setQuery,
+              filterValues,
+              onFilterChange: setFilterValues,
+              sort,
+              onSortChange: setSort,
+            }}
           />
         </div>
       </Panel>
 
-      <CreateUserModal open={creating} onClose={() => setCreating(false)} existingEmails={existingEmails} />
+      <CreateUserModal open={creating} onClose={() => setCreating(false)} />
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} />}
       {resetting && <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />}
       {deactivating && <DeactivateModal user={deactivating} onClose={() => setDeactivating(null)} />}
@@ -344,7 +418,7 @@ export default function UsersPage() {
 
 /* -------------------------------------------------------------------------- */
 
-function CreateUserModal({ open, onClose, existingEmails }: { open: boolean; onClose: () => void; existingEmails: string[] }) {
+function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [form, setForm] = useState({
     email: "", title: "นาย", first_name: "", last_name: "", phone: "",
     role: "ta", study_level: "undergrad", study_year: "",
@@ -363,18 +437,29 @@ function CreateUserModal({ open, onClose, existingEmails }: { open: boolean; onC
 
   const showYear = form.role === "ta" && form.study_level === "undergrad";
 
+  // The duplicate-email warning used to compare against the loaded user list.
+  // That list is now ONE PAGE, so it would have quietly stopped warning about
+  // everyone not on screen — the account you would most want flagged is the one
+  // you cannot see. Ask the server about this exact address instead.
+  const typedEmail = form.email.trim().toLowerCase();
+  const emailToCheck = vEmail(form.email) === null ? typedEmail : "";
+  const debouncedEmail = useDebounced(emailToCheck, 400);
+  const { data: emailMatches } = useSWR<{ items: User[] }>(
+    debouncedEmail ? `/users?q=${encodeURIComponent(debouncedEmail)}&limit=5` : null,
+  );
+  // `q` is a substring match, so narrow it back down to an exact address.
+  const emailTaken = !!emailMatches?.items?.some(u => u.email.toLowerCase() === debouncedEmail);
+
   const errors = useMemo(() => ({
-    // Client-side duplicate-email guard against the already-loaded user list so
-    // we fail fast before hitting the server.
     email: vEmail(form.email) ??
-      (existingEmails.includes(form.email.trim().toLowerCase()) ? "อีเมลนี้มีผู้ใช้อยู่แล้ว" : null),
+      (emailTaken && debouncedEmail === typedEmail ? "อีเมลนี้มีผู้ใช้อยู่แล้ว" : null),
     title: vSelect(form.title, TITLE_OPTIONS),
     first_name: vName(form.first_name, "ชื่อ"),
     last_name: vName(form.last_name, "นามสกุล"),
     role: vSelect(form.role, ROLE_OPTIONS),
     study_level: form.role === "ta" ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
     phone: vPhone(form.phone),
-  }), [form, existingEmails]);
+  }), [form, emailTaken, debouncedEmail, typedEmail]);
   const hasErrors = Object.values(errors).some(Boolean);
 
   async function submit() {

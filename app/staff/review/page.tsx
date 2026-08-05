@@ -72,7 +72,7 @@ export default function ReviewPage() {
           onSelectionChange={k => setBucket(String(k) as Bucket)}
         >
           <Tabs.ListContainer>
-            <Tabs.List aria-label="สถานะการตรวจสอบ" className="px-4 pt-2">
+            <Tabs.List aria-label="สถานะการตรวจสอบ" data-tour="review-tabs" className="px-4 pt-2">
               {BUCKETS.map(b => (
                 <Tabs.Tab key={b.id} id={b.id}>
                   <TabLabel icon={b.icon} count={counts[b.id]} active={bucket === b.id}>
@@ -196,7 +196,7 @@ function PendingList({
 
   return (
     <div className="p-4">
-      <div className="mb-3">
+      <div data-tour="review-pending" className="mb-3">
         <SearchField
           value={q}
           onChange={setQ}
@@ -271,7 +271,7 @@ function IncompleteList({ people }: { people?: Pending[] }) {
   const notStarted = people.filter(u => (u.docs_in ?? 0) === 0).length;
 
   return (
-    <div className="mt-4 rounded-lg border border-[var(--hairline)] bg-surface-secondary">
+    <div data-tour="review-incomplete" className="mt-4 rounded-lg border border-[var(--hairline)] bg-surface-secondary">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}

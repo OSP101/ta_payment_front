@@ -70,6 +70,7 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
       />
 
       <Panel
+        data-tour="payout-grid"
         title="ตรวจรายเดือน"
         description="แต่ละช่องคือ TA หนึ่งคนในหนึ่งเดือน — กดตัวเลขชั่วโมงเพื่อดูรายการรายวัน"
         className="mb-3"
@@ -77,11 +78,11 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
         <ReviewGrid tcId={tcId} onChanged={revalidateAll} />
       </Panel>
 
-      <Panel className="mb-3">
+      <Panel data-tour="payout-export" className="mb-3">
         <ExportPreviewBody tcId={tcId} exportedAt={tc?.exported_at} onExported={revalidateAll} />
       </Panel>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div data-tour="payout-extras" className="mt-3 flex flex-wrap gap-2">
         <Button variant="ghost" size="sm" onPress={() => setShowEditor(v => !v)}>
           <ClipboardEdit size={14} /> {showEditor ? "ซ่อนบันทึกเวลา" : "ดู/แก้ไขบันทึกเวลา"}
         </Button>

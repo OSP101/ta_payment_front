@@ -31,6 +31,30 @@ export interface DataFilter<T> {
   className?: string;
 }
 
+/**
+ * Hands search / filters / sort / paging to the caller so they can be answered
+ * by the API instead of the browser.
+ *
+ * Once a list is paged, these four cannot stay split across the two sides. A
+ * filter applied after slicing returns a short page; a sort applied after
+ * slicing orders only the rows that happen to be on screen, so "page 1 of a
+ * name sort" is not the first names at all. When `server` is set the table
+ * renders `rows` verbatim as the current page and trusts `total` for the
+ * summary and the page count.
+ */
+export interface DataTableServer {
+  /** Total matching rows on the server — NOT the length of the current page. */
+  total: number;
+  page: number;
+  onPageChange: (page: number) => void;
+  query: string;
+  onQueryChange: (query: string) => void;
+  filterValues: Record<string, string>;
+  onFilterChange: (values: Record<string, string>) => void;
+  sort?: SortDescriptor;
+  onSortChange: (sort: SortDescriptor) => void;
+}
+
 interface DataTableProps<T> {
   ariaLabel: string;
   columns: DataColumn<T>[];
@@ -60,6 +84,8 @@ interface DataTableProps<T> {
    * three lines. Set it on wide tables — omit for tables that fit anywhere.
    */
   minWidth?: string;
+  /** Set to page/filter/sort on the server instead of in the browser. */
+  server?: DataTableServer;
 }
 
 // React Aria selection keys must be non-empty; callers use "" for the
@@ -85,10 +111,10 @@ export function DataTable<T>({
   searchFn, searchPlaceholder = "ค้นหา…",
   filters, initialFilterValues, pageSize = 10, initialSort,
   emptyTitle = "ไม่มีข้อมูล", emptyDescription,
-  loading, error, onRetry, toolbarExtra, minWidth,
+  loading, error, onRetry, toolbarExtra, minWidth, server,
 }: DataTableProps<T>) {
-  const [query, setQuery] = useState("");
-  const [filterValues, setFilterValues] = useState<Record<string, string>>(initialFilterValues ?? {});
+  const [localQuery, setLocalQuery] = useState("");
+  const [localFilterValues, setLocalFilterValues] = useState<Record<string, string>>(initialFilterValues ?? {});
   // If the caller resolves initial values asynchronously (e.g. after an SWR
   // fetch), apply them the first time they arrive — but only once, so we don't
   // overwrite user changes on subsequent renders.
@@ -96,10 +122,19 @@ export function DataTable<T>({
   useEffect(() => {
     if (appliedInitRef.done || !initialFilterValues) return;
     appliedInitRef.done = true;
-    setFilterValues(initialFilterValues);
+    setLocalFilterValues(initialFilterValues);
   }, [initialFilterValues, appliedInitRef]);
-  const [sort, setSort] = useState<SortDescriptor | undefined>(initialSort);
-  const [page, setPage] = useState(1);
+  const [localSort, setLocalSort] = useState<SortDescriptor | undefined>(initialSort);
+  const [localPage, setLocalPage] = useState(1);
+
+  // One set of names for the toolbar and footer to read, wired to either the
+  // caller (server mode) or this component's own state.
+  const query = server ? server.query : localQuery;
+  const filterValues = server ? server.filterValues : localFilterValues;
+  const sort = server ? server.sort : localSort;
+  const page = server ? server.page : localPage;
+  const setQuery = server ? server.onQueryChange : setLocalQuery;
+  const setSort = server ? server.onSortChange : setLocalSort;
 
   // `rows` may be undefined while loading or null when the server returns a
   // JSON null for an empty slice — either way, treat both as an empty list.
@@ -107,19 +142,23 @@ export function DataTable<T>({
   const rowsLoaded = rows !== undefined && rows !== null;
 
   const filtered = useMemo(() => {
+    // In server mode `rows` IS the page — already filtered, sorted and sliced
+    // by the API. Doing any of it again here would filter a page down to fewer
+    // rows than the footer promises and sort only within it.
+    if (server) return safeRows;
     let out = safeRows;
-    const q = query.trim().toLowerCase();
+    const q = localQuery.trim().toLowerCase();
     if (searchFn && q) {
       out = out.filter(r => searchFn(r).toLowerCase().includes(q));
     }
     for (const f of filters ?? []) {
-      const v = filterValues[f.id] ?? "";
+      const v = localFilterValues[f.id] ?? "";
       if (v !== "") out = out.filter(r => f.predicate(r, v));
     }
-    if (sort?.column) {
-      const col = columns.find(c => c.id === sort.column);
+    if (localSort?.column) {
+      const col = columns.find(c => c.id === localSort.column);
       if (col?.sortValue) {
-        const dir = sort.direction === "descending" ? -1 : 1;
+        const dir = localSort.direction === "descending" ? -1 : 1;
         out = [...out].sort((a, b) => {
           const va = col.sortValue!(a);
           const vb = col.sortValue!(b);
@@ -129,18 +168,29 @@ export function DataTable<T>({
       }
     }
     return out;
-  }, [safeRows, query, filterValues, sort, columns, searchFn, filters]);
+  }, [server, safeRows, localQuery, localFilterValues, localSort, columns, searchFn, filters]);
 
-  const total = filtered.length;
+  const total = server ? server.total : filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
   // Reset to page 1 only when the query or filters change — NOT when `total`
   // shifts due to a background revalidation, which would yank the user off
   // their current page. `safePage` already clamps when the list shrinks.
-  useEffect(() => { setPage(1); }, [query, filterValues]);
+  // Server mode owns its own page state, so the caller does this reset.
+  useEffect(() => {
+    if (server) return;
+    setLocalPage(1);
+  }, [localQuery, localFilterValues, server]);
+
+  const setPage = (next: number) => {
+    if (server) server.onPageChange(next);
+    else setLocalPage(next);
+  };
 
   const start = (safePage - 1) * pageSize;
-  const pageRows = filtered.slice(start, start + pageSize);
+  // Server mode already sliced; slicing again would blank every page past 1,
+  // because `rows` is indexed from 0 no matter which page it holds.
+  const pageRows = server ? filtered : filtered.slice(start, start + pageSize);
 
   // A load error with nothing already on screen: show a clear error + retry
   // instead of a misleading "ไม่มีข้อมูล" empty state.
@@ -169,7 +219,11 @@ export function DataTable<T>({
               key={f.id}
               placeholder={f.placeholder}
               value={(filterValues[f.id] ?? "") === "" ? ALL_KEY : filterValues[f.id]}
-              onChange={v => setFilterValues(prev => ({ ...prev, [f.id]: v === ALL_KEY ? "" : v }))}
+              onChange={v => {
+                const next = { ...filterValues, [f.id]: v === ALL_KEY ? "" : v };
+                if (server) server.onFilterChange(next);
+                else setLocalFilterValues(next);
+              }}
               options={f.options.map(o => (o.id === "" ? { ...o, id: ALL_KEY } : o))}
               className={f.className ?? "min-w-44"}
             />
@@ -250,7 +304,7 @@ export function DataTable<T>({
                   <Pagination.Item>
                     <Pagination.Previous
                       isDisabled={safePage === 1}
-                      onPress={() => setPage(p => Math.max(1, p - 1))}
+                      onPress={() => setPage(Math.max(1, safePage - 1))}
                     >
                       <Pagination.PreviousIcon />
                     </Pagination.Previous>
@@ -271,7 +325,7 @@ export function DataTable<T>({
                   <Pagination.Item>
                     <Pagination.Next
                       isDisabled={safePage === totalPages}
-                      onPress={() => setPage(p => Math.min(totalPages, p + 1))}
+                      onPress={() => setPage(Math.min(totalPages, safePage + 1))}
                     >
                       <Pagination.NextIcon />
                     </Pagination.Next>

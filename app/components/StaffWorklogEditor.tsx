@@ -351,7 +351,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
         <td className="px-3 py-2 align-middle"><StatusChip status={row.status} /></td>
         <td className="px-3 py-2 align-middle text-right whitespace-nowrap pr-4">
           {row.locked ? (
-            <span title="เดือนนี้ถูกส่งออก/ส่งการเงินแล้ว — ต้องตีกลับหรือปลดล็อกก่อนจึงแก้ได้">
+            <span title="งวดของเดือนนี้ปิดแล้ว หรือส่งออก/ส่งการเงินไปแล้ว — แก้ไขย้อนหลังไม่ได้">
               <Chip tone="warn"><Lock size={11} /> ล็อก</Chip>
             </span>
           ) : (

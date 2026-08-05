@@ -13,7 +13,7 @@ interface CourseInfo {
   has_missing_schedule?: boolean;
   num_students?: number;
 }
-interface PendingReport { teaching_course_id: string }
+interface PendingReport { teaching_course_id: string; ta_id: string }
 
 export default function LecturerCourseShell({
   me, tcId, courseCode, children,
@@ -33,7 +33,13 @@ export default function LecturerCourseShell({
   // รายงานที่ TA ส่งมาแล้วรออาจารย์อนุมัติ — งานประจำหลักของอาจารย์ และเป็น
   // คอขวดของการเบิกจ่าย: ถ้าไม่อนุมัติ เจ้าหน้าที่ตรวจต่อไม่ได้ทั้งเดือน
   const { data: pending } = useSWR<PendingReport[]>("/reports/pending");
-  const pendingReports = (pending ?? []).filter(r => r.teaching_course_id === tcId).length;
+  // Counted by PERSON, not by row. /reports/pending returns one row per
+  // ASSIGNMENT, so a TA helping with two sections produced a "2" next to a page
+  // that then showed one card — the badge and the screen were counting
+  // different things, and the reader had no way to know which.
+  const pendingReports = new Set(
+    (pending ?? []).filter(r => r.teaching_course_id === tcId).map(r => r.ta_id),
+  ).size;
 
   // ตั้งค่ารายวิชาเป็นที่ที่แก้ทั้งสองอย่างนี้ ไอคอนจึงอยู่ตรงนั้น ไม่ใช่ตรงหน้า
   // ที่ถูกบล็อก — บอกว่า "ต้องไปทำอะไร" มีประโยชน์กว่าบอกว่า "ตรงนี้ทำไม่ได้"

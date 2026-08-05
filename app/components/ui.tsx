@@ -136,6 +136,7 @@ export function PageHeader({
   info,
   breadcrumb,
   actions,
+  "data-tour": dataTour,
 }: {
   title: string;
   description?: string;
@@ -145,9 +146,11 @@ export function PageHeader({
   info?: React.ReactNode;
   breadcrumb?: string;
   actions?: React.ReactNode;
+  // Anchor for the onboarding tour (see app/staff/tours/).
+  "data-tour"?: string;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+    <div className="flex flex-wrap items-start justify-between gap-3 mb-6" data-tour={dataTour}>
       <div className="min-w-0">
         {breadcrumb && <div className="text-xs text-muted mb-1">{breadcrumb}</div>}
         <div className="flex items-center gap-2">
@@ -174,6 +177,7 @@ export function Panel({
   className = "",
   variant = "default",
   children,
+  "data-tour": dataTour,
 }: {
   title?: React.ReactNode;
   description?: React.ReactNode;
@@ -186,10 +190,12 @@ export function Panel({
   className?: string;
   variant?: "default" | "secondary" | "tertiary" | "transparent";
   children: React.ReactNode;
+  // Anchor for the onboarding tour (see app/staff/tours/).
+  "data-tour"?: string;
 }) {
   const hasHeader = title || description || actions || info;
   return (
-    <HCard variant={variant} className={className}>
+    <HCard variant={variant} className={className} data-tour={dataTour}>
       {hasHeader && (
         <HCard.Header>
           <div className="w-full min-w-0">

@@ -1,14 +1,12 @@
 "use client";
 import useSWR, { mutate } from "swr";
-import { Fragment, use, useMemo, useState } from "react";
-import {
-  Check, X, CircleAlert, ChevronDown, History, Link2, Users, CalendarCheck,
-} from "lucide-react";
+import { useEffect, Fragment, use, useMemo, useState } from "react";
+import { Check, X, CircleAlert, ChevronDown, History, Link2, Users, CalendarCheck, AlertTriangle } from "lucide-react";
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
   PageHeader, Panel, Button, EmptyState, TextArea, FieldGroup, Alert, Spinner,
-  Chip, StatusChip, type ChipTone,
+  Chip, StatusChip, ConfirmDialog, type ChipTone,
 } from "../../../../components/ui";
 
 /**
@@ -331,6 +329,37 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
     }
   }
 
+  /**
+   * Approve everything this TA still has waiting, across every month and every
+   * section they help with.
+   *
+   * The endpoint means "all submitted rows" when year_month is absent, so this
+   * needs no month list — which is what lets a FOLDED card offer the button at
+   * all.
+   *
+   * One request covering every section, not one per section: /worklog/approve-batch
+   * runs them in a single transaction. Looping left the TA half-approved whenever
+   * the second call was refused — the lecturer saw an error for something that
+   * had partly happened. It also lets the server weigh the whole batch against
+   * the course budget at once, which per-section calls cannot.
+   */
+  async function approveAll(g: TAGroup) {
+    setPendingKey(`${g.taId}|ALL`);
+    try {
+      await api.post("/worklog/approve-batch", { assignment_ids: g.rows.map(r => r.id) });
+      notify.success(`อนุมัติบันทึกเวลาที่รออยู่ทั้งหมดของ ${g.name} แล้ว`);
+      await Promise.all([
+        mutate(PENDING_KEY),
+        mutate(historyKey),
+        mutate(k => Array.isArray(k) && k[0] === "worklogs"),
+      ]);
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setPendingKey(null);
+    }
+  }
+
   const totalHours = groups.reduce((s, g) => s + g.pendingHours, 0);
 
   return (
@@ -374,6 +403,11 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
           {/* What is waiting, before any of it is opened. The old page opened on
               a bare list and the reviewer had to expand rows to learn the size
               of the job. */}
+          {/* The budget warning sits above the queue, not inside a dialog:
+              the lecturer needs it while deciding, and it applies to every
+              person below rather than to one approval. */}
+          <BudgetNotice tcId={tcId} />
+
           <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
               <Users size={14} className="text-muted" />
@@ -387,8 +421,12 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
               <TACard
                 key={g.taId}
                 group={g}
+                // One person waiting is not a list to scan — folding the only
+                // card would just cost a click before any work can start.
+                defaultOpen={groups.length === 1}
                 pendingKey={pendingKey}
                 onDecide={(ym, ids, kind, reason) => decideMonth(g, ym, ids, kind, reason)}
+                onApproveAll={() => approveAll(g)}
               />
             ))}
           </div>
@@ -432,40 +470,179 @@ function SectionChips({ group }: { group: TAGroup }) {
 }
 
 function TACard({
-  group, pendingKey, onDecide,
+  group, defaultOpen, pendingKey, onDecide, onApproveAll,
 }: {
   group: TAGroup;
+  defaultOpen: boolean;
   pendingKey: string | null;
   onDecide: (ym: string, assignmentIds: string[], kind: "approve" | "reject", reason?: string) => void;
+  onApproveAll: () => void;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [openMonth, setOpenMonth] = useState<string | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
+  // True while one of this person's months has its send-back reason box open.
+  const [rejecting, setRejecting] = useState(false);
+  const bodyId = `ta-${group.taId}`;
+  const busyAll = pendingKey === `${group.taId}|ALL`;
+
   return (
     <Panel padded={false}>
-      <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-3">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-foreground">{group.name}</div>
-          <div className="mt-1.5">
-            <SectionChips group={group} />
+      {/* The disclosure and the approve-all button are SIBLINGS, not nested — a
+          button inside a button is invalid HTML, and in practice pressing
+          "อนุมัติทั้งคนนี้" would have folded the card on its way out. */}
+      <div className="flex flex-wrap items-start gap-2 px-4 py-3">
+        {/* Five TAs with every month laid out measured 2,557px — three screens,
+            25 month rows and 51 buttons, with only the first person and a half
+            visible without scrolling. Folded, the same queue is one screen of
+            names and the reviewer opens the one they are working on. */}
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="-mx-1 flex min-w-0 flex-1 items-start gap-2 rounded-md px-1 py-0.5 text-left hover:bg-surface-secondary"
+        >
+          <ChevronDown
+            size={15}
+            className={`mt-0.5 shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`}
+          />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">{group.name}</div>
+            <div className="mt-1.5">
+              <SectionChips group={group} />
+            </div>
           </div>
-        </div>
-        <div className="text-right text-xs text-muted">
-          <div className="tabular font-medium text-foreground">
-            รอพิจารณา {group.pendingHours.toFixed(1)} ชม.
+        </button>
+
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="text-right text-xs text-muted">
+            <div className="tabular font-medium text-foreground">
+              รอพิจารณา {group.pendingHours.toFixed(1)} ชม.
+            </div>
+            {group.firstDate && (
+              <div className="mt-0.5">ส่งช่วง {dateRangeTH(group.firstDate, group.lastDate)}</div>
+            )}
           </div>
-          {group.firstDate && (
-            <div className="mt-0.5">ส่งช่วง {dateRangeTH(group.firstDate, group.lastDate)}</div>
-          )}
+          <Button
+            variant="primary" size="sm"
+            disabled={busyAll || rejecting} isPending={busyAll}
+            onPress={() => setConfirmAll(true)}
+          >
+            <Check size={14} /> อนุมัติทั้งคนนี้
+          </Button>
         </div>
       </div>
 
-      <MonthRows
-        group={group}
-        openMonth={openMonth}
-        onToggleMonth={k => setOpenMonth(openMonth === k ? null : k)}
-        pendingKey={pendingKey}
-        onDecide={onDecide}
+      {/* Confirmed rather than immediate: this covers months the reviewer may
+          not have opened, so it has to be a deliberate act rather than a
+          mis-aimed click on the row they meant to expand. */}
+      <ConfirmDialog
+        open={confirmAll}
+        onClose={() => setConfirmAll(false)}
+        onConfirm={() => { setConfirmAll(false); onApproveAll(); }}
+        title="อนุมัติทั้งคนนี้"
+        icon={<Check size={18} />}
+        confirmLabel="อนุมัติทั้งหมด"
+        isPending={busyAll}
+        message={
+          <div className="space-y-2 text-sm">
+            <p>
+              อนุมัติบันทึกเวลาที่รออยู่<b>ทุกเดือน</b>ของ{" "}
+              <b className="text-foreground">{group.name}</b> รวม{" "}
+              <span className="tabular">{group.pendingHours.toFixed(1)}</span> ชม.
+              {group.rows.length > 1 && ` (ครอบคลุม ${group.rows.length} เซคชัน)`}
+            </p>
+            <p className="text-muted">
+              หลังอนุมัติแล้ว TA จะแก้ไขเดือนเหล่านั้นไม่ได้ ถ้าต้องแก้ต้องกดส่งกลับทีละเดือน
+            </p>
+          </div>
+        }
       />
+
+      {/* Mounted only when open, so a folded card costs no work-log request
+          either — five collapsed TAs fetch nothing until one is opened. */}
+      {open && (
+        <div id={bodyId}>
+          <MonthRows
+            group={group}
+            openMonth={openMonth}
+            onToggleMonth={k => setOpenMonth(openMonth === k ? null : k)}
+            pendingKey={pendingKey}
+            onDecide={onDecide}
+            onRejectingChange={setRejecting}
+          />
+        </div>
+      )}
     </Panel>
+  );
+}
+
+/** What the budget can and cannot pay for, from the server's own settlement. */
+interface Settlement {
+  unpaid_months?: string[];
+  partial_months?: string[];
+  dropped_baht: number;
+  spilled_baht?: number;
+  over_budget: boolean;
+}
+/** committed = what approval has already spent · forecast = plus everything logged. */
+interface SettlementView { committed: Settlement; forecast: Settlement }
+
+/**
+ * Budget state for the course, in the lecturer's own terms.
+ *
+ * Approving no longer refuses when the money runs out — the budget decides
+ * which MONTHS get paid instead (budget_settlement.go). That makes an early,
+ * plain warning the only thing standing between the lecturer and a TA who
+ * finds out on payday, so it names the months rather than quoting a shortfall.
+ */
+function BudgetNotice({ tcId }: { tcId: string }) {
+  const { data } = useSWR<SettlementView>(
+    tcId ? `/teaching-courses/${tcId}/budget-settlement` : null,
+  );
+  // Read the FORECAST, not the settled figure. By the time approved spending
+  // crosses the line the lecturer has already approved months that will not be
+  // paid — warning then is warning after the fact.
+  const view = data?.forecast;
+  if (!view?.over_budget) return null;
+  const unpaid = view.unpaid_months ?? [];
+  const partial = view.partial_months ?? [];
+  if (!unpaid.length && !partial.length) return null;
+  // "ได้ไม่ครบทุกคาบ" and "ไม่ได้เลย" are different news. Since the cutoff moved
+  // off the month boundary a month can be part-paid, and calling that "จะไม่ได้
+  // รับค่าตอบแทน" would be wrong.
+  const what = [
+    partial.length ? `${partial.map(formatMonthTH).join(", ")} ได้ไม่ครบทุกคาบ` : "",
+    unpaid.length ? `${unpaid.map(formatMonthTH).join(", ")} ไม่ได้รับค่าตอบแทน` : "",
+  ].filter(Boolean).join(" และ");
+  // Already committed vs still avoidable changes what the lecturer can do about
+  // it, so the two are worded differently rather than sharing one alarm.
+  const committed = data?.committed?.over_budget;
+  // The concurrent-section rule already moved what it could from the special
+  // pool into the regular one. Saying so keeps the lecturer from asking whether
+  // the other pool's leftover was overlooked.
+  const spilled = view.spilled_baht ?? 0;
+  return (
+    <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-red-300 bg-red-50 px-3.5 py-3 text-sm text-red-900">
+      <AlertTriangle size={17} className="mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <div className="font-semibold">
+          {committed
+            ? `งบรายวิชาไม่พอแล้ว — ${what}`
+            : `ถ้าอนุมัติครบตามที่ TA ลงไว้ งบจะไม่พอ — ${what}`}
+        </div>
+        <div className="mt-0.5 text-red-900/85">
+          อนุมัติได้ตามปกติ ระบบจะบันทึกชั่วโมงไว้ครบ แต่คาบที่เกินงบ
+          (รวม ฿{Math.round(view.dropped_baht).toLocaleString()}) จะไม่ถูกนำไปเบิก —
+          มีผลกับ TA ทุกคนในวิชานี้เท่ากัน
+          {spilled > 0 && (
+            <> (นับงบภาคพิเศษที่เหลือ ฿{Math.round(spilled).toLocaleString()}
+            มาช่วยคาบที่สอนร่วมกันแล้ว)</>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -476,13 +653,17 @@ function TACard({
  * co-taught copies are merged back into single sittings — see mergeSittings.
  */
 function MonthRows({
-  group, openMonth, onToggleMonth, pendingKey, onDecide,
+  group, openMonth, onToggleMonth, pendingKey, onDecide, onRejectingChange,
 }: {
   group: TAGroup;
   openMonth: string | null;
   onToggleMonth: (key: string) => void;
   pendingKey: string | null;
   onDecide: (ym: string, assignmentIds: string[], kind: "approve" | "reject", reason?: string) => void;
+  // Raised while a send-back reason is being written, so the card above can
+  // quiet its own "อนุมัติทั้งคนนี้" — that one would approve the very month
+  // being rejected, which is the worst thing a stray click here could do.
+  onRejectingChange?: (rejecting: boolean) => void;
 }) {
   // One SWR key per assignment. Hooks cannot be called in a loop, so the keys
   // are joined into one request through a fetcher that fans out.
@@ -500,6 +681,7 @@ function MonthRows({
 
   const [rejectYm, setRejectYm] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  useEffect(() => { onRejectingChange?.(rejectYm !== null); }, [rejectYm, onRejectingChange]);
 
   const months = useMemo(() => {
     const sittings = mergeSittings((perAssignment ?? []).flat(), secOf);
@@ -550,6 +732,7 @@ function MonthRows({
         const busy = pendingKey === `${group.taId}|${mo.key}`;
         const actionable = mo.submittedCount > 0;
         const open = openMonth === mo.key;
+        const rejectingThis = rejectYm === mo.key;
         return (
           <div key={mo.key} className="border-b border-(--hairline) last:border-b-0">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
@@ -577,15 +760,22 @@ function MonthRows({
               </button>
 
               {actionable ? (
-                <div className="ms-auto flex shrink-0 items-center gap-2">
+                /* While a reason is being written, the two buttons sitting
+                   directly above the textarea go quiet. The lecturer has
+                   already decided to bounce this month; the only choices that
+                   belong to them now are ยกเลิก and ส่งกลับให้แก้ไข, and
+                   "อนุมัติ" is one stray click from approving the very month
+                   they are rejecting. */
+                <div className={"ms-auto flex shrink-0 items-center gap-2 transition-opacity " +
+                  (rejectingThis ? "pointer-events-none opacity-40" : "")}>
                   <Button
-                    variant="danger-soft" size="sm" disabled={busy}
+                    variant="danger-soft" size="sm" disabled={busy || rejectingThis}
                     onClick={() => { setRejectYm(rejectYm === mo.key ? null : mo.key); setReason(""); }}
                   >
                     <X size={14} /> ส่งกลับ
                   </Button>
                   <Button
-                    variant="primary" size="sm" disabled={busy} isPending={busy}
+                    variant="primary" size="sm" disabled={busy || rejectingThis} isPending={busy}
                     onClick={() => onDecide(mo.key, mo.assignmentIds, "approve")}
                   >
                     <Check size={14} /> อนุมัติ

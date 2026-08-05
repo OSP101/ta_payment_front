@@ -104,6 +104,7 @@ export default function AuditPage() {
   return (
     <div>
       <PageHeader title="Audit Log" description={`${data?.length ?? 0} รายการล่าสุด`} />
+      <div data-tour="audit-table">
       <DataTable
         ariaLabel="Audit log"
         rows={data}
@@ -138,6 +139,7 @@ export default function AuditPage() {
         emptyTitle="ไม่มี log"
         columns={columns}
       />
+      </div>
     </div>
   );
 }

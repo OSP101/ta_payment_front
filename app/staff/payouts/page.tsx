@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ClipboardCheck, Lock, ChevronRight, AlertTriangle } from "lucide-react";
 import { useTerm, useTermKey } from "../TermContext";
 import { PageHeader, Panel, EmptyState, Chip, Spinner, type ChipTone } from "../../components/ui";
+import { CertifierPicker } from "./CertifierPicker";
 
 /**
  * ตรวจและส่งออกเอกสาร — the merged staff steps 3 and 4.
@@ -46,6 +47,8 @@ interface ReviewRow {
   open_rows: number;
   waiting_ta: number;
   waiting_lecturer: number;
+  row_count: number;
+  needs_staff: boolean;
 }
 
 interface CourseSummary {
@@ -106,13 +109,15 @@ export default function PayoutsPage() {
 
   const loading = qLoading || sLoading || !summary;
   const open = (c: CourseCard) => router.push(`/staff/payouts/${c.id}`);
-  void termId;
 
   return (
     <>
       <PageHeader
         title="ตรวจและส่งออกเอกสาร"
         description="กดที่วิชาเพื่อตรวจชั่วโมงรายเดือน แล้วส่งออกเอกสารเบิกจ่าย"
+        // Term-wide, so it belongs beside the title rather than inside any one
+        // course's export panel.
+        actions={termId ? <CertifierPicker termId={termId} /> : null}
       />
 
       {loading ? (
@@ -134,6 +139,7 @@ export default function PayoutsPage() {
       ) : (
         <div className="space-y-4">
           <Section
+            tourId="payouts-act"
             icon={<ClipboardCheck size={14} />}
             title={`รอคุณดำเนินการ (${act.length})`}
             // The chip beside each course name already says exactly what that
@@ -148,6 +154,7 @@ export default function PayoutsPage() {
           </Section>
 
           <Section
+            tourId="payouts-done"
             icon={<Lock size={14} />}
             title={`ส่งออกแล้ว (${done.length})`}
             hint="ดาวน์โหลดซ้ำได้ · เดือนที่ส่งออกไปแล้วถูกล็อกไม่ให้แก้"
@@ -172,13 +179,13 @@ export default function PayoutsPage() {
 }
 
 function Section({
-  icon, title, hint, empty, count, children,
+  icon, title, hint, empty, count, children, tourId,
 }: {
   icon: React.ReactNode; title: string; hint: string; empty: string;
-  count: number; children: React.ReactNode;
+  count: number; children: React.ReactNode; tourId?: string;
 }) {
   return (
-    <Panel padded={false}>
+    <Panel padded={false} data-tour={tourId}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2.5">
         <span className="inline-flex items-center gap-1.5 text-sm font-medium">{icon} {title}</span>
         <span className="text-xs text-muted">{hint}</span>
@@ -327,6 +334,10 @@ function buildCards(rows: ReviewRow[], summary: CourseSummary[]): CourseCard[] {
   for (const r of rows) {
     const c = ensure(r.teaching_course_id, r.course_code, r.course_name_th);
     if (r.status !== "pending") continue; // already signed off — nothing to show
+    // needs_staff comes from the server so this screen and the per-course grid
+    // cannot disagree about what is actionable. A month whose rows were all
+    // forfeited is neither ready nor blocked: nothing to sign, nothing to pay.
+    if (!r.needs_staff && r.open_rows === 0) continue;
     if (r.open_rows > 0) {
       c.blocked.push(r);
       c.waitingTA += r.waiting_ta;

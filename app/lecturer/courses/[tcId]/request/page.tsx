@@ -31,7 +31,30 @@ import { TaBudgetCalculator } from "../../../../components/TaBudgetCalculator";
 /* Types                                                                       */
 /* -------------------------------------------------------------------------- */
 
-interface SectionSchedule { day_of_week: number; start_time: string; end_time: string; }
+interface SectionSchedule { kind: string; day_of_week: number; start_time: string; end_time: string; }
+
+/**
+ * The SUM of one side's declared hours may reach this multiple of the group's
+ * real teaching time. Mirrors sectionTotalMultiplier on the server.
+ *
+ * Two, not one: attendance happens inside the session while grading and other
+ * work happen after it, so the total legitimately exceeds the class hours — but
+ * three fields each at the per-field ceiling would be three times over.
+ */
+const SECTION_TOTAL_MULTIPLIER = 2;
+
+/** Weekly contact hours of one section, split by kind — the real ceiling. */
+function sectionWeeklyHours(s: Section | undefined): { lecture: number; lab: number } {
+  const out = { lecture: 0, lab: 0 };
+  for (const sc of s?.schedules ?? []) {
+    const start = Number(sc.start_time.slice(0, 2)) * 60 + Number(sc.start_time.slice(3, 5));
+    const end = Number(sc.end_time.slice(0, 2)) * 60 + Number(sc.end_time.slice(3, 5));
+    const hrs = Math.max(0, end - start) / 60;
+    if (sc.kind === "lecture") out.lecture += hrs;
+    else if (sc.kind === "lab") out.lab += hrs;
+  }
+  return out;
+}
 interface Section {
   id: string; sec_no: string; track: string;
   /** Weekly meetings. Present on /teaching-courses/:id. */
@@ -90,7 +113,14 @@ function taBlockedReason(t: TA): string | null {
 
 /** Per-term ceiling on how many courses one TA may assist. */
 const MAX_COURSES_PER_TA = 3;
-interface SectionConflict { section_id: string; messages: string[]; }
+interface SectionConflict {
+  section_id: string;
+  messages: string[];
+  /** Session kinds whose EVERY meeting collides with this TA's own class. */
+  blocked_kinds?: string[];
+  /** Overlap with a DIFFERENT course the TA already assists — still blocking. */
+  cross_conflict?: boolean;
+}
 interface ConflictsResp { conflicts: SectionConflict[]; }
 interface WorkloadFields {
   help_teach_hrs: number; help_teach_desc: string;
@@ -99,6 +129,7 @@ interface WorkloadFields {
   other_hrs: number; other_desc: string;
   check_work_hrs: number; attendance_hrs: number; ug_other_hrs: number; ug_other_desc: string;
   lab_hrs: number;
+  lab_other_hrs: number; lab_other_desc: string;
 }
 
 interface Assignment {
@@ -153,7 +184,7 @@ const emptyWorkload = (): WorkloadFields => ({
   grade_hrs: 0, grade_desc: "",
   other_hrs: 0, other_desc: "",
   check_work_hrs: 0, attendance_hrs: 0, ug_other_hrs: 0, ug_other_desc: "",
-  lab_hrs: 0,
+  lab_hrs: 0, lab_other_hrs: 0, lab_other_desc: "",
 });
 
 /** Hours declared for one section, or zeroes if the lecturer hasn't filled it. */
@@ -166,7 +197,7 @@ function sectionHours(w: WorkloadFields, level: string): number {
   if (level === "master" || level === "phd") {
     return w.help_teach_hrs + w.prep_hrs + w.grade_hrs + w.other_hrs;
   }
-  return w.check_work_hrs + w.attendance_hrs + w.ug_other_hrs + w.lab_hrs;
+  return w.check_work_hrs + w.attendance_hrs + w.ug_other_hrs + w.lab_hrs + w.lab_other_hrs;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -371,20 +402,30 @@ function RequestFormSection({
   }, [course?.sections, payCaps]);
 
   const secs = course?.sections ?? [];
-  const lecHrs = course?.lecture_hrs ?? 0;
-  const labHrsCourse = course?.lab_hrs ?? 0;
 
-  // Every section's declared hours must fit inside the course's weekly contact
-  // hours for that kind — the figures in 3(3-0-6). Checked here (not only on
-  // submit) so the Send button reflects the real state of the form.
+  // Every section's declared hours must fit inside how long THAT SECTION
+  // actually meets each week for that kind. Mirrors validateUndergradSectionCaps
+  // so the Send button reflects the verdict the server will reach — checked here
+  // rather than only on submit.
   const sectionCapsOk = assignments.every(a =>
     a.section_ids.every(sid => {
       const w = workloadOf(a, sid);
       if (a.level === "master" || a.level === "phd") return true; // grad uses the 10–12 total
-      return w.check_work_hrs <= lecHrs + 0.001
-        && w.attendance_hrs <= lecHrs + 0.001
-        && w.ug_other_hrs <= lecHrs + 0.001
-        && w.lab_hrs <= labHrsCourse + 0.001;
+      const hrs = sectionWeeklyHours(secs.find(x => x.id === sid));
+      // ปฏิบัติการ is either-or; declaring both is refused server-side.
+      if (w.lab_hrs > 0.001 && w.lab_other_hrs > 0.001) return false;
+      // Each field against the class hours, then each SIDE's total against the
+      // multiple of them — a field-only check let three lecture fields at the
+      // ceiling declare three times the group's real teaching time.
+      const lecTotal = w.check_work_hrs + w.attendance_hrs + w.ug_other_hrs;
+      const labTotal = w.lab_hrs + w.lab_other_hrs;
+      if (hrs.lecture > 0 && lecTotal > hrs.lecture * SECTION_TOTAL_MULTIPLIER + 0.001) return false;
+      if (hrs.lab > 0 && labTotal > hrs.lab * SECTION_TOTAL_MULTIPLIER + 0.001) return false;
+      return w.check_work_hrs <= hrs.lecture + 0.001
+        && w.attendance_hrs <= hrs.lecture + 0.001
+        && w.ug_other_hrs <= hrs.lecture + 0.001
+        && w.lab_hrs <= hrs.lab + 0.001
+        && w.lab_other_hrs <= hrs.lab + 0.001;
     }));
 
   const workloadOk = assignments.length > 0 && sectionCapsOk && assignments.every(a => {
@@ -394,15 +435,19 @@ function RequestFormSection({
     return t > 0;
   });
   const sectionChosen = assignments.length > 0 && assignments.every(a => a.section_ids.length > 0);
-  // Block submit if any TA has a picked section that conflicts with either
-  // their own class schedule or an already-approved TA duty elsewhere. The
-  // lecturer must remove that TA before the request can go through.
+  // Only a clash with ANOTHER course the TA already assists blocks the send.
+  //
+  // A clash with the TA's own class no longer does. It cannot be resolved by
+  // removing the TA — the group still needs one — and it does not stop them
+  // working: the in-class duty for the clashing kind is disabled above, while
+  // grading and other work carry on outside the session. Refusing the whole
+  // request threw away sections that were perfectly workable.
   const anyScheduleConflict = assignments.some(a => {
     if (!a.ta_id) return false;
     const conflicts = conflictsByTa[a.ta_id];
     if (!conflicts?.length) return false;
-    const bad = new Set(conflicts.map(c => c.section_id));
-    return a.section_ids.some(sid => bad.has(sid));
+    const blocking = new Set(conflicts.filter(c => c.cross_conflict).map(c => c.section_id));
+    return a.section_ids.some(sid => blocking.has(sid));
   });
 
   const canSubmit = taChosen && workloadOk && sectionChosen && !anyScheduleConflict;
@@ -666,8 +711,6 @@ function RequestFormSection({
                         tas={allTas.filter(t => !takenElsewhere.has(t.id))}
                         scope={scope}
                         weeklyCap={weeklyCapFor(a)}
-                        lectureHrs={course?.lecture_hrs ?? 0}
-                        labHrs={course?.lab_hrs ?? 0}
                         tcId={tcId}
                         onConflicts={reportConflicts}
                         onUpdate={updateAssign}
@@ -869,7 +912,7 @@ function sumWorkload(a: Assignment, sections: Section[]): number {
 }
 
 function AssignmentBlock({
-  idx, n, assignment: a, sections, tas, scope, weeklyCap, lectureHrs, labHrs, tcId, onConflicts, onUpdate, onWorkload, onRemove,
+  idx, n, assignment: a, sections, tas, scope, weeklyCap, tcId, onConflicts, onUpdate, onWorkload, onRemove,
 }: {
   idx: number;
   n: number;
@@ -879,8 +922,6 @@ function AssignmentBlock({
   scope: "lecture" | "lab" | "both";
   /** เพดาน ชม./สัปดาห์ = เพดาน ชม./วัน ตามประกาศ × วันทำการ */
   weeklyCap: number;
-  lectureHrs: number;
-  labHrs: number;
   tcId: string;
   onConflicts: (taId: string, list: SectionConflict[]) => void;
   onUpdate: (idx: number, patch: Partial<Assignment>) => void;
@@ -1057,8 +1098,9 @@ function AssignmentBlock({
                           sectionId={sid}
                           workload={w}
                           scope={scope}
-                          lectureHrs={lectureHrs}
-                          labHrs={labHrs}
+                          lectureHrs={sectionWeeklyHours(sections.find(x => x.id === sid)).lecture}
+                          labHrs={sectionWeeklyHours(sections.find(x => x.id === sid)).lab}
+                          blockedKinds={conflicts.find(c => c.section_id === sid)?.blocked_kinds ?? []}
                           onWorkload={onWorkload}
                         />
                       )}
@@ -1107,27 +1149,40 @@ function AssignmentBlock({
 }
 
 function UndergradWorkload({
-  idx, sectionId, workload, scope, lectureHrs, labHrs, onWorkload,
+  idx, sectionId, workload, scope, lectureHrs, labHrs, blockedKinds, onWorkload,
 }: {
   idx: number;
   sectionId: string;
   workload: WorkloadFields;
   scope: "lecture" | "lab" | "both";
-  // The ceiling is the course's weekly contact hours for each kind — the
-  // figures inside the Thai credit notation, e.g. 3(3-0-6) gives 3 lecture
-  // hours and 0 lab hours per week. It applies PER SECTION: a TA cannot spend
-  // more time on a group than the group actually meets, no matter how many
-  // groups they cover.
+  // The ceiling is how long this section ACTUALLY meets each week for that
+  // kind, read from its timetable. It used to come from the credit notation —
+  // the figures inside 3(2-2-5) — which does not track reality: a course with
+  // one credit-hour of lab can meet for three real hours, and the TA standing
+  // in that room was capped at one.
   lectureHrs: number;
   labHrs: number;
+  // Session kinds whose every meeting collides with this TA's own class. Only
+  // the in-class duty is disabled — เช็คชื่อ for lecture, สอนปฏิบัติการ for lab.
+  // Grading and other work happen outside the session and stay available, which
+  // is why the section is still worth assigning at all.
+  blockedKinds: string[];
   onWorkload: (idx: number, sectionId: string, patch: Partial<WorkloadFields>) => void;
 }) {
   const showLec = scope === "lecture" || scope === "both";
   const showLab = scope === "lab" || scope === "both";
+  const lecBlocked = blockedKinds.includes("lecture");
+  const labBlocked = blockedKinds.includes("lab");
   const capHint = (hrs: number) =>
     hrs <= 0
-      ? "วิชานี้ไม่มีชั่วโมงประเภทนี้ในหน่วยกิต"
-      : `สูงสุด ${hrs.toFixed(1)} ชม./สัปดาห์ ต่อกลุ่ม (ตามหน่วยกิตวิชา)`;
+      ? "กลุ่มนี้ไม่มีคาบประเภทนี้ในตารางสอน"
+      : `สูงสุด ${hrs.toFixed(1)} ชม./สัปดาห์ ต่อกลุ่ม (ตามตารางสอนจริง)`;
+
+  // ปฏิบัติการ is either-or: running the session, or supporting it from outside.
+  // Ticking one clears the other so the form cannot submit a pair the server
+  // will refuse.
+  const labMode: "teach" | "other" | null =
+    workload.lab_hrs > 0 ? "teach" : workload.lab_other_hrs > 0 ? "other" : null;
 
   return (
     <div className="space-y-3">
@@ -1135,8 +1190,19 @@ function UndergradWorkload({
         <div className="rounded-md border border-hairline p-3">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <div className="text-xs font-medium text-ink-2">1. ชั่วโมงบรรยาย (ปริญญาตรี)</div>
-            <div className="text-[11px] text-ink-3">{capHint(lectureHrs)}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <SideTotal
+                used={workload.check_work_hrs + workload.attendance_hrs + workload.ug_other_hrs}
+                hrs={lectureHrs}
+              />
+              <span className="text-[11px] text-ink-3">{capHint(lectureHrs)}</span>
+            </div>
           </div>
+          {lecBlocked && (
+            <div className="mb-2 text-[11px] text-amber-700">
+              ทุกคาบบรรยายของกลุ่มนี้ตรงกับตารางเรียนของ TA — เช็คชื่อไม่ได้ แต่ยังช่วยตรวจงาน/งานอื่นนอกคาบได้
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <CheckHrs
               label="ช่วยตรวจงาน"
@@ -1148,6 +1214,8 @@ function UndergradWorkload({
               label="เช็คชื่อ / เก็บใบงาน"
               hrs={workload.attendance_hrs}
               max={lectureHrs}
+              disabled={lecBlocked}
+              disabledHint="ตรงกับตารางเรียนของ TA ทุกคาบ"
               onH={v => onWorkload(idx, sectionId, { attendance_hrs: v })}
             />
             <div className="md:col-span-2">
@@ -1168,15 +1236,39 @@ function UndergradWorkload({
         <div className="rounded-md border border-hairline p-3">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <div className="text-xs font-medium text-ink-2">2. ชั่วโมงปฏิบัติการ</div>
-            <div className="text-[11px] text-ink-3">{capHint(labHrs)}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <SideTotal used={workload.lab_hrs + workload.lab_other_hrs} hrs={labHrs} />
+              <span className="text-[11px] text-ink-3">{capHint(labHrs)}</span>
+            </div>
           </div>
+          <div className="mb-2 text-[11px] text-ink-3">เลือกได้อย่างใดอย่างหนึ่ง</div>
+          {labBlocked && (
+            <div className="mb-2 text-[11px] text-amber-700">
+              ทุกคาบปฏิบัติการของกลุ่มนี้ตรงกับตารางเรียนของ TA — สอนปฏิบัติการไม่ได้ แต่ยังทำงานอื่นนอกคาบได้
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <CheckHrs
-              label="จำนวนชั่วโมง"
+              label="สอนปฏิบัติการ"
               hrs={workload.lab_hrs}
               max={labHrs}
-              onH={v => onWorkload(idx, sectionId, { lab_hrs: v })}
+              disabled={labBlocked || labMode === "other"}
+              disabledHint={labBlocked ? "ตรงกับตารางเรียนของ TA ทุกคาบ" : "เลือก 'อื่น ๆ' ไว้แล้ว"}
+              onH={v => onWorkload(idx, sectionId, { lab_hrs: v, lab_other_hrs: 0, lab_other_desc: "" })}
             />
+            <div className="md:col-span-2">
+              <CheckHrs
+                label="อื่น ๆ (ปฏิบัติการ)"
+                hrs={workload.lab_other_hrs}
+                desc={workload.lab_other_desc}
+                max={labHrs}
+                hint={capHint(labHrs)}
+                disabled={labMode === "teach"}
+                disabledHint="เลือก 'สอนปฏิบัติการ' ไว้แล้ว"
+                onH={v => onWorkload(idx, sectionId, { lab_other_hrs: v, lab_hrs: 0 })}
+                onD={v => onWorkload(idx, sectionId, { lab_other_desc: v })}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1185,29 +1277,56 @@ function UndergradWorkload({
 }
 
 /**
+ * "รวม x.x / y.y ชม." for one side of the form, so the lecturer can see the
+ * total ceiling while filling the fields rather than discovering it on Send.
+ * Stays quiet when the group has no sessions of that kind — the per-field rows
+ * already say so, and "0.0 / 0.0" reads like a bug.
+ */
+function SideTotal({ used, hrs }: { used: number; hrs: number }) {
+  if (hrs <= 0) return null;
+  const limit = hrs * SECTION_TOTAL_MULTIPLIER;
+  const over = used > limit + 0.001;
+  return (
+    <span
+      className={
+        "text-[11px] rounded px-1.5 py-0.5 " +
+        (over ? "bg-amber-100 text-amber-800 font-medium" : "text-ink-3")
+      }
+    >
+      รวม {used.toFixed(1)} / {limit.toFixed(1)} ชม.
+    </span>
+  );
+}
+
+/**
  * Row with a checkbox (auto-enabled when hrs > 0) + hours + optional description.
  * Mirrors the "checkbox activity + hr/wk" pattern from the design mock-up.
  */
 function CheckHrs({
-  label, hrs, desc, max, hint, onH, onD,
+  label, hrs, desc, max, hint, disabled: forced, disabledHint, onH, onD,
 }: {
   label: string;
   hrs: number;
   desc?: string;
   max?: number;
   hint?: string;
+  /** Disable regardless of the cap — a clash, or the other half of an either-or pair. */
+  disabled?: boolean;
+  /** Shown in place of `hint` when `disabled` is set, so the row says WHY. */
+  disabledHint?: string;
   onH: (v: number) => void;
   onD?: (v: string) => void;
 }) {
   const enabled = hrs > 0;
-  // Disable the whole row when the cap is 0 (no sections picked yet, or the
-  // course simply has no credit hours in this category).
-  const disabled = max !== undefined && max <= 0;
+  // Disable the whole row when the cap is 0 (no sections picked yet, or this
+  // group simply never meets for this kind), or when the caller forces it.
+  const disabled = (max !== undefined && max <= 0) || !!forced;
+  const shownHint = forced && disabledHint ? disabledHint : hint;
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Checkbox
-          isSelected={enabled}
+          isSelected={enabled && !disabled}
           isDisabled={disabled}
           onChange={sel => { if (!sel) onH(0); else if (hrs === 0) onH(1); }}
         >
@@ -1218,7 +1337,9 @@ function CheckHrs({
             <span className="text-sm">{label}</span>
           </Checkbox.Content>
         </Checkbox>
-        {hint && <span className="text-[11px] text-ink-3">{hint}</span>}
+        {shownHint && (
+          <span className={"text-[11px] " + (forced ? "text-amber-700" : "text-ink-3")}>{shownHint}</span>
+        )}
       </div>
       <div className={"flex items-center gap-2 pl-6 " + (enabled && !disabled ? "" : "opacity-50 pointer-events-none")}>
         <HourInput value={hrs} onChange={onH} maxValue={max ?? 99} />

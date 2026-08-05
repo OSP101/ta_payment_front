@@ -152,20 +152,24 @@ export default function StaffHolidaysPage() {
         description="รายการวันหยุดที่ระบบใช้ตรวจสอบการลงเวลาปฏิบัติงานของ TA — ถ้าคาบเรียนตรงกับวันหยุด TA จะลงชั่วโมงไม่ได้จนกว่าอาจารย์จะระบุวันชดเชย"
         actions={
           <>
-            <Select value={String(year)} onChange={e => setYear(Number(e.target.value))} className="max-w-40">
-              {yearOpts.map(y => (
-                <option key={y} value={y}>ปี พ.ศ. {y + 543}</option>
-              ))}
-            </Select>
-            <Button variant="secondary" onClick={handleSyncFromBOT} isPending={syncing} disabled={syncing}>
-              <RefreshCw size={14} /> ซิงก์จาก BOT (ปี พ.ศ. {year + 543})
-            </Button>
-            <Button variant="secondary" onClick={() => setShowBulk(true)}>
-              <Upload size={14} /> นำเข้าหลายรายการ
-            </Button>
-            <Button variant="primary" onClick={() => setShowAdd(true)}>
-              <Plus size={14} /> เพิ่มวันหยุด
-            </Button>
+            <span data-tour="holidays-sync" className="flex gap-2">
+              <Select value={String(year)} onChange={e => setYear(Number(e.target.value))} className="max-w-40">
+                {yearOpts.map(y => (
+                  <option key={y} value={y}>ปี พ.ศ. {y + 543}</option>
+                ))}
+              </Select>
+              <Button variant="secondary" onClick={handleSyncFromBOT} isPending={syncing} disabled={syncing}>
+                <RefreshCw size={14} /> ซิงก์จาก BOT (ปี พ.ศ. {year + 543})
+              </Button>
+            </span>
+            <span data-tour="holidays-add" className="flex gap-2">
+              <Button variant="secondary" onClick={() => setShowBulk(true)}>
+                <Upload size={14} /> นำเข้าหลายรายการ
+              </Button>
+              <Button variant="primary" onClick={() => setShowAdd(true)}>
+                <Plus size={14} /> เพิ่มวันหยุด
+              </Button>
+            </span>
           </>
         }
       />
@@ -191,7 +195,7 @@ export default function StaffHolidaysPage() {
             />
           </Panel>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div data-tour="holidays-list" className="flex flex-col gap-3">
             {grouped.map(([monthNo, rows], idx) => (
               <MonthSection
                 key={monthNo}

@@ -54,7 +54,7 @@ export default function SettingsPage() {
       <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน วิชา ภาคเรียน และฝ่ายบริหาร" />
       <Tabs defaultSelectedKey={initialTab}>
         <Tabs.ListContainer>
-          <Tabs.List aria-label="หมวดตั้งค่า">
+          <Tabs.List aria-label="หมวดตั้งค่า" data-tour="settings-tabs">
             <Tabs.Tab id="rate">อัตราค่าตอบแทน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="terms">ภาคเรียน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="calendar">ปฏิทินเทอม<Tabs.Indicator /></Tabs.Tab>
@@ -370,7 +370,7 @@ interface Term {
 interface TermUsage {
   teaching_courses: number;
   class_schedules: number;
-  budget_allocations: number;
+  exports: number;
   request_windows: number;
 }
 
@@ -1302,16 +1302,20 @@ function TermDeleteModal({
   const [typed, setTyped] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Kept apart from `error`: a failed usage lookup is not a failed delete, and
+  // labelling it "ลบไม่สำเร็จ" sent the officer looking for the wrong problem.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !target?.id) return;
     setTyped("");
     setError(null);
+    setLoadError(null);
     setUsage(null);
     setLoadingUsage(true);
     api.get<TermUsage>(`/terms/${target.id}/usage`)
       .then(setUsage)
-      .catch(e => setError((e as Error).message || "โหลดข้อมูลอ้างอิงไม่สำเร็จ"))
+      .catch(e => setLoadError((e as Error).message || "โหลดข้อมูลอ้างอิงไม่สำเร็จ"))
       .finally(() => setLoadingUsage(false));
   }, [open, target?.id]);
 
@@ -1328,7 +1332,7 @@ function TermDeleteModal({
   const confirmCode = `${target.academic_year}/${target.semester}`;
   const blocking =
     usage !== null &&
-    usage.teaching_courses + usage.class_schedules + usage.budget_allocations > 0;
+    usage.teaching_courses + usage.class_schedules + usage.exports > 0;
   const cascadeWindows = (usage?.request_windows ?? 0) > 0;
   const codeMatch = typed.trim() === confirmCode;
   const canDelete = !loadingUsage && usage !== null && !blocking && codeMatch;
@@ -1396,9 +1400,9 @@ function TermDeleteModal({
                   </span>
                 </li>
                 <li className="flex justify-between">
-                  <span>งบประมาณที่ผูกไว้</span>
-                  <span className={usage.budget_allocations > 0 ? "text-red-600 font-medium tabular" : "tabular"}>
-                    {usage.budget_allocations}
+                  <span>ไฟล์ส่งออกที่ผูกไว้</span>
+                  <span className={usage.exports > 0 ? "text-red-600 font-medium tabular" : "tabular"}>
+                    {usage.exports}
                   </span>
                 </li>
                 <li className="flex justify-between">
@@ -1413,7 +1417,7 @@ function TermDeleteModal({
                 status="danger"
                 icon={<CircleAlert size={16} />}
                 title="ลบไม่ได้ — มีข้อมูลอ้างอิงอยู่"
-                description="ต้องลบ/ปิดวิชาที่เปิดสอน ตารางสอน TA และงบประมาณของภาคเรียนนี้ก่อน จึงจะลบได้ (ป้องกันข้อมูลกำพร้า)"
+                description="ต้องลบวิชาที่เปิดสอน ตารางสอน TA และไฟล์ส่งออกของภาคเรียนนี้ก่อน จึงจะลบได้ (ป้องกันข้อมูลกำพร้า)"
               />
             ) : (
               <>
@@ -1443,6 +1447,15 @@ function TermDeleteModal({
             )}
           </>
         ) : null}
+
+        {loadError && (
+          <Alert
+            status="danger"
+            icon={<CircleAlert size={16} />}
+            title="ตรวจข้อมูลอ้างอิงไม่สำเร็จ"
+            description={`${loadError} — ยังลบไม่ได้จนกว่าจะตรวจได้ว่ามีอะไรผูกอยู่กับภาคเรียนนี้`}
+          />
+        )}
 
         {error && (
           <Alert status="danger" icon={<CircleAlert size={16} />} title="ลบไม่สำเร็จ" description={error} />
@@ -2234,11 +2247,19 @@ function AdminOfficerFormModal({
           />
         </FieldGroup>
 
-        <FieldGroup label="ตำแหน่งบริหาร (Title)" hint="ใส่ตามที่ต้องการให้ปรากฏในเอกสาร">
+        {/* This field is load-bearing, not just decoration: the คำสั่ง reads it
+            to decide whether the signer holds the dean's seat or is standing in
+            for it, and prints the acting form when they are not. Say so here —
+            a title typed as "รักษาการคณบดี" would otherwise silently produce
+            "รักษาการคณบดี รักษาการแทน คณบดี…". */}
+        <FieldGroup
+          label="ตำแหน่งบริหาร (Title)"
+          hint="ใส่ตำแหน่งจริงตามที่ต้องการให้ปรากฏในเอกสาร — ถ้าไม่ได้ขึ้นต้นด้วย “คณบดี” ระบบจะพิมพ์ใบแต่งตั้งเป็น “รักษาการแทน คณบดี…” ให้เอง"
+        >
           <TextInput
             value={draft.title}
             onChange={e => setDraft({ ...draft, title: e.target.value })}
-            placeholder="เช่น คณบดีคณะวิศวกรรมศาสตร์"
+            placeholder="เช่น คณบดีวิทยาลัยการคอมพิวเตอร์ หรือ รองคณบดีฝ่ายวิชาการ"
           />
         </FieldGroup>
 

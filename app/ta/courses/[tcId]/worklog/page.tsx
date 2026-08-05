@@ -180,6 +180,14 @@ interface Assignment {
   // its own state at once. unsent_count is draft+rejected — exactly what
   // "ส่งอนุมัติ" would send for that section.
   unsent_count: number;
+  // The part of unsent_count still inside an open period. The difference is
+  // stranded — past the deadline, only staff can move it. Server-derived so the
+  // cards for sections NOT on screen are right too; their rows are not loaded.
+  submittable_count: number;
+  // "YYYY-MM" months that have entered review. Upsert refuses a new row in
+  // exactly these, so the "+ เพิ่ม" affordance is hidden there — same predicate,
+  // server-derived, so the screen cannot offer what the server refuses.
+  months_in_review: string[];
   submitted_count: number;
   approved_count: number;
   hours_logged: number;
@@ -577,6 +585,28 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // rules — this map only lets the UI disable controls up front. Keyed by the
   // 2-digit Gregorian month ("06") taken from period.year_month, matching how
   // the backend maps work_date → period.
+  // Which months the course budget can actually pay for. Read from the same
+  // settlement the export uses, so what the TA is warned about is exactly what
+  // will be dropped — not a second guess at the same sum.
+  const { data: settlement } = useSWR<{
+    committed: { unpaid_months?: string[]; partial_months?: string[]; dropped_baht: number; over_budget: boolean };
+    forecast: { unpaid_months?: string[]; partial_months?: string[]; dropped_baht: number; over_budget: boolean };
+  }>(tcId ? `/teaching-courses/${tcId}/budget-settlement` : null);
+  // The forecast, so the TA hears about it while there is still a term left to
+  // change something in — not once the money is already spent.
+  const budgetForecast = settlement?.forecast;
+  const unpaidMonths = useMemo(
+    () => new Set(budgetForecast?.over_budget ? (budgetForecast.unpaid_months ?? []) : []),
+    [budgetForecast],
+  );
+  // Since the cutoff moved from the month to the คาบ, a month can be part-paid.
+  // Kept apart from unpaidMonths so the chip never tells somebody they get
+  // nothing for a month they are in fact partly paid for.
+  const partialMonths = useMemo(
+    () => new Set(budgetForecast?.over_budget ? (budgetForecast.partial_months ?? []) : []),
+    [budgetForecast],
+  );
+
   const { data: myPeriods } = useSWR<MyPeriod[]>("/me/submission-periods");
   const monthLocks = useMemo(() => {
     const m = new Map<string, MonthLock>();
@@ -597,6 +627,29 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     }
     return m;
   }, [myPeriods, tcId]);
+  // Deadlines for months still OPEN. The lock map above can only ever say "too
+  // late"; this is what lets the screen say so BEFORE it is, which is the only
+  // thing that actually prevents a stranded month.
+  const monthDeadlines = useMemo(() => {
+    const m = new Map<string, { label: string; daysLeft: number }>();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (const p of myPeriods ?? []) {
+      if (p.teaching_course_id !== tcId) continue;
+      const mm = (p.year_month ?? "").slice(5, 7);
+      if (mm.length !== 2 || monthLocks.has(mm)) continue;
+      // Same grace day the backend applies, so the countdown ends when the
+      // server stops accepting rather than a day early.
+      const gd = new Date(`${p.due_date}T00:00:00`);
+      gd.setDate(gd.getDate() + 1);
+      m.set(mm, {
+        label: p.label,
+        daysLeft: Math.round((gd.getTime() - today.getTime()) / 86400000),
+      });
+    }
+    return m;
+  }, [myPeriods, tcId, monthLocks]);
+
   // Lock info for a work_date's month, or null when the month is writable.
   const monthLockFor = (iso: string): MonthLock | null =>
     monthLocks.get((iso ?? "").slice(5, 7)) ?? null;
@@ -607,7 +660,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       ? `เดือน ${lock.label} ถูกส่งการเงินแล้ว — แก้ไขไม่ได้`
       : lock.exported
       ? `เดือน ${lock.label} ถูกส่งออกไฟล์เบิกจ่ายแล้ว — แก้ไขไม่ได้ กรุณาติดต่อเจ้าหน้าที่ให้ตีกลับก่อน`
-      : `งวดส่งบันทึกเวลาเดือน ${lock.label} ปิดรับแล้ว — แก้ไขไม่ได้ กรุณาติดต่อเจ้าหน้าที่`;
+      : `งวดส่งบันทึกเวลาเดือน ${lock.label} ปิดแล้ว — แก้ไขและส่งย้อนหลังไม่ได้ รายการที่ไม่ได้ส่งถือว่าไม่ประสงค์ลงเวลา`;
 
   // A TA can hold multiple assignments on the same course (one per section).
   // Let them switch between them; default to the first.
@@ -893,14 +946,50 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   );
   // Only rows already saved as draft on the server can be submitted — unsaved
   // in-memory edits don't count until the row is persisted.
-  const draftCount = (logs ?? []).filter(l => l.status === "draft").length;
+  // Only drafts the server would actually delete. A draft parked in a closed
+  // month is refused by Delete (assertWorklogWritable), so counting it here lit
+  // up "ลบฉบับร่าง" on a pile that can never be cleared — the same live-button-
+  // that-always-fails trap as the submit button and the staff pencil.
+  const draftCount = (logs ?? []).filter(
+    l => l.status === "draft" && !monthLockFor(l.work_date),
+  ).length;
   // Submittable = draft + rejected. Backend's Submit picks up both statuses
   // so the whole batch goes together — TAs who fix only a handful of rows
   // expect the untouched rejected rows to be resubmitted alongside them.
-  const submittableCount = (logs ?? []).filter(l => isEditableStatus(l.status)).length;
+  //
+  // Rows in a CLOSED month are excluded: the server skips them (Submit's
+  // unsubmittableMonthSQL), so counting them here produced a live button
+  // offering to send ten rows and an error saying it sent none. A TA who missed
+  // a deadline was left pressing it.
+  const editableRows = (logs ?? []).filter(l => isEditableStatus(l.status));
+  const submittableCount = editableRows.filter(l => !monthLockFor(l.work_date)).length;
+  // The remainder is stranded: past the deadline, only staff can move it now.
+  const strandedRows = editableRows.filter(l => !!monthLockFor(l.work_date));
+  const strandedMonths = [...new Set(strandedRows.map(l => monthLockFor(l.work_date)!.label))];
   const canSubmit = !!aid && submittableCount > 0;
 
   const activeAssignment = assignments?.find(a => a.id === aid);
+  // Server-derived, never re-computed here: the rule that decides it lives in
+  // Upsert, and a second copy would drift into offering buttons that fail.
+  const monthsInReview = useMemo(
+    () => new Set(activeAssignment?.months_in_review ?? []),
+    [activeAssignment],
+  );
+  // The top-level "+ เพิ่มรายการ" targets any date, so it survives while at
+  // least one month can still take a row. A month is out if it has entered
+  // review OR its period has closed — checking only the first left the button
+  // live on a section whose every month was one or the other.
+  const openMonths = useMemo(() => {
+    const months = new Set((logs ?? []).map(l => monthKey(l.work_date)).filter(Boolean));
+    return [...months].filter(
+      m => !monthsInReview.has(m) && !monthLocks.get(m.slice(5, 7)),
+    );
+  }, [logs, monthsInReview, monthLocks]);
+  const canAddRows = (logs ?? []).length === 0 || openMonths.length > 0;
+  // "สร้างอัตโนมัติ" wipes and recreates the term, so the server refuses it
+  // outright once anything has been submitted or approved (Generate). Same
+  // predicate, so the button is not offered on a section it can never run for.
+  const generateAllowed = monthsInReview.size === 0;
   const activeScope = activeAssignment?.reimburse_scope;
   const canGenerate = !!activeAssignment?.has_schedule;
 
@@ -1215,9 +1304,13 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       render: l => {
         const w = view(l);
         const canEdit = rowEditable(w);
+        // A draft whose period has closed is not a draft any more — nothing will
+        // ever move it, and "ฉบับร่าง" reads as work in progress. Say what it
+        // actually is, so the row and the banner above tell the same story.
+        const forfeited = isEditableStatus(w.status) && !!monthLockFor(w.work_date);
         return (
           <div className="flex items-center gap-1">
-            <StatusChip status={w.status} />
+            {forfeited ? <Chip tone="neutral">หมดเวลาส่ง</Chip> : <StatusChip status={w.status} />}
             {canEdit && (
               <LockedActionButton
                 variant={aidDrafts[l.id] ? "primary" : "ghost"} size="sm"
@@ -1279,9 +1372,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             {/* No section dropdown here any more — see SectionStrip below. A
                 control that only changes which pile the OTHER buttons act on has
                 no business sitting among them looking like one of them. */}
-            <LockedActionButton variant="secondary" onClick={() => setShowAdd(true)} disabled={!aid || creating || needStudentCount}>
-              <Plus size={14} /> เพิ่มรายการ
-            </LockedActionButton>
+            {/* Gone entirely once the section has entered review: a disabled
+                button invites a hover looking for the reason, and there is
+                nothing the TA can do to re-enable it. */}
+            {canAddRows && (
+              <LockedActionButton variant="secondary" onClick={() => setShowAdd(true)} disabled={!aid || creating || needStudentCount}>
+                <Plus size={14} /> เพิ่มรายการ
+              </LockedActionButton>
+            )}
             <LockedActionButton
               variant="ghost"
               onClick={() => setShowBulkDelete(true)}
@@ -1292,7 +1390,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             </LockedActionButton>
             <TipWrap
               content={
-                !canGenerate && aid
+                !aid
+                  ? undefined
+                  : !generateAllowed
+                  // Generate wipes and recreates the term; the server refuses
+                  // once anything is submitted or approved, so say that rather
+                  // than let the click fail.
+                  ? "มีรายการที่ส่งอนุมัติหรืออนุมัติแล้ว จึงสร้างใหม่ทั้งชุดไม่ได้"
+                  : !canGenerate
                   ? "อาจารย์ยังไม่ได้ตั้งตารางสอนของ section นี้ในระบบ จึงยังสร้างอัตโนมัติไม่ได้"
                   : undefined
               }
@@ -1301,7 +1406,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 variant="secondary"
                 onClick={() => setConfirmGenerate(true)}
                 isPending={generating}
-                disabled={generating || !aid || !canGenerate || needStudentCount}
+                disabled={generating || !aid || !canGenerate || !generateAllowed || needStudentCount}
               >
                 <Wand2 size={14} /> สร้างอัตโนมัติ
               </LockedActionButton>
@@ -1329,6 +1434,48 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           <span>
             รอเจ้าหน้าที่กรอกจำนวนนักศึกษาของวิชานี้ก่อน จึงจะบันทึกเวลาปฏิบัติงานได้
             (ยอดเบิกจ่ายคำนวณจากจำนวนนักศึกษา)
+          </span>
+        </div>
+      )}
+
+      {/* The budget ran out before the term did. Stated in months, because that
+          is the unit the cutoff works in and the only form a TA can act on. */}
+      {(unpaidMonths.size > 0 || partialMonths.size > 0) && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            {settlement?.committed?.over_budget
+              ? "งบของวิชานี้ไม่พอจ่ายทุกเดือนแล้ว — "
+              : "ถ้าอาจารย์อนุมัติครบตามที่ลงไว้ งบจะไม่พอ — "}
+            {partialMonths.size > 0 && (
+              <>
+                <b>{[...partialMonths].map(formatMonthTH).join(", ")}</b> ได้ไม่ครบทุกคาบ
+                {unpaidMonths.size > 0 ? " และ " : " "}
+              </>
+            )}
+            {unpaidMonths.size > 0 && (
+              <><b>{[...unpaidMonths].map(formatMonthTH).join(", ")}</b> ไม่ได้รับค่าตอบแทน </>
+            )}
+            ชั่วโมงยังถูกบันทึกไว้ครบและอาจารย์อนุมัติได้ตามปกติ แต่คาบที่เกินงบจะไม่ถูกนำไปเบิก
+            <br /><span className="text-red-900/75">งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น — ทุกคนถูกตัดที่คาบเดียวกัน ใครสอนคาบไหนก่อนได้ก่อน</span>
+          </span>
+        </div>
+      )}
+
+      {/* Rows whose deadline passed unsent.
+          Stated as a settled outcome, not as a problem with a workaround: staff
+          decided (03/08/2026) that there is no back-dated submission, so an
+          unsent month is a month the TA chose not to claim. The earlier draft of
+          this banner pointed at the office, which invited exactly the negotiation
+          the rule exists to end. */}
+      {strandedRows.length > 0 && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-ink-2">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-ink-3" />
+          <span>
+            <b>{strandedRows.length} รายการ</b> ในงวดที่ปิดไปแล้ว ({strandedMonths.join(", ")}){" "}
+            ไม่ได้ส่งภายในกำหนด — <b>ถือว่าไม่ประสงค์ลงเวลา</b> ระบบจะไม่นำมาคิดค่าตอบแทน
+            และส่งย้อนหลังไม่ได้
+            {submittableCount > 0 && <> ส่วนอีก {submittableCount} รายการในงวดที่ยังเปิดอยู่ ยังกดส่งได้ตามปกติ</>}
           </span>
         </div>
       )}
@@ -1384,7 +1531,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         <>
           {aid && (
             <div className="mb-4">
-              <ReviewSchedulePanel assignmentId={aid} />
+              <DutySchedulePanels assignmentId={aid} />
             </div>
           )}
 
@@ -1441,6 +1588,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             onQuickAdd={date => { setQuickAddDate(date); setShowAdd(true); }}
             impacts={impacts?.impacts ?? []}
             monthLocks={monthLocks}
+            monthDeadlines={monthDeadlines}
+            monthsInReview={monthsInReview}
+            unpaidMonths={unpaidMonths}
+            partialMonths={partialMonths}
             tcId={tcId}
             sectionId={activeAssignment?.section_id}
           />
@@ -1581,6 +1732,17 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         sectionNo={activeAssignment?.sec_no}
         sectionTrack={activeAssignment?.track}
         defaultDate={quickAddDate}
+        // Months that cannot take a new row, so the dialog can say so on the
+        // date field instead of letting the save round-trip and fail. Closed
+        // periods and months already in review are refused by Upsert.
+        blockedMonth={(iso: string) => {
+          const lock = monthLockFor(iso);
+          if (lock) return monthLockMessage(lock);
+          if (monthsInReview.has((iso ?? "").slice(0, 7))) {
+            return "เดือนนี้ส่งอนุมัติหรืออนุมัติไปแล้ว — เพิ่มรายการใหม่ในเดือนนี้ไม่ได้";
+          }
+          return null;
+        }}
         impacts={impacts?.impacts ?? []}
         sectionId={activeAssignment?.section_id}
         tcId={tcId}
@@ -1753,6 +1915,10 @@ interface AddWorklogModalProps {
   impacts?: HolidayImpact[];
   sectionId?: string;
   tcId?: string;
+  // Returns why a date's MONTH cannot take a new row, or null when it can. The
+  // rules live on the server (assertWorklogWritable / Upsert); this reports them
+  // on the field instead of after a failed round-trip.
+  blockedMonth?: (iso: string) => string | null;
   // Weekly-cap context so the modal can preflight-limit hour entry to what
   // the lecturer's workload declaration allows. capsSet=false means no
   // workload form yet → skip enforcement UI. existingLogs is the current
@@ -1845,7 +2011,7 @@ function defaultTimesForActivity(
 
 function AddWorklogModal({
   open, onClose, onSave, isPending, scope, sectionNo, sectionTrack, defaultDate,
-  impacts, sectionId, tcId, weeklyCaps, existingLogs, sectionSchedules,
+  impacts, sectionId, tcId, blockedMonth, weeklyCaps, existingLogs, sectionSchedules,
   userId, aid,
 }: AddWorklogModalProps) {
   // Per-date lookup rebuilt only when impacts/section change — cheap since the
@@ -2035,6 +2201,10 @@ function AddWorklogModal({
       ...form, id: "", assignment_id: "__new__", status: "draft",
     });
     if (err) { setError(err); return; }
+    // The month has to be able to accept the row at all — checked before the
+    // quota, because "this month is closed" makes the quota moot.
+    const monthErr = blockedMonth?.(workDate);
+    if (monthErr) { setError(monthErr); return; }
     // Weekly quota preflight — mirrors the server-side enforceWeeklyActivityCap
     // check. Gives the TA a clear reason before hitting the network.
     if (weeklyInfo && hours > weeklyInfo.remaining + 0.01) {
@@ -2446,6 +2616,12 @@ function SectionStrip({
                   >
                     <Send size={13} /> ส่งอนุมัติ sec {a.sec_no}
                   </LockedActionButton>
+                ) : a.unsent_count > 0 && a.submittable_count === 0 ? (
+                  // Nothing here can be sent any more, so the card offers the
+                  // step that CAN move it instead of a button that cannot.
+                  <div className="rounded-md border border-border bg-surface-secondary px-2 py-1.5 text-center text-[11px] leading-tight text-ink-3">
+                    ไม่ประสงค์ลงเวลา (เลยกำหนดแล้ว)
+                  </div>
                 ) : (
                   <Button variant="secondary" size="sm" className="w-full" onClick={() => onSelect(a.id)}>
                     เปิดกลุ่มนี้
@@ -2467,10 +2643,17 @@ function SectionStrip({
  */
 function SectionStateLine({ a }: { a: Assignment }) {
   if (a.unsent_count > 0) {
+    const stranded = a.unsent_count - a.submittable_count;
+    // A single "unsent 10" hid the difference that decides what to do next:
+    // some of those ten may be past their deadline and beyond the TA entirely.
     return (
-      <span className="inline-flex items-center gap-1.5 text-amber-700">
+      <span className={"inline-flex items-center gap-1.5 " + (a.submittable_count > 0 ? "text-amber-700" : "text-red-700")}>
         <Pencil size={14} className="shrink-0" />
-        ยังไม่ได้ส่ง {a.unsent_count} รายการ
+        {stranded > 0
+          ? a.submittable_count > 0
+            ? `ยังไม่ได้ส่ง ${a.submittable_count} รายการ · ไม่ประสงค์ลงเวลา ${stranded}`
+            : `ไม่ประสงค์ลงเวลา ${stranded} รายการ`
+          : `ยังไม่ได้ส่ง ${a.unsent_count} รายการ`}
       </span>
     );
   }
@@ -2523,18 +2706,62 @@ interface MonthlyWorklogViewProps {
   // Months (keyed "MM") whose submission period is closed or finance_sent —
   // the header shows a lock chip and hides the quick-add for those months.
   monthLocks?: Map<string, MonthLock>;
+  monthDeadlines?: Map<string, { label: string; daysLeft: number }>;
+  monthsInReview?: Set<string>;
+  unpaidMonths?: Set<string>;
+  partialMonths?: Set<string>;
   tcId?: string;
   sectionId?: string;
 }
 
 function MonthlyWorklogView({
+  monthDeadlines,
+  monthsInReview,
+  unpaidMonths,
+  partialMonths,
   rows, loading, columns, termStart, termEnd, view, onQuickAdd,
   impacts, monthLocks, tcId, sectionId,
 }: MonthlyWorklogViewProps) {
+  // Months with nothing left to do start folded.
+  //
+  // A settled month is a wall of green rows the TA will never act on again, and
+  // it pushed the months that DO need something off the screen. The header still
+  // carries the counts, so nothing is hidden — only the rows behind a number
+  // that already summarises them.
+  //
+  // "Settled" is every row approved, or the period closed with the rest
+  // forfeited. A rejected row keeps its month open however old it is: somebody
+  // is waiting on the TA to look at it.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Keyed by section, not a bare flag: switching sections swaps in a different
+  // pile of months that has to be folded on its own terms.
+  const [foldedFor, setFoldedFor] = useState<string | null>(null);
   // Per-date lookup for the row-level "🏖 holiday" chip and the per-month
   // count of unresolved impacts on the ACTIVE section.
   const dateIndex = useMemo(() => buildDateIndex(impacts, sectionId), [impacts, sectionId]);
+
+  // Fold once, on first load. Re-folding on every change would spring the month
+  // shut under the TA the moment their last row was approved, mid-scroll.
+  useEffect(() => {
+    const key = sectionId ?? "";
+    if (foldedFor === key || !rows || rows.length === 0) return;
+    const byMonthLocal = new Map<string, WorkLog[]>();
+    for (const r of rows) {
+      const k = monthKey(r.work_date);
+      byMonthLocal.set(k, [...(byMonthLocal.get(k) ?? []), r]);
+    }
+    const fold = new Set<string>();
+    for (const [m, list] of byMonthLocal) {
+      const rejected = list.some(r => r.status === "rejected");
+      const unsent = list.some(r => r.status === "draft");
+      const locked = !!monthLocks?.get(m.slice(5, 7));
+      if (rejected) continue;                 // needs the TA's attention
+      if (unsent && !locked) continue;        // still sendable
+      fold.add(m);                            // all approved, or closed for good
+    }
+    setCollapsed(fold);
+    setFoldedFor(key);
+  }, [rows, monthLocks, sectionId, foldedFor]);
 
   if (loading && !rows) {
     return (
@@ -2610,9 +2837,12 @@ function MonthlyWorklogView({
         const subtotal = monthRows.reduce((s, r) => s + (view(r).hours || 0), 0);
         const draftInMonth = monthRows.filter(r => r.status === "draft").length;
         const submittedInMonth = monthRows.filter(r => r.status === "submitted").length;
+        const rejectedInMonth = monthRows.filter(r => r.status === "rejected").length;
         const approvedInMonth = monthRows.filter(r => r.status === "approved").length;
         const unresolvedInMonth = unresolvedByMonth.get(month) ?? 0;
         const monthLock = monthLocks?.get(month.slice(5, 7)) ?? null;
+        const deadline = monthDeadlines?.get(month.slice(5, 7)) ?? null;
+        const unsentInMonth = monthRows.filter(r => r.status === "draft" || r.status === "rejected").length;
 
         return (
           <Panel key={month} padded={false}>
@@ -2633,6 +2863,19 @@ function MonthlyWorklogView({
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
                   <span>{formatMonthTH(month)}</span>
+                  {/* Only on months that still hold unsent rows: a deadline
+                      with nothing outstanding behind it is noise. */}
+                  {!monthLock && unsentInMonth > 0 && deadline && deadline.daysLeft <= 14 && (
+                    <Chip tone={deadline.daysLeft <= 3 ? "danger" : "warn"}>
+                      {/* With no way back after the deadline, the warning has to
+                          name the consequence, not just the date. */}
+                      {deadline.daysLeft <= 0
+                        ? "⏰ วันนี้วันสุดท้าย — ไม่ส่งถือว่าไม่ประสงค์ลงเวลา"
+                        : deadline.daysLeft <= 3
+                        ? `⏰ เหลือ ${deadline.daysLeft} วัน — ไม่ส่งถือว่าไม่ประสงค์ลงเวลา`
+                        : `⏰ เหลืออีก ${deadline.daysLeft} วันต้องส่ง`}
+                    </Chip>
+                  )}
                   {monthLock && (
                     <Chip tone={monthLock.financeSent ? "success" : "neutral"}>
                       {monthLock.financeSent ? "🔒 ส่งการเงินแล้ว" : "🔒 งวดปิดรับแล้ว"}
@@ -2644,15 +2887,68 @@ function MonthlyWorklogView({
                     </Chip>
                   )}
                 </div>
-                <div className="text-xs text-muted mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                  <span>{monthRows.length} รายการ</span>
+                {/* Status reads at a glance, in the order it has to be acted on.
+                    A single grey run-on line ("5 รายการ · รวม 10.0 ชม. · อนุมัติ 5")
+                    made a bounced month and a finished one look identical — the
+                    reader had to open every card to find the one that needed
+                    them. The counts carry colour now, and each state is named.
+
+                    It also printed "ฉบับร่าง 0" on a month whose seven rows were
+                    all rejected: the label read draftInMonth while the condition
+                    tested draft+rejected. Each state now counts its own rows. */}
+                <div className="text-xs text-muted mt-1 flex flex-wrap items-center gap-1.5">
+                  <span className="tabular">{monthRows.length} รายการ</span>
                   <span>· รวม <span className="font-semibold text-foreground tabular">{subtotal.toFixed(1)}</span> ชม.</span>
-                  {approvedInMonth > 0 && <span>· อนุมัติ {approvedInMonth}</span>}
-                  {submittedInMonth > 0 && <span>· รออนุมัติ {submittedInMonth}</span>}
-                  {draftInMonth > 0 && <span>· ฉบับร่าง {draftInMonth}</span>}
+                  {/* In a closed month a bounced row is as lost as an unsent
+                      one — the TA cannot fix and resend it either — so the two
+                      collapse into one grey "หมดเวลาส่ง" rather than a red
+                      "ต้องแก้ไข" nobody can act on. */}
+                  {monthLock ? (
+                    unsentInMonth > 0 && (
+                      <span className="ml-1 rounded-full border border-border bg-surface-secondary px-2 py-0.5 font-medium text-ink-3">
+                        หมดเวลาส่ง {unsentInMonth}
+                      </span>
+                    )
+                  ) : (
+                    <>
+                      {rejectedInMonth > 0 && (
+                        <span className="ml-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700">
+                          ✏️ ต้องแก้ไข {rejectedInMonth}
+                        </span>
+                      )}
+                      {draftInMonth > 0 && (
+                        <span className="ml-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-800">
+                          ฉบับร่าง {draftInMonth}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {submittedInMonth > 0 && (
+                    <span className="ml-1 rounded-full bg-blue-50 px-2 py-0.5 font-medium text-blue-700 border border-blue-200">
+                      รออาจารย์ {submittedInMonth}
+                    </span>
+                  )}
+                  {approvedInMonth > 0 && (
+                    <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 border border-emerald-200">
+                      ✓ อนุมัติแล้ว {approvedInMonth}
+                    </span>
+                  )}
+                  {/* Approved and still unpaid: the hours are fine, the money
+                      ran out. Kept separate from the approval chip so the two
+                      facts are not confused for one another. */}
+                  {unpaidMonths?.has(month) && (
+                    <span className="ml-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700">
+                      งบไม่ถึง · ไม่ได้รับค่าตอบแทน
+                    </span>
+                  )}
+                  {partialMonths?.has(month) && (
+                    <span className="ml-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+                      งบไม่ถึงบางคาบ
+                    </span>
+                  )}
                 </div>
               </div>
-              {!monthLock && (
+              {!monthLock && !monthsInReview?.has(month) && (
                 <span
                   role="button"
                   tabIndex={0}
@@ -2845,20 +3141,20 @@ function HolidayHint({
       icon={<AlertTriangle size={14} />}
       title={isPartial
         ? `เวลา ${startTime || "—"}–${endTime || "—"} อยู่ในช่วงวันหยุด (${holidayLabel(holiday)})`
-        : `วันนี้เป็นวันหยุด (${holiday.name}) — อาจารย์ยังไม่ได้กำหนดวันชดเชย`}
+        : `วันนี้เป็นวันหยุด (${holiday.name}) — ยังไม่ได้กำหนดวันชดเชย`}
       description={
         isPartial ? (
           // The cheapest fix for a partial closure is usually to move the entry a
           // few hours, not to wait on a makeup — lead with that.
           <span>
-            ลงเวลาได้เฉพาะช่วงที่ไม่คาบเกี่ยวกับ {holiday.start}–{holiday.end} — หรือรอให้อาจารย์กำหนดวันชดเชย
+            ลงเวลาได้เฉพาะช่วงที่ไม่คาบเกี่ยวกับ {holiday.start}–{holiday.end} — หรือกำหนดวันชดเชย
             {link && <> · <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a></>}
           </span>
         ) : link ? (
           <span>
-            คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ — <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a> เพื่อแจ้งอาจารย์
+            คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ — <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a> เพื่อกำหนดวันชดเชย หรือแจ้งอาจารย์
           </span>
-        ) : "คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ กรุณาให้อาจารย์กำหนดวันชดเชยก่อน"
+        ) : "คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ ต้องกำหนดวันชดเชยก่อน"
       }
     />
   );
@@ -2872,6 +3168,7 @@ function HolidayHint({
 interface TAReviewSchedule {
   id: string;
   assignment_id: string;
+  kind: string;
   day_of_week: number;
   start_time: string;
   end_time: string;
@@ -2879,14 +3176,44 @@ interface TAReviewSchedule {
   note?: string;
 }
 
+/**
+ * The duties a TA nominates their own weekly slots for. All three are done
+ * OUTSIDE the class session, which is why they exist as a schedule of their own
+ * rather than following the section timetable.
+ */
+const DUTY_KINDS = ["review", "other_lecture", "other_lab"] as const;
+
+const DUTY_META: Record<string, { title: string; short: string; blurb: string; activity: string }> = {
+  review: {
+    title: "ตารางตรวจการบ้านของคุณ",
+    short: "ตรวจงาน",
+    blurb: "กำหนดวันเวลาที่คุณตรวจการบ้านเป็นประจำ",
+    activity: "ตรวจงาน",
+  },
+  other_lecture: {
+    title: "ตารางงานอื่น ๆ (บรรยาย) ของคุณ",
+    short: "งานอื่นๆ (บรรยาย)",
+    blurb: "กำหนดวันเวลาที่คุณทำงานอื่นที่คู่กับคาบบรรยาย",
+    activity: "อื่นๆ",
+  },
+  other_lab: {
+    title: "ตารางงานอื่น ๆ (ปฏิบัติการ) ของคุณ",
+    short: "งานอื่นๆ (ปฏิบัติการ)",
+    blurb: "กำหนดวันเวลาที่คุณทำงานอื่นที่คู่กับคาบปฏิบัติการ",
+    activity: "อื่นๆ",
+  },
+};
+
 const DAY_TH_SHORT = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
 
-// Response shape for GET /assignments/:id/review-schedules — wraps items with
-// the weekly caps so the UI can show remaining budget without a second call.
+// Response shape for GET /assignments/:id/review-schedules. The budget is what
+// the LECTURER declared per duty — a duty they did not ask for comes back as 0
+// and gets no card at all, instead of the old always-visible grading panel that
+// let a TA plan a whole term of work the system would silently discard.
 interface TAReviewScheduleList {
   items: TAReviewSchedule[];
-  lecture_hours_per_week: number;
-  review_hours_per_week: number;
+  declared_hours_per_week: Record<string, number>;
+  used_hours_per_week: Record<string, number>;
 }
 
 function hoursOf(start: string, end: string): number {
@@ -2895,7 +3222,29 @@ function hoursOf(start: string, end: string): number {
   return (e - s) / 60;
 }
 
-function ReviewSchedulePanel({ assignmentId }: { assignmentId: string }) {
+/**
+ * All the duty cards for one assignment. Renders a card per duty the lecturer
+ * actually declared — none at all when they declared none, which is the point:
+ * the grading card used to appear unconditionally.
+ */
+function DutySchedulePanels({ assignmentId }: { assignmentId: string }) {
+  const { data } = useSWR<TAReviewScheduleList>(
+    assignmentId ? `/assignments/${assignmentId}/review-schedules` : null,
+  );
+  const declared = data?.declared_hours_per_week ?? {};
+  const shown = DUTY_KINDS.filter(k => (declared[k] ?? 0) > 0);
+  if (shown.length === 0) return null;
+  return (
+    <div className="space-y-4">
+      {shown.map(k => (
+        <DutySchedulePanel key={k} assignmentId={assignmentId} kind={k} />
+      ))}
+    </div>
+  );
+}
+
+function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind: string }) {
+  const meta = DUTY_META[kind];
   const { data, isLoading } = useSWR<TAReviewScheduleList>(
     assignmentId ? `/assignments/${assignmentId}/review-schedules` : null,
   );
@@ -2912,7 +3261,7 @@ function ReviewSchedulePanel({ assignmentId }: { assignmentId: string }) {
     setDeleting(true);
     try {
       await api.del(`/assignments/${assignmentId}/review-schedules/${confirmDeleteId}`);
-      notify.success("ลบตารางตรวจการบ้านแล้ว");
+      notify.success(`ลบ${meta.short}แล้ว`);
       setConfirmDeleteId(null);
       await refresh();
     } catch (e) {
@@ -2920,31 +3269,29 @@ function ReviewSchedulePanel({ assignmentId }: { assignmentId: string }) {
     } finally { setDeleting(false); }
   }
 
-  const rows = data?.items ?? [];
-  const lectureHrs = data?.lecture_hours_per_week ?? 0;
-  const reviewHrs = data?.review_hours_per_week ?? 0;
-  const remaining = Math.max(0, lectureHrs - reviewHrs);
-  const isFull = lectureHrs > 0 && remaining <= 0;
-  const noLectureYet = data !== undefined && lectureHrs <= 0;
+  const rows = (data?.items ?? []).filter(r => r.kind === kind);
+  const declaredHrs = data?.declared_hours_per_week?.[kind] ?? 0;
+  const usedHrs = data?.used_hours_per_week?.[kind] ?? 0;
+  const isFull = declaredHrs > 0 && usedHrs >= declaredHrs;
 
   return (
     <Panel
       title={
         <span className="flex items-center gap-2">
           <BookOpenCheck size={16} className="text-muted" />
-          <span>ตารางตรวจการบ้านของคุณ</span>
-          {lectureHrs > 0 && (
+          <span>{meta.title}</span>
+          {declaredHrs > 0 && (
             <Chip tone={isFull ? "warn" : "info"}>
-              {reviewHrs.toFixed(1)}/{lectureHrs.toFixed(1)} ชม./สัปดาห์
+              {usedHrs.toFixed(1)}/{declaredHrs.toFixed(1)} ชม./สัปดาห์
             </Chip>
           )}
         </span>
       }
       info={
         <>
-          กำหนดวันเวลาที่คุณตรวจการบ้านเป็นประจำ ตอนกด <b>สร้างอัตโนมัติ</b> ระบบจะขยายเป็นรายการ <b>ตรวจงาน</b> ให้ตลอดเทอม
+          {meta.blurb} ตอนกด <b>สร้างอัตโนมัติ</b> ระบบจะขยายเป็นรายการ <b>{meta.activity}</b> ให้ตลอดเทอม
           <br /><br />
-          รวมชั่วโมงตรวจงานต่อสัปดาห์ต้องไม่เกินชั่วโมงบรรยายของ section
+          รวมต่อสัปดาห์ต้องไม่เกินชั่วโมงที่อาจารย์ระบุไว้ในคำขอ ({declaredHrs.toFixed(1)} ชม.)
         </>
       }
       actions={
@@ -2952,26 +3299,18 @@ function ReviewSchedulePanel({ assignmentId }: { assignmentId: string }) {
           variant="secondary"
           size="sm"
           onClick={() => setEditing("new")}
-          disabled={isFull || noLectureYet}
+          disabled={isFull}
         >
-          <Plus size={13} /> เพิ่มวันตรวจ
+          <Plus size={13} /> เพิ่มช่วงเวลา
         </LockedActionButton>
       }
       padded={false}
     >
       {isLoading && !data ? (
         <div className="p-4 text-sm text-muted text-center">กำลังโหลด…</div>
-      ) : noLectureYet ? (
-        <div className="p-4">
-          <Alert
-            status="warning"
-            title="ยังไม่พบชั่วโมงบรรยายของ section นี้"
-            description="ต้องรออาจารย์ตั้งตารางสอน (คาบบรรยาย) ก่อน จึงจะเพิ่มวันตรวจการบ้านได้ — เพราะระบบใช้ชั่วโมงบรรยายเป็นเพดานของเวลาตรวจ"
-          />
-        </div>
       ) : rows.length === 0 ? (
         <div className="p-4 text-sm text-muted">
-          ยังไม่ได้ตั้งวันตรวจการบ้าน — กด "เพิ่มวันตรวจ" เพื่อกำหนดวันประจำสัปดาห์ที่คุณจะตรวจงาน
+          ยังไม่ได้ตั้งช่วงเวลา — กด "เพิ่มช่วงเวลา" เพื่อกำหนดวันประจำสัปดาห์ที่คุณจะทำงานนี้
         </div>
       ) : (
         <div className="divide-y divide-(--hairline)">
@@ -3003,9 +3342,10 @@ function ReviewSchedulePanel({ assignmentId }: { assignmentId: string }) {
       {editing && (
         <ReviewScheduleModal
           assignmentId={assignmentId}
+          kind={kind}
           initial={editing === "new" ? null : editing}
-          lectureHrs={lectureHrs}
-          reviewHrs={reviewHrs}
+          lectureHrs={declaredHrs}
+          reviewHrs={usedHrs}
           onClose={() => setEditing(null)}
           onSaved={async () => { setEditing(null); await refresh(); }}
         />
@@ -3026,15 +3366,20 @@ function ReviewSchedulePanel({ assignmentId }: { assignmentId: string }) {
 }
 
 function ReviewScheduleModal({
-  assignmentId, initial, lectureHrs, reviewHrs, onClose, onSaved,
+  assignmentId, kind, initial, lectureHrs, reviewHrs, onClose, onSaved,
 }: {
   assignmentId: string;
+  /** Which declared duty this slot belongs to. */
+  kind: string;
   initial: TAReviewSchedule | null;
+  /** Weekly ceiling for this duty — the hours the LECTURER declared. */
   lectureHrs: number;
+  /** Hours already nominated for this duty. */
   reviewHrs: number;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const meta = DUTY_META[kind];
   const [dow, setDow] = useState<number>(initial?.day_of_week ?? 1);
   const [start, setStart] = useState(initial?.start_time ?? "14:00");
   const [end, setEnd] = useState(initial?.end_time ?? "16:00");
@@ -3069,7 +3414,7 @@ function ReviewScheduleModal({
   const conflictKindTH: Record<BusyBlock["kind"], string> = {
     class: "ตารางเรียนของคุณ",
     teaching: "คาบสอนที่คุณเป็น TA",
-    review: "ตารางตรวจการบ้านอื่นของคุณ",
+    review: "ตารางงานอื่นของคุณ",
   };
 
   async function handleSave() {
@@ -3084,18 +3429,18 @@ function ReviewScheduleModal({
       return;
     }
     if (overCap) {
-      notify.error(`ชั่วโมงตรวจการบ้านรวมต่อสัปดาห์ (${projected.toFixed(1)} ชม.) เกินชั่วโมงบรรยาย (${lectureHrs.toFixed(1)} ชม.)`);
+      notify.error(`ชั่วโมง${meta.short}รวมต่อสัปดาห์ (${projected.toFixed(1)} ชม.) เกินที่อาจารย์ระบุไว้ (${lectureHrs.toFixed(1)} ชม.)`);
       return;
     }
     setSaving(true);
     try {
-      const body = { day_of_week: dow, start_time: start, end_time: end, room, note };
+      const body = { kind, day_of_week: dow, start_time: start, end_time: end, room, note };
       if (initial) {
         await api.patch(`/assignments/${assignmentId}/review-schedules/${initial.id}`, body);
-        notify.success("แก้ไขวันตรวจแล้ว");
+        notify.success(`แก้ไข${meta.short}แล้ว`);
       } else {
         await api.post(`/assignments/${assignmentId}/review-schedules`, body);
-        notify.success("เพิ่มวันตรวจแล้ว");
+        notify.success(`เพิ่ม${meta.short}แล้ว`);
       }
       await onSaved();
     } catch (e) {
@@ -3107,7 +3452,7 @@ function ReviewScheduleModal({
     <Modal
       open
       onClose={onClose}
-      title={initial ? "แก้ไขวันตรวจการบ้าน" : "เพิ่มวันตรวจการบ้าน"}
+      title={`${initial ? "แก้ไข" : "เพิ่ม"}ช่วงเวลา — ${meta.short}`}
       icon={<BookOpenCheck size={18} />}
       size="md"
       footer={

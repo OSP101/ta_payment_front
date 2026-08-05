@@ -28,12 +28,20 @@ interface SubmissionRow {
   due_date: string;          // 'YYYY-MM-DD'
   is_closed: boolean;
   teaching_course_id: string;
+  course_code: string;
   status: SubmissionStage;
   // Worklog readiness for the period's month — lets the badge reflect the
   // daily-approval track instead of showing a bare "รอ TA ยืนยันเวลา" that
   // contradicts an already-approved (or empty) month.
   worklog_total: number;
   worklog_unapproved: number;
+  // Who the unapproved rows are with. The single "unapproved" number could not
+  // say, so this page blamed the lecturer for rows the TA had never sent.
+  worklog_waiting_ta: number;
+  worklog_waiting_lecturer: number;
+  // Rows the LECTURER sent back. Part of waiting_ta, but a bounced row and a
+  // never-sent row need different words and different urgency.
+  worklog_rejected: number;
   worklog_approved_hrs: number;
 }
 
@@ -57,14 +65,42 @@ const SUBMISSION_TONE: Record<SubmissionStage, ChipTone> = {
 // pending we fold in the worklog-approval state so the TA sees what's happening:
 //   pending + window not open yet    → "ยังไม่ถึงรอบ" (neutral — nothing to do)
 //   pending + no worklog in month    → "ไม่มีรายการเดือนนี้" (neutral)
-//   pending + un-approved worklog     → "รออาจารย์อนุมัติงาน" (info)
+//   pending + rows still with the TA → "ยังไม่ได้ส่งอนุมัติ" (warn — the TA's move)
+//   pending + rows with the lecturer  → "รออาจารย์อนุมัติงาน" (info)
 //   pending + all approved            → "รอเจ้าหน้าที่ส่งออก" (info — staff's turn)
 // exported / finance_sent keep their own label so the payout progress shows.
+// A period is past due once today passes due_date + the one grace day the
+// backend applies (period_lock.go). The is_closed flag alone is not enough —
+// most closed periods are closed by time, not by anyone flipping it.
+function periodPastDue(r: { is_closed: boolean; due_date: string }, today: string): boolean {
+  if (r.is_closed) return true;
+  const g = new Date(`${r.due_date}T00:00:00`);
+  g.setDate(g.getDate() + 1);
+  const iso = `${g.getFullYear()}-${String(g.getMonth() + 1).padStart(2, "0")}-${String(g.getDate()).padStart(2, "0")}`;
+  return today > iso;
+}
+
 function submissionBadge(r: SubmissionRow, today: string): { label: string; tone: ChipTone } {
   if (r.status === "pending") {
     if (r.starts_on > today)      return { label: "ยังไม่ถึงรอบ", tone: "neutral" };
     if (r.worklog_total === 0)    return { label: "ไม่มีรายการเดือนนี้", tone: "neutral" };
-    if (r.worklog_unapproved > 0) return { label: "รออาจารย์อนุมัติงาน", tone: "info" };
+    // Past the deadline the month is settled, whichever way it went: unsent
+    // rows are forfeited and there is nothing left to chase. Keeping the
+    // "ยังไม่ได้ส่งอนุมัติ" badge here would ask for an action that no longer
+    // exists.
+    if (periodPastDue(r, today)) {
+      return r.worklog_waiting_ta > 0
+        ? { label: "หมดเวลาส่ง", tone: "neutral" }
+        : { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
+    }
+    // Bounced work first: it is the only state where somebody has already
+    // looked at the hours and said no, and it was reading as a plain "not sent
+    // yet" — indistinguishable from a TA who simply had not got round to it.
+    if (r.worklog_rejected > 0)          return { label: "อาจารย์ตีกลับ", tone: "danger" };
+    // The TA's own move outranks the lecturer's: it is the only one they can
+    // act on, and it was the one being hidden behind the lecturer's name.
+    if (r.worklog_waiting_ta > 0)        return { label: "ยังไม่ได้ส่งอนุมัติ", tone: "warn" };
+    if (r.worklog_waiting_lecturer > 0)  return { label: "รออาจารย์อนุมัติงาน", tone: "info" };
     return { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
   }
   return { label: SUBMISSION_LABEL[r.status], tone: SUBMISSION_TONE[r.status] };
@@ -434,12 +470,31 @@ function AlertsSection({
     d => d.status !== "rejected" && d.status !== "needs_fix").length;
 
   // Only months whose window has opened can be acted on.
-  const dueSoon = (submissions ?? []).filter(
-    r => r.status === "pending" && !r.is_closed && r.starts_on <= today && r.worklog_unapproved > 0,
+  //
+  // "Closed" is not just the flag: the backend also closes a period once today
+  // passes due_date + one grace day (period_lock.go). Testing the flag alone put
+  // a past-due month under "ต้องดำเนินการ" with the future-tense warning
+  // "ถ้าเลยกำหนด เดือนนี้จะถูกปิด" — on a month that had already closed.
+  // Bounced worklogs, by course. The band handled rejected DOCUMENTS and
+  // nothing else, so a lecturer sending hours back produced one bell
+  // notification and no trace anywhere the TA actually looks.
+  const bounced = (submissions ?? []).filter(
+    r => r.status === "pending" && !periodPastDue(r, today) && r.worklog_rejected > 0,
   );
+  const openPeriods = (submissions ?? []).filter(
+    r => r.status === "pending" && !periodPastDue(r, today) &&
+         r.starts_on <= today && r.worklog_unapproved > 0,
+  );
+  // Past-due months with rows the TA never sent. Nothing they can do alone, but
+  // hiding it is how ten rows sat unnoticed until payday.
+  const missed = (submissions ?? []).filter(
+    r => r.status === "pending" && periodPastDue(r, today) && r.worklog_waiting_ta > 0,
+  );
+  const dueSoon = openPeriods;
 
   const hasCourses = (courses?.length ?? 0) > 0;
-  if (rejected.length === 0 && notSent <= 0 && dueSoon.length === 0) return null;
+  if (rejected.length === 0 && notSent <= 0 && dueSoon.length === 0 &&
+      missed.length === 0 && bounced.length === 0) return null;
 
   return (
     <>
@@ -475,13 +530,41 @@ function AlertsSection({
             }
           />
         )}
+        {bounced.map(r => (
+          <Alert
+            key={"bounced" + r.period_id + r.teaching_course_id}
+            status="danger"
+            icon={<CalendarClock size={16} />}
+            title={`${r.course_code} — อาจารย์ตีกลับบันทึกเวลา ${r.worklog_rejected} รายการ`}
+            description={`รอบ ${r.label} · แก้ไขแล้วส่งอนุมัติใหม่ภายใน ${thDueDate(r.due_date)}`}
+            action={
+              <Link
+                href={`/ta/courses/${r.teaching_course_id}/worklog`}
+                className="text-sm font-medium underline underline-offset-2"
+              >
+                ไปแก้ไข
+              </Link>
+            }
+          />
+        ))}
         {dueSoon.map(r => (
           <Alert
             key={r.period_id + r.teaching_course_id}
             status="warning"
             icon={<CalendarClock size={16} />}
-            title={`รอบ ${r.label} ยังมีบันทึกเวลาที่อาจารย์ไม่ได้อนุมัติ ${r.worklog_unapproved} รายการ`}
-            description={`ครบกำหนด ${thDueDate(r.due_date)} — ถ้าเลยกำหนด เดือนนี้จะถูกปิดและแก้ไม่ได้`}
+            // Named by who has to move. Telling a TA the lecturer has not
+            // approved rows the TA never sent points them at the wrong person
+            // and hides the one action that would fix it.
+            title={
+              r.worklog_waiting_ta > 0
+                ? `รอบ ${r.label} คุณยังไม่ได้ส่งอนุมัติ ${r.worklog_waiting_ta} รายการ`
+                : `รอบ ${r.label} รออาจารย์อนุมัติ ${r.worklog_waiting_lecturer} รายการ`
+            }
+            description={
+              r.worklog_waiting_ta > 0
+                ? `ครบกำหนด ${thDueDate(r.due_date)} — ถ้าเลยกำหนด เดือนนี้จะถูกปิดและส่งเองไม่ได้อีก`
+                : `ครบกำหนด ${thDueDate(r.due_date)} — คุณส่งครบแล้ว รออาจารย์กดอนุมัติ`
+            }
             action={
               <Link
                 href={`/ta/courses/${r.teaching_course_id}/worklog`}
@@ -493,6 +576,30 @@ function AlertsSection({
           />
         ))}
       </div>
+
+      {/* Settled, not outstanding.
+          A month whose deadline passed with rows unsent is closed for good —
+          staff decided (03/08/2026) there is no back-dated submission: the
+          hours are treated as not claimed. So it is reported as an OUTCOME,
+          below the action list and with no link, rather than as another thing
+          to chase. Listing it under "ต้องดำเนินการ" promised a way back that
+          does not exist. */}
+      {missed.length > 0 && (
+        <>
+          <h2 className="mt-5 mb-2 text-sm font-medium text-ink-2">รอบที่ปิดไปแล้ว</h2>
+          <div className="space-y-2">
+            {missed.map(r => (
+              <Alert
+                key={"missed" + r.period_id + r.teaching_course_id}
+                status="default"
+                icon={<CalendarClock size={16} />}
+                title={`รอบ ${r.label} — ถือว่าไม่ประสงค์ลงเวลา ${r.worklog_waiting_ta} รายการ`}
+                description={`ครบกำหนดไปแล้วเมื่อ ${thDueDate(r.due_date)} — รายการที่ไม่ได้ส่งภายในกำหนดถือเป็นการไม่ประสงค์ลงเวลา และไม่นำมาคิดค่าตอบแทน`}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

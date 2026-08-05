@@ -20,6 +20,7 @@ import NotificationBell from "../components/NotificationBell";
 import { type Executive, emptyExecutive } from "./types";
 import { TermProvider, useTerm } from "./TermContext";
 import TermSwitcher from "./TermSwitcher";
+import TourLauncher from "./tours/TourLauncher";
 
 // The four steps a payment actually travels through, in order. Numbered
 // instead of iconned at the lecturers' request: icons made every entry look
@@ -119,7 +120,14 @@ function StaffShellInner({ me, children }: { me: Me; children: React.ReactNode }
       nav={nav}
       userMenuItems={userMenuItems}
       topBarScope={<TermSwitcher />}
-      topBarAccessory={<NotificationBell />}
+      topBarAccessory={
+        <>
+          <TourLauncher />
+          <div data-tour="notif-bell" className="shrink-0">
+            <NotificationBell />
+          </div>
+        </>
+      }
     >
       {children}
     </Shell>

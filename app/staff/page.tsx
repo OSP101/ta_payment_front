@@ -89,7 +89,7 @@ export default function StaffDashboard() {
       {/* md stays at 2 columns: the sidebar is already open at that width, so a
           3-column row leaves ~85px of text per card and clips the longer
           labels. 3 columns only from lg. */}
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+      <div data-tour="dash-stats" className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
         <StatCard label="วิชาที่เปิดสอน" value={s.total_courses} icon={<BookOpen size={18} />} tone="brand"
                   hint={termText || undefined} />
         <StatCard label="TA ทั้งหมด" value={s.total_tas} icon={<Users size={18} />}
@@ -111,6 +111,7 @@ export default function StaffDashboard() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel
           title="งบประมาณคงเหลือ"
+          data-tour="dash-budget"
           description={`เพดานรวมของ ${s.budget_courses} วิชาที่ขอใช้ TA เทียบกับที่จ่ายไปแล้ว`}
           className="lg:col-span-2"
         >
@@ -126,7 +127,7 @@ export default function StaffDashboard() {
           </div>
         </Panel>
 
-        <Panel title="ทางลัด" description="เมนูใช้บ่อย">
+        <Panel title="ทางลัด" description="เมนูใช้บ่อย" data-tour="dash-shortcuts">
           <ul className="divide-y divide-[var(--hairline)]">
             <ShortcutRow href="/staff/approvals" title="อนุมัติคำขอ TA" />
             <ShortcutRow href="/staff/review" title="ตรวจสอบแบบฟอร์มใบแจ้งหนี้" />
@@ -200,7 +201,7 @@ function TodoPanel({ todos, loading }: { todos: Todo[]; loading: boolean }) {
 
   const total = todos.reduce((n, t) => n + t.count, 0);
   return (
-    <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20 overflow-hidden">
+    <div data-tour="dash-todo" className="mb-5 rounded-xl border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20 overflow-hidden">
       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
         <AlertTriangle size={17} className="text-amber-600 dark:text-amber-400 shrink-0" />
         <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">

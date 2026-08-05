@@ -37,10 +37,25 @@ interface ReviewRow {
   approved_hours: number;
   approved_baht: number;
   open_rows: number;
+  // Rows the TA never sent before their period closed. Not outstanding work —
+  // the deadline has passed and nobody is going to send them — so they neither
+  // block sign-off nor belong in the "waiting on the TA" count.
+  forfeited: number;
   waiting_ta: number;
   waiting_lecturer: number;
   row_count: number;
+  needs_staff: boolean;
   manual_count: number;
+}
+
+/** What the monthly tracker knows about a (TA, month) the review queue dropped. */
+interface TimelineRow {
+  year_month: string;
+  due_date: string;
+  is_closed: boolean;
+  ta_id: string;
+  status: string;
+  worklog_total: number;
 }
 
 const shortMonth = (label: string) => {
@@ -61,6 +76,15 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
     () => (data?.items ?? []).filter(r => r.teaching_course_id === tcId),
     [data, tcId],
   );
+  // The queue only carries months that HAVE work logs, so a cell it omits is
+  // blank and says nothing about why. The monthly tracker is the one source
+  // that can tell the four different reasons apart — see EmptyCell.
+  const { data: timeline } = useSWR<TimelineRow[]>(`/teaching-courses/${tcId}/submission-timeline`);
+  const timelineAt = useMemo(() => {
+    const m = new Map<string, TimelineRow>();
+    for (const t of timeline ?? []) m.set(`${t.ta_id}:${t.year_month}`, t);
+    return m;
+  }, [timeline]);
 
   const [busy, setBusy] = useState<string | null>(null);
   const [sendBack, setSendBack] = useState<ReviewRow | null>(null);
@@ -88,7 +112,17 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
   const cell = (taId: string, ym: string) =>
     rows.find(r => r.ta_id === taId && r.year_month === ym);
 
-  const readyRows = rows.filter(r => r.status === "pending" && r.open_rows === 0);
+  // Months an officer can actually sign off. A month whose only rows were
+  // forfeited has nothing in it to review — no approved hours, nothing that
+  // will ever be exported — so it is not offered for sign-off and does not
+  // count towards "ผ่านทั้งวิชา". The export gate agrees: its unreviewed-months
+  // query only looks at periods holding APPROVED work (export_batch.go), so
+  // leaving these unsigned blocks nothing.
+  const settledByForfeit = (r: ReviewRow) => r.forfeited > 0 && r.row_count === 0;
+  // needs_staff is the server's verdict, shared with the payout list. Deriving
+  // it here as well is what let the two screens disagree about forfeit-only
+  // months and strand two courses in the officer's queue.
+  const readyRows = rows.filter(r => r.needs_staff);
   // Rows genuinely sitting in the lecturer's approval queue. The nudge lives
   // here now: the payout list dropped its "waiting on someone else" section, and
   // this is the screen that can already name which months are held and by whom.
@@ -205,7 +239,9 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
                   const r = cell(taId, ym);
                   if (!r) {
                     return (
-                      <td key={ym} className="px-1.5 py-2 text-center text-muted">—</td>
+                      <td key={ym} className="px-1.5 py-1.5 align-top">
+                        <EmptyCell t={timelineAt.get(`${taId}:${ym}`)} />
+                      </td>
                     );
                   }
                   return (
@@ -214,6 +250,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
                         r={r}
                         busy={busy === cellKey(r)}
                         disabled={busy !== null}
+                        settled={settledByForfeit(r)}
                         onOpen={() => setDetailFor(r)}
                         onApprove={() => approve([r])}
                         onSendBack={() => { setSendBack(r); setReason(""); }}
@@ -322,6 +359,79 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
   );
 }
 
+const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+                   "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+
+/** "2026-07-31" → "31 ก.ค." — the due date is only ever read next to its own
+ *  month column, so the year would be noise. */
+const shortDue = (iso: string) => {
+  const [, m, d] = iso.split("-");
+  return `${Number(d)} ${TH_MONTHS[Number(m) - 1]}`;
+};
+
+/**
+ * A (TA, month) the review queue has no row for.
+ *
+ * This used to be an em dash, which is where the question "did they not work,
+ * or did they not file?" went to die — the two cost the university completely
+ * different things, and only one of them is anyone's fault. The queue drops a
+ * month for four unrelated reasons and the dash spoke for all of them, so the
+ * officer had to open the TA's month elsewhere to find out which they were
+ * looking at.
+ *
+ * The monthly tracker has a row per (period × assigned TA) whether or not any
+ * hours exist, so it can separate them:
+ *
+ *   - the deadline passed with nothing filed — the only one that is a finding.
+ *     Said plainly, because an unfiled month is a forfeited claim: the hours
+ *     cannot be entered afterwards and will never be paid;
+ *   - the month is still open — the same emptiness, no verdict yet, so it
+ *     carries the date the TA still has;
+ *   - already sent to finance — done, not missing;
+ *   - hours exist but the appointment order has not been printed, which blocks
+ *     the whole TA rather than this month.
+ *
+ * NOT claimed here: that the TA was appointed for the whole term. An assignment
+ * carries no start date, so a TA added in August has empty June and July that
+ * look identical to abandoned ones. Hence "ไม่มีบันทึกเวลาถึงกำหนด" — what the
+ * record shows — rather than an accusation the data cannot support.
+ */
+function EmptyCell({ t }: { t?: TimelineRow }) {
+  if (!t) return <div className="py-2 text-center text-muted">—</div>;
+
+  if (t.status === "finance_sent") {
+    return (
+      <div className="rounded-lg border border-[var(--hairline)] bg-surface-secondary px-2 py-2 text-center text-[11px] leading-tight text-muted">
+        ส่งการเงินแล้ว
+      </div>
+    );
+  }
+  if (t.worklog_total > 0) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-center text-[11px] leading-tight text-amber-800">
+        รอออกใบแต่งตั้ง
+      </div>
+    );
+  }
+
+  const past = t.is_closed || new Date(t.due_date) < new Date(new Date().toDateString());
+  if (past) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-2 text-center leading-tight">
+        <div className="text-[11px] font-medium text-red-800">ไม่มีบันทึกเวลาถึงกำหนด</div>
+        <div className="mt-0.5 text-[11px] text-red-700">ถือว่าสละสิทธิ์เดือนนี้</div>
+        <div className="mt-0.5 text-[10px] text-red-600/80">ครบกำหนด {shortDue(t.due_date)}</div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-[var(--hairline)] bg-surface-secondary px-2 py-2 text-center leading-tight">
+      <div className="text-[11px] text-muted">ยังไม่มีบันทึกเวลา</div>
+      <div className="mt-0.5 text-[10px] text-muted">ครบกำหนด {shortDue(t.due_date)}</div>
+    </div>
+  );
+}
+
 /**
  * One (TA, month).
  *
@@ -347,13 +457,19 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
  * A cell with nothing to sign off gets no buttons at all.
  */
 function Cell({
-  r, busy, disabled, onOpen, onApprove, onSendBack,
+  r, busy, disabled, settled, onOpen, onApprove, onSendBack,
 }: {
   r: ReviewRow; busy: boolean; disabled: boolean;
+  // Nothing in this month will ever be paid, so it carries no controls: an
+  // officer pressing ผ่าน on it would be signing off on nothing.
+  settled: boolean;
   onOpen: () => void; onApprove: () => void; onSendBack: () => void;
 }) {
   const reviewed = r.status !== "pending";
   const blocked = !reviewed && r.open_rows > 0;
+  // A forfeited month needs no tone of its own: it is already the neutral one.
+  // What it must NOT be is amber — the deadline has passed, so there is nothing
+  // left to warn about.
   const tone = reviewed
     ? "border-emerald-200 bg-emerald-50"
     : blocked
@@ -376,6 +492,11 @@ function Cell({
             {r.waiting_lecturer > 0 && r.waiting_ta > 0 ? " · " : ""}
             {r.waiting_ta > 0 ? `TA ยังไม่ส่ง ${r.waiting_ta}` : ""}
           </span>
+        ) : r.forfeited > 0 && r.row_count === 0 ? (
+          // Nothing was ever sent and the window has shut. Reported as the
+          // settled outcome it is — "TA ยังไม่ส่ง" read as a chase still worth
+          // making, on a month where there is nobody left to chase.
+          <span className="text-ink-3">ไม่ประสงค์ลงเวลา {r.forfeited} รายการ</span>
         ) : reviewed ? (
           <span className="text-emerald-800">ตรวจแล้ว · {r.row_count} รายการ</span>
         ) : r.manual_count > 0 ? (
@@ -404,7 +525,7 @@ function Cell({
               ดู
             </button>
           )}
-          {!reviewed && !blocked && (
+          {!reviewed && !blocked && !settled && (
             <>
               <button
                 type="button"

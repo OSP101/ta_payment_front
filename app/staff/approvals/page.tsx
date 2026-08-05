@@ -138,7 +138,7 @@ export default function TARequestsPage() {
       />
 
       <Panel padded={false}>
-        <div className="flex flex-wrap items-end gap-3 border-b border-(--hairline) px-4 py-3">
+        <div data-tour="approvals-filters" className="flex flex-wrap items-end gap-3 border-b border-(--hairline) px-4 py-3">
           <SelectField
             className="min-w-[9rem]"
             label={<span className="text-xs">ปีการศึกษา</span>}
@@ -203,6 +203,7 @@ export default function TARequestsPage() {
               ไม่พบคำขอตามเงื่อนไขที่เลือก
             </div>
           ) : (
+            <div data-tour="approvals-list">
             <Accordion allowsMultipleExpanded className="w-full">
               {filtered.map(req => (
                 <Accordion.Item key={req.id}>
@@ -222,6 +223,7 @@ export default function TARequestsPage() {
                 </Accordion.Item>
               ))}
             </Accordion>
+            </div>
           )}
         </div>
       </Panel>

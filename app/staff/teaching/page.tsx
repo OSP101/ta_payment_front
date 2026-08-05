@@ -76,12 +76,16 @@ export default function TeachingPage() {
         actions={
           noTerms ? null : (
             <>
-              <Button variant="secondary" disabled={!termId} onClick={() => setImporting(true)}>
-                <FileSpreadsheet size={16} /> นำเข้า Excel
-              </Button>
-              <Button variant="primary" disabled={!termId} onClick={() => setCreating(true)}>
-                <BookPlus size={16} /> เปิดรายวิชา
-              </Button>
+              <span data-tour="teaching-import">
+                <Button variant="secondary" disabled={!termId} onClick={() => setImporting(true)}>
+                  <FileSpreadsheet size={16} /> นำเข้า Excel
+                </Button>
+              </span>
+              <span data-tour="teaching-open">
+                <Button variant="primary" disabled={!termId} onClick={() => setCreating(true)}>
+                  <BookPlus size={16} /> เปิดรายวิชา
+                </Button>
+              </span>
             </>
           )
         }
@@ -141,6 +145,7 @@ export default function TeachingPage() {
                 </Button>
               </div>
             )}
+            <div data-tour="teaching-table">
             <DataTable
               ariaLabel="วิชาที่เปิดสอน"
               rows={shownCourses}
@@ -157,6 +162,7 @@ export default function TeachingPage() {
               minWidth="1080px"
               columns={makeCourseColumns(setEditStudents)}
             />
+            </div>
           </div>
         </Panel>
       )}
