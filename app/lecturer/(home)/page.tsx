@@ -344,7 +344,7 @@ export default function LecturerHome() {
                       id="with-ta"
                       title="มี TA แล้ว"
                       count={withTA.length}
-                      hint="คำขอผ่านแล้วและ TA เริ่มลงเวลาได้ — งานหลักคืออนุมัติบันทึกเวลาให้ทัน"
+                      hint="คำขอผ่านแล้วและ TA เริ่มลงเวลาได้ งานหลักคืออนุมัติบันทึกเวลาให้ทัน"
                     >
                       <CourseGrid
                         courses={withTA}
@@ -359,7 +359,7 @@ export default function LecturerHome() {
                       id="without-ta"
                       title="ยังไม่มี TA"
                       count={withoutTA.length}
-                      hint="วิชาที่ยังไม่มี TA ที่อนุมัติแล้ว — ป้ายบนการ์ดบอกว่าส่งคำขอไปหรือยัง"
+                      hint="วิชาที่ยังไม่มี TA ที่อนุมัติแล้ว ป้ายบนการ์ดบอกว่าส่งคำขอไปหรือยัง"
                     >
                       <CourseGrid
                         courses={withoutTA}
@@ -577,7 +577,7 @@ function AlertsSection({
                   items={makeups.map(c => ({
                     id: c.id,
                     href: `/lecturer/courses/${c.id}/holidays`,
-                    label: `${c.code} — ค้าง ${c.unresolved_makeups} คาบ`,
+                    label: `${c.code} ค้าง ${c.unresolved_makeups} คาบ`,
                   }))}
                 />
               </>
@@ -598,7 +598,7 @@ function AlertsSection({
                     return {
                       id: c.id,
                       href: `/lecturer/courses/${c.id}/reports`,
-                      label: `${c.code} — ${ov.ta_pending_count} คน (${ov.hours_pending_approval.toFixed(1)} ชม.)`,
+                      label: `${c.code} ${ov.ta_pending_count} คน (${ov.hours_pending_approval.toFixed(1)} ชม.)`,
                     };
                   })}
                 />

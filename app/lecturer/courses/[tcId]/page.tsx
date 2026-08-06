@@ -81,7 +81,7 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
   return (
     <div>
       <PageHeader
-        title={course ? `${course.code} — ${course.name_th}` : "รายวิชา"}
+        title={course ? `${course.code} ${course.name_th}` : "รายวิชา"}
         description="ภาพรวมสถานะและข้อมูลของรายวิชานี้"
         actions={
           <Link href="/lecturer">
@@ -168,7 +168,7 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
                 status="danger"
                 icon={<CalendarOff size={16} />}
                 title={`ต้องกำหนดวันชดเชย ${course.unresolved_makeups} คาบ`}
-                description="คาบเหล่านี้ตรงกับวันหยุด — ถ้ายังไม่กำหนดวันชดเชย ระบบจะข้ามวันนั้น TA จะลงเวลาไม่ได้และเบิกค่าตอบแทนส่วนนี้ไม่ได้"
+                description="คาบเหล่านี้ตรงกับวันหยุด ถ้ายังไม่กำหนดวันชดเชย ระบบจะข้ามวันนั้น TA จะลงเวลาไม่ได้และเบิกค่าตอบแทนส่วนนี้ไม่ได้"
                 action={
                   <Link href={`/lecturer/courses/${tcId}/holidays`}>
                     <Button variant="primary" size="sm">กำหนดวันชดเชย</Button>
@@ -359,9 +359,9 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
       <div className="text-xs text-muted mt-2">
         ใช้ไปแล้ว ~{baht(budget.used_baht)} บ. ({pct.toFixed(0)}%)
         {budget.over_budget
-          ? " — เกินเพดานงบ (โดยประมาณ)"
+          ? " เกินเพดานงบ (โดยประมาณ)"
           : pct >= 80
-          ? " — ใกล้เต็มงบ (โดยประมาณ)"
+          ? " ใกล้เต็มงบ (โดยประมาณ)"
           : ""}
       </div>
     </StatusCardShell>

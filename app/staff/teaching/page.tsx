@@ -115,7 +115,7 @@ export default function TeachingPage() {
             {missingCourses.length > 0 && (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/30 px-3 py-2 text-sm">
                 <span className="text-amber-800 dark:text-amber-200">
-                  มี <b>{missingCourses.length}</b> วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา — ต้องกรอกก่อนจึงจะส่งออกได้
+                  มี <b>{missingCourses.length}</b> วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา ต้องกรอกก่อนจึงจะส่งออกได้
                 </span>
                 <Button
                   variant={onlyMissing ? "primary" : "secondary"}
@@ -133,7 +133,7 @@ export default function TeachingPage() {
             {wbaCourses.length > 0 && (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
                 <span className="text-red-800 dark:text-red-200">
-                  มี <b>{wbaCourses.length}</b> วิชาที่ยังไม่ระบุเวลาเรียน (WBA) — อาจารย์หรือเจ้าหน้าที่ต้องกรอกตารางเรียนก่อน จึงจะส่งคำขอ TA ได้
+                  มี <b>{wbaCourses.length}</b> วิชาที่ยังไม่ระบุเวลาเรียน (WBA) อาจารย์หรือเจ้าหน้าที่ต้องกรอกตารางเรียนก่อน จึงจะส่งคำขอ TA ได้
                 </span>
                 <Button
                   variant={onlyWba ? "primary" : "secondary"}
@@ -323,7 +323,7 @@ function DeleteCourseButton({ course }: { course: TC }) {
     try {
       await api.del(`/teaching-courses/${course.id}`);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
-      toast.success("ลบรายวิชาแล้ว", { description: `${course.code} — ${course.name_th}` });
+      toast.success("ลบรายวิชาแล้ว", { description: `${course.code} ${course.name_th}` });
       setConfirm(false);
     } catch (e) {
       notify.error(e); // backend returns a clear Thai reason when it has data
@@ -356,7 +356,7 @@ function DeleteCourseButton({ course }: { course: TC }) {
         confirmLabel="ลบรายวิชา"
         message={
           <p className="text-sm text-muted">
-            จะลบรายวิชา <b>{course.code} — {course.name_th}</b> พร้อม section และตารางเวลาทั้งหมด
+            จะลบรายวิชา <b>{course.code} {course.name_th}</b> พร้อม section และตารางเวลาทั้งหมด
             การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
           </p>
         }
@@ -461,7 +461,7 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
             </FieldGroup>
           </div>
           <div className="text-xs text-muted">
-            จำนวนนักศึกษาใช้คำนวณงบประมาณโดยประมาณของวิชา — ต้องกรอกก่อนจึงจะส่งออกเอกสารได้
+            จำนวนนักศึกษาใช้คำนวณงบประมาณโดยประมาณของวิชา ต้องกรอกก่อนจึงจะส่งออกเอกสารได้
           </div>
         </div>
       )}

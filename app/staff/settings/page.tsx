@@ -170,7 +170,7 @@ function PayRateSection() {
   return (
     <Panel
       title="อัตราค่าตอบแทน TA"
-      description="ค่าตอบแทนแบบมีเวอร์ชัน — สร้างเวอร์ชันใหม่ทุกครั้งที่แก้ (เก็บประวัติ)"
+      description="ค่าตอบแทนแบบมีเวอร์ชัน สร้างเวอร์ชันใหม่ทุกครั้งที่แก้ (เก็บประวัติ)"
       actions={
         editing ? (
           <>
@@ -193,13 +193,13 @@ function PayRateSection() {
       {!editing && (
         data ? (
           <div className="space-y-5">
-            <ViewGroup title="อัตราค่าจ้าง — ปริญญาตรี" hint="อ้างอิงประกาศ 731/2565 + 1080/2565">
+            <ViewGroup title="อัตราค่าจ้าง ปริญญาตรี" hint="อ้างอิงประกาศ 731/2565 + 1080/2565">
               <ViewRow label="ภาคปกติ" value={`${data.undergrad_regular} บาท/ชั่วโมง`} />
               <ViewRow label="ภาคพิเศษ" value={`${data.undergrad_special} บาท/ชั่วโมง`} />
               <ViewRow label="ชั่วโมงสูงสุด/วัน (ปกติ)" value={`${data.ug_regular_daily_hour_cap ?? 7} ชั่วโมง`} />
               <ViewRow label="ชั่วโมงสูงสุด/วัน (พิเศษ)" value={`${data.ug_special_daily_hour_cap ?? 6} ชั่วโมง`} />
             </ViewGroup>
-            <ViewGroup title="อัตราค่าจ้าง — บัณฑิตศึกษา (โท/เอก)">
+            <ViewGroup title="อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)">
               <ViewRow label="ภาคปกติ (คิดชั่วโมง)" value={`${data.graduate_regular_hourly ?? 50} บาท/ชั่วโมง`} />
               <ViewRow label="ชั่วโมงสูงสุด/วัน (บัณฑิต ปกติ)" value={`${data.grad_regular_daily_hour_cap ?? 6} ชั่วโมง`} />
               <ViewRow label="ภาคพิเศษ (เหมาจ่าย)" value={`${data.graduate_special_lumpsum.toLocaleString()} บาท/เดือน`} />
@@ -237,14 +237,14 @@ function PayRateSection() {
             </button>
           </div>
         ) : (
-          <div className="text-sm text-muted py-4">ยังไม่มีอัตราค่าตอบแทน — กด "แก้ไข" เพื่อกำหนดครั้งแรก</div>
+          <div className="text-sm text-muted py-4">ยังไม่มีอัตราค่าตอบแทน กด "แก้ไข" เพื่อกำหนดครั้งแรก</div>
         )
       )}
 
       {/* Edit mode */}
       {editing && (
         <div className="space-y-6">
-          <EditGroup title="อัตราค่าจ้าง — ปริญญาตรี" description="ประกาศ 731/2565: ปกติ 40, พิเศษ 50 บาท/ชั่วโมง">
+          <EditGroup title="อัตราค่าจ้าง ปริญญาตรี" description="ประกาศ 731/2565: ปกติ 40, พิเศษ 50 บาท/ชั่วโมง">
             <F label="ตรี ปกติ (บาท/ชั่วโมง)" type="number" min={0} value={draft.undergrad_regular}
                error={rateErrors.undergrad_regular}
                onChange={v => setDraft({ ...draft, undergrad_regular: Number(v) })} />
@@ -259,7 +259,7 @@ function PayRateSection() {
                onChange={v => setDraft({ ...draft, ug_special_daily_hour_cap: Number(v) })} />
           </EditGroup>
 
-          <EditGroup title="อัตราค่าจ้าง — บัณฑิตศึกษา (โท/เอก)" description="ประกาศ 1080/2565: ปกติ 50 บาท/ชม., พิเศษ 4,000 บาท/เดือน (cap 12,000/เทอม)">
+          <EditGroup title="อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)" description="ประกาศ 1080/2565: ปกติ 50 บาท/ชม., พิเศษ 4,000 บาท/เดือน (cap 12,000/เทอม)">
             <F label="ภาคปกติ (บาท/ชั่วโมง)" type="number" min={0} value={draft.graduate_regular_hourly}
                error={rateErrors.graduate_regular_hourly}
                onChange={v => setDraft({ ...draft, graduate_regular_hourly: Number(v) })} />
@@ -294,13 +294,13 @@ function PayRateSection() {
               status="warning"
               icon={<CircleAlert size={16} />}
               title="วันเริ่มใช้เป็นวันในอดีต"
-              description="เวอร์ชันนี้จะเริ่มใช้ย้อนหลัง อาจกระทบการคำนวณค่าจ้างของรายการที่ผ่านมา — โปรดตรวจสอบก่อนบันทึก"
+              description="เวอร์ชันนี้จะเริ่มใช้ย้อนหลัง อาจกระทบการคำนวณค่าจ้างของรายการที่ผ่านมา โปรดตรวจสอบก่อนบันทึก"
             />
           )}
 
           <EditGroup
             title="สูตรคำนวณโหลด TA ปริญญาตรี"
-            description="ตามชีต 2_59 ป.ตรี — ปกติ/พิเศษ ใช้ effective rate เดียวกัน (default 300 = 50% × 200 ตรี + 50% × 400 บัณฑิต)"
+            description="ตามชีต 2_59 ป.ตรี ปกติ/พิเศษ ใช้ effective rate เดียวกัน (default 300 = 50% × 200 ตรี + 50% × 400 บัณฑิต)"
           >
             <F label="ชั่วโมงบรรยาย / หน่วยกิต" type="number" min={0} value={draft.ug_lecture_hours_per_credit}
                error={rateErrors.ug_lecture_hours_per_credit}
@@ -344,7 +344,7 @@ function PayRateSection() {
         example={{
           lecCr: 2, labCr: 1, students: 5,
           trackLabel: "ภาคปกติ (ตัวอย่าง)",
-          courseName: "ตัวอย่าง — SW-TESTING (3 นก.)",
+          courseName: "ตัวอย่าง SW-TESTING (3 นก.)",
         }}
       />
     </Panel>
@@ -621,11 +621,11 @@ function TermsSection() {
       const yearsLabel = res.years.map(y => y.year + 543).join(", ");
       if (failed.length === 0) {
         toast.success(
-          `ซิงก์วันหยุดจาก BOT สำเร็จ (ปี พ.ศ. ${yearsLabel}) — เพิ่มใหม่ ${res.total.inserted}, อัปเดต ${res.total.updated}, ข้าม ${res.total.skipped}`,
+          `ซิงก์วันหยุดจาก BOT สำเร็จ (ปี พ.ศ. ${yearsLabel}) เพิ่มใหม่ ${res.total.inserted}, อัปเดต ${res.total.updated}, ข้าม ${res.total.skipped}`,
         );
       } else {
         const failLabel = failed.map(y => `พ.ศ. ${y.year + 543} (${y.error})`).join(", ");
-        toast.danger(`ซิงก์บางส่วนล้มเหลว: ${failLabel} — สำเร็จ: เพิ่ม ${res.total.inserted} / อัปเดต ${res.total.updated}`);
+        toast.danger(`ซิงก์บางส่วนล้มเหลว: ${failLabel} สำเร็จ: เพิ่ม ${res.total.inserted} / อัปเดต ${res.total.updated}`);
       }
       setSyncPromptFor(null);
     } catch (e) {
@@ -646,7 +646,7 @@ function TermsSection() {
       }
     >
       {grouped.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีปีการศึกษา — กด "เพิ่มปีการศึกษา" เพื่อเริ่ม</div>
+        <div className="text-sm text-muted py-4">ยังไม่มีปีการศึกษา กด "เพิ่มปีการศึกษา" เพื่อเริ่ม</div>
       ) : (
         <div className="space-y-3">
           <div className="flex items-end gap-3 flex-wrap">
@@ -735,7 +735,7 @@ function TermsSection() {
                         </div>
                         {list.length === 0 ? (
                           <div className="text-sm text-muted py-4">
-                            ยังไม่มีภาคเรียนในปีนี้ — กด "เพิ่มภาคเรียน" เพื่อเริ่ม
+                            ยังไม่มีภาคเรียนในปีนี้ กด "เพิ่มภาคเรียน" เพื่อเริ่ม
                           </div>
                         ) : (
                           <div className="overflow-x-auto rounded-lg border border-border">
@@ -844,7 +844,7 @@ function TermsSection() {
             ? `เทอมนี้ครอบคลุมปี พ.ศ. ${syncPromptFor.startY === syncPromptFor.endY
                 ? syncPromptFor.startY + 543
                 : `${syncPromptFor.startY + 543}, ${syncPromptFor.endY + 543}`
-              } — ต้องการดึงวันหยุด (จันทรคติ + วันชดเชย) จากธนาคารแห่งประเทศไทยเลยไหม? ถ้าข้าม สามารถซิงก์ทีหลังได้ที่หน้าจัดการวันหยุด`
+              } ต้องการดึงวันหยุด (จันทรคติ + วันชดเชย) จากธนาคารแห่งประเทศไทยเลยไหม? ถ้าข้าม สามารถซิงก์ทีหลังได้ที่หน้าจัดการวันหยุด`
             : ""
         }
       />
@@ -889,7 +889,7 @@ function YearPickerModal({
         <>
           <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
           <Button variant="primary" onClick={() => onPicked(yearNum)} disabled={!canPick}>
-            ถัดไป — เพิ่มภาคเรียน
+            ถัดไป เพิ่มภาคเรียน
           </Button>
         </>
       }
@@ -1091,7 +1091,7 @@ function TermFormModal({
             {isEdit
               ? `แก้ไข${termLabel(editing!)}`
               : lockedYear !== null
-                ? `เพิ่มภาคเรียน — ปีการศึกษา ${lockedYear}`
+                ? `เพิ่มภาคเรียน ปีการศึกษา ${lockedYear}`
                 : "เพิ่มภาคเรียนใหม่"}
           </span>
         }
@@ -1110,8 +1110,8 @@ function TermFormModal({
             <Alert
               status="default"
               icon={<CircleAlert size={16} />}
-              title="แก้ไขภาคเรียน — ล็อกคีย์หลัก"
-              description="ปีการศึกษาและภาคเรียนล็อกไว้ เพราะเป็นตัวอ้างอิงของวิชาที่เปิดสอน / ตารางสอน TA / งบประมาณ — หากต้องเปลี่ยน ให้ลบและสร้างใหม่ (ต้องไม่มีข้อมูลอ้างอิงเหลืออยู่)"
+              title="แก้ไขภาคเรียน ล็อกคีย์หลัก"
+              description="ปีการศึกษาและภาคเรียนล็อกไว้ เพราะเป็นตัวอ้างอิงของวิชาที่เปิดสอน / ตารางสอน TA / งบประมาณ หากต้องเปลี่ยน ให้ลบและสร้างใหม่ (ต้องไม่มีข้อมูลอ้างอิงเหลืออยู่)"
             />
           )}
 
@@ -1222,7 +1222,7 @@ function TermFormModal({
               </FieldGroup>
             </div>
             <div className="text-xs text-muted">
-              TA จะลงบันทึกเวลาในช่วงนี้ไม่ได้ — ระบบจะปฏิเสธอัตโนมัติ
+              TA จะลงบันทึกเวลาในช่วงนี้ไม่ได้ ระบบจะปฏิเสธอัตโนมัติ
             </div>
           </div>
 
@@ -1243,7 +1243,7 @@ function TermFormModal({
               status="danger"
               icon={<CircleAlert size={16} />}
               title={`${termLabel(duplicate)} มีอยู่แล้ว`}
-              description="ห้ามซ้ำ — หากต้องการแก้ไข ให้ปิดหน้านี้แล้วกด 'แก้ไข' ที่แถวนั้นแทน"
+              description="ห้ามซ้ำ หากต้องการแก้ไข ให้ปิดหน้านี้แล้วกด 'แก้ไข' ที่แถวนั้นแทน"
             />
           )}
 
@@ -1252,7 +1252,7 @@ function TermFormModal({
               status="warning"
               icon={<CircleAlert size={16} />}
               title="จำนวนเดือนไม่ตรงกับช่วงวันที่"
-              description={`ช่วงวันที่เริ่ม–สิ้นสุดคือประมาณ ${spanMismatch.span} เดือน แต่กรอกไว้ ${spanMismatch.months} เดือน — ค่าจ้างอาจคำนวณไม่ตรงกับที่คาด`}
+              description={`ช่วงวันที่เริ่ม–สิ้นสุดคือประมาณ ${spanMismatch.span} เดือน แต่กรอกไว้ ${spanMismatch.months} เดือน ค่าจ้างอาจคำนวณไม่ตรงกับที่คาด`}
             />
           )}
 
@@ -1261,7 +1261,7 @@ function TermFormModal({
               status="warning"
               icon={<CircleAlert size={16} />}
               title={`มีภาคเรียนที่ active อยู่ ${activeCount} รายการแล้ว`}
-              description="ระบบยอมให้มีหลาย active พร้อมกัน แต่จะกำกวมว่าอันไหนคือภาคปัจจุบัน — แนะนำให้ปิด active ของภาคเดิมก่อน"
+              description="ระบบยอมให้มีหลาย active พร้อมกัน แต่จะกำกวมว่าอันไหนคือภาคปัจจุบัน แนะนำให้ปิด active ของภาคเดิมก่อน"
             />
           )}
 
@@ -1282,7 +1282,7 @@ function TermFormModal({
         saving={saving}
         title={isEdit ? "ยืนยันบันทึกการแก้ไข?" : "ยืนยันเพิ่มภาคเรียน?"}
         description={
-          `${isEdit ? "อัปเดต" : "สร้าง"}${termLabel(draft)} — ${draft.months} เดือน, ${formatThaiDate(draft.starts_on)} → ${formatThaiDate(draft.ends_on)}${draft.is_active ? ", active" : ""}`
+          `${isEdit ? "อัปเดต" : "สร้าง"}${termLabel(draft)} ${draft.months} เดือน, ${formatThaiDate(draft.starts_on)} → ${formatThaiDate(draft.ends_on)}${draft.is_active ? ", active" : ""}`
         }
       />
     </>
@@ -1416,7 +1416,7 @@ function TermDeleteModal({
               <Alert
                 status="danger"
                 icon={<CircleAlert size={16} />}
-                title="ลบไม่ได้ — มีข้อมูลอ้างอิงอยู่"
+                title="ลบไม่ได้ มีข้อมูลอ้างอิงอยู่"
                 description="ต้องลบวิชาที่เปิดสอน ตารางสอน TA และไฟล์ส่งออกของภาคเรียนนี้ก่อน จึงจะลบได้ (ป้องกันข้อมูลกำพร้า)"
               />
             ) : (
@@ -1426,11 +1426,11 @@ function TermDeleteModal({
                     status="warning"
                     icon={<CircleAlert size={16} />}
                     title={`รอบเปิดรับ TA จำนวน ${usage.request_windows} รายการจะถูกลบพร้อมกัน`}
-                    description="ตารางรอบเปิดรับผูกกับภาคเรียนแบบ cascade — เมื่อลบภาคเรียนจะลบตามอัตโนมัติ"
+                    description="ตารางรอบเปิดรับผูกกับภาคเรียนแบบ cascade เมื่อลบภาคเรียนจะลบตามอัตโนมัติ"
                   />
                 )}
                 <div className="text-sm">
-                  การลบไม่สามารถย้อนกลับได้ — เพื่อยืนยัน กรุณาพิมพ์ <b className="tabular">{confirmCode}</b> ด้านล่าง
+                  การลบไม่สามารถย้อนกลับได้ เพื่อยืนยัน กรุณาพิมพ์ <b className="tabular">{confirmCode}</b> ด้านล่าง
                 </div>
                 <FieldGroup label={`พิมพ์ "${confirmCode}" เพื่อยืนยัน`}>
                   <TextInput
@@ -1453,7 +1453,7 @@ function TermDeleteModal({
             status="danger"
             icon={<CircleAlert size={16} />}
             title="ตรวจข้อมูลอ้างอิงไม่สำเร็จ"
-            description={`${loadError} — ยังลบไม่ได้จนกว่าจะตรวจได้ว่ามีอะไรผูกอยู่กับภาคเรียนนี้`}
+            description={`${loadError} ยังลบไม่ได้จนกว่าจะตรวจได้ว่ามีอะไรผูกอยู่กับภาคเรียนนี้`}
           />
         )}
 
@@ -1586,8 +1586,8 @@ interface RequestWindow {
 // ยังไม่ถึงกำหนด (ส่งแล้วนับว่าทันเวลา) กับ เลยกำหนด (ส่งได้ แต่นับว่าล่าช้า)
 function windowStatus(w: RequestWindow, now = Date.now()) {
   const closes = new Date(w.closes_at).getTime();
-  if (now > closes) return { tone: "warn" as const, label: "เลยกำหนด — คำขอใหม่นับเป็นส่งช้า" };
-  return { tone: "success" as const, label: "ยังไม่ถึงกำหนด — ส่งทันเวลา" };
+  if (now > closes) return { tone: "warn" as const, label: "เลยกำหนด คำขอใหม่นับเป็นส่งช้า" };
+  return { tone: "success" as const, label: "ยังไม่ถึงกำหนด ส่งทันเวลา" };
 }
 
 function RequestWindowsSection() {
@@ -1652,7 +1652,7 @@ function RequestWindowsSection() {
   return (
     <Panel
       title="ระยะเวลารับสมัคร TA"
-      description="กำหนดวันส่งคำขอ TA ของแต่ละภาคเรียน — ไม่มีการปิดรับ เลยกำหนดแล้วอาจารย์ยังส่งได้ แต่คำขอจะถูกทำเครื่องหมายว่า “ส่งช้า” และการเบิกจ่ายจะล่าช้าตาม"
+      description="กำหนดวันส่งคำขอ TA ของแต่ละภาคเรียน ไม่มีการปิดรับ เลยกำหนดแล้วอาจารย์ยังส่งได้ แต่คำขอจะถูกทำเครื่องหมายว่า “ส่งช้า” และการเบิกจ่ายจะล่าช้าตาม"
       actions={
         !noTerms && (
           <Button
@@ -2047,7 +2047,7 @@ function AdminOfficersSection() {
       }
     >
       {rows.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีรายชื่อฝ่ายบริหาร — กด "เพิ่มรายชื่อ" เพื่อเริ่ม</div>
+        <div className="text-sm text-muted py-4">ยังไม่มีรายชื่อฝ่ายบริหาร กด "เพิ่มรายชื่อ" เพื่อเริ่ม</div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="data-table w-full">
@@ -2109,7 +2109,7 @@ function AdminOfficersSection() {
         title="ยืนยันลบรายชื่อฝ่ายบริหาร?"
         description={
           deleteTarget
-            ? `ลบ "${deleteTarget.academic_prefix}${deleteTarget.full_name}" (${deleteTarget.title}) — หากใช้ในเอกสารเก่าอาจมีผลกระทบ ควรใช้ "ปิดใช้งาน" แทนหากไม่แน่ใจ`
+            ? `ลบ "${deleteTarget.academic_prefix}${deleteTarget.full_name}" (${deleteTarget.title}) หากใช้ในเอกสารเก่าอาจมีผลกระทบ ควรใช้ "ปิดใช้งาน" แทนหากไม่แน่ใจ`
             : ""
         }
         variant="danger"
@@ -2188,7 +2188,7 @@ function AdminOfficerFormModal({
       title={
         <span className="inline-flex items-center gap-2">
           {isEdit ? <Pencil size={18} /> : <Plus size={18} />}
-          {isEdit ? `แก้ไขรายชื่อ — ${editing!.full_name}` : "เพิ่มรายชื่อฝ่ายบริหาร"}
+          {isEdit ? `แก้ไขรายชื่อ ${editing!.full_name}` : "เพิ่มรายชื่อฝ่ายบริหาร"}
         </span>
       }
       size="lg"
@@ -2254,7 +2254,7 @@ function AdminOfficerFormModal({
             "รักษาการคณบดี รักษาการแทน คณบดี…". */}
         <FieldGroup
           label="ตำแหน่งบริหาร (Title)"
-          hint="ใส่ตำแหน่งจริงตามที่ต้องการให้ปรากฏในเอกสาร — ถ้าไม่ได้ขึ้นต้นด้วย “คณบดี” ระบบจะพิมพ์ใบแต่งตั้งเป็น “รักษาการแทน คณบดี…” ให้เอง"
+          hint="ใส่ตำแหน่งจริงตามที่ต้องการให้ปรากฏในเอกสาร ถ้าไม่ได้ขึ้นต้นด้วย “คณบดี” ระบบจะพิมพ์ใบแต่งตั้งเป็น “รักษาการแทน คณบดี…” ให้เอง"
         >
           <TextInput
             value={draft.title}
@@ -2371,7 +2371,7 @@ function SubmissionPeriodsSection() {
   return (
     <Panel
       title="ระยะเวลาเบิกจ่ายรายเดือน"
-      description="รอบเบิกจ่ายต่อเดือน (ประกาศ 2569: มิ.ย.–ต.ค.) — ระบบส่ง reminder ผ่าน email/in-app ให้ TA อัตโนมัติก่อนวันครบกำหนด"
+      description="รอบเบิกจ่ายต่อเดือน (ประกาศ 2569: มิ.ย.–ต.ค.) ระบบส่ง reminder ผ่าน email/in-app ให้ TA อัตโนมัติก่อนวันครบกำหนด"
       actions={
         <>
           <Button variant="secondary" onClick={() => setSeedConfirm(true)} disabled={!termId || seeding}>
@@ -2384,11 +2384,11 @@ function SubmissionPeriodsSection() {
       }
     >
       {!termId ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีภาคเรียนในระบบ — สร้างที่แท็บ "ภาคเรียน" ก่อน</div>
+        <div className="text-sm text-muted py-4">ยังไม่มีภาคเรียนในระบบ สร้างที่แท็บ "ภาคเรียน" ก่อน</div>
       ) : !periods ? (
         <div className="text-sm text-muted py-4">กำลังโหลด…</div>
       ) : periods.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีรอบเบิกจ่าย — กด "สร้างอัตโนมัติ 5 เดือน" เพื่อเริ่ม</div>
+        <div className="text-sm text-muted py-4">ยังไม่มีรอบเบิกจ่าย กด "สร้างอัตโนมัติ 5 เดือน" เพื่อเริ่ม</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -2480,7 +2480,7 @@ function SubmissionPeriodsSection() {
                   ? "มีรอบครบทุกเดือนแล้ว"
                   : `จะข้าม ${seedTemplateMonths.length - seedWillCreate} เดือนที่มีอยู่แล้ว`
               }
-              description="ระบบจะไม่ทับรอบเดิม — เดือนที่มีอยู่แล้วต้องแก้จากปุ่ม “แก้ไข” ในตารางแทน"
+              description="ระบบจะไม่ทับรอบเดิม เดือนที่มีอยู่แล้วต้องแก้จากปุ่ม “แก้ไข” ในตารางแทน"
             />
           )}
         </div>
@@ -2495,7 +2495,7 @@ function SubmissionPeriodsSection() {
         confirmLabel="ลบรอบนี้"
         confirmIcon={<Trash2 size={14} />}
         title={deleteTarget ? `ลบรอบ "${deleteTarget.label}"?` : "ลบรอบเบิกจ่าย?"}
-        description="สถานะการเซ็น/ลงนามของ TA และอาจารย์ที่ผูกอยู่กับรอบนี้จะถูกลบทั้งหมด — หากมี TA เซ็นไปแล้ว จะไม่สามารถกู้กลับได้"
+        description="สถานะการเซ็น/ลงนามของ TA และอาจารย์ที่ผูกอยู่กับรอบนี้จะถูกลบทั้งหมด หากมี TA เซ็นไปแล้ว จะไม่สามารถกู้กลับได้"
       />
     </Panel>
   );

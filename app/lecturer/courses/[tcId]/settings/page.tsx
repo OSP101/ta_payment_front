@@ -29,12 +29,12 @@ interface SectionRow {
 // "you already answered" are the same lock but not the same explanation, and a
 // lecturer who hits the wrong one will go looking for a bug that isn't there.
 function lockReason(sec: SectionRow, courseLocked: boolean): string | null {
-  if (courseLocked) return "รายวิชานี้ถูกส่งออกแล้ว — แก้ไขไม่ได้";
+  if (courseLocked) return "รายวิชานี้ถูกส่งออกแล้ว แก้ไขไม่ได้";
   if (sec.schedule_set_by_lecturer_at) {
-    return `คุณกำหนดตารางเวลาของกลุ่มนี้ไปแล้วเมื่อ ${formatThaiDate(sec.schedule_set_by_lecturer_at)} — กำหนดได้ครั้งเดียว หากต้องแก้ไขกรุณาแจ้งเจ้าหน้าที่`;
+    return `คุณกำหนดตารางเวลาของกลุ่มนี้ไปแล้วเมื่อ ${formatThaiDate(sec.schedule_set_by_lecturer_at)} กำหนดได้ครั้งเดียว หากต้องแก้ไขกรุณาแจ้งเจ้าหน้าที่`;
   }
   if ((sec.schedules ?? []).length > 0) {
-    return "ตารางเวลาของกลุ่มนี้มาจากไฟล์ที่เจ้าหน้าที่นำเข้า — แก้ไขได้เฉพาะเจ้าหน้าที่";
+    return "ตารางเวลาของกลุ่มนี้มาจากไฟล์ที่เจ้าหน้าที่นำเข้า แก้ไขได้เฉพาะเจ้าหน้าที่";
   }
   return null;
 }
@@ -83,7 +83,7 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
             status="warning"
             icon={<Lock size={16} />}
             title="รายวิชานี้ถูกล็อกแล้ว"
-            description={`เจ้าหน้าที่ได้ส่งออกไฟล์ของรายวิชานี้เมื่อ ${formatExportedAt(tc?.exported_at)} — ไม่สามารถแก้ไข section ได้อีก`}
+            description={`เจ้าหน้าที่ได้ส่งออกไฟล์ของรายวิชานี้เมื่อ ${formatExportedAt(tc?.exported_at)} ไม่สามารถแก้ไข section ได้อีก`}
           />
         </div>
       )}
@@ -159,8 +159,8 @@ function SectionsPanel({
       title="Sections และตารางเวลา"
       description={
         locked
-          ? "รายวิชานี้ถูกล็อกหลังส่งออกไฟล์แล้ว — ดูอย่างเดียว"
-          : "รายชื่อ section และจำนวนนักศึกษามาจากไฟล์ทะเบียนที่เจ้าหน้าที่นำเข้า — เพิ่ม แก้ไข หรือลบได้เฉพาะเจ้าหน้าที่"
+          ? "รายวิชานี้ถูกล็อกหลังส่งออกไฟล์แล้ว ดูอย่างเดียว"
+          : "รายชื่อ section และจำนวนนักศึกษามาจากไฟล์ทะเบียนที่เจ้าหน้าที่นำเข้า เพิ่ม แก้ไข หรือลบได้เฉพาะเจ้าหน้าที่"
       }
       className="mb-4"
       padded={false}
@@ -170,7 +170,7 @@ function SectionsPanel({
           <Alert
             status="warning"
             icon={<TriangleAlert size={16} />}
-            title={`มี ${openSecs.length} กลุ่มที่ยังไม่มีตารางเวลา — Sec ${openSecs.map(s => s.sec_no).join(", ")}`}
+            title={`มี ${openSecs.length} กลุ่มที่ยังไม่มีตารางเวลา Sec ${openSecs.map(s => s.sec_no).join(", ")}`}
             description="ไฟล์ทะเบียนไม่ได้ระบุวัน–เวลาเรียนไว้ คุณกรอกเองได้ กลุ่มละครั้งเดียว หลังจากนั้นการแก้ไขจะเป็นหน้าที่ของเจ้าหน้าที่ (ส่งคำขอ TA ไม่ได้จนกว่าจะกรอกครบ)"
           />
         </div>
@@ -350,11 +350,11 @@ function SectionScheduleModal({
             status="warning"
             icon={<TriangleAlert size={16} />}
             title="กำหนดได้ครั้งเดียว"
-            description="หลังกดบันทึก ตารางเวลาของกลุ่มนี้จะแก้ไขได้เฉพาะเจ้าหน้าที่ — ตรวจวัน เวลา และประเภทคาบให้ครบถูกต้องก่อนบันทึก"
+            description="หลังกดบันทึก ตารางเวลาของกลุ่มนี้จะแก้ไขได้เฉพาะเจ้าหน้าที่ ตรวจวัน เวลา และประเภทคาบให้ครบถูกต้องก่อนบันทึก"
           />
         )}
         <div className="text-xs text-muted">
-          กำหนดวัน–เวลาเรียนของ section นี้ให้ครบทุกคาบ (ทั้งบรรยายและปฏิบัติการ) —
+          กำหนดวัน–เวลาเรียนของ section นี้ให้ครบทุกคาบ (ทั้งบรรยายและปฏิบัติการ)
           ระบบใช้ข้อมูลนี้เพื่อเช็คว่า TA ที่เลือกไว้ไม่ติดเวลาเรียนอื่น
         </div>
         <SectionScheduleEditor

@@ -39,6 +39,8 @@ interface User {
   study_level?: string | null;
   study_year?: number | null;
   roles: string[];
+  /** สิทธิ์ผู้บริหาร — เห็นแดชบอร์ดสถิติงบแบบอ่านอย่างเดียว (ไม่ใช่ role) */
+  is_executive?: boolean;
   is_active: boolean;
 }
 
@@ -63,8 +65,11 @@ const ROLE_OPTIONS = ["staff", "lecturer", "ta"] as const;
 // stays fully editable instead of being silently demoted.
 const ALL_ROLES = ["admin", "staff", "lecturer", "ta"] as const;
 
+// "ผู้บริหาร" now names the executive FLAG (read-only budget analytics), so
+// admin reverts to the name the backend's own messages use — ผู้ดูแลระบบ.
+// Keeping both as "ผู้บริหาร" would put two different powers under one word.
 const ROLE_LABEL: Record<string, string> = {
-  admin: "ผู้บริหาร",
+  admin: "ผู้ดูแลระบบ",
   staff: "เจ้าหน้าที่",
   lecturer: "อาจารย์",
   ta: "ผู้ช่วยสอน",
@@ -296,6 +301,7 @@ export default function UsersPage() {
       render: u => (
         <div className="flex gap-1 flex-wrap">
           {u.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
+          {u.is_executive && <Chip tone="info">ผู้บริหาร</Chip>}
         </div>
       ),
     },
@@ -368,7 +374,7 @@ export default function UsersPage() {
                 placeholder: "ทุกบทบาท",
                 options: [
                   { id: "", label: "ทุกบทบาท" },
-                  { id: "admin", label: "Admin / ผู้บริหาร" },
+                  { id: "admin", label: "Admin / ผู้ดูแลระบบ" },
                   { id: "staff", label: "เจ้าหน้าที่" },
                   { id: "lecturer", label: "อาจารย์" },
                   { id: "ta", label: "ผู้ช่วยสอน (TA)" },
@@ -552,7 +558,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
             )}
           </div>
           {showYear && (
-            <VSelect label="ชั้นปี (สำหรับ TA ปริญญาตรี — จำเป็นสำหรับการใช้โหมด WBA ปี 4)"
+            <VSelect label="ชั้นปี (สำหรับ TA ปริญญาตรี จำเป็นสำหรับการใช้โหมด WBA ปี 4)"
               value={form.study_year}
               onChange={v => setForm({ ...form, study_year: v })}
               error={null} show={showErrors}
@@ -582,6 +588,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     phone: user.phone ?? "",
     // Preserve the full role set (incl. admin) rather than collapsing to one.
     roles: [...user.roles],
+    is_executive: user.is_executive === true,
     study_level: user.study_level ?? "undergrad",
     study_year: user.study_year != null ? String(user.study_year) : "",
   });
@@ -615,6 +622,9 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         // Only send roles when they actually changed, so an unrelated edit never
         // rewrites the user's role set.
         ...(rolesChanged ? { roles: form.roles } : {}),
+        ...(form.is_executive !== (user.is_executive === true)
+          ? { is_executive: form.is_executive }
+          : {}),
         study_level: isTa ? form.study_level : "",
         // 0 clears study_year server-side; send it only for undergrad TAs.
         study_year: isTa && form.study_level === "undergrad"
@@ -674,6 +684,22 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
               onChange={roles => setForm({ ...form, roles })}
               error={errors.roles} show={showErrors}
             />
+            {/* สิทธิ์ ไม่ใช่บทบาท: เห็นเฉพาะหน้าสถิติงบแบบอ่านอย่างเดียว
+                (/executive) ไม่เพิ่มเมนูงานหรืออำนาจแก้ไขใด ๆ */}
+            <label className="flex items-start gap-2.5 rounded-lg border border-border bg-surface px-3 py-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[var(--brand)]"
+                checked={form.is_executive}
+                onChange={e => setForm({ ...form, is_executive: e.target.checked })}
+              />
+              <span className="text-sm">
+                <span className="font-medium">สิทธิ์ผู้บริหาร</span>
+                <span className="block text-xs text-muted mt-0.5">
+                  ให้เข้าดูหน้ามุมมองผู้บริหาร (สรุปการใช้งบประมาณ) ได้อย่างเดียว แก้ไขข้อมูลไม่ได้
+                </span>
+              </span>
+            </label>
             <div className="grid grid-cols-2 gap-3">
               {isTa && (
                 <VSelect label="ระดับการศึกษา" value={form.study_level}

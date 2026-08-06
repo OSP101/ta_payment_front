@@ -113,7 +113,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
   return (
     <div>
       <PageHeader
-        title={course ? `${course.code} — ${course.name_th}` : "รายวิชา"}
+        title={course ? `${course.code} ${course.name_th}` : "รายวิชา"}
         description="ภาพรวมสถานะภาระงาน TA ในรายวิชานี้"
         actions={
           <Link href={`/ta/courses/${tcId}/worklog`}>
@@ -203,7 +203,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                       <div key={a.id} className="whitespace-pre-line">{a.state_reason}</div>
                     ))}
                     <div className="text-xs opacity-80 pt-1">
-                      คาบที่เหลือยังลงบันทึกเวลาได้ตามปกติ — หากตารางเรียนของคุณเปลี่ยน
+                      คาบที่เหลือยังลงบันทึกเวลาได้ตามปกติ หากตารางเรียนของคุณเปลี่ยน
                       ให้แก้ที่หน้า “ตารางเรียนของฉัน” แล้วระบบจะคำนวณใหม่ให้
                     </div>
                   </div>

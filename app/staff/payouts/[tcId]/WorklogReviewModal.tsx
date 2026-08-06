@@ -305,7 +305,7 @@ export function WorklogReviewModal({
               {/* ── left: the week ─────────────────────────────────────────── */}
               <div className="min-h-0 overflow-auto">
                 <p className="mb-1.5 text-xs text-muted">
-                  ตารางสัปดาห์ — คาบของวิชาอื่นเป็นสีเทา · กดคาบเพื่อไฮไลต์แถวที่มาจากคาบนั้น
+                  ตารางสัปดาห์ คาบของวิชาอื่นเป็นสีเทา · กดคาบเพื่อไฮไลต์แถวที่มาจากคาบนั้น
                 </p>
                 <WeekGrid
                   blocks={form?.blocks ?? []}
@@ -391,7 +391,7 @@ export function WorklogReviewModal({
         message={
           <div className="space-y-2">
             <p className="text-sm text-muted">
-              {target?.taName} · {target?.periodLabel} — เดือนนี้จะกลับไปให้แก้ไข
+              {target?.taName} · {target?.periodLabel} เดือนนี้จะกลับไปให้แก้ไข
               และส่งออกเอกสารไม่ได้จนกว่าจะตรวจผ่านอีกครั้ง
             </p>
             <TextArea
@@ -848,7 +848,7 @@ function CommitDialog({
       if (res.failed > 0) {
         notify.error(`บันทึก ${res.applied} รายการ · ไม่ผ่าน ${res.failed}: ${(res.errors ?? []).join(" · ")}`);
       } else {
-        notify.success(`บันทึกการแก้ไข ${res.applied} รายการ — แจ้งอาจารย์และทีเอแล้ว`);
+        notify.success(`บันทึกการแก้ไข ${res.applied} รายการ แจ้งอาจารย์และทีเอแล้ว`);
       }
       onDone();
     } catch (e) {

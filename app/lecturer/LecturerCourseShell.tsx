@@ -46,9 +46,9 @@ export default function LecturerCourseShell({
   const missingSchedule = courseInfo?.has_missing_schedule === true;
   const missingStudents = courseInfo !== undefined && (courseInfo.num_students ?? 0) === 0;
   const settingsIssue = missingSchedule
-    ? "ยังไม่ระบุเวลาเรียน (WBA) — ส่งคำขอ TA ไม่ได้จนกว่าจะกรอกตารางเรียน"
+    ? "ยังไม่ระบุเวลาเรียน (WBA) ส่งคำขอ TA ไม่ได้จนกว่าจะกรอกตารางเรียน"
     : missingStudents
-      ? "ยังไม่ได้กรอกจำนวนนักศึกษา — คำนวณงบและเบิกจ่ายไม่ได้"
+      ? "ยังไม่ได้กรอกจำนวนนักศึกษา คำนวณงบและเบิกจ่ายไม่ได้"
       : undefined;
 
   const nav: NavSection[] = [
@@ -120,7 +120,7 @@ export default function LecturerCourseShell({
             status="warning"
             icon={<ShieldAlert size={16} />}
             title="กำลังเข้าใช้งานด้วยสิทธิ์เจ้าหน้าที่/ผู้ดูแลระบบ"
-            description="คุณเข้ามาในหน้ามุมมองของอาจารย์เพื่อจัดการแทน — การกระทำใด ๆ จะถูกบันทึกในนามผู้ใช้ปัจจุบัน"
+            description="คุณเข้ามาในหน้ามุมมองของอาจารย์เพื่อจัดการแทน การกระทำใด ๆ จะถูกบันทึกในนามผู้ใช้ปัจจุบัน"
           />
         </div>
       )}

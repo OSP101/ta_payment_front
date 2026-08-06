@@ -7,14 +7,14 @@ import {
   Users,
   ClipboardCheck,
   FileText,
-  Wallet,
   ArrowUpRight,
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
-import { PageHeader, Panel, StatCard, ProgressBar, Chip, Button } from "../components/ui";
+import { PageHeader, Panel, StatCard, Chip, Button } from "../components/ui";
 import { type Executive, emptyExecutive } from "./types";
-import { useTermKey } from "./TermContext";
+import { useTerm, useTermKey } from "./TermContext";
+import BudgetAnalytics from "./BudgetAnalytics";
 
 // One row of the "สิ่งที่ต้องทำตอนนี้" panel. `blocker` marks work that stops
 // a later step rather than being a step itself — it is listed first because
@@ -34,6 +34,7 @@ export default function StaffDashboard() {
   // can never disagree with the cards.
   const { data } = useSWR<Executive>(useTermKey("/dashboard/executive"));
   const s = data ?? emptyExecutive;
+  const { termId } = useTerm();
 
   // The dashboard used to warn about exactly one thing (missing student
   // counts) and stay silent about every queue, so "nothing on screen" meant
@@ -59,6 +60,15 @@ export default function StaffDashboard() {
       href: "/staff/review", action: "ตรวจเอกสาร",
     },
     {
+      // Appointment orders gate payout review: a TA without one cannot be
+      // paid, so approved names waiting for a round are work on the officer's
+      // desk even though the page lives under จัดการ, not a numbered step.
+      count: s.pending_appointments,
+      title: "TA รอออกคำสั่งแต่งตั้ง",
+      detail: "อนุมัติคำขอแล้วแต่ยังไม่อยู่ในคำสั่งแต่งตั้งรอบใด ต้องออกคำสั่งก่อนจึงจะเบิกจ่ายได้",
+      href: "/staff/appointments", action: "ออกคำสั่ง",
+    },
+    {
       // One line for what used to be two. Steps 3 and 4 are the same errand and
       // now the same screen, so two to-do cards pointing at it would only ask
       // the officer to decide which half to click.
@@ -69,8 +79,6 @@ export default function StaffDashboard() {
     },
   ].filter(t => t.count > 0);
 
-  const usePct = s.budget_allocated > 0 ? (s.budget_used / s.budget_allocated) * 100 : 0;
-  const budgetTone = usePct >= 90 ? "danger" : usePct >= 70 ? "warn" : "brand";
   // Every figure below is scoped to one term, so the term belongs in the page
   // header rather than repeated on each card.
   const termText = s.term_label ? `ปีการศึกษา ${s.term_label}` : "";
@@ -80,7 +88,7 @@ export default function StaffDashboard() {
       <PageHeader
         title="แดชบอร์ดผู้ดูแลระบบ"
         description={termText
-          ? `ภาพรวมการดำเนินงาน — ${termText}`
+          ? `ภาพรวมการดำเนินงาน ${termText}`
           : "ภาพรวมการดำเนินงานของระบบ TA Payment"}
       />
 
@@ -89,7 +97,7 @@ export default function StaffDashboard() {
       {/* md stays at 2 columns: the sidebar is already open at that width, so a
           3-column row leaves ~85px of text per card and clips the longer
           labels. 3 columns only from lg. */}
-      <div data-tour="dash-stats" className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+      <div data-tour="dash-stats" className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
         <StatCard label="วิชาที่เปิดสอน" value={s.total_courses} icon={<BookOpen size={18} />} tone="brand"
                   hint={termText || undefined} />
         <StatCard label="TA ทั้งหมด" value={s.total_tas} icon={<Users size={18} />}
@@ -103,30 +111,17 @@ export default function StaffDashboard() {
         <StatCard label="วิชาที่รอตรวจ / รอส่งออก" value={s.payout_courses_actionable} icon={<ClipboardCheck size={18} />}
                   tone={s.payout_courses_actionable > 0 ? "warn" : "default"}
                   hint="ขั้นที่ 3" href="/staff/payouts" />
-        <StatCard label="งบใช้ / ทั้งหมด" value={`${formatBaht(s.budget_used)} / ${formatBaht(s.budget_allocated)}`}
-                  icon={<Wallet size={18} />}
-                  hint={`จาก ${s.budget_courses} วิชาที่ขอใช้ TA`} />
+        {/* No budget StatCard here any more: the analytics section below is the
+            budget's single source on this page (settle-based). A second figure
+            from the old hours×rate sum sat 12% above it and invited the
+            question "which one is right?" */}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Panel
-          title="งบประมาณคงเหลือ"
-          data-tour="dash-budget"
-          description={`เพดานรวมของ ${s.budget_courses} วิชาที่ขอใช้ TA เทียบกับที่จ่ายไปแล้ว`}
-          className="lg:col-span-2"
-        >
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-[var(--ink-3)]">ใช้ไปแล้ว</span>
-            <span className="font-medium tabular">{usePct.toFixed(1)}%</span>
-          </div>
-          <ProgressBar value={usePct} tone={budgetTone} />
-          <div className="grid grid-cols-3 gap-4 mt-5 pt-4 border-t border-[var(--hairline)]">
-            <Metric label="เพดานงบรวม" value={`${formatBaht(s.budget_allocated)} บ.`} />
-            <Metric label="ใช้ไปแล้ว" value={`${formatBaht(s.budget_used)} บ.`} />
-            <Metric label="คงเหลือ" value={`${formatBaht(Math.max(0, s.budget_allocated - s.budget_used))} บ.`} />
-          </div>
-        </Panel>
+      {/* มุมบริหาร — เงินไปไหน เร็วแค่ไหน หลักสูตรไหนใช้เยอะ. Same component the
+          executive page renders, so the two audiences read identical numbers. */}
+      <BudgetAnalytics termId={termId} />
 
+      <div className="grid gap-4 mt-4 lg:grid-cols-3">
         <Panel title="ทางลัด" description="เมนูใช้บ่อย" data-tour="dash-shortcuts">
           <ul className="divide-y divide-[var(--hairline)]">
             <ShortcutRow href="/staff/approvals" title="อนุมัติคำขอ TA" />
@@ -136,9 +131,6 @@ export default function StaffDashboard() {
             <ShortcutRow href="/staff/appointments" title="ใบแต่งตั้งทีเอ (คำสั่ง)" />
           </ul>
         </Panel>
-      </div>
-
-      <div className="grid gap-4 mt-4 lg:grid-cols-2">
         {/* Deliberately no "รอตรวจ" lines here any more — those live in the
             to-do panel at the top, and repeating them made two places to keep
             in sync while telling the reader nothing new. */}
@@ -154,26 +146,18 @@ export default function StaffDashboard() {
               label="TA ที่ปฏิบัติงาน"
               chip={<Chip tone={s.total_tas > 0 ? "success" : "warn"}>{s.total_tas} คน</Chip>}
             />
-            <SummaryLine
-              label="การใช้งบ"
-              chip={<Chip tone={budgetTone}>{usePct.toFixed(0)}%</Chip>}
-            />
           </div>
         </Panel>
         <Panel title="คู่มือระบบ" description="ลิงก์เอกสารและเวิร์กโฟลว์">
           <ul className="space-y-2 text-sm">
             <li className="text-[var(--ink-2)]">• เจ้าหน้าที่นำเข้าตารางสอนจาก Excel → อาจารย์ขอ TA → เจ้าหน้าที่อนุมัติ</li>
-            <li className="text-[var(--ink-2)]">• TA กรอกข้อมูล/เอกสาร + บันทึกเวลาปฏิบัติงาน → อาจารย์อนุมัติ/ปฏิเสธรายวัน (คือการตรวจจริง — ไม่มีการเซ็นในระบบ)</li>
+            <li className="text-[var(--ink-2)]">• TA กรอกข้อมูล/เอกสาร + บันทึกเวลาปฏิบัติงาน → อาจารย์อนุมัติ/ปฏิเสธรายวัน (คือการตรวจจริง ไม่มีการเซ็นในระบบ)</li>
             <li className="text-[var(--ink-2)]">• อนุมัติครบ → เจ้าหน้าที่ตรวจสอบและส่งออกไฟล์ ZIP (ล็อกบันทึกเวลาของเดือนนั้น) → ยืนยันส่งการเงิน</li>
           </ul>
         </Panel>
       </div>
     </div>
   );
-}
-
-function formatBaht(v: number) {
-  return v >= 1000 ? (v / 1000).toFixed(1) + "k" : v.toFixed(0);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -193,7 +177,7 @@ function TodoPanel({ todos, loading }: { todos: Todo[]; loading: boolean }) {
       <div className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/30 px-4 py-3">
         <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
         <div className="text-sm text-emerald-900 dark:text-emerald-100">
-          <b>ไม่มีงานค้าง</b> — ทุกขั้นตอนดำเนินการครบแล้ว
+          <b>ไม่มีงานค้าง</b> ทุกขั้นตอนดำเนินการครบแล้ว
         </div>
       </div>
     );
@@ -242,15 +226,6 @@ function TodoPanel({ todos, loading }: { todos: Todo[]; loading: boolean }) {
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs text-[var(--ink-3)]">{label}</div>
-      <div className="text-lg font-semibold tabular mt-0.5">{value}</div>
     </div>
   );
 }

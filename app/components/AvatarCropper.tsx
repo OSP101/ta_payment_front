@@ -215,7 +215,7 @@ export default function AvatarCropper({
     >
       <div className="flex flex-col items-center gap-4">
         <p className="text-xs text-muted text-center">
-          ลากเพื่อเลื่อนรูป เลื่อนแถบด้านล่างหรือหมุนเมาส์เพื่อย่อ-ขยาย — เฉพาะส่วนในวงกลมจะถูกบันทึก
+          ลากเพื่อเลื่อนรูป เลื่อนแถบด้านล่างหรือหมุนเมาส์เพื่อย่อ-ขยาย เฉพาะส่วนในวงกลมจะถูกบันทึก
         </p>
 
         <div

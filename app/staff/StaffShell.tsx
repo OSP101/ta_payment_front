@@ -61,13 +61,18 @@ const buildNav = (s: Executive): NavSection[] => [
       // Printing appointment orders is a term-level act that gates everything
       // above; it lived as a tab inside the export screen, where it read as one
       // of the ways to export a payout package.
-      { label: "ใบแต่งตั้งทีเอ", href: "/staff/appointments", icon: FileSignature },
+      //
+      // The badge (06/08/2026 ask) counts รายชื่อ approved but not yet on any
+      // order — the exact list the next round would print. A TA without an
+      // order cannot pass payout review, so this is workflow-gating work, which
+      // is what badges mean here. Same number the page itself shows.
+      { label: "ใบแต่งตั้งทีเอ", href: "/staff/appointments", icon: FileSignature,
+        badge: s.pending_appointments, badgeLabel: "รายชื่อรอออกคำสั่ง" },
       { label: "จัดการผู้ใช้", href: "/staff/users", icon: Users },
-      // No badge here on purpose. Badges are reserved for the "สิ่งที่ต้องทำ"
-      // group so a red dot always means "a step of the workflow is waiting on
-      // you". Missing student counts are a blocker, but they are surfaced by
-      // the dashboard's to-do panel; putting a count on a reference page too
-      // spreads the signal thin and makes the whole sidebar feel noisy.
+      // No badge here on purpose: badges mean "a step of the workflow is
+      // waiting on you". Missing student counts are a blocker, but they are
+      // surfaced by the dashboard's to-do panel; putting a count on a
+      // reference page too spreads the signal thin.
       { label: "วิชาที่เปิดสอน", href: "/staff/teaching", icon: BookOpen },
     ],
   },

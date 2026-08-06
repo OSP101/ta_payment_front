@@ -57,7 +57,7 @@ export default function ReviewPage() {
     <div>
       <PageHeader
         title="ตรวจสอบเอกสาร TA"
-        description="กดที่ชื่อ TA เพื่อดูรายละเอียด — ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่ออนุมัติครบทั้ง 3 ไฟล์ ระบบจะอนุมัติผู้ใช้ให้อัตโนมัติ"
+        description="กดที่ชื่อ TA เพื่อดูรายละเอียด ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่ออนุมัติครบทั้ง 3 ไฟล์ ระบบจะอนุมัติผู้ใช้ให้อัตโนมัติ"
       />
 
       {/* Approval is now a by-product of approving the third document, so an
@@ -147,7 +147,7 @@ function NotDownloadedNotice({ people }: { people?: Pending[] }) {
         status="warning"
         icon={<AlertTriangle size={18} />}
         title={`มี ${pendingDownload.length} คนที่อนุมัติแล้วแต่ยังไม่ได้ดาวน์โหลดเอกสาร`}
-        description={`${names}${more > 0 ? ` และอีก ${more} คน` : ""} — ไฟล์จะถูกลบอัตโนมัติภายใน 7 วันนับจากวันอนุมัติ กรุณาดาวน์โหลดเก็บไว้ก่อนถึงกำหนด`}
+        description={`${names}${more > 0 ? ` และอีก ${more} คน` : ""} ไฟล์จะถูกลบอัตโนมัติภายใน 7 วันนับจากวันอนุมัติ กรุณาดาวน์โหลดเก็บไว้ก่อนถึงกำหนด`}
       />
     </div>
   );
@@ -281,7 +281,7 @@ function IncompleteList({ people }: { people?: Pending[] }) {
         <span className="flex-1 text-sm">
           มี <span className="font-medium">{people.length}</span> คนยังส่งเอกสารไม่ครบ
           {notStarted > 0 && (
-            <span className="text-muted"> — ในนั้น {notStarted} คนยังไม่ส่งอะไรเลย</span>
+            <span className="text-muted"> ในนั้น {notStarted} คนยังไม่ส่งอะไรเลย</span>
           )}
         </span>
         <span className="text-xs text-muted">{open ? "ซ่อน" : "ดูรายชื่อ"}</span>
@@ -569,8 +569,8 @@ function RedownloadModal({
               title={`ครั้งนี้จะเป็นครั้งที่ ${(target.downloads_used ?? 0) + 1} จาก ${target.downloads_limit}`}
               description={
                 downloadsLeft(target) === 1
-                  ? "เป็นครั้งสุดท้าย — หลังจากนี้จะดาวน์โหลดไม่ได้อีก และไม่มีวิธีขอเพิ่ม กรุณาเก็บไฟล์ให้เรียบร้อย"
-                  : "ระบบจำกัดจำนวนการดาวน์โหลดต่อ TA หนึ่งคน เพื่อคุมจำนวนสำเนาที่ออกจากระบบ — ใช้ครบแล้วขอเพิ่มไม่ได้"
+                  ? "เป็นครั้งสุดท้าย หลังจากนี้จะดาวน์โหลดไม่ได้อีก และไม่มีวิธีขอเพิ่ม กรุณาเก็บไฟล์ให้เรียบร้อย"
+                  : "ระบบจำกัดจำนวนการดาวน์โหลดต่อ TA หนึ่งคน เพื่อคุมจำนวนสำเนาที่ออกจากระบบ ใช้ครบแล้วขอเพิ่มไม่ได้"
               }
             />
           )}

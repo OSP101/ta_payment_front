@@ -113,7 +113,7 @@ function validateRow(w: WorkLog): string | null {
   // a row that passes here can't bounce off the API with the same complaint.
   const span = (e - s) / 60;
   if (Math.abs(span - w.hours) > 0.01) {
-    return `จำนวนชั่วโมง (${w.hours}) ไม่ตรงกับช่วงเวลา ${w.start_time}–${w.end_time} (${span.toFixed(2)} ชม.) — ปรับชั่วโมงให้ตรงกับช่วงเวลา`;
+    return `จำนวนชั่วโมง (${w.hours}) ไม่ตรงกับช่วงเวลา ${w.start_time}–${w.end_time} (${span.toFixed(2)} ชม.) ปรับชั่วโมงให้ตรงกับช่วงเวลา`;
   }
   // Q&A rule 2: "อื่นๆ" must be tagged with the parent session type so the
   // server can enforce the per-session credit-hour cap.
@@ -657,10 +657,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     isEditableStatus(w.status) && !monthLockFor(w.work_date);
   const monthLockMessage = (lock: MonthLock) =>
     lock.financeSent
-      ? `เดือน ${lock.label} ถูกส่งการเงินแล้ว — แก้ไขไม่ได้`
+      ? `เดือน ${lock.label} ถูกส่งการเงินแล้ว แก้ไขไม่ได้`
       : lock.exported
-      ? `เดือน ${lock.label} ถูกส่งออกไฟล์เบิกจ่ายแล้ว — แก้ไขไม่ได้ กรุณาติดต่อเจ้าหน้าที่ให้ตีกลับก่อน`
-      : `งวดส่งบันทึกเวลาเดือน ${lock.label} ปิดแล้ว — แก้ไขและส่งย้อนหลังไม่ได้ รายการที่ไม่ได้ส่งถือว่าไม่ประสงค์ลงเวลา`;
+      ? `เดือน ${lock.label} ถูกส่งออกไฟล์เบิกจ่ายแล้ว แก้ไขไม่ได้ กรุณาติดต่อเจ้าหน้าที่ให้ตีกลับก่อน`
+      : `งวดส่งบันทึกเวลาเดือน ${lock.label} ปิดแล้ว แก้ไขและส่งย้อนหลังไม่ได้ รายการที่ไม่ได้ส่งถือว่าไม่ประสงค์ลงเวลา`;
 
   // A TA can hold multiple assignments on the same course (one per section).
   // Let them switch between them; default to the first.
@@ -1037,7 +1037,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       const skippedTotal = skipped.reduce((sum, s) => sum + s.count, 0);
       if (skippedTotal > 0) {
         notify.info(
-          `ข้ามไป ${skippedTotal} คาบ เพราะตรงกับตารางเรียนของคุณ — ` +
+          `ข้ามไป ${skippedTotal} คาบ เพราะตรงกับตารางเรียนของคุณ ` +
             skipped.map(s => `${s.reason} (${s.count} คาบ)`).join(", "),
         );
       }
@@ -1045,8 +1045,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       if (n === 0) {
         notify.info(
           skippedTotal > 0
-            ? "ไม่ได้สร้างรายการใดเลย เพราะทุกคาบตรงกับตารางเรียนของคุณ — หากตารางเรียนไม่ถูกต้อง ให้แก้ที่หน้า 'ตารางเรียนของฉัน'"
-            : "ยังไม่ได้สร้างรายการใด — อาจเป็นเพราะ section นี้ยังไม่มีตารางสอนในระบบ หรือทุกคาบตกวันหยุด/สอบ/สุดสัปดาห์ ลองตรวจในหน้า 'วันหยุดและวันชดเชย' หรือให้อาจารย์เพิ่มตารางสอนของ section",
+            ? "ไม่ได้สร้างรายการใดเลย เพราะทุกคาบตรงกับตารางเรียนของคุณ หากตารางเรียนไม่ถูกต้อง ให้แก้ที่หน้า 'ตารางเรียนของฉัน'"
+            : "ยังไม่ได้สร้างรายการใด อาจเป็นเพราะ section นี้ยังไม่มีตารางสอนในระบบ หรือทุกคาบตกวันหยุด/สอบ/สุดสัปดาห์ ลองตรวจในหน้า 'วันหยุดและวันชดเชย' หรือให้อาจารย์เพิ่มตารางสอนของ section",
         );
       } else {
         notify.success(`สร้างรายการอัตโนมัติเรียบร้อย (${n} รายการ)`);
@@ -1124,7 +1124,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       const others = (assignments ?? []).filter(a => a.id !== aid && a.unsent_count > 0);
       if (showMultiSection && others.length > 0) {
         notify.success(
-          `ส่ง sec ${activeAssignment?.sec_no ?? ""} เรียบร้อย — ยังเหลือ ` +
+          `ส่ง sec ${activeAssignment?.sec_no ?? ""} เรียบร้อย ยังเหลือ ` +
           others.map(a => `sec ${a.sec_no} (${a.unsent_count} รายการ)`).join(", ") +
           " ที่ยังไม่ได้ส่ง",
         );
@@ -1445,8 +1445,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <span>
             {settlement?.committed?.over_budget
-              ? "งบของวิชานี้ไม่พอจ่ายทุกเดือนแล้ว — "
-              : "ถ้าอาจารย์อนุมัติครบตามที่ลงไว้ งบจะไม่พอ — "}
+              ? "งบของวิชานี้ไม่พอจ่ายทุกเดือนแล้ว "
+              : "ถ้าอาจารย์อนุมัติครบตามที่ลงไว้ งบจะไม่พอ "}
             {partialMonths.size > 0 && (
               <>
                 <b>{[...partialMonths].map(formatMonthTH).join(", ")}</b> ได้ไม่ครบทุกคาบ
@@ -1457,7 +1457,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               <><b>{[...unpaidMonths].map(formatMonthTH).join(", ")}</b> ไม่ได้รับค่าตอบแทน </>
             )}
             ชั่วโมงยังถูกบันทึกไว้ครบและอาจารย์อนุมัติได้ตามปกติ แต่คาบที่เกินงบจะไม่ถูกนำไปเบิก
-            <br /><span className="text-red-900/75">งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น — ทุกคนถูกตัดที่คาบเดียวกัน ใครสอนคาบไหนก่อนได้ก่อน</span>
+            <br /><span className="text-red-900/75">งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น ทุกคนถูกตัดที่คาบเดียวกัน ใครสอนคาบไหนก่อนได้ก่อน</span>
           </span>
         </div>
       )}
@@ -1473,7 +1473,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-ink-3" />
           <span>
             <b>{strandedRows.length} รายการ</b> ในงวดที่ปิดไปแล้ว ({strandedMonths.join(", ")}){" "}
-            ไม่ได้ส่งภายในกำหนด — <b>ถือว่าไม่ประสงค์ลงเวลา</b> ระบบจะไม่นำมาคิดค่าตอบแทน
+            ไม่ได้ส่งภายในกำหนด <b>ถือว่าไม่ประสงค์ลงเวลา</b> ระบบจะไม่นำมาคิดค่าตอบแทน
             และส่งย้อนหลังไม่ได้
             {submittableCount > 0 && <> ส่วนอีก {submittableCount} รายการในงวดที่ยังเปิดอยู่ ยังกดส่งได้ตามปกติ</>}
           </span>
@@ -1680,7 +1680,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             </p>
             {hasUnsaved && (
               <p className="text-amber-700">
-                มีรายการที่แก้ไขแล้วแต่ยังไม่ได้บันทึก — จะไม่ถูกส่งไปด้วย โปรดบันทึกก่อนหากต้องการรวมไปด้วย
+                มีรายการที่แก้ไขแล้วแต่ยังไม่ได้บันทึก จะไม่ถูกส่งไปด้วย โปรดบันทึกก่อนหากต้องการรวมไปด้วย
               </p>
             )}
             {otherUnsent.length > 0 && (
@@ -1715,8 +1715,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         confirmLabel="สร้างอัตโนมัติ"
         message={
           draftCount > 0
-            ? `ระบบจะสร้างรายการจากตารางสอนของ section นี้ทั้งเทอม โดยจะเขียนทับ draft ที่มีอยู่ ${draftCount} รายการ — ต้องการดำเนินการต่อหรือไม่?`
-            : "ระบบจะสร้างรายการบันทึกเวลาจากตารางสอนของ section นี้ทั้งเทอมให้อัตโนมัติ (ข้ามวันหยุดที่อาจารย์ยังไม่ระบุวันชดเชย) — ต้องการดำเนินการต่อหรือไม่?"
+            ? `ระบบจะสร้างรายการจากตารางสอนของ section นี้ทั้งเทอม โดยจะเขียนทับ draft ที่มีอยู่ ${draftCount} รายการ ต้องการดำเนินการต่อหรือไม่?`
+            : "ระบบจะสร้างรายการบันทึกเวลาจากตารางสอนของ section นี้ทั้งเทอมให้อัตโนมัติ (ข้ามวันหยุดที่อาจารย์ยังไม่ระบุวันชดเชย) ต้องการดำเนินการต่อหรือไม่?"
         }
       />
 
@@ -1739,7 +1739,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           const lock = monthLockFor(iso);
           if (lock) return monthLockMessage(lock);
           if (monthsInReview.has((iso ?? "").slice(0, 7))) {
-            return "เดือนนี้ส่งอนุมัติหรืออนุมัติไปแล้ว — เพิ่มรายการใหม่ในเดือนนี้ไม่ได้";
+            return "เดือนนี้ส่งอนุมัติหรืออนุมัติไปแล้ว เพิ่มรายการใหม่ในเดือนนี้ไม่ได้";
           }
           return null;
         }}
@@ -1824,7 +1824,7 @@ function WorklogSaveStatus({
         title={error}
       >
         <CloudOff size={13} />
-        <span className="truncate max-w-[16rem]">บันทึกอัตโนมัติไม่สำเร็จ — แก้ไขอีกครั้งเพื่อลองใหม่</span>
+        <span className="truncate max-w-[16rem]">บันทึกอัตโนมัติไม่สำเร็จ แก้ไขอีกครั้งเพื่อลองใหม่</span>
       </span>
     );
   }
@@ -2209,7 +2209,7 @@ function AddWorklogModal({
     // check. Gives the TA a clear reason before hitting the network.
     if (weeklyInfo && hours > weeklyInfo.remaining + 0.01) {
       setError(
-        `เกินโควตา ${weeklyInfo.labelTH} ประจำสัปดาห์ (${weeklyInfo.cap.toFixed(1)} ชม./สัปดาห์) — สัปดาห์นี้เหลือ ${weeklyInfo.remaining.toFixed(2)} ชม.`,
+        `เกินโควตา ${weeklyInfo.labelTH} ประจำสัปดาห์ (${weeklyInfo.cap.toFixed(1)} ชม./สัปดาห์) สัปดาห์นี้เหลือ ${weeklyInfo.remaining.toFixed(2)} ชม.`,
       );
       return;
     }
@@ -2552,7 +2552,7 @@ function SectionStrip({
         <LayoutGrid size={15} className="shrink-0" />
         <span>
           วิชานี้คุณดูแล <b className="font-medium text-foreground">{assignments.length} กลุ่ม</b>{" "}
-          — บันทึกเวลาและส่งอนุมัติ <b className="font-medium text-foreground">แยกกันแต่ละกลุ่ม</b>
+          บันทึกเวลาและส่งอนุมัติ <b className="font-medium text-foreground">แยกกันแต่ละกลุ่ม</b>
         </span>
       </div>
 
@@ -2870,9 +2870,9 @@ function MonthlyWorklogView({
                       {/* With no way back after the deadline, the warning has to
                           name the consequence, not just the date. */}
                       {deadline.daysLeft <= 0
-                        ? "⏰ วันนี้วันสุดท้าย — ไม่ส่งถือว่าไม่ประสงค์ลงเวลา"
+                        ? "⏰ วันนี้วันสุดท้าย ไม่ส่งถือว่าไม่ประสงค์ลงเวลา"
                         : deadline.daysLeft <= 3
-                        ? `⏰ เหลือ ${deadline.daysLeft} วัน — ไม่ส่งถือว่าไม่ประสงค์ลงเวลา`
+                        ? `⏰ เหลือ ${deadline.daysLeft} วัน ไม่ส่งถือว่าไม่ประสงค์ลงเวลา`
                         : `⏰ เหลืออีก ${deadline.daysLeft} วันต้องส่ง`}
                     </Chip>
                   )}
@@ -3114,7 +3114,7 @@ function HolidayHint({
     return (
       <Alert
         status="accent"
-        title={`วันนี้หยุดเฉพาะช่วง ${partialOnDate.start}–${partialOnDate.end} (${partialOnDate.name}) — ช่วงเวลาที่คุณเลือกอยู่นอกช่วงหยุด จึงลงเวลาได้ตามปกติ`}
+        title={`วันนี้หยุดเฉพาะช่วง ${partialOnDate.start}–${partialOnDate.end} (${partialOnDate.name}) ช่วงเวลาที่คุณเลือกอยู่นอกช่วงหยุด จึงลงเวลาได้ตามปกติ`}
       />
     );
   }
@@ -3129,7 +3129,7 @@ function HolidayHint({
       <Alert
         status="accent"
         icon={<AlertTriangle size={14} />}
-        title={`ช่วงเวลานี้ตรงกับวันหยุด (${holidayLabel(holiday)}) — อนุญาตเฉพาะ${activity === "review" ? "การตรวจงาน" : "งานอื่นๆ ที่คู่กับบรรยาย"}`}
+        title={`ช่วงเวลานี้ตรงกับวันหยุด (${holidayLabel(holiday)}) อนุญาตเฉพาะ${activity === "review" ? "การตรวจงาน" : "งานอื่นๆ ที่คู่กับบรรยาย"}`}
       />
     );
   }
@@ -3141,18 +3141,18 @@ function HolidayHint({
       icon={<AlertTriangle size={14} />}
       title={isPartial
         ? `เวลา ${startTime || "—"}–${endTime || "—"} อยู่ในช่วงวันหยุด (${holidayLabel(holiday)})`
-        : `วันนี้เป็นวันหยุด (${holiday.name}) — ยังไม่ได้กำหนดวันชดเชย`}
+        : `วันนี้เป็นวันหยุด (${holiday.name}) ยังไม่ได้กำหนดวันชดเชย`}
       description={
         isPartial ? (
           // The cheapest fix for a partial closure is usually to move the entry a
           // few hours, not to wait on a makeup — lead with that.
           <span>
-            ลงเวลาได้เฉพาะช่วงที่ไม่คาบเกี่ยวกับ {holiday.start}–{holiday.end} — หรือกำหนดวันชดเชย
+            ลงเวลาได้เฉพาะช่วงที่ไม่คาบเกี่ยวกับ {holiday.start}–{holiday.end} หรือกำหนดวันชดเชย
             {link && <> · <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a></>}
           </span>
         ) : link ? (
           <span>
-            คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ — <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a> เพื่อกำหนดวันชดเชย หรือแจ้งอาจารย์
+            คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a> เพื่อกำหนดวันชดเชย หรือแจ้งอาจารย์
           </span>
         ) : "คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ ต้องกำหนดวันชดเชยก่อน"
       }
@@ -3310,7 +3310,7 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
         <div className="p-4 text-sm text-muted text-center">กำลังโหลด…</div>
       ) : rows.length === 0 ? (
         <div className="p-4 text-sm text-muted">
-          ยังไม่ได้ตั้งช่วงเวลา — กด "เพิ่มช่วงเวลา" เพื่อกำหนดวันประจำสัปดาห์ที่คุณจะทำงานนี้
+          ยังไม่ได้ตั้งช่วงเวลา กด "เพิ่มช่วงเวลา" เพื่อกำหนดวันประจำสัปดาห์ที่คุณจะทำงานนี้
         </div>
       ) : (
         <div className="divide-y divide-(--hairline)">
@@ -3452,7 +3452,7 @@ function ReviewScheduleModal({
     <Modal
       open
       onClose={onClose}
-      title={`${initial ? "แก้ไข" : "เพิ่ม"}ช่วงเวลา — ${meta.short}`}
+      title={`${initial ? "แก้ไข" : "เพิ่ม"}ช่วงเวลา ${meta.short}`}
       icon={<BookOpenCheck size={18} />}
       size="md"
       footer={
@@ -3492,7 +3492,7 @@ function ReviewScheduleModal({
             status="danger"
             icon={<AlertTriangle size={14} />}
             title={`เวลาชนกับ${conflictKindTH[conflict.kind]}`}
-            description={`${conflict.label} · ${DAY_TH_SHORT[conflict.day_of_week]} ${conflict.start_time}–${conflict.end_time} — เลือกช่วงเวลาที่ไม่ทับกัน`}
+            description={`${conflict.label} · ${DAY_TH_SHORT[conflict.day_of_week]} ${conflict.start_time}–${conflict.end_time} เลือกช่วงเวลาที่ไม่ทับกัน`}
           />
         )}
 
@@ -3501,7 +3501,7 @@ function ReviewScheduleModal({
             <Alert
               status="danger"
               icon={<AlertTriangle size={14} />}
-              title={`เกินเพดาน — รวมต่อสัปดาห์ ${projected.toFixed(1)} ชม. เกินชั่วโมงบรรยาย ${lectureHrs.toFixed(1)} ชม.`}
+              title={`เกินเพดาน รวมต่อสัปดาห์ ${projected.toFixed(1)} ชม. เกินชั่วโมงบรรยาย ${lectureHrs.toFixed(1)} ชม.`}
               description="ลดช่วงเวลาลง หรือลบวันตรวจอื่นก่อน"
             />
           ) : (

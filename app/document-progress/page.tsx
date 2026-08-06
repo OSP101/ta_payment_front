@@ -28,7 +28,7 @@ export default function DocumentProgressPage() {
     <div className="mx-auto w-full max-w-[1000px]">
       <PageHeader
         title="ความคืบหน้าเอกสารเบิกจ่าย"
-        description="ติดตามว่าเอกสารของแต่ละวิชาเดินทางไปถึงขั้นไหนแล้ว — อัปเดตโดยเจ้าหน้าที่"
+        description="ติดตามว่าเอกสารของแต่ละวิชาเดินทางไปถึงขั้นไหนแล้ว อัปเดตโดยเจ้าหน้าที่"
         actions={
           <TermSelect terms={terms} value={termId} onChange={setTermId} />
         }

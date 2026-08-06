@@ -7,6 +7,9 @@ import {
   Info, Newspaper, PartyPopper, AlertTriangle, Radio, Megaphone,
 } from "lucide-react";
 import { PageHeader, Panel, EmptyState, Chip, type ChipTone } from "../../components/ui";
+import ShareButtons from "../../components/ShareButtons";
+import AttachmentGallery, { type Attachment } from "../../components/AttachmentGallery";
+import RichText from "../../components/RichText";
 
 type Category = "info" | "news" | "warning" | "urgent" | "event";
 
@@ -21,6 +24,8 @@ interface Ann {
   published_at?: string | null;
   expires_at?: string | null;
   status: "draft" | "scheduled" | "live" | "expired";
+  is_public?: boolean;
+  attachments?: Attachment[];
 }
 
 const CAT_META: Record<Category, { label: string; icon: React.ReactNode; tone: ChipTone }> = {
@@ -101,8 +106,18 @@ function Body({ a }: { a: Ann }) {
       )}
 
       <Panel>
-        <div className="whitespace-pre-wrap text-[15px] leading-7 text-foreground">
-          {a.body}
+        <RichText body={a.body} className="text-[15px] text-foreground" />
+        {!!a.attachments?.length && (
+          <div className="mt-4">
+            <AttachmentGallery items={a.attachments} />
+          </div>
+        )}
+        {/* Share from where people read. A non-public announcement still gets
+            "copy link" — colleagues can open it — but no social buttons, since
+            those would post a link the recipient cannot follow. */}
+        <div className="mt-5 border-t border-hairline pt-4">
+          <div className="mb-2 text-xs font-medium text-muted">แชร์ประกาศนี้</div>
+          <ShareButtons id={a.id} title={a.title} isPublic={!!a.is_public} size="sm" />
         </div>
       </Panel>
     </article>

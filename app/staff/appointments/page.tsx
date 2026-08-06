@@ -1,11 +1,14 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { AlertTriangle, Download, FileSignature } from "lucide-react";
+import {
+  AlertTriangle, CalendarDays, Check, Download, FileSignature,
+  FileText, Hash, PenLine, Users,
+} from "lucide-react";
 import { api, errMessage } from "../../lib/api";
 import { useTerm } from "../TermContext";
 import { notify } from "../../lib/notify";
-import { PageHeader, Panel, Button, Select, Chip, TextInput, DatePicker } from "../../components/ui";
+import { PageHeader, Panel, Button, Select, Chip, DatePicker, EmptyState } from "../../components/ui";
 
 /**
  * ใบแต่งตั้งทีเอ (คำสั่ง) — its own menu since 31/07/2026.
@@ -16,6 +19,11 @@ import { PageHeader, Panel, Button, Select, Chip, TextInput, DatePicker } from "
  * rather than a reimbursement package, and it is the GATE the payout screen
  * waits on. Filing it under the monthly errand hid a term-level act inside a
  * per-month one, and made the export menu answer to two unrelated jobs.
+ *
+ * Layout (06/08/2026): the round's headcount leads the page, the form and the
+ * history sit side by side below it. Everything used to be stacked in one
+ * narrow column, so the number staff came for was a grey footnote and the four
+ * fields they fill read as an afterthought.
  */
 
 export default function AppointmentsPage() {
@@ -24,7 +32,7 @@ export default function AppointmentsPage() {
     <div>
       <PageHeader
         title="ใบแต่งตั้งทีเอ (คำสั่ง)"
-        description="ออกคำสั่งแต่งตั้งทีเอเป็นรอบ — ทีเอที่ยังไม่มีคำสั่ง จะยังตรวจเบิกจ่ายและส่งออกเอกสารไม่ได้"
+        description="ออกคำสั่งแต่งตั้งทีเอเป็นรอบ ทีเอที่ยังไม่มีคำสั่ง จะยังตรวจเบิกจ่ายและส่งออกเอกสารไม่ได้"
       />
       {termId && <AppointmentSection termId={termId} />}
     </div>
@@ -63,7 +71,13 @@ interface AppointmentPreview {
   next_round: number;
   is_late: boolean;
   already_issued: number;
-  include: { teaching_course_id: string; course_code: string; ta_id: string; ta_name: string }[];
+  include: {
+    teaching_course_id: string;
+    course_code: string;
+    course_name_th: string;
+    ta_id: string;
+    ta_name: string;
+  }[];
   skipped: { course_code: string; course_name_th: string; reason: string; pending_tas?: string[] }[];
 }
 
@@ -80,6 +94,28 @@ interface AppointmentRound {
   // rendered document. Those can never be re-issued, so the button is absent
   // rather than present-and-failing.
   can_reprint: boolean;
+}
+
+/** Field wrapper — one label style for every control on this form. */
+function Field({
+  label, icon, hint, children,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-2">
+        {icon}{label}
+      </label>
+      {children}
+      {/* Fixed height so a preview appearing under one field cannot shove its
+          neighbour down and make the grid jump while typing. */}
+      <div className="mt-1 h-4 text-xs text-brand">{hint}</div>
+    </div>
+  );
 }
 
 function AppointmentSection({ termId }: { termId: string }) {
@@ -108,6 +144,31 @@ function AppointmentSection({ termId }: { termId: string }) {
   const acting = signer && !signer.is_dean;
   const deanSeat = deans.find(o => o.is_dean)?.title ?? "คณบดีวิทยาลัยการคอมพิวเตอร์";
 
+  const pending = preview?.include.length ?? 0;
+
+  // Names grouped by course: the printed บัญชีแนบท้าย is laid out that way, so
+  // checking the screen against the paper is a straight read rather than a
+  // mental regroup.
+  const byCourse = useMemo(() => {
+    const m = new Map<string, { code: string; name: string; tas: string[] }>();
+    for (const p of preview?.include ?? []) {
+      const g = m.get(p.course_code) ?? { code: p.course_code, name: p.course_name_th, tas: [] };
+      g.tas.push(p.ta_name);
+      m.set(p.course_code, g);
+    }
+    return [...m.values()];
+  }, [preview]);
+
+  // What is still missing, named — a disabled button with no reason is a dead
+  // end, and the toast that used to say it only appeared after a click.
+  const missing = [
+    !orderNoNum.trim() || !orderNoYear.trim() ? "เลขที่คำสั่ง" : null,
+    !signerId ? "ผู้ลงนาม" : null,
+    !orderDate ? "วันที่สั่ง" : null,
+    !effectiveDate ? "วันที่มีผล" : null,
+  ].filter(Boolean) as string[];
+  const canGenerate = missing.length === 0 && pending > 0 && !busy;
+
   /**
    * Fetch an already-issued order again.
    *
@@ -123,7 +184,7 @@ function AppointmentSection({ termId }: { termId: string }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `appointment-order-${r.order_no.replace("/", "-")}.zip`;
+      a.download = `appointment-order-${r.order_no.replace("/", "-")}.docx`;
       a.click();
       URL.revokeObjectURL(url);
       notify.success(`ดาวน์โหลดคำสั่งที่ ${r.order_no} (ฉบับเดิม) แล้ว`);
@@ -135,10 +196,7 @@ function AppointmentSection({ termId }: { termId: string }) {
   }
 
   async function generate() {
-    if (!orderNoNum.trim() || !orderNoYear.trim() || !orderDate || !effectiveDate || !signerId) {
-      notify.error("กรุณากรอกข้อมูลให้ครบทุกช่อง");
-      return;
-    }
+    if (!canGenerate) return;
     setBusy(true);
     try {
       const blob: Blob = await api.post("/exports/appointment-order", {
@@ -151,10 +209,10 @@ function AppointmentSection({ termId }: { termId: string }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `appointment-order-${orderNoNum.trim()}-${orderNoYear.trim()}.zip`;
+      a.download = `appointment-order-${orderNoNum.trim()}-${orderNoYear.trim()}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-      notify.success("สร้างเอกสารสำเร็จ");
+      notify.success("สร้างไฟล์คำสั่งแล้ว");
       // The round is now on the ledger — refresh so the next preview shows the
       // reduced membership rather than offering the same names again.
       if (previewKey) void mutate(previewKey);
@@ -167,199 +225,260 @@ function AppointmentSection({ termId }: { termId: string }) {
   }
 
   return (
-    <Panel className="mb-3">
-      <div className="max-w-2xl space-y-3">
-        <p className="text-sm text-ink-3">
-          กรอกข้อมูลของคำสั่งแต่งตั้งทีเอ ระบบจะดึงรายชื่อทีเอที่ได้รับอนุมัติและ<b>ยังไม่เคยออกคำสั่ง</b>
-          จัดกลุ่มตามระดับการศึกษาและรายวิชา (บัญชีแนบท้าย) ตามรูปแบบคำสั่งของวิทยาลัย และสร้างเป็น PDF + DOCX ให้
-        </p>
-
-        {/* Round membership. Named before printing, because paper cannot be
-            recalled and a course left out has to be chased, not discovered. */}
-        {preview && (
-          <div data-tour="appt-round" className="rounded-lg border border-border bg-surface-secondary p-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium">
-                รอบที่ {preview.next_round}
-              </span>
-              {preview.is_late
-                ? <Chip tone="warn">รอบล่าช้า</Chip>
-                : <Chip tone="success">รอบแรก (ทันกำหนด)</Chip>}
-              <span className="text-xs text-ink-3">
-                จะออกคำสั่งให้ {preview.include.length} รายชื่อ
-                {preview.already_issued > 0 && ` · ออกไปแล้วก่อนหน้า ${preview.already_issued} รายชื่อ`}
-              </span>
+    <div className="space-y-4">
+      {/* ── Round headline ─────────────────────────────────────────────── */}
+      <div
+        data-tour="appt-round"
+        className="overflow-hidden rounded-xl border border-border bg-panel-bg shadow-sm"
+      >
+        <div className="flex flex-wrap items-center gap-4 border-b border-hairline bg-brand-soft/50 px-5 py-4">
+          <div
+            className={`flex size-16 shrink-0 items-center justify-center rounded-2xl text-3xl font-bold tabular-nums shadow-sm ${
+              pending > 0 ? "bg-brand text-brand-fg" : "bg-emerald-100 text-emerald-700"
+            }`}
+          >
+            {pending > 0 ? pending : <Check size={30} />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-lg font-semibold text-ink-1">
+              {pending > 0 ? `ทีเอ ${pending} คน รอออกคำสั่งแต่งตั้ง` : "ออกคำสั่งครบทุกคนแล้ว"}
             </div>
+            {/* No "·" separators: they wrap onto the next line on a phone and
+                sit there as a stray dot. Spacing alone does the job. */}
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+              {preview && (
+                <>
+                  <span>คำสั่งรอบที่ {preview.next_round}</span>
+                  {preview.is_late
+                    ? <Chip tone="warn">รอบล่าช้า</Chip>
+                    : <Chip tone="success">รอบแรก (ทันกำหนด)</Chip>}
+                  {preview.already_issued > 0 && (
+                    <span>ออกคำสั่งไปแล้ว {preview.already_issued} คน</span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
 
-            {preview.include.length === 0 && (
-              <div className="text-xs text-amber-700">
-                ไม่มีรายชื่อค้างให้ออกคำสั่ง — ทุกคนที่อนุมัติแล้วได้รับคำสั่งครบ
-              </div>
-            )}
-
-            {preview.skipped.length > 0 && (
-              <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-900">
-                  <AlertTriangle size={12} />
-                  ข้ามไป {preview.skipped.length} วิชา — ยังไม่พร้อม (จะถือว่าล่าช้า)
-                </div>
-                <ul className="mt-1 space-y-0.5">
-                  {preview.skipped.map(s => (
-                    <li key={s.course_code} className="text-[11px] text-amber-900/90">
-                      <b>{s.course_code}</b> {s.course_name_th} — {s.reason}
-                      {s.pending_tas?.length ? ` (${s.pending_tas.join(", ")})` : ""}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-1 text-[11px] text-amber-900/80">
-                  วิชาเหล่านี้จะไม่อยู่ในคำสั่งรอบนี้ — เมื่อเรียบร้อยแล้วให้กลับมาออกคำสั่งรอบถัดไป
-                </div>
-              </div>
-            )}
+        {/* The names themselves, grouped as they will print. Shown outright —
+            hiding a one-line list behind a toggle costs a click and tells the
+            reader nothing about how long the list is. */}
+        {pending > 0 && (
+          <div className="max-h-64 overflow-y-auto px-5 py-3">
+            <ul className="space-y-2">
+              {byCourse.map(c => (
+                <li key={c.code} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+                  <span className="font-semibold text-ink-1">{c.code}</span>
+                  <span className="min-w-0 truncate text-ink-3">{c.name}</span>
+                  <span className="ms-auto flex flex-wrap justify-end gap-1">
+                    {c.tas.map(t => (
+                      <span key={t} className="chip chip-brand !text-[11px]">{t}</span>
+                    ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
+        {pending === 0 && (
+          <div className="px-5 py-3 text-sm text-ink-3">
+            ทีเอที่อนุมัติแล้วได้รับคำสั่งแต่งตั้งครบทุกคน เมื่ออนุมัติคำขอใหม่ รายชื่อจะมาแสดงที่นี่
+          </div>
+        )}
+      </div>
 
-        {!!rounds?.items?.length && (
-          <details data-tour="appt-history" className="rounded-lg border border-border p-3">
-            <summary className="cursor-pointer text-sm font-medium">
-              คำสั่งที่ออกไปแล้ว ({rounds.items.length} รอบ)
-            </summary>
-            <ul className="mt-2 space-y-1">
+      {/* ── Courses held back ──────────────────────────────────────────── */}
+      {!!preview?.skipped.length && (
+        <Panel
+          title={
+            <span className="inline-flex items-center gap-2 text-amber-900">
+              <AlertTriangle size={16} className="text-amber-600" />
+              ยังไม่พร้อมออกคำสั่ง {preview.skipped.length} วิชา
+            </span>
+          }
+          description="วิชาเหล่านี้จะไม่อยู่ในคำสั่งรอบนี้ เมื่อเรียบร้อยแล้วให้กลับมาออกคำสั่งรอบถัดไป (จะนับเป็นรอบล่าช้า)"
+          className="border-amber-200 bg-amber-50/40"
+        >
+          <ul className="divide-y divide-amber-200/60">
+            {preview.skipped.map(s => (
+              <li key={s.course_code} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-2 text-sm first:pt-0 last:pb-0">
+                <span className="font-semibold text-ink-1">{s.course_code}</span>
+                <span className="text-ink-3">{s.course_name_th}</span>
+                <span className="ms-auto text-xs text-amber-800">
+                  {s.reason}
+                  {s.pending_tas?.length ? ` (${s.pending_tas.join(", ")})` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+
+      {/* ── Form + history ─────────────────────────────────────────────── */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel
+          title="ข้อมูลคำสั่ง"
+          description="ระบบจัดกลุ่มรายชื่อตามระดับการศึกษาและรายวิชา (บัญชีแนบท้าย) ตามรูปแบบคำสั่งของวิทยาลัย"
+          className="lg:col-span-2"
+          data-tour="appt-form"
+        >
+          <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
+            <Field label="คำสั่งที่ (เลขที่คำสั่ง)" icon={<Hash size={13} className="text-ink-4" />}>
+              <div className="flex h-9 items-center rounded-lg border border-border bg-surface px-2 transition-colors focus-within:border-brand">
+                <input
+                  value={orderNoNum}
+                  onChange={e => setOrderNoNum(e.target.value.replace(/\D/g, ""))}
+                  placeholder="6"
+                  inputMode="numeric"
+                  aria-label="เลขที่คำสั่ง"
+                  className="w-14 bg-transparent text-center text-sm outline-none"
+                />
+                <span className="px-1 text-ink-3">/</span>
+                <input
+                  value={orderNoYear}
+                  onChange={e => setOrderNoYear(e.target.value.replace(/\D/g, ""))}
+                  placeholder="2569"
+                  inputMode="numeric"
+                  maxLength={4}
+                  aria-label="ปี พ.ศ. ของคำสั่ง"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                />
+              </div>
+            </Field>
+
+            <Field label="ผู้ลงนาม (คณบดี หรือผู้รักษาการแทน)" icon={<PenLine size={13} className="text-ink-4" />}>
+              <Select
+                value={signerId}
+                onChange={e => setSignerId(e.target.value)}
+                className="w-full"
+                disabled={deans.length === 0}
+              >
+                <option value="">เลือกผู้ลงนาม</option>
+                {deans.map(o => (
+                  <option key={o.id} value={o.id}>
+                    {(o.academic_prefix ?? "")}{o.full_name} · {o.title}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field
+              label="วันที่สั่ง"
+              icon={<CalendarDays size={13} className="text-ink-4" />}
+              hint={orderDate && thaiDatePreview(orderDate, true)}
+            >
+              <DatePicker value={orderDate} onChange={setOrderDate} label="วันที่สั่ง" className="w-full" />
+            </Field>
+
+            <Field
+              label="มีผลตั้งแต่วันที่"
+              icon={<CalendarDays size={13} className="text-ink-4" />}
+              hint={effectiveDate && thaiDatePreview(effectiveDate, false)}
+            >
+              <DatePicker value={effectiveDate} onChange={setEffectiveDate} label="มีผลตั้งแต่วันที่" className="w-full" />
+            </Field>
+          </div>
+
+          {/* Show the signature block as it will print, not just a warning about
+              it. "รักษาการแทน" is a claim about authority, so staff should be
+              able to check the exact three lines against the seat they think is
+              vacant before committing them to paper. */}
+          {acting && (
+            <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-amber-900">
+                <AlertTriangle size={13} /> ผู้ลงนามไม่ใช่คณบดี จะพิมพ์เป็น “รักษาการแทน”
+              </div>
+              <div className="mt-1 text-center text-xs leading-relaxed text-amber-900/90">
+                <div>({signer!.academic_prefix ?? ""}{signer!.full_name})</div>
+                <div>{signer!.title} รักษาการแทน</div>
+                <div>{deanSeat}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Without a roster the form fills in fine and only fails at submit
+              with "ไม่พบข้อมูลผู้ลงนาม", which reads as a bug rather than as
+              missing setup. Say it here, with the way out. */}
+          {officers && deans.length === 0 && (
+            <p className="mt-1 text-xs text-amber-700">
+              ยังไม่มีรายชื่อผู้ลงนามในระบบ เพิ่มได้ที่{" "}
+              <a href="/staff/settings" className="underline underline-offset-2">
+                ตั้งค่า › ผู้บริหารที่ลงนาม
+              </a>
+            </p>
+          )}
+
+          <div
+            data-tour="appt-generate"
+            className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-hairline pt-4"
+          >
+            <span className="me-auto text-xs text-ink-3">
+              {pending === 0
+                ? "ไม่มีรายชื่อค้าง จึงยังไม่ต้องออกคำสั่งรอบใหม่"
+                : missing.length > 0
+                  ? `กรอกให้ครบก่อน: ${missing.join(" · ")}`
+                  : `จะได้ไฟล์ Word 1 ไฟล์ สำหรับทีเอ ${pending} คน`}
+            </span>
+            <Button variant="primary" onClick={generate} disabled={!canGenerate}>
+              <FileSignature size={14} /> {busy ? "กำลังสร้าง…" : "สร้างไฟล์คำสั่ง (.docx)"}
+            </Button>
+          </div>
+        </Panel>
+
+        <Panel
+          title="ประวัติการออกคำสั่ง"
+          description={rounds?.items?.length ? `ออกไปแล้ว ${rounds.items.length} รอบ` : undefined}
+          data-tour="appt-history"
+          padded={!rounds?.items?.length}
+        >
+          {!rounds?.items?.length ? (
+            <EmptyState
+              icon={<FileText size={26} />}
+              title="ยังไม่เคยออกคำสั่ง"
+              description="คำสั่งที่ออกแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม"
+            />
+          ) : (
+            <ul className="divide-y divide-hairline">
               {rounds.items.map(r => (
-                <li key={r.id} className="flex flex-wrap items-center gap-2 text-xs text-ink-3">
-                  <Chip tone={r.is_late ? "warn" : "neutral"}>รอบ {r.round_no}</Chip>
-                  <span className="font-medium text-foreground">คำสั่งที่ {r.order_no}</span>
+                <li key={r.id} className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Chip tone={r.is_late ? "warn" : "neutral"}>รอบ {r.round_no}</Chip>
+                    <span className="text-sm font-medium text-ink-1">คำสั่งที่ {r.order_no}</span>
+                    <span className="ms-auto inline-flex items-center gap-1 text-xs text-ink-3">
+                      <Users size={12} />{r.ta_count}
+                    </span>
+                  </div>
                   {/* order_date is stored as the ISO the picker produced; the
                       printed document converts it, so the history must too —
                       2026 next to a 2569 order number invites a double-take. */}
-                  <span>· {thaiDatePreview(r.order_date, false) || r.order_date}</span>
-                  <span>· {r.ta_count} รายชื่อ</span>
-                  {r.generated_by && <span>· โดย {r.generated_by}</span>}
-                  {/* Pushed to the right so it never reads as part of the
-                      sentence describing the round. */}
-                  <span className="ml-auto">
+                  <div className="mt-1 text-xs text-ink-3">
+                    {thaiDatePreview(r.order_date, false) || r.order_date}
+                    {r.generated_by && ` · โดย ${r.generated_by}`}
+                  </div>
+                  <div className="mt-1.5">
                     {r.can_reprint ? (
                       <button
                         type="button"
                         onClick={() => void reprint(r)}
                         disabled={reprinting !== null}
-                        className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] hover:border-brand hover:text-brand disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
                       >
-                        <Download size={11} />
+                        <Download size={12} />
                         {reprinting === r.id ? "กำลังดาวน์โหลด…" : "ดาวน์โหลดฉบับเดิม"}
                       </button>
                     ) : (
                       // Not a disabled button: nothing the user can do will ever
                       // enable it, and a greyed control invites them to try.
-                      <span className="text-[11px] text-ink-3">
-                        ออกก่อนระบบเก็บสำเนา — ดาวน์โหลดซ้ำไม่ได้
-                      </span>
+                      <span className="text-xs text-ink-4">ออกก่อนระบบเก็บสำเนา ดาวน์โหลดซ้ำไม่ได้</span>
                     )}
-                  </span>
+                  </div>
                 </li>
               ))}
             </ul>
-          </details>
-        )}
-
-        <div data-tour="appt-form" className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-          {/* คำสั่งที่ — one compact "N / ปี" unit inside a single bordered box */}
-          <div>
-            <label className="block text-xs text-ink-2 mb-1.5">คำสั่งที่ (เลขที่คำสั่ง)</label>
-            <div className="flex h-9 items-center rounded-lg border border-border bg-surface px-2 focus-within:border-brand transition-colors">
-              <input
-                value={orderNoNum}
-                onChange={e => setOrderNoNum(e.target.value.replace(/\D/g, ""))}
-                placeholder="6"
-                inputMode="numeric"
-                aria-label="เลขที่คำสั่ง"
-                className="w-14 bg-transparent text-center text-sm outline-none"
-              />
-              <span className="text-ink-3 px-1">/</span>
-              <input
-                value={orderNoYear}
-                onChange={e => setOrderNoYear(e.target.value.replace(/\D/g, ""))}
-                placeholder="2569"
-                inputMode="numeric"
-                maxLength={4}
-                aria-label="ปี พ.ศ. ของคำสั่ง"
-                className="flex-1 min-w-0 bg-transparent text-sm outline-none"
-              />
-            </div>
-          </div>
-
-          {/* ผู้ลงนาม */}
-          <div>
-            <label className="block text-xs text-ink-2 mb-1.5">
-              ผู้ลงนาม (คณบดี หรือผู้รักษาการแทน)
-            </label>
-            <Select
-              value={signerId}
-              onChange={e => setSignerId(e.target.value)}
-              className="w-full"
-              disabled={deans.length === 0}
-            >
-              <option value="">— เลือกผู้ลงนาม —</option>
-              {deans.map(o => (
-                <option key={o.id} value={o.id}>
-                  {(o.academic_prefix ?? "")}{o.full_name} · {o.title}
-                </option>
-              ))}
-            </Select>
-            {/* Without a roster the form fills in fine and only fails at submit
-                with "ไม่พบข้อมูลผู้ลงนาม" — which reads as a bug rather than
-                as missing setup. Say it here, with the way out. */}
-            {/* Show the block as it will print, not just a warning about it.
-                "รักษาการแทน" is a claim about authority — staff should be
-                able to check the exact three lines against the seat they think
-                is vacant before committing them to paper. */}
-            {acting && (
-              <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50/60 px-2 py-1.5">
-                <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-900">
-                  <AlertTriangle size={12} /> ผู้ลงนามไม่ใช่คณบดี — จะพิมพ์เป็น “รักษาการแทน”
-                </div>
-                <div className="mt-1 text-center text-[11px] leading-tight text-amber-900/90">
-                  <div>({signer!.academic_prefix ?? ""}{signer!.full_name})</div>
-                  <div>{signer!.title} รักษาการแทน</div>
-                  <div>{deanSeat}</div>
-                </div>
-              </div>
-            )}
-            {officers && deans.length === 0 && (
-              <p className="mt-1 text-xs text-amber-700">
-                ยังไม่มีรายชื่อผู้ลงนามในระบบ — เพิ่มได้ที่{" "}
-                <a href="/staff/settings" className="underline underline-offset-2">
-                  ตั้งค่า › ผู้บริหารที่ลงนาม
-                </a>
-              </p>
-            )}
-          </div>
-
-          {/* วันที่สั่ง */}
-          <div>
-            <label className="block text-xs text-ink-2 mb-1.5">วันที่สั่ง</label>
-            <DatePicker value={orderDate} onChange={setOrderDate} label="วันที่สั่ง" className="w-full" />
-            <p className="text-xs text-brand mt-1 h-4">
-              {orderDate && thaiDatePreview(orderDate, true)}
-            </p>
-          </div>
-
-          {/* มีผลตั้งแต่วันที่ */}
-          <div>
-            <label className="block text-xs text-ink-2 mb-1.5">มีผลตั้งแต่วันที่</label>
-            <DatePicker value={effectiveDate} onChange={setEffectiveDate} label="มีผลตั้งแต่วันที่" className="w-full" />
-            <p className="text-xs text-brand mt-1 h-4">
-              {effectiveDate && thaiDatePreview(effectiveDate, false)}
-            </p>
-          </div>
-        </div>
-
-        <div data-tour="appt-generate" className="flex justify-end">
-          <Button variant="primary" onClick={generate} disabled={busy}>
-            <FileSignature size={14} /> {busy ? "กำลังสร้าง…" : "สร้าง PDF + DOCX"}
-          </Button>
-        </div>
+          )}
+        </Panel>
       </div>
-    </Panel>
+    </div>
   );
 }

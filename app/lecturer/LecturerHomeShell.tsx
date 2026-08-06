@@ -1,7 +1,7 @@
 "use client";
 import useSWR from "swr";
 import {
-  LayoutDashboard, Route, Megaphone, Bell, IdCard,
+  LayoutDashboard, Route, Megaphone, Bell, IdCard, ChartColumnBig,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
@@ -17,7 +17,7 @@ import NotificationBell from "../components/NotificationBell";
 
 interface PendingReport { teaching_course_id: string }
 
-const buildNav = (pendingCourses: number): NavSection[] => [
+const buildNav = (pendingCourses: number, isExecutive: boolean): NavSection[] => [
   {
     title: "ภาพรวม",
     items: [
@@ -34,6 +34,12 @@ const buildNav = (pendingCourses: number): NavSection[] => [
         badge: pendingCourses,
         badgeLabel: "วิชาที่มีบันทึกเวลารออนุมัติ",
       },
+      // The management team are lecturers whose accounts staff ticked the
+      // executive flag on — the read-only budget analytics lives one click
+      // from where they already work.
+      ...(isExecutive
+        ? [{ label: "มุมมองผู้บริหาร", href: "/executive", icon: ChartColumnBig }]
+        : []),
     ],
   },
   {
@@ -79,7 +85,7 @@ export default function LecturerHomeShell({
     <Shell
       me={me}
       brandTitle="TA Payment"
-      nav={buildNav(pendingCourses)}
+      nav={buildNav(pendingCourses, me.is_executive === true)}
       userMenuItems={userMenuItems}
       topBarAccessory={<NotificationBell />}
     >

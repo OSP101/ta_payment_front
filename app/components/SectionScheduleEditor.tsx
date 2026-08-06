@@ -193,7 +193,7 @@ export default function SectionScheduleEditor({
         <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted">
           {disabled
             ? "ยังไม่มีคาบเรียน"
-            : <>ยังไม่มีคาบเรียน — กด &quot;เพิ่มคาบ&quot; เพื่อกำหนดวัน-เวลา</>}
+            : <>ยังไม่มีคาบเรียน กด &quot;เพิ่มคาบ&quot; เพื่อกำหนดวัน-เวลา</>}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -290,7 +290,7 @@ export default function SectionScheduleEditor({
           title="คาบใน section นี้ทับซ้อนกัน"
           description={
             <>
-              <div>ตรวจดู AM/PM ให้ตรง — คาบที่ชนกัน:</div>
+              <div>ตรวจดู AM/PM ให้ตรง คาบที่ชนกัน:</div>
               <ul className="mt-1 list-disc ps-5 space-y-0.5">
                 {errors.overlapIdx.map(i => {
                   const r = value[i];

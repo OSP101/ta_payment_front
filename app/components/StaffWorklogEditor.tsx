@@ -213,7 +213,7 @@ function TAWorklogTable({
         </thead>
         <tbody>
           {monthGroups.length === 0 && adding.length === 0 && (
-            <tr><td colSpan={7} className="px-3 py-4 text-center text-muted text-xs">ยังไม่มีบันทึกเวลา — กด “เพิ่มแถว” เพื่อบันทึก</td></tr>
+            <tr><td colSpan={7} className="px-3 py-4 text-center text-muted text-xs">ยังไม่มีบันทึกเวลา กด “เพิ่มแถว” เพื่อบันทึก</td></tr>
           )}
           {monthGroups.map(([ym, rows]) => {
             const mHrs = rows.filter(r => r.status === "approved").reduce((a, r) => a + r.hours, 0);
@@ -351,7 +351,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
         <td className="px-3 py-2 align-middle"><StatusChip status={row.status} /></td>
         <td className="px-3 py-2 align-middle text-right whitespace-nowrap pr-4">
           {row.locked ? (
-            <span title="งวดของเดือนนี้ปิดแล้ว หรือส่งออก/ส่งการเงินไปแล้ว — แก้ไขย้อนหลังไม่ได้">
+            <span title="งวดของเดือนนี้ปิดแล้ว หรือส่งออก/ส่งการเงินไปแล้ว แก้ไขย้อนหลังไม่ได้">
               <Chip tone="warn"><Lock size={11} /> ล็อก</Chip>
             </span>
           ) : (
@@ -459,7 +459,7 @@ function NewRow({
         parent_kind: activity === "other" ? (parentKind || null) : null,
         note: note || null,
       });
-      notify.success("เพิ่มแล้ว (แบบร่าง — ต้องอนุมัติจึงจะนับยอด)");
+      notify.success("เพิ่มแล้ว (แบบร่าง ต้องอนุมัติจึงจะนับยอด)");
       onSaved();
       onDone();
     } catch (e) {

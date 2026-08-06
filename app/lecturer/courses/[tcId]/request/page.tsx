@@ -249,7 +249,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
       <PageHeader
         title="คำขอผู้ช่วยสอน"
         description={course
-          ? `${course.code} — ${course.name_th} · กรอกแบบฟอร์มด้านล่างเพื่อขอ TA`
+          ? `${course.code} ${course.name_th} · กรอกแบบฟอร์มด้านล่างเพื่อขอ TA`
           : "กรอกแบบฟอร์มด้านล่างเพื่อขอ TA"}
       />
 
@@ -262,7 +262,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
           <Alert
             status="danger"
             icon={<CalendarOff size={16} />}
-            title="ยังส่งคำขอ TA ไม่ได้ — วิชานี้ยังไม่ระบุเวลาเรียน (WBA)"
+            title="ยังส่งคำขอ TA ไม่ได้ วิชานี้ยังไม่ระบุเวลาเรียน (WBA)"
             description="มี section ที่ยังไม่มีตารางเรียน กรุณากรอกวัน-เวลาเรียนให้ครบทุก section ก่อน แล้วจึงกลับมาส่งคำขอ TA"
             action={
               <Link href={`/lecturer/courses/${tcId}/settings`}>
@@ -308,7 +308,7 @@ function BudgetForecast({ budget }: { budget: CourseBudget }) {
         title="งบวิชานี้เกินเพดานแล้ว (โดยประมาณ)"
         description={
           <>
-            ใช้ไปแล้ว ~{fmt(budget.used_baht)} จากเพดาน ~{fmt(budget.per_course_max)} —
+            ใช้ไปแล้ว ~{fmt(budget.used_baht)} จากเพดาน ~{fmt(budget.per_course_max)}
             {" "}ถ้าเพิ่ม TA อีก การเบิกจ่ายอาจไม่ครบตามที่ควรได้{" "}
             <b>รบกวนแจ้งนักศึกษาให้ทราบล่วงหน้า</b>
           </>
@@ -545,7 +545,7 @@ function RequestFormSection({
       if (res.status === "submitted") {
         // Deferred decision: at least one TA has no timetable yet, so there is
         // nothing to judge. Say so plainly rather than implying approval.
-        notify.success("ส่งคำขอแล้ว — ระบบจะตัดสินให้อัตโนมัติเมื่อ TA สร้างตารางเรียนครบทุกคน");
+        notify.success("ส่งคำขอแล้ว ระบบจะตัดสินให้อัตโนมัติเมื่อ TA สร้างตารางเรียนครบทุกคน");
         onSubmitted();
         return;
       }
@@ -586,7 +586,7 @@ function RequestFormSection({
             status="warning"
             icon={<AlertCircle size={16} />}
             title="คำขอนี้จะถูกนับเป็น “ส่งช้า”"
-            description="เลยกำหนดส่งแล้ว — ยังส่งได้ตามปกติ แต่คำขอจะถูกทำเครื่องหมายว่าล่าช้า และการเบิกจ่ายค่าตอบแทนของ TA จะล่าช้าไปด้วย"
+            description="เลยกำหนดส่งแล้ว ยังส่งได้ตามปกติ แต่คำขอจะถูกทำเครื่องหมายว่าล่าช้า และการเบิกจ่ายค่าตอบแทนของ TA จะล่าช้าไปด้วย"
           />
         </div>
       )}
@@ -643,7 +643,7 @@ function RequestFormSection({
               : !sectionChosen
               ? { tone: "warn", text: "ยังไม่ได้เลือก section" }
               : anyScheduleConflict
-              ? { tone: "danger", text: "มี TA ที่ตารางทับซ้อน — เอาชื่อออกก่อน" }
+              ? { tone: "danger", text: "มี TA ที่ตารางทับซ้อน เอาชื่อออกก่อน" }
               : !workloadOk
               ? { tone: "warn", text: "ภาระงานยังไม่ครบตามระเบียบ" }
               : { tone: "success", text: `${assignments.length} คน · พร้อมส่ง` }
@@ -693,7 +693,7 @@ function RequestFormSection({
               {/* Unified assignment list */}
               {assignments.length === 0 ? (
                 <div className="text-xs text-ink-3 text-center py-8 border border-dashed border-hairline rounded-lg">
-                  ยังไม่ได้เพิ่ม TA — กดปุ่ม "เพิ่ม TA" ด้านบน
+                  ยังไม่ได้เพิ่ม TA กดปุ่ม "เพิ่ม TA" ด้านบน
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -730,7 +730,7 @@ function RequestFormSection({
             status="warning"
             title="มี TA ที่ยังไม่ได้สร้างตารางเรียน"
             description={
-              `${waitingOnSchedule.join(", ")} ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้ — ` +
+              `${waitingOnSchedule.join(", ")} ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้ ` +
               "ส่งคำขอได้ตามปกติ แต่ระบบจะยังไม่ตัดสินจนกว่าจะสร้างครบทุกคน " +
               "และถ้าคาบใดตรงกับตารางเรียนของเขา คาบนั้นจะถูกตัดออกโดยอัตโนมัติ"
             }
@@ -804,7 +804,7 @@ function RequestFormSection({
             <p>• คำขอจะยังไม่ถูกตัดสิน จนกว่า TA ทุกคนในคำขอจะสร้างตารางเรียนครบ</p>
             <p>
               • ถ้าคาบสอนใดตรงกับตารางเรียนของ TA ระบบจะ<b>ตัดคาบนั้นออกทั้งคาบ</b>โดยอัตโนมัติ
-              เพราะเขาต้องไปเรียน — และจะแจ้งทั้งคุณและ TA
+              เพราะเขาต้องไปเรียน และจะแจ้งทั้งคุณและ TA
             </p>
             <p>• ถ้าทุกคาบตรงกับตารางเรียนของเขา TA คนนั้นจะถูกตัดออกจากวิชานี้ และคืนโควตาให้ไปรับวิชาอื่นได้</p>
           </div>
@@ -1019,7 +1019,7 @@ function AssignmentBlock({
           <div className="rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-800 space-y-1.5">
             <div className="flex items-center gap-1.5 font-medium">
               <AlertCircle size={13} />
-              TA คนนี้มีตารางทับซ้อน — กรุณาเอาชื่อออกหรือเปลี่ยน section
+              TA คนนี้มีตารางทับซ้อน กรุณาเอาชื่อออกหรือเปลี่ยน section
             </div>
             <ul className="pl-5 list-disc space-y-0.5">
               {pickedConflicts.flatMap(x =>
@@ -1040,7 +1040,7 @@ function AssignmentBlock({
           ) : (
             <div className="space-y-3">
               <div className="text-xs font-medium text-ink-2">
-                ชั่วโมงทำงานต่อสัปดาห์ — กำหนดแยกแต่ละกลุ่มเรียน
+                ชั่วโมงทำงานต่อสัปดาห์ กำหนดแยกแต่ละกลุ่มเรียน
               </div>
               {a.section_ids.map(sid => {
                 const sec = sections.find(s => s.id === sid);
@@ -1058,7 +1058,7 @@ function AssignmentBlock({
                       {sec?.track === "special" && <span className="text-[11px] text-ink-3">ภาคพิเศษ</span>}
                       {mates.length > 0 && (
                         <span className="text-[11px] text-brand">
-                          สอนพร้อมกับ Sec {mates.join(", ")} — เบิกรวมเป็นก้อนเดียว
+                          สอนพร้อมกับ Sec {mates.join(", ")} เบิกรวมเป็นก้อนเดียว
                         </span>
                       )}
                     </div>
@@ -1122,7 +1122,7 @@ function AssignmentBlock({
           const msg = overDaily
             ? `เกิน ${weeklyCap.toFixed(0)} ชม./สัปดาห์ ที่ลงบันทึกเวลาได้จริง (เพดาน ${(weeklyCap / WORKING_DAYS_PER_WEEK).toFixed(0)} ชม./วัน ตามประกาศ × ${WORKING_DAYS_PER_WEEK} วันทำการ)`
             : gradUnder
-            ? `ต้องกรอกอย่างน้อย ${GRAD_MIN_HRS} ชม./สัปดาห์ ตามระเบียบบัณฑิตศึกษา — ยังส่งคำขอไม่ได้`
+            ? `ต้องกรอกอย่างน้อย ${GRAD_MIN_HRS} ชม./สัปดาห์ ตามระเบียบบัณฑิตศึกษา ยังส่งคำขอไม่ได้`
             : gradOver
             ? `เกินขีดจำกัด ${GRAD_MAX_HRS} ชม./สัปดาห์`
             : !isGrad && total === 0
@@ -1200,7 +1200,7 @@ function UndergradWorkload({
           </div>
           {lecBlocked && (
             <div className="mb-2 text-[11px] text-amber-700">
-              ทุกคาบบรรยายของกลุ่มนี้ตรงกับตารางเรียนของ TA — เช็คชื่อไม่ได้ แต่ยังช่วยตรวจงาน/งานอื่นนอกคาบได้
+              ทุกคาบบรรยายของกลุ่มนี้ตรงกับตารางเรียนของ TA เช็คชื่อไม่ได้ แต่ยังช่วยตรวจงาน/งานอื่นนอกคาบได้
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1244,7 +1244,7 @@ function UndergradWorkload({
           <div className="mb-2 text-[11px] text-ink-3">เลือกได้อย่างใดอย่างหนึ่ง</div>
           {labBlocked && (
             <div className="mb-2 text-[11px] text-amber-700">
-              ทุกคาบปฏิบัติการของกลุ่มนี้ตรงกับตารางเรียนของ TA — สอนปฏิบัติการไม่ได้ แต่ยังทำงานอื่นนอกคาบได้
+              ทุกคาบปฏิบัติการของกลุ่มนี้ตรงกับตารางเรียนของ TA สอนปฏิบัติการไม่ได้ แต่ยังทำงานอื่นนอกคาบได้
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1432,7 +1432,7 @@ function SectionPicker({
                   {s.track === "special" ? (
                     <span className="text-xs text-ink-3 ml-1">· ภาคพิเศษ</span>
                   ) : null}
-                  {bad && <span className="text-[10px] text-red-600 ml-1">· เลือกไม่ได้ — ตารางเรียนทับ</span>}
+                  {bad && <span className="text-[10px] text-red-600 ml-1">· เลือกไม่ได้ ตารางเรียนทับ</span>}
                 </span>
               </Checkbox.Content>
             </Checkbox>
@@ -1819,7 +1819,7 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
         <Chip tone="warn"><AlertCircle size={12} /> ส่งช้า</Chip>
         <div className="flex flex-col min-w-0">
           <div className="text-sm font-medium text-amber-900">
-            เลยกำหนดแล้ว — ส่งคำขอได้ตามปกติ แต่จะถูกทำเครื่องหมายว่า “ล่าช้า”
+            เลยกำหนดแล้ว ส่งคำขอได้ตามปกติ แต่จะถูกทำเครื่องหมายว่า “ล่าช้า”
           </div>
           <div className="text-xs text-amber-800">
             <b>การเบิกจ่ายค่าตอบแทนจะล่าช้าไปด้วย</b> · กำหนดเดิม: {formatThaiDateTime(state.window.closes_at)}
@@ -1845,7 +1845,7 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
           <Clock size={14} className="inline -mt-0.5 mr-1" />
           {state.window && state.remainingMs !== undefined
             ? `เหลืออีก ${formatRemaining(state.remainingMs)} ถึงกำหนดส่ง`
-            : "ไม่มีกำหนดส่ง — ส่งคำขอได้ตลอด"}
+            : "ไม่มีกำหนดส่ง ส่งคำขอได้ตลอด"}
         </div>
         <div className={"text-xs " + (urgent ? "text-amber-800" : "text-emerald-800")}>
           {state.window

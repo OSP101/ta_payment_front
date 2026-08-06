@@ -145,7 +145,7 @@ export default function LoginPage() {
                   )}
                   {THAI_RE.test(email) && (
                     <p className="text-xs text-warning mt-1">
-                      ตรวจพบอักษรไทย — กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN
+                      ตรวจพบอักษรไทย กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN
                     </p>
                   )}
                 </TextField>
@@ -181,7 +181,7 @@ export default function LoginPage() {
                   )}
                   {THAI_RE.test(password) && (
                     <p className="text-xs text-warning mt-1">
-                      ตรวจพบอักษรไทยในรหัสผ่าน — กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN
+                      ตรวจพบอักษรไทยในรหัสผ่าน กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN
                     </p>
                   )}
                 </TextField>

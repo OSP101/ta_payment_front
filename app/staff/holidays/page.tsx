@@ -110,7 +110,7 @@ export default function StaffHolidaysPage() {
         fetched: number; inserted: number; updated: number; skipped: number;
       }>(`/holidays/sync-from-bot?year=${year}`);
       notify.success(
-        `ซิงก์จาก BOT สำเร็จ — เพิ่มใหม่ ${res.inserted}, อัปเดต ${res.updated}, ข้าม ${res.skipped} จากทั้งหมด ${res.fetched}`,
+        `ซิงก์จาก BOT สำเร็จ เพิ่มใหม่ ${res.inserted}, อัปเดต ${res.updated}, ข้าม ${res.skipped} จากทั้งหมด ${res.fetched}`,
       );
       await refresh();
     } catch (e) {
@@ -149,7 +149,7 @@ export default function StaffHolidaysPage() {
     <div>
       <PageHeader
         title="วันหยุดราชการ"
-        description="รายการวันหยุดที่ระบบใช้ตรวจสอบการลงเวลาปฏิบัติงานของ TA — ถ้าคาบเรียนตรงกับวันหยุด TA จะลงชั่วโมงไม่ได้จนกว่าอาจารย์จะระบุวันชดเชย"
+        description="รายการวันหยุดที่ระบบใช้ตรวจสอบการลงเวลาปฏิบัติงานของ TA ถ้าคาบเรียนตรงกับวันหยุด TA จะลงชั่วโมงไม่ได้จนกว่าอาจารย์จะระบุวันชดเชย"
         actions={
           <>
             <span data-tour="holidays-sync" className="flex gap-2">
@@ -178,7 +178,7 @@ export default function StaffHolidaysPage() {
         status="warning"
         icon={<AlertTriangle size={14} />}
         title="กด “ซิงก์จาก BOT” เพื่อดึงวันหยุดจันทรคติ/วันชดเชยของปีนี้"
-        description="ระบบใช้ข้อมูลจากธนาคารแห่งประเทศไทย (BOT) ครอบคลุมวันหยุดพุทธศาสนา (มาฆบูชา วิสาขบูชา อาสาฬหบูชา เข้าพรรษา) และวันชดเชย — การซิงก์ซ้ำจะไม่ทับชื่อที่ staff แก้ไว้ ส่วนวันหยุดพิเศษที่ ครม. ประกาศเพิ่มภายหลัง อาจต้องเพิ่มด้วยตนเอง"
+        description="ระบบใช้ข้อมูลจากธนาคารแห่งประเทศไทย (BOT) ครอบคลุมวันหยุดพุทธศาสนา (มาฆบูชา วิสาขบูชา อาสาฬหบูชา เข้าพรรษา) และวันชดเชย การซิงก์ซ้ำจะไม่ทับชื่อที่ staff แก้ไว้ ส่วนวันหยุดพิเศษที่ ครม. ประกาศเพิ่มภายหลัง อาจต้องเพิ่มด้วยตนเอง"
       />
 
       <div className="mt-4">
@@ -418,7 +418,7 @@ function HolidayFormModal({
       <div className="flex flex-col gap-3">
         <FieldGroup
           label={<>วันที่<RequiredMark /></>}
-          hint={isEdit ? "แก้วันที่ไม่ได้ — ต้องลบแล้วเพิ่มใหม่ (เพื่อรักษา audit)" : undefined}
+          hint={isEdit ? "แก้วันที่ไม่ได้ ต้องลบแล้วเพิ่มใหม่ (เพื่อรักษา audit)" : undefined}
         >
           <DatePicker value={date} onChange={setDate} label="วันที่" isDisabled={isEdit} />
         </FieldGroup>
@@ -431,7 +431,7 @@ function HolidayFormModal({
         <FieldGroup
           label={<>ประเภท<RequiredMark /></>}
           hint={PARTIAL_DAY_SOURCES.includes(source)
-            ? "วันหยุดของคณะมักไม่ได้หยุดทั้งวัน — ระบุช่วงเวลาได้ด้านล่าง"
+            ? "วันหยุดของคณะมักไม่ได้หยุดทั้งวัน ระบุช่วงเวลาได้ด้านล่าง"
             : undefined}
         >
           <Select value={source} onChange={e => setSource(e.target.value as Holiday["source"])} disabled={isEdit}>
@@ -447,8 +447,8 @@ function HolidayFormModal({
           <FieldGroup
             label="ช่วงเวลาที่หยุด"
             hint={usePartial
-              ? "คาบเรียนที่คาบเกี่ยวกับช่วงนี้เท่านั้นที่จะถูกงด — คาบนอกช่วงยังเรียนและลงเวลาได้ตามปกติ และใช้เป็นเวลาชดเชยในวันเดียวกันได้"
-              : "หยุดทั้งวัน — ทุกคาบของวันนี้จะถูกงด"}
+              ? "คาบเรียนที่คาบเกี่ยวกับช่วงนี้เท่านั้นที่จะถูกงด คาบนอกช่วงยังเรียนและลงเวลาได้ตามปกติ และใช้เป็นเวลาชดเชยในวันเดียวกันได้"
+              : "หยุดทั้งวัน ทุกคาบของวันนี้จะถูกงด"}
           >
             <div className="flex flex-col gap-2">
               <Select
@@ -515,7 +515,7 @@ function BulkImportModal({
     for (const line of lines) {
       const m = /^(\d{4}-\d{2}-\d{2})\s*[|\t\s]\s*(.+)$/.exec(line);
       if (!m) {
-        setError(`บรรทัดไม่ถูกต้อง: "${line}" — รูปแบบต้องเป็น "YYYY-MM-DD | ชื่อวันหยุด"`);
+        setError(`บรรทัดไม่ถูกต้อง: "${line}" รูปแบบต้องเป็น "YYYY-MM-DD | ชื่อวันหยุด"`);
         return;
       }
       let nameTH = m[2].trim();
@@ -528,11 +528,11 @@ function BulkImportModal({
       const start = pad(win[2]);
       const end = pad(win[3]);
       if (!nameTH) {
-        setError(`บรรทัดไม่ถูกต้อง: "${line}" — ขาดชื่อวันหยุด`);
+        setError(`บรรทัดไม่ถูกต้อง: "${line}" ขาดชื่อวันหยุด`);
         return;
       }
       if (start >= end) {
-        setError(`บรรทัดไม่ถูกต้อง: "${line}" — เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`);
+        setError(`บรรทัดไม่ถูกต้อง: "${line}" เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`);
         return;
       }
       rows.push({ holiday_date: m[1], name_th: nameTH, source, start_time: start, end_time: end });
@@ -566,7 +566,7 @@ function BulkImportModal({
       <div className="flex flex-col gap-3">
         <FieldGroup
           label="รายการ (บรรทัดละ 1 วันหยุด)"
-          hint="รูปแบบ: YYYY-MM-DD | ชื่อวันหยุด — เติม | HH:MM-HH:MM ต่อท้ายถ้าหยุดแค่บางช่วง (เว้นไว้ = หยุดทั้งวัน)"
+          hint="รูปแบบ: YYYY-MM-DD | ชื่อวันหยุด เติม | HH:MM-HH:MM ต่อท้ายถ้าหยุดแค่บางช่วง (ถ้าไม่ใส่เวลาถือว่าหยุดทั้งวัน)"
         >
           <textarea
             value={text}

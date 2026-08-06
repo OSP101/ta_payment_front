@@ -7,6 +7,8 @@ import {
   Info, Newspaper, PartyPopper, AlertTriangle, Radio,
 } from "lucide-react";
 import { Panel, EmptyState, Chip, type ChipTone } from "./ui";
+import AttachmentGallery, { type Attachment } from "./AttachmentGallery";
+import RichText from "./RichText";
 
 // Feed of published announcements as seen by the audience. The staff
 // composer at /staff/announce owns the create/edit flow; this file is
@@ -22,6 +24,7 @@ interface Ann {
   audience: string[];
   pinned: boolean;
   cover_image_url?: string | null;
+  attachments?: Attachment[];
   published_at?: string | null;
   expires_at?: string | null;
   status: "draft" | "scheduled" | "live" | "expired";
@@ -111,8 +114,8 @@ function AnnouncementItem({ a, compact }: { a: Ann; compact: boolean }) {
         </h3>
 
         {!compact && (
-          <div className="text-sm text-foreground/85 whitespace-pre-wrap">
-            {preview}
+          <div className="text-sm text-foreground/85">
+            <RichText body={preview} />
             {bodyLong && (
               <button
                 type="button"
@@ -124,6 +127,8 @@ function AnnouncementItem({ a, compact }: { a: Ann; compact: boolean }) {
             )}
           </div>
         )}
+
+        {!compact && !!a.attachments?.length && <AttachmentGallery items={a.attachments} />}
       </article>
     </li>
   );

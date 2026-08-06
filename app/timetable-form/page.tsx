@@ -158,7 +158,7 @@ function TimetableFormInner() {
 
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm text-muted">
-          พิมพ์แนวนอน A4 — ช่องลายเซ็นอยู่ท้ายฟอร์ม
+          พิมพ์แนวนอน A4 ช่องลายเซ็นอยู่ท้ายฟอร์ม
         </div>
         <div className="flex gap-2">
           {/* Two ways out on purpose. Browser print is instant and lays the grid
@@ -178,7 +178,7 @@ function TimetableFormInner() {
           <Alert
             status="warning"
             title="ยังไม่มีตารางเรียนของนักศึกษา"
-            description="ครึ่งบนของแต่ละวันจะว่าง — ฟอร์มนี้ต้องมีตารางเรียนจึงจะตรวจการทับซ้อนได้ตามแบบของคณะ"
+            description="ครึ่งบนของแต่ละวันจะว่าง ฟอร์มนี้ต้องมีตารางเรียนจึงจะตรวจการทับซ้อนได้ตามแบบของคณะ"
           />
         </div>
       )}
@@ -208,7 +208,7 @@ function TimetableFormInner() {
         {(["own_class", "lecture", "lab", "review"] as const).map(k => (
           <span key={k} className="inline-flex items-center gap-1.5">
             <span className="inline-block h-3 w-3 rounded-sm border border-black/20" style={{ background: STYLE[k].bg }} />
-            {k === "own_class" ? "คาบเรียนของนักศึกษา" : `งาน TA — ${STYLE[k].tag}`}
+            {k === "own_class" ? "คาบเรียนของนักศึกษา" : `งาน TA ${STYLE[k].tag}`}
           </span>
         ))}
       </div>

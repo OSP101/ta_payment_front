@@ -96,14 +96,14 @@ export function DocumentProgressBoard({
         {p.all_exported ? (
           <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 size={18} />
-            <span><b>ส่งออกเอกสารครบทุกวิชาแล้ว</b> ({p.exported_courses}/{p.total_courses} วิชา) — เริ่มติดตามการเซ็นได้</span>
+            <span><b>ส่งออกเอกสารครบทุกวิชาแล้ว</b> ({p.exported_courses}/{p.total_courses} วิชา) เริ่มติดตามการเซ็นได้</span>
           </div>
         ) : (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
               <AlertTriangle size={18} />
               <span>
-                <b>ยังส่งออกไม่ครบ</b> — ส่งออกแล้ว {p.exported_courses}/{p.total_courses} วิชา
+                <b>ยังส่งออกไม่ครบ</b> ส่งออกแล้ว {p.exported_courses}/{p.total_courses} วิชา
                 {" "}ต้องส่งออกให้ครบทุกวิชาก่อนจึงจะเริ่มติดตามการเซ็นได้
               </span>
             </div>
@@ -156,7 +156,7 @@ export function DocumentProgressBoard({
                 : isCurrent
                 ? "คลิกเพื่อย้อนขั้นนี้"
                 : blockedNext
-                ? `ยังกดไม่ได้ — ${st.who}ยังเซ็นไม่ครบ`
+                ? `ยังกดไม่ได้ ${st.who}ยังเซ็นไม่ครบ`
                 : isNext
                 ? "คลิกเพื่อยืนยันว่าขั้นนี้เสร็จแล้ว"
                 : "ต้องทำขั้นก่อนหน้าให้เสร็จก่อน";
@@ -196,7 +196,7 @@ export function DocumentProgressBoard({
 
         {p.all_exported && !done && p.current_role && !p.can_advance && (p.signers_missing?.length ?? 0) > 0 && (
           <div className="mx-4 mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-            <b>ยังไปขั้นถัดไปไม่ได้</b> — เหลืออีก {p.signers_missing!.length} รายที่ยังไม่เซ็น:{" "}
+            <b>ยังไปขั้นถัดไปไม่ได้</b> เหลืออีก {p.signers_missing!.length} รายที่ยังไม่เซ็น:{" "}
             {p.signers_missing!.slice(0, 4).join(" · ")}
             {p.signers_missing!.length > 4 && ` และอีก ${p.signers_missing!.length - 4} ราย`}
           </div>
@@ -339,7 +339,7 @@ function SignatureChecklistPanel({
           title={stage >= 5 ? "เดินเอกสารครบทุกขั้นแล้ว" : "ขั้นนี้ไม่มีรายการให้เซ็น"}
           description={
             stage >= 5
-              ? "คณบดีลงนามแล้ว — จบกระบวนการของเทอมนี้"
+              ? "คณบดีลงนามแล้ว จบกระบวนการของเทอมนี้"
               : "เป็นขั้นที่เจ้าหน้าที่ดำเนินการเอง กดที่วงกลมขั้นถัดไปเมื่อทำเสร็จ"
           }
         />
@@ -361,11 +361,11 @@ function SignatureChecklistPanel({
           <div className="font-semibold">
             ขั้นที่ {stage + 1} · {stageInfo?.label ?? ""}
           </div>
-          <div className="text-xs text-muted">รอ{stageInfo?.who ?? ""}ลงนาม — ติ๊กทีละคนเมื่อได้ลายเซ็นแล้ว</div>
+          <div className="text-xs text-muted">รอ{stageInfo?.who ?? ""}ลงนาม ติ๊กทีละคนเมื่อได้ลายเซ็นแล้ว</div>
         </div>
         {pendingCount > 0
           ? <Chip tone="warn">เซ็นแล้ว {signedCount}/{items.length}</Chip>
-          : <Chip tone="success"><Check size={12} /> ครบแล้ว {items.length}/{items.length} — กดขั้นถัดไปได้</Chip>}
+          : <Chip tone="success"><Check size={12} /> ครบแล้ว {items.length}/{items.length} กดขั้นถัดไปได้</Chip>}
         {canEdit && role === "lecturer" && (
           <Button variant="secondary" size="sm" className="ml-auto" onClick={remind} disabled={busy || pendingCount === 0}>
             <Mail size={14} /> ส่งอีเมลเตือนอาจารย์ที่ยังไม่เซ็น

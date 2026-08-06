@@ -177,7 +177,7 @@ export default function ImportModal({
       {phase === "upload" && (
         <FieldGroup
           label="ไฟล์ Excel"
-          hint="ไฟล์ 'รายวิชาที่เปิดสอน-<เทอม>-<ปี>.xlsx' จากระบบทะเบียน — ระบบสร้างวิชาจากไฟล์โดยตรง (อ่านชีต 'Normalized' หรือไฟล์ดิบ 'sysTitle' ก็ได้)"
+          hint="ไฟล์ 'รายวิชาที่เปิดสอน-<เทอม>-<ปี>.xlsx' จากระบบทะเบียน ระบบสร้างวิชาจากไฟล์โดยตรง (อ่านชีต 'Normalized' หรือไฟล์ดิบ 'sysTitle' ก็ได้)"
         >
           <input
             type="file"

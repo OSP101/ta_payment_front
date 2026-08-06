@@ -26,7 +26,7 @@ export interface FormulaExample {
 const DEFAULT_EXAMPLE: FormulaExample = {
   lecCr: 2, labCr: 1, students: 5,
   trackLabel: "ภาคปกติ",
-  courseName: "ตัวอย่าง — SW-TESTING (3 นก.)",
+  courseName: "ตัวอย่าง SW-TESTING (3 นก.)",
 };
 
 export function FormulaHelpModal({
@@ -54,7 +54,7 @@ export function FormulaHelpModal({
       title={
         <span className="flex items-center gap-2">
           <Sparkles size={18} className="text-accent" />
-          วิธีคิดงบ TA — {trackLabel}
+          วิธีคิดงบ TA {trackLabel}
         </span>
       }
       size="xl"
@@ -156,8 +156,8 @@ export function FormulaHelpModal({
         <div className="text-xs text-muted pt-2 border-t border-border flex items-start gap-2">
           <InfoIcon size={14} className="shrink-0 mt-0.5" />
           <span>
-            <b>หมายเหตุ:</b> ตัวเลขนี้เป็น <b>เพดานงบต่อวิชา</b> — ค่าจ้างจริงต่อ TA เบิกตามชั่วโมงจริง
-            (ตรี ปกติ 40 บ./ชม., พิเศษ 50 บ./ชม.) หรือเหมาจ่ายเดือน (โท ปกติ 3,000, พิเศษ 4,000) —
+            <b>หมายเหตุ:</b> ตัวเลขนี้เป็น <b>เพดานงบต่อวิชา</b> ค่าจ้างจริงต่อ TA เบิกตามชั่วโมงจริง
+            (ตรี ปกติ 40 บ./ชม., พิเศษ 50 บ./ชม.) หรือเหมาจ่ายเดือน (โท ปกติ 3,000, พิเศษ 4,000)
             รวมทุก TA ต้องไม่เกินเพดานงบนี้
           </span>
         </div>

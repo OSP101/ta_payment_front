@@ -80,7 +80,7 @@ export function CertifierPicker({ termId }: { termId: string }) {
             the sane default and must stay reachable after a manual choice. */}
         <option value="">
           {headSeat
-            ? `ตามตำแหน่ง — ${headSeat.academic_prefix ?? ""}${headSeat.full_name}`
+            ? `ตามตำแหน่ง ${headSeat.academic_prefix ?? ""}${headSeat.full_name}`
             : "ตามตำแหน่งหัวหน้าสาขา (ยังไม่มีในระบบ)"}
         </option>
         {active.map(o => (
@@ -93,7 +93,7 @@ export function CertifierPicker({ termId }: { termId: string }) {
       {current?.resolved && current.acting_for && (
         <div className="mt-1 rounded-md border border-amber-200 bg-amber-50/60 px-2 py-1.5 text-[11px] leading-tight text-amber-900">
           <div className="flex items-center gap-1 font-medium">
-            <AlertTriangle size={11} /> ไม่ใช่หัวหน้าสาขา — จะพิมพ์เป็น “รักษาการแทน”
+            <AlertTriangle size={11} /> ไม่ใช่หัวหน้าสาขา จะพิมพ์เป็น “รักษาการแทน”
           </div>
           {/* Shown as the form will print it, so the claim about authority can
               be checked before it is signed. */}
@@ -106,7 +106,7 @@ export function CertifierPicker({ termId }: { termId: string }) {
 
       {current && !current.resolved && (
         <p className="mt-1 text-[11px] text-amber-700">
-          ยังไม่มีหัวหน้าสาขาในระบบ — ช่องผู้รับรองในเอกสารจะเว้นว่างไว้ให้เซ็นเอง
+          ยังไม่มีหัวหน้าสาขาในระบบ ช่องผู้รับรองในเอกสารจะเว้นว่างไว้ให้เซ็นเอง
         </p>
       )}
     </div>

@@ -69,7 +69,7 @@ export default function OnboardingChecklistCard() {
       >
         <PartyPopper size={18} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
         <div className="text-sm text-emerald-900 dark:text-emerald-100">
-          <b>เตรียมพร้อมเรียบร้อย</b> — ทำครบทั้ง 2 ขั้นตอนแล้ว
+          <b>เตรียมพร้อมเรียบร้อย</b> ทำครบทั้ง 2 ขั้นตอนแล้ว
         </div>
       </div>
     );
@@ -107,7 +107,7 @@ export default function OnboardingChecklistCard() {
               <span className="text-xs tabular-nums text-muted">{doneCount}/{total}</span>
             </div>
             {/* Says WHY, not how the widget behaves. The old line ("ระบบจะปิด
-                กล่องนี้ให้อัตโนมัติ") described the UI to itself — noise once
+                กล่องนี้ให้อัตโนมัติ") described the UI to itself noise once
                 the card sits in the page like everything else. */}
             <p className="mt-0.5 text-xs text-muted">
               ต้องทำครบทั้ง 2 ขั้นตอน ระบบจึงจะเริ่มบันทึกชั่วโมงและเบิกจ่ายให้ได้

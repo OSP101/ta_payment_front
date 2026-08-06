@@ -40,7 +40,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
     <div>
       <PageHeader
         title="โปรแกรมคำนวณงบ TA"
-        description={courseName ? `${courseName.code} — ${courseName.name_th}` : "ประเมินภาระงาน จำนวน TA และงบประมาณ"}
+        description={courseName ? `${courseName.code} ${courseName.name_th}` : "ประเมินภาระงาน จำนวน TA และงบประมาณ"}
         actions={
           <Button variant="secondary" onClick={() => setHelpTrack("regular")}>
             <HelpCircle size={16} />วิธีคิดสูตร
@@ -141,7 +141,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             }
           >
             <div className="text-sm text-muted">
-              สูตรอ้างอิงจากไฟล์ Excel <b>ค่า-TA-ภาคต้น-ปี-2560</b> ชีต <b>2_59 ป.ตรี</b> —
+              สูตรอ้างอิงจากไฟล์ Excel <b>ค่า-TA-ภาคต้น-ปี-2560</b> ชีต <b>2_59 ป.ตรี</b>
               คลิกปุ่ม "ดูวิธีคิด" เพื่อดูตัวอย่างการคำนวณของวิชานี้ พร้อมกราฟิกอธิบายทีละขั้น
             </div>
           </Panel>

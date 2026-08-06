@@ -188,7 +188,7 @@ export default function Shell({
             <BrandBlock brandTitle={brandTitle} />
           ) : (
             <div className="h-14 flex items-center justify-center border-b border-border">
-              <Link href="/" aria-label={`${brandTitle} — ไปหน้าแรก`}
+              <Link href="/" aria-label={`${brandTitle} ไปหน้าแรก`}
                     className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
                 T
               </Link>
@@ -306,7 +306,7 @@ function BrandMark({ brandTitle }: { brandTitle: string }) {
   return (
     <Link
       href="/"
-      aria-label={`${brandTitle} — ไปหน้าแรก`}
+      aria-label={`${brandTitle} ไปหน้าแรก`}
       className="flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 hover:bg-surface-secondary transition-colors"
     >
       <div className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">

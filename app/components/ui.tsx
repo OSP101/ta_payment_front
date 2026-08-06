@@ -266,7 +266,7 @@ export function StatCard({
       )}
       {/* line-clamp, not truncate: at the 2-column mobile breakpoint a card is
           ~115px wide, so any Thai label past ~14 characters became
-          "แบบฟอร์มหนี้ร…" — present but unreadable. Two lines fit every label
+          "แบบฟอร์มหนี้ร…" present but unreadable. Two lines fit every label
           the app uses, and h-full keeps a taller card level with its row. */}
       <div className="min-w-0 flex-1">
         <div className="text-xs text-muted line-clamp-2">{label}</div>

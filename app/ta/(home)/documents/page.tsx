@@ -40,7 +40,7 @@ const ACCEPT_ATTR = ".pdf,application/pdf";
 function validateUploadFile(f: File): string | null {
   if (f.size > MAX_UPLOAD_BYTES) {
     const mb = (f.size / (1024 * 1024)).toFixed(2);
-    return `ไฟล์ใหญ่เกิน ${MAX_UPLOAD_MB} MB (${mb} MB) — โปรดย่อขนาดก่อนอัปโหลด`;
+    return `ไฟล์ใหญ่เกิน ${MAX_UPLOAD_MB} MB (${mb} MB) โปรดย่อขนาดก่อนอัปโหลด`;
   }
   // Some browsers omit type for uncommon files; fall back to extension.
   const ext = f.name.toLowerCase().split(".").pop() ?? "";
@@ -48,7 +48,7 @@ function validateUploadFile(f: File): string | null {
   if (!looksPDF) {
     // Name the likely cause: a phone photo is what people actually try first.
     if (["jpg", "jpeg", "png", "heic", "heif", "webp"].includes(ext)) {
-      return "ตอนนี้รับเฉพาะไฟล์ PDF — ถ้าถ่ายรูปมา ให้แปลงเป็น PDF ก่อน (แอปกล้อง/สแกนบนมือถือส่วนใหญ่บันทึกเป็น PDF ได้)";
+      return "ตอนนี้รับเฉพาะไฟล์ PDF ถ้าถ่ายรูปมา ให้แปลงเป็น PDF ก่อน (แอปกล้อง/สแกนบนมือถือส่วนใหญ่บันทึกเป็น PDF ได้)";
     }
     return "รองรับเฉพาะไฟล์ PDF เท่านั้น";
   }
@@ -326,7 +326,7 @@ export default function ProfilePage() {
             status="danger"
             icon={<AlertTriangle size={18} />}
             title="ไม่ผ่านการตรวจสอบ กรุณาแก้ไขและส่งใหม่"
-            description={`เหตุผล: ${data.reject_reason ?? "-"}\nแก้ไขข้อมูล/อัปโหลดไฟล์ที่ถูกตีกลับ แล้วกด “บันทึกและทำขั้นตอนถัดไป” เพื่อส่งอีกครั้ง — ประวัติการส่งเดิมยังเก็บไว้ให้เจ้าหน้าที่ตรวจสอบย้อนหลังได้`}
+            description={`เหตุผล: ${data.reject_reason ?? "-"}\nแก้ไขข้อมูล/อัปโหลดไฟล์ที่ถูกตีกลับ แล้วกด “บันทึกและทำขั้นตอนถัดไป” เพื่อส่งอีกครั้ง ประวัติการส่งเดิมยังเก็บไว้ให้เจ้าหน้าที่ตรวจสอบย้อนหลังได้`}
           />
         </div>
       )}
@@ -340,7 +340,7 @@ export default function ProfilePage() {
           <Alert
             status="warning"
             icon={<AlertTriangle size={18} />}
-            title={`เจ้าหน้าที่ขอให้แก้ไข ${rejectedDocs.length} รายการ — เฉพาะรายการที่ระบุ ส่วนอื่นที่ผ่านแล้วไม่ต้องทำใหม่`}
+            title={`เจ้าหน้าที่ขอให้แก้ไข ${rejectedDocs.length} รายการ เฉพาะรายการที่ระบุ ส่วนอื่นที่ผ่านแล้วไม่ต้องทำใหม่`}
             description={rejectedDocs
               .map(d => `• ${DOC_LABEL[d.kind] ?? d.kind}: ${d.reject_reason ?? "-"}`)
               .join("\n")}
@@ -368,10 +368,10 @@ export default function ProfilePage() {
             </div>
             <div className="mt-2 text-xs text-muted">
               {anyNeedsFix
-                ? "มีบางขั้นตอนถูกตีกลับให้แก้ไข — โปรดตรวจสอบและส่งใหม่"
+                ? "มีบางขั้นตอนถูกตีกลับให้แก้ไข โปรดตรวจสอบและส่งใหม่"
                 : allDone
                   ? "ครบทุกขั้นตอนแล้ว รอเจ้าหน้าที่ตรวจสอบและอนุมัติ"
-                  : "ทำแต่ละขั้นตอนตามลำดับ — เมื่อครบทั้งหมด เจ้าหน้าที่จะตรวจสอบและอนุมัติภายในภายหลัง"}
+                  : "ทำแต่ละขั้นตอนตามลำดับ เมื่อครบทั้งหมด เจ้าหน้าที่จะตรวจสอบและอนุมัติภายในภายหลัง"}
             </div>
           </div>
         </div>
@@ -526,7 +526,7 @@ function ProfileStep({
       : undefined;
   const nidChecksumWarn =
     touched.national_id && nidDigits.length === 13 && !isValidThaiID(nidDigits)
-      ? "หลักตรวจสอบไม่ตรงกับ 12 หลักแรก — โปรดตรวจว่าพิมพ์ถูกทุกหลัก (บันทึกได้ปกติหากยืนยันว่าถูกต้อง)"
+      ? "หลักตรวจสอบไม่ตรงกับ 12 หลักแรก โปรดตรวจว่าพิมพ์ถูกทุกหลัก (บันทึกได้ปกติหากยืนยันว่าถูกต้อง)"
       : undefined;
   const branchCodeErr =
     touched.branch_code && form.branch_code.length > 0 && form.branch_code.length !== 4
@@ -600,7 +600,7 @@ function ProfileStep({
               ? <span className="text-warning">{nidChecksumWarn}</span>
               : nidDigits.length > 0 && !nidErr
                 ? `กรอกครบ ${nidDigits.length}/13`
-                : "ระบบไม่จัดเก็บเลขบัตรลงฐานข้อมูล — ใช้พิมพ์ลงแบบฟอร์มเจ้าหนี้เท่านั้น"
+                : "ระบบไม่จัดเก็บเลขบัตรลงฐานข้อมูล ใช้พิมพ์ลงแบบฟอร์มเจ้าหนี้เท่านั้น"
           }
           error={nidErr}
         >
@@ -788,7 +788,7 @@ function CreditorFormStep({
       fd.append("file", file);
       await api.uploadWithProgress("/me/documents", fd, setUploadProgress);
       setFile(null);
-      notify.success(`อัปโหลด ${name} เรียบร้อย — ไฟล์ผ่านการสแกนไวรัสแล้ว`);
+      notify.success(`อัปโหลด ${name} เรียบร้อย ไฟล์ผ่านการสแกนไวรัสแล้ว`);
       await mutate("/me/documents");
       onDone();
     } catch (e) {
@@ -806,7 +806,7 @@ function CreditorFormStep({
         icon={<AlertTriangle size={16} />}
         title={doc ? "กรอกข้อมูลขั้นตอนที่ 1 อีกครั้งเพื่อสร้างฟอร์มใหม่" : "กรอกข้อมูลในขั้นตอนที่ 1 ให้ครบก่อน"}
         description={doc
-          ? "ระบบไม่จัดเก็บเลขบัตร ข้อมูลธนาคาร และลายเซ็นไว้ในฐานข้อมูล (PDPA) — ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง"
+          ? "ระบบไม่จัดเก็บเลขบัตร ข้อมูลธนาคาร และลายเซ็นไว้ในฐานข้อมูล (PDPA) ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง"
           : "ระบบจะสร้างฟอร์มจากข้อมูลที่กรอก โดยไม่บันทึกข้อมูลเหล่านั้นลงฐานข้อมูล"}
       />
     );
@@ -817,7 +817,7 @@ function CreditorFormStep({
       <div className="mb-3">
         <div className="flex items-center gap-2 mb-2">
           <div className="text-sm text-muted flex-1">
-            ตรวจดูฟอร์มที่ระบบกรอกให้ล่วงหน้าด้านล่าง — หากถูกต้อง กด{" "}
+            ตรวจดูฟอร์มที่ระบบกรอกให้ล่วงหน้าด้านล่าง หากถูกต้อง กด{" "}
             <span className="font-medium">“ยืนยันและบันทึกเอกสารนี้”</span>
           </div>
           <button
@@ -951,7 +951,7 @@ function DocStep({
       fd.append("file", file);
       await api.uploadWithProgress("/me/documents", fd, setUploadProgress);
       setChosen(null);
-      notify.success(`อัปโหลด ${name} เรียบร้อย — ไฟล์ผ่านการสแกนไวรัสแล้ว`);
+      notify.success(`อัปโหลด ${name} เรียบร้อย ไฟล์ผ่านการสแกนไวรัสแล้ว`);
       await mutate("/me/documents");
       onUploaded();
     } catch (e) {
@@ -1016,10 +1016,10 @@ function DocStep({
           </div>
           <PdfFrame
             src={previewURL}
-            title={`ตรวจก่อนอัปโหลด — ${file.name}`}
+            title={`ตรวจก่อนอัปโหลด ${file.name}`}
           />
           <p className="border-t border-[var(--hairline)] px-3 py-2 text-xs text-muted">
-            ตรวจว่าเป็นเอกสารที่ถูกต้องและอ่านออกชัดเจน — ถ้าอัปผิดไฟล์
+            ตรวจว่าเป็นเอกสารที่ถูกต้องและอ่านออกชัดเจน ถ้าอัปผิดไฟล์
             เจ้าหน้าที่จะตีกลับและต้องส่งใหม่
           </p>
         </div>

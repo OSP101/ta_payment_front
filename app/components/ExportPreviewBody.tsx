@@ -143,7 +143,7 @@ export function ExportPreviewBody({
   if (error) {
     return (
       <div className="py-8 text-center text-sm text-danger">
-        โหลดข้อมูลไม่สำเร็จ — {errMessage(error)}
+        โหลดข้อมูลไม่สำเร็จ {errMessage(error)}
       </div>
     );
   }
@@ -164,20 +164,20 @@ export function ExportPreviewBody({
 
       {data.over_budget && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-          <b>ยอดรวมเกินงบรายวิชา</b> — ระบบเกลี่ยเงิน (pro-rata) ให้อัตโนมัติ คอลัมน์ “จ่ายจริง” คือยอดหลังเกลี่ยแล้ว
+          <b>ยอดรวมเกินงบรายวิชา</b> ระบบเกลี่ยเงิน (pro-rata) ให้อัตโนมัติ คอลัมน์ “จ่ายจริง” คือยอดหลังเกลี่ยแล้ว
         </div>
       )}
 
       {!data.all_ready && (
         <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
-          <b>ยังดาวน์โหลดไม่ได้</b> — มี TA ที่ข้อมูลไม่พร้อม {notReady.length} คน:{" "}
-          {notReady.map(r => `${r.full_name} (${r.profile_issue})`).join(", ")} — โปรดให้ TA แก้ไขหรือเจ้าหน้าที่อนุมัติเอกสารก่อน
+          <b>ยังดาวน์โหลดไม่ได้</b> มี TA ที่ข้อมูลไม่พร้อม {notReady.length} คน:{" "}
+          {notReady.map(r => `${r.full_name} (${r.profile_issue})`).join(", ")} โปรดให้ TA แก้ไขหรือเจ้าหน้าที่อนุมัติเอกสารก่อน
         </div>
       )}
 
       {blockers.length > 0 && (
         <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
-          <b>ยังดาวน์โหลดไม่ได้</b> — ต้องผ่านครบทุกขั้นก่อน เพราะการดาวน์โหลดจะล็อกตัวเลขทันที
+          <b>ยังดาวน์โหลดไม่ได้</b> ต้องผ่านครบทุกขั้นก่อน เพราะการดาวน์โหลดจะล็อกตัวเลขทันที
           <ul className="mt-1 list-disc pl-4 space-y-0.5">
             {blockers.map((b, i) => (
               <li key={i}>
@@ -252,13 +252,13 @@ export function ExportPreviewBody({
         <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
           <input type="checkbox" className="mt-0.5" checked={ack} onChange={e => setAck(e.target.checked)} />
           <span>
-            ตรวจสอบข้อมูลข้างต้นถูกต้องแล้ว — เข้าใจว่าการดาวน์โหลดจะ<b>ล็อกบันทึกเวลาของเดือนที่อนุมัติครบ</b> (แก้ไม่ได้จนกว่าเจ้าหน้าที่จะตีกลับหรือแอดมินปลดล็อก)
+            ตรวจสอบข้อมูลข้างต้นถูกต้องแล้ว เข้าใจว่าการดาวน์โหลดจะ<b>ล็อกบันทึกเวลาของเดือนที่อนุมัติครบ</b> (แก้ไม่ได้จนกว่าเจ้าหน้าที่จะตีกลับหรือแอดมินปลดล็อก)
           </span>
         </label>
       )}
       {alreadyExported && blockers.length === 0 && (
         <p className="text-xs text-ink-3">
-          วิชานี้เคยส่งออก (ล็อก) แล้ว — ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม
+          วิชานี้เคยส่งออก (ล็อก) แล้ว ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม
         </p>
       )}
 

@@ -86,7 +86,7 @@ function SaveStatus({
     return (
       <TipWrap content={error} className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft rounded-md px-2 py-1">
         <CloudOff size={13} />
-        <span className="truncate max-w-[16rem]">บันทึกไม่สำเร็จ — จะลองใหม่อัตโนมัติ</span>
+        <span className="truncate max-w-[16rem]">บันทึกไม่สำเร็จ จะลองใหม่อัตโนมัติ</span>
       </TipWrap>
     );
   }
@@ -435,7 +435,7 @@ export default function TASchedulePage() {
         <Panel>
           <EmptyState
             icon={<Calendar size={28} />}
-            title="โหมด WBA / นักศึกษาปี 4 — ไม่มีตารางเรียนปกติ"
+            title="โหมด WBA / นักศึกษาปี 4 ไม่มีตารางเรียนปกติ"
             description="ระบบจะบันทึกว่าคุณไม่มีคาบเรียนประจำในภาคการศึกษานี้ ปิดสวิตช์ด้านล่างเพื่อกลับไปสร้างตารางเรียน"
           />
         </Panel>
@@ -517,13 +517,13 @@ export default function TASchedulePage() {
           <span>ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)</span>
         </label>
         <p className="text-xs text-muted mt-1">
-          เปิดตัวเลือกนี้เมื่อคุณไม่มีตารางเรียนประจำในภาคเรียนนี้ — ระบบจะข้ามการตรวจสอบทับซ้อนตอนอาจารย์ยื่นคำร้อง
+          เปิดตัวเลือกนี้เมื่อคุณไม่มีตารางเรียนประจำในภาคเรียนนี้ ระบบจะข้ามการตรวจสอบทับซ้อนตอนอาจารย์ยื่นคำร้อง
         </p>
         {!canWba && !isWba && (
           <p className="text-xs text-warning mt-1">
             โหมด WBA ใช้ได้เฉพาะนักศึกษาปริญญาตรีชั้นปีที่ 4 ขึ้นไป
             {me?.study_level === "undergrad" && (me?.study_year ?? 0) < 1
-              ? " — ระบบยังไม่มีข้อมูลชั้นปีของคุณ กรุณาติดต่อเจ้าหน้าที่"
+              ? " ระบบยังไม่มีข้อมูลชั้นปีของคุณ กรุณาติดต่อเจ้าหน้าที่"
               : ""}
           </p>
         )}
@@ -646,7 +646,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
     if (other) {
       const otherTitle = blockTitle(other) || "คาบเรียน";
       // Informational — overlap is allowed (two sections meeting together).
-      setOverlapWarn(`จะซ้อนกับ "${otherTitle}" ${other.start_time}–${other.end_time} — ระบบจะจัดชั้นให้ในตาราง`);
+      setOverlapWarn(`จะซ้อนกับ "${otherTitle}" ${other.start_time}–${other.end_time} ระบบจะจัดชั้นให้ในตาราง`);
     }
   }, [isOpen, isEdit, block?.id, termId, courseCode, courseName, kind, secNo, dow, start, end, note, checkOverlap]);
 
@@ -868,9 +868,9 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
         // ดึงตารางไม่ได้ก็ยังนำเข้าได้ตามปกติ แค่ต้องเลือกประเภทเอง
       }
       if (parsed.eventsTotal === 0) {
-        setError("ไม่พบเหตุการณ์ในไฟล์ (VEVENT) — โปรดตรวจว่าไฟล์เป็น .ics ที่ถูกต้อง");
+        setError("ไม่พบเหตุการณ์ในไฟล์ (VEVENT) โปรดตรวจว่าไฟล์เป็น .ics ที่ถูกต้อง");
       } else if (parsed.blocks.length === 0) {
-        setError("อ่านไฟล์ได้แต่ไม่พบคาบเรียนที่นำเข้าได้ — ทั้งหมดอาจเป็นเหตุการณ์สอบหรืออยู่นอกช่วง 08:00–20:00");
+        setError("อ่านไฟล์ได้แต่ไม่พบคาบเรียนที่นำเข้าได้ ทั้งหมดอาจเป็นเหตุการณ์สอบหรืออยู่นอกช่วง 08:00–20:00");
       }
       setResult(parsed);
     } catch (e) {
@@ -994,8 +994,8 @@ function IcsPreview({ result }: { result: IcsImportResult }) {
       )}
       <p className="text-xs text-muted">
         {unresolved === 0
-          ? "ระบุประเภท (บรรยาย/ปฏิบัติการ) ให้ครบทุกคาบแล้วจากตารางสอนในระบบ — แก้ไขภายหลังได้"
-          : `ไฟล์ .ics ของระบบทะเบียนไม่ได้ระบุประเภทคาบ ระบบจึงเทียบกับตารางสอนในระบบให้ — ยังเหลือ ${unresolved} คาบที่ต้องเลือกประเภทเอง`}
+          ? "ระบุประเภท (บรรยาย/ปฏิบัติการ) ให้ครบทุกคาบแล้วจากตารางสอนในระบบ แก้ไขภายหลังได้"
+          : `ไฟล์ .ics ของระบบทะเบียนไม่ได้ระบุประเภทคาบ ระบบจึงเทียบกับตารางสอนในระบบให้ ยังเหลือ ${unresolved} คาบที่ต้องเลือกประเภทเอง`}
       </p>
     </div>
   );

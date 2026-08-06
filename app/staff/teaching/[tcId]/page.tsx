@@ -20,8 +20,21 @@ interface SectionRow {
   sec_no: string;
   track: "regular" | "special" | string;
   num_students: number;
+  /** หลักสูตรของกลุ่มเรียน (CS/IT/GIS/AI/CY/OTHER) — มาจาก ReservedFor ตอนนำเข้า;
+   *  ไม่มีค่า = ยังไม่ระบุ. เจ้าหน้าที่แก้ทับได้ และค่าที่แก้จะไม่ถูกนำเข้าทับ */
+  curriculum?: string | null;
   schedules?: SectionScheduleRow[];
 }
+
+const CURRICULUM_OPTIONS = [
+  { id: "", label: "ยังไม่ระบุ" },
+  { id: "CS", label: "วิทยาการคอมพิวเตอร์ (CS)" },
+  { id: "IT", label: "เทคโนโลยีสารสนเทศ (IT)" },
+  { id: "GIS", label: "ภูมิสารสนเทศศาสตร์ (GIS)" },
+  { id: "AI", label: "ปัญญาประดิษฐ์ (AI)" },
+  { id: "CY", label: "ความมั่นคงปลอดภัยไซเบอร์ (CY)" },
+  { id: "OTHER", label: "คณะอื่น ๆ" },
+];
 
 interface TC {
   id: string;
@@ -88,7 +101,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
             status="warning"
             icon={<Lock size={16} />}
             title="รายวิชานี้ถูกล็อกแล้ว"
-            description={`ส่งออกไฟล์เมื่อ ${formatExportedAt(tc?.exported_at)} — ไม่สามารถแก้ไข section หรือตารางเวลาได้อีก`}
+            description={`ส่งออกไฟล์เมื่อ ${formatExportedAt(tc?.exported_at)} ไม่สามารถแก้ไข section หรือตารางเวลาได้อีก`}
           />
         </div>
       )}
@@ -96,7 +109,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
       <Panel
         title="Section และตารางเวลาเรียน"
         data-tour="course-sections"
-        description="รายชื่อ section ปกติมาจากไฟล์ทะเบียน — เพิ่มเองเมื่อไฟล์ตกหล่น อาจารย์แก้ส่วนนี้ไม่ได้"
+        description="รายชื่อ section ปกติมาจากไฟล์ทะเบียน เพิ่มเองเมื่อไฟล์ตกหล่น อาจารย์แก้ส่วนนี้ไม่ได้"
         actions={
           !locked && (
             <Button variant="primary" size="sm" onClick={() => setAddOpen(true)}>
@@ -156,7 +169,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
           <div className="min-w-0">
             <div className="text-sm font-semibold text-danger">ลบรายวิชานี้</div>
             <div className="text-xs text-muted mt-0.5">
-              ลบได้เฉพาะวิชาที่เปิดผิด/ยังไม่มีข้อมูล — ถ้ามี TA, บันทึกเวลา หรือส่งออกแล้ว ระบบจะไม่ให้ลบ
+              ลบได้เฉพาะวิชาที่เปิดผิด/ยังไม่มีข้อมูล ถ้ามี TA, บันทึกเวลา หรือส่งออกแล้ว ระบบจะไม่ให้ลบ
             </div>
           </div>
           <Button
@@ -181,7 +194,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         confirmLabel="ลบรายวิชา"
         message={
           <p className="text-sm text-muted">
-            จะลบรายวิชา <b>{tc ? `${tc.code} — ${tc.name_th}` : ""}</b> พร้อม section และตารางเวลาทั้งหมด
+            จะลบรายวิชา <b>{tc ? `${tc.code} ${tc.name_th}` : ""}</b> พร้อม section และตารางเวลาทั้งหมด
             การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
           </p>
         }
@@ -253,6 +266,11 @@ function SectionScheduleBlock({
         <Chip tone={section.track === "special" ? "warn" : "brand"}>
           {section.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
         </Chip>
+        {section.curriculum && (
+          <Chip tone="neutral">
+            {CURRICULUM_OPTIONS.find(c => c.id === section.curriculum)?.label ?? section.curriculum}
+          </Chip>
+        )}
         <span className="text-xs text-muted">{section.num_students} คน</span>
         {!dirty && rows.length > 0 && (
           <div className="ms-auto"><ScheduleSummary rows={rows} /></div>
@@ -303,6 +321,7 @@ function SectionFormModal({
   const [secNo, setSecNo] = useState("");
   const [track, setTrack] = useState<"regular" | "special">("regular");
   const [students, setStudents] = useState("0");
+  const [curriculum, setCurriculum] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -311,6 +330,7 @@ function SectionFormModal({
     setSecNo(section?.sec_no ?? "");
     setTrack(section?.track === "special" ? "special" : "regular");
     setStudents(String(section?.num_students ?? 0));
+    setCurriculum(section?.curriculum ?? "");
     setErr(null);
   }, [open, section]);
 
@@ -327,6 +347,9 @@ function SectionFormModal({
         await api.patch(`/teaching-courses/${tcId}/sections/${section!.id}`, {
           sec_no: secNo.trim(),
           num_students: num,
+          // Send only when changed: "" clears back to ยังไม่ระบุ on purpose,
+          // but an untouched field must not rewrite what the import derived.
+          ...(curriculum !== (section?.curriculum ?? "") ? { curriculum } : {}),
         });
       } else {
         await api.post(`/teaching-courses/${tcId}/sections`, {
@@ -393,9 +416,18 @@ function SectionFormModal({
           </FieldGroup>
         </div>
 
+        {editing && (
+          <SelectField
+            label="หลักสูตรของกลุ่มเรียน"
+            value={curriculum}
+            onChange={setCurriculum}
+            options={CURRICULUM_OPTIONS}
+          />
+        )}
+
         {editing ? (
           <div className="text-xs text-muted">
-            ประเภทเป็น <b>{track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}</b> —
+            ประเภทเป็น <b>{track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}</b>
             เปลี่ยนไม่ได้หลังสร้างแล้ว หากผิดให้ลบ section นี้แล้วเพิ่มใหม่
           </div>
         ) : (
@@ -455,7 +487,7 @@ function DeleteSectionDialog({
         <div className="space-y-2">
           <p className="text-sm">
             จะลบ <b>Sec {target?.sec_no}</b> ({target?.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"})
-            พร้อมตารางเวลาของ section นี้ — ย้อนกลับไม่ได้
+            พร้อมตารางเวลาของ section นี้ ย้อนกลับไม่ได้
           </p>
           <p className="text-xs text-muted">
             ถ้ามีคำขอ TA หรือบันทึกเวลาที่อ้างอิง section นี้อยู่ ระบบจะไม่ให้ลบ

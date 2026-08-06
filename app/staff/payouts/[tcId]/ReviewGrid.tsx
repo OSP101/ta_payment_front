@@ -147,7 +147,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
       }
       notify.success(`ตรวจผ่าน ${done} รายการ`);
     } catch (e) {
-      notify.error(done > 0 ? `ผ่านไป ${done} รายการแล้วหยุด — ${errMessage(e)}` : e);
+      notify.error(done > 0 ? `ผ่านไป ${done} รายการแล้วหยุด ${errMessage(e)}` : e);
     } finally {
       setBusy(null);
       await revalidate();
@@ -193,7 +193,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
   if (rows.length === 0) {
     return (
       <p className="py-4 text-sm text-muted">
-        ไม่มีเดือนที่รอตรวจในวิชานี้ — ทุกเดือนผ่านการตรวจแล้ว หรือยังไม่มีบันทึกเวลาที่อาจารย์อนุมัติ
+        ไม่มีเดือนที่รอตรวจในวิชานี้ ทุกเดือนผ่านการตรวจแล้ว หรือยังไม่มีบันทึกเวลาที่อาจารย์อนุมัติ
       </p>
     );
   }
@@ -269,7 +269,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
           <p className="flex-1 text-xs text-muted">
             {readyRows.length > 0
               ? "ตรวจครบทุกเดือนแล้ว แถบส่งออกด้านล่างจะเปิดให้ดาวน์โหลดทันที"
-              : `มี ${waitingLecturer} รายการรออาจารย์อนุมัติ — ตรวจต่อไม่ได้จนกว่าจะอนุมัติครบ`}
+              : `มี ${waitingLecturer} รายการรออาจารย์อนุมัติ ตรวจต่อไม่ได้จนกว่าจะอนุมัติครบ`}
           </p>
           {waitingLecturer > 0 && (
             <Button variant="secondary" size="sm" isDisabled={busy !== null} onPress={() => setRemindOpen(true)}>
@@ -292,7 +292,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
         isPending={busy === "remind"}
         message={
           <p className="text-sm text-muted">
-            ส่งการแจ้งเตือนถึงอาจารย์ผู้สอนวิชานี้ว่ามีบันทึกเวลา {waitingLecturer} รายการรออนุมัติอยู่ —
+            ส่งการแจ้งเตือนถึงอาจารย์ผู้สอนวิชานี้ว่ามีบันทึกเวลา {waitingLecturer} รายการรออนุมัติอยู่
             ส่งได้วันละครั้งต่อวิชา
           </p>
         }
@@ -338,7 +338,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
         message={
           <div className="space-y-2">
             <p className="text-sm text-muted">
-              {sendBack?.ta_name} · {sendBack?.period_label} — รายการจะกลับไปให้แก้ไข
+              {sendBack?.ta_name} · {sendBack?.period_label} รายการจะกลับไปให้แก้ไข
               และจะส่งออกเอกสารไม่ได้จนกว่าจะตรวจผ่านอีกครั้ง
             </p>
             <TextArea

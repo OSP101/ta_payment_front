@@ -296,6 +296,9 @@ export interface Me {
    *  Absent when the user has not set one — draw initials instead. */
   avatar_url?: string | null;
   must_change_password?: boolean;
+  /** Read-only executive dashboard (/executive). A flag staff tick per user —
+   *  not a value in `roles`. */
+  is_executive?: boolean;
   roles: string[];
 }
 

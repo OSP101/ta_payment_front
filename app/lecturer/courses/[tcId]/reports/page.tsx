@@ -366,7 +366,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
     <div>
       <PageHeader
         title="อนุมัติรายงานบันทึกเวลา TA"
-        description={course ? `${course.code} — ${course.name_th}` : "รายการที่ TA กดส่งขออนุมัติ"}
+        description={course ? `${course.code} ${course.name_th}` : "รายการที่ TA กดส่งขออนุมัติ"}
       />
 
       {error && all === undefined ? (
@@ -459,10 +459,10 @@ function SectionChips({ group }: { group: TAGroup }) {
         <span
           key={secs.join("-")}
           className="inline-flex items-center gap-1 text-xs text-muted"
-          title="คาบเดียวกันถูกบันทึกไว้ทั้งสองเซคชัน ระบบจ่ายครั้งเดียว — ชั่วโมงจึงไม่บวกกัน"
+          title="คาบเดียวกันถูกบันทึกไว้ทั้งสองเซคชัน ระบบจ่ายครั้งเดียว ชั่วโมงจึงไม่บวกกัน"
         >
           <Link2 size={12} />
-          sec {secs.join(" กับ ")} สอนพร้อมกัน — ชั่วโมงไม่บวกกัน
+          sec {secs.join(" กับ ")} สอนพร้อมกัน ชั่วโมงไม่บวกกัน
         </span>
       ))}
     </div>
@@ -629,12 +629,12 @@ function BudgetNotice({ tcId }: { tcId: string }) {
       <div className="min-w-0">
         <div className="font-semibold">
           {committed
-            ? `งบรายวิชาไม่พอแล้ว — ${what}`
-            : `ถ้าอนุมัติครบตามที่ TA ลงไว้ งบจะไม่พอ — ${what}`}
+            ? `งบรายวิชาไม่พอแล้ว ${what}`
+            : `ถ้าอนุมัติครบตามที่ TA ลงไว้ งบจะไม่พอ ${what}`}
         </div>
         <div className="mt-0.5 text-red-900/85">
           อนุมัติได้ตามปกติ ระบบจะบันทึกชั่วโมงไว้ครบ แต่คาบที่เกินงบ
-          (รวม ฿{Math.round(view.dropped_baht).toLocaleString()}) จะไม่ถูกนำไปเบิก —
+          (รวม ฿{Math.round(view.dropped_baht).toLocaleString()}) จะไม่ถูกนำไปเบิก
           มีผลกับ TA ทุกคนในวิชานี้เท่ากัน
           {spilled > 0 && (
             <> (นับงบภาคพิเศษที่เหลือ ฿{Math.round(spilled).toLocaleString()}
@@ -792,7 +792,7 @@ function MonthRows({
 
             {rejectYm === mo.key && (
               <div className="border-t border-(--hairline) bg-surface-secondary px-4 py-3">
-                <FieldGroup label={`เหตุผลที่ส่งกลับ — ${formatMonthTH(mo.key)}`}>
+                <FieldGroup label={`เหตุผลที่ส่งกลับ ${formatMonthTH(mo.key)}`}>
                   <TextArea
                     rows={2}
                     value={reason}

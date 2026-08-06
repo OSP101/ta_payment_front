@@ -100,7 +100,7 @@ export function TimetableModal({
       onClose={onClose}
       size="3xl"
       icon={<CalendarDays size={18} />}
-      title={data ? `ตารางเรียนและตารางปฏิบัติงาน — ${data.ta_name}` : (taName ?? "ตารางเรียน")}
+      title={data ? `ตารางเรียนและตารางปฏิบัติงาน ${data.ta_name}` : (taName ?? "ตารางเรียน")}
     >
       {isLoading || !data ? (
         <div className="flex justify-center py-12"><Spinner /></div>

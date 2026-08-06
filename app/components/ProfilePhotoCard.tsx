@@ -121,7 +121,7 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
             {hasPhoto ? "คุณตั้งรูปโปรไฟล์ไว้แล้ว" : "ยังไม่มีรูปโปรไฟล์"}
           </div>
           <div className="text-xs text-muted mt-0.5">
-            ลากไฟล์มาวางที่นี่ หรือเลือกไฟล์ — รองรับ JPEG, PNG, WebP ขนาดไม่เกิน 12MB
+            ลากไฟล์มาวางที่นี่ หรือเลือกไฟล์ รองรับ JPEG, PNG, WebP ขนาดไม่เกิน 12MB
             <br />
             ระบบจะครอบตัดและบีบอัดให้อัตโนมัติก่อนบันทึก
           </div>

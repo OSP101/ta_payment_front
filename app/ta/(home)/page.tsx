@@ -535,7 +535,7 @@ function AlertsSection({
             key={"bounced" + r.period_id + r.teaching_course_id}
             status="danger"
             icon={<CalendarClock size={16} />}
-            title={`${r.course_code} — อาจารย์ตีกลับบันทึกเวลา ${r.worklog_rejected} รายการ`}
+            title={`${r.course_code} อาจารย์ตีกลับบันทึกเวลา ${r.worklog_rejected} รายการ`}
             description={`รอบ ${r.label} · แก้ไขแล้วส่งอนุมัติใหม่ภายใน ${thDueDate(r.due_date)}`}
             action={
               <Link
@@ -562,8 +562,8 @@ function AlertsSection({
             }
             description={
               r.worklog_waiting_ta > 0
-                ? `ครบกำหนด ${thDueDate(r.due_date)} — ถ้าเลยกำหนด เดือนนี้จะถูกปิดและส่งเองไม่ได้อีก`
-                : `ครบกำหนด ${thDueDate(r.due_date)} — คุณส่งครบแล้ว รออาจารย์กดอนุมัติ`
+                ? `ครบกำหนด ${thDueDate(r.due_date)} ถ้าเลยกำหนด เดือนนี้จะถูกปิดและส่งเองไม่ได้อีก`
+                : `ครบกำหนด ${thDueDate(r.due_date)} คุณส่งครบแล้ว รออาจารย์กดอนุมัติ`
             }
             action={
               <Link
@@ -593,8 +593,8 @@ function AlertsSection({
                 key={"missed" + r.period_id + r.teaching_course_id}
                 status="default"
                 icon={<CalendarClock size={16} />}
-                title={`รอบ ${r.label} — ถือว่าไม่ประสงค์ลงเวลา ${r.worklog_waiting_ta} รายการ`}
-                description={`ครบกำหนดไปแล้วเมื่อ ${thDueDate(r.due_date)} — รายการที่ไม่ได้ส่งภายในกำหนดถือเป็นการไม่ประสงค์ลงเวลา และไม่นำมาคิดค่าตอบแทน`}
+                title={`รอบ ${r.label} ถือว่าไม่ประสงค์ลงเวลา ${r.worklog_waiting_ta} รายการ`}
+                description={`ครบกำหนดไปแล้วเมื่อ ${thDueDate(r.due_date)} รายการที่ไม่ได้ส่งภายในกำหนดถือเป็นการไม่ประสงค์ลงเวลา และไม่นำมาคิดค่าตอบแทน`}
               />
             ))}
           </div>

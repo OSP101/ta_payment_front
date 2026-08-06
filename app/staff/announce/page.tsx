@@ -1,13 +1,18 @@
 "use client";
 import useSWR, { mutate } from "swr";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Megaphone, Send, Image as ImageIcon, X, Trash2, Pencil,
   Pin, PinOff, Eye, EyeOff, CalendarClock, Clock, AlertTriangle,
   Info, PartyPopper, Newspaper, Radio, Sparkles, Check, Plus,
+  Globe, Mail, Target, Users, Paperclip, Play, FileText,
+  List, ListOrdered, Link as LinkIcon, AlignCenter, AlignLeft, AlignRight,
 } from "lucide-react";
 import { Tabs, toast } from "@heroui/react";
-import { api } from "../../lib/api";
+import { api, errMessage } from "../../lib/api";
+import ShareButtons from "../../components/ShareButtons";
+import type { Attachment } from "../../components/AttachmentGallery";
+import RichText from "../../components/RichText";
 import {
   PageHeader, Panel, Button, TextInput, TextArea, FieldGroup,
   Chip, EmptyState, Modal, Alert,
@@ -35,6 +40,23 @@ interface Ann {
   created_at?: string;
   updated_at?: string;
   status: Status;
+  is_public?: boolean;
+  target_course_ids?: string[];
+  target_user_ids?: string[];
+  target_filters?: string[];
+  /** How many people it actually reached. Filled by /announcements/:id. */
+  audience_count?: number;
+  recipients?: Recipient[];
+  attachments?: Attachment[];
+}
+
+interface Recipient {
+  email: string;
+  name?: string;
+  user_id?: string | null;
+  status: "pending" | "sent" | "skipped" | "failed";
+  sent_at?: string | null;
+  error?: string;
 }
 
 const ROLES = [
@@ -76,6 +98,11 @@ const IMG = {
 // Composer state
 // ============================================================================
 
+/** Children take the state setter itself: several of them update from async
+ *  callbacks (uploads), where a captured `draft` would be stale by the time it
+ *  lands and would drop a file that finished first. */
+type SetDraft = React.Dispatch<React.SetStateAction<Draft>>;
+
 interface Draft {
   id?: string;
   title: string;
@@ -92,6 +119,14 @@ interface Draft {
   // Original ISO published_at of the item being edited — preserved so editing
   // an already-live announcement doesn't reset its publish time to "now".
   originalPublishedAt?: string | null;
+  isPublic: boolean;
+  /** Named people. Everyone here holds an account — announcements are system
+   *  notices, so there is no free-typed outside address. */
+  targetUsers: { id: string; name: string; email: string }[];
+  targetCourses: { id: string; label: string }[];
+  targetFilters: string[];
+  audienceCount: number;
+  attachments: Attachment[];
 }
 
 const emptyDraft: Draft = {
@@ -107,6 +142,12 @@ const emptyDraft: Draft = {
   expires: false,
   expiresAt: "",
   originalPublishedAt: null,
+  isPublic: false,
+  targetUsers: [],
+  targetCourses: [],
+  targetFilters: [],
+  audienceCount: 0,
+  attachments: [],
 };
 
 // ============================================================================
@@ -158,7 +199,28 @@ export default function AnnouncePage() {
       expires: !!a.expires_at,
       expiresAt: a.expires_at ? toLocalInput(a.expires_at) : "",
       originalPublishedAt: a.published_at ?? null,
+      isPublic: !!a.is_public,
+      targetUsers: [],
+      targetCourses: [],
+      targetFilters: a.target_filters ?? [],
+      audienceCount: 0,
+      attachments: [],
     });
+    // The list row has no recipient ledger; fetch the full record so editing
+    // shows who is already on the list instead of an empty box.
+    void api.get<Ann>(`/announcements/${a.id}`).then(full => {
+      setDraft(d => d.id !== a.id ? d : {
+        ...d,
+        isPublic: !!full.is_public,
+        targetFilters: full.target_filters ?? [],
+        audienceCount: full.audience_count ?? 0,
+        // Ids alone would render as raw UUIDs; the pickers below resolve them
+        // to names on mount.
+        targetUsers: (full.target_user_ids ?? []).map(id => ({ id, name: id, email: "" })),
+        targetCourses: (full.target_course_ids ?? []).map(id => ({ id, label: id })),
+        attachments: full.attachments ?? [],
+      });
+    }).catch(() => {});
     setTab("compose");
     // Scroll composer into view — the list can be long on wide screens.
     setTimeout(() => editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
@@ -188,6 +250,9 @@ export default function AnnouncePage() {
     id?: string; title: string; body: string; category: Category;
     audience: string[]; pinned: boolean; cover_image_key: string | null;
     published_at: string | null; expires_at: string | null;
+    is_public: boolean; target_course_ids: string[];
+    target_user_ids: string[]; target_filters: string[];
+    attachments: Attachment[];
   } | { error: string } {
     const title = draft.title.trim();
     const body = draft.body.trim();
@@ -195,7 +260,6 @@ export default function AnnouncePage() {
     if (title.length > 200) return { error: "หัวข้อยาวเกิน 200 ตัวอักษร" };
     if (!body) return { error: "กรุณากรอกเนื้อหา" };
     if (body.length > 8000) return { error: "เนื้อหายาวเกิน 8000 ตัวอักษร" };
-    if (draft.audience.length === 0) return { error: "เลือกกลุ่มผู้รับอย่างน้อยหนึ่งกลุ่ม" };
 
     let publishedAt: string | null = null;
     if (draft.publishMode === "now") {
@@ -237,6 +301,11 @@ export default function AnnouncePage() {
       cover_image_key: draft.cover_image_key,
       published_at: publishedAt,
       expires_at: expiresAt,
+      is_public: draft.isPublic,
+      target_course_ids: draft.targetCourses.map(c => c.id),
+      target_user_ids: draft.targetUsers.map(u => u.id),
+      target_filters: draft.targetFilters,
+      attachments: draft.attachments,
     };
   }
 
@@ -445,7 +514,7 @@ export default function AnnouncePage() {
 // Composer
 // ============================================================================
 
-function Composer({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
+function Composer({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
   const setField = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
 
   return (
@@ -461,13 +530,7 @@ function Composer({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => v
         </FieldGroup>
 
         <FieldGroup label={<span>เนื้อหา <span className="text-muted">({draft.body.length}/8000)</span></span>}>
-          <TextArea
-            rows={7}
-            placeholder="ใส่รายละเอียดของประกาศ (ขึ้นบรรทัดใหม่จะแสดงจริงในหน้าฟีด)"
-            value={draft.body}
-            maxLength={8000}
-            onChange={e => setField("body", e.target.value)}
-          />
+          <BodyEditor value={draft.body} onChange={v => setField("body", v)} />
         </FieldGroup>
 
         <FieldGroup label="หมวดหมู่">
@@ -585,16 +648,493 @@ function Composer({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => v
           />
           <Pin size={14} /> ปักหมุดไว้บนสุดของฟีด
         </label>
+
+        <AttachmentsField draft={draft} setDraft={setDraft} />
+
+        <div className="border-t border-hairline pt-4">
+          <ReachFields draft={draft} setDraft={setDraft} />
+        </div>
       </div>
     </Panel>
   );
 }
 
 // ============================================================================
+// Body editor: a toolbar over a plain textarea
+// ============================================================================
+
+/**
+ * The buttons insert the same tiny markup RichText renders, around whatever the
+ * officer has selected. A textarea rather than a contenteditable surface on
+ * purpose: what is stored is exactly what was typed, so there is no HTML from
+ * the composer that a reader's browser could be asked to run.
+ */
+function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+
+  const surround = (before: string, after: string, placeholder: string) => {
+    const el = ref.current;
+    if (!el) return;
+    const { selectionStart: a, selectionEnd: b } = el;
+    const picked = value.slice(a, b) || placeholder;
+    const next = value.slice(0, a) + before + picked + after + value.slice(b);
+    onChange(next);
+    // Put the caret around the inserted text so typing continues naturally.
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(a + before.length, a + before.length + picked.length);
+    });
+  };
+
+  // Line tools work on whole lines: a list marker in the middle of a sentence
+  // is not what the button promises.
+  const prefixLines = (make: (i: number) => string) => {
+    const el = ref.current;
+    if (!el) return;
+    const { selectionStart: a, selectionEnd: b } = el;
+    const lineStart = value.lastIndexOf("\n", a - 1) + 1;
+    const lineEnd = value.indexOf("\n", b) === -1 ? value.length : value.indexOf("\n", b);
+    const chunk = value.slice(lineStart, lineEnd) || "รายการ";
+    const marked = chunk.split("\n").map((l, i) => make(i) + l.replace(/^\s*(?:[-•]\s+|\d+[.)]\s+)/, "")).join("\n");
+    const next = value.slice(0, lineStart) + marked + value.slice(lineEnd);
+    onChange(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(lineStart, lineStart + marked.length);
+    });
+  };
+
+  const alignLine = (how: "center" | "right" | "left") => {
+    const el = ref.current;
+    if (!el) return;
+    const a = el.selectionStart;
+    let lineStart = value.lastIndexOf("\n", a - 1) + 1;
+    // Clicking a second alignment on the same line replaces the first rather
+    // than stacking a marker on top of it.
+    const prevStart = lineStart === 0 ? -1 : value.lastIndexOf("\n", lineStart - 2) + 1;
+    if (prevStart >= 0 && /^:::(center|right|left)\s*$/.test(value.slice(prevStart, lineStart - 1))) {
+      lineStart = prevStart;
+    }
+    const lineFrom = lineStart === prevStart ? value.indexOf("\n", prevStart) + 1 : lineStart;
+    const marker = `:::${how}\n`;
+    const next = value.slice(0, lineStart) + marker + value.slice(lineFrom);
+    onChange(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(lineStart + marker.length, lineStart + marker.length);
+    });
+  };
+
+  const btn = "inline-flex items-center justify-center rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand";
+
+  /**
+   * preventDefault on mousedown is what makes the buttons work at all: without
+   * it the click moves focus off the textarea first, the selection collapses,
+   * and every button ends up inserting its placeholder instead of wrapping the
+   * words the officer had highlighted.
+   */
+  const Tool = ({ title, onPress, children }: { title: string; onPress: () => void; children: React.ReactNode }) => (
+    <button type="button" className={btn} title={title} onMouseDown={e => e.preventDefault()} onClick={onPress}>
+      {children}
+    </button>
+  );
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1">
+        <Tool title="ตัวหนา" onPress={() => surround("**", "**", "ข้อความหนา")}><b>ห</b></Tool>
+        <Tool title="ตัวเอียง" onPress={() => surround("*", "*", "ข้อความเอียง")}><i>อ</i></Tool>
+        <span className="mx-0.5 w-px bg-border" />
+        <Tool title="รายการ" onPress={() => prefixLines(() => "- ")}><List size={13} /></Tool>
+        <Tool title="รายการมีลำดับ" onPress={() => prefixLines(i => `${i + 1}. `)}><ListOrdered size={13} /></Tool>
+        <span className="mx-0.5 w-px bg-border" />
+        <Tool title="แนบลิงก์" onPress={() => surround("[", "](https://)", "ข้อความลิงก์")}><LinkIcon size={13} /></Tool>
+        <span className="mx-0.5 w-px bg-border" />
+        <Tool title="จัดกึ่งกลาง" onPress={() => alignLine("center")}><AlignCenter size={13} /></Tool>
+        <Tool title="ชิดขวา" onPress={() => alignLine("right")}><AlignRight size={13} /></Tool>
+        <Tool title="ชิดซ้าย" onPress={() => alignLine("left")}><AlignLeft size={13} /></Tool>
+      </div>
+      {/* A native textarea, not the shared TextArea: the toolbar needs a ref to
+          the element to place the caret, and the wrapper does not forward one.
+          Classes mirror the other fields so it still reads as one form. */}
+      <textarea
+        ref={ref}
+        rows={8}
+        placeholder="ใส่รายละเอียดของประกาศ วางลิงก์ได้เลยระบบจะทำให้กดได้เอง"
+        value={value}
+        maxLength={8000}
+        onChange={e => onChange(e.target.value)}
+        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-6 text-foreground outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+      />
+      <p className="text-xs text-muted">
+        เลือกข้อความแล้วกดปุ่มด้านบน หรือพิมพ์เอง: **หนา** *เอียง* · ขึ้นต้นบรรทัดด้วย - หรือ 1. เพื่อทำรายการ
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
+// Attachments: photos, a clip, the PDF of the official notice
+// ============================================================================
+
+const MEDIA_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf";
+
+function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function addFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setErr(null);
+    const picked = Array.from(files);
+    if (draft.attachments.length + picked.length > 20) {
+      setErr("แนบไฟล์ได้ไม่เกิน 20 ไฟล์ต่อหนึ่งประกาศ");
+      return;
+    }
+    setBusy(b => b + picked.length);
+    // Uploaded one at a time so a rejected file names itself instead of
+    // failing the whole batch anonymously.
+    for (const file of picked) {
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const up = await api.upload<Attachment>("/announcements/upload-media", form);
+        setDraft(d => ({ ...d, attachments: [...d.attachments, up] }));
+      } catch (e) {
+        setErr(`${file.name}: ${errMessage(e)}`);
+      } finally {
+        setBusy(b => b - 1);
+      }
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  const move = (i: number, dir: -1 | 1) => {
+    const next = [...draft.attachments];
+    const j = i + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    setDraft({ ...draft, attachments: next });
+  };
+
+  return (
+    <FieldGroup
+      label={<span className="inline-flex items-center gap-1.5"><Paperclip size={14} />ไฟล์แนบ (รูป วิดีโอ หรือ PDF)</span>}
+      hint="รูปได้หลายรูป เรียงลำดับได้ · รูป ≤ 8MB · วิดีโอ ≤ 80MB · PDF ≤ 20MB"
+    >
+      <div className="space-y-2">
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          accept={MEDIA_ACCEPT}
+          className="hidden"
+          onChange={e => void addFiles(e.target.files)}
+        />
+        <Button variant="ghost" size="sm" onPress={() => fileRef.current?.click()} isDisabled={busy > 0}>
+          <Plus size={13} />{busy > 0 ? `กำลังอัปโหลด… (${busy})` : "เพิ่มไฟล์"}
+        </Button>
+
+        {err && <div className="text-xs text-danger">{err}</div>}
+
+        {!!draft.attachments.length && (
+          <ul className="space-y-1.5">
+            {draft.attachments.map((a, i) => (
+              <li key={a.storage_key} className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2 py-1.5">
+                {a.kind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={a.url} alt="" className="size-9 shrink-0 rounded object-cover" />
+                ) : (
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded bg-accent-soft text-accent-soft-foreground">
+                    {a.kind === "video" ? <Play size={14} /> : <FileText size={14} />}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 truncate text-xs">{a.filename}</span>
+                <button type="button" aria-label="เลื่อนขึ้น" onClick={() => move(i, -1)}
+                  className="px-1 text-ink-3 hover:text-brand disabled:opacity-30" disabled={i === 0}>↑</button>
+                <button type="button" aria-label="เลื่อนลง" onClick={() => move(i, 1)}
+                  className="px-1 text-ink-3 hover:text-brand disabled:opacity-30" disabled={i === draft.attachments.length - 1}>↓</button>
+                <button type="button" aria-label={`เอา ${a.filename} ออก`}
+                  onClick={() => setDraft({ ...draft, attachments: draft.attachments.filter(x => x.storage_key !== a.storage_key) })}
+                  className="px-1 text-ink-3 hover:text-danger">
+                  <X size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </FieldGroup>
+  );
+}
+
+// ============================================================================
+// Reach: public link + extra email recipients
+// ============================================================================
+
+function ReachFields({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const setField = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
+  const { data: filterOpts } = useSWR<{ items: { value: string; label: string }[] }>(
+    "/announcements/audience-filters",
+  );
+
+  // Who this rule reaches, answered by the server that will do the sending —
+  // so the number on screen is the number of people, not an estimate.
+  const rule = useMemo(() => ({
+    roles: draft.audience,
+    course_ids: draft.targetCourses.map(c => c.id),
+    user_ids: draft.targetUsers.map(u => u.id),
+    filters: draft.targetFilters,
+  }), [draft.audience, draft.targetCourses, draft.targetUsers, draft.targetFilters]);
+  const ruleKey = JSON.stringify(rule);
+  const [preview, setPreview] = useState<AudiencePreview | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setPreviewing(true);
+    const t = setTimeout(() => {
+      api.post<AudiencePreview>("/announcements/preview-audience", JSON.parse(ruleKey))
+        .then(p => { if (!cancelled) setPreview(p); })
+        .catch(() => { if (!cancelled) setPreview(null); })
+        .finally(() => { if (!cancelled) setPreviewing(false); });
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [ruleKey]);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-2">
+          <Target size={14} />เจาะกลุ่มให้แคบลง (ไม่บังคับ)
+        </div>
+        <p className="mb-2 text-xs text-muted">
+          เลือกได้หลายอย่างพร้อมกัน กลุ่มบทบาท วิชา และรายชื่อจะรวมกัน
+          ส่วนเงื่อนไขด้านล่างจะกรองให้แคบลงอีกชั้น
+        </p>
+
+        <div className="space-y-3">
+          <CoursePicker draft={draft} setDraft={setDraft} />
+          <PeoplePicker draft={draft} setDraft={setDraft} />
+
+          <div>
+            <div className="mb-1.5 text-xs text-ink-2">เฉพาะคนที่เข้าเงื่อนไข</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(filterOpts?.items ?? []).map(f => {
+                const on = draft.targetFilters.includes(f.value);
+                return (
+                  <button
+                    key={f.value}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setField("targetFilters",
+                      on ? draft.targetFilters.filter(x => x !== f.value)
+                         : [...draft.targetFilters, f.value])}
+                    className={`chip cursor-pointer transition ${on ? "chip-brand" : "chip-neutral"}`}
+                  >
+                    {on ? <Check size={11} className="me-1 inline" /> : null}{f.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AudienceSummary preview={preview} loading={previewing} />
+
+      <label className="flex cursor-pointer items-start gap-2.5 border-t border-hairline pt-4">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={draft.isPublic}
+          onChange={e => setField("isPublic", e.target.checked)}
+        />
+        <span className="text-sm">
+          <span className="inline-flex items-center gap-1.5 font-medium"><Globe size={14} />เปิดให้บุคคลทั่วไปอ่านได้</span>
+          <span className="mt-0.5 block text-xs text-muted">
+            สร้างลิงก์สาธารณะสำหรับแชร์ลง Facebook หรือ LINE เปิดอ่านได้โดยไม่ต้องเข้าสู่ระบบ
+            (เห็นเฉพาะหัวข้อและเนื้อหา ไม่เห็นว่าส่งถึงใครบ้าง)
+          </span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
+interface AudiencePreview {
+  total: number;
+  everyone: boolean;
+  names: { id: string; name: string; email: string }[];
+}
+
+/** The count is the point of the whole targeting UI: confirm, don't trust. */
+function AudienceSummary({ preview, loading }: { preview: AudiencePreview | null; loading: boolean }) {
+  if (!preview) {
+    return <div className="h-14 animate-pulse rounded-lg border border-border bg-surface-secondary" />;
+  }
+  const tone = preview.total === 0
+    ? "border-amber-300 bg-amber-50/70"
+    : preview.everyone
+      ? "border-sky-300 bg-sky-50/70"
+      : "border-border bg-surface-secondary";
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 ${tone} ${loading ? "opacity-60" : ""}`}>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <Users size={14} className="text-ink-3" />
+        <span className="text-sm font-semibold text-ink-1">
+          {preview.total === 0 ? "ไม่มีใครเข้าเงื่อนไขนี้" : `จะส่งถึง ${preview.total} คน`}
+        </span>
+        {preview.everyone && preview.total > 0 && (
+          <span className="text-xs text-sky-800">ทุกคนในระบบ (ยังไม่ได้เจาะกลุ่ม)</span>
+        )}
+      </div>
+      {preview.total > 0 && (
+        <div className="mt-1 line-clamp-2 text-xs text-muted">
+          {preview.names.map(n => n.name).join(" · ")}
+          {preview.total > preview.names.length && ` และอีก ${preview.total - preview.names.length} คน`}
+        </div>
+      )}
+      {preview.total === 0 && (
+        <div className="mt-0.5 text-xs text-amber-800">
+          ลองผ่อนเงื่อนไขลง มิฉะนั้นประกาศนี้จะไม่ถึงใครเลย
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Pick teaching courses; everyone attached to them is reached. */
+function CoursePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const [q, setQ] = useState("");
+  const search = useDebounced(q, 300);
+  const { data } = useSWR<{ id: string; code: string; name_th: string }[]>(
+    search.trim().length >= 2 ? `/teaching-courses` : null,
+  );
+  const matches = (data ?? [])
+    .filter(c => `${c.code} ${c.name_th}`.toLowerCase().includes(search.trim().toLowerCase()))
+    .slice(0, 8);
+
+  return (
+    <div>
+      <div className="mb-1.5 text-xs text-ink-2">เฉพาะวิชา (อาจารย์และผู้ช่วยสอนของวิชานั้น)</div>
+      <TextInput placeholder="พิมพ์รหัสหรือชื่อวิชา…" value={q} onChange={e => setQ(e.target.value)} />
+      {!!matches.length && (
+        <ul className="mt-1 rounded-lg border border-border bg-surface">
+          {matches.map(c => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!draft.targetCourses.some(x => x.id === c.id)) {
+                    setDraft({ ...draft, targetCourses: [...draft.targetCourses, { id: c.id, label: `${c.code} ${c.name_th}` }] });
+                  }
+                  setQ("");
+                }}
+                className="w-full px-3 py-1.5 text-start text-sm hover:bg-accent-soft"
+              >
+                <b>{c.code}</b> <span className="text-muted">{c.name_th}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!!draft.targetCourses.length && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {draft.targetCourses.map(c => (
+            <span key={c.id} className="chip chip-brand inline-flex items-center gap-1">
+              {c.label}
+              <button type="button" aria-label={`เอา ${c.label} ออก`}
+                onClick={() => setDraft({ ...draft, targetCourses: draft.targetCourses.filter(x => x.id !== c.id) })}
+                className="text-brand/70 hover:text-brand">
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Pick named people — including exactly one, for a private notice. */
+function PeoplePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const [q, setQ] = useState("");
+  const search = useDebounced(q, 300);
+  const { data: found } = useSWR<{ items: PickUser[] }>(
+    search.trim().length >= 2 ? `/users?search=${encodeURIComponent(search.trim())}&limit=8` : null,
+  );
+
+  return (
+    <div>
+      <div className="mb-1.5 text-xs text-ink-2">เฉพาะรายชื่อ (ระบุคนเดียวก็ได้)</div>
+      <TextInput placeholder="ค้นหาชื่อหรืออีเมลของคนในระบบ…" value={q} onChange={e => setQ(e.target.value)} />
+      {!!found?.items?.length && (
+        <ul className="mt-1 rounded-lg border border-border bg-surface">
+          {found.items.map(u => (
+            <li key={u.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!draft.targetUsers.some(x => x.id === u.id)) {
+                    setDraft({ ...draft, targetUsers: [...draft.targetUsers, { id: u.id, name: formatName(u), email: u.email }] });
+                  }
+                  setQ("");
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-start text-sm hover:bg-accent-soft"
+              >
+                <span className="truncate">{formatName(u)}</span>
+                <span className="shrink-0 text-xs text-muted">{u.email}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!!draft.targetUsers.length && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {draft.targetUsers.map(u => (
+            <span key={u.id} className="chip chip-brand inline-flex items-center gap-1">
+              {u.name}
+              <button type="button" aria-label={`เอา ${u.name} ออก`}
+                onClick={() => setDraft({ ...draft, targetUsers: draft.targetUsers.filter(x => x.id !== u.id) })}
+                className="text-brand/70 hover:text-brand">
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PickUser {
+  id: string;
+  title?: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
+function formatName(u: PickUser): string {
+  return `${u.title ?? ""}${u.first_name} ${u.last_name}`.trim();
+}
+
+/** Returns `value` after it has stopped changing for `ms`. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return settled;
+}
+
+// ============================================================================
 // Cover-image field: drag-drop, client resize, validation, preview
 // ============================================================================
 
-function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
+function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -607,7 +1147,7 @@ function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: (d: Draf
       return;
     }
     if (file.size > IMG.maxBytes) {
-      setError("ไฟล์ใหญ่เกิน 5MB — ระบบจะพยายามย่อขนาดให้อัตโนมัติ");
+      setError("ไฟล์ใหญ่เกิน 5MB ระบบจะพยายามย่อขนาดให้อัตโนมัติ");
     }
     setUploading(true);
     try {
@@ -629,8 +1169,8 @@ function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: (d: Draf
       label={<span>รูปหน้าปก <span className="text-muted">(ไม่บังคับ)</span></span>}
       hint={
         <span>
-          แนะนำอัตราส่วน {IMG.aspectHint} — ขนาด {IMG.maxWidth}×{IMG.maxHeight}px, ขั้นต่ำ {IMG.minWidth}px แนวกว้าง
-          — รองรับ {IMG.acceptLabel} — ไม่เกิน 5MB (ระบบย่ออัตโนมัติ)
+          แนะนำอัตราส่วน {IMG.aspectHint} ขนาด {IMG.maxWidth}×{IMG.maxHeight}px, ขั้นต่ำ {IMG.minWidth}px แนวกว้าง
+          รองรับ {IMG.acceptLabel} ไม่เกิน 5MB (ระบบย่ออัตโนมัติ)
         </span>
       }
     >
@@ -733,9 +1273,11 @@ function AnnouncementCardPreview({ draft }: { draft: Draft }) {
         <div className="text-base font-semibold text-foreground">
           {draft.title || <span className="text-muted">หัวข้อ…</span>}
         </div>
-        <div className="text-sm text-foreground/80 mt-2 whitespace-pre-wrap">
-          {draft.body || <span className="text-muted">เนื้อหา…</span>}
-        </div>
+        {/* The same renderer the readers get, so the preview cannot promise a
+            layout the announcement will not actually have. */}
+        {draft.body
+          ? <RichText body={draft.body} className="mt-2 text-sm text-foreground/80" />
+          : <div className="mt-2 text-sm text-muted">เนื้อหา…</div>}
         <div className="mt-3 flex flex-wrap gap-1">
           {draft.audience.map(r => {
             const label = ROLES.find(x => x.value === r)?.label ?? r;
@@ -757,6 +1299,25 @@ function ManageRow({
   onTogglePin: () => void;
 }) {
   const meta = CAT_META[a.category] ?? CAT_META.info;
+  const [sending, setSending] = useState(false);
+
+  // Only offered once the announcement is live: mailing people about a draft
+  // sends them to a page that is not there yet, and the server refuses it.
+  async function resend() {
+    setSending(true);
+    try {
+      const r = await api.post<{ sent: number; skipped: number }>(`/announcements/${a.id}/send-email`);
+      toast.success(
+        r.sent > 0
+          ? `ส่งอีเมลแล้ว ${r.sent} ฉบับ`
+          : "ไม่มีใครค้างอยู่ ทุกคนในรายชื่อได้รับอีเมลแล้ว",
+      );
+    } catch (e) {
+      toast.danger(errMessage(e));
+    } finally {
+      setSending(false);
+    }
+  }
   return (
     <li className="px-4 py-3">
       <div className="flex items-start gap-3">
@@ -773,6 +1334,7 @@ function ManageRow({
             <Chip tone={meta.tone}><span className="inline-flex items-center gap-1">{meta.icon}{meta.label}</span></Chip>
             <StatusChip status={a.status} publishedAt={a.published_at ?? null} />
             {a.pinned && <Chip tone="brand"><span className="inline-flex items-center gap-1"><Pin size={11}/>ปักหมุด</span></Chip>}
+            {a.is_public && <Chip tone="info"><span className="inline-flex items-center gap-1"><Globe size={11}/>สาธารณะ</span></Chip>}
           </div>
           <div className="font-medium text-sm mt-1 truncate">{a.title}</div>
           <div className="text-xs text-muted mt-0.5 line-clamp-2">{a.body}</div>
@@ -790,6 +1352,19 @@ function ManageRow({
             )}
             <span>• กลุ่ม: {a.audience.map(r => ROLES.find(x => x.value === r)?.label ?? r).join(", ") || "-"}</span>
           </div>
+          {a.status === "live" && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <ShareButtons id={a.id} title={a.title} isPublic={!!a.is_public} size="sm" />
+              <button
+                type="button"
+                onClick={resend}
+                disabled={sending}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+              >
+                <Mail size={12} />{sending ? "กำลังส่ง…" : "ส่งอีเมลถึงรายชื่อที่เพิ่ม"}
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-1 shrink-0">
           <Button variant="ghost" size="sm" onPress={onEdit}><Pencil size={13} /> แก้ไข</Button>
@@ -850,8 +1425,13 @@ function toUpsertPayload(a: Ann) {
     cover_image_key: a.cover_image_key ?? null,
     published_at: a.published_at ?? null,
     expires_at: a.expires_at ?? null,
+    // is_public/recipients are deliberately absent: the server reads a missing
+    // field as "leave it alone". Sending a default here would let the pin
+    // button switch off an announcement's share link and delete everyone still
+    // queued for email.
   };
 }
+
 
 // ISO -> local `YYYY-MM-DDTHH:MM` string suitable for <input type="datetime-local">
 function toLocalInput(iso: string): string {

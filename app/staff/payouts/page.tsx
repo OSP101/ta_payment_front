@@ -131,7 +131,7 @@ export default function PayoutsPage() {
             title="ยังไม่มีวิชาที่ต้องดำเนินการ"
             description={
               (queue?.awaiting_appointment ?? 0) > 0
-                ? `มีงาน ${queue?.awaiting_appointment} รายการที่รออยู่ แต่ยังไม่ได้ออกคำสั่งแต่งตั้งทีเอ — ออกคำสั่งที่เมนู “ใบแต่งตั้งทีเอ” แล้วรายการจะขึ้นที่นี่`
+                ? `มีงาน ${queue?.awaiting_appointment} รายการที่รออยู่ แต่ยังไม่ได้ออกคำสั่งแต่งตั้งทีเอ ออกคำสั่งที่เมนู “ใบแต่งตั้งทีเอ” แล้วรายการจะขึ้นที่นี่`
                 : "เมื่ออาจารย์อนุมัติบันทึกเวลาของ TA แล้ว วิชาจะขึ้นที่นี่"
             }
           />
@@ -147,7 +147,7 @@ export default function PayoutsPage() {
             // a mechanic the officer can see for themselves, and which answers
             // no question they came here with.
             hint="ป้ายท้ายชื่อวิชาบอกว่าต้องทำอะไรต่อ"
-            empty="ไม่มีวิชาที่รอคุณอยู่ — เคลียร์หมดแล้ว"
+            empty="ไม่มีวิชาที่รอคุณอยู่ เคลียร์หมดแล้ว"
             count={act.length}
           >
             {act.map(c => <CourseRow key={c.id} card={c} onOpen={() => open(c)} />)}
@@ -169,7 +169,7 @@ export default function PayoutsPage() {
               page. */}
           {waiting > 0 && (
             <p className="px-1 text-xs text-muted">
-              อีก {waiting} วิชายังไม่ถึงคิวคุณ — รอ TA ลงเวลา รออาจารย์อนุมัติ หรือยังไม่ได้ออกคำสั่งแต่งตั้ง
+              อีก {waiting} วิชายังไม่ถึงคิวคุณ รอ TA ลงเวลา รออาจารย์อนุมัติ หรือยังไม่ได้ออกคำสั่งแต่งตั้ง
             </p>
           )}
         </div>

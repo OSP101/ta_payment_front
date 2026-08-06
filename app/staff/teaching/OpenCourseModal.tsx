@@ -198,8 +198,8 @@ export default function OpenCourseModal({
   const codeDuplicate = codeValid && existingCodes.has(draft.code);
   const codeError =
     draft.code === "" ? null
-    : !codeValid ? "รูปแบบรหัสไม่ถูกต้อง — ต้องเป็นตัวเลข 6 หลัก (เช่น 342233) หรือตัวอักษรพิมพ์ใหญ่ 2 ตัวตามด้วยตัวเลข 6 หลัก (เช่น CP353201)"
-    : codeDuplicate ? "วิชารหัสนี้เปิดอยู่แล้วในเทอมนี้ — เปิดซ้ำไม่ได้" : null;
+    : !codeValid ? "รูปแบบรหัสไม่ถูกต้อง ต้องเป็นตัวเลข 6 หลัก (เช่น 342233) หรือตัวอักษรพิมพ์ใหญ่ 2 ตัวตามด้วยตัวเลข 6 หลัก (เช่น CP353201)"
+    : codeDuplicate ? "วิชารหัสนี้เปิดอยู่แล้วในเทอมนี้ เปิดซ้ำไม่ได้" : null;
 
   // Progressive reveal gates: each step unlocks the next only when its
   // required fields are filled cleanly. When pickLecturers is on, an extra
@@ -241,7 +241,7 @@ export default function OpenCourseModal({
       const res = await api.post<{ id: string }>("/teaching-courses", body);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
       toast.success("เปิดรายวิชาเรียบร้อยแล้ว", {
-        description: `${draft.code} — ${draft.name_en.trim() || "(ไม่ระบุชื่อ)"}`,
+        description: `${draft.code} ${draft.name_en.trim() || "(ไม่ระบุชื่อ)"}`,
       });
       onClose();
       router.push(`${redirectBase}/${res.id}`);
@@ -276,7 +276,7 @@ export default function OpenCourseModal({
             the imported registrar file). */}
         <StepCard n={1} title="ข้อมูลวิชา" done={step1Done}>
           <div className="text-xs text-muted mb-3">
-            สำหรับวิชาที่ไม่มีในไฟล์นำเข้า — กรอกรหัสและข้อมูลหน่วยกิตเอง
+            สำหรับวิชาที่ไม่มีในไฟล์นำเข้า กรอกรหัสและข้อมูลหน่วยกิตเอง
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <FieldGroup
@@ -609,7 +609,7 @@ function LecturerPicker({
           })}
         </div>
       ) : (
-        <div className="text-xs text-warning font-medium mt-2">ยังไม่ได้เลือกอาจารย์ — ต้องเลือกอย่างน้อย 1 คน</div>
+        <div className="text-xs text-warning font-medium mt-2">ยังไม่ได้เลือกอาจารย์ ต้องเลือกอย่างน้อย 1 คน</div>
       )}
     </div>
   );

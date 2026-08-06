@@ -21,12 +21,12 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
 
       <Panel
         title="ข้อมูลส่วนตัว"
-        description="ข้อมูลนี้จัดการโดยเจ้าหน้าที่ — หากต้องการแก้ไข โปรดติดต่อเจ้าหน้าที่"
+        description="ข้อมูลนี้จัดการโดยเจ้าหน้าที่ หากต้องการแก้ไข โปรดติดต่อเจ้าหน้าที่"
         className="mb-4"
       >
         <div className="grid md:grid-cols-2 gap-4">
           {/* One icon per KIND of fact. อีเมล used to carry the same person
-              glyph as the name, and ระดับการศึกษา a shield — neither said
+              glyph as the name, and ระดับการศึกษา a shield neither said
               anything about the row it sat on. */}
           <InfoRow icon={<User size={16} />} label="ชื่อ-นามสกุล" value={formatFullName(me) || "—"} />
           <InfoRow icon={<Mail size={16} />} label="อีเมล" value={me?.email ?? "—"} />

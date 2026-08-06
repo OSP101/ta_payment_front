@@ -126,7 +126,7 @@ export function TaBudgetCalculator({
             เครื่องคิดเลขงบ TA <span className="font-normal text-muted">(โดยประมาณ)</span>
           </div>
           <div className="text-xs text-muted">
-            ลองปรับจำนวน นศ. และจำนวน TA เพื่อดูว่างบพอไหม ก่อนส่งคำขอ — ไม่บันทึกลงระบบ
+            ลองปรับจำนวน นศ. และจำนวน TA เพื่อดูว่างบพอไหม ก่อนส่งคำขอ ไม่บันทึกลงระบบ
           </div>
         </div>
         {!open && (

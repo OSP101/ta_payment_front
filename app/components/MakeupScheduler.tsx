@@ -173,8 +173,8 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
           // The TA can now file the makeup themselves, so lead with that —
           // but say plainly that it is still the lecturer's call, otherwise a
           // TA who guesses a date has effectively rescheduled the class.
-          ? "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ — คุณกำหนดวันชดเชยเองได้ (กรุณาตกลงกับอาจารย์ก่อน) หรือจะแจ้งเตือนให้อาจารย์กำหนดก็ได้ ถ้ายังไม่มีวันชดเชยจะลงเวลาปฏิบัติงานของคาบนั้นไม่ได้"
-          : "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ และสถานะการกำหนดวันชดเชย — TA จะลงชั่วโมงคาบที่ตกวันหยุดไม่ได้จนกว่าจะมีการกำหนดวันชดเชย"}
+          ? "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ คุณกำหนดวันชดเชยเองได้ (กรุณาตกลงกับอาจารย์ก่อน) หรือจะแจ้งเตือนให้อาจารย์กำหนดก็ได้ ถ้ายังไม่มีวันชดเชยจะลงเวลาปฏิบัติงานของคาบนั้นไม่ได้"
+          : "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ และสถานะการกำหนดวันชดเชย TA จะลงชั่วโมงคาบที่ตกวันหยุดไม่ได้จนกว่าจะมีการกำหนดวันชดเชย"}
         actions={
           <Button variant="secondary" onClick={() => setManualOpen(true)} disabled={!course?.sections?.length}>
             <Plus size={14} /> เพิ่มวันชดเชย (กรณีอื่น)
@@ -191,13 +191,13 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
           title={`ต้องดำเนินการ: ${unresolvedCount} คาบยังไม่ได้กำหนดวันชดเชย`}
           description={isTA ? (
             <>
-              คาบเหล่านี้ตรงกับวันหยุด ระบบจะ<b>ข้ามวันนั้นในบันทึกเวลา</b> —
+              คาบเหล่านี้ตรงกับวันหยุด ระบบจะ<b>ข้ามวันนั้นในบันทึกเวลา</b>
               {" "}<b>คุณจะลงเวลาและเบิกค่าตอบแทนของคาบนั้นไม่ได้</b>
               {" "}จนกว่าจะมีวันชดเชย กด “กำหนดวันชดเชย” เพื่อกรอกเอง หรือ “แจ้งเตือนอาจารย์” ให้อาจารย์กำหนด
             </>
           ) : (
             <>
-              คาบเหล่านี้ตรงกับวันหยุด ระบบจะ<b>ข้ามวันนั้นในบันทึกเวลา</b> —
+              คาบเหล่านี้ตรงกับวันหยุด ระบบจะ<b>ข้ามวันนั้นในบันทึกเวลา</b>
               {" "}<b>TA จะลงเวลาไม่ได้ และเบิกค่าตอบแทนของคาบนั้นไม่ได้</b>
               {" "}จนกว่าจะกดปุ่ม “กำหนดวันชดเชย” ในทุกคาบด้านล่าง
             </>
@@ -237,7 +237,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                     // Say what is NOT cancelled too: with a partial closure the
                     // cheapest fix is often a slot later the same day, and
                     // nothing else on the page would tell them that is legal.
-                    ? `หยุดเฉพาะช่วง ${holidayWindowLabel(imp)} · มี ${imp.affected_sections.length} คาบที่คาบเกี่ยวกับช่วงนี้ — คาบนอกช่วงยังเรียนตามปกติ และกำหนดเป็นเวลาชดเชยในวันเดียวกันได้`
+                    ? `หยุดเฉพาะช่วง ${holidayWindowLabel(imp)} · มี ${imp.affected_sections.length} คาบที่คาบเกี่ยวกับช่วงนี้ คาบนอกช่วงยังเรียนตามปกติ และกำหนดเป็นเวลาชดเชยในวันเดียวกันได้`
                     : `มี ${imp.affected_sections.length} คาบที่ได้รับผลกระทบ`}
                   actions={
                     // The nudge stays TA-only: it exists so a TA who does not
@@ -288,7 +288,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             <div className="flex items-center gap-2">
                               <AlertTriangle size={16} className="text-warning" />
                               <span className="text-sm text-warning-soft-foreground">
-                                {isTA ? "ยังไม่ได้กำหนดวันชดเชย — คุณจะลงเวลาคาบนี้ไม่ได้" : "ยังไม่ได้กำหนดวันชดเชย"}
+                                {isTA ? "ยังไม่ได้กำหนดวันชดเชย คุณจะลงเวลาคาบนี้ไม่ได้" : "ยังไม่ได้กำหนดวันชดเชย"}
                               </span>
                             </div>
                           )}
@@ -530,7 +530,7 @@ function MakeupFormModal({
             status="accent"
             icon={<CalendarOff size={14} />}
             title={`วันนี้หยุดเฉพาะช่วง ${closedWindow}`}
-            description="ชดเชยในวันเดิมได้ ถ้าเลือกเวลาที่ไม่คาบเกี่ยวกับช่วงที่หยุด — หรือจะเลือกวันอื่นก็ได้"
+            description="ชดเชยในวันเดิมได้ ถ้าเลือกเวลาที่ไม่คาบเกี่ยวกับช่วงที่หยุด หรือจะเลือกวันอื่นก็ได้"
           />
         )}
 
@@ -609,7 +609,7 @@ function ManualMakeupModal({
     if (!sectionId) { setError("กรุณาเลือก section"); return; }
     if (!originalDate) { setError("กรุณาระบุวันเดิมที่งดสอน"); return; }
     if (periods.length === 0) {
-      setError("กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก — ตรวจสอบวันเดิมที่งดสอนอีกครั้ง");
+      setError("กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก ตรวจสอบวันเดิมที่งดสอนอีกครั้ง");
       return;
     }
     if (!kind) { setError("กรุณาเลือกคาบที่ต้องการชดเชย"); return; }
@@ -682,7 +682,7 @@ function ManualMakeupModal({
           hint={originalDate && periods.length === 0
             ? "กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก"
             : periods.length > 1
-              ? "วันนั้นมีหลายคาบ — เลือกคาบที่งด (คาบอื่นกำหนดแยกได้)"
+              ? "วันนั้นมีหลายคาบ เลือกคาบที่งด (คาบอื่นกำหนดแยกได้)"
               : undefined}
         >
           <select

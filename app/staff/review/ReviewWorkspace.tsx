@@ -585,7 +585,7 @@ function DocPanel({
 // no hover events of its own — the same arrangement LockedActionButton uses.
 function downloadAllReason(approvedCount: number): string {
   return approvedCount === 0
-    ? "ยังไม่มีใครในรายชื่อนี้ที่อนุมัติครบทั้ง 3 ไฟล์ — ต้องอนุมัติอย่างน้อย 1 คนก่อน"
+    ? "ยังไม่มีใครในรายชื่อนี้ที่อนุมัติครบทั้ง 3 ไฟล์ ต้องอนุมัติอย่างน้อย 1 คนก่อน"
     : `อนุมัติแล้ว ${approvedCount} คนในรอบนี้`;
 }
 
@@ -687,7 +687,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
               <div className="space-y-1">
                 <p className="font-medium text-foreground">ไฟล์จะถูกลบอัตโนมัติภายใน 7 วัน</p>
                 <p className="text-xs text-muted">
-                  ตามนโยบายคุ้มครองข้อมูลส่วนบุคคล — กรุณาบันทึกไฟล์เก็บไว้ในระบบของหน่วยงาน
+                  ตามนโยบายคุ้มครองข้อมูลส่วนบุคคล กรุณาบันทึกไฟล์เก็บไว้ในระบบของหน่วยงาน
                   ก่อนถึงกำหนด
                 </p>
               </div>
