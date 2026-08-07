@@ -35,14 +35,25 @@ function shareURL(target: ShareTarget, url: string, title: string): string {
   }
 }
 
-export function publicAnnouncementURL(id: string): string {
-  if (typeof window === "undefined") return `/p/announcements/${id}`;
-  return `${window.location.origin}/p/announcements/${id}`;
+/**
+ * `baseURL` is the origin to build the link on. The public announcement page is
+ * server-rendered, and there `window` does not exist — without an origin passed
+ * in, the href went to Facebook as the bare path "/p/announcements/…", which is
+ * not a link anyone can follow. It also pins the shared link to the site's
+ * canonical origin rather than whatever host the officer happens to be browsing
+ * from, so a link copied off an internal IP still works for the public.
+ */
+function origin(baseURL?: string): string {
+  if (baseURL) return baseURL.replace(/\/+$/, "");
+  return typeof window === "undefined" ? "" : window.location.origin;
 }
 
-export function internalAnnouncementURL(id: string): string {
-  if (typeof window === "undefined") return `/announcements/${id}`;
-  return `${window.location.origin}/announcements/${id}`;
+export function publicAnnouncementURL(id: string, baseURL?: string): string {
+  return `${origin(baseURL)}/p/announcements/${id}`;
+}
+
+export function internalAnnouncementURL(id: string, baseURL?: string): string {
+  return `${origin(baseURL)}/announcements/${id}`;
 }
 
 export default function ShareButtons({
@@ -50,15 +61,20 @@ export default function ShareButtons({
   title,
   isPublic,
   size = "md",
+  baseURL,
 }: {
   id: string;
   title: string;
   /** Whether staff opened this announcement to readers with no account. */
   isPublic: boolean;
   size?: "sm" | "md";
+  /** Origin to build the link on. Required wherever this is server-rendered. */
+  baseURL?: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const url = isPublic ? publicAnnouncementURL(id) : internalAnnouncementURL(id);
+  const url = isPublic
+    ? publicAnnouncementURL(id, baseURL)
+    : internalAnnouncementURL(id, baseURL);
 
   async function copy() {
     try {

@@ -151,7 +151,7 @@ export default async function PublicAnnouncementPage(
       </header>
 
       <main className="mx-auto max-w-[760px] px-5 py-6">
-        {a ? <Article a={a} /> : (
+        {a ? <Article a={a} base={siteURL()} /> : (
           <div className="rounded-xl border border-border bg-white px-6 py-12 text-center">
             <Megaphone size={30} className="mx-auto mb-3 text-ink-4" />
             <div className="text-base font-semibold text-ink-1">ไม่พบประกาศนี้</div>
@@ -176,7 +176,7 @@ export default async function PublicAnnouncementPage(
   );
 }
 
-function Article({ a }: { a: PublicAnn }) {
+function Article({ a, base }: { a: PublicAnn; base: string }) {
   const meta = CAT_META[a.category] ?? CAT_META.info;
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-white">
@@ -224,7 +224,9 @@ function Article({ a }: { a: PublicAnn }) {
 
         <div className="mt-6 border-t border-hairline pt-4">
           <div className="mb-2 text-xs font-medium text-ink-3">แชร์ประกาศนี้</div>
-          <ShareButtons id={a.id} title={a.title} isPublic size="sm" />
+          {/* base: this page is server-rendered, so the buttons cannot read the
+              origin off `window` the way they do on the in-app pages. */}
+          <ShareButtons id={a.id} title={a.title} isPublic size="sm" baseURL={base} />
         </div>
       </div>
     </article>
