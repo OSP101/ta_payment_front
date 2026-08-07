@@ -1,0 +1,26 @@
+# Keep local development state out of the image.
+#
+# The immediate reason: .env.local is a developer's machine-local override, but
+# `COPY . .` copied it into the build, where `npm run build` inlined its
+# NEXT_PUBLIC_* values into the client bundle. A wrong value there is not a
+# runtime setting you can correct by restarting the container — it is compiled
+# into the JavaScript the browser downloads, so it survives until the next
+# rebuild. Configure the container through compose `environment` instead.
+.env
+.env.*
+!.env.example
+
+node_modules
+.next
+npm-debug.log*
+
+.git
+.github
+.vscode
+Dockerfile
+.dockerignore
+README.md
+CLAUDE.md
+AGENTS.md
+.agents
+.heroui-docs
