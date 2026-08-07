@@ -2350,7 +2350,8 @@ function AddWorklogModal({
           tcId={tcId}
         />
 
-        <div className="grid grid-cols-3 gap-3">
+        {/* Two times fit a phone row; the third field does not. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <FieldGroup label="เวลาเริ่ม">
             <TimePicker value={start} onChange={v => { markDirty(); setStart(v); }} label="เวลาเริ่ม" />
           </FieldGroup>
@@ -3008,7 +3009,7 @@ function MonthTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
+      <table className="w-full min-w-[560px] text-sm border-collapse sm:min-w-0">
         <thead>
           <tr className="bg-surface-secondary/50 text-xs uppercase tracking-wider text-muted">
             {columns.map(col => (

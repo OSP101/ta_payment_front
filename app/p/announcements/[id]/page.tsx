@@ -1,6 +1,4 @@
-"use client";
-import useSWR from "swr";
-import { useParams } from "next/navigation";
+import type { Metadata } from "next";
 import {
   AlertTriangle, CalendarClock, Info, Megaphone,
   Newspaper, PartyPopper, Radio,
@@ -8,15 +6,24 @@ import {
 import ShareButtons from "../../../components/ShareButtons";
 import AttachmentGallery, { type Attachment } from "../../../components/AttachmentGallery";
 import RichText from "../../../components/RichText";
+import { backendURL, siteURL } from "../../../lib/site";
 
 /**
  * The public face of one announcement: no login, no sidebar, no feed.
  *
- * This is where a Facebook or LINE link lands. It deliberately renders nothing
- * from the rest of the app — no shell, no navigation into the system — because
- * the reader may have no account and offering them locked doors is noise.
+ * This is where a Facebook or LINE link lands, and it is a SERVER component for
+ * exactly that reason. It used to fetch the announcement in the browser with
+ * SWR, which reads fine for a person but not for the crawler that builds the
+ * link-preview card: that crawler does not run JavaScript, so every shared link
+ * arrived as a bare card carrying nothing but the domain. Rendering on the
+ * server puts the title, the text and the picture in the HTML itself, which is
+ * what `generateMetadata` below then declares to the platforms.
  *
- * The server decides what is visible (see AnnounceService.PublicGet): only
+ * It deliberately renders nothing from the rest of the app — no shell, no
+ * navigation into the system — because the reader may have no account and
+ * offering them locked doors is noise.
+ *
+ * The API decides what is visible (see AnnounceService.PublicGet): only
  * announcements staff opened for sharing, and only while they are live.
  * Everything else answers 404, so this page cannot be used to probe which
  * announcements exist.
@@ -28,6 +35,9 @@ interface PublicAnn {
   id: string;
   title: string;
   body: string;
+  /** Body with the markup stripped, cut for a preview card. From the API, so
+   *  it can never describe the announcement differently from the email. */
+  excerpt?: string;
   category: Category;
   cover_image_url?: string | null;
   published_at?: string | null;
@@ -43,15 +53,88 @@ const CAT_META: Record<Category, { label: string; icon: React.ReactNode; classNa
   urgent:  { label: "ด่วน",               icon: <Radio size={14} />,         className: "bg-red-50 text-red-700 border-red-200" },
 };
 
-export default function PublicAnnouncementPage() {
-  const params = useParams<{ id: string }>();
-  const { data, error, isLoading } = useSWR<PublicAnn>(
-    params?.id ? `/public/announcements/${params.id}` : null,
-    // One shot: an anonymous reader has nothing to revalidate against, and a
-    // background refetch on focus would just re-run a request that cannot
-    // change while they read.
-    { revalidateOnFocus: false, shouldRetryOnError: false },
-  );
+const SITE_NAME = "TA Payment · วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น";
+
+async function getAnnouncement(id: string): Promise<PublicAnn | null> {
+  try {
+    const r = await fetch(
+      `${backendURL()}/api/v1/public/announcements/${encodeURIComponent(id)}`,
+      // Never cached: an announcement can be withdrawn or expire at any moment,
+      // and a cached copy would keep serving a notice the office has retracted.
+      { cache: "no-store" },
+    );
+    if (!r.ok) return null;
+    return (await r.json()) as PublicAnn;
+  } catch {
+    // The API being down must not crash the page — the reader gets the same
+    // "not found" panel they would get for a withdrawn announcement.
+    return null;
+  }
+}
+
+/**
+ * The picture a crawler will fetch.
+ *
+ * Cover images come back pointed at the authenticated media route, which
+ * refuses anonymous callers — Facebook among them. Swapping in the public route
+ * is what makes the image actually load in the preview card. Falls back to the
+ * first attached photo, so an announcement that carries pictures but no cover
+ * still shares as a picture card rather than a line of text.
+ */
+function previewImage(a: PublicAnn): string | null {
+  const key = a.cover_image_url?.replace("/api/v1/announcements/images/", "/api/v1/public/announcements/media/");
+  if (key) return `${siteURL()}${key}`;
+  const firstPhoto = a.attachments?.find(x => x.kind === "image");
+  if (firstPhoto) return `${siteURL()}/api/v1/public/announcements/media/${firstPhoto.storage_key}`;
+  return null;
+}
+
+export async function generateMetadata(
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Metadata> {
+  const { id } = await params;
+  const a = await getAnnouncement(id);
+  if (!a) {
+    // Nothing to describe, and nothing that should end up in a search index.
+    return { title: "ไม่พบประกาศ", robots: { index: false, follow: false } };
+  }
+
+  const url = `${siteURL()}/p/announcements/${a.id}`;
+  const description = a.excerpt || SITE_NAME;
+  const image = previewImage(a);
+
+  return {
+    title: a.title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      siteName: SITE_NAME,
+      title: a.title,
+      description,
+      url,
+      locale: "th_TH",
+      publishedTime: a.published_at ?? undefined,
+      expirationTime: a.expires_at ?? undefined,
+      // Dimensions are deliberately not declared: the cover is resized to fit
+      // 1600x900 but the stored file can be anything under that, and a wrong
+      // width tells the platform to lay out a box the picture does not fill.
+      images: image ? [{ url: image, alt: a.title }] : undefined,
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title: a.title,
+      description,
+      images: image ? [image] : undefined,
+    },
+  };
+}
+
+export default async function PublicAnnouncementPage(
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const a = await getAnnouncement(id);
 
   return (
     <div className="min-h-screen bg-[var(--page-bg)]">
@@ -68,11 +151,7 @@ export default function PublicAnnouncementPage() {
       </header>
 
       <main className="mx-auto max-w-[760px] px-5 py-6">
-        {isLoading && !data && !error && (
-          <div className="h-64 animate-pulse rounded-xl border border-border bg-white" />
-        )}
-
-        {error && (
+        {a ? <Article a={a} /> : (
           <div className="rounded-xl border border-border bg-white px-6 py-12 text-center">
             <Megaphone size={30} className="mx-auto mb-3 text-ink-4" />
             <div className="text-base font-semibold text-ink-1">ไม่พบประกาศนี้</div>
@@ -88,8 +167,6 @@ export default function PublicAnnouncementPage() {
             </a>
           </div>
         )}
-
-        {data && <Article a={data} />}
       </main>
 
       <footer className="mx-auto max-w-[760px] px-5 pb-10 text-center text-xs text-ink-4">

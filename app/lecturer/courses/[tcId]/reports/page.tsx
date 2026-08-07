@@ -829,7 +829,7 @@ function MonthTable({ weeks, showSections }: { weeks: WeekGroup[]; showSections:
   const cols = showSections ? 7 : 6;
   return (
     <div className="overflow-x-auto border-t border-(--hairline)">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[560px] text-sm sm:min-w-0">
         <thead className="border-b border-(--hairline) text-xs text-muted">
           <tr>
             <th className="whitespace-nowrap px-4 py-2 text-left font-medium">วันที่</th>

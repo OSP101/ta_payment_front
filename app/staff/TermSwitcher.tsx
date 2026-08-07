@@ -23,7 +23,7 @@ export default function TermSwitcher() {
 
   return (
     <div data-tour="term-switcher" className="shrink-0">
-      <TermSelect terms={terms} value={termId} onChange={setTermId} className="w-44 shrink-0" />
+      <TermSelect terms={terms} value={termId} onChange={setTermId} className="w-32 sm:w-44 shrink-0" />
     </div>
   );
 }

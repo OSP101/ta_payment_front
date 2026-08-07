@@ -8,8 +8,8 @@ import {
   TextField as HTextField,
   type SortDescriptor,
 } from "@heroui/react";
-import { Check, Copy, KeyRound, Pencil, Plus, UserCheck, UserX } from "lucide-react";
-import { api } from "../../lib/api";
+import { Check, Copy, KeyRound, LockOpen, Pencil, Plus, UserCheck, UserX } from "lucide-react";
+import { api, type Me } from "../../lib/api";
 import { THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
@@ -41,6 +41,8 @@ interface User {
   roles: string[];
   /** สิทธิ์ผู้บริหาร — เห็นแดชบอร์ดสถิติงบแบบอ่านอย่างเดียว (ไม่ใช่ role) */
   is_executive?: boolean;
+  /** ตำแหน่งบริหาร เช่น "หัวหน้าสาขาวิชา..." — ป้ายแสดงผลเฉยๆ ไม่มีผลต่อสิทธิ์หรือเอกสาร */
+  admin_position?: string | null;
   is_active: boolean;
 }
 
@@ -50,7 +52,7 @@ interface User {
  * typing what they see has to match, and so does someone typing "วรัญญา" alone.
  */
 function userHaystack(u: User): string {
-  return `${formatFullName(u)} ${u.title ?? ""} ${u.first_name} ${u.last_name} ${u.email}`;
+  return `${formatFullName(u)} ${u.title ?? ""} ${u.first_name} ${u.last_name} ${u.email} ${u.admin_position ?? ""}`;
 }
 
 // ตำแหน่งทางวิชาการนำหน้าคุณวุฒิเสมอ (เช่น "รศ. ดร." ไม่ใช่ "ดร. รศ.")
@@ -282,13 +284,31 @@ export default function UsersPage() {
   const [resetting, setResetting] = useState<User | null>(null);
   const [deactivating, setDeactivating] = useState<User | null>(null);
   const [reactivating, setReactivating] = useState<User | null>(null);
+  const [unlocking, setUnlocking] = useState<User | null>(null);
+
+  // The password-gate unlock is admin-only, and the API additionally refuses an
+  // admin unlocking themselves (see service.ClearPasswordGateLockout — otherwise
+  // a stolen admin session could grind the gate and keep letting itself back in).
+  // Both rules are mirrored here so the button is never offered where the request
+  // would come back 403; the server stays the one enforcing them.
+  const { data: me } = useSWR<Me>("/me");
+  const isAdmin = (me?.roles ?? []).includes("admin");
+  const canUnlock = (u: User) => isAdmin && u.id !== me?.id;
 
   const columns: DataColumn<User>[] = [
     {
       id: "name", label: "ชื่อ", sortable: true, isRowHeader: true,
       sortValue: u => `${u.first_name} ${u.last_name}`,
       className: "font-medium",
-      render: u => formatFullName(u),
+      render: u => (
+        <div>
+          <div>{formatFullName(u)}</div>
+          {/* ป้ายแสดงผลเฉยๆ ต่อจากชื่อ — ตำแหน่งบริหารไม่ใช่บทบาท จึงไม่ใช่ Chip */}
+          {u.admin_position && (
+            <div className="text-xs font-normal text-muted mt-0.5">{u.admin_position}</div>
+          )}
+        </div>
+      ),
     },
     {
       id: "email", label: "อีเมล", sortable: true,
@@ -329,6 +349,11 @@ export default function UsersPage() {
           <Button variant="ghost" size="sm" onClick={() => setResetting(u)}>
             <KeyRound size={14} /> รีเซ็ตรหัส
           </Button>
+          {canUnlock(u) && (
+            <Button variant="ghost" size="sm" onClick={() => setUnlocking(u)}>
+              <LockOpen size={14} /> ปลดล็อก
+            </Button>
+          )}
           {u.is_active ? (
             <Button variant="danger-soft" size="sm" onClick={() => setDeactivating(u)}>
               <UserX size={14} /> ปิด
@@ -418,6 +443,7 @@ export default function UsersPage() {
       {resetting && <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />}
       {deactivating && <DeactivateModal user={deactivating} onClose={() => setDeactivating(null)} />}
       {reactivating && <ReactivateModal user={reactivating} onClose={() => setReactivating(null)} />}
+      {unlocking && <UnlockPasswordGateModal user={unlocking} onClose={() => setUnlocking(null)} />}
     </div>
   );
 }
@@ -589,6 +615,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     // Preserve the full role set (incl. admin) rather than collapsing to one.
     roles: [...user.roles],
     is_executive: user.is_executive === true,
+    admin_position: user.admin_position ?? "",
     study_level: user.study_level ?? "undergrad",
     study_year: user.study_year != null ? String(user.study_year) : "",
   });
@@ -624,6 +651,9 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         ...(rolesChanged ? { roles: form.roles } : {}),
         ...(form.is_executive !== (user.is_executive === true)
           ? { is_executive: form.is_executive }
+          : {}),
+        ...(form.admin_position !== (user.admin_position ?? "")
+          ? { admin_position: form.admin_position.trim() }
           : {}),
         study_level: isTa ? form.study_level : "",
         // 0 clears study_year server-side; send it only for undergrad TAs.
@@ -683,6 +713,14 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
               value={form.roles}
               onChange={roles => setForm({ ...form, roles })}
               error={errors.roles} show={showErrors}
+            />
+            {/* ป้ายแสดงผลเฉยๆ: คนคนหนึ่งอาจมีตำแหน่งบริหารควบคู่กับบทบาทสอน เช่น
+                หัวหน้าสาขาวิชา — ไม่ผูกกับสิทธิ์การใช้งานหรือเอกสารที่ออกจากระบบ
+                (เอกสารทางการใช้รายชื่อแยกที่หน้า "ตั้งค่า") */}
+            <VField label="ตำแหน่งบริหาร (ถ้ามี)" value={form.admin_position}
+              onChange={v => setForm({ ...form, admin_position: v })}
+              error={null} show={false}
+              placeholder="เช่น หัวหน้าสาขาวิชาวิทยาการคอมพิวเตอร์"
             />
             {/* สิทธิ์ ไม่ใช่บทบาท: เห็นเฉพาะหน้าสถิติงบแบบอ่านอย่างเดียว
                 (/executive) ไม่เพิ่มเมนูงานหรืออำนาจแก้ไขใด ๆ */}
@@ -890,6 +928,73 @@ function ReactivateModal({ user, onClose }: { user: User; onClose: () => void })
           อีกครั้ง ผู้ใช้จะสามารถเข้าสู่ระบบได้ตามปกติ
         </p>
         {err && <Alert status="danger" title="เปิดใช้งานไม่สำเร็จ" description={err} />}
+      </div>
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Clears the re-authentication lockout that guards the document-bundle download
+ * and the staff worklog editor. Five wrong passwords at that prompt shut it for
+ * 15 minutes; this is the shortcut past the wait, not the only way out.
+ *
+ * Distinct from "รีเซ็ตรหัสผ่าน" and worth keeping distinct in the wording: this
+ * does NOT change the password. An admin who reaches for the wrong one of the two
+ * hands the officer a temporary password they never asked for.
+ *
+ * The success message branches on was_locked because "unlocked" and "there was
+ * nothing to unlock" are genuinely different answers — the second means the
+ * officer's problem is something else, and saying "สำเร็จ" to both would send the
+ * admin away believing they had fixed it.
+ */
+function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setPending(true); setErr(null);
+    try {
+      const res = await api.post<{ was_locked: boolean }>(`/users/${user.id}/unlock-password-gate`);
+      notify.success(res.was_locked
+        ? "ปลดล็อกเรียบร้อยแล้ว ผู้ใช้ยืนยันรหัสผ่านได้ทันที"
+        : "บัญชีนี้ไม่ได้ถูกล็อกอยู่ จึงไม่มีอะไรต้องปลด");
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      notify.error(e);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="ปลดล็อกการยืนยันรหัสผ่าน"
+      size="md"
+      footer={<>
+        <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
+        <Button variant="primary" onClick={submit} disabled={pending} isPending={pending}>
+          <LockOpen size={14} /> ปลดล็อก
+        </Button>
+      </>}
+    >
+      <div className="space-y-3">
+        <p className="text-sm">
+          ล้างการนับรหัสผ่านผิดของ
+          <span className="font-medium"> {user.first_name} {user.last_name} </span>
+          ({user.email}) เพื่อให้กลับมายืนยันตัวตนตอนดาวน์โหลดเอกสารหรือแก้ไขเวลาปฏิบัติงานได้ทันที
+          โดยไม่ต้องรอจนครบ 15 นาที
+        </p>
+        <p className="text-sm text-(--ink-3)">
+          การดำเนินการนี้ <span className="font-medium">ไม่เปลี่ยนรหัสผ่าน</span> ของผู้ใช้
+          หากผู้ใช้จำรหัสผ่านไม่ได้ ให้ใช้ &ldquo;รีเซ็ตรหัส&rdquo; แทน
+          ทั้งนี้ระบบจะบันทึกผู้ปลดล็อกไว้ในประวัติการใช้งาน
+        </p>
+        {err && <Alert status="danger" title="ปลดล็อกไม่สำเร็จ" description={err} />}
       </div>
     </Modal>
   );

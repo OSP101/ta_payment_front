@@ -7,6 +7,7 @@ import {
   Info, PartyPopper, Newspaper, Radio, Sparkles, Check, Plus,
   Globe, Mail, Target, Users, Paperclip, Play, FileText,
   List, ListOrdered, Link as LinkIcon, AlignCenter, AlignLeft, AlignRight,
+  ChevronDown,
 } from "lucide-react";
 import { Tabs, toast } from "@heroui/react";
 import { api, errMessage } from "../../lib/api";
@@ -77,6 +78,15 @@ const CATEGORIES: {
   { value: "event",   label: "กิจกรรม / อบรม",  icon: <PartyPopper size={14} />, tone: "success",description: "งาน กิจกรรม หรืออบรมที่มีวันจัด" },
   { value: "warning", label: "แจ้งเตือน",       icon: <AlertTriangle size={14} />, tone: "warn",  description: "เตือนให้ปฏิบัติภายในกำหนด" },
   { value: "urgent",  label: "ด่วน",           icon: <Radio size={14} />,       tone: "danger", description: "เรื่องเร่งด่วน ต้องการความสนใจทันที" },
+];
+
+// Publish timing. The three modes used to be stacked radios each carrying its
+// own paragraph — a whole screenful for one choice. As chips with a single line
+// of help for whichever is selected, it is one row.
+const PUBLISH_MODES: { value: Draft["publishMode"]; label: string; description: string }[] = [
+  { value: "now",       label: "เผยแพร่ทันที",   description: "โพสต์และส่งการแจ้งเตือนทันที" },
+  { value: "scheduled", label: "ตั้งเวลา",        description: "ระบบจะเผยแพร่และแจ้งเตือนตามเวลาที่ตั้งไว้" },
+  { value: "draft",     label: "เก็บเป็นฉบับร่าง", description: "เก็บไว้ในแท็บฉบับร่าง ไม่ส่งการแจ้งเตือน" },
 ];
 
 const CAT_META: Record<Category, typeof CATEGORIES[number]> = Object.fromEntries(
@@ -396,7 +406,9 @@ export default function AnnouncePage() {
           <div ref={editorRef} className="grid gap-4 lg:grid-cols-5 mt-4">
             <div data-tour="announce-composer" className="lg:col-span-3 space-y-4">
               <Composer draft={draft} setDraft={setDraft} />
-              <div className="flex flex-wrap gap-2 justify-end">
+              {/* Reads as the end of the form rather than two buttons adrift
+                  under it, now that everything above sits in bordered blocks. */}
+              <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-border bg-surface px-4 py-3">
                 {draft.id && (
                   <Button variant="ghost" onPress={resetDraft}>
                     <X size={14} /> ยกเลิกการแก้ไข
@@ -514,12 +526,82 @@ export default function AnnouncePage() {
 // Composer
 // ============================================================================
 
-function Composer({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
-  const setField = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
+/**
+ * One titled block of the composer.
+ *
+ * The form was a single card holding nine field groups at equal weight, so
+ * nothing on it read as "start here" — everything asked for attention at once.
+ * Four named blocks let an officer answer one question at a time: what am I
+ * writing, who gets it, what is attached, when does it go out. The blocks that
+ * are usually left alone collapse, so the screen opens short.
+ */
+function Section({
+  icon, title, hint, summary, children,
+  collapsible = false, defaultOpen = true,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  hint?: string;
+  /** Shown at the right of the header: what is inside, without opening it. */
+  summary?: React.ReactNode;
+  children: React.ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const head = (
+    <>
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">{title}</span>
+        {hint && <span className="mt-0.5 block text-xs text-muted">{hint}</span>}
+      </span>
+      {summary && <span className="shrink-0 text-xs text-muted">{summary}</span>}
+    </>
+  );
 
   return (
-    <Panel title={draft.id ? "แก้ไขประกาศ" : "สร้างประกาศใหม่"}>
-      <div className="space-y-4">
+    <section className="rounded-xl border border-border bg-surface">
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-2.5 rounded-xl px-4 py-3 text-start transition-colors hover:bg-surface-secondary"
+        >
+          {head}
+          <ChevronDown
+            size={15}
+            className={"shrink-0 text-muted transition-transform " + (open ? "rotate-180" : "")}
+          />
+        </button>
+      ) : (
+        <div className="flex items-center gap-2.5 px-4 py-3">{head}</div>
+      )}
+      {(!collapsible || open) && (
+        <div className="space-y-4 border-t border-hairline px-4 py-4">{children}</div>
+      )}
+    </section>
+  );
+}
+
+function Composer({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const setField = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
+  const cat = CAT_META[draft.category];
+  const mediaCount = draft.attachments.length + (draft.cover_image_key ? 1 : 0);
+  const publishMeta = PUBLISH_MODES.find(m => m.value === draft.publishMode);
+
+  return (
+    <div className="space-y-3">
+      {draft.id && (
+        <div className="flex items-center gap-2 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-sm text-accent-soft-foreground">
+          <Pencil size={14} /> กำลังแก้ไขประกาศที่มีอยู่
+        </div>
+      )}
+
+      <Section icon={<Pencil size={15} />} title="เนื้อหาประกาศ">
         <FieldGroup label={<span>หัวข้อ <span className="text-muted">({draft.title.length}/200)</span></span>}>
           <TextInput
             placeholder="หัวข้อประกาศ"
@@ -534,113 +616,97 @@ function Composer({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
         </FieldGroup>
 
         <FieldGroup label="หมวดหมู่">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {CATEGORIES.map(c => {
               const on = draft.category === c.value;
               return (
                 <button
                   key={c.value}
                   type="button"
-                  onClick={() => setField("category", c.value)}
-                  className={
-                    "px-2.5 py-2 rounded-lg border text-xs flex flex-col items-start gap-1 transition text-start " +
-                    (on
-                      ? "border-accent bg-accent-soft text-accent-soft-foreground"
-                      : "border-border bg-surface hover:bg-surface-secondary")
-                  }
                   aria-pressed={on}
+                  onClick={() => setField("category", c.value)}
+                  className={`chip inline-flex cursor-pointer items-center gap-1.5 transition ${on ? "chip-brand" : "chip-neutral"}`}
                 >
-                  <span className="flex items-center gap-1.5 font-medium">
-                    {c.icon} {c.label}
-                  </span>
-                  <span className="text-[11px] text-muted leading-snug">{c.description}</span>
+                  {c.icon}{c.label}
                 </button>
               );
             })}
           </div>
+          {/* Only the chosen category needs explaining. Five descriptions on
+              screen at once was most of what made this form feel crowded. */}
+          <p className="text-xs text-muted">{cat.description}</p>
         </FieldGroup>
+      </Section>
 
-        <FieldGroup label="กลุ่มผู้รับ" hint="ผู้รับจะได้รับการแจ้งเตือนในระบบและทางอีเมล">
-          <div className="flex gap-2 flex-wrap">
-            {ROLES.map(r => {
-              const on = draft.audience.includes(r.value);
+      <AudienceSection draft={draft} setDraft={setDraft} />
+
+      {/* Keyed on the draft: loading an existing announcement for edit should
+          re-decide whether this opens, and a stale upload error from the
+          previous draft should not survive the switch. */}
+      <Section
+        key={draft.id ?? "new"}
+        icon={<ImageIcon size={15} />}
+        title="รูปภาพและไฟล์แนบ"
+        hint="ไม่ใส่ก็ได้"
+        collapsible
+        defaultOpen={mediaCount > 0}
+        summary={mediaCount > 0 ? `${mediaCount} ไฟล์` : "ยังไม่มีไฟล์"}
+      >
+        <CoverImageField draft={draft} setDraft={setDraft} />
+        <AttachmentsField draft={draft} setDraft={setDraft} />
+      </Section>
+
+      <Section icon={<CalendarClock size={15} />} title="การเผยแพร่">
+        <FieldGroup label="เผยแพร่เมื่อไหร่">
+          <div className="flex flex-wrap gap-1.5">
+            {PUBLISH_MODES.map(m => {
+              const on = draft.publishMode === m.value;
               return (
                 <button
-                  key={r.value}
+                  key={m.value}
                   type="button"
-                  onClick={() => setField("audience", on ? draft.audience.filter(x => x !== r.value) : [...draft.audience, r.value])}
-                  className={`chip cursor-pointer transition ${on ? "chip-brand" : "chip-neutral"}`}
                   aria-pressed={on}
+                  onClick={() => setField("publishMode", m.value)}
+                  className={`chip cursor-pointer transition ${on ? "chip-brand" : "chip-neutral"}`}
                 >
-                  {on ? <Check size={12} className="me-1 inline" /> : null}
-                  {r.label}
+                  {m.label}
                 </button>
               );
             })}
           </div>
+          <p className="text-xs text-muted">{publishMeta?.description}</p>
+          {draft.publishMode === "scheduled" && (
+            <input
+              type="datetime-local"
+              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground"
+              value={draft.publishedAt}
+              min={toLocalInput(new Date().toISOString())}
+              onChange={e => setField("publishedAt", e.target.value)}
+            />
+          )}
         </FieldGroup>
 
-        <CoverImageField draft={draft} setDraft={setDraft} />
+        <FieldGroup label="วันหมดอายุ (ไม่บังคับ)" hint="ประกาศจะซ่อนจากฟีดหลังเวลานี้">
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.expires}
+              onChange={e => setField("expires", e.target.checked)}
+            />
+            ตั้งเวลาหมดอายุ
+          </label>
+          {draft.expires && (
+            <input
+              type="datetime-local"
+              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground"
+              value={draft.expiresAt}
+              min={draft.publishedAt || toLocalInput(new Date().toISOString())}
+              onChange={e => setField("expiresAt", e.target.value)}
+            />
+          )}
+        </FieldGroup>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FieldGroup label="กำหนดการเผยแพร่">
-            <div className="flex flex-col gap-2">
-              {(["now", "scheduled", "draft"] as const).map(m => (
-                <label key={m} className="flex items-start gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    className="mt-1"
-                    checked={draft.publishMode === m}
-                    onChange={() => setField("publishMode", m)}
-                  />
-                  <span>
-                    <span className="font-medium">
-                      {m === "now" ? "เผยแพร่ทันที" : m === "scheduled" ? "ตั้งเวลาเผยแพร่" : "บันทึกเป็นฉบับร่าง"}
-                    </span>
-                    <span className="block text-xs text-muted">
-                      {m === "now"
-                        ? "โพสต์และส่งการแจ้งเตือนทันที"
-                        : m === "scheduled"
-                        ? "ระบบจะเผยแพร่และแจ้งเตือนตามเวลาที่ตั้งไว้"
-                        : "เก็บไว้ในแท็บฉบับร่าง ไม่ส่งการแจ้งเตือน"}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            {draft.publishMode === "scheduled" && (
-              <input
-                type="datetime-local"
-                className="mt-2 h-9 rounded-lg border border-border bg-surface px-3 text-sm text-foreground w-full"
-                value={draft.publishedAt}
-                min={toLocalInput(new Date().toISOString())}
-                onChange={e => setField("publishedAt", e.target.value)}
-              />
-            )}
-          </FieldGroup>
-
-          <FieldGroup label="วันหมดอายุ (ไม่บังคับ)" hint="ประกาศจะซ่อนจากฟีดหลังเวลานี้">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={draft.expires}
-                onChange={e => setField("expires", e.target.checked)}
-              />
-              ตั้งเวลาหมดอายุ
-            </label>
-            {draft.expires && (
-              <input
-                type="datetime-local"
-                className="mt-2 h-9 rounded-lg border border-border bg-surface px-3 text-sm text-foreground w-full"
-                value={draft.expiresAt}
-                min={draft.publishedAt || toLocalInput(new Date().toISOString())}
-                onChange={e => setField("expiresAt", e.target.value)}
-              />
-            )}
-          </FieldGroup>
-        </div>
-
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={draft.pinned}
@@ -648,14 +714,8 @@ function Composer({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
           />
           <Pin size={14} /> ปักหมุดไว้บนสุดของฟีด
         </label>
-
-        <AttachmentsField draft={draft} setDraft={setDraft} />
-
-        <div className="border-t border-hairline pt-4">
-          <ReachFields draft={draft} setDraft={setDraft} />
-        </div>
-      </div>
-    </Panel>
+      </Section>
+    </div>
   );
 }
 
@@ -672,18 +732,44 @@ function Composer({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
 function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
-  const surround = (before: string, after: string, placeholder: string) => {
+  /** Apply an edit and leave the caret where the officer would expect it. */
+  const apply = (next: string, from: number, to: number) => {
+    onChange(next);
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(from, to);
+    });
+  };
+
+  /**
+   * Wrap the selection — or unwrap it, if it is already wrapped. Pressing the
+   * bold button on text that is already bold should turn it off, the way it
+   * does in every editor people use; without that the only way back is to
+   * hunt down the stars by hand.
+   */
+  const surround = (mark: string, closing: string, placeholder: string) => {
     const el = ref.current;
     if (!el) return;
     const { selectionStart: a, selectionEnd: b } = el;
-    const picked = value.slice(a, b) || placeholder;
-    const next = value.slice(0, a) + before + picked + after + value.slice(b);
-    onChange(next);
-    // Put the caret around the inserted text so typing continues naturally.
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(a + before.length, a + before.length + picked.length);
-    });
+    const picked = value.slice(a, b);
+
+    // Already wrapped, either inside the selection or just outside it.
+    if (picked.startsWith(mark) && picked.endsWith(closing) && picked.length > mark.length + closing.length) {
+      const inner = picked.slice(mark.length, picked.length - closing.length);
+      apply(value.slice(0, a) + inner + value.slice(b), a, a + inner.length);
+      return;
+    }
+    if (value.slice(a - mark.length, a) === mark && value.slice(b, b + closing.length) === closing) {
+      const next = value.slice(0, a - mark.length) + picked + value.slice(b + closing.length);
+      apply(next, a - mark.length, a - mark.length + picked.length);
+      return;
+    }
+
+    const body = picked || placeholder;
+    const next = value.slice(0, a) + mark + body + closing + value.slice(b);
+    apply(next, a + mark.length, a + mark.length + body.length);
   };
 
   // Line tools work on whole lines: a list marker in the middle of a sentence
@@ -696,12 +782,7 @@ function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) 
     const lineEnd = value.indexOf("\n", b) === -1 ? value.length : value.indexOf("\n", b);
     const chunk = value.slice(lineStart, lineEnd) || "รายการ";
     const marked = chunk.split("\n").map((l, i) => make(i) + l.replace(/^\s*(?:[-•]\s+|\d+[.)]\s+)/, "")).join("\n");
-    const next = value.slice(0, lineStart) + marked + value.slice(lineEnd);
-    onChange(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(lineStart, lineStart + marked.length);
-    });
+    apply(value.slice(0, lineStart) + marked + value.slice(lineEnd), lineStart, lineStart + marked.length);
   };
 
   const alignLine = (how: "center" | "right" | "left") => {
@@ -717,21 +798,84 @@ function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) 
     }
     const lineFrom = lineStart === prevStart ? value.indexOf("\n", prevStart) + 1 : lineStart;
     const marker = `:::${how}\n`;
-    const next = value.slice(0, lineStart) + marker + value.slice(lineFrom);
-    onChange(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(lineStart + marker.length, lineStart + marker.length);
-    });
+    const caret = lineStart + marker.length;
+    apply(value.slice(0, lineStart) + marker + value.slice(lineFrom), caret, caret);
   };
 
-  const btn = "inline-flex items-center justify-center rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand";
+  /**
+   * Enter inside a list carries the list on, and Enter on an item left empty
+   * ends it. Retyping "- " on every line is the kind of small friction that
+   * makes people give up and write one long paragraph instead.
+   */
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = ref.current;
+    if (!el) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === "b") { e.preventDefault(); surround("**", "**", "ข้อความหนา"); return; }
+      if (k === "i") { e.preventDefault(); surround("*", "*", "ข้อความเอียง"); return; }
+      if (k === "k") { e.preventDefault(); surround("[", "](https://)", "ข้อความลิงก์"); return; }
+    }
+    if (e.key !== "Enter" || e.shiftKey) return;
+
+    const a = el.selectionStart;
+    if (a !== el.selectionEnd) return;
+    const lineStart = value.lastIndexOf("\n", a - 1) + 1;
+    const line = value.slice(lineStart, a);
+    const bullet = /^(\s*)([-•])\s+(.*)$/.exec(line);
+    const numbered = /^(\s*)(\d+)[.)]\s+(.*)$/.exec(line);
+    if (!bullet && !numbered) return;
+
+    e.preventDefault();
+    const rest = (bullet ?? numbered)![3];
+    if (rest.trim() === "") {
+      // An empty item means "I am done with the list": drop the marker.
+      apply(value.slice(0, lineStart) + "\n" + value.slice(a), lineStart + 1, lineStart + 1);
+      return;
+    }
+    const marker = bullet
+      ? `${bullet[1]}${bullet[2]} `
+      : `${numbered![1]}${Number(numbered![2]) + 1}. `;
+    const ins = "\n" + marker;
+    apply(value.slice(0, a) + ins + value.slice(a), a + ins.length, a + ins.length);
+  };
 
   /**
-   * preventDefault on mousedown is what makes the buttons work at all: without
-   * it the click moves focus off the textarea first, the selection collapses,
-   * and every button ends up inserting its placeholder instead of wrapping the
-   * words the officer had highlighted.
+   * Pasting a URL over selected words turns them into a link, instead of
+   * replacing the words with the URL — the one paste people get wrong most.
+   */
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const el = ref.current;
+    if (!el) return;
+    const { selectionStart: a, selectionEnd: b } = el;
+    if (a === b) return;
+    const pasted = e.clipboardData.getData("text/plain").trim();
+    if (!/^https?:\/\/\S+$/.test(pasted)) return;
+    e.preventDefault();
+    const label = value.slice(a, b);
+    const link = `[${label}](${pasted})`;
+    apply(value.slice(0, a) + link + value.slice(b), a + link.length, a + link.length);
+  };
+
+  // The field grows with the announcement. A fixed 8 rows means a long notice
+  // is written through a letterbox, which is where formatting mistakes hide.
+  // Past the cap it scrolls — capping the height without that would put the
+  // end of a long announcement out of reach.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 180), 640)}px`;
+  }, [value]);
+
+  // size-9 on a phone: a 28px button is a miss with a thumb. Desktop keeps the
+  // tighter row, where the pointer is precise.
+  const btn = "inline-flex size-9 items-center justify-center rounded-md border border-border text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand sm:size-auto sm:px-2 sm:py-1";
+
+  /**
+   * preventDefault on mousedown keeps the caret in the textarea, so the field
+   * is still where the officer left it after a button press.
    */
   const Tool = ({ title, onPress, children }: { title: string; onPress: () => void; children: React.ReactNode }) => (
     <button type="button" className={btn} title={title} onMouseDown={e => e.preventDefault()} onClick={onPress}>
@@ -742,13 +886,13 @@ function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) 
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-1">
-        <Tool title="ตัวหนา" onPress={() => surround("**", "**", "ข้อความหนา")}><b>ห</b></Tool>
-        <Tool title="ตัวเอียง" onPress={() => surround("*", "*", "ข้อความเอียง")}><i>อ</i></Tool>
+        <Tool title="ตัวหนา (⌘B)" onPress={() => surround("**", "**", "ข้อความหนา")}><b>ห</b></Tool>
+        <Tool title="ตัวเอียง (⌘I)" onPress={() => surround("*", "*", "ข้อความเอียง")}><i>อ</i></Tool>
         <span className="mx-0.5 w-px bg-border" />
         <Tool title="รายการ" onPress={() => prefixLines(() => "- ")}><List size={13} /></Tool>
         <Tool title="รายการมีลำดับ" onPress={() => prefixLines(i => `${i + 1}. `)}><ListOrdered size={13} /></Tool>
         <span className="mx-0.5 w-px bg-border" />
-        <Tool title="แนบลิงก์" onPress={() => surround("[", "](https://)", "ข้อความลิงก์")}><LinkIcon size={13} /></Tool>
+        <Tool title="แนบลิงก์ (⌘K)" onPress={() => surround("[", "](https://)", "ข้อความลิงก์")}><LinkIcon size={13} /></Tool>
         <span className="mx-0.5 w-px bg-border" />
         <Tool title="จัดกึ่งกลาง" onPress={() => alignLine("center")}><AlignCenter size={13} /></Tool>
         <Tool title="ชิดขวา" onPress={() => alignLine("right")}><AlignRight size={13} /></Tool>
@@ -764,10 +908,16 @@ function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) 
         value={value}
         maxLength={8000}
         onChange={e => onChange(e.target.value)}
-        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-6 text-foreground outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        className="w-full resize-none overflow-y-auto rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-6 text-foreground outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
       />
       <p className="text-xs text-muted">
-        เลือกข้อความแล้วกดปุ่มด้านบน หรือพิมพ์เอง: **หนา** *เอียง* · ขึ้นต้นบรรทัดด้วย - หรือ 1. เพื่อทำรายการ
+        เลือกข้อความแล้วกดปุ่มด้านบน
+        {/* Keyboard shortcuts are noise on a phone — there is no keyboard to
+            press them on. */}
+        <span className="hidden sm:inline"> หรือใช้ ⌘B ⌘I ⌘K</span>
+        {" · "}ขึ้นต้นบรรทัดด้วย - หรือ 1. แล้วกด Enter ระบบจะต่อรายการให้เอง
       </p>
     </div>
   );
@@ -873,7 +1023,16 @@ function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: SetDraf
 // Reach: public link + extra email recipients
 // ============================================================================
 
-function ReachFields({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+/**
+ * Everything that answers "who gets this": the role chips, the optional
+ * narrowing rules, the resulting head-count, and the public link.
+ *
+ * These four used to sit in three different places on the form — roles near the
+ * top, the count and the narrowing rules at the bottom under a rule, the public
+ * toggle below that. They are one decision, so they are now one block, and the
+ * count sits directly under the controls that move it.
+ */
+function AudienceSection({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
   const setField = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
   const { data: filterOpts } = useSWR<{ items: { value: string; label: string }[] }>(
     "/announcements/audience-filters",
@@ -903,47 +1062,36 @@ function ReachFields({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) 
   }, [ruleKey]);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ink-2">
-          <Target size={14} />เจาะกลุ่มให้แคบลง (ไม่บังคับ)
+    <Section
+      icon={<Users size={15} />}
+      title="ส่งถึงใคร"
+      summary={preview ? (preview.total === 0 ? "ยังไม่ถึงใคร" : `${preview.total} คน`) : undefined}
+    >
+      <FieldGroup label="กลุ่มผู้รับ" hint="ผู้รับจะได้รับการแจ้งเตือนในระบบและทางอีเมล">
+        <div className="flex flex-wrap gap-2">
+          {ROLES.map(r => {
+            const on = draft.audience.includes(r.value);
+            return (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => setField("audience", on ? draft.audience.filter(x => x !== r.value) : [...draft.audience, r.value])}
+                className={`chip cursor-pointer transition ${on ? "chip-brand" : "chip-neutral"}`}
+                aria-pressed={on}
+              >
+                {on ? <Check size={12} className="me-1 inline" /> : null}
+                {r.label}
+              </button>
+            );
+          })}
         </div>
-        <p className="mb-2 text-xs text-muted">
-          เลือกได้หลายอย่างพร้อมกัน กลุ่มบทบาท วิชา และรายชื่อจะรวมกัน
-          ส่วนเงื่อนไขด้านล่างจะกรองให้แคบลงอีกชั้น
-        </p>
+      </FieldGroup>
 
-        <div className="space-y-3">
-          <CoursePicker draft={draft} setDraft={setDraft} />
-          <PeoplePicker draft={draft} setDraft={setDraft} />
-
-          <div>
-            <div className="mb-1.5 text-xs text-ink-2">เฉพาะคนที่เข้าเงื่อนไข</div>
-            <div className="flex flex-wrap gap-1.5">
-              {(filterOpts?.items ?? []).map(f => {
-                const on = draft.targetFilters.includes(f.value);
-                return (
-                  <button
-                    key={f.value}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => setField("targetFilters",
-                      on ? draft.targetFilters.filter(x => x !== f.value)
-                         : [...draft.targetFilters, f.value])}
-                    className={`chip cursor-pointer transition ${on ? "chip-brand" : "chip-neutral"}`}
-                  >
-                    {on ? <Check size={11} className="me-1 inline" /> : null}{f.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
+      <NarrowingRules draft={draft} setDraft={setDraft} filterOpts={filterOpts?.items ?? []} />
 
       <AudienceSummary preview={preview} loading={previewing} />
 
-      <label className="flex cursor-pointer items-start gap-2.5 border-t border-hairline pt-4">
+      <label className="flex cursor-pointer items-start gap-2.5">
         <input
           type="checkbox"
           className="mt-0.5"
@@ -958,6 +1106,78 @@ function ReachFields({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) 
           </span>
         </span>
       </label>
+    </Section>
+  );
+}
+
+/**
+ * The narrowing rules, folded away until wanted.
+ *
+ * Two search boxes and a row of condition chips is the single biggest thing on
+ * the form, and most announcements go to whole roles and never touch it. It
+ * opens by itself when the draft already carries rules, so editing an targeted
+ * announcement never hides the reason it reaches so few people.
+ */
+function NarrowingRules({
+  draft, setDraft, filterOpts,
+}: {
+  draft: Draft;
+  setDraft: SetDraft;
+  filterOpts: { value: string; label: string }[];
+}) {
+  const count = draft.targetCourses.length + draft.targetUsers.length + draft.targetFilters.length;
+  const [open, setOpen] = useState(count > 0);
+
+  return (
+    <div className="rounded-lg border border-border">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start transition-colors hover:bg-surface-secondary"
+      >
+        <Target size={14} className="shrink-0 text-muted" />
+        <span className="flex-1 text-sm">เจาะกลุ่มให้แคบลง</span>
+        <span className="shrink-0 text-xs text-muted">{count > 0 ? `${count} เงื่อนไข` : "ไม่บังคับ"}</span>
+        <ChevronDown size={14} className={"shrink-0 text-muted transition-transform " + (open ? "rotate-180" : "")} />
+      </button>
+
+      {open && (
+        <div className="space-y-3 border-t border-hairline p-3">
+          <p className="text-xs text-muted">
+            เลือกได้หลายอย่างพร้อมกัน กลุ่มบทบาท วิชา และรายชื่อจะรวมกัน
+            ส่วนเงื่อนไขด้านล่างจะกรองให้แคบลงอีกชั้น
+          </p>
+
+          <CoursePicker draft={draft} setDraft={setDraft} />
+          <PeoplePicker draft={draft} setDraft={setDraft} />
+
+          <div>
+            <div className="mb-1.5 text-xs text-ink-2">เฉพาะคนที่เข้าเงื่อนไข</div>
+            <div className="flex flex-wrap gap-1.5">
+              {filterOpts.map(f => {
+                const on = draft.targetFilters.includes(f.value);
+                return (
+                  <button
+                    key={f.value}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setDraft(d => ({
+                      ...d,
+                      targetFilters: on
+                        ? d.targetFilters.filter(x => x !== f.value)
+                        : [...d.targetFilters, f.value],
+                    }))}
+                    className={`chip cursor-pointer transition ${on ? "chip-brand" : "chip-neutral"}`}
+                  >
+                    {on ? <Check size={11} className="me-1 inline" /> : null}{f.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

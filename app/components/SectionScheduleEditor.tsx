@@ -205,7 +205,11 @@ export default function SectionScheduleEditor({
               <div
                 key={row.id ?? i}
                 className={
-                  "grid grid-cols-[110px_1fr_1fr_1fr_auto] gap-2 items-center rounded-lg border p-2 " +
+                  // Five controls in a row need ~470px. On a phone they go two
+                  // up — kind + day on the first line, the two times on the
+                  // second — with the delete button pinned to the end of the
+                  // first line where it stays out of the way of the fields.
+                  "grid grid-cols-[1fr_1fr_auto] sm:grid-cols-[110px_1fr_1fr_1fr_auto] gap-2 items-center rounded-lg border p-2 " +
                   (invalid || overlap || dupKind ? "border-danger/50 bg-danger-soft/20" : "border-border")
                 }
               >
@@ -232,27 +236,30 @@ export default function SectionScheduleEditor({
                     <option key={d} value={d}>{DOW_LABEL[d]}</option>
                   ))}
                 </Select>
-                <Hour24TimeInput
-                  value={normalizeHM(row.start_time)}
-                  onChange={v => updateRow(i, { start_time: v })}
-                  disabled={disabled}
-                  ariaLabel="เวลาเริ่ม"
-                />
-                <Hour24TimeInput
-                  value={normalizeHM(row.end_time)}
-                  onChange={v => updateRow(i, { end_time: v })}
-                  disabled={disabled}
-                  ariaLabel="เวลาสิ้นสุด"
-                />
                 {!disabled && (
                   <IconButton
                     label="ลบคาบ"
                     variant="danger-soft" size="sm"
+                    className="sm:order-last"
                     onClick={() => removeRow(i)}
                   >
                     <Trash2 size={13} />
                   </IconButton>
                 )}
+                <div className="col-span-3 grid grid-cols-2 gap-2 sm:col-span-1 sm:contents">
+                  <Hour24TimeInput
+                    value={normalizeHM(row.start_time)}
+                    onChange={v => updateRow(i, { start_time: v })}
+                    disabled={disabled}
+                    ariaLabel="เวลาเริ่ม"
+                  />
+                  <Hour24TimeInput
+                    value={normalizeHM(row.end_time)}
+                    onChange={v => updateRow(i, { end_time: v })}
+                    disabled={disabled}
+                    ariaLabel="เวลาสิ้นสุด"
+                  />
+                </div>
               </div>
             );
           })}
@@ -343,7 +350,10 @@ export function ScheduleSummary({ rows }: { rows: SectionScheduleRow[] }) {
         <span
           key={r.id ?? i}
           className={
-            "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs " +
+            // whitespace-nowrap: the chip is one fact — "บรรยาย จ. 13:00–15:00".
+            // Left to wrap in a narrow table cell it broke into three lines and
+            // read as three separate things.
+            "inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs " +
             (r.kind === "lab"
               ? "bg-warning-soft text-warning-soft-foreground"
               : "bg-accent-soft text-accent-soft-foreground")

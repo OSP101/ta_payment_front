@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Pagination, Table, type SortDescriptor,
 } from "@heroui/react";
+import { ArrowDownAZ, ArrowUpAZ } from "lucide-react";
 import { EmptyState, SearchField, SelectField, Spinner, Alert, Button, type SelectOption } from "./ui";
 
 /* -------------------------------------------------------------------------- */
@@ -19,6 +20,14 @@ export interface DataColumn<T> {
   render: (row: T) => React.ReactNode;
   /** Required when sortable — value used for comparison. */
   sortValue?: (row: T) => string | number;
+  /**
+   * Leave this column out of the phone card. For columns that only make sense
+   * beside their neighbours — a raw id, a duplicate of the title — where a
+   * card would spend a whole line on something nobody reads on a phone.
+   */
+  hideOnMobile?: boolean;
+  /** Shorter label for the card, when the table heading is a sentence. */
+  mobileLabel?: React.ReactNode;
 }
 
 export interface DataFilter<T> {
@@ -197,6 +206,15 @@ export function DataTable<T>({
   const showError = !!error && !rowsLoaded;
 
   const hasToolbar = !!searchFn || (filters?.length ?? 0) > 0 || !!toolbarExtra;
+  const hasQuery = !!query || Object.values(filterValues).some(Boolean);
+
+  // Card layout: the row header is the card's title, everything else is a
+  // labelled line under it.
+  const cardColumns = columns.filter(c => !c.hideOnMobile);
+  const cardTitleColumn = cardColumns.find(c => c.isRowHeader) ?? cardColumns[0] ?? columns[0];
+  const mobileSortOptions: SelectOption[] = columns
+    .filter(c => c.sortable && c.sortValue)
+    .map(c => ({ id: c.id, label: c.mobileLabel ?? c.label, textValue: typeof c.label === "string" ? c.label : c.id }));
   // When we already have rows on screen and a fresh fetch is in flight, we show
   // a translucent overlay instead of wiping the table — keeps context so the
   // user doesn't lose their scroll / selection while data refreshes.
@@ -241,6 +259,83 @@ export function DataTable<T>({
         />
       ) : (
       <div className="relative" aria-busy={!!loading}>
+        {/* Phones get cards, not a table.
+            A table narrower than its columns is not a table any more: names
+            wrap to four lines, most columns sit off-screen behind a sideways
+            scroll nobody discovers, and the header that says what a value
+            means scrolls away from the value. A card per row puts every field
+            beside its own label and reads down the page like everything else
+            on a phone. Same rows, same page, same order — only the shape
+            differs, so nothing here can disagree with the table. */}
+        <div className="sm:hidden">
+          {mobileSortOptions.length > 1 && total > 0 && (
+            <div className="mb-2 flex items-center gap-2">
+              <SelectField
+                placeholder="เรียงตาม"
+                value={String(sort?.column ?? mobileSortOptions[0].id)}
+                onChange={v => setSort({ column: v, direction: sort?.direction ?? "ascending" })}
+                options={mobileSortOptions}
+                className="flex-1 min-w-0"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                isIconOnly
+                // The label names what pressing does, not what the list is doing
+                // now — it matches the icon, which points at the next state.
+                aria-label={sort?.direction === "descending" ? "เรียงจากน้อยไปมาก" : "เรียงจากมากไปน้อย"}
+                onPress={() => setSort({
+                  column: sort?.column ?? mobileSortOptions[0].id,
+                  direction: sort?.direction === "descending" ? "ascending" : "descending",
+                })}
+              >
+                {sort?.direction === "descending" ? <ArrowUpAZ size={16} /> : <ArrowDownAZ size={16} />}
+              </Button>
+            </div>
+          )}
+
+          {pageRows.length === 0 ? (
+            loading && !rowsLoaded ? (
+              <div className="py-14 flex flex-col items-center justify-center gap-2 text-(--ink-3)">
+                <Spinner />
+                <div className="text-xs">กำลังโหลดข้อมูล…</div>
+              </div>
+            ) : (
+              <EmptyState
+                title={hasQuery ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}
+                description={hasQuery ? "ลองปรับคำค้นหาหรือตัวกรอง" : emptyDescription}
+              />
+            )
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {pageRows.map(row => {
+                const rest = cardColumns.filter(c => c !== cardTitleColumn);
+                return (
+                  <li key={rowKey(row)} className="rounded-lg border border-(--hairline) bg-surface p-3">
+                    <div className="text-sm font-semibold text-foreground">
+                      {cardTitleColumn.render(row)}
+                    </div>
+                    <dl className="mt-2 flex flex-col gap-1.5 empty:mt-0">
+                      {rest.map(c => {
+                        const v = c.render(row);
+                        // A blank cell is a blank line on a card; drop it.
+                        if (v === null || v === undefined || v === false || v === "") return null;
+                        return (
+                          <div key={c.id} className="flex items-start justify-between gap-3">
+                            <dt className="shrink-0 text-xs text-muted pt-0.5">{c.mobileLabel ?? c.label}</dt>
+                            <dd className="min-w-0 text-sm text-foreground text-right">{v}</dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="hidden sm:block">
       <Table>
         <Table.ScrollContainer>
           <Table.Content
@@ -275,8 +370,8 @@ export function DataTable<T>({
                   </div>
                 ) : (
                   <EmptyState
-                    title={query || Object.values(filterValues).some(Boolean) ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}
-                    description={query || Object.values(filterValues).some(Boolean) ? "ลองปรับคำค้นหาหรือตัวกรอง" : emptyDescription}
+                    title={hasQuery ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}
+                    description={hasQuery ? "ลองปรับคำค้นหาหรือตัวกรอง" : emptyDescription}
                   />
                 )
               }
@@ -293,10 +388,13 @@ export function DataTable<T>({
             </Table.Body>
           </Table.Content>
         </Table.ScrollContainer>
+      </Table>
+        </div>
+
         {total > 0 && (
-          <Table.Footer>
-            <Pagination size="sm" className="w-full justify-between">
-              <Pagination.Summary>
+          <div className="mt-3 border-t border-(--hairline) pt-3">
+            <Pagination size="sm" className="w-full justify-between gap-2">
+              <Pagination.Summary className="text-xs sm:text-sm">
                 {start + 1}–{Math.min(start + pageSize, total)} จาก {total} รายการ
               </Pagination.Summary>
               {totalPages > 1 && (
@@ -311,11 +409,14 @@ export function DataTable<T>({
                   </Pagination.Item>
                   {pageItems(totalPages, safePage).map((p, i) =>
                     p === "…" ? (
-                      <Pagination.Item key={`e${i}`}>
+                      <Pagination.Item key={`e${i}`} className="hidden sm:block">
                         <Pagination.Ellipsis />
                       </Pagination.Item>
                     ) : (
-                      <Pagination.Item key={p}>
+                      // Numbered pages need a row of small targets. On a phone
+                      // that row is the widest thing in the footer, so only the
+                      // current page stays and the arrows do the moving.
+                      <Pagination.Item key={p} className={p === safePage ? "" : "hidden sm:block"}>
                         <Pagination.Link isActive={p === safePage} onPress={() => setPage(p)}>
                           {p}
                         </Pagination.Link>
@@ -333,9 +434,8 @@ export function DataTable<T>({
                 </Pagination.Content>
               )}
             </Pagination>
-          </Table.Footer>
+          </div>
         )}
-      </Table>
       {showRefetchOverlay && (
         <div
           className="pointer-events-none absolute inset-0 flex items-start justify-center pt-6 bg-surface/55 backdrop-blur-[1px] rounded-lg"

@@ -188,7 +188,7 @@ export function CourseSubmissionPanel({
               <Accordion.Panel>
                 <Accordion.Body className="px-0 pb-0">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[520px] text-sm sm:min-w-0">
                       <thead className="bg-slate-50 text-ink-2">
                         <tr>
                           <th className="w-8 px-2 py-2"></th>

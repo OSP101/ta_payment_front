@@ -299,6 +299,9 @@ export interface Me {
   /** Read-only executive dashboard (/executive). A flag staff tick per user —
    *  not a value in `roles`. */
   is_executive?: boolean;
+  /** Free-text administrative position (e.g. "หัวหน้าสาขาวิชา...") shown next
+   *  to the role label. Display-only — staff set it, nothing reads it back. */
+  admin_position?: string | null;
   roles: string[];
 }
 

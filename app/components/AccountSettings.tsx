@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import {
-  ArrowRight, Clock, GraduationCap, KeyRound, Mail, Phone, ShieldCheck, User,
+  ArrowRight, Briefcase, Clock, GraduationCap, KeyRound, Mail, Phone, ShieldCheck, User,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import { formatFullName } from "../lib/prefixes";
@@ -35,6 +35,11 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
               a row that reads "—" forever. */}
           {me?.study_level && (
             <InfoRow icon={<GraduationCap size={16} />} label="ระดับการศึกษา" value={studyLabel(me.study_level)} />
+          )}
+          {/* Only for the people who hold one — e.g. หัวหน้าสาขาวิชา. Display
+              only, same as everywhere else this shows: it carries no rights. */}
+          {me?.admin_position && (
+            <InfoRow icon={<Briefcase size={16} />} label="ตำแหน่งบริหาร" value={me.admin_position} />
           )}
         </div>
       </Panel>

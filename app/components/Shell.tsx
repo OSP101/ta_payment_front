@@ -494,11 +494,16 @@ function TopBar({
   const menuItems = userMenuItems ?? [];
   const fullName = formatFullName(me);
   const roleLbl = roleLabel(me.roles);
+  // Display-only: a lecturer can also hold an administrative post (หัวหน้า
+  // สาขาวิชา, ประธานหลักสูตร, ...) alongside their teaching role. Appended
+  // rather than replacing roleLbl, since the role still says what the account
+  // can DO — this just says what else the person IS.
+  const roleWithPosition = me.admin_position ? `${roleLbl} · ${me.admin_position}` : roleLbl;
   return (
     <header className="h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 sticky top-0 z-30">
       {showMobileMenu && (
         <Button variant="ghost" isIconOnly size="sm" onPress={onOpenMobile}
-                aria-label="เปิดเมนู" className="md:hidden">
+                aria-label="เปิดเมนู" className="md:hidden shrink-0 size-9!">
           <Menu size={20} />
         </Button>
       )}
@@ -509,7 +514,10 @@ function TopBar({
       ) : topBarLeft ? (
         <div className="flex-1 min-w-0 flex items-center">{topBarLeft}</div>
       ) : (
-        <div className="flex-1 min-w-0 flex items-center gap-3">
+        // On a phone the title is squeezed to a couple of characters by the
+        // controls beside it, and every page already leads with its own
+        // heading — so it is the first thing to give up the space.
+        <div className="hidden sm:flex flex-1 min-w-0 items-center gap-3">
           <div className="text-sm font-medium text-foreground truncate">{title}</div>
         </div>
       )}
@@ -518,24 +526,24 @@ function TopBar({
       {topBarAccessory}
 
       <Dropdown>
-        <Button variant="ghost" aria-label="เมนูผู้ใช้" className="px-1.5! gap-2! h-auto! py-1!">
+        <Button variant="ghost" aria-label="เมนูผู้ใช้" className="px-1.5! gap-2! h-auto! py-1! shrink-0">
           <UserAvatar firstName={me.first_name} lastName={me.last_name} src={me.avatar_url} />
           <div className="hidden sm:flex flex-col items-start min-w-0 leading-tight">
             <span className="text-sm font-medium text-foreground truncate max-w-40 md:max-w-56">
               {fullName}
             </span>
             <span className="text-xs text-muted truncate max-w-40 md:max-w-56">
-              {roleLbl}
+              {roleWithPosition}
             </span>
           </div>
-          <ChevronDown size={14} />
+          <ChevronDown size={14} className="hidden sm:block" />
         </Button>
         <Dropdown.Popover>
           <div className="px-3 py-2.5 border-b border-border">
             <div className="text-sm font-medium text-foreground truncate max-w-50">
               {fullName}
             </div>
-            <div className="text-xs text-muted truncate max-w-50">{roleLbl}</div>
+            <div className="text-xs text-muted truncate max-w-50">{roleWithPosition}</div>
             <div className="text-xs text-muted truncate max-w-50">{me.email}</div>
           </div>
           <Dropdown.Menu

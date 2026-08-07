@@ -200,9 +200,12 @@ export function Panel({
         <HCard.Header>
           <div className="w-full min-w-0">
             {(title || actions || info) && (
-              <div className="flex items-center justify-between gap-3 min-w-0">
+              // The header wraps on a phone: a shrink-0 action next to a Thai
+              // title left the title ~90px, one word per line, while the button
+              // sat comfortably beside a five-line heading.
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 min-w-0 sm:flex-nowrap">
                 {(title || info) && (
-                  <HCard.Title className="text-base flex-1 min-w-0">
+                  <HCard.Title className="text-base flex-1 basis-full min-w-0 sm:basis-auto">
                     <span className="inline-flex items-center gap-2">
                       {title}
                       {info && <InfoTip content={info} />}
@@ -257,10 +260,10 @@ export function StatCard({
   const card = (
     <HCard
       variant="default"
-      className={`p-4 flex flex-row items-start gap-3 h-full ${href ? "transition-shadow hover:shadow-md" : ""} ${className}`}
+      className={`p-3 sm:p-4 flex flex-row items-start gap-2.5 sm:gap-3 h-full ${href ? "transition-shadow hover:shadow-md" : ""} ${className}`}
     >
       {icon && (
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>
+        <div className={`size-9 sm:size-10 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>
           {icon}
         </div>
       )}
@@ -270,7 +273,10 @@ export function StatCard({
           the app uses, and h-full keeps a taller card level with its row. */}
       <div className="min-w-0 flex-1">
         <div className="text-xs text-muted line-clamp-2">{label}</div>
-        <div className="mt-1 text-2xl font-semibold leading-tight tabular-nums">{value}</div>
+        {/* Smaller on a phone: two of these sit side by side in ~150px, and at
+            text-2xl a value like "112,500 / 72,492 บ." stacked into a tower
+            three lines tall. */}
+        <div className="mt-1 text-xl sm:text-2xl font-semibold leading-tight tabular-nums break-words">{value}</div>
         {hint && <div className="text-xs text-muted mt-1 line-clamp-2">{hint}</div>}
       </div>
     </HCard>
@@ -957,13 +963,22 @@ export function Alert({
   icon?: React.ReactNode;
 }) {
   return (
-    <HAlert status={status === "default" ? undefined : status}>
+    // flex-wrap on a phone so the action can take its own line. Without it the
+    // basis-full below squeezes the message into a one-word-per-line column
+    // instead of pushing the button down.
+    <HAlert status={status === "default" ? undefined : status} className="flex-wrap sm:flex-nowrap">
       <HAlert.Indicator>{icon}</HAlert.Indicator>
-      <HAlert.Content>
+      {/* basis-0 + min-w-0: with the row allowed to wrap, the text column
+          otherwise claims its min-content width and pushes the icon onto a
+          line of its own. */}
+      <HAlert.Content className="min-w-0 flex-1 basis-0">
         <HAlert.Title>{title}</HAlert.Title>
         {description && <HAlert.Description>{description}</HAlert.Description>}
       </HAlert.Content>
-      {action}
+      {/* The action drops below the text on a phone. Beside it, a button that
+          will not shrink took half the row and squeezed the message into a
+          column of two-word lines. */}
+      {action && <div className="basis-full shrink-0 sm:basis-auto">{action}</div>}
     </HAlert>
   );
 }

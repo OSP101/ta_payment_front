@@ -723,7 +723,9 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-3 gap-3">
+        {/* Three fields side by side leave ~100px each on a phone, which is
+            not enough for a course code, let alone its hint. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <FieldGroup label="รหัสวิชา" hint="ตัวเลข 6 หลัก หรือ อักษรนำหน้า + ตัวเลข 6 หลัก">
             <TextInput
               value={courseCode}

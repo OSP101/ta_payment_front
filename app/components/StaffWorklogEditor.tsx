@@ -199,7 +199,7 @@ function TAWorklogTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[560px] text-sm sm:min-w-0">
         <thead className="bg-surface-secondary/50 text-xs uppercase tracking-wider text-muted">
           <tr>
             <th className="text-left px-3 py-2 font-medium">วันที่</th>

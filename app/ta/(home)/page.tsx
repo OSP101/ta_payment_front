@@ -617,7 +617,10 @@ function CourseCard({
   return (
     <Link
       href={`/ta/courses/${course.id}`}
-      className="group flex flex-col rounded-xl border border-[var(--hairline)] bg-surface p-4 transition-colors hover:bg-surface-secondary"
+      // min-w-0: a grid item defaults to min-width:auto, so the longest line
+      // inside sets the card's floor. On a phone that made the card 460px wide
+      // in a 309px column and the whole page scrolled sideways.
+      className="group flex min-w-0 flex-col rounded-xl border border-[var(--hairline)] bg-surface p-4 transition-colors hover:bg-surface-secondary"
     >
       <div className="flex items-start gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
@@ -652,7 +655,7 @@ function CourseCard({
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--hairline)] pt-3">
         {badge ? <Chip tone={badge.tone}>{badge.label}</Chip> : <Chip tone="neutral">ยังไม่เปิดรอบเบิกจ่าย</Chip>}
         {submission && (
-          <span className="truncate text-[11px] text-muted">
+          <span className="min-w-0 truncate text-[11px] text-muted">
             {submission.is_closed ? "ปิดแล้ว" : `ครบกำหนด ${thDueDate(submission.due_date)}`}
           </span>
         )}

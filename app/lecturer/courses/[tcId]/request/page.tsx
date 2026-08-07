@@ -1666,7 +1666,9 @@ function CreateTaPanel({
             value={form.email} onChange={v => setForm({ ...form, email: v })}
             error={errors.email} show={showErrors}
           />
-          <div className="grid grid-cols-[140px_1fr_1fr] gap-3">
+          {/* Title stays on its own line on a phone — sharing one with two
+              name fields left each name about 90px wide. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_1fr_1fr]">
             <FieldGroup label="คำนำหน้า">
               <Select value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}>
                 {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}

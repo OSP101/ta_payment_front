@@ -45,7 +45,7 @@ export default function TermSelect({
           <span className="flex items-center gap-2">
             <CalendarRange size={14} className="text-muted shrink-0" aria-hidden />
             <span className="tabular-nums">{t.academic_year}/{t.semester}</span>
-            {t.is_active && <Chip tone="success">active</Chip>}
+            {t.is_active && <span className="hidden sm:inline-flex"><Chip tone="success">active</Chip></span>}
           </span>
         ),
       }))}

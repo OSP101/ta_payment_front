@@ -208,7 +208,12 @@ export default function TARequestsPage() {
               {filtered.map(req => (
                 <Accordion.Item key={req.id}>
                   <Accordion.Heading>
-                    <Accordion.Trigger>
+                    {/* min-w-0: the trigger is a flex container whose default
+                        min-width:auto lets its contents set the width. On a
+                        phone that made the row 433px wide inside a 277px card,
+                        so the course name ran off the screen instead of
+                        truncating. */}
+                    <Accordion.Trigger className="min-w-0">
                       <RequestHeader req={req} />
                       <Accordion.Indicator>
                         <ChevronDown size={16} />
@@ -234,11 +239,14 @@ export default function TARequestsPage() {
 function RequestHeader({ req }: { req: RequestSummary }) {
   const meta = STATUS_META[req.status] ?? { tone: "neutral" as const, label: req.status };
   return (
-    <div className="flex flex-1 flex-wrap items-center gap-2 pr-2 text-left">
+    // min-w-0 on the row and on each text child: without it a long course or
+    // lecturer name sets the flex item's floor and pushes the whole accordion
+    // past the edge of a phone screen instead of truncating.
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 pr-2 text-left">
       <Chip tone={meta.tone}>{meta.label}</Chip>
       <span className="font-semibold tabular-nums">{req.course_code}</span>
-      <span className="text-(--ink-2) truncate max-w-[24rem]">{req.course_name}</span>
-      <span className="text-xs text-(--ink-3)">อ. {req.lecturer_name}</span>
+      <span className="min-w-0 max-w-full truncate text-(--ink-2) sm:max-w-[24rem]">{req.course_name}</span>
+      <span className="min-w-0 max-w-full truncate text-xs text-(--ink-3)">อ. {req.lecturer_name}</span>
     </div>
   );
 }

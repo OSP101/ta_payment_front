@@ -140,14 +140,14 @@ export default function BudgetAnalytics({ termId }: { termId: string }) {
         {/* Monthly disbursement */}
         <Panel title="การเบิกจ่ายรายเดือน"
                description="กราฟแท่งคือยอดแต่ละเดือน เส้นสีเขียวคือยอดรวมสะสม"
-               className="lg:col-span-3">
+               className="min-w-0 lg:col-span-3">
           <MonthlyChart a={a} b={b ?? undefined} />
         </Panel>
 
         {/* Per-curriculum */}
         <Panel title="การใช้งบรายหลักสูตร"
                description="วิชาที่เปิดให้หลายหลักสูตร นับรวมในหลักสูตรหลักของวิชานั้น"
-               className="lg:col-span-2">
+               className="min-w-0 lg:col-span-2">
           <CurriculumBars a={a} />
         </Panel>
       </div>
@@ -325,7 +325,11 @@ function CourseTable({ a }: { a: TermAnalytics }) {
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      {/* Seven columns do not fit a phone. Without a floor the browser keeps
+          the table inside the screen by crushing the course name to one word
+          per line — six lines tall and still unreadable. Given a floor it
+          scrolls instead, which is the honest trade. */}
+      <table className="w-full min-w-[680px] text-sm sm:min-w-0">
         <thead>
           <tr className="text-start text-[11px] uppercase tracking-wide text-[var(--ink-3)] border-b border-[var(--hairline)]">
             <th className="py-2 pe-3 text-start font-semibold">วิชา</th>

@@ -137,8 +137,8 @@ export function DocumentProgressBoard({
           </div>
         </div>
 
-        <div className={"px-4 py-5 overflow-x-auto " + (!p.all_exported ? "opacity-50" : "")}>
-          <div className="flex items-start min-w-[640px]">
+        <div className={"px-4 py-5 overflow-x-auto snap-x " + (!p.all_exported ? "opacity-50" : "")}>
+          <div className="flex items-start min-w-[640px] [&>*]:snap-start">
             {visibleStages.map((st, i) => {
               const reached = p.stage >= st.n;
               const isCurrent = p.stage === st.n;
@@ -193,6 +193,11 @@ export function DocumentProgressBoard({
             })}
           </div>
         </div>
+        {/* The five desks do not fit a phone, so the row scrolls. Say so —
+            a scroll nobody knows about is the same as steps that do not exist. */}
+        <div className="px-4 -mt-3 pb-1 text-[11px] text-muted sm:hidden">
+          เลื่อนแถวขั้นตอนไปทางซ้ายเพื่อดูขั้นถัดไป
+        </div>
 
         {p.all_exported && !done && p.current_role && !p.can_advance && (p.signers_missing?.length ?? 0) > 0 && (
           <div className="mx-4 mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
@@ -204,20 +209,25 @@ export function DocumentProgressBoard({
 
         <div className="px-4 pb-3 space-y-2">
           {canEdit ? (
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
+            // Buttons drop under the field on a phone: side by side they left
+            // the note box too narrow to read and pushed "บันทึกหมายเหตุ" off
+            // the card.
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1">
                 <label className="block text-xs text-ink-2 mb-1">หมายเหตุ (ไม่บังคับ)</label>
                 <TextArea rows={2} value={note} onChange={e => setNoteDraft(e.target.value)}
                   placeholder="เช่น รออาจารย์ ก. เซ็น / ส่งเอกสารวันที่…" disabled={!p.all_exported} />
               </div>
-              <Button variant="secondary" size="sm" onClick={() => setStage(p.stage)} disabled={busy || !p.all_exported}>
-                บันทึกหมายเหตุ
-              </Button>
-              {p.stage > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setStage(0)} disabled={busy}>
-                  <RotateCcw size={12} /> รีเซ็ต
+              <div className="flex shrink-0 items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setStage(p.stage)} disabled={busy || !p.all_exported}>
+                  บันทึกหมายเหตุ
                 </Button>
-              )}
+                {p.stage > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setStage(0)} disabled={busy}>
+                    <RotateCcw size={12} /> รีเซ็ต
+                  </Button>
+                )}
+              </div>
             </div>
           ) : (
             p.note && <div className="text-xs text-ink-2"><span className="text-muted">หมายเหตุ: </span>{p.note}</div>

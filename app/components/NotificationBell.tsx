@@ -70,7 +70,7 @@ export default function NotificationBell({
         )}
       </IconButton>
 
-      <Dropdown.Popover className="min-w-[320px] max-w-[380px]">
+      <Dropdown.Popover className="w-[calc(100vw-1.5rem)] max-w-[380px] sm:w-auto sm:min-w-[320px]">
         <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
           <div className="text-sm font-semibold text-foreground">การเตือน</div>
           <div className="flex items-center gap-1">

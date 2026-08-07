@@ -253,7 +253,11 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                   <div className="divide-y divide-(--hairline)">
                     {imp.affected_sections.map((sec, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-4 flex-wrap md:flex-nowrap">
-                        <div className="w-44 shrink-0">
+                        {/* w-44 is a column width, and on a phone it is most of
+                            the screen — the status beside it was left ~120px and
+                            wrapped to three lines. Full width below sm puts the
+                            two on separate rows instead. */}
+                        <div className="w-full shrink-0 sm:w-44">
                           <div className="flex items-center gap-2">
                             <span className={
                               "inline-flex items-center justify-center min-w-8 h-6 px-2 rounded-full text-xs font-semibold tabular-nums " +

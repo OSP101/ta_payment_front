@@ -183,7 +183,10 @@ function SectionsPanel({
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="data-table w-full">
+          {/* A phone cannot hold four columns of Thai without breaking every
+              cell onto its own set of lines. Given a floor the container
+              scrolls and the rows stay readable. */}
+          <table className="data-table w-full min-w-[620px] sm:min-w-0">
             <thead>
               <tr>
                 <th style={{ width: 100 }}>Sec</th>

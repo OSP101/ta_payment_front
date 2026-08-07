@@ -63,7 +63,7 @@ export default function CourseSwitcher({
       selectionMode="single"
       value={tcId || null}
       onChange={(k: Key | null) => { if (k) go(String(k)); }}
-      className="min-w-0 max-w-[460px]"
+      className="min-w-0 max-w-full sm:max-w-[460px]"
     >
       {/* Flat by default (blends into the bar); border + bg appear on hover. */}
       <Autocomplete.Trigger className="min-w-0 overflow-hidden items-center! gap-1! shadow-none! border! border-transparent! bg-transparent! rounded-md px-2! py-1.5! text-foreground hover:border-border! hover:bg-surface-secondary!">
@@ -78,7 +78,7 @@ export default function CourseSwitcher({
         </span>
         <ChevronsUpDown size={14} className="shrink-0 text-muted" />
       </Autocomplete.Trigger>
-      <Autocomplete.Popover placement="bottom start" className="min-w-[340px] max-w-[480px]">
+      <Autocomplete.Popover placement="bottom start" className="w-[calc(100vw-1.5rem)] max-w-[480px] sm:w-auto sm:min-w-[340px]">
         <Autocomplete.Filter filter={contains}>
           <SearchField autoFocus name="course-search" variant="secondary">
             <SearchField.Group>
