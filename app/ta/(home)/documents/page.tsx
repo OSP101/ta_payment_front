@@ -349,7 +349,7 @@ export default function ProfilePage() {
       )}
 
       {/* Progress summary */}
-      <Panel className="mb-4">
+      <Panel className="mb-4" data-tour="doc-progress">
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <div className="flex items-baseline justify-between mb-2">
@@ -377,6 +377,7 @@ export default function ProfilePage() {
         </div>
       </Panel>
 
+      <div data-tour="doc-steps">
       <Accordion
         allowsMultipleExpanded={false}
         expandedKeys={expanded}
@@ -438,6 +439,7 @@ export default function ProfilePage() {
           </Accordion.Item>
         ))}
       </Accordion>
+      </div>
 
       {allDone && !anyNeedsFix && data?.status !== "approved" && (
         <Alert

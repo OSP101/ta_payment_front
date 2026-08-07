@@ -1376,9 +1376,11 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 button invites a hover looking for the reason, and there is
                 nothing the TA can do to re-enable it. */}
             {canAddRows && (
-              <LockedActionButton variant="secondary" onClick={() => setShowAdd(true)} disabled={!aid || creating || needStudentCount}>
-                <Plus size={14} /> เพิ่มรายการ
-              </LockedActionButton>
+              <span data-tour="wl-add">
+                <LockedActionButton variant="secondary" onClick={() => setShowAdd(true)} disabled={!aid || creating || needStudentCount}>
+                  <Plus size={14} /> เพิ่มรายการ
+                </LockedActionButton>
+              </span>
             )}
             <LockedActionButton
               variant="ghost"
@@ -1388,6 +1390,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             >
               <Trash2 size={14} /> ลบฉบับร่าง
             </LockedActionButton>
+            <span data-tour="wl-generate">
             <TipWrap
               content={
                 !aid
@@ -1411,18 +1414,21 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 <Wand2 size={14} /> สร้างอัตโนมัติ
               </LockedActionButton>
             </TipWrap>
+            </span>
             {/* With several sections the submit button lives on each section's
                 card instead: on the toolbar it reads as "submit the course", which
                 is what let a TA send one section and believe they were done. */}
             {!showMultiSection && (
-              <LockedActionButton
-                variant="primary"
-                onClick={() => setConfirmSubmit(true)}
-                isPending={submitting}
-                disabled={submitting || !canSubmit}
-              >
-                <Send size={14} /> ส่งอนุมัติ
-              </LockedActionButton>
+              <span data-tour="wl-submit">
+                <LockedActionButton
+                  variant="primary"
+                  onClick={() => setConfirmSubmit(true)}
+                  isPending={submitting}
+                  disabled={submitting || !canSubmit}
+                >
+                  <Send size={14} /> ส่งอนุมัติ
+                </LockedActionButton>
+              </span>
             )}
           </>
         }
@@ -1547,7 +1553,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
 
           {aid && (
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-2 text-sm text-foreground bg-surface-secondary border border-[var(--hairline)] px-3 py-1.5 rounded-lg">
+              <div data-tour="wl-totals" className="inline-flex items-center gap-2 text-sm text-foreground bg-surface-secondary border border-[var(--hairline)] px-3 py-1.5 rounded-lg">
                 <Clock size={14} className="text-muted" />
                 {activeAssignment && showMultiSection && (
                   <>
@@ -2548,7 +2554,7 @@ function SectionStrip({
   canSubmitActive: boolean;
 }) {
   return (
-    <div className="mb-4">
+    <div data-tour="wl-sections" className="mb-4">
       <div className="mb-2 flex items-center gap-2 text-sm text-muted">
         <LayoutGrid size={15} className="shrink-0" />
         <span>
@@ -2831,7 +2837,7 @@ function MonthlyWorklogView({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div data-tour="wl-months" className="flex flex-col gap-3">
       {sortedMonths.map(month => {
         const monthRows = byMonth.get(month) ?? [];
         const isCollapsed = collapsed.has(month);
@@ -3236,7 +3242,7 @@ function DutySchedulePanels({ assignmentId }: { assignmentId: string }) {
   const shown = DUTY_KINDS.filter(k => (declared[k] ?? 0) > 0);
   if (shown.length === 0) return null;
   return (
-    <div className="space-y-4">
+    <div data-tour="wl-duty" className="space-y-4">
       {shown.map(k => (
         <DutySchedulePanel key={k} assignmentId={assignmentId} kind={k} />
       ))}

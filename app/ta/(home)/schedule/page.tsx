@@ -402,12 +402,16 @@ export default function TASchedulePage() {
               />
             )}
             <TermSelect terms={terms} value={termId} onChange={requestTermChange} />
-            <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={locked}>
-              <FileUp size={14} /> อัปโหลด .ics
-            </Button>
-            <Button variant="secondary" onClick={() => openCreate()} disabled={isWba || locked}>
-              <Plus size={14} /> เพิ่มคาบเรียน
-            </Button>
+            <span data-tour="sch-ics">
+              <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={locked}>
+                <FileUp size={14} /> อัปโหลด .ics
+              </Button>
+            </span>
+            <span data-tour="sch-add">
+              <Button variant="secondary" onClick={() => openCreate()} disabled={isWba || locked}>
+                <Plus size={14} /> เพิ่มคาบเรียน
+              </Button>
+            </span>
             <Button variant="primary" onClick={() => save(false)} disabled={saving || !dirty || locked}>
               <Save size={14} /> บันทึกทันที
             </Button>
@@ -440,6 +444,7 @@ export default function TASchedulePage() {
           />
         </Panel>
       ) : (
+        <div data-tour="sch-grid">
         <ScheduleGrid
           blocks={local}
           // Locked: the grid still renders so past terms can be read, but every
@@ -450,10 +455,11 @@ export default function TASchedulePage() {
           onMoveBlock={locked ? undefined : moveBlock}
           onResizeBlock={locked ? undefined : resizeBlock}
         />
+        </div>
       )}
 
       {!isWba && (
-        <Panel title="รายการคาบเรียน" className="mt-4" padded={false}>
+        <Panel title="รายการคาบเรียน" className="mt-4" padded={false} data-tour="sch-list">
           {regularBlocks.length === 0 ? (
             <div className="p-8">
               <EmptyState
@@ -506,7 +512,7 @@ export default function TASchedulePage() {
         </Panel>
       )}
 
-      <Panel title="กรณีพิเศษ" className="mt-4">
+      <Panel title="กรณีพิเศษ" className="mt-4" data-tour="sch-wba">
         <label className={"flex items-center gap-2 text-sm " + ((canWba || isWba) && !locked ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
           <input
             type="checkbox"

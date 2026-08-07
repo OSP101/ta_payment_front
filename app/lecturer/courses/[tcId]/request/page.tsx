@@ -289,7 +289,9 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
         />
       )}
 
-      <RequestsTable rows={courseReqs} loading={!allReqs} />
+      <div data-tour="req-history">
+        <RequestsTable rows={courseReqs} loading={!allReqs} />
+      </div>
     </div>
   );
 }
@@ -592,10 +594,12 @@ function RequestFormSection({
       )}
 
       {/* เครื่องคิดเลขงบ — ให้อาจารย์ลองคำนวณก่อนตัดสินใจว่าจะรับ TA กี่คน */}
+      <div data-tour="req-calculator">
       <TaBudgetCalculator
         tcId={tcId}
         hasSpecialSection={(course?.sections ?? []).some(s => s.track === "special")}
       />
+      </div>
 
       {/* เตือนเฉพาะกรณีงบจริงเกินเพดานแล้ว — ตัวเลขปกติอยู่ในเครื่องคิดเลขข้างบน */}
       {budget?.over_budget && <BudgetForecast budget={budget} />}
@@ -614,7 +618,7 @@ function RequestFormSection({
 
       <div className="space-y-4">
         {/* Step 1 --------------------------------------------------------- */}
-        <StepPanel n={1} title="ประเภทการเบิกค่าตอบแทน" description="เลือกให้ตรงกับหน่วยกิตวิชา">
+        <StepPanel tourId="req-step1" n={1} title="ประเภทการเบิกค่าตอบแทน" description="เลือกให้ตรงกับหน่วยกิตวิชา">
           <RadioGroup
             value={scope}
             onChange={v => setScope(v as "lecture" | "lab" | "both")}
@@ -632,6 +636,7 @@ function RequestFormSection({
 
         {/* Step 2 --------------------------------------------------------- */}
         <StepPanel
+          tourId="req-step2"
           n={2}
           title="เพิ่มรายชื่อ TA และกำหนดภาระงาน"
           description="เพิ่ม TA ทีละคน เลือก section และกรอกภาระงานของแต่ละคน"
@@ -654,7 +659,7 @@ function RequestFormSection({
           ) : (
             <div className="space-y-3">
               {/* Toolbar with add + create buttons */}
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 border border-hairline px-3 py-2">
+              <div data-tour="req-toolbar" className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 border border-hairline px-3 py-2">
                 <div className="text-xs text-ink-3">
                   รวม TA ในวิชานี้ <b className="text-ink-1">{assignments.length}</b> คน
                 </div>
@@ -744,7 +749,7 @@ function RequestFormSection({
       </div>
 
       {/* Inline footer */}
-      <div className="mt-4 pt-3 border-t border-hairline flex flex-wrap items-center justify-between gap-3">
+      <div data-tour="req-submit" className="mt-4 pt-3 border-t border-hairline flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xs text-ink-3">
           <span>เพิ่มแล้ว <b className="text-ink-1">{assignments.length}</b> คน</span>
           <span>เบิก <b className="text-ink-1">{scopeLabel}</b></span>
@@ -843,16 +848,17 @@ function StepPill({
 }
 
 function StepPanel({
-  n, title, description, status, children,
+  n, title, description, status, children, tourId,
 }: {
   n: number;
   title: string;
   description?: string;
   status?: { tone: "success" | "warn" | "danger" | "neutral"; text: string };
   children: React.ReactNode;
+  tourId?: string;
 }) {
   return (
-    <Panel padded={false}>
+    <Panel padded={false} data-tour={tourId}>
       <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-hairline">
         <div className="flex items-start gap-3 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-brand-soft text-brand flex items-center justify-center font-semibold shrink-0">
@@ -987,7 +993,7 @@ function AssignmentBlock({
 
       <div className="p-3 space-y-3">
         {/* TA + level picker */}
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
+        <div data-tour="req-ta-picker" className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
           <TaAutocomplete
             tas={tas}
             value={a.ta_id}
@@ -1032,7 +1038,7 @@ function AssignmentBlock({
         {/* Workload section — disabled visually and via pointer-events while
             a schedule conflict is unresolved so the lecturer must fix the
             picking before entering hours. */}
-        <div className={blocked ? "opacity-50 pointer-events-none select-none" : ""}>
+        <div data-tour="req-workload" className={blocked ? "opacity-50 pointer-events-none select-none" : ""}>
           {a.section_ids.length === 0 ? (
             <div className="text-xs text-ink-3 py-3 text-center border border-dashed border-hairline rounded-md">
               เลือก section ก่อน จึงจะกำหนดชั่วโมงได้
@@ -1131,7 +1137,7 @@ function AssignmentBlock({
             ? "อยู่ในช่วง 10–12 ชม./สัปดาห์"
             : "ภาระงานรวม";
           return (
-            <div className={
+            <div data-tour="req-total" className={
               "flex items-center justify-between rounded-md px-3 py-2 text-xs " +
               (bad ? "bg-amber-50 text-amber-800" : total === 0 ? "bg-slate-50 text-ink-3" : "bg-brand-soft text-brand")
             }>
@@ -1398,6 +1404,7 @@ function SectionPicker({
       value={value}
       onChange={onChange}
       className="w-full"
+      data-tour="req-sections"
     >
       <Label className="text-sm font-medium">
         Section <span className="text-red-500">*</span>{" "}
@@ -1635,7 +1642,7 @@ function CreateTaPanel({
   }
 
   return (
-    <div className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3">
+    <div data-tour="req-create-ta" className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3">
       <div className="flex items-center gap-2 mb-3">
         <UserPlus size={16} className="text-accent" />
         <div className="font-medium text-sm">
@@ -1817,7 +1824,7 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
   // ส่งช้า — ยังส่งได้ตามปกติ แต่ต้องรู้ว่าเงินจะออกช้า
   if (state.phase === "late") {
     return (
-      <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center gap-3">
+      <div data-tour="req-window" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center gap-3">
         <Chip tone="warn"><AlertCircle size={12} /> ส่งช้า</Chip>
         <div className="flex flex-col min-w-0">
           <div className="text-sm font-medium text-amber-900">
@@ -1835,7 +1842,7 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
   // ส่งทันเวลา — ถ้าไม่มีกำหนดเลย ก็ทันเวลาเสมอ
   const urgent = state.remainingMs !== undefined && state.remainingMs < 24 * 60 * 60 * 1000;
   return (
-    <div className={
+    <div data-tour="req-window" className={
       "mb-3 rounded-lg border px-4 py-3 flex flex-wrap items-center gap-3 " +
       (urgent ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50")
     }>

@@ -59,7 +59,7 @@ export default function NotificationsList({
       <PageHeader title={title} description={description} />
       {header}
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
+      <div data-tour="ntf-filters" className="flex items-center gap-2 mb-3 flex-wrap">
         <button
           type="button"
           onClick={() => setTab("all")}
@@ -80,7 +80,7 @@ export default function NotificationsList({
         </Button>
       </div>
 
-      <Panel padded={false}>
+      <Panel padded={false} data-tour="ntf-list">
         {list.length === 0 ? (
           <EmptyState
             icon={<Bell size={28} />}

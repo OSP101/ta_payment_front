@@ -123,7 +123,7 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
       ) : (
         <>
           {/* Compact info strip — everything at a glance, no drilling */}
-          <Panel className="mb-4">
+          <Panel className="mb-4" data-tour="course-info">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
               <InfoItem label="นักศึกษา">
                 <span className="text-lg font-semibold tabular-nums">{course.num_students}</span>
@@ -195,19 +195,20 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
           )}
 
           {/* Status cards — real state, not just navigation */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div data-tour="course-cards" className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <BudgetStatusCard tcId={tcId} budget={budget} />
             <RequestStatusCard tcId={tcId} counts={reqCounts} total={courseReqs.length} />
             <ReportStatusCard tcId={tcId} count={pendingReports.length} loading={pending === undefined} />
           </div>
 
           {/* Monthly reimbursement status, grouped per TA */}
-          <div className="mb-4">
+          <div data-tour="course-submissions" className="mb-4">
             <CourseSubmissionPanel tcId={tcId} role="lecturer" />
           </div>
 
           {/* Sections — compact inline chips */}
           <Panel
+            data-tour="course-sections-list"
             title="Section ทั้งหมด"
             description={`รายวิชานี้มี ${course.sections?.length ?? 0} section`}
             className="mb-4"

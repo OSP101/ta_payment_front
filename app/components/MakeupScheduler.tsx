@@ -219,7 +219,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
             />
           </Panel>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div data-tour="mk-list" className="flex flex-col gap-3">
             {impacts.impacts.map(imp => {
               const unresolvedHere = imp.affected_sections.filter(s => !s.makeup).length;
               return (

@@ -94,7 +94,7 @@ export default function OnboardingChecklistCard() {
 
   return (
     <div className="mb-6">
-      <Panel className="border-amber-300 dark:border-amber-800">
+      <Panel className="border-amber-300 dark:border-amber-800" data-tour="ta-home-checklist">
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning-soft-foreground">
             <ShieldAlert size={18} />

@@ -147,7 +147,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
       ) : (
         <>
           {/* Hours + stage summary */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div data-tour="ta-course-stats" className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <StatCard
               label="สถานะ"
               value={myStatus ? STAGE_LABEL[myStatus.stage] : "—"}
@@ -215,6 +215,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
           {/* Section schedule */}
           <Panel
             title="ตารางสอนของรายวิชา"
+            data-tour="ta-course-schedule"
             description={
               mySections.length > 0 && mySectionIds.size > 0
                 ? `แสดงเฉพาะ section ที่คุณเป็น TA (${mySections.length} section)`

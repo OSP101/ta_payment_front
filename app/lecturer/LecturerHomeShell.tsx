@@ -6,6 +6,7 @@ import {
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
+import LecturerTourLauncher from "./tours/TourLauncher";
 
 // The lecturer's home used to be a bare header with two links buried in the top
 // bar, so /document-progress and /announcements were reachable from here and
@@ -87,7 +88,14 @@ export default function LecturerHomeShell({
       brandTitle="TA Payment"
       nav={buildNav(pendingCourses, me.is_executive === true)}
       userMenuItems={userMenuItems}
-      topBarAccessory={<NotificationBell />}
+      topBarAccessory={
+        <>
+          <LecturerTourLauncher />
+          <div data-tour="notif-bell" className="shrink-0">
+            <NotificationBell />
+          </div>
+        </>
+      }
     >
       {children}
     </Shell>

@@ -42,9 +42,11 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
         title="โปรแกรมคำนวณงบ TA"
         description={courseName ? `${courseName.code} ${courseName.name_th}` : "ประเมินภาระงาน จำนวน TA และงบประมาณ"}
         actions={
-          <Button variant="secondary" onClick={() => setHelpTrack("regular")}>
-            <HelpCircle size={16} />วิธีคิดสูตร
-          </Button>
+          <span data-tour="budget-help">
+            <Button variant="secondary" onClick={() => setHelpTrack("regular")}>
+              <HelpCircle size={16} />วิธีคิดสูตร
+            </Button>
+          </span>
         }
       />
 
@@ -89,7 +91,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             </div>
           )}
 
-          <Panel title="ข้อมูลวิชา" className="mb-4">
+          <Panel title="ข้อมูลวิชา" className="mb-4" data-tour="budget-info">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <Info k="หน่วยกิต (Lec/Lab)" v={`${b.credits} (${b.lecture_credits}/${b.lab_credits})`} />
               <Info k="เพดานงบ/วิชา" v={`${b.per_course_max.toLocaleString()} บ.`} />
@@ -97,7 +99,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             </div>
           </Panel>
 
-          <div className="grid gap-4 md:grid-cols-2 mb-4">
+          <div data-tour="budget-tracks" className="grid gap-4 md:grid-cols-2 mb-4">
             <TrackPanel
               title="ภาคปกติ"
               tone="brand"
@@ -120,7 +122,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             />
           </div>
 
-          <Panel title="งบรวม" className="mb-4">
+          <Panel title="งบรวม" className="mb-4" data-tour="budget-total">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Info k="ภาระงาน TA ตรี / สัปดาห์" v={`${b.weekly_workload_hours.toFixed(2)} ชม.`} />
               <Info k="ค่าตอบแทน TA ตรี / เดือน" v={`${b.monthly_pay_baht.toFixed(0)} บ.`} />

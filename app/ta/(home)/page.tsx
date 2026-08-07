@@ -303,7 +303,7 @@ export default function TAHome() {
         description="รายวิชาที่รับเป็น TA และสิ่งที่ต้องดำเนินการในภาคเรียนนี้"
         actions={
           noTerms ? null : (
-            <div className="flex gap-2 items-end flex-wrap">
+            <div data-tour="ta-home-term" className="flex gap-2 items-end flex-wrap">
               <SelectField
                 label="ปีการศึกษา"
                 value={defaultYear}
@@ -355,7 +355,7 @@ export default function TAHome() {
           />
 
           <SectionHeading>รายวิชาที่ฉันเป็น TA</SectionHeading>
-          <Panel padded={false}>
+          <Panel padded={false} data-tour="ta-home-courses">
             {coursesError ? (
               <EmptyState
                 icon={<AlertTriangle size={28} />}
@@ -416,7 +416,9 @@ export default function TAHome() {
               when undefined, which would print the heading twice — once here
               and once inside the card. null is falsy so Panel drops its header
               entirely, matching the courses section above. */}
-          <AnnouncementFeed title={null} compact limit={5} />
+          <div data-tour="ta-home-announce">
+            <AnnouncementFeed title={null} compact limit={5} />
+          </div>
         </>
       )}
     </div>
@@ -499,7 +501,7 @@ function AlertsSection({
   return (
     <>
       <SectionHeading>ต้องดำเนินการ</SectionHeading>
-      <div className="space-y-2">
+      <div data-tour="ta-home-alerts" className="space-y-2">
         {rejected.length > 0 && (
           <Alert
             status="danger"

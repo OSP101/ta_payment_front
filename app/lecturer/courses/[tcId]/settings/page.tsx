@@ -92,7 +92,7 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
           section row, and a WBA course (registrar sent no timetable) is exactly
           the case where the lecturer arrives here *looking* for it — burying
           that row under a second tab hid the one thing the page is for. */}
-      <Panel title="ข้อมูลรายวิชา" className="mb-4">
+      <Panel title="ข้อมูลรายวิชา" className="mb-4" data-tour="set-info">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <ReadOnly label="รหัสวิชา" value={tc?.code} tabular />
           <ReadOnly label="ชื่อวิชา" value={tc?.name_th} span={3} />
@@ -157,6 +157,7 @@ function SectionsPanel({
   return (
     <Panel
       title="Sections และตารางเวลา"
+      data-tour="set-sections"
       description={
         locked
           ? "รายวิชานี้ถูกล็อกหลังส่งออกไฟล์แล้ว ดูอย่างเดียว"

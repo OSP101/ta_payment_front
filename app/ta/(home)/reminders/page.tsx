@@ -79,7 +79,7 @@ export default function TAReminderPage() {
           </div>
         </Panel>
       ) : (
-        <div className="space-y-6">
+        <div data-tour="rem-list" className="space-y-6">
           {groups.map(g => {
             // Local calendar date, not UTC — toISOString() would lag a day
             // between 00:00–07:00 ICT and mark due-today periods overdue.

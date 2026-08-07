@@ -7,6 +7,7 @@ import {
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
+import TaTourLauncher from "./tours/TourLauncher";
 import CourseSwitcher from "../components/CourseSwitcher";
 import { TAApprovalBanner } from "./TAGate";
 
@@ -90,8 +91,19 @@ export default function TACourseShell({
       userMenuItems={userMenuItems}
       // สลับวิชาได้จากแถบบนเหมือนฝั่งอาจารย์ — รายการมาจาก /me/ta-courses
       // (เฉพาะวิชาที่ตัวเองเป็น TA) ไม่ใช่ทุกวิชาในเทอม
-      topBarLeft={<CourseSwitcher tcId={tcId} siblingsPath="/me/ta-courses" />}
-      topBarAccessory={<NotificationBell seeAllHref="/ta/notifications" />}
+      topBarLeft={
+        <div data-tour="course-switcher" className="min-w-0">
+          <CourseSwitcher tcId={tcId} siblingsPath="/me/ta-courses" />
+        </div>
+      }
+      topBarAccessory={
+        <>
+          <TaTourLauncher />
+          <div data-tour="notif-bell" className="shrink-0">
+            <NotificationBell seeAllHref="/ta/notifications" />
+          </div>
+        </>
+      }
     >
       <TAApprovalBanner />
       {children}

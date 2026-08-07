@@ -408,7 +408,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
               person below rather than to one approval. */}
           <BudgetNotice tcId={tcId} />
 
-          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <div data-tour="rep-summary" className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
               <Users size={14} className="text-muted" />
               รอคุณตรวจ {groups.length} คน
@@ -416,7 +416,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
             <span className="tabular text-muted">รวม {totalHours.toFixed(1)} ชม.</span>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div data-tour="rep-list" className="flex flex-col gap-3">
             {groups.map(g => (
               <TACard
                 key={g.taId}
@@ -490,7 +490,7 @@ function TACard({
     <Panel padded={false}>
       {/* The disclosure and the approve-all button are SIBLINGS, not nested — a
           button inside a button is invalid HTML, and in practice pressing
-          "อนุมัติทั้งคนนี้" would have folded the card on its way out. */}
+          "อนุมัติทุกเดือน" would have folded the card on its way out. */}
       <div className="flex flex-wrap items-start gap-2 px-4 py-3">
         {/* Five TAs with every month laid out measured 2,557px — three screens,
             25 month rows and 51 buttons, with only the first person and a half
@@ -529,7 +529,7 @@ function TACard({
             disabled={busyAll || rejecting} isPending={busyAll}
             onPress={() => setConfirmAll(true)}
           >
-            <Check size={14} /> อนุมัติทั้งคนนี้
+            <Check size={14} /> อนุมัติทุกเดือน
           </Button>
         </div>
       </div>
@@ -541,7 +541,7 @@ function TACard({
         open={confirmAll}
         onClose={() => setConfirmAll(false)}
         onConfirm={() => { setConfirmAll(false); onApproveAll(); }}
-        title="อนุมัติทั้งคนนี้"
+        title="อนุมัติทุกเดือนที่รออยู่"
         icon={<Check size={18} />}
         confirmLabel="อนุมัติทั้งหมด"
         isPending={busyAll}
@@ -661,7 +661,7 @@ function MonthRows({
   pendingKey: string | null;
   onDecide: (ym: string, assignmentIds: string[], kind: "approve" | "reject", reason?: string) => void;
   // Raised while a send-back reason is being written, so the card above can
-  // quiet its own "อนุมัติทั้งคนนี้" — that one would approve the very month
+  // quiet its own "อนุมัติทุกเดือน" — that one would approve the very month
   // being rejected, which is the worst thing a stray click here could do.
   onRejectingChange?: (rejecting: boolean) => void;
 }) {
@@ -931,7 +931,7 @@ function ApprovalHistoryPanel({
   const show = userOpen ?? count > 0;
 
   return (
-    <Panel padded={false}>
+    <Panel padded={false} data-tour="rep-history">
       <div className="flex items-center gap-2 px-4 py-3">
         <button
           type="button"

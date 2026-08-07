@@ -231,7 +231,7 @@ export default function LecturerHome() {
         description={pageDesc}
         actions={
           noTerms ? null : (
-            <div className="flex gap-2 items-end flex-wrap">
+            <div data-tour="home-term" className="flex gap-2 items-end flex-wrap">
               <SelectField
                 label="ปีการศึกษา"
                 value={defaultYear}
@@ -441,6 +441,7 @@ function CollapsibleSection({
   id, title, count, hint, action, defaultOpen = true, children,
 }: {
   id: string;
+  // Anchor for the onboarding tour (section id doubles as the data-tour id).
   title: string;
   count?: number;
   hint?: string;
@@ -466,7 +467,7 @@ function CollapsibleSection({
 
   const bodyId = `section-${id}`;
   return (
-    <section className="mt-6 first:mt-0">
+    <section className="mt-6 first:mt-0" data-tour={`home-section-${id}`}>
       <div className="mb-2 flex items-center justify-between gap-3">
         <button
           type="button"
@@ -544,7 +545,7 @@ function AlertsSection({
   return (
     <>
       <SectionHeading>ต้องดำเนินการ</SectionHeading>
-      <div className="space-y-2">
+      <div data-tour="home-alerts" className="space-y-2">
         {wba.length > 0 && (
           <Alert
             status="danger"

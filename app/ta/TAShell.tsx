@@ -5,6 +5,7 @@ import {
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type NavStatus, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
+import TaTourLauncher from "./tours/TourLauncher";
 import { useTAOnboarding } from "./useTAOnboarding";
 
 // The TA's pages now live in the left sidebar rather than behind the avatar
@@ -76,7 +77,14 @@ export default function TAShell({
       brandTitle="TA Payment"
       nav={nav}
       userMenuItems={userMenuItems}
-      topBarAccessory={<NotificationBell seeAllHref="/ta/notifications" />}
+      topBarAccessory={
+        <>
+          <TaTourLauncher />
+          <div data-tour="notif-bell" className="shrink-0">
+            <NotificationBell seeAllHref="/ta/notifications" />
+          </div>
+        </>
+      }
     >
       {children}
     </Shell>

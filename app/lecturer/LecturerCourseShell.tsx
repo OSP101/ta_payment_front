@@ -4,6 +4,7 @@ import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft,
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
+import LecturerTourLauncher from "./tours/TourLauncher";
 import CourseSwitcher from "../components/CourseSwitcher";
 import { Alert } from "../components/ui";
 
@@ -111,8 +112,19 @@ export default function LecturerCourseShell({
       brandTitle={brandTitle}
       nav={nav}
       userMenuItems={userMenuItems}
-      topBarLeft={<CourseSwitcher tcId={tcId} />}
-      topBarAccessory={<NotificationBell />}
+      topBarLeft={
+        <div data-tour="course-switcher" className="min-w-0">
+          <CourseSwitcher tcId={tcId} />
+        </div>
+      }
+      topBarAccessory={
+        <>
+          <LecturerTourLauncher />
+          <div data-tour="notif-bell" className="shrink-0">
+            <NotificationBell />
+          </div>
+        </>
+      }
     >
       {impersonating && (
         <div className="mb-4">
