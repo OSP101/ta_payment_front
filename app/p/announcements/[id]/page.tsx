@@ -144,7 +144,12 @@ export default async function PublicAnnouncementPage(
             T
           </span>
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-ink-1">TA Payment</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-ink-1">TA Payment</span>
+              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide leading-none text-amber-800">
+                Beta
+              </span>
+            </div>
             <div className="text-[11px] text-ink-3">วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น</div>
           </div>
         </div>

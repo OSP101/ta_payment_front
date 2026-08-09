@@ -10,11 +10,20 @@ import {
   ArrowUpRight,
   AlertTriangle,
   CheckCircle2,
+  CalendarPlus,
+  CalendarOff,
 } from "lucide-react";
-import { PageHeader, Panel, StatCard, Chip, Button } from "../components/ui";
+import { PageHeader, Panel, StatCard, Chip, Button, Alert, EmptyState } from "../components/ui";
 import { type Executive, emptyExecutive } from "./types";
 import { useTerm, useTermKey } from "./TermContext";
 import BudgetAnalytics from "./BudgetAnalytics";
+
+function formatThaiDate(iso?: string): string {
+  if (!iso) return "";
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("th-TH", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+}
 
 // One row of the "สิ่งที่ต้องทำตอนนี้" panel. `blocker` marks work that stops
 // a later step rather than being a step itself — it is listed first because
@@ -34,7 +43,20 @@ export default function StaffDashboard() {
   // can never disagree with the cards.
   const { data } = useSWR<Executive>(useTermKey("/dashboard/executive"));
   const s = data ?? emptyExecutive;
-  const { termId } = useTerm();
+  const { terms, termId, loaded } = useTerm();
+
+  // Gate: nothing on this page means anything without at least one term to
+  // scope it to. `loaded` distinguishes "still loading" from "confirmed none
+  // created yet" — same pattern as the teaching page's noTerms check.
+  const noTerms = loaded && (terms?.length ?? 0) === 0;
+  // is_active is a manual flag (see academic_terms migration 0066) — a term
+  // whose window has passed does not clear it on its own, so staff can be
+  // looking at a dashboard scoped to a semester that ended weeks ago with
+  // nothing on screen saying so.
+  const activeTerm = terms?.find(t => t.is_active);
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const termExpired = !!activeTerm?.ends_on && activeTerm.ends_on < todayISO;
+  const noActiveTerm = loaded && !noTerms && !activeTerm;
 
   // The dashboard used to warn about exactly one thing (missing student
   // counts) and stay silent about every queue, so "nothing on screen" meant
@@ -92,70 +114,112 @@ export default function StaffDashboard() {
           : "ภาพรวมการดำเนินงานของระบบ TA Payment"}
       />
 
-      <TodoPanel todos={todos} loading={!data} />
-
-      {/* md stays at 2 columns: the sidebar is already open at that width, so a
-          3-column row leaves ~85px of text per card and clips the longer
-          labels. 3 columns only from lg. */}
-      <div data-tour="dash-stats" className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
-        <StatCard label="วิชาที่เปิดสอน" value={s.total_courses} icon={<BookOpen size={18} />} tone="brand"
-                  hint={termText || undefined} />
-        <StatCard label="TA ทั้งหมด" value={s.total_tas} icon={<Users size={18} />}
-                  hint="ปฏิบัติงานในเทอมนี้" />
-        <StatCard label="วิชาที่มีการขอใช้ TA" value={s.courses_with_ta} icon={<GraduationCap size={18} />} tone="success"
-                  hint={s.total_courses > 0 ? `${((s.courses_with_ta / s.total_courses) * 100).toFixed(0)}% ของวิชาที่เปิดสอน` : undefined} />
-        {/* The two review queues live on different pages — each card links to its own. */}
-        <StatCard label="แบบฟอร์มหนี้รอตรวจ" value={s.pending_reviews} icon={<FileText size={18} />}
-                  tone={s.pending_reviews > 0 ? "warn" : "default"}
-                  hint="ขั้นที่ 2" href="/staff/review" />
-        <StatCard label="วิชาที่รอตรวจ / รอส่งออก" value={s.payout_courses_actionable} icon={<ClipboardCheck size={18} />}
-                  tone={s.payout_courses_actionable > 0 ? "warn" : "default"}
-                  hint="ขั้นที่ 3" href="/staff/payouts" />
-        {/* No budget StatCard here any more: the analytics section below is the
-            budget's single source on this page (settle-based). A second figure
-            from the old hours×rate sum sat 12% above it and invited the
-            question "which one is right?" */}
-      </div>
-
-      {/* มุมบริหาร — เงินไปไหน เร็วแค่ไหน หลักสูตรไหนใช้เยอะ. Same component the
-          executive page renders, so the two audiences read identical numbers. */}
-      <BudgetAnalytics termId={termId} />
-
-      <div className="grid gap-4 mt-4 lg:grid-cols-3">
-        <Panel title="ทางลัด" description="เมนูใช้บ่อย" data-tour="dash-shortcuts">
-          <ul className="divide-y divide-[var(--hairline)]">
-            <ShortcutRow href="/staff/approvals" title="อนุมัติคำขอ TA" />
-            <ShortcutRow href="/staff/review" title="ตรวจสอบแบบฟอร์มใบแจ้งหนี้" />
-            <ShortcutRow href="/staff/payouts" title="ตรวจและส่งออกเอกสาร" />
-            <ShortcutRow href="/staff/teaching" title="วิชาที่เปิดสอน" />
-            <ShortcutRow href="/staff/appointments" title="ใบแต่งตั้งทีเอ (คำสั่ง)" />
-          </ul>
+      {noTerms ? (
+        // Every card below reads zero without a term to scope it to — showing
+        // them anyway would look like an honest "nothing going on" instead of
+        // "the system isn't set up yet". Same gate the teaching page uses.
+        <Panel padded={false}>
+          <EmptyState
+            icon={<CalendarPlus size={28} />}
+            title="ยังไม่ได้สร้างปีการศึกษา / ภาคเรียน"
+            description="ต้องสร้างปีการศึกษาและภาคเรียนอย่างน้อย 1 รายการก่อน จึงจะเปิดวิชาสอน อนุมัติคำขอ TA และดำเนินงานขั้นตอนอื่น ๆ ต่อได้"
+            action={
+              <Link href="/staff/settings?tab=terms">
+                <Button variant="primary">
+                  <CalendarPlus size={16} /> สร้างปีการศึกษา / ภาคเรียน
+                </Button>
+              </Link>
+            }
+          />
         </Panel>
-        {/* Deliberately no "รอตรวจ" lines here any more — those live in the
-            to-do panel at the top, and repeating them made two places to keep
-            in sync while telling the reader nothing new. */}
-        <Panel title="สถานะโดยรวม" description={`ภาพรวมของเทอม ${s.term_label || "—"}`}>
-          <div className="space-y-3">
-            <SummaryLine
-              label="วิชาที่ยังไม่ขอใช้ TA"
-              chip={<Chip tone={s.total_courses - s.courses_with_ta > 0 ? "warn" : "success"}>
-                {s.total_courses - s.courses_with_ta} วิชา
-              </Chip>}
-            />
-            <SummaryLine
-              label="TA ที่ปฏิบัติงาน"
-              chip={<Chip tone={s.total_tas > 0 ? "success" : "warn"}>{s.total_tas} คน</Chip>}
-            />
+      ) : (
+        <>
+          {(termExpired || noActiveTerm) && (
+            <div className="mb-5">
+              <Alert
+                status="warning"
+                icon={<CalendarOff size={16} />}
+                title={termExpired
+                  ? `ภาคเรียนที่ใช้งานอยู่สิ้นสุดแล้ว (${formatThaiDate(activeTerm?.ends_on)})`
+                  : "ยังไม่ได้ตั้งภาคเรียนที่ใช้งานอยู่"}
+                description={termExpired
+                  ? `ภาคเรียน ${activeTerm?.academic_year}/${activeTerm?.semester} หมดเขตแล้ว กรุณาสร้างภาคเรียนถัดไปและตั้งเป็นภาคเรียนที่ใช้งาน มิฉะนั้นเมนูอื่นจะยังอ้างอิงภาคเรียนที่หมดเขตนี้อยู่`
+                  : "ไม่มีภาคเรียนใดถูกตั้งเป็นภาคเรียนที่ใช้งานอยู่ กรุณาตรวจสอบที่หน้าตั้งค่า"}
+                action={
+                  <Link href="/staff/settings?tab=terms">
+                    <Button variant="secondary" size="sm">ไปตั้งค่าภาคเรียน</Button>
+                  </Link>
+                }
+              />
+            </div>
+          )}
+
+          <TodoPanel todos={todos} loading={!data} />
+
+          {/* md stays at 2 columns: the sidebar is already open at that width, so a
+              3-column row leaves ~85px of text per card and clips the longer
+              labels. 3 columns only from lg. */}
+          <div data-tour="dash-stats" className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
+            <StatCard label="วิชาที่เปิดสอน" value={s.total_courses} icon={<BookOpen size={18} />} tone="brand"
+                      hint={termText || undefined} />
+            <StatCard label="TA ทั้งหมด" value={s.total_tas} icon={<Users size={18} />}
+                      hint="ปฏิบัติงานในเทอมนี้" />
+            <StatCard label="วิชาที่มีการขอใช้ TA" value={s.courses_with_ta} icon={<GraduationCap size={18} />} tone="success"
+                      hint={s.total_courses > 0 ? `${((s.courses_with_ta / s.total_courses) * 100).toFixed(0)}% ของวิชาที่เปิดสอน` : undefined} />
+            {/* The two review queues live on different pages — each card links to its own. */}
+            <StatCard label="แบบฟอร์มหนี้รอตรวจ" value={s.pending_reviews} icon={<FileText size={18} />}
+                      tone={s.pending_reviews > 0 ? "warn" : "default"}
+                      hint="ขั้นที่ 2" href="/staff/review" />
+            <StatCard label="วิชาที่รอตรวจ / รอส่งออก" value={s.payout_courses_actionable} icon={<ClipboardCheck size={18} />}
+                      tone={s.payout_courses_actionable > 0 ? "warn" : "default"}
+                      hint="ขั้นที่ 3" href="/staff/payouts" />
+            {/* No budget StatCard here any more: the analytics section below is the
+                budget's single source on this page (settle-based). A second figure
+                from the old hours×rate sum sat 12% above it and invited the
+                question "which one is right?" */}
           </div>
-        </Panel>
-        <Panel title="คู่มือระบบ" description="ลิงก์เอกสารและเวิร์กโฟลว์">
-          <ul className="space-y-2 text-sm">
-            <li className="text-[var(--ink-2)]">• เจ้าหน้าที่นำเข้าตารางสอนจาก Excel → อาจารย์ขอ TA → เจ้าหน้าที่อนุมัติ</li>
-            <li className="text-[var(--ink-2)]">• TA กรอกข้อมูล/เอกสาร + บันทึกเวลาปฏิบัติงาน → อาจารย์อนุมัติ/ปฏิเสธรายวัน (คือการตรวจจริง ไม่มีการเซ็นในระบบ)</li>
-            <li className="text-[var(--ink-2)]">• อนุมัติครบ → เจ้าหน้าที่ตรวจสอบและส่งออกไฟล์ ZIP (ล็อกบันทึกเวลาของเดือนนั้น) → ยืนยันส่งการเงิน</li>
-          </ul>
-        </Panel>
-      </div>
+
+          {/* มุมบริหาร — เงินไปไหน เร็วแค่ไหน หลักสูตรไหนใช้เยอะ. Same component the
+              executive page renders, so the two audiences read identical numbers. */}
+          <BudgetAnalytics termId={termId} />
+
+          <div className="grid gap-4 mt-4 lg:grid-cols-3">
+            <Panel title="ทางลัด" description="เมนูใช้บ่อย" data-tour="dash-shortcuts">
+              <ul className="divide-y divide-[var(--hairline)]">
+                <ShortcutRow href="/staff/approvals" title="อนุมัติคำขอ TA" />
+                <ShortcutRow href="/staff/review" title="ตรวจสอบแบบฟอร์มใบแจ้งหนี้" />
+                <ShortcutRow href="/staff/payouts" title="ตรวจและส่งออกเอกสาร" />
+                <ShortcutRow href="/staff/teaching" title="วิชาที่เปิดสอน" />
+                <ShortcutRow href="/staff/appointments" title="ใบแต่งตั้งทีเอ (คำสั่ง)" />
+              </ul>
+            </Panel>
+            {/* Deliberately no "รอตรวจ" lines here any more — those live in the
+                to-do panel at the top, and repeating them made two places to keep
+                in sync while telling the reader nothing new. */}
+            <Panel title="สถานะโดยรวม" description={`ภาพรวมของเทอม ${s.term_label || "—"}`}>
+              <div className="space-y-3">
+                <SummaryLine
+                  label="วิชาที่ยังไม่ขอใช้ TA"
+                  chip={<Chip tone={s.total_courses - s.courses_with_ta > 0 ? "warn" : "success"}>
+                    {s.total_courses - s.courses_with_ta} วิชา
+                  </Chip>}
+                />
+                <SummaryLine
+                  label="TA ที่ปฏิบัติงาน"
+                  chip={<Chip tone={s.total_tas > 0 ? "success" : "warn"}>{s.total_tas} คน</Chip>}
+                />
+              </div>
+            </Panel>
+            <Panel title="คู่มือระบบ" description="ลิงก์เอกสารและเวิร์กโฟลว์">
+              <ul className="space-y-2 text-sm">
+                <li className="text-[var(--ink-2)]">• เจ้าหน้าที่นำเข้าตารางสอนจาก Excel → อาจารย์ขอ TA → เจ้าหน้าที่อนุมัติ</li>
+                <li className="text-[var(--ink-2)]">• TA กรอกข้อมูล/เอกสาร + บันทึกเวลาปฏิบัติงาน → อาจารย์อนุมัติ/ปฏิเสธรายวัน (คือการตรวจจริง ไม่มีการเซ็นในระบบ)</li>
+                <li className="text-[var(--ink-2)]">• อนุมัติครบ → เจ้าหน้าที่ตรวจสอบและส่งออกไฟล์ ZIP (ล็อกบันทึกเวลาของเดือนนั้น) → ยืนยันส่งการเงิน</li>
+              </ul>
+            </Panel>
+          </div>
+        </>
+      )}
     </div>
   );
 }

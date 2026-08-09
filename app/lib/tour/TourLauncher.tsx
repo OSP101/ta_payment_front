@@ -79,7 +79,10 @@ export default function TourLauncher({
       data-tour="tour-button"
       onClick={launch}
       title="ดูคำแนะนำการใช้งานของหน้านี้"
-      className="relative inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-(--border) bg-(--panel-bg) px-2.5 text-sm font-medium text-(--ink-2) transition-colors hover:bg-(--sidebar-hover) hover:text-(--ink-1)"
+      // A phone's top bar has no room to spare, and the tour it opens is
+      // built around anchoring to desktop panel layouts anyway — hidden below
+      // sm rather than shrunk to icon-only like the other controls here.
+      className="relative hidden h-9 shrink-0 items-center gap-1.5 rounded-lg border border-(--border) bg-(--panel-bg) px-2.5 text-sm font-medium text-(--ink-2) transition-colors hover:bg-(--sidebar-hover) hover:text-(--ink-1) sm:inline-flex"
     >
       <GraduationCap size={16} />
       <span className="hidden lg:inline">สอนการใช้งาน</span>

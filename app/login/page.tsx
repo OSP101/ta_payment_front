@@ -13,6 +13,7 @@ import {
 } from "@heroui/react";
 import { LogIn, Eye, EyeOff, Shield } from "lucide-react";
 import { IconButton } from "../components/ui";
+import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "../components/BetaNotice";
 import { api, errMessage, type Me } from "../lib/api";
 import { notify } from "../lib/notify";
 
@@ -31,11 +32,16 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [ssoUrl, setSsoUrl] = useState<string | null>(null);
+  const [betaOpen, setBetaOpen] = useState(false);
 
   useEffect(() => {
     api.get<{ enabled: boolean; url?: string }>("/auth/sso/url")
       .then(r => { if (r.enabled && r.url) setSsoUrl(r.url); })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!hasSeenBetaNotice()) setBetaOpen(true);
   }, []);
 
   const fieldErrors = useMemo(() => {
@@ -88,9 +94,11 @@ export default function LoginPage() {
             T
           </div>
           <div className="font-semibold text-[15px] text-foreground">TA Payment</div>
+          <BetaBadge onClick={() => setBetaOpen(true)} />
         </div>
         {/* <div className="text-xs text-muted">วิทยาลัยการคอมพิวเตอร์ ม.ขอนแก่น</div> */}
       </header>
+      <BetaNoticeModal open={betaOpen} onClose={() => setBetaOpen(false)} />
 
       <main className="flex-1 flex items-center justify-center px-4 py-10 bg-background">
         <div className="w-full max-w-md">

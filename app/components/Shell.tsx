@@ -24,6 +24,7 @@ import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 import { formatFullName } from "../lib/prefixes";
 import UserAvatar from "./UserAvatar";
+import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "./BetaNotice";
 
 const SIDEBAR_KEY = "ta-payment:sidebar-collapsed";
 /** Expanded panel, 256px. Down from w-68/w-72 (272/288). Measured, not
@@ -118,6 +119,24 @@ export default function Shell({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // A page built around one wide data table (columns of names, emails, role
+  // chips...) reads cramped at the 1400px cap that keeps prose-heavy pages
+  // comfortable to read. A staff desk is typically a 1920px+ monitor with
+  // real room to spare — worth giving back on the pages that have columns to
+  // fill it with.
+  const WIDE_ROUTES = [
+    "/staff/users", "/staff/teaching", "/staff/approvals", "/staff/review",
+    "/staff/payouts", "/staff/appointments",
+  ];
+  const isWide = WIDE_ROUTES.some(p => pathname === p || pathname.startsWith(`${p}/`));
+
+  // Beta notice: pops up once per browser (auto-dismissed the same way as a
+  // manual open) and stays reachable afterward via the badge next to the logo.
+  const [betaOpen, setBetaOpen] = useState(false);
+  useEffect(() => {
+    if (!hasSeenBetaNotice()) setBetaOpen(true);
+  }, []);
+
   // Collapsed = the icon rail. Persisted because it is a working preference,
   // not a per-page mode: someone who narrowed the chrome to see more of a
   // timetable means it for the whole session, not one route.
@@ -185,7 +204,7 @@ export default function Shell({
           }
         >
           {sidebarOpen ? (
-            <BrandBlock brandTitle={brandTitle} />
+            <BrandBlock brandTitle={brandTitle} onBetaClick={() => setBetaOpen(true)} />
           ) : (
             <div className="h-14 flex items-center justify-center border-b border-border">
               <Link href="/" aria-label={`${brandTitle} ไปหน้าแรก`}
@@ -244,7 +263,7 @@ export default function Shell({
           <aside className="absolute inset-y-0 left-0 w-[85vw] max-w-75 bg-surface shadow-xl flex flex-col"
                  onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-3 border-b border-border">
-              <BrandMark brandTitle={brandTitle} />
+              <BrandMark brandTitle={brandTitle} onBetaClick={() => setBetaOpen(true)} />
               <Button variant="ghost" isIconOnly size="sm" onPress={() => setMobileOpen(false)} aria-label="ปิดเมนู">
                 <X size={18} />
               </Button>
@@ -281,11 +300,13 @@ export default function Shell({
           topBarScope={topBarScope}
           showMobileMenu={!hideSidebar}
           showBrandInHeader={hideSidebar}
+          onBetaClick={() => setBetaOpen(true)}
         />
-        <div className="flex-1 p-4 md:p-8 max-w-[1400px] w-full mx-auto">
+        <div className={`flex-1 p-4 md:p-8 w-full mx-auto ${isWide ? "max-w-[2000px]" : "max-w-[1400px]"}`}>
           {children}
         </div>
       </main>
+      <BetaNoticeModal open={betaOpen} onClose={() => setBetaOpen(false)} />
     </div>
   );
 }
@@ -294,26 +315,29 @@ export default function Shell({
 /* Sidebar sub-components                                                     */
 /* -------------------------------------------------------------------------- */
 
-function BrandBlock({ brandTitle }: { brandTitle: string }) {
+function BrandBlock({ brandTitle, onBetaClick }: { brandTitle: string; onBetaClick: () => void }) {
   return (
     <div className="h-14 px-4 flex items-center border-b border-border">
-      <BrandMark brandTitle={brandTitle} />
+      <BrandMark brandTitle={brandTitle} onBetaClick={onBetaClick} />
     </div>
   );
 }
 
-function BrandMark({ brandTitle }: { brandTitle: string }) {
+function BrandMark({ brandTitle, onBetaClick }: { brandTitle: string; onBetaClick: () => void }) {
   return (
-    <Link
-      href="/"
-      aria-label={`${brandTitle} ไปหน้าแรก`}
-      className="flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 hover:bg-surface-secondary transition-colors"
-    >
-      <div className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
-        T
-      </div>
-      <div className="font-semibold text-[15px] text-foreground leading-tight">{brandTitle}</div>
-    </Link>
+    <div className="flex items-center gap-1.5 min-w-0">
+      <Link
+        href="/"
+        aria-label={`${brandTitle} ไปหน้าแรก`}
+        className="flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 hover:bg-surface-secondary transition-colors min-w-0"
+      >
+        <div className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
+          T
+        </div>
+        <div className="font-semibold text-[15px] text-foreground leading-tight truncate">{brandTitle}</div>
+      </Link>
+      <BetaBadge onClick={onBetaClick} />
+    </div>
   );
 }
 
@@ -477,6 +501,7 @@ function TopBar({
   topBarScope,
   showMobileMenu = true,
   showBrandInHeader = false,
+  onBetaClick,
 }: {
   title: string;
   me: Me;
@@ -489,6 +514,7 @@ function TopBar({
   topBarScope?: React.ReactNode;
   showMobileMenu?: boolean;
   showBrandInHeader?: boolean;
+  onBetaClick: () => void;
 }) {
   const router = useRouter();
   const menuItems = userMenuItems ?? [];
@@ -509,16 +535,20 @@ function TopBar({
       )}
       {showBrandInHeader ? (
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <BrandMark brandTitle={brandTitle} />
+          <BrandMark brandTitle={brandTitle} onBetaClick={onBetaClick} />
         </div>
       ) : topBarLeft ? (
         <div className="flex-1 min-w-0 flex items-center">{topBarLeft}</div>
       ) : (
         // On a phone the title is squeezed to a couple of characters by the
         // controls beside it, and every page already leads with its own
-        // heading — so it is the first thing to give up the space.
-        <div className="hidden sm:flex flex-1 min-w-0 items-center gap-3">
-          <div className="text-sm font-medium text-foreground truncate">{title}</div>
+        // heading — so it is the first thing to give up the space. The flex-1
+        // wrapper itself stays, though: it is what pushes the term switcher,
+        // notifications and avatar to the right edge instead of piling them
+        // up right after the menu button, which is what happened when this
+        // div (not just the title inside it) used to be the thing hidden.
+        <div className="flex flex-1 min-w-0 items-center gap-3">
+          <div className="hidden sm:block text-sm font-medium text-foreground truncate">{title}</div>
         </div>
       )}
 
