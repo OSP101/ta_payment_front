@@ -1,10 +1,14 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
-import { Download, Lock, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Download, Lock, CheckCircle2, AlertTriangle, CalendarRange } from "lucide-react";
 import { errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Button, Chip, Spinner } from "./ui";
+import {
+  MonthChips, monthLabels, monthsQuery, suggestMonths,
+  type MonthCoverage,
+} from "./monthScope";
 
 
 // Pull the download filename out of a Content-Disposition header, handling both
@@ -76,8 +80,23 @@ export function ExportPreviewBody({
   exportedAt?: string | null;
   onExported?: () => void;
 }) {
+  // Which months this claim covers. งบแผ่นดิน closes 30 กันยายน mid-ภาคต้น, so
+  // มิ.ย.–ก.ย. and ตุลาคม are claimed on separate documents against separate
+  // appropriations — without a scope, re-exporting after October would bill
+  // มิ.ย.–ก.ย. a second time.
+  const { data: coverage } = useSWR<MonthCoverage>(`/exports/course/${tcId}/coverage`);
+  const allMonths = useMemo(() => coverage?.months ?? [], [coverage]);
+  const split = coverage?.fiscal_split;
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const suggested = useMemo(() => suggestMonths(allMonths, split), [allMonths, split]);
+  const months = picked ?? suggested;
+  // A term that does not straddle the boundary keeps the single whole-term
+  // document it always had, so the selector only earns its space when it does.
+  const showPicker = !!split?.crosses;
+  const scope = showPicker ? months : [];
+
   const { data, error, isLoading } = useSWR<ExportPreview>(
-    `/exports/course/${tcId}/preview`,
+    `/exports/course/${tcId}/preview${monthsQuery(scope)}`,
   );
   const [ack, setAck] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -93,7 +112,7 @@ export function ExportPreviewBody({
     // fixed 1.5s timer revalidated before MarkCourseExported had committed).
     setDownloading(true);
     try {
-      const res = await fetch(`/api/v1/exports/course/${tcId}.zip`, {
+      const res = await fetch(`/api/v1/exports/course/${tcId}.zip${monthsQuery(scope)}`, {
         credentials: "include",
       });
       if (!res.ok) {
@@ -151,6 +170,39 @@ export function ExportPreviewBody({
 
   return (
     <div className="space-y-4">
+      {showPicker && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 dark:border-amber-800 dark:bg-amber-950/30">
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
+              <CalendarRange size={14} /> เลือกเดือนที่จะเบิก
+            </span>
+            <span className="text-xs text-amber-900/80 dark:text-amber-200/80">
+              ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — {monthLabels(allMonths, split!.after).join(", ")}{" "}
+              ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสาร
+            </span>
+          </div>
+          <div className="mb-2 flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setPicked(split!.before)}>
+              งบปีเก่า ({split!.before.length} เดือน)
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setPicked(split!.after)}>
+              งบปีใหม่ ({split!.after.length} เดือน)
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPicked(allMonths.map(m => m.year_month))}>
+              ทั้งภาคเรียน
+            </Button>
+          </div>
+          <MonthChips months={allMonths} selected={months} onChange={setPicked} />
+          {/* Re-issuing to correct a file is normal; billing the same month
+              twice by accident is not. */}
+          {months.some(ym => allMonths.find(m => m.year_month === ym)?.issued) && (
+            <p className="mt-2 text-xs text-amber-900 dark:text-amber-200">
+              เดือนที่เลือกบางเดือนเคยออกเอกสารไปแล้ว การออกซ้ำจะได้ยอดเดิมอีกฉบับ
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <SummaryStat label="งบรายวิชา" value={data.budget_max > 0 ? fmtBaht(data.budget_max) : "ไม่จำกัด"} />
         <SummaryStat label="รวมที่คำนวณได้" value={fmtBaht(data.total_pay)} />

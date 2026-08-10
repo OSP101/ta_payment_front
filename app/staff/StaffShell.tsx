@@ -13,6 +13,7 @@ import {
   Route,
   IdCard,
   FileSignature,
+  Calculator,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
@@ -68,6 +69,12 @@ const buildNav = (s: Executive): NavSection[] => [
       // is what badges mean here. Same number the page itself shows.
       { label: "ใบแต่งตั้งทีเอ", href: "/staff/appointments", icon: FileSignature,
         badge: s.pending_appointments, badgeLabel: "รายชื่อรอออกคำสั่ง" },
+      // สรุปรายวิชาที่ขอใช้ TA / ปะหน้าจ่ายตรง / รหัสคู่ (10/08/2026) — briefly
+      // lived under ใบแต่งตั้งทีเอ ("ส่งออกเอกสาร"), split back out into its own
+      // menu: staff wanted a page they could actually READ a summary on
+      // on-screen before downloading, not just a bundle of download buttons
+      // bolted onto the appointment-order screen.
+      { label: "สรุปงบและปะหน้าจ่ายตรง", href: "/staff/budget-summary", icon: Calculator },
       { label: "จัดการผู้ใช้", href: "/staff/users", icon: Users },
       // No badge here on purpose: badges mean "a step of the workflow is
       // waiting on you". Missing student counts are a blocker, but they are

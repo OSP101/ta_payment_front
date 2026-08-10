@@ -46,7 +46,7 @@ export default function SettingsPage() {
   // land on the merged calendar tab instead of a 404.
   const rawTab = tabParam ?? "";
   const normalised = rawTab === "windows" || rawTab === "periods" ? "calendar" : rawTab;
-  const initialTab = ["rate", "terms", "calendar", "admins"].includes(normalised)
+  const initialTab = ["rate", "terms", "calendar", "curricula", "admins"].includes(normalised)
     ? normalised
     : "rate";
   return (
@@ -58,6 +58,7 @@ export default function SettingsPage() {
             <Tabs.Tab id="rate">อัตราค่าตอบแทน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="terms">ภาคเรียน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="calendar">ปฏิทินเทอม<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="curricula">หลักสูตร<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
@@ -73,6 +74,9 @@ export default function SettingsPage() {
             <RequestWindowsSection />
             <SubmissionPeriodsSection />
           </div>
+        </Tabs.Panel>
+        <Tabs.Panel id="curricula" className="pt-6">
+          <CurriculaSection />
         </Tabs.Panel>
         <Tabs.Panel id="admins" className="pt-6">
           <AdminOfficersSection />
@@ -1991,6 +1995,161 @@ const PREFIX_PRESETS = [
   "รองศาสตราจารย์", "รองศาสตราจารย์ ดร.",
   "ศาสตราจารย์", "ศาสตราจารย์ ดร.",
 ] as const;
+
+/* -------------------------------------------------------------------------- */
+/* หลักสูตร — sheet identity the payout documents print under                  */
+/* -------------------------------------------------------------------------- */
+
+interface Curriculum {
+  code: string;
+  sheet_name: string;
+  full_name_th: string;
+  level: "undergrad" | "graduate";
+  sort_order: number;
+}
+
+function CurriculaSection() {
+  const { data } = useSWR<Curriculum[]>("/curricula");
+  const [editing, setEditing] = useState<Curriculum | null>(null);
+  const rows = data ?? [];
+
+  return (
+    <Panel
+      title="หลักสูตร"
+      description={
+        "ชื่อชีตและชื่อเต็มของแต่ละหลักสูตร ใช้พิมพ์ในเอกสารสรุปรายวิชาที่ขอใช้ TA " +
+        "และปะหน้าจ่ายตรง — แก้ตรงนี้เมื่อคณะเปลี่ยนชื่อหลักสูตร (เช่น IT → ITII) โดยไม่ต้องแก้โค้ด"
+      }
+    >
+      {rows.length === 0 ? (
+        <div className="text-sm text-muted py-4">กำลังโหลด…</div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="data-table w-full">
+            <thead>
+              <tr>
+                <th>รหัส</th>
+                <th>ชื่อชีต</th>
+                <th>ชื่อเต็มหลักสูตร</th>
+                <th>ระดับ</th>
+                <th className="actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(cur => (
+                <tr key={cur.code}>
+                  <td className="tabular text-muted">{cur.code}</td>
+                  <td className="font-medium">{cur.sheet_name}</td>
+                  <td>{cur.full_name_th}</td>
+                  <td>
+                    {cur.level === "graduate"
+                      ? <Chip tone="neutral">บัณฑิตศึกษา</Chip>
+                      : <Chip tone="success">ปริญญาตรี</Chip>}
+                  </td>
+                  <td className="actions">
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(cur)}>
+                      <Pencil size={13} />แก้ไข
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <CurriculumEditModal
+        editing={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          toast.success("บันทึกการแก้ไขหลักสูตรเรียบร้อยแล้ว");
+        }}
+      />
+    </Panel>
+  );
+}
+
+function CurriculumEditModal({
+  editing, onClose, onSaved,
+}: {
+  editing: Curriculum | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [sheetName, setSheetName] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [sortOrder, setSortOrder] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editing) return;
+    setSheetName(editing.sheet_name);
+    setFullName(editing.full_name_th);
+    setSortOrder(editing.sort_order);
+    setError(null);
+  }, [editing]);
+
+  const sheetTrim = sheetName.trim();
+  const fullTrim = fullName.trim();
+  const canSave = sheetTrim !== "" && fullTrim !== "";
+
+  async function save() {
+    if (!editing || !canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patch(`/curricula/${editing.code}`, {
+        sheet_name: sheetTrim, full_name_th: fullTrim, sort_order: sortOrder,
+      });
+      await mutate("/curricula");
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message || "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={editing !== null}
+      onClose={onClose}
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Pencil size={18} />
+          {editing ? `แก้ไขหลักสูตร ${editing.code}` : ""}
+        </span>
+      }
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
+            <Save size={14} />บันทึกการแก้ไข
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {error && <Alert status="danger" title={error} />}
+        <FieldGroup label="ชื่อชีต" hint="ชื่อแท็บชีตที่พิมพ์ในเอกสาร Excel">
+          <TextInput value={sheetName} onChange={e => setSheetName(e.target.value)} maxLength={40} autoFocus />
+        </FieldGroup>
+        <FieldGroup label="ชื่อเต็มหลักสูตร">
+          <TextInput value={fullName} onChange={e => setFullName(e.target.value)} maxLength={200} />
+        </FieldGroup>
+        <FieldGroup label="ลำดับการพิมพ์" hint="ชีตที่มีเลขน้อยกว่าจะอยู่ก่อนในเอกสาร">
+          <TextInput
+            type="number"
+            value={String(sortOrder)}
+            onChange={e => setSortOrder(Number(e.target.value) || 0)}
+          />
+        </FieldGroup>
+      </div>
+    </Modal>
+  );
+}
 
 function AdminOfficersSection() {
   const { data } = useSWR<AdminOfficer[]>("/settings/admin-officers?include_inactive=1");

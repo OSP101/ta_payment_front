@@ -190,7 +190,8 @@ export default function StaffDashboard() {
                 <ShortcutRow href="/staff/review" title="ตรวจสอบแบบฟอร์มใบแจ้งหนี้" />
                 <ShortcutRow href="/staff/payouts" title="ตรวจและส่งออกเอกสาร" />
                 <ShortcutRow href="/staff/teaching" title="วิชาที่เปิดสอน" />
-                <ShortcutRow href="/staff/appointments" title="ใบแต่งตั้งทีเอ (คำสั่ง)" />
+                <ShortcutRow href="/staff/appointments" title="ใบแต่งตั้งทีเอ" />
+                <ShortcutRow href="/staff/budget-summary" title="สรุปงบและปะหน้าจ่ายตรง" />
               </ul>
             </Panel>
             {/* Deliberately no "รอตรวจ" lines here any more — those live in the

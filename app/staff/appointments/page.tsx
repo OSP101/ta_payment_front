@@ -8,10 +8,12 @@ import {
 import { api, errMessage } from "../../lib/api";
 import { useTerm } from "../TermContext";
 import { notify } from "../../lib/notify";
-import { PageHeader, Panel, Button, Select, Chip, DatePicker, EmptyState } from "../../components/ui";
+import {
+  PageHeader, Panel, Button, Select, Chip, DatePicker, EmptyState,
+} from "../../components/ui";
 
 /**
- * ใบแต่งตั้งทีเอ (คำสั่ง) — its own menu since 31/07/2026.
+ * ใบแต่งตั้งทีเอ (คำสั่ง) — its own section since 31/07/2026.
  *
  * It used to be a tab inside the export screen, which read as though printing an
  * order were one of the ways to export a payout package. It is not: it happens
@@ -19,6 +21,12 @@ import { PageHeader, Panel, Button, Select, Chip, DatePicker, EmptyState } from 
  * rather than a reimbursement package, and it is the GATE the payout screen
  * waits on. Filing it under the monthly errand hid a term-level act inside a
  * per-month one, and made the export menu answer to two unrelated jobs.
+ *
+ * สรุปรายวิชาที่ขอใช้ TA / ปะหน้าจ่ายตรง / รหัสคู่ briefly lived here too
+ * (09/08/2026 – 10/08/2026) but moved out to their own "สรุปงบและปะหน้าจ่ายตรง"
+ * page: those three are budget/payout documents, not appointment orders, and
+ * staff wanted an on-screen summary table for them that has no equivalent
+ * here — see app/staff/budget-summary/page.tsx.
  *
  * Layout (06/08/2026): the round's headcount leads the page, the form and the
  * history sit side by side below it. Everything used to be stacked in one
@@ -31,8 +39,8 @@ export default function AppointmentsPage() {
   return (
     <div>
       <PageHeader
-        title="ใบแต่งตั้งทีเอ (คำสั่ง)"
-        description="ออกคำสั่งแต่งตั้งทีเอเป็นรอบ ทีเอที่ยังไม่มีคำสั่ง จะยังตรวจเบิกจ่ายและส่งออกเอกสารไม่ได้"
+        title="ใบแต่งตั้งทีเอ"
+        description="ออกคำสั่งแต่งตั้งทีเอตามรอบที่ยื่นขอ พร้อมประวัติการออกคำสั่งและปุ่มดาวน์โหลดฉบับเดิม"
       />
       {termId && <AppointmentSection termId={termId} />}
     </div>
