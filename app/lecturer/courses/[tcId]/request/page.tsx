@@ -480,6 +480,23 @@ function RequestFormSection({
       section_workloads: initial ? { [initial]: emptyWorkload() } : {},
     }]);
   }
+  // "Copy" of the previous TA (10/08/2026 feedback): most rounds add several
+  // TAs doing the same job on the same sections, so retyping the same
+  // sections + hours for each one was pure friction. Only the sections/level/
+  // workload carry over — ta_id starts blank because it is, by definition, a
+  // different person.
+  function addAssignmentCopyingPrevious() {
+    const prev = assignments[assignments.length - 1];
+    if (!prev) return addAssignment();
+    setAssignments(a => [...a, {
+      section_ids: [...prev.section_ids],
+      ta_id: "",
+      level: prev.level,
+      section_workloads: Object.fromEntries(
+        Object.entries(prev.section_workloads).map(([sid, w]) => [sid, { ...w }]),
+      ),
+    }]);
+  }
   function removeAssignment(idx: number) {
     setAssignments(a => a.filter((_, i) => i !== idx));
   }
@@ -544,6 +561,14 @@ function RequestFormSection({
         notify.error(reason);
         return;
       }
+      // A successful submit (deferred or decided) books every TA on the form
+      // against this course — leaving them in place invited exactly the "ส่ง
+      // ซ้ำ" the duplicate guard now exists to catch, and the candidate list
+      // (already_in_course / at_quota) was stale until the next unrelated
+      // fetch. Clear the form and force both to refresh.
+      setAssignments([]);
+      setConflictsByTa({});
+      if (candidatesKey) mutate(candidatesKey);
       if (res.status === "submitted") {
         // Deferred decision: at least one TA has no timetable yet, so there is
         // nothing to judge. Say so plainly rather than implying approval.
@@ -671,6 +696,15 @@ function RequestFormSection({
                   >
                     <UserPlus size={14} /> สร้างบัญชี TA ใหม่
                   </Button>
+                  {assignments.length > 0 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={addAssignmentCopyingPrevious}
+                    >
+                      <Copy size={14} /> คัดลอกจากคนก่อนหน้า
+                    </Button>
+                  )}
                   <Button
                     variant="primary"
                     size="sm"
@@ -764,10 +798,13 @@ function RequestFormSection({
           </Button>
           <Button
             variant="primary"
-            // Consequences that only bite AFTER submit (a deferred verdict,
-            // sessions dropped later, unapproved documents) are explained in a
-            // confirmation step rather than left to be discovered.
-            onClick={() => (waitingOnSchedule.length > 0 ? setConfirming(true) : submit())}
+            // Always confirm before sending, with a real summary of who is
+            // being submitted and what for (10/08/2026 feedback: the old
+            // confirm-only-if-waiting popup had nothing for the lecturer to
+            // actually review). Consequences that only bite AFTER submit (a
+            // deferred verdict, sessions dropped later) are folded in below
+            // when they apply.
+            onClick={() => setConfirming(true)}
             disabled={!canSubmit || pending || canSend === false}
             isPending={pending}
           >
@@ -781,7 +818,7 @@ function RequestFormSection({
         open={confirming}
         onClose={() => setConfirming(false)}
         title="ยืนยันการส่งคำขอ"
-        icon={<CalendarClock size={18} />}
+        icon={<Send size={18} />}
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirming(false)}>ย้อนกลับ</Button>
@@ -797,22 +834,47 @@ function RequestFormSection({
       >
         <div className="space-y-3 text-sm">
           <p className="text-ink-2">
-            คำขอนี้มี TA ที่ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้
+            ตรวจสอบรายชื่อและภาระงานก่อนส่ง — เบิก <b>{scopeLabel}</b>
           </p>
-          <ul className="list-disc pl-5 space-y-0.5">
-            {waitingOnSchedule.map(n => (
-              <li key={n} className="font-medium text-ink-1">{n}</li>
-            ))}
+          <ul className="space-y-2">
+            {assignments.map((a, i) => {
+              const ta = allTas.find(t => t.id === a.ta_id);
+              const total = sumWorkload(a, secs);
+              const secLabels = a.section_ids
+                .map(sid => secs.find(s => s.id === sid)?.sec_no)
+                .filter(Boolean);
+              return (
+                <li key={i} className="rounded-lg border border-hairline p-2.5">
+                  <div className="font-medium text-ink-1">
+                    {ta ? `${ta.first_name} ${ta.last_name}` : "-"}
+                  </div>
+                  <div className="text-xs text-ink-3 mt-0.5">
+                    กลุ่ม {secLabels.join(", ") || "-"} ·{" "}
+                    {a.level === "master" || a.level === "phd" ? "บัณฑิตศึกษา" : "ปริญญาตรี"} ·{" "}
+                    {total.toFixed(1)} ชม./สัปดาห์
+                  </div>
+                </li>
+              );
+            })}
           </ul>
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1.5 text-xs text-amber-900">
-            <p className="font-semibold">สิ่งที่จะเกิดขึ้นหลังกดส่ง</p>
-            <p>• คำขอจะยังไม่ถูกตัดสิน จนกว่า TA ทุกคนในคำขอจะสร้างตารางเรียนครบ</p>
-            <p>
-              • ถ้าคาบสอนใดตรงกับตารางเรียนของ TA ระบบจะ<b>ตัดคาบนั้นออกทั้งคาบ</b>โดยอัตโนมัติ
-              เพราะเขาต้องไปเรียน และจะแจ้งทั้งคุณและ TA
-            </p>
-            <p>• ถ้าทุกคาบตรงกับตารางเรียนของเขา TA คนนั้นจะถูกตัดออกจากวิชานี้ และคืนโควตาให้ไปรับวิชาอื่นได้</p>
-          </div>
+
+          {waitingOnSchedule.length > 0 && (
+            <>
+              <p className="text-ink-2">
+                มี TA ที่ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้: <b>{waitingOnSchedule.join(", ")}</b>
+              </p>
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1.5 text-xs text-amber-900">
+                <p className="font-semibold">สิ่งที่จะเกิดขึ้นหลังกดส่ง</p>
+                <p>• คำขอจะยังไม่ถูกตัดสิน จนกว่า TA ทุกคนในคำขอจะสร้างตารางเรียนครบ</p>
+                <p>
+                  • ถ้าคาบสอนใดตรงกับตารางเรียนของ TA ระบบจะ<b>ตัดคาบนั้นออกทั้งคาบ</b>โดยอัตโนมัติ
+                  เพราะเขาต้องไปเรียน และจะแจ้งทั้งคุณและ TA
+                </p>
+                <p>• ถ้าทุกคาบตรงกับตารางเรียนของเขา TA คนนั้นจะถูกตัดออกจากวิชานี้ และคืนโควตาให้ไปรับวิชาอื่นได้</p>
+              </div>
+            </>
+          )}
+
           <p className="text-xs text-ink-3">
             ที่นั่งของ TA ทุกคนในคำขอถูกจองไว้ตั้งแต่ตอนกดส่ง (นับเข้าโควตา {MAX_COURSES_PER_TA} วิชา) แม้ยังไม่ได้ตัดสิน
           </p>

@@ -209,6 +209,17 @@ export default function LoginPage() {
           <p className="text-center text-xs text-muted mt-6">
             © {new Date().getFullYear()} College of Computing, Khon Kaen University
           </p>
+          <p className="text-center text-xs text-muted mt-1">
+            Developed by{" "}
+            <a
+              href="https://osp101.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              ITII Development Team
+            </a>
+          </p>
         </div>
       </main>
     </div>
