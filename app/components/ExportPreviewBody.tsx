@@ -95,8 +95,15 @@ export function ExportPreviewBody({
   const showPicker = !!split?.crosses;
   const scope = showPicker ? months : [];
 
-  const { data, error, isLoading } = useSWR<ExportPreview>(
+  // keepPreviousData: switching months changes the SWR key (the query string),
+  // so without this the table/stats/picker would all unmount to a bare
+  // spinner on every click — indistinguishable from a full page reload even
+  // though nothing above this panel actually remounts. Keeping the previous
+  // month's numbers on screen while the new ones load (isValidating below)
+  // reads as "updating in place" instead.
+  const { data, error, isLoading, isValidating } = useSWR<ExportPreview>(
     `/exports/course/${tcId}/preview${monthsQuery(scope)}`,
+    { keepPreviousData: true },
   );
   const [ack, setAck] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -152,14 +159,17 @@ export function ExportPreviewBody({
   // re-download while work is still moving would freeze a different document.
   const canDownload = !!data?.can_export && (alreadyExported || ack) && !downloading;
 
-  if (isLoading || (!data && !error)) {
+  // Only the very first load (nothing cached yet, for any month scope) blocks
+  // the whole panel. A later switch keeps rendering the previous data (via
+  // keepPreviousData above) with an inline "updating" indicator instead.
+  if (isLoading && !data) {
     return (
       <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted">
         <Spinner size="sm" /> กำลังคำนวณข้อมูลเบิกจ่าย…
       </div>
     );
   }
-  if (error) {
+  if (error && !data) {
     return (
       <div className="py-8 text-center text-sm text-danger">
         โหลดข้อมูลไม่สำเร็จ {errMessage(error)}
@@ -170,6 +180,16 @@ export function ExportPreviewBody({
 
   return (
     <div className="space-y-4">
+      {isValidating && (
+        <div className="flex items-center gap-1.5 text-xs text-muted">
+          <Spinner size="sm" /> กำลังอัปเดตข้อมูลตามเดือนที่เลือก…
+        </div>
+      )}
+      {error && (
+        <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
+          อัปเดตข้อมูลไม่สำเร็จ {errMessage(error)} — ตัวเลขด้านล่างเป็นของเดือนที่เลือกไว้ก่อนหน้า
+        </div>
+      )}
       {showPicker && (
         <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 dark:border-amber-800 dark:bg-amber-950/30">
           <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">

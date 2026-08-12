@@ -18,6 +18,8 @@ interface PendingRow {
   id: string;                    // assignment id
   ta_id: string;
   ta_name: string;
+  /** "undergrad" | "master" | "phd" — reviewed under different rules. */
+  study_level: string;
   course_code: string;
   teaching_course_id?: string;
   sec_no: string;
@@ -225,6 +227,7 @@ function groupByWeek(items: Sitting[]): WeekGroup[] {
 interface TAGroup {
   taId: string;
   name: string;
+  studyLevel: string;
   rows: PendingRow[];       // one per section
   /** Pending hours counted ONCE per sitting — what the payout will settle. */
   pendingHours: number;
@@ -260,6 +263,7 @@ function groupByTA(rows: PendingRow[]): TAGroup[] {
     return {
       taId,
       name: list[0].ta_name,
+      studyLevel: list[0].study_level,
       rows: [...list].sort((a, b) => a.sec_no.localeCompare(b.sec_no, undefined, { numeric: true })),
       pendingHours: Array.from(groups.values()).reduce((s, h) => s + h, 0),
       firstDate: dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : undefined,
@@ -508,7 +512,12 @@ function TACard({
             className={`mt-0.5 shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`}
           />
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-foreground">{group.name}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-foreground">{group.name}</span>
+              <Chip tone={group.studyLevel === "undergrad" ? "neutral" : "brand"}>
+                {group.studyLevel === "undergrad" ? "ป.ตรี" : "บัณฑิตศึกษา"}
+              </Chip>
+            </div>
             <div className="mt-1.5">
               <SectionChips group={group} />
             </div>

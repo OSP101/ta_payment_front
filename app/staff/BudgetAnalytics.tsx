@@ -1,10 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
-import { Download, TrendingUp, Wallet, Clock3, Users } from "lucide-react";
-import { Panel, Chip, Button, Select, StatCard } from "../components/ui";
+import { Download, TrendingUp, Wallet, Clock3, Users, Eye } from "lucide-react";
+import { Panel, Chip, Button, Select, StatCard, Modal } from "../components/ui";
 import { api, type Term } from "../lib/api";
-import { type TermAnalytics, curriculumTH } from "./types";
+import { type TermAnalytics, type CourseSpendStat, curriculumTH } from "./types";
 
 /* -------------------------------------------------------------------------- */
 /* มุมบริหาร: เงินไปไหน เร็วแค่ไหน หลักสูตรไหนใช้เยอะ                            */
@@ -287,15 +287,18 @@ function thMonth(ym: string) {
 
 function CurriculumBars({ a }: { a: TermAnalytics }) {
   const rows = a.curricula ?? [];
+  const [detail, setDetail] = useState<string | null>(null);
   if (rows.length === 0) {
     return <div className="py-10 text-center text-sm text-[var(--ink-3)]">ยังไม่มีข้อมูลหลักสูตร (นำเข้ารายวิชาอีกครั้งระบบจะดึงหลักสูตรให้เอง)</div>;
   }
   const maxSpend = Math.max(...rows.map(r => r.spent_baht), 1);
+  const detailRow = rows.find(r => (r.curriculum || "unknown") === detail);
+  const detailCourses = (a.courses ?? []).filter(c => (c.curriculum || "unknown") === detail);
   return (
     <div className="space-y-1">
       {rows.map(r => (
         <div key={r.curriculum || "unknown"}
-             className="grid grid-cols-[minmax(0,1.2fr)_minmax(60px,1fr)_auto] items-center gap-3 py-1.5 border-b border-dashed border-[var(--hairline)] last:border-0">
+             className="grid grid-cols-[minmax(0,1.2fr)_minmax(60px,1fr)_auto_auto] items-center gap-3 py-1.5 border-b border-dashed border-[var(--hairline)] last:border-0">
           <div className="min-w-0">
             <div className="text-sm font-medium text-[var(--ink-1)] truncate">{curriculumTH(r.curriculum)}</div>
             <div className="text-[11px] text-[var(--ink-3)]">
@@ -310,8 +313,98 @@ function CurriculumBars({ a }: { a: TermAnalytics }) {
           <div className="text-xs text-[var(--ink-2)] tabular text-end whitespace-nowrap">
             <b>{baht(r.spent_baht)}</b>{r.cap_baht > 0 && <> / {baht(r.cap_baht)}</>} บ.
           </div>
+          <button
+            type="button"
+            onClick={() => setDetail(r.curriculum || "unknown")}
+            title="ดูรายละเอียดรายวิชา"
+            className="shrink-0 rounded-md p-1.5 text-[var(--ink-3)] hover:bg-[var(--surface-2,#eef1f5)] hover:text-[var(--ink-1)]"
+          >
+            <Eye size={15} />
+          </button>
         </div>
       ))}
+
+      <Modal
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        title={detailRow ? `การใช้งบ: ${curriculumTH(detailRow.curriculum)}` : ""}
+        size="2xl"
+      >
+        {detailRow && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <DetailStat label="เปิดสอน" value={`${detailRow.courses_open} วิชา`} />
+              <DetailStat label="ใช้ TA" value={`${detailRow.courses_with_ta} วิชา · ${detailRow.tas} คน`} />
+              <DetailStat label="เบิกจ่ายแล้ว" value={`${baht(detailRow.spent_baht)} บ.`} />
+              <DetailStat label="เพดานหลักสูตร" value={detailRow.cap_baht > 0 ? `${baht(detailRow.cap_baht)} บ.` : "ไม่จำกัด"} />
+            </div>
+            <CurriculumCourseTable rows={detailCourses} />
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function DetailStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--hairline)] bg-[var(--surface-2,#eef1f5)]/50 px-2.5 py-1.5">
+      <div className="text-[10px] text-[var(--ink-3)]">{label}</div>
+      <div className="font-medium tabular text-[var(--ink-1)]">{value}</div>
+    </div>
+  );
+}
+
+// Courses within one curriculum — same row shape as CourseTable minus the
+// (redundant, since every row shares it here) curriculum column.
+function CurriculumCourseTable({ rows }: { rows: CourseSpendStat[] }) {
+  if (rows.length === 0) {
+    return <div className="py-8 text-center text-sm text-[var(--ink-3)]">ยังไม่มีวิชาที่ขอใช้ TA ในหลักสูตรนี้</div>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] text-sm sm:min-w-0">
+        <thead>
+          <tr className="text-start text-[11px] uppercase tracking-wide text-[var(--ink-3)] border-b border-[var(--hairline)]">
+            <th className="py-2 pe-3 text-start font-semibold">วิชา</th>
+            <th className="py-2 pe-3 text-end font-semibold">TA</th>
+            <th className="py-2 pe-3 text-end font-semibold">ชม.อนุมัติ</th>
+            <th className="py-2 pe-3 text-end font-semibold">เบิกจ่าย</th>
+            <th className="py-2 pe-3 text-end font-semibold">เพดานวิชา</th>
+            <th className="py-2 text-start font-semibold">สัดส่วน</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--hairline)]">
+          {rows.map(c => {
+            const pct = c.cap_baht > 0 ? (c.spent_baht / c.cap_baht) * 100 : 0;
+            const tone = c.over_budget || pct >= 100 ? "danger" : pct >= 80 ? "warn" : "brand";
+            const barColor = tone === "danger" ? "bg-red-500" : tone === "warn" ? "bg-amber-500" : "bg-[var(--brand)]";
+            return (
+              <tr key={c.teaching_course_id}>
+                <td className="py-2.5 pe-3">
+                  <span className="font-semibold">{c.code}</span>{" "}
+                  <span className="text-[var(--ink-2)]">{c.name_th}</span>
+                </td>
+                <td className="py-2.5 pe-3 text-end tabular">{c.tas}</td>
+                <td className="py-2.5 pe-3 text-end tabular">{fmtNum(c.approved_hours)}</td>
+                <td className="py-2.5 pe-3 text-end tabular font-medium">{baht(c.spent_baht)}</td>
+                <td className="py-2.5 pe-3 text-end tabular text-[var(--ink-3)]">{c.cap_baht > 0 ? baht(c.cap_baht) : "—"}</td>
+                <td className="py-2.5">
+                  <div className="flex items-center gap-2 min-w-[130px]">
+                    <div className="h-2 w-20 rounded-full bg-[var(--surface-2,#eef1f5)] overflow-hidden shrink-0">
+                      <div className={`h-full rounded-full ${barColor}`}
+                           style={{ width: `${Math.min(100, pct)}%` }} />
+                    </div>
+                    {c.over_budget
+                      ? <Chip tone="danger">เกินเพดาน</Chip>
+                      : <span className="text-xs tabular text-[var(--ink-2)]">{c.cap_baht > 0 ? `${pct.toFixed(0)}%` : "ยังไม่ตั้งงบ"}</span>}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

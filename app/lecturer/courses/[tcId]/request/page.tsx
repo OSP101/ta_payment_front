@@ -394,6 +394,9 @@ function RequestFormSection({
   // undergrad just needs > 0. The >12 side is prevented via per-field caps so
   // here we only need to gate the lower bound.
   const weeklyCapFor = useCallback((a: Assignment) => {
+    // บัณฑิตศึกษา: เพดานรายวันไม่เกี่ยวกับการส่งคำขอ (ย้ายไปคุมที่ฟังก์ชันลงเวลา
+    // งานแทนแล้ว) — ตอนส่งคำขอคุมแค่ 10–12 ชม./สัปดาห์ ผ่าน GRAD_MIN/MAX_HRS
+    if (a.level === "master" || a.level === "phd") return Infinity;
     const tracks = (course?.sections ?? [])
       .filter(s => a.section_ids.includes(s.id))
       .map(s => s.track);

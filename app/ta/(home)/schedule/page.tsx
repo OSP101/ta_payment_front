@@ -121,10 +121,12 @@ type EditorMode = { kind: "closed" } | { kind: "create"; draft: Partial<Block> }
 
 export default function TASchedulePage() {
   const { data: me } = useSWR<Me>("/me");
-  // WBA (no-regular-schedule) mode is only valid for year-4+ undergraduates.
-  // The backend enforces this; we mirror it here so the checkbox is disabled
-  // with a reason instead of failing on save.
-  const canWba = me?.study_level === "undergrad" && (me?.study_year ?? 0) >= 4;
+  // WBA (no-regular-schedule) mode: year-4+ undergraduates, or any graduate
+  // student (master/phd — they may genuinely have no class schedule of their
+  // own). The backend enforces this; we mirror it here so the checkbox is
+  // disabled with a reason instead of failing on save.
+  const isGrad = me?.study_level === "master" || me?.study_level === "phd";
+  const canWba = isGrad || (me?.study_level === "undergrad" && (me?.study_year ?? 0) >= 4);
   const { data: terms } = useSWR<Term[]>("/terms");
   const [termId, setTermId] = useState<string>("");
   useEffect(() => {
@@ -286,7 +288,7 @@ export default function TASchedulePage() {
         id: "wba-" + Date.now(),
         term_id: termId,
         course_code: "",
-        course_name: "WBA / ปี 4",
+        course_name: isGrad ? "ไม่มีตารางเรียนปกติ (บัณฑิตศึกษา)" : "WBA / ปี 4",
         kind: "",
         sec_no: "",
         day_of_week: 0,
@@ -458,19 +460,10 @@ export default function TASchedulePage() {
         </div>
       )}
 
-      {!isWba && (
+      {!isWba && regularBlocks.length > 0 && (
         <Panel title="รายการคาบเรียน" className="mt-4" padded={false} data-tour="sch-list">
-          {regularBlocks.length === 0 ? (
-            <div className="p-8">
-              <EmptyState
-                icon={<Clock size={24} />}
-                title="ยังไม่มีคาบเรียน"
-                description="ลากบนตารางเพื่อสร้างคาบ หรือกดปุ่ม “เพิ่มคาบเรียน” เพื่อกรอกข้อมูล"
-              />
-            </div>
-          ) : (
-            <div className="divide-y divide-[var(--hairline)]">
-              {regularBlocks.map(b => {
+          <div className="divide-y divide-[var(--hairline)]">
+            {regularBlocks.map(b => {
                 const stacked = overlappingIds.has(b.id);
                 const heading = blockTitle(b);
                 return (
@@ -507,8 +500,7 @@ export default function TASchedulePage() {
                   </div>
                 );
               })}
-            </div>
-          )}
+          </div>
         </Panel>
       )}
 
@@ -520,14 +512,14 @@ export default function TASchedulePage() {
             disabled={locked || (!canWba && !isWba)}
             onChange={e => toggleWba(e.target.checked)}
           />
-          <span>ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)</span>
+          <span>{isGrad ? "ฉันไม่มีตารางเรียนปกติ (นักศึกษาระดับบัณฑิตศึกษา)" : "ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)"}</span>
         </label>
         <p className="text-xs text-muted mt-1">
           เปิดตัวเลือกนี้เมื่อคุณไม่มีตารางเรียนประจำในภาคเรียนนี้ ระบบจะข้ามการตรวจสอบทับซ้อนตอนอาจารย์ยื่นคำร้อง
         </p>
         {!canWba && !isWba && (
           <p className="text-xs text-warning mt-1">
-            โหมด WBA ใช้ได้เฉพาะนักศึกษาปริญญาตรีชั้นปีที่ 4 ขึ้นไป
+            โหมด WBA ใช้ได้เฉพาะนักศึกษาปริญญาตรีชั้นปีที่ 4 ขึ้นไป หรือนักศึกษาระดับบัณฑิตศึกษา
             {me?.study_level === "undergrad" && (me?.study_year ?? 0) < 1
               ? " ระบบยังไม่มีข้อมูลชั้นปีของคุณ กรุณาติดต่อเจ้าหน้าที่"
               : ""}
