@@ -4,12 +4,19 @@ import useSWR, { mutate } from "swr";
 import { Check, RotateCcw, Lock, AlertTriangle, CheckCircle2, Mail, Circle } from "lucide-react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Panel, Button, Chip, TextArea, EmptyState, Spinner } from "./ui";
+import { Panel, Button, Chip, TextArea, EmptyState, Spinner, Alert } from "./ui";
 
 interface CourseRef { code: string; name_th: string; }
-// Per-term physical document progress (migration 0031) + export readiness.
+// Per-ROUND physical document progress (migration 0031, fiscal_round since
+// migration 0082) + export readiness. A term that crosses the 30 กันยายน
+// budget year with real ตุลาคม work has TWO of these; every other term has
+// exactly one, indistinguishable from before this feature existed.
 export interface TermProgress {
   term_id: string;
+  /** 1 or 2 — see TermProgressOverview. */
+  round: number;
+  /** "" for a single-round term; "รอบ 1 · งบ 2569 (มิ.ย.–ก.ย.)" once a term has two. */
+  round_label?: string;
   total_courses: number;
   exported_courses: number;
   all_exported: boolean;
@@ -31,6 +38,11 @@ export interface TermProgress {
   current_role?: string;
 }
 
+interface TermProgressOverview {
+  term_id: string;
+  rounds: TermProgress[];
+}
+
 const STAGES: { n: number; label: string; atKey: keyof TermProgress; role?: string; who: string }[] = [
   { n: 1, label: "TA เซ็นครบ", atKey: "ta_signed_at", role: "ta", who: "TA ทุกคนที่สอนในวิชานั้น" },
   { n: 2, label: "อาจารย์เซ็นครบ", atKey: "lecturer_signed_at", role: "lecturer", who: "อาจารย์ผู้ส่งคำขอ" },
@@ -47,6 +59,12 @@ function fmt(iso?: string | null): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear() + 543} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+// DocumentProgressBoard fetches every round this term has and renders tabs
+// only when there is more than one. A term whose ปะหน้าจ่ายตรง never crosses
+// the 30 กันยายน budget year (or crosses it but October has nothing billable
+// yet — see resolveFiscalRounds) gets back exactly one round and this screen
+// is pixel-identical to before fiscal rounds existed: no tabs, no "รอบ"
+// wording anywhere.
 export function DocumentProgressBoard({
   termId, canEdit, showFinalStage = true,
 }: {
@@ -56,16 +74,78 @@ export function DocumentProgressBoard({
   showFinalStage?: boolean;
 }) {
   const key = termId ? `/document-progress?term_id=${termId}` : null;
-  const { data, isLoading } = useSWR<TermProgress>(key);
-  const [noteDraft, setNoteDraft] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { data, isLoading } = useSWR<TermProgressOverview>(key);
+  const [activeRound, setActiveRound] = useState(1);
 
   if (!termId) return <Panel><EmptyState title="เลือกภาคเรียนเพื่อดูความคืบหน้า" /></Panel>;
   if (isLoading || !data) {
     return <Panel><div className="flex items-center gap-2 py-8 justify-center text-sm text-muted"><Spinner size="sm" /> กำลังโหลด…</div></Panel>;
   }
 
-  const p = data;
+  const rounds = data.rounds;
+  const showTabs = rounds.length > 1;
+  const current = rounds.find(r => r.round === activeRound) ?? rounds[0];
+  const maxStage = showFinalStage ? 5 : 4;
+  // A round other than the one on screen still needing work is exactly the
+  // thing staff asked not to lose track of — surfaced once, above the tabs,
+  // so switching to round 1's tab does not make round 2 disappear from mind.
+  const lagging = showTabs ? rounds.filter(r => r.round !== activeRound && r.stage < maxStage) : [];
+
+  return (
+    <div className="space-y-3">
+      {showTabs && (
+        <div className="inline-flex rounded-lg border border-border p-0.5">
+          {rounds.map(r => (
+            <button
+              key={r.round}
+              type="button"
+              onClick={() => setActiveRound(r.round)}
+              className={
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+                (activeRound === r.round ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
+              }
+            >
+              {r.round_label || `รอบ ${r.round}`}
+            </button>
+          ))}
+        </div>
+      )}
+      {lagging.length > 0 && (
+        <Alert
+          status="warning"
+          title={`เทอมนี้ยังเหลือ ${lagging.map(r => r.round_label || `รอบ ${r.round}`).join(", ")} ที่ยังไม่เสร็จ`}
+          description="อย่าลืมกลับมาเดินเอกสารรอบนี้ให้ครบด้วย — คลิกที่แท็บด้านบนเพื่อสลับไปดู"
+        />
+      )}
+      <RoundBoard
+        key={current.round}
+        termId={termId}
+        round={current.round}
+        p={current}
+        overviewKey={key}
+        canEdit={canEdit}
+        showFinalStage={showFinalStage}
+      />
+    </div>
+  );
+}
+
+// RoundBoard renders ONE round's stepper + checklist. Keyed by round in the
+// parent so switching tabs remounts it fresh (a note draft typed for round 1
+// must not leak onto round 2's screen).
+function RoundBoard({
+  termId, round, p, overviewKey, canEdit, showFinalStage,
+}: {
+  termId: string;
+  round: number;
+  p: TermProgress;
+  overviewKey: string | null;
+  canEdit: boolean;
+  showFinalStage: boolean;
+}) {
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
   const note = noteDraft ?? p.note ?? "";
   // TAs never see the final "คณบดีลงนาม" stage — clamp the visible range so the
   // stepper and the "ขั้นที่ X/Y" chip stay consistent.
@@ -78,10 +158,10 @@ export function DocumentProgressBoard({
   async function setStage(stage: number) {
     setBusy(true);
     try {
-      await api.post(`/document-progress/${termId}`, { stage, note });
+      await api.post(`/document-progress/${termId}?round=${round}`, { stage, note });
       notify.success("อัปเดตความคืบหน้าแล้ว");
       setNoteDraft(null);
-      if (key) mutate(key);
+      if (overviewKey) mutate(overviewKey);
     } catch (e) {
       notify.error(errMessage(e));
     } finally {
@@ -243,6 +323,7 @@ export function DocumentProgressBoard({
           the officer wants one list: who do I chase today. */}
       <SignatureChecklistPanel
         termId={termId}
+        round={round}
         canEdit={canEdit}
         stage={p.stage}
         role={p.current_role ?? ""}
@@ -270,9 +351,10 @@ interface SignatureItem {
 }
 
 function SignatureChecklistPanel({
-  termId, canEdit, stage, role, allExported,
+  termId, round, canEdit, stage, role, allExported,
 }: {
   termId: string;
+  round: number;
   canEdit: boolean;
   /** Current term stage — the panel shows whoever signs at stage + 1. */
   stage: number;
@@ -280,7 +362,7 @@ function SignatureChecklistPanel({
   role: string;
   allExported: boolean;
 }) {
-  const key = termId ? `/document-progress/checklist?term_id=${termId}` : null;
+  const key = termId ? `/document-progress/checklist?term_id=${termId}&round=${round}` : null;
   const { data, isLoading } = useSWR<SignatureItem[]>(key);
   const [busy, setBusy] = useState(false);
 
@@ -309,7 +391,7 @@ function SignatureChecklistPanel({
   async function toggle(it: SignatureItem, signed: boolean) {
     setBusy(true);
     try {
-      await api.post(`/document-progress/checklist/${it.teaching_course_id}`, {
+      await api.post(`/document-progress/checklist/${it.teaching_course_id}?round=${round}`, {
         role: it.role,
         signer_id: it.signer_id ?? null,
         signed,
@@ -328,7 +410,7 @@ function SignatureChecklistPanel({
   async function remind() {
     setBusy(true);
     try {
-      const res = await api.post<{ notified: number }>(`/document-progress/${termId}/remind`);
+      const res = await api.post<{ notified: number }>(`/document-progress/${termId}/remind?round=${round}`);
       notify.success(`ส่งอีเมลแจ้งเตือนแล้ว ${res.notified} ท่าน`);
     } catch (e) {
       notify.error(errMessage(e));

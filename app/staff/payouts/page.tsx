@@ -62,6 +62,10 @@ interface CourseSummary {
   ta_count: number;
   export_eligible: boolean;
   last_export_at?: string | null;
+  /** True when this course's term crosses the budget year (30 ก.ย.), has real
+   *  work AFTER it, and that slice has not been exported yet — see
+   *  ExportBatchService.DashboardSummary. */
+  round_two_outstanding?: boolean;
 }
 
 interface CourseCard {
@@ -80,6 +84,7 @@ interface CourseCard {
   waitingLecturer: number;
   exportable: boolean;
   exportedAt?: string | null;
+  roundTwoOutstanding: boolean;
 }
 
 const baht = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -262,6 +267,11 @@ function CourseRow({ card, onOpen, muted }: { card: CourseCard; onOpen: () => vo
             {card.code} <span className="text-xs font-normal text-muted">{card.nameTH}</span>
           </span>
           <Chip tone={st.tone}>{st.label}</Chip>
+          {/* A course can be fully exported for round 1 (มิ.ย.–ก.ย.) and still
+              owe a SEPARATE round-2 document for ตุลาคม once the term crosses
+              the budget year — without this, "ส่งออกแล้ว" reads as "nothing
+              left to do" for a course that still has a second file due. */}
+          {card.roundTwoOutstanding && <Chip tone="warn">เหลือรอบ 2 (ต.ค.)</Chip>}
         </div>
         <div className="mt-0.5 truncate text-xs text-muted">
           {card.lecturers || "ยังไม่มีอาจารย์ผู้สอนในระบบ"}
@@ -324,7 +334,7 @@ function buildCards(rows: ReviewRow[], summary: CourseSummary[]): CourseCard[] {
       c = {
         id, code, nameTH, lecturers: "", maxBaht: 0, usedBaht: 0, overBudget: false,
         ready: [], blocked: [], waitingTA: 0, waitingLecturer: 0,
-        exportable: false, exportedAt: null,
+        exportable: false, exportedAt: null, roundTwoOutstanding: false,
       };
       byId.set(id, c);
     }
@@ -366,6 +376,7 @@ function buildCards(rows: ReviewRow[], summary: CourseSummary[]): CourseCard[] {
     // reading undefined and could never light up. This value comes from
     // export_batches, which is where the fact actually lives.
     c.exportedAt = s.last_export_at ?? null;
+    c.roundTwoOutstanding = !!s.round_two_outstanding;
   }
 
   const out = [...byId.values()];

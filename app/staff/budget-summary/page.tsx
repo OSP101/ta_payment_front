@@ -43,6 +43,10 @@ export default function BudgetSummaryPage() {
           termId ? (
             <>
               <CourseSummaryDownloadButton termId={termId} termLabel={termLabel} />
+              {/* หนึ่งปุ่ม หนึ่ง zip (12/08/2026) — ข้างในยังคงเป็น 2 ไฟล์แยกกัน
+                  (ป.ตรี / บัณฑิตศึกษา) เพราะทำเบิกไม่เหมือนกัน แค่รวมปุ่มดาวน์โหลด
+                  เข้าด้วยกันไม่ให้แถวปุ่มรก — แต่ละไฟล์ยังผ่าน gate ของตัวเองอิสระ
+                  ต่อกัน ไม่ใช่การรวม gate เข้าด้วยกัน */}
               <TransferCoverDownloadButton termId={termId} termLabel={termLabel} />
               <CourseGroupReviewButton termId={termId} />
             </>
@@ -120,7 +124,7 @@ function PreviewSection({ termId }: { termId: string }) {
         </Tabs.Panel>
         <Tabs.Panel id="transfer_cover">
           <div className="p-4">
-            <TransferCoverPreviewPanel termId={termId} />
+            <TransferCoverPreviewSection termId={termId} />
           </div>
         </Tabs.Panel>
       </Tabs>
@@ -410,13 +414,59 @@ const transferCoverColumns: DataColumn<TransferCoverPreviewRow>[] = [
   },
 ];
 
+/** "undergrad" | "graduate" — the level split (12/08/2026): ป.ตรี กับ
+ *  บัณฑิตศึกษาทำเบิกไม่เหมือนกัน จึงเป็นคนละไฟล์เสมอ ไม่มีตัวเลือก "ทั้งสองระดับ". */
+type TransferCoverLevel = "undergrad" | "graduate";
+const transferCoverLevelLabel: Record<TransferCoverLevel, string> = {
+  undergrad: "ป.ตรี", graduate: "บัณฑิตศึกษา",
+};
+
+// transferCoverQuery builds the query string every transfer-cover endpoint
+// needs: level is required (no "give me both" default the way months has
+// one — see the backend's levelParam), months is optional.
+function transferCoverQuery(level: TransferCoverLevel, months?: string[]) {
+  const params = new URLSearchParams({ level });
+  if (months?.length) params.set("months", months.join(","));
+  return `?${params.toString()}`;
+}
+
+// TransferCoverPreviewSection — the level toggle (ป.ตรี / บัณฑิตศึกษา) plus
+// the coverage + preview tables for whichever level is selected. A level
+// switch is a fresh screen, not a filter on one shared table: the two files
+// have entirely different rosters and month-coverage histories.
+function TransferCoverPreviewSection({ termId }: { termId: string }) {
+  const [level, setLevel] = useState<TransferCoverLevel>("undergrad");
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex rounded-lg border border-border p-0.5">
+        {(["undergrad", "graduate"] as const).map(l => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => setLevel(l)}
+            className={
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+              (level === l ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
+            }
+          >
+            {transferCoverLevelLabel[l]}
+          </button>
+        ))}
+      </div>
+      <TransferCoverPreviewPanel termId={termId} level={level} />
+    </div>
+  );
+}
+
 // TransferCoverCoveragePanel — which months of the term already have a
 // document and which do not. Sits above the preview because with month
 // selection now free, "did we ever issue ตุลาคม?" is a question staff would
 // otherwise answer from memory, and the cost of getting it wrong is a TA who
-// is never paid for a month they worked.
-function TransferCoverCoveragePanel({ termId }: { termId: string }) {
-  const { data } = useSWR<MonthCoverage>(`/exports/terms/${termId}/transfer-cover/coverage`);
+// is never paid for a month they worked. Scoped to ONE level: the two files
+// are issued on independent schedules, so issuing ป.ตรี must never make the
+// บัณฑิตศึกษา screen believe its own months are already covered.
+function TransferCoverCoveragePanel({ termId, level }: { termId: string; level: TransferCoverLevel }) {
+  const { data } = useSWR<MonthCoverage>(`/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery(level)}`);
   if (!data?.months.length) return null;
   const pending = data.months.filter(m => !m.issued);
   return (
@@ -452,14 +502,14 @@ function TransferCoverCoveragePanel({ termId }: { termId: string }) {
   );
 }
 
-function TransferCoverPreviewPanel({ termId }: { termId: string }) {
+function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: TransferCoverLevel }) {
   const { data, error, isLoading, mutate: retry } = useSWR<{ sheets: TransferCoverPreviewSheet[]; warnings: string[] }>(
-    `/exports/terms/${termId}/transfer-cover/preview`
+    `/exports/terms/${termId}/transfer-cover/preview${transferCoverQuery(level)}`
   );
   const sheets = data?.sheets ?? [];
   return (
     <div className="space-y-4">
-      <TransferCoverCoveragePanel termId={termId} />
+      <TransferCoverCoveragePanel termId={termId} level={level} />
       {!!data?.warnings.length && (
         <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
           <div className="font-medium">มีรายการที่ควรตรวจสอบ {data.warnings.length} รายการ</div>
@@ -605,6 +655,8 @@ interface TransferCoverExportSummary {
   sheet_count: number;
   /** Empty for files issued before the fiscal split existed — those were whole-term. */
   months?: string[];
+  /** Empty for files issued before the level split (12/08/2026) — those covered both levels in one file. */
+  level?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -619,6 +671,27 @@ interface TransferCoverExportSummary {
 // separate documents. Free month selection makes two new mistakes possible —
 // issuing ตุลาคม twice, or never issuing it — so the months already on the
 // ledger are shown here rather than left to memory.
+// mergeCoverage combines both levels' coverage into one for the bundle
+// button's month picker: the month LIST is structurally identical between
+// levels (same term, same TermMonths call underneath) — only "issued" can
+// differ, so a month reads issued here if EITHER level has already produced
+// a file for it, which is the useful warning ("you're about to re-issue
+// something") regardless of which level that something was.
+function mergeCoverage(a?: MonthCoverage, b?: MonthCoverage): MonthCoverage | undefined {
+  const base = a ?? b;
+  if (!base) return undefined;
+  return {
+    ...base,
+    months: base.months.map(m => ({
+      ...m,
+      issued: !!(
+        a?.months.find(x => x.year_month === m.year_month)?.issued ||
+        b?.months.find(x => x.year_month === m.year_month)?.issued
+      ),
+    })),
+  };
+}
+
 function TransferCoverMonthModal({
   termId, onClose, onConfirm, isPending,
 }: {
@@ -627,9 +700,14 @@ function TransferCoverMonthModal({
   onConfirm: (months: string[]) => void;
   isPending: boolean;
 }) {
-  const { data, isLoading } = useSWR<MonthCoverage>(
-    `/exports/terms/${termId}/transfer-cover/coverage`
+  const { data: ugData, isLoading: ugLoading } = useSWR<MonthCoverage>(
+    `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("undergrad")}`
   );
+  const { data: gradData, isLoading: gradLoading } = useSWR<MonthCoverage>(
+    `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("graduate")}`
+  );
+  const isLoading = ugLoading || gradLoading;
+  const data = useMemo(() => mergeCoverage(ugData, gradData), [ugData, gradData]);
   const all = useMemo(() => data?.months ?? [], [data]);
   const split = data?.fiscal_split;
   const [selected, setSelected] = useState<string[] | null>(null);
@@ -722,33 +800,45 @@ function TransferCoverMonthModal({
 
 
 // TransferCoverDownloadButton — "ปะหน้าจ่ายตรง" (แจ้งโอนจ่ายตรงเข้าบัญชีบุคลากร).
-// Unlike CourseSummaryDownloadButton above, this is a settled/actual document:
-// the server refuses outright (not a confirm-and-continue) while any course in
-// the term has not reached finance_sent — see ExportService.TermExportBlockers.
+// One button, one zip download — bundling both level files (ป.ตรี, บัณฑิต)
+// so the header does not carry two near-identical buttons + two history icons
+// (12/08/2026). The two documents underneath still pass their OWN gate
+// independently: a level that is not ready is skipped (with a toast saying
+// so) rather than holding up the level that IS ready — collapsing the gates
+// back into one would recreate exactly the coupling the level split fixed.
+// Unlike CourseSummaryDownloadButton above, this is a settled/actual
+// document: the server refuses outright while a level's every course has not
+// reached finance_sent — see ExportService.TermExportBlockers.
 function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; termLabel: string }) {
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [blockers, setBlockers] = useState<TransferCoverBlocker[] | null>(null);
+  const [blockers, setBlockers] = useState<{ undergrad: TransferCoverBlocker[]; graduate: TransferCoverBlocker[] } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  async function downloadNow(months: string[]) {
+  async function downloadNow(months: string[], skippedLevel: TransferCoverLevel | null) {
     setDownloading(true);
     try {
-      const blob = await api.get<Blob>(`/exports/terms/${termId}/transfer-cover.xlsx${monthsQuery(months)}`);
+      const blob = await api.get<Blob>(`/exports/terms/${termId}/transfer-cover-bundle.zip${monthsQuery(months)}`);
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
       el.href = url;
-      // Name the slice: two files for one term that differ only by month must
-      // not land in a downloads folder under the same name.
       const slice = months.length ? `-${months[0]}${months.length > 1 ? `_${months[months.length - 1]}` : ""}` : "";
-      el.download = `transfer-cover-${termLabel.replace("/", "-") || "term"}${slice}.xlsx`;
+      el.download = `transfer-cover-${termLabel.replace("/", "-") || "term"}${slice}.zip`;
       el.click();
       URL.revokeObjectURL(url);
-      // A download just added a row to the generation ledger — refresh the
-      // history and the coverage panel so the new slice shows up as issued.
-      void mutate(`/exports/terms/${termId}/transfer-cover/history`);
-      void mutate(`/exports/terms/${termId}/transfer-cover/coverage`);
+      // A download just added a row to both levels' generation ledgers —
+      // refresh whatever the preview tab / history modal are showing.
+      for (const lvl of ["undergrad", "graduate"] as const) {
+        void mutate(`/exports/terms/${termId}/transfer-cover/history${transferCoverQuery(lvl)}`);
+        void mutate(`/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery(lvl)}`);
+      }
+      if (skippedLevel) {
+        const gotLevel: TransferCoverLevel = skippedLevel === "undergrad" ? "graduate" : "undergrad";
+        toast.warning(`ได้เฉพาะไฟล์${transferCoverLevelLabel[gotLevel]}`, {
+          description: `ไฟล์${transferCoverLevelLabel[skippedLevel]}ยังไม่พร้อม กดปุ่มนี้อีกครั้งเพื่อดูรายการค้าง`,
+        });
+      }
     } catch (e) {
       toast.danger("ดาวน์โหลดไม่สำเร็จ", { description: (e as Error).message });
     } finally {
@@ -756,23 +846,27 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
     }
   }
 
-  // The gate is checked for the CHOSEN months only — the whole point of the
-  // split is that มิ.ย.–ก.ย. must be issuable in September, while October is
-  // still being taught and cannot possibly have reached finance_sent yet.
+  // Both levels are checked for the CHOSEN months in parallel — the whole
+  // point of the split is that a graduate course mid-review must not hold up
+  // the undergrad file (or the reverse), so one blocked level never blocks
+  // the other's download; it only blocks the WHOLE bundle once both are.
   async function checkThenDownload(months: string[]) {
     if (!termId) return;
     setChecking(true);
     try {
-      const res = await api.get<{ blockers: TransferCoverBlocker[] }>(
-        `/exports/terms/${termId}/transfer-cover/blockers${monthsQuery(months)}`
-      );
-      if (res.blockers.length > 0) {
-        setBlockers(res.blockers);
+      const [ug, grad] = await Promise.all([
+        api.get<{ blockers: TransferCoverBlocker[] }>(`/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("undergrad", months)}`),
+        api.get<{ blockers: TransferCoverBlocker[] }>(`/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("graduate", months)}`),
+      ]);
+      const ugBlocked = ug.blockers.length > 0;
+      const gradBlocked = grad.blockers.length > 0;
+      if (ugBlocked && gradBlocked) {
+        setBlockers({ undergrad: ug.blockers, graduate: grad.blockers });
         setPickerOpen(false);
-      } else {
-        setPickerOpen(false);
-        await downloadNow(months);
+        return;
       }
+      setPickerOpen(false);
+      await downloadNow(months, ugBlocked ? "undergrad" : gradBlocked ? "graduate" : null);
     } catch (e) {
       toast.danger("ตรวจสอบไม่สำเร็จ", { description: (e as Error).message });
     } finally {
@@ -797,8 +891,8 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
         <Banknote size={16} /> ปะหน้าจ่ายตรง
       </Button>
       {/* variant="secondary" to match its neighbour — IconButton defaults to
-          "primary" (a solid-fill circle), which next to three outlined
-          buttons in the same row read as a mismatched fourth style. */}
+          "primary" (a solid-fill circle), which next to outlined buttons in
+          the same row would read as a mismatched style. */}
       <IconButton
         label="ประวัติการสร้างเอกสาร"
         variant="secondary"
@@ -811,17 +905,22 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
       <Modal
         open={blockers !== null}
         onClose={() => setBlockers(null)}
-        title="ยังสร้างเอกสารไม่ได้"
+        title="ยังสร้างเอกสารไม่ได้เลยสักไฟล์"
         icon={<FileDown size={20} />}
         footer={<Button variant="primary" onClick={() => setBlockers(null)}>ปิด</Button>}
       >
-        <div className="space-y-2 text-sm">
-          <p className="text-muted">
-            เอกสารนี้ต้องรอทุกวิชาส่งการเงินให้ครบก่อน ยังมีรายการค้างดังนี้:
-          </p>
-          <ul className="list-disc pl-5 space-y-1">
-            {(blockers ?? []).map((b, i) => <li key={i}>{blockerLine(b)}</li>)}
-          </ul>
+        <div className="space-y-3 text-sm">
+          <p className="text-muted">ทั้งไฟล์ ป.ตรี และบัณฑิตยังไม่พร้อม ยังมีรายการค้างดังนี้:</p>
+          {blockers && ([["ป.ตรี", blockers.undergrad], ["บัณฑิตศึกษา", blockers.graduate]] as const).map(([label, list]) => (
+            list.length > 0 && (
+              <div key={label}>
+                <div className="text-xs font-medium text-ink-2 mb-1">{label}</div>
+                <ul className="list-disc pl-5 space-y-1">
+                  {list.map((b, i) => <li key={i}>{blockerLine(b)}</li>)}
+                </ul>
+              </div>
+            )
+          ))}
         </div>
       </Modal>
 
@@ -846,9 +945,17 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
 // from the frozen snapshot rather than recomputing — a work log corrected
 // after the fact must not silently change a document finance may already
 // have acted on (see ExportService.ReprintTransferCover).
-function TransferCoverHistoryModal({ termId, onClose }: { termId: string; onClose: () => void }) {
+function TransferCoverHistoryModal({
+  termId, onClose,
+}: {
+  termId: string; onClose: () => void;
+}) {
+  // The download button is one button now, but the two documents' generation
+  // histories are still separate ledgers (each level is gated and re-issued
+  // independently) — a small toggle inside the modal instead of two modals.
+  const [level, setLevel] = useState<TransferCoverLevel>("undergrad");
   const { data: history } = useSWR<TransferCoverExportSummary[]>(
-    `/exports/terms/${termId}/transfer-cover/history`
+    `/exports/terms/${termId}/transfer-cover/history${transferCoverQuery(level)}`
   );
   const [reprinting, setReprinting] = useState<string | null>(null);
 
@@ -877,6 +984,21 @@ function TransferCoverHistoryModal({ termId, onClose }: { termId: string; onClos
       icon={<History size={20} />}
       footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
     >
+      <div className="mb-3 inline-flex rounded-lg border border-border p-0.5">
+        {(["undergrad", "graduate"] as const).map(l => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => setLevel(l)}
+            className={
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+              (level === l ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
+            }
+          >
+            {transferCoverLevelLabel[l]}
+          </button>
+        ))}
+      </div>
       {!history?.length ? (
         <EmptyState
           icon={<FileText size={26} />}
@@ -888,10 +1010,14 @@ function TransferCoverHistoryModal({ termId, onClose }: { termId: string; onClos
           {history.map(h => (
             <li key={h.id} className="py-3 flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-ink-1">
+                <div className="text-sm font-medium text-ink-1 flex items-center gap-1.5">
                   {new Date(h.generated_at).toLocaleString("th-TH", {
                     dateStyle: "medium", timeStyle: "short",
                   })}
+                  {/* Pre-level-split rows (12/08/2026) covered both files at
+                      once — flag that explicitly rather than silently
+                      claiming this was already a level-scoped generation. */}
+                  {!h.level && <Chip tone="neutral">ก่อนแยกไฟล์ — ครอบคลุมทั้งสองระดับ</Chip>}
                 </div>
                 {/* Which slice this file was. Two files for one term now differ
                     only by their months, so without this the history reads as

@@ -94,6 +94,16 @@ export function ExportPreviewBody({
   // document it always had, so the selector only earns its space when it does.
   const showPicker = !!split?.crosses;
   const scope = showPicker ? months : [];
+  // Months on the FAR side of the budget-year cut that have no claim yet —
+  // shown after export so staff notice ตุลาคม is still owed instead of
+  // reading "ส่งออกแล้ว" as "this course is fully done for the term".
+  const outstandingAfterSplit = useMemo(
+    () =>
+      split?.crosses
+        ? monthLabels(allMonths, split.after.filter(ym => !allMonths.find(m => m.year_month === ym)?.issued))
+        : [],
+    [allMonths, split],
+  );
 
   // keepPreviousData: switching months changes the SWR key (the query string),
   // so without this the table/stats/picker would all unmount to a bare
@@ -330,7 +340,9 @@ export function ExportPreviewBody({
       )}
       {alreadyExported && blockers.length === 0 && (
         <p className="text-xs text-ink-3">
-          วิชานี้เคยส่งออก (ล็อก) แล้ว ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม
+          {outstandingAfterSplit.length > 0
+            ? <>วิชานี้ส่งออก (ล็อก) งบปีเก่าแล้ว ดาวน์โหลดซ้ำได้ทันที — <b>ยังเหลือ {outstandingAfterSplit.join(", ")}</b> ที่ยังไม่ได้ทำเบิก (งบปีใหม่)</>
+            : "วิชานี้เคยส่งออก (ล็อก) แล้ว ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม"}
         </p>
       )}
 
