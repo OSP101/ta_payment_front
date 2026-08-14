@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Kanit } from "next/font/google";
 import "./globals.css";
 import SWRProvider from "./components/SWRProvider";
+import SessionActivityGuard from "./components/SessionActivityGuard";
 
 const kanit = Kanit({
   variable: "--font-kanit",
@@ -18,7 +19,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="th" className={`${kanit.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        <SWRProvider>{children}</SWRProvider>
+        <SWRProvider>
+          <SessionActivityGuard />
+          {children}
+        </SWRProvider>
       </body>
     </html>
   );

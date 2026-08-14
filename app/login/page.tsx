@@ -11,14 +11,50 @@ import {
   Spinner,
   TextField,
 } from "@heroui/react";
-import { LogIn, Eye, EyeOff, Shield } from "lucide-react";
-import { IconButton } from "../components/ui";
+import { LogIn, Eye, EyeOff, Shield, Clock, MonitorSmartphone, LogOut, CheckCircle2 } from "lucide-react";
+import { Alert, IconButton } from "../components/ui";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "../components/BetaNotice";
 import { api, errMessage, type Me } from "../lib/api";
 import { notify } from "../lib/notify";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const THAI_RE = /[฀-๿]/;
+
+/**
+ * Why the login page loaded instead of somewhere the user was already on.
+ * `session_idle`/`session_superseded`/`session_revoked` are set by api.ts's
+ * handleAuthRedirect and by SessionActivityGuard's own client-side idle
+ * timer — both funnel through the same ?reason= so this map is the one
+ * place that turns a code into what the user actually reads.
+ * `password_changed` is login-page-only: set by /change-password after a
+ * successful change, which now also ends that session (see
+ * AuthHandler.ChangePassword) rather than leaving the user signed in.
+ */
+const REASON_INFO: Record<
+  string,
+  { status: "warning" | "accent" | "success"; icon: React.ReactNode; title: string; description: string }
+> = {
+  session_idle: {
+    status: "warning", icon: <Clock size={16} />,
+    title: "ออกจากระบบอัตโนมัติ",
+    description: "เนื่องจากไม่มีการใช้งานเกิน 15 นาที เพื่อความปลอดภัยของบัญชีคุณ",
+  },
+  session_superseded: {
+    status: "warning", icon: <MonitorSmartphone size={16} />,
+    title: "เข้าสู่ระบบจากอุปกรณ์อื่น",
+    description: "บัญชีนี้ใช้งานได้ครั้งละ 1 เครื่องเท่านั้น การเข้าสู่ระบบที่นี่จึงสิ้นสุดลง",
+  },
+  session_revoked: {
+    status: "accent", icon: <LogOut size={16} />,
+    title: "เซสชันสิ้นสุดแล้ว",
+    description: "กรุณาเข้าสู่ระบบอีกครั้ง",
+  },
+  password_changed: {
+    status: "success", icon: <CheckCircle2 size={16} />,
+    title: "ตั้งรหัสผ่านใหม่สำเร็จ",
+    description: "กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่ของคุณ",
+  },
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,11 +69,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [ssoUrl, setSsoUrl] = useState<string | null>(null);
   const [betaOpen, setBetaOpen] = useState(false);
+  const [reason, setReason] = useState<string | null>(null);
 
   useEffect(() => {
     api.get<{ enabled: boolean; url?: string }>("/auth/sso/url")
       .then(r => { if (r.enabled && r.url) setSsoUrl(r.url); })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setReason(new URLSearchParams(window.location.search).get("reason"));
   }, []);
 
   useEffect(() => {
@@ -111,6 +152,17 @@ export default function LoginPage() {
             </h1>
             <p className="text-sm text-muted mt-1">ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน</p>
           </div>
+
+          {reason && REASON_INFO[reason] && (
+            <div className="mb-4">
+              <Alert
+                status={REASON_INFO[reason].status}
+                icon={REASON_INFO[reason].icon}
+                title={REASON_INFO[reason].title}
+                description={REASON_INFO[reason].description}
+              />
+            </div>
+          )}
 
           <Card>
             <Card.Content className="flex flex-col gap-4">

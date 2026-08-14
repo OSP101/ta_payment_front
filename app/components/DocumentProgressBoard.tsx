@@ -1,10 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Check, RotateCcw, Lock, AlertTriangle, CheckCircle2, Mail, Circle } from "lucide-react";
+import { Check, RotateCcw, Lock, AlertTriangle, CheckCircle2, Mail, Circle, Globe2, Copy, X } from "lucide-react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Panel, Button, Chip, TextArea, EmptyState, Spinner, Alert } from "./ui";
+import { Panel, Button, Chip, TextArea, EmptyState, Spinner, Alert, SearchField, ConfirmDialog } from "./ui";
 
 interface CourseRef { code: string; name_th: string; }
 // Per-ROUND physical document progress (migration 0031, fiscal_round since
@@ -44,14 +44,14 @@ interface TermProgressOverview {
 }
 
 const STAGES: { n: number; label: string; atKey: keyof TermProgress; role?: string; who: string }[] = [
-  { n: 1, label: "TA เซ็นครบ", atKey: "ta_signed_at", role: "ta", who: "TA ทุกคนที่สอนในวิชานั้น" },
+  { n: 1, label: "ผู้ช่วยสอนเซ็นครบ", atKey: "ta_signed_at", role: "ta", who: "ผู้ช่วยสอนทุกคนที่สอนในวิชานั้น" },
   { n: 2, label: "อาจารย์เซ็นครบ", atKey: "lecturer_signed_at", role: "lecturer", who: "อาจารย์ผู้ส่งคำขอ" },
   { n: 3, label: "ผู้รับรองเซ็นครบ", atKey: "certifier_signed_at", role: "certifier", who: "หัวหน้าสาขาวิชา" },
   { n: 4, label: "ส่งการเงินแล้ว", atKey: "sent_finance_at", who: "เจ้าหน้าที่นำส่ง" },
   { n: 5, label: "คณบดีลงนาม", atKey: "sent_treasury_at", who: "คณบดี" },
 ];
 
-function fmt(iso?: string | null): string {
+export function fmt(iso?: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
@@ -89,7 +89,9 @@ export function DocumentProgressBoard({
   // A round other than the one on screen still needing work is exactly the
   // thing staff asked not to lose track of — surfaced once, above the tabs,
   // so switching to round 1's tab does not make round 2 disappear from mind.
-  const lagging = showTabs ? rounds.filter(r => r.round !== activeRound && r.stage < maxStage) : [];
+  // …and only for the officer who has to act on it. To a TA it is a nag about
+  // somebody else's desk.
+  const lagging = showTabs && canEdit ? rounds.filter(r => r.round !== activeRound && r.stage < maxStage) : [];
 
   return (
     <div className="space-y-3">
@@ -117,16 +119,145 @@ export function DocumentProgressBoard({
           description="อย่าลืมกลับมาเดินเอกสารรอบนี้ให้ครบด้วย — คลิกที่แท็บด้านบนเพื่อสลับไปดู"
         />
       )}
-      <RoundBoard
-        key={current.round}
-        termId={termId}
-        round={current.round}
-        p={current}
-        overviewKey={key}
-        canEdit={canEdit}
-        showFinalStage={showFinalStage}
-      />
+      {canEdit && (
+        // Per-term, not per-round — the public link tabs through every round
+        // itself (see the public page), so one link covers a crossing term's
+        // two documents.
+        <ShareLinkPanel termId={termId} />
+      )}
+      {canEdit ? (
+        <RoundBoard
+          key={current.round}
+          termId={termId}
+          round={current.round}
+          p={current}
+          overviewKey={key}
+          canEdit={canEdit}
+          showFinalStage={showFinalStage}
+        />
+      ) : (
+        // TAs and lecturers get a different screen, not a disabled copy of the
+        // officer's. Theirs is a record of where the paper is, so it reads
+        // top-to-bottom like a route slip and offers nothing to click.
+        <ViewerRoundBoard
+          key={current.round}
+          p={current}
+          showFinalStage={showFinalStage}
+          checklistKey={termId ? `/document-progress/checklist?term_id=${termId}&round=${current.round}` : null}
+        />
+      )}
     </div>
+  );
+}
+
+interface ShareLink {
+  id: string;
+  term_id: string;
+  created_at: string;
+  created_by_name?: string;
+}
+
+// The public, no-login view of this term's board — a link staff post to the
+// department LINE group or Facebook page. At most one is live per term;
+// issuing again while one exists just hands back the same link (see the
+// backend), so the button here never risks scattering two different links
+// for the same term across chat history.
+function ShareLinkPanel({ termId }: { termId: string }) {
+  const key = termId ? `/document-progress/${termId}/share-link` : null;
+  const { data, isLoading } = useSWR<ShareLink | null>(key);
+  const [busy, setBusy] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const url = data && typeof window !== "undefined" ? `${window.location.origin}/p/document-progress/${data.id}` : "";
+
+  async function create() {
+    setBusy(true);
+    try {
+      await api.post(`/document-progress/${termId}/share-link`);
+      if (key) mutate(key);
+    } catch (e) {
+      notify.error(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke() {
+    setBusy(true);
+    try {
+      await api.del(`/document-progress/${termId}/share-link`);
+      notify.success("ยกเลิกลิงก์แล้ว — ลิงก์เดิมใช้ดูไม่ได้อีกต่อไป");
+      setConfirmRevoke(false);
+      if (key) mutate(key);
+    } catch (e) {
+      notify.error(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.prompt("คัดลอกลิงก์นี้", url);
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  if (isLoading) return null;
+
+  return (
+    <Panel>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="shrink-0 grid place-items-center w-9 h-9 rounded-lg bg-brand-soft text-brand">
+          <Globe2 size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold">ลิงก์สาธารณะสำหรับเทอมนี้</div>
+          {data ? (
+            <div className="text-xs text-muted truncate">
+              ใครก็เปิดดูได้โดยไม่ต้องเข้าสู่ระบบ · สร้างเมื่อ {fmt(data.created_at)}
+              {data.created_by_name ? ` โดย ${data.created_by_name}` : ""}
+            </div>
+          ) : (
+            <div className="text-xs text-muted">ยังไม่มีลิงก์ — สร้างแล้วนำไปประกาศให้อาจารย์และผู้ช่วยสอนดูความคืบหน้าได้</div>
+          )}
+        </div>
+        {data ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={copy}>
+              {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmRevoke(true)} disabled={busy}>
+              <X size={13} /> ยกเลิกลิงก์
+            </Button>
+          </div>
+        ) : (
+          <Button variant="secondary" size="sm" className="shrink-0" onClick={create} disabled={busy}>
+            <Globe2 size={13} /> สร้างลิงก์สาธารณะ
+          </Button>
+        )}
+      </div>
+      {data && (
+        <div className="mt-2 truncate rounded-md bg-panel border border-hairline px-2.5 py-1.5 text-xs text-ink-2 tabular">
+          {url}
+        </div>
+      )}
+      <ConfirmDialog
+        open={confirmRevoke}
+        onClose={() => setConfirmRevoke(false)}
+        onConfirm={revoke}
+        danger
+        isPending={busy}
+        title="ยกเลิกลิงก์สาธารณะ?"
+        message="ลิงก์ที่ประกาศไปแล้วจะเปิดดูไม่ได้อีก ถ้าต้องแชร์ใหม่ต้องสร้างลิงก์ใหม่และประกาศอีกครั้ง"
+        confirmLabel="ยกเลิกลิงก์"
+      />
+    </Panel>
   );
 }
 
@@ -337,7 +468,7 @@ function RoundBoard({
 /* Per-course signature checklist (B3)                                        */
 /* -------------------------------------------------------------------------- */
 
-interface SignatureItem {
+export interface SignatureItem {
   teaching_course_id: string;
   code: string;
   name_th: string;
@@ -365,6 +496,7 @@ function SignatureChecklistPanel({
   const key = termId ? `/document-progress/checklist?term_id=${termId}&round=${round}` : null;
   const { data, isLoading } = useSWR<SignatureItem[]>(key);
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
 
   const stageInfo = STAGES.find(st => st.n === stage + 1);
   // Only this stage's people. The panel is a work queue, not an archive: a TA
@@ -375,15 +507,29 @@ function SignatureChecklistPanel({
     [data, role],
   );
 
+  // In a real term this list runs to hundreds of names, so the officer needs to
+  // jump straight to one course or one person. Matching is on course code, Thai
+  // course name, and the signer's name — whichever the officer happens to know.
+  const needle = q.trim().toLowerCase();
+  const shown = useMemo(
+    () =>
+      needle === ""
+        ? items
+        : items.filter(i =>
+            [i.code, i.name_th, i.responsible].some(v => (v ?? "").toLowerCase().includes(needle)),
+          ),
+    [items, needle],
+  );
+
   const byCourse = useMemo(() => {
     const m = new Map<string, { code: string; name_th: string; items: SignatureItem[] }>();
-    for (const it of items) {
+    for (const it of shown) {
       const g = m.get(it.teaching_course_id) ?? { code: it.code, name_th: it.name_th, items: [] };
       g.items.push(it);
       m.set(it.teaching_course_id, g);
     }
     return Array.from(m.entries());
-  }, [items]);
+  }, [shown]);
 
   const pendingCount = items.filter(i => !i.signed_at).length;
   const signedCount = items.length - pendingCount;
@@ -438,10 +584,13 @@ function SignatureChecklistPanel({
       </Panel>
     );
   }
-  if (byCourse.length === 0) {
+  // Only when the stage genuinely has nobody. A search that matches nothing
+  // must keep the panel (and its search box) on screen, or the officer is stuck
+  // with no way to clear the term they just typed.
+  if (items.length === 0) {
     return (
       <Panel>
-        <EmptyState title="ยังไม่มีรายวิชาที่มี TA ในเทอมนี้" description="เมื่อมีคำขอ TA ที่อนุมัติแล้ว รายการรอลงนามจะแสดงที่นี่" />
+        <EmptyState title="ยังไม่มีรายวิชาที่มีผู้ช่วยสอนในเทอมนี้" description="เมื่อมีคำขอผู้ช่วยสอนที่อนุมัติแล้ว รายการรอลงนามจะแสดงที่นี่" />
       </Panel>
     );
   }
@@ -459,11 +608,26 @@ function SignatureChecklistPanel({
           ? <Chip tone="warn">เซ็นแล้ว {signedCount}/{items.length}</Chip>
           : <Chip tone="success"><Check size={12} /> ครบแล้ว {items.length}/{items.length} กดขั้นถัดไปได้</Chip>}
         {canEdit && role === "lecturer" && (
-          <Button variant="secondary" size="sm" className="ml-auto" onClick={remind} disabled={busy || pendingCount === 0}>
+          <Button variant="secondary" size="sm" onClick={remind} disabled={busy || pendingCount === 0}>
             <Mail size={14} /> ส่งอีเมลเตือนอาจารย์ที่ยังไม่เซ็น
           </Button>
         )}
+        <div className="w-full sm:w-auto sm:ml-auto">
+          <SearchField
+            value={q}
+            onChange={setQ}
+            ariaLabel="ค้นหารายวิชาหรือชื่อผู้ลงนาม"
+            placeholder="ค้นหารหัสวิชา ชื่อวิชา หรือชื่อผู้ลงนาม"
+          />
+        </div>
       </div>
+      {needle !== "" && (
+        <div className="px-4 py-2 text-xs text-muted border-b border-hairline">
+          {shown.length > 0
+            ? `พบ ${shown.length} รายการจากทั้งหมด ${items.length} รายการ`
+            : `ไม่พบรายการที่ตรงกับ “${q.trim()}”`}
+        </div>
+      )}
       <div className="divide-y divide-hairline">
         {byCourse.map(([tcId, g]) => {
           const left = g.items.filter(i => !i.signed_at).length;
@@ -507,6 +671,300 @@ function SignatureChecklistPanel({
                   );
                 })}
               </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Viewer side (TA / lecturer): the same route, read as a record              */
+/* -------------------------------------------------------------------------- */
+
+// The database stores คำนำหน้า the way the paper forms abbreviate them
+// ("ผศ. ดร.", "น.ส."). On a screen there is room for the whole word, and a TA
+// reading who is holding their paperwork should see the person as they would be
+// addressed. Longest key first so "ผศ." never matches inside "ผู้ช่วยศาสตราจารย์".
+const FULL_PREFIX: [string, string][] = [
+  ["ศ. ดร.", "ศาสตราจารย์ ดร."],
+  ["รศ. ดร.", "รองศาสตราจารย์ ดร."],
+  ["ผศ. ดร.", "ผู้ช่วยศาสตราจารย์ ดร."],
+  ["ศ.ดร.", "ศาสตราจารย์ ดร."],
+  ["รศ.ดร.", "รองศาสตราจารย์ ดร."],
+  ["ผศ.ดร.", "ผู้ช่วยศาสตราจารย์ ดร."],
+  ["ผศ.", "ผู้ช่วยศาสตราจารย์"],
+  ["รศ.", "รองศาสตราจารย์"],
+  ["ศ.", "ศาสตราจารย์"],
+  ["อ.", "อาจารย์"],
+  ["น.ส.", "นางสาว"],
+  ["นส.", "นางสาว"],
+];
+
+export function fullName(raw: string): string {
+  const s = (raw ?? "").trim();
+  if (!s) return "";
+  for (const [abbr, full] of FULL_PREFIX) {
+    if (s.startsWith(abbr)) return `${full} ${s.slice(abbr.length).trim()}`;
+  }
+  return s;
+}
+
+// The panel header for whichever role is signing at the current stage. Not
+// just "รายชื่อ" + STAGES[...].who verbatim — "สถานะรายชื่อ…" reads as a
+// status board, which is what a TA scanning for a stuck course actually wants.
+const STAGE_LIST_TITLE: Record<string, string> = {
+  ta: "สถานะรายชื่อผู้ช่วยสอนที่สอนในแต่ละวิชา",
+  lecturer: "สถานะรายชื่ออาจารย์ที่สอนในแต่ละวิชา",
+  certifier: "สถานะรายชื่อผู้รับรองในแต่ละวิชา",
+};
+
+// Exported so the public share-link page (app/p/document-progress/[linkId])
+// can render the exact same read-only board off its own (unauthenticated)
+// checklist endpoint — same component, different URL underneath.
+export function ViewerRoundBoard({
+  p, showFinalStage, checklistKey,
+}: {
+  p: TermProgress;
+  showFinalStage: boolean;
+  /** Full SWR key for this round's checklist, or null while nothing to fetch yet. */
+  checklistKey: string | null;
+}) {
+  const visibleStages = STAGES.filter(st => showFinalStage || st.n < 5);
+  const maxStage = showFinalStage ? 5 : 4;
+  const displayStage = Math.min(p.stage, maxStage);
+  const done = displayStage >= maxStage;
+  const currentStage = STAGES.find(st => st.n === displayStage + 1);
+
+  // One line, in the reader's terms. No tally of who is still missing — with
+  // thirty TAs that turns the header into a wall of names, and the list below
+  // answers it properly.
+  const headline = !p.all_exported
+    ? "เจ้าหน้าที่กำลังเตรียมเอกสาร"
+    : done
+    ? "เดินเอกสารครบทุกขั้นแล้ว"
+    : `กำลังรอ${currentStage?.who ?? ""}ลงนาม`;
+  const sub = !p.all_exported
+    ? `เตรียมแล้ว ${p.exported_courses} จาก ${p.total_courses} วิชา เมื่อครบทุกวิชาจึงจะเริ่มเก็บลายเซ็น`
+    : done
+    ? "จบกระบวนการของรอบนี้แล้ว"
+    : `ขั้นที่ ${displayStage + 1} จาก ${maxStage} · ${currentStage?.label ?? ""}`;
+
+  return (
+    <div className="space-y-3">
+      <Panel padded={false}>
+        <div className="px-4 pt-4">
+          <div className="text-xs uppercase tracking-wide text-muted">สถานะตอนนี้</div>
+          <h2 className="text-lg font-semibold mt-0.5">{headline}</h2>
+          <p className="text-sm text-ink-2 mt-0.5">{sub}</p>
+        </div>
+
+        {/* Same left-to-right route as the officer's board, so both sides of
+            the office are talking about the same five desks — but built from
+            list items, not buttons: there is nothing here to press. */}
+        <div className={"px-4 py-5 overflow-x-auto snap-x " + (!p.all_exported ? "opacity-60" : "")}>
+          <ol className="flex items-start min-w-[640px] [&>*]:snap-start">
+            {visibleStages.map((st, i) => {
+              const reached = displayStage >= st.n;
+              const isCurrent = p.all_exported && !done && displayStage + 1 === st.n;
+              const at = p[st.atKey] as string | null | undefined;
+              return (
+                <li
+                  key={st.n}
+                  className="flex-1 flex flex-col items-center relative"
+                  aria-current={isCurrent ? "step" : undefined}
+                >
+                  {i > 0 && (
+                    <span aria-hidden className={"absolute top-4 right-1/2 left-[-50%] h-0.5 " + (reached ? "bg-emerald-500" : "bg-hairline")} />
+                  )}
+                  <span
+                    aria-hidden
+                    className={
+                      "relative z-10 grid place-items-center w-8 h-8 rounded-full " +
+                      (reached
+                        ? "bg-emerald-500 text-white"
+                        : isCurrent
+                        ? "bg-panel text-accent ring-2 ring-accent"
+                        : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400")
+                    }
+                  >
+                    {reached ? <Check size={16} strokeWidth={3} /> : <span className="text-xs font-semibold">{st.n}</span>}
+                  </span>
+                  <span className={"mt-2 text-center text-xs px-1 " + (reached || isCurrent ? "text-ink-1 font-medium" : "text-ink-3")}>
+                    {st.label}
+                  </span>
+                  <span className="text-[10px] text-muted text-center px-1">{st.who}</span>
+                  <span className={"text-[10px] text-center px-1 mt-0.5 " + (reached ? "text-muted tabular" : "text-ink-3")}>
+                    {reached ? fmt(at) : isCurrent ? "กำลังดำเนินการ" : ""}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <div className="px-4 -mt-3 pb-1 text-[11px] text-muted sm:hidden">
+          เลื่อนแถวขั้นตอนไปทางซ้ายเพื่อดูขั้นถัดไป
+        </div>
+
+        {(p.note || (p.updated_by_name && p.updated_at)) && (
+          <div className="px-4 pb-4 pt-1 space-y-1 border-t border-hairline mt-2">
+            {p.note && (
+              <div className="text-sm pt-2">
+                <span className="text-muted text-xs">หมายเหตุจากเจ้าหน้าที่: </span>
+                <span className="text-ink-1">{p.note}</span>
+              </div>
+            )}
+            {p.updated_by_name && p.updated_at && (
+              <div className="text-[11px] text-muted">อัปเดตล่าสุดโดย {p.updated_by_name} · {fmt(p.updated_at)}</div>
+            )}
+          </div>
+        )}
+      </Panel>
+
+      {p.all_exported && (
+        <ViewerStageSigners
+          checklistKey={checklistKey}
+          stage={displayStage}
+          role={p.current_role ?? ""}
+          done={done}
+        />
+      )}
+    </div>
+  );
+}
+
+// Only the people the CURRENT step is waiting on — TA names while it is the
+// TAs' step, lecturers once it moves to theirs. Names come with their full
+// คำนำหน้า, and nothing here is clickable.
+function ViewerStageSigners({
+  checklistKey, stage, role, done,
+}: {
+  checklistKey: string | null;
+  stage: number;
+  role: string;
+  done: boolean;
+}) {
+  const { data, isLoading } = useSWR<SignatureItem[]>(checklistKey);
+  const [q, setQ] = useState("");
+
+  const stageInfo = STAGES.find(st => st.n === stage + 1);
+  const items = useMemo(
+    () => (data ?? []).filter(i => role !== "" && i.role === role),
+    [data, role],
+  );
+
+  // A real term runs to hundreds of rows, so let the reader jump to one course
+  // or one person instead of scrolling for their own name.
+  const needle = q.trim().toLowerCase();
+  const byCourse = useMemo(() => {
+    const m = new Map<string, { code: string; name_th: string; items: SignatureItem[] }>();
+    for (const it of items) {
+      const g = m.get(it.teaching_course_id) ?? { code: it.code, name_th: it.name_th, items: [] };
+      g.items.push(it);
+      m.set(it.teaching_course_id, g);
+    }
+    const all = Array.from(m.entries());
+    if (needle === "") return all;
+    return all
+      .map(([id, g]) => {
+        if ([g.code, g.name_th].some(v => (v ?? "").toLowerCase().includes(needle))) return [id, g] as const;
+        const hit = g.items.filter(i => fullName(i.responsible).toLowerCase().includes(needle));
+        return hit.length ? ([id, { ...g, items: hit }] as const) : null;
+      })
+      .filter((x): x is readonly [string, { code: string; name_th: string; items: SignatureItem[] }] => x !== null)
+      .map(x => [x[0], x[1]] as [string, { code: string; name_th: string; items: SignatureItem[] }]);
+  }, [items, needle]);
+
+  if (isLoading || !data) {
+    return <Panel><div className="flex items-center gap-2 py-6 justify-center text-sm text-muted"><Spinner size="sm" /> กำลังโหลด…</div></Panel>;
+  }
+  if (role === "" || done) {
+    return (
+      <Panel>
+        <EmptyState
+          title={done ? "เดินเอกสารครบทุกขั้นแล้ว" : "ขั้นนี้ไม่มีรายชื่อผู้ลงนาม"}
+          description={
+            done
+              ? "เอกสารของรอบนี้ผ่านทุกขั้นเรียบร้อย"
+              : "เป็นขั้นที่เจ้าหน้าที่ดำเนินการเอง ไม่มีใครต้องลงนามในขั้นนี้"
+          }
+        />
+      </Panel>
+    );
+  }
+  if (items.length === 0) {
+    return (
+      <Panel>
+        <EmptyState title="ยังไม่มีรายวิชาที่มีผู้ช่วยสอนในรอบนี้" description="เมื่อคำขอผู้ช่วยสอนได้รับอนุมัติ รายชื่อจะแสดงที่นี่" />
+      </Panel>
+    );
+  }
+
+  const signed = items.filter(i => i.signed_at).length;
+
+  return (
+    <Panel
+      padded={false}
+      className="overflow-hidden"
+    >
+      <div className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline">
+        <div className="min-w-0">
+          <div className="font-semibold">{STAGE_LIST_TITLE[role] ?? `สถานะรายชื่อ${stageInfo?.who ?? ""}`}</div>
+          <div className="text-xs text-muted">ลงนามแล้ว {signed} จาก {items.length} รายชื่อ</div>
+        </div>
+        <div className="w-full sm:w-auto sm:ml-auto">
+          <SearchField
+            value={q}
+            onChange={setQ}
+            ariaLabel="ค้นหารายวิชาหรือชื่อผู้ลงนาม"
+            placeholder="ค้นหารหัสวิชา ชื่อวิชา หรือชื่อผู้ลงนาม"
+          />
+        </div>
+      </div>
+      {needle !== "" && (
+        <div className="px-4 py-2 text-xs text-muted border-b border-hairline">
+          {byCourse.length > 0 ? `พบ ${byCourse.length} วิชา` : `ไม่พบรายการที่ตรงกับ “${q.trim()}”`}
+        </div>
+      )}
+      <div className="divide-y divide-hairline">
+        {byCourse.map(([tcId, g]) => {
+          const left = g.items.filter(i => !i.signed_at).length;
+          const incomplete = left > 0;
+          return (
+            <div
+              key={tcId}
+              className={
+                "px-4 py-3 border-l-4 " +
+                (incomplete
+                  ? "border-l-red-400 bg-red-50/60 dark:bg-red-950/10"
+                  : "border-l-transparent")
+              }
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="tabular text-sm font-medium">{g.code}</span>
+                <span className="text-sm text-ink-2 min-w-0 truncate">{g.name_th}</span>
+                {/* The whole point of this list is "which course is stuck" —
+                    a TA should see that at a glance, not by counting ticks. */}
+                {incomplete
+                  ? <Chip tone="danger">ค้างอยู่ {left} คน</Chip>
+                  : <Chip tone="success"><Check size={12} /> ลงนามครบ</Chip>}
+              </div>
+              <ul className="mt-2 space-y-1.5">
+                {g.items.map(it => (
+                  <li key={it.role + (it.signer_id ?? "")} className="flex items-baseline gap-2 text-sm">
+                    {it.signed_at
+                      ? <Check size={15} aria-hidden className="text-emerald-600 shrink-0 translate-y-0.5" />
+                      : <X size={15} aria-hidden className="text-red-600 shrink-0 translate-y-0.5" />}
+                    <span className={"min-w-0 flex-1 font-medium " + (it.signed_at ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+                      {fullName(it.responsible) || "—"}
+                    </span>
+                    <span className={"text-xs shrink-0 " + (it.signed_at ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400")}>
+                      {it.signed_at ? `ลงนามแล้ว · ${fmt(it.signed_at)}` : "ยังไม่ได้ลงนาม"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           );
         })}

@@ -50,7 +50,19 @@ const UPLOAD_ORIGIN = (process.env.NEXT_PUBLIC_API_ORIGIN ?? "").replace(/\/$/, 
 const CODE_MESSAGES: Record<string, string> = {
   password_change_required: "กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน",
   ta_profile_not_approved: "เอกสารของคุณยังไม่ได้รับการอนุมัติ",
+  // See internal/handler/middleware.go's AccountGuard — these three all come
+  // back as a plain 401 with one of these as the `error` field. SESSION_REASONS
+  // below is the subset the login page turns into a banner via ?reason=; the
+  // messages here are what shows in an inline toast for a request that fails
+  // mid-page instead of at the moment of redirect (e.g. a background poll).
+  session_idle: "ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 15 นาที",
+  session_superseded: "บัญชีนี้ถูกเข้าใช้งานจากอุปกรณ์อื่น คุณจึงถูกออกจากระบบที่นี่",
+  session_revoked: "เซสชันนี้สิ้นสุดแล้ว กรุณาเข้าสู่ระบบใหม่",
 };
+
+/** The subset of CODE_MESSAGES that the login page shows as a ?reason= banner. */
+export const SESSION_REASONS = ["session_idle", "session_superseded", "session_revoked"] as const;
+export type SessionReason = (typeof SESSION_REASONS)[number];
 
 function humanMessage(status: number, raw: string): string {
   if (raw && CODE_MESSAGES[raw]) return CODE_MESSAGES[raw];
@@ -75,13 +87,16 @@ function humanMessage(status: number, raw: string): string {
  * is built to show never got the chance to render.
  *
  * `/auth/` is here for the original reason: a failed login is not an expired
- * session either.
+ * session either. `/auth/heartbeat` is carved back OUT of that: its whole job
+ * is to surface exactly this kind of 401 (see SessionActivityGuard), so it is
+ * the one `/auth/*` path that must still redirect.
  */
 const REAUTH_PATHS = [
   "/auth/",
   "/ta-review/download-all-token",
 ];
 function isReauthPath(path: string): boolean {
+  if (path === "/auth/heartbeat") return false;
   // zip-token carries a user id in the middle, hence the suffix test.
   return REAUTH_PATHS.some(p => path.startsWith(p)) || path.endsWith("/zip-token");
 }
@@ -92,7 +107,8 @@ function handleAuthRedirect(path: string, status: number, code?: string) {
   if (isReauthPath(path)) return;
   const here = window.location.pathname + window.location.search;
   if (status === 401 && !here.startsWith("/login")) {
-    window.location.assign(`/login?next=${encodeURIComponent(here)}`);
+    const reason = code && (SESSION_REASONS as readonly string[]).includes(code) ? `&reason=${code}` : "";
+    window.location.assign(`/login?next=${encodeURIComponent(here)}${reason}`);
     return;
   }
   if (status === 403 && code === "password_change_required" && !here.startsWith("/change-password")) {

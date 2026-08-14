@@ -22,6 +22,29 @@ const nextConfig: NextConfig = {
       { source: "/api/health", destination: `${backend}/api/health` },
     ];
   },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // Sent unconditionally — browsers only ever honour this when the
+          // response itself arrived over HTTPS, so it's a no-op over plain
+          // HTTP in local dev rather than something that needs gating on
+          // NODE_ENV. No includeSubDomains: this app doesn't own every
+          // subdomain of its parent domain, and HSTS misapplied to one that
+          // isn't HTTPS-ready locks users out of it, not just this app.
+          { key: "Strict-Transport-Security", value: "max-age=63072000" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=()",
+          },
+        ],
+      },
+    ];
+  },
   devIndicators: false
 };
 

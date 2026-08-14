@@ -43,6 +43,27 @@ export const monthsQuery = (months: string[], prefix = "?") =>
 export const monthLabels = (all: TermMonth[], yms: string[]) =>
   yms.map(ym => all.find(m => m.year_month === ym)?.label ?? ym);
 
+const MONTH_TH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+
+/**
+ * Names a fiscal round by the span it covers — "มิ.ย.–ก.ย.", or "ต.ค." when the
+ * round is a single month.
+ *
+ * Takes Gregorian "YYYY-MM" keys, which is what FiscalSplitInfo carries, and
+ * needs no month list to look labels up in: a round is always a contiguous run
+ * (that is what a budget year cut produces), so its first and last months say
+ * everything. Lives beside the split it describes so the several screens that
+ * now speak about rounds cannot drift on how a round is named.
+ */
+export function roundRangeLabel(yms: string[]): string {
+  if (!yms.length) return "";
+  const name = (ym: string) => MONTH_TH_SHORT[Number(ym.split("-")[1]) - 1] ?? ym;
+  const first = name(yms[0]);
+  const last = name(yms[yms.length - 1]);
+  return first === last ? first : `${first}–${last}`;
+}
+
 /**
  * Which months to preselect: the fiscal half that still has work to issue,
  * so the common case is one click. A term that does not cross the boundary

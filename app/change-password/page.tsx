@@ -1,13 +1,11 @@
 "use client";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Alert, Button, Card, FieldError, Input, InputGroup, Label, TextField } from "@heroui/react";
 import { IconButton } from "../components/ui";
 import { Check, Eye, EyeOff, KeyRound, ShieldAlert, X } from "lucide-react";
 import { api, errMessage } from "../lib/api";
 
 export default function ChangePasswordPage() {
-  const router = useRouter();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -41,8 +39,12 @@ export default function ChangePasswordPage() {
     setLoading(true);
     try {
       await api.post("/me/password", { new_password: pw });
-      router.push("/");
-      router.refresh();
+      // A changed password now ends the session it was changed from too (see
+      // AuthHandler.ChangePassword / SessionService.RevokeAllForUser) — the
+      // next request under the old cookie would 401 anyway, so go straight to
+      // login instead of bouncing through "/" and landing there via a
+      // generic session-expired redirect with no explanation.
+      window.location.assign("/login?reason=password_changed");
     } catch (e) {
       setErr(errMessage(e));
     } finally {

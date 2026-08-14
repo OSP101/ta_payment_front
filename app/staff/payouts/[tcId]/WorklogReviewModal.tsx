@@ -5,13 +5,14 @@ import {
   ClipboardCheck, ChevronLeft, ChevronRight, CheckCircle2, Check, Undo2,
   Pencil, Trash2, X, ShieldCheck, ImagePlus, RotateCcw,
 } from "lucide-react";
-import { api, errMessage } from "../../../lib/api";
+import { api, errMessage, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import {
   Modal, Button, Spinner, Chip, TextArea, TextInput, Alert, IconButton,
   ConfirmDialog,
 } from "../../../components/ui";
 import { packLanes, parseTime } from "../../../components/ScheduleGrid";
+import { readAddForm, writeAddForm, clearAddForm } from "../../../lib/draftStorage";
 
 /**
  * One TA's month, checked against their own week.
@@ -121,6 +122,18 @@ const linkKey = (dow: number, start: string, end: string, sec: string) =>
 
 const dowOf = (isoDate: string) => new Date(isoDate + "T00:00:00").getDay();
 
+// Draft key for one officer's in-progress edits to one TA's one month, reusing
+// the same localStorage helpers the TA worklog page uses (see draftStorage.ts)
+// — "aid" there just means "the string that scopes this draft", not literally
+// an assignment id. Session now ends the moment 15 minutes pass with no
+// activity (see SessionActivityGuard) instead of warning first, so an officer
+// who steps away mid-edit to answer a phone call loses the page, not just the
+// tab — this is what makes re-opening the same TA's month hand the edits back.
+const staffBatchAid = (tcId: string, taId: string, yearMonth: string) =>
+  `staffbatch:${tcId}:${taId}:${yearMonth}`;
+const staffBatchReasonAid = (tcId: string, taId: string, yearMonth: string) =>
+  `staffbatch-reason:${tcId}:${taId}:${yearMonth}`;
+
 /** A pending change the officer has made but not yet committed. */
 type Pending =
   | { action: "delete" }
@@ -148,6 +161,7 @@ export function WorklogReviewModal({
     : null;
   const { data, isLoading } = useSWR<MonthDetail>(detailKey);
   const { data: form } = useSWR<{ blocks: OwnBlock[] }>(formKey);
+  const { data: me } = useSWR<Me>("/me");
 
   const [secTab, setSecTab] = useState<string>("__all");
   const [pending, setPending] = useState<Record<string, Pending>>({});
@@ -160,11 +174,37 @@ export function WorklogReviewModal({
 
   // Moving to another month must not carry the previous month's uncommitted
   // edits with it — they reference row ids that are not on screen any more.
+  // If this exact (course, TA, month) has a draft left over from a session
+  // that ended mid-edit (idle timeout, closed tab), restore it instead of
+  // starting blank — see staffBatchAid above.
   useEffect(() => {
-    setPending({});
+    if (target && me?.id) {
+      const saved = readAddForm<Record<string, Pending>>(
+        me.id, staffBatchAid(tcId, target.taId, target.yearMonth));
+      if (saved && Object.keys(saved.form).length > 0) {
+        setPending(saved.form);
+        notify.info(`กู้คืนการแก้ไขที่ยังไม่ได้บันทึก ${Object.keys(saved.form).length} รายการ`);
+      } else {
+        setPending({});
+      }
+    } else {
+      setPending({});
+    }
     setPinnedKey(null);
     setSecTab("__all");
-  }, [target?.periodId, target?.taId]);
+    // me?.id starts undefined while /me is loading and arrives a tick later —
+    // it has to be a dependency so the restore actually runs once it does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.periodId, target?.taId, target?.yearMonth, me?.id]);
+
+  // Mirror every edit to localStorage as it happens, not just on unmount —
+  // an idle-timeout logout doesn't give the page a chance to run cleanup.
+  useEffect(() => {
+    if (!target || !me?.id) return;
+    const aid = staffBatchAid(tcId, target.taId, target.yearMonth);
+    if (Object.keys(pending).length === 0) clearAddForm(me.id, aid);
+    else writeAddForm(me.id, aid, pending);
+  }, [pending, target?.taId, target?.yearMonth, me?.id, tcId]);
 
   const days = data?.days ?? [];
   // Sections as (number, track) pairs — the tab label has to say which fund the
@@ -813,6 +853,24 @@ function CommitDialog({
   const [password, setPassword] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const { data: me } = useSWR<Me>("/me");
+
+  // Reason text only — never the password, never the File objects (not
+  // serializable, and re-attaching evidence is a small ask compared to
+  // retyping the explanation). See staffBatchAid above for why this exists.
+  const reasonAid = staffBatchReasonAid(tcId, taId, yearMonth);
+  useEffect(() => {
+    if (!me?.id) return;
+    const saved = readAddForm<{ reason: string }>(me.id, reasonAid);
+    if (saved?.form.reason) setReason(saved.form.reason);
+    // Restore once, when the user id first resolves — not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.id]);
+  useEffect(() => {
+    if (!me?.id) return;
+    if (reason.trim() === "") clearAddForm(me.id, reasonAid);
+    else writeAddForm(me.id, reasonAid, { reason });
+  }, [reason, me?.id, reasonAid]);
 
   const byId = new Map(days.map(d => [d.id, d]));
   const entries = Object.entries(pending);
@@ -850,6 +908,7 @@ function CommitDialog({
       } else {
         notify.success(`บันทึกการแก้ไข ${res.applied} รายการ แจ้งอาจารย์และทีเอแล้ว`);
       }
+      if (me?.id) clearAddForm(me.id, reasonAid);
       onDone();
     } catch (e) {
       notify.error(errMessage(e));

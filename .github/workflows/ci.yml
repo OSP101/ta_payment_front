@@ -29,6 +29,21 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # `--audit-level=high` so routine low/moderate advisories (common in a
+      # tree this size) don't create noise; high+ still gets a visible report.
+      # NOT --fail-on-vuln: as of this step's introduction, `postcss` and
+      # `sharp` (both nested under `next`) carry unfixed high-severity
+      # advisories whose only fix is a `next` bump outside the pinned
+      # 16.2.12 (`npm audit fix --force` wants 16.3.1) — this codebase's own
+      # AGENTS.md warns that version bumps here can carry real breaking
+      # changes, so that upgrade needs its own dedicated testing pass across
+      # the app, not a silent side effect of wiring up this scan. Blocking
+      # CI on an advisory nothing here can fix yet would just make every
+      # unrelated PR red. Re-tighten this once `next` is bumped past 16.3.1.
+      - name: Dependency audit (npm audit)
+        if: always()
+        run: npm audit --audit-level=high || true
+
       - name: Build
         run: npm run build
 
