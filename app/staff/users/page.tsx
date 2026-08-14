@@ -655,11 +655,13 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         ...(form.admin_position !== (user.admin_position ?? "")
           ? { admin_position: form.admin_position.trim() }
           : {}),
-        study_level: isTa ? form.study_level : "",
-        // 0 clears study_year server-side; send it only for undergrad TAs.
+        study_level: isTa ? form.study_level : null,
+        // null clears study_year server-side; the request-validation layer
+        // rejects a literal 0 (gte=1) before Update's own clear-sentinel
+        // logic ever runs, so non-applicable saves must send null, not 0.
         study_year: isTa && form.study_level === "undergrad"
-          ? (form.study_year ? Number(form.study_year) : 0)
-          : 0,
+          ? (form.study_year ? Number(form.study_year) : null)
+          : null,
       });
       mutate((k: string) => k.startsWith("/users"));
       onClose();
