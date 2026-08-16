@@ -1,5 +1,6 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getMe } from "../lib/session";
+import { getMe, mfaSetupRequired } from "../lib/session";
 import RoleShell from "../components/RoleShell";
 
 // The read-only budget view for the management team. They are lecturers whose
@@ -12,5 +13,9 @@ export default async function ExecutiveLayout({ children }: { children: React.Re
   if (!me) redirect("/login");
   const allowed = me.is_executive || me.roles.includes("staff") || me.roles.includes("admin");
   if (!allowed) redirect("/");
+  // See requireRole's own comment on mfaSetupRequired: demo slots never
+  // enforce this, so skip it for a demo walkthrough session.
+  const c = await cookies();
+  if (!c.get("demo_base_path")?.value && mfaSetupRequired(me)) redirect("/setup-2fa");
   return <RoleShell me={me}>{children}</RoleShell>;
 }

@@ -13,7 +13,7 @@ import {
   REGEXP_ONLY_DIGITS,
   Spinner,
 } from "@heroui/react";
-import { Check, Copy, LogOut, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Check, Copy, LogOut, ShieldAlert, ShieldCheck, Smartphone } from "lucide-react";
 import { api, errMessage, mfaEnable, mfaSetup, type MFASetupResult } from "../lib/api";
 import { notify } from "../lib/notify";
 
@@ -154,8 +154,27 @@ export default function Setup2FAPage() {
             ) : (
               <form onSubmit={onVerify} className="flex flex-col gap-4 items-center">
                 <p className="text-sm text-muted text-center">
-                  สแกน QR นี้ด้วยแอปยืนยันตัวตน (เช่น Google Authenticator) แล้วกรอกรหัส 6 หลักที่แสดงขึ้น
+                  สแกน QR นี้ด้วยแอปยืนยันตัวตน แล้วกรอกรหัส 6 หลักที่แสดงขึ้น
                 </p>
+                <div className="w-full rounded-lg border border-[var(--hairline)] bg-default/50 px-3 py-2.5">
+                  <div className="text-xs font-medium text-foreground mb-1.5">ยังไม่มีแอปยืนยันตัวตน? แนะนำ</div>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-start gap-2 text-xs text-muted">
+                      <Smartphone size={13} className="shrink-0 mt-0.5" />
+                      <span>
+                        <span className="text-foreground font-medium">Google Authenticator</span>{" "}
+                        — ใช้งานง่าย มีทั้ง Android และ iOS
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2 text-xs text-muted">
+                      <Smartphone size={13} className="shrink-0 mt-0.5" />
+                      <span>
+                        <span className="text-foreground font-medium">Microsoft Authenticator</span>{" "}
+                        — มี Android และ iOS เช่นกัน สำรองรหัสขึ้นคลาวด์ได้
+                      </span>
+                    </div>
+                  </div>
+                </div>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={setup.qr_png_base64}
