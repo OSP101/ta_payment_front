@@ -8,7 +8,7 @@ import {
   DatePicker, DateField, Calendar, I18nProvider,
 } from "@heroui/react";
 import { parseDate, parseDateTime, type DateValue } from "@internationalized/date";
-import { api, demoTesters, demoAddTester, demoRemoveTester, type DemoTester } from "../../lib/api";
+import { api, ApiError, demoTesters, demoAddTester, demoRemoveTester, type DemoTester } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select, ConfirmDialog, TipWrap,
@@ -2479,7 +2479,7 @@ const TIER_TONE: Record<DemoTester["tier"], "brand" | "success" | "neutral"> = {
 };
 
 function DemoTestersSection() {
-  const { data } = useSWR<{ items: DemoTester[] }>("/demo-testers", () => demoTesters());
+  const { data, error } = useSWR<{ items: DemoTester[] }>("/demo-testers", () => demoTesters());
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DemoTester | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -2488,6 +2488,23 @@ function DemoTestersSection() {
     () => (data?.items ?? []).slice().sort((a, b) => a.email.localeCompare(b.email)),
     [data],
   );
+
+  // /api/v1/demo-testers only exists when this backend was started with
+  // DEMO_MODE=true (see main.go's demo.MountAdmin call) — production never
+  // sets that flag, so this 404s there. Without this check the panel just
+  // rendered an empty "ยังไม่มีใครมีสิทธิ์" table forever and "เพิ่มผู้มีสิทธิ์"
+  // silently 404'd on submit, with nothing telling the admin why.
+  if (error instanceof ApiError && error.status === 404) {
+    return (
+      <Panel title="สิทธิ์เข้าใช้งานห้องทดลอง">
+        <Alert
+          status="default"
+          title="เซิร์ฟเวอร์นี้ไม่ได้เปิดใช้งานโหมดทดลอง (Demo)"
+          description='ฟีเจอร์ "ห้องทดลอง" เปิดเฉพาะบางเซิร์ฟเวอร์ (เช่นสำหรับสาธิตระบบ) เซิร์ฟเวอร์นี้ไม่ได้ตั้งค่าไว้ จึงไม่มีอะไรให้จัดการในส่วนนี้'
+        />
+      </Panel>
+    );
+  }
 
   async function doDelete() {
     if (!deleteTarget) return;
