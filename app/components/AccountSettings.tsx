@@ -1,12 +1,14 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, Briefcase, Clock, GraduationCap, KeyRound, Mail, Phone, ShieldCheck, User,
+  ArrowRight, Briefcase, GraduationCap, KeyRound, Mail, Phone, Settings2, ShieldCheck, User,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import { formatFullName } from "../lib/prefixes";
-import { Button, Chip, Panel } from "./ui";
+import { Button, Panel } from "./ui";
 import ProfilePhotoCard from "./ProfilePhotoCard";
+import TwoFactorManageModal from "./TwoFactorManageModal";
 
 /**
  * The account screen's body: picture, identity, security. One implementation
@@ -14,10 +16,13 @@ import ProfilePhotoCard from "./ProfilePhotoCard";
  * belongs to — so no role ever gets its own copy to drift apart from.
  */
 export default function AccountSettings({ me }: { me: Me | undefined }) {
+  const [manageOpen, setManageOpen] = useState(false);
+
   return (
     <>
       {/* The picture is the one thing here the user owns outright, so it leads. */}
       {me && <ProfilePhotoCard me={me} />}
+      {manageOpen && <TwoFactorManageModal onClose={() => setManageOpen(false)} />}
 
       <Panel
         title="ข้อมูลส่วนตัว"
@@ -60,9 +65,25 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
           />
           <SecurityRow
             icon={<ShieldCheck size={18} />}
-            title="Two-Factor Authentication"
-            description="เพิ่มความปลอดภัยด้วยการยืนยันตัวตนสองขั้นตอน"
-            action={<Chip tone="neutral"><Clock size={12} className="me-1" /> กำลังพัฒนา</Chip>}
+            title="Two-Factor Authentication (2FA)"
+            description={
+              me?.totp_enabled
+                ? `เปิดใช้งานแล้ว · เหลือรหัสสำรอง ${me.recovery_codes_remaining} ชุด`
+                : "เพิ่มความปลอดภัยด้วยการยืนยันตัวตนสองขั้นตอน"
+            }
+            action={
+              me?.totp_enabled ? (
+                <Button variant="secondary" size="sm" onClick={() => setManageOpen(true)}>
+                  <Settings2 size={13} /> จัดการ
+                </Button>
+              ) : (
+                <Link href="/setup-2fa">
+                  <Button variant="primary" size="sm">
+                    เปิดใช้งาน <ArrowRight size={13} />
+                  </Button>
+                </Link>
+              )
+            }
           />
         </div>
       </Panel>

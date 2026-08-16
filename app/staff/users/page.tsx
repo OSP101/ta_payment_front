@@ -8,8 +8,8 @@ import {
   TextField as HTextField,
   type SortDescriptor,
 } from "@heroui/react";
-import { Check, Copy, KeyRound, LockOpen, Pencil, Plus, UserCheck, UserX } from "lucide-react";
-import { api, type Me } from "../../lib/api";
+import { Check, Copy, KeyRound, LockOpen, Pencil, Plus, ShieldAlert, ShieldOff, UserCheck, UserX } from "lucide-react";
+import { api, errMessage, mfaAdminReset, type Me } from "../../lib/api";
 import { THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
@@ -44,6 +44,8 @@ interface User {
   /** ตำแหน่งบริหาร เช่น "หัวหน้าสาขาวิชา..." — ป้ายแสดงผลเฉยๆ ไม่มีผลต่อสิทธิ์หรือเอกสาร */
   admin_position?: string | null;
   is_active: boolean;
+  /** เปิดใช้งาน 2FA แล้วหรือยัง — บังคับสำหรับ admin/staff/ผู้บริหาร */
+  totp_enabled?: boolean;
 }
 
 /**
@@ -285,6 +287,7 @@ export default function UsersPage() {
   const [deactivating, setDeactivating] = useState<User | null>(null);
   const [reactivating, setReactivating] = useState<User | null>(null);
   const [unlocking, setUnlocking] = useState<User | null>(null);
+  const [resetting2FA, setResetting2FA] = useState<User | null>(null);
 
   // The password-gate unlock is admin-only, and the API additionally refuses an
   // admin unlocking themselves (see service.ClearPasswordGateLockout — otherwise
@@ -294,6 +297,14 @@ export default function UsersPage() {
   const { data: me } = useSWR<Me>("/me");
   const isAdmin = (me?.roles ?? []).includes("admin");
   const canUnlock = (u: User) => isAdmin && u.id !== me?.id;
+  // 2FA reset is admin-only, NOT adminOrStaff — see router.go's
+  // RequireRole(rbac.RoleAdmin) on this route and MFAService.AdminReset's own
+  // doc comment: staff already hold unrestricted password reset, so letting
+  // staff also reset 2FA would chain into a one-click admin takeover. Also
+  // refused on self, mirroring AdminReset's own refusal — an admin who still
+  // has access must disable their OWN 2FA from /account (password + code),
+  // not this weaker admin path (password only).
+  const canReset2FA = (u: User) => isAdmin && u.id !== me?.id;
 
   const columns: DataColumn<User>[] = [
     {
@@ -318,12 +329,24 @@ export default function UsersPage() {
     },
     {
       id: "roles", label: "บทบาท",
-      render: u => (
-        <div className="flex gap-1 flex-wrap">
-          {u.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
-          {u.is_executive && <Chip tone="info">ผู้บริหาร</Chip>}
-        </div>
-      ),
+      render: u => {
+        // 2FA is mandatory for admin/staff/ผู้บริหาร (see AccountGuard's
+        // mfa_setup_required) — only flag the gap for those, since a
+        // lecturer/TA without it is just someone who hasn't opted in, not a
+        // policy violation worth an admin's attention.
+        const mandatory = u.roles.includes("admin") || u.roles.includes("staff") || u.is_executive;
+        return (
+          <div className="flex gap-1 flex-wrap">
+            {u.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
+            {u.is_executive && <Chip tone="info">ผู้บริหาร</Chip>}
+            {u.totp_enabled ? (
+              <Chip tone="success">2FA</Chip>
+            ) : mandatory ? (
+              <Chip tone="danger"><ShieldAlert size={11} className="me-1" /> ยังไม่ตั้ง 2FA</Chip>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       id: "level", label: "ระดับ",
@@ -352,6 +375,11 @@ export default function UsersPage() {
           {canUnlock(u) && (
             <Button variant="ghost" size="sm" onClick={() => setUnlocking(u)}>
               <LockOpen size={14} /> ปลดล็อก
+            </Button>
+          )}
+          {canReset2FA(u) && u.totp_enabled && (
+            <Button variant="ghost" size="sm" onClick={() => setResetting2FA(u)}>
+              <ShieldOff size={14} /> รีเซ็ต 2FA
             </Button>
           )}
           {u.is_active ? (
@@ -444,6 +472,7 @@ export default function UsersPage() {
       {deactivating && <DeactivateModal user={deactivating} onClose={() => setDeactivating(null)} />}
       {reactivating && <ReactivateModal user={reactivating} onClose={() => setReactivating(null)} />}
       {unlocking && <UnlockPasswordGateModal user={unlocking} onClose={() => setUnlocking(null)} />}
+      {resetting2FA && <Reset2FAModal user={resetting2FA} onClose={() => setResetting2FA(null)} />}
     </div>
   );
 }
@@ -1003,6 +1032,71 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
 }
 
 /* -------------------------------------------------------------------------- */
+
+// Admin-only (see canReset2FA above and router.go's RequireRole(rbac.RoleAdmin)
+// on this route). Requires the ACTING admin's own password, unlike
+// UnlockPasswordGateModal above — resetting 2FA removes a security control
+// entirely, not just a temporary rate-limit, so it gets the stronger gate.
+function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const [password, setPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    if (!password) {
+      setErr("กรุณากรอกรหัสผ่านของคุณเพื่อยืนยัน");
+      return;
+    }
+    setPending(true);
+    setErr(null);
+    try {
+      await mfaAdminReset(user.id, password);
+      notify.success(`รีเซ็ต 2FA ของ ${user.first_name} ${user.last_name} แล้ว`);
+      mutate((k: string) => k.startsWith("/users"));
+      onClose();
+    } catch (e) {
+      setErr(errMessage(e));
+      notify.error(e);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="รีเซ็ต 2FA"
+      size="md"
+      footer={<>
+        <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
+        <Button variant="danger" onClick={submit} disabled={pending} isPending={pending}>
+          <ShieldOff size={14} /> รีเซ็ต 2FA
+        </Button>
+      </>}
+    >
+      <div className="space-y-3">
+        <p className="text-sm">
+          ล้างการยืนยันตัวตนสองขั้นตอนของ
+          <span className="font-medium"> {user.first_name} {user.last_name} </span>
+          ({user.email}) ผู้ใช้จะเข้าสู่ระบบด้วยรหัสผ่านเพียงอย่างเดียว และต้องตั้งค่า 2FA ใหม่
+        </p>
+        <p className="text-sm text-(--ink-3)">
+          ใช้เมื่อผู้ใช้ทำอุปกรณ์ยืนยันตัวตนหายและไม่มีรหัสสำรองเหลืออยู่
+        </p>
+        <VField
+          label="รหัสผ่านของคุณ (ยืนยันตัวตน)"
+          value={password}
+          onChange={setPassword}
+          error={err}
+          show={!!err}
+          type="password"
+          required
+        />
+      </div>
+    </Modal>
+  );
+}
 
 function TempPasswordPanel({ email, password }: { email: string; password: string }) {
   const [copied, setCopied] = useState(false);

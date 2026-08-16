@@ -4,17 +4,21 @@ import { useRouter } from "next/navigation";
 import {
   Button,
   Card,
+  Description,
   FieldError,
   InputGroup,
+  InputOTP,
   Label,
+  Link,
+  REGEXP_ONLY_DIGITS,
   Separator,
   Spinner,
   TextField,
 } from "@heroui/react";
-import { LogIn, Eye, EyeOff, Shield, Clock, MonitorSmartphone, LogOut, CheckCircle2 } from "lucide-react";
+import { LogIn, Eye, EyeOff, Shield, Clock, MonitorSmartphone, LogOut, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Alert, IconButton } from "../components/ui";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "../components/BetaNotice";
-import { api, errMessage, type Me } from "../lib/api";
+import { api, errMessage, setDemoApiPrefix, login, loginTwoFactor, type Me } from "../lib/api";
 import { notify } from "../lib/notify";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -71,6 +75,31 @@ export default function LoginPage() {
   const [betaOpen, setBetaOpen] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
 
+  // Step 2 of login (see internal/handler/auth.go's AuthHandler.Login /
+  // LoginTwoFactor). Deliberately rendered as a state change WITHIN this
+  // same /login page rather than a navigation to a separate route — see
+  // handleAuthRedirect/SessionActivityGuard: the user holds no session
+  // cookie yet at this point, so navigating anywhere outside /login would
+  // either trip the idle guard's heartbeat (401 → hard-redirect, destroying
+  // the in-flight challenge) or, on a tab that once visited /demo, resolve
+  // the code POST against a stale demo slot instead of production.
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+
+  // Landing on /login is an unambiguous signal that whatever happens next is
+  // REAL production auth — clear any demo apiPrefix left over from an
+  // earlier /demo visit in this same tab before this page's own API calls
+  // (the SSO check right below, and the login submit further down) fire.
+  // Without this, a tab that visited /demo and never clicked "ออกจากโหมด
+  // ทดลอง" keeps routing every call here at the stale demo slot's own route
+  // tree instead of production's /api/v1 — real credentials silently hit
+  // the wrong backend.
+  useEffect(() => {
+    setDemoApiPrefix(null);
+  }, []);
+
   useEffect(() => {
     api.get<{ enabled: boolean; url?: string }>("/auth/sso/url")
       .then(r => { if (r.enabled && r.url) setSsoUrl(r.url); })
@@ -110,16 +139,52 @@ export default function LoginPage() {
     setShowErrors(false);
     setLoading(true);
     try {
-      const res = await api.post<{ user: Me; token?: string }>("/auth/login", { email: email.trim(), password });
-      if (res.user?.must_change_password) {
-        router.push("/change-password");
-      } else {
-        // Honour a ?next= redirect target set when the session expired mid-use.
-        const next = new URLSearchParams(window.location.search).get("next");
-        router.push(next && next.startsWith("/") ? next : "/");
+      const res = await login(email.trim(), password);
+      if ("mfa_required" in res) {
+        // Password verified, second factor still outstanding — no session,
+        // no cookie yet. Switch this same page into step 2; nothing to
+        // navigate to.
+        setChallenge(res.challenge);
+        return;
       }
-      router.refresh();
+      finishLogin(res.user);
     } catch (e) {
+      notify.error(errMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function finishLogin(user: Me) {
+    if (user.must_change_password) {
+      router.push("/change-password");
+    } else {
+      // Honour a ?next= redirect target set when the session expired mid-use.
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(next && next.startsWith("/") ? next : "/");
+    }
+    router.refresh();
+  }
+
+  async function onSubmit2FA(e: React.FormEvent) {
+    e.preventDefault();
+    if (!challenge) return;
+    if (!code.trim()) {
+      setCodeError(useRecoveryCode ? "กรุณากรอกรหัสสำรอง" : "กรุณากรอกรหัส 6 หลัก");
+      return;
+    }
+    setCodeError(null);
+    setLoading(true);
+    try {
+      const res = await loginTwoFactor(challenge, code.trim());
+      finishLogin(res.user);
+    } catch (e) {
+      // Wrong code, expired challenge, and a consumed challenge all return
+      // the same message from the backend by design — see
+      // service.ErrMFAChallengeInvalid's doc comment — so there is nothing
+      // more specific to show here even on a lockout (429), which arrives
+      // with its own distinct message already.
+      setCode("");
       notify.error(errMessage(e));
     } finally {
       setLoading(false);
@@ -148,9 +213,15 @@ export default function LoginPage() {
               T
             </div>
             <h1 className="mt-4 text-[22px] font-semibold text-foreground">
-              เข้าสู่ระบบ TA Payment
+              {challenge ? "ยืนยันตัวตนสองขั้นตอน" : "เข้าสู่ระบบ TA Payment"}
             </h1>
-            <p className="text-sm text-muted mt-1">ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน</p>
+            <p className="text-sm text-muted mt-1">
+              {challenge
+                ? (useRecoveryCode
+                  ? "กรอกรหัสสำรองหนึ่งชุดที่คุณบันทึกไว้ตอนตั้งค่า 2FA"
+                  : "กรอกรหัส 6 หลักจากแอปยืนยันตัวตนของคุณ")
+                : "ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน"}
+            </p>
           </div>
 
           {reason && REASON_INFO[reason] && (
@@ -166,6 +237,75 @@ export default function LoginPage() {
 
           <Card>
             <Card.Content className="flex flex-col gap-4">
+              {challenge ? (
+              <form onSubmit={onSubmit2FA} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2 items-center">
+                  <Label>{useRecoveryCode ? "รหัสสำรอง" : "รหัสยืนยันตัวตน"}</Label>
+                  {useRecoveryCode ? (
+                    <TextField
+                      name="recovery-code"
+                      isRequired
+                      value={code}
+                      onChange={v => { setCode(v); setCodeError(null); }}
+                      isInvalid={!!codeError}
+                      className="w-full"
+                    >
+                      <InputGroup>
+                        <InputGroup.Input placeholder="XXXXX-XXXXX" autoComplete="one-time-code" lang="en" />
+                      </InputGroup>
+                    </TextField>
+                  ) : (
+                    <InputOTP
+                      maxLength={6}
+                      pattern={REGEXP_ONLY_DIGITS}
+                      value={code}
+                      onChange={v => { setCode(v); setCodeError(null); }}
+                      isInvalid={!!codeError}
+                      autoFocus
+                    >
+                      <InputOTP.Group>
+                        <InputOTP.Slot index={0} />
+                        <InputOTP.Slot index={1} />
+                        <InputOTP.Slot index={2} />
+                      </InputOTP.Group>
+                      <InputOTP.Separator />
+                      <InputOTP.Group>
+                        <InputOTP.Slot index={3} />
+                        <InputOTP.Slot index={4} />
+                        <InputOTP.Slot index={5} />
+                      </InputOTP.Group>
+                    </InputOTP>
+                  )}
+                  {codeError && <FieldError>{codeError}</FieldError>}
+                  <Description className="text-center">
+                    {useRecoveryCode
+                      ? "แต่ละรหัสสำรองใช้ได้เพียงครั้งเดียว"
+                      : "เปิดแอปยืนยันตัวตน (เช่น Google Authenticator) เพื่อดูรหัส"}
+                  </Description>
+                </div>
+
+                <Button type="submit" size="lg" fullWidth isPending={loading}>
+                  {loading ? <Spinner color="current" size="sm" /> : <ShieldCheck />}
+                  {loading ? "กำลังตรวจสอบ…" : "ยืนยัน"}
+                </Button>
+
+                <div className="flex items-center justify-center gap-4">
+                  <Link
+                    className="text-sm cursor-pointer"
+                    onPress={() => { setUseRecoveryCode(u => !u); setCode(""); setCodeError(null); }}
+                  >
+                    {useRecoveryCode ? "ใช้รหัสจากแอปยืนยันตัวตนแทน" : "ใช้รหัสสำรองแทน"}
+                  </Link>
+                  <Link
+                    className="text-sm cursor-pointer text-muted"
+                    onPress={() => { setChallenge(null); setCode(""); setCodeError(null); setPassword(""); }}
+                  >
+                    ยกเลิก
+                  </Link>
+                </div>
+              </form>
+              ) : (
+              <>
               {ssoUrl && (
                 <>
                   <a href={ssoUrl}>
@@ -255,6 +395,8 @@ export default function LoginPage() {
               <p className="text-center text-xs text-muted">
                 ลืมรหัสผ่าน? กรุณาติดต่อเจ้าหน้าที่วิทยาลัยการคอมพิวเตอร์เพื่อรีเซ็ตรหัสผ่าน
               </p>
+              </>
+              )}
             </Card.Content>
           </Card>
 

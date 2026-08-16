@@ -21,6 +21,69 @@ export class ApiError extends Error {
 const TIMEOUT_MS = 20000;
 
 /**
+ * BETA-only: lets the demo sandbox (app/demo, see internal/demo on the
+ * backend) reuse every existing page unmodified. Every real page in this app
+ * calls api.get/post/etc, which always resolved to a literal "/api/v1"
+ * prefix — fine for exactly one backend, but the sandbox needs each visitor
+ * routed to their own isolated workspace at "/api/demo/w/<n>" instead.
+ *
+ * Rather than duplicate every page under app/demo/staff, app/demo/lecturer,
+ * etc., app/demo/enter/page.tsx calls setApiPrefix once after claiming a
+ * workspace, and every existing page's calls transparently go to that
+ * workspace's backend from then on — no page needed to know the sandbox
+ * exists. Persisted to sessionStorage (not localStorage: a demo workspace
+ * belongs to one browser session, not "this device forever") so a reload
+ * mid-walkthrough doesn't silently drop back to hitting production.
+ *
+ * Deliberately module-level mutable state, not React context: api.ts is
+ * called from far outside the component tree (SWR fetchers, event handlers
+ * with no provider above them), and the prefix changes at most once per
+ * demo session, not something anything needs to re-render on.
+ */
+const DEMO_PREFIX_KEY = "ta-payment:demo-api-prefix";
+let apiPrefix = "/api/v1";
+if (typeof window !== "undefined") {
+  try {
+    // Landing on /login (a hard load or a browser-restored tab, not a
+    // client-side navigation — this runs once at module load) is an
+    // unambiguous "this must be production" signal. Never hydrate a stale
+    // demo prefix there: a tab that visited /demo earlier and never
+    // clicked "ออกจากโหมดทดลอง" would otherwise start this fresh /login
+    // load still demo-prefixed, misrouting the real login POST at a demo
+    // slot's own route tree. app/login/page.tsx's own mount-time clear
+    // covers the client-side-navigation-TO-/login case; this covers the
+    // hard-load case that fix's effect runs too late for (DemoBanner reads
+    // this same module-level apiPrefix synchronously on its own first
+    // render, before that effect fires).
+    if (!window.location.pathname.startsWith("/login")) {
+      const saved = window.sessionStorage.getItem(DEMO_PREFIX_KEY);
+      if (saved) apiPrefix = saved;
+    }
+  } catch {
+    /* storage blocked — stay on production */
+  }
+}
+
+export function setDemoApiPrefix(prefix: string | null) {
+  apiPrefix = prefix ?? "/api/v1";
+  if (typeof window === "undefined") return;
+  try {
+    if (prefix) window.sessionStorage.setItem(DEMO_PREFIX_KEY, prefix);
+    else window.sessionStorage.removeItem(DEMO_PREFIX_KEY);
+  } catch {
+    /* not fatal — apiPrefix itself is already updated for this tab */
+  }
+}
+
+export function isDemoMode(): boolean {
+  return apiPrefix !== "/api/v1";
+}
+
+export function getDemoBasePath(): string | null {
+  return isDemoMode() ? apiPrefix : null;
+}
+
+/**
  * Origin that file uploads POST to, bypassing the Next.js rewrite.
  *
  * Next buffers the ENTIRE body of a proxied request in memory so it can be read
@@ -49,6 +112,11 @@ const UPLOAD_ORIGIN = (process.env.NEXT_PUBLIC_API_ORIGIN ?? "").replace(/\/$/, 
 // human message.
 const CODE_MESSAGES: Record<string, string> = {
   password_change_required: "กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน",
+  // See internal/handler/middleware.go's AccountGuard — the mandatory-2FA
+  // twin of password_change_required, same shape: every admin/staff/
+  // executive account without totp_enabled_at set gets this on every
+  // endpoint except /me, /me/2fa/*, and /auth/heartbeat.
+  mfa_setup_required: "กรุณาตั้งค่าการยืนยันตัวตนสองขั้นตอน (2FA) ก่อนใช้งาน",
   ta_profile_not_approved: "เอกสารของคุณยังไม่ได้รับการอนุมัติ",
   // See internal/handler/middleware.go's AccountGuard — these three all come
   // back as a plain 401 with one of these as the `error` field. SESSION_REASONS
@@ -90,15 +158,36 @@ function humanMessage(status: number, raw: string): string {
  * session either. `/auth/heartbeat` is carved back OUT of that: its whole job
  * is to surface exactly this kind of 401 (see SessionActivityGuard), so it is
  * the one `/auth/*` path that must still redirect.
+ *
+ * Matched with `includes`, not `startsWith`: every OTHER caller of this goes
+ * through req() with a path relative to apiPrefix (e.g. "/auth/login"), but
+ * demoFetch (demoLogin) passes an ABSOLUTE path instead — "/api/demo/w/3
+ * /auth/login" — since apiPrefix isn't set yet at that point in the demo
+ * entry flow. `startsWith` alone never matches that, so a demo login's own
+ * 401 fell through to the "session expired" branch below and hard-navigated
+ * the tab away before the entry page's own catch block could show the
+ * user why their login actually failed.
  */
 const REAUTH_PATHS = [
   "/auth/",
   "/ta-review/download-all-token",
+  // MFAHandler.Enable/Disable/RegenerateRecoveryCodes (internal/handler/mfa.go)
+  // return 401 for a wrong TOTP/recovery code or a wrong password — the exact
+  // same "not a dead session" shape as the two entries above, found live: a
+  // mistyped enrolment code hard-navigated straight to /login instead of
+  // showing the inline FieldError /setup-2fa is built to render, discarding
+  // the in-progress QR scan.
+  "/me/2fa/",
 ];
 function isReauthPath(path: string): boolean {
-  if (path === "/auth/heartbeat") return false;
+  if (path.endsWith("/auth/heartbeat")) return false;
   // zip-token carries a user id in the middle, hence the suffix test.
-  return REAUTH_PATHS.some(p => path.startsWith(p)) || path.endsWith("/zip-token");
+  // /2fa/reset (POST /users/:id/2fa/reset, MFAHandler.AdminReset) is the same
+  // shape again, with the target user's id in the middle the same way
+  // zip-token's is — a staff member mistyping their OWN confirming password
+  // must not be logged out of /staff/users over it.
+  return REAUTH_PATHS.some(p => path.startsWith(p) || path.includes(p))
+    || path.endsWith("/zip-token") || path.endsWith("/2fa/reset");
 }
 
 /** Handle auth-related statuses with a client-side redirect where appropriate. */
@@ -106,13 +195,22 @@ function handleAuthRedirect(path: string, status: number, code?: string) {
   if (typeof window === "undefined") return;
   if (isReauthPath(path)) return;
   const here = window.location.pathname + window.location.search;
-  if (status === 401 && !here.startsWith("/login")) {
+  // A demo session that idles out or gets superseded must land back on
+  // /demo, never /login — /login authenticates against production, which a
+  // sandbox visitor almost certainly has no real account for, and sending
+  // them there reads as "you got logged out of the real system".
+  const authPage = isDemoMode() ? "/demo" : "/login";
+  if (status === 401 && !here.startsWith(authPage)) {
     const reason = code && (SESSION_REASONS as readonly string[]).includes(code) ? `&reason=${code}` : "";
-    window.location.assign(`/login?next=${encodeURIComponent(here)}${reason}`);
+    window.location.assign(`${authPage}?next=${encodeURIComponent(here)}${reason}`);
     return;
   }
   if (status === 403 && code === "password_change_required" && !here.startsWith("/change-password")) {
     window.location.assign("/change-password");
+    return;
+  }
+  if (status === 403 && code === "mfa_setup_required" && !here.startsWith("/setup-2fa")) {
+    window.location.assign("/setup-2fa");
   }
 }
 
@@ -135,7 +233,7 @@ async function parseError(path: string, res: Response): Promise<ApiError> {
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/api/v1${path}`, {
+    res = await fetch(`${apiPrefix}${path}`, {
       ...init,
       credentials: "include",
       signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS),
@@ -159,6 +257,116 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.blob()) as unknown as T;
 }
 
+/**
+ * BETA-only: the two calls app/demo/page.tsx makes before setDemoApiPrefix
+ * has anything to point at, so they cannot go through req() (which always
+ * targets apiPrefix — see its doc comment). Both live outside /api/v1
+ * entirely: /api/demo/enter claims a workspace and returns where its routes
+ * live; the returned base_path is then what api.ts prefixes for every OTHER
+ * call for the rest of the demo session, including the actual login below.
+ */
+export interface DemoAccount { email: string; label: string; roles: string[] }
+/** tier is the caller's OWN resolved permission tier (see internal/demo/tiers.go)
+ *  — accounts is already filtered to what that tier may log into; nothing
+ *  client-side needs to filter again. */
+export interface DemoEnterResult { base_path: string; accounts: DemoAccount[]; tier: DemoTester["tier"]; demo_password: string }
+
+async function demoFetch<T>(path: string, body: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method: "POST",
+      credentials: "include",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, humanMessage(0, ""));
+  }
+  if (!res.ok) throw await parseError(path, res);
+  return (await res.json()) as T;
+}
+
+export const demoEnter = (email: string) =>
+  demoFetch<DemoEnterResult>("/api/demo/enter", { email });
+
+export const demoResetWorkspace = (email: string) =>
+  demoFetch<{ base_path: string }>("/api/demo/reset", { email });
+
+export const demoLogin = (basePath: string, email: string, password: string) =>
+  demoFetch<{ user: Me }>(`${basePath}/auth/login`, { email, password });
+
+// The simulator panel's own two endpoints — unlike demoEnter/demoLogin
+// above, these run AFTER login, under the claimed slot's own prefix, so
+// they go through the normal api.get/post (apiPrefix-aware) below rather
+// than demoFetch.
+/** Matches internal/demo's tiers.go — which seeded account's point of view a
+ *  scenario/problem step is written from. See DemoScenarioEvent.actor_role. */
+export type DemoActorRole = "staff" | "lecturer" | "ta";
+
+export interface DemoScenarioEvent {
+  key: string;
+  label: string;
+  description: string;
+  /** Whether this step's effect is already present — a cheap DB read, not a
+   *  guarantee the step can be re-run without error (see internal/demo's
+   *  ScenarioEventStatus doc comment). */
+  done: boolean;
+  /** Staff page that shows this step's real effect, if it has one — see
+   *  internal/demo's ScenarioEvent.RelatedPath doc comment. */
+  related_path?: string;
+  /** Which seeded role this step is written from the POV of — see
+   *  internal/demo's ScenarioEvent.ActorRole doc comment. Used to decide
+   *  whether to offer navigating to related_path at all: a lecturer/TA
+   *  tester has no access to a staff-actor step's (always staff-only)
+   *  related_path, so offering that link would just send them into a 403. */
+  actor_role: DemoActorRole;
+}
+
+export const demoScenarioEvents = () => api.get<{ items: DemoScenarioEvent[] }>("/scenario/events");
+export const demoRunScenarioEvent = (key: string) => api.post<{ message: string }>(`/scenario/events/${key}`);
+
+/** Problem-case events have no `done` flag — see internal/demo/scenario_problems.go:
+ *  they're repeatable demonstrations, not one-time setup steps. */
+export interface DemoProblemEvent {
+  key: string;
+  label: string;
+  description: string;
+  related_path?: string;
+  actor_role: DemoActorRole;
+}
+
+export const demoProblemEvents = () => api.get<{ items: DemoProblemEvent[] }>("/scenario/problems");
+export const demoRunProblemEvent = (key: string) => api.post<{ message: string }>(`/scenario/problems/${key}`);
+
+/** "บันทึกจุดตรวจสอบ" / "ย้อนกลับไปจุดตรวจสอบ" — see internal/demo/checkpoint.go.
+ *  One checkpoint per workspace; saving overwrites whatever was there before. */
+export const demoCheckpointStatus = () => api.get<{ saved_at: string | null }>("/scenario/checkpoint");
+export const demoSaveCheckpoint = () => api.post<{ ok: true }>("/scenario/checkpoint");
+export const demoRestoreCheckpoint = () => api.post<{ ok: true }>("/scenario/checkpoint/restore");
+
+/**
+ * Who may enter the demo sandbox, and at what tier — managed from
+ * /staff/settings (DemoTestersSection), unlike everything else on this page
+ * which runs from INSIDE a claimed demo slot. These calls go through the
+ * normal api.get/post/del (production /api/v1 prefix, real staff session),
+ * not demoFetch — see internal/demo/admin.go's own doc comment for why these
+ * endpoints live on the production router instead of under /api/demo.
+ */
+export interface DemoTester {
+  email: string;
+  tier: "staff" | "lecturer" | "ta";
+  note: string;
+  added_by: string;
+  created_at: string;
+}
+export const demoTesters = () => api.get<{ items: DemoTester[] }>("/demo-testers");
+export const demoAddTester = (email: string, tier: DemoTester["tier"], note: string) =>
+  api.post<{ ok: true }>("/demo-testers", { email, tier, note });
+export const demoRemoveTester = (email: string) =>
+  api.del<{ ok: true }>(`/demo-testers/${encodeURIComponent(email)}`);
+
 export const api = {
   get: <T>(path: string) => req<T>(path),
   post: <T>(path: string, body?: unknown) => req<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
@@ -168,7 +376,7 @@ export const api = {
   upload: async <T>(path: string, form: FormData): Promise<T> => {
     let res: Response;
     try {
-      res = await fetch(`${UPLOAD_ORIGIN}/api/v1${path}`, {
+      res = await fetch(`${UPLOAD_ORIGIN}${apiPrefix}${path}`, {
         method: "POST",
         body: form,
         // Required both ways: same-origin through the rewrite, and cross-origin
@@ -234,7 +442,7 @@ function uploadWithProgress<T>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${UPLOAD_ORIGIN}/api/v1${path}`, true);
+    xhr.open("POST", `${UPLOAD_ORIGIN}${apiPrefix}${path}`, true);
     // The XHR spelling of credentials: "include".
     xhr.withCredentials = true;
     xhr.timeout = TIMEOUT_MS * 3;
@@ -319,7 +527,47 @@ export interface Me {
    *  to the role label. Display-only — staff set it, nothing reads it back. */
   admin_position?: string | null;
   roles: string[];
+  /** Whether this account has completed 2FA enrolment. Mandatory for
+   *  admin/staff/executive — see AccountGuard's mfa_setup_required. */
+  totp_enabled: boolean;
+  /** 0 when totp_enabled is false. Shown on /account so a user notices
+   *  before they run out. */
+  recovery_codes_remaining: number;
 }
+
+/**
+ * Two-factor authentication. Login is now two steps — see
+ * internal/handler/auth.go's AuthHandler.Login/LoginTwoFactor: step 1
+ * (password) returns either {user} directly (2FA off) or {mfa_required,
+ * challenge} (2FA on, no session/cookie yet); step 2 redeems the challenge
+ * with a TOTP or recovery code and returns {user}, same shape either path
+ * used to return alone.
+ */
+export type LoginResult = { user: Me } | { mfa_required: true; challenge: string };
+export const login = (email: string, password: string) =>
+  api.post<LoginResult>("/auth/login", { email, password });
+export const loginTwoFactor = (challenge: string, code: string) =>
+  api.post<{ user: Me }>("/auth/login/2fa", { challenge, code });
+
+/** What /me/2fa/setup renders on the enrolment screen. secret is included so
+ *  the page can offer "can't scan? type this instead" — the same secret is
+ *  embedded in otpauth_url/the QR image, not additional exposure. */
+export interface MFASetupResult {
+  secret: string;
+  otpauth_url: string;
+  qr_png_base64: string;
+}
+export const mfaSetup = () => api.post<MFASetupResult>("/me/2fa/setup");
+export const mfaEnable = (code: string) =>
+  api.post<{ recovery_codes: string[] }>("/me/2fa/enable", { code });
+export const mfaDisable = (password: string, code: string) =>
+  api.post<{ ok: true }>("/me/2fa/disable", { password, code });
+export const mfaRegenerateRecoveryCodes = (password: string) =>
+  api.post<{ recovery_codes: string[] }>("/me/2fa/recovery-codes", { password });
+/** Admin-only — see router.go's RequireRole(rbac.RoleAdmin) on this route and
+ *  MFAService.AdminReset's doc comment for why staff cannot call this. */
+export const mfaAdminReset = (userId: string, password: string) =>
+  api.post<{ ok: true }>(`/users/${userId}/2fa/reset`, { password });
 
 export interface Term {
   id: string;

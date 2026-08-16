@@ -8,7 +8,7 @@ import {
   DatePicker, DateField, Calendar, I18nProvider,
 } from "@heroui/react";
 import { parseDate, parseDateTime, type DateValue } from "@internationalized/date";
-import { api } from "../../lib/api";
+import { api, demoTesters, demoAddTester, demoRemoveTester, type DemoTester } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select, ConfirmDialog, TipWrap,
@@ -46,7 +46,7 @@ export default function SettingsPage() {
   // land on the merged calendar tab instead of a 404.
   const rawTab = tabParam ?? "";
   const normalised = rawTab === "windows" || rawTab === "periods" ? "calendar" : rawTab;
-  const initialTab = ["rate", "terms", "calendar", "curricula", "admins"].includes(normalised)
+  const initialTab = ["rate", "terms", "calendar", "curricula", "admins", "demo-access"].includes(normalised)
     ? normalised
     : "rate";
   return (
@@ -60,6 +60,7 @@ export default function SettingsPage() {
             <Tabs.Tab id="calendar">ปฏิทินเทอม<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="curricula">หลักสูตร<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="demo-access">สิทธิ์ห้องทดลอง<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
@@ -80,6 +81,9 @@ export default function SettingsPage() {
         </Tabs.Panel>
         <Tabs.Panel id="admins" className="pt-6">
           <AdminOfficersSection />
+        </Tabs.Panel>
+        <Tabs.Panel id="demo-access" className="pt-6">
+          <DemoTestersSection />
         </Tabs.Panel>
       </Tabs>
     </div>
@@ -2448,6 +2452,222 @@ function AdminOfficerFormModal({
             <div className="text-muted">{titleTrim || "— ยังไม่กรอกตำแหน่ง —"}</div>
           </div>
         </div>
+
+        {error && (
+          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Demo sandbox access — who may enter "โหมดทดลอง" and at what tier.          */
+/* BETA-only, same as everything under internal/demo on the backend — remove  */
+/* this section together with that package when the sandbox is retired.      */
+/* -------------------------------------------------------------------------- */
+
+const TIER_LABELS: Record<DemoTester["tier"], string> = {
+  staff: "เจ้าหน้าที่ (ทุกสิทธิ์)",
+  lecturer: "อาจารย์ (อาจารย์ + TA)",
+  ta: "TA (เฉพาะสิทธิ์ TA)",
+};
+const TIER_TONE: Record<DemoTester["tier"], "brand" | "success" | "neutral"> = {
+  staff: "brand",
+  lecturer: "success",
+  ta: "neutral",
+};
+
+function DemoTestersSection() {
+  const { data } = useSWR<{ items: DemoTester[] }>("/demo-testers", () => demoTesters());
+  const [formOpen, setFormOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DemoTester | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const rows = useMemo(
+    () => (data?.items ?? []).slice().sort((a, b) => a.email.localeCompare(b.email)),
+    [data],
+  );
+
+  async function doDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await demoRemoveTester(deleteTarget.email);
+      await mutate("/demo-testers");
+      toast.success(`ยกเลิกสิทธิ์ของ ${deleteTarget.email} เรียบร้อยแล้ว`);
+      setDeleteTarget(null);
+    } catch (e) {
+      toast.danger("ยกเลิกสิทธิ์ไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Panel
+      title="สิทธิ์เข้าใช้งานห้องทดลอง"
+      description={
+        'กำหนดว่าอีเมลไหนเข้า "โหมดทดลอง" ได้บ้าง และเห็นบทบาทไหนบ้าง — เจ้าหน้าที่เห็นทุกบทบาท ' +
+        "อาจารย์เห็นเฉพาะบทบาทอาจารย์และ TA ส่วน TA เห็นเฉพาะบทบาท TA ของตัวเอง อีเมลที่ไม่อยู่ในรายการนี้เข้าห้องทดลองไม่ได้เลย"
+      }
+      actions={
+        <Button variant="primary" onClick={() => setFormOpen(true)}>
+          <Plus size={14} />เพิ่มผู้มีสิทธิ์
+        </Button>
+      }
+    >
+      {rows.length === 0 ? (
+        <div className="text-sm text-muted py-4">
+          ยังไม่มีใครมีสิทธิ์เข้าห้องทดลอง กด "เพิ่มผู้มีสิทธิ์" เพื่อเริ่ม
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="data-table w-full">
+            <thead>
+              <tr>
+                <th>อีเมล</th>
+                <th>ระดับสิทธิ์</th>
+                <th>หมายเหตุ</th>
+                <th>เพิ่มโดย</th>
+                <th className="actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(t => (
+                <tr key={t.email}>
+                  <td className="font-medium">{t.email}</td>
+                  <td><Chip tone={TIER_TONE[t.tier]}>{TIER_LABELS[t.tier]}</Chip></td>
+                  <td className="text-muted text-sm">{t.note || <span className="text-muted">—</span>}</td>
+                  <td className="text-muted text-sm">{t.added_by}</td>
+                  <td className="actions">
+                    <Button variant="danger-soft" size="sm" onClick={() => setDeleteTarget(t)}>
+                      <Trash2 size={13} />ยกเลิกสิทธิ์
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <DemoTesterFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onSaved={email => {
+          setFormOpen(false);
+          toast.success(`ให้สิทธิ์ ${email} เรียบร้อยแล้ว`);
+        }}
+      />
+
+      <ConfirmSaveModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={doDelete}
+        saving={deleting}
+        title="ยืนยันยกเลิกสิทธิ์เข้าห้องทดลอง?"
+        description={
+          deleteTarget
+            ? `ยกเลิกสิทธิ์ของ "${deleteTarget.email}" — คำขอเข้าห้องทดลองครั้งถัดไปของอีเมลนี้จะถูกปฏิเสธ และหากกำลังทดลองอยู่ ระบบจะบล็อกการเข้าสู่ระบบครั้งถัดไปทันที`
+            : ""
+        }
+        variant="danger"
+      />
+    </Panel>
+  );
+}
+
+function DemoTesterFormModal({
+  open, onClose, onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: (email: string) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [tier, setTier] = useState<DemoTester["tier"]>("ta");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setEmail("");
+    setTier("ta");
+    setNote("");
+    setError(null);
+  }, [open]);
+
+  const emailTrim = email.trim();
+  const emailError = emailTrim === "" ? null
+    : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim) ? "รูปแบบอีเมลไม่ถูกต้อง" : null;
+  const canSave = emailTrim !== "" && !emailError;
+
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await demoAddTester(emailTrim, tier, note.trim());
+      await mutate("/demo-testers");
+      onSaved(emailTrim);
+    } catch (e) {
+      setError((e as Error).message || "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Plus size={18} />เพิ่มผู้มีสิทธิ์เข้าห้องทดลอง
+        </span>
+      }
+      size="md"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
+            <Plus size={14} />ให้สิทธิ์
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FieldGroup label="อีเมลผู้ทดสอบ" hint="อีเมลจริงของอาจารย์/TA/เจ้าหน้าที่ที่จะทดลองใช้งาน" error={emailError ?? undefined}>
+          <TextInput
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="you@kkumail.com"
+            autoFocus
+          />
+        </FieldGroup>
+
+        <FieldGroup
+          label="ระดับสิทธิ์"
+          hint="กำหนดว่าจะเลือกทดลองบทบาทไหนได้บ้างในห้องทดลอง"
+        >
+          <Select value={tier} onChange={e => setTier(e.target.value as DemoTester["tier"])}>
+            <option value="ta">{TIER_LABELS.ta}</option>
+            <option value="lecturer">{TIER_LABELS.lecturer}</option>
+            <option value="staff">{TIER_LABELS.staff}</option>
+          </Select>
+        </FieldGroup>
+
+        <FieldGroup label="หมายเหตุ (ถ้ามี)" hint="เช่น ชื่อ-นามสกุล หรือเหตุผลที่ให้สิทธิ์">
+          <TextInput
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="เช่น อาจารย์สมชาย ภาควิชา..."
+            maxLength={200}
+          />
+        </FieldGroup>
 
         {error && (
           <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />

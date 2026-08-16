@@ -36,6 +36,15 @@ const PANEL_W = "w-64";
 /** Icon rail. Wide enough for a 36px hit target plus breathing room. */
 const RAIL_W = "w-16";
 
+/**
+ * How far this shell's fixed/sticky chrome sits from the true viewport top —
+ * 0px outside demo mode, or DemoBanner.tsx's own height when its strip is
+ * stacked above it. DemoBanner owns and measures this var itself; Shell.tsx
+ * never needs to import anything demo-related — outside demo mode the var
+ * is simply unset and this falls back to `0px`, identical to not existing.
+ */
+const DEMO_CHROME_OFFSET = "top-[var(--demo-banner-h,0px)]";
+
 export interface NavItem {
   label: string;
   href: string;
@@ -197,7 +206,10 @@ export default function Shell({
           onMouseEnter={() => collapsed && setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           className={
-            "fixed inset-y-0 left-0 z-30 flex flex-col bg-surface border-r border-border " +
+            // top/bottom instead of inset-y-0: top reads --demo-banner-h (see
+            // DemoBanner.tsx), which is unset → 0px outside demo mode, so
+            // this is pixel-identical to inset-y-0 everywhere else.
+            `fixed ${DEMO_CHROME_OFFSET} bottom-0 left-0 z-30 flex flex-col bg-surface border-r border-border ` +
             "transition-[width] duration-150 ease-out " +
             (sidebarOpen ? `${PANEL_W} ` : `${RAIL_W} `) +
             (collapsed && hovered ? "shadow-xl" : "")
@@ -258,7 +270,10 @@ export default function Shell({
 
       {/* Mobile drawer */}
       {!hideSidebar && mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-40" onClick={() => setMobileOpen(false)}>
+        <div
+          className={`md:hidden fixed ${DEMO_CHROME_OFFSET} inset-x-0 bottom-0 z-40`}
+          onClick={() => setMobileOpen(false)}
+        >
           <div className="absolute inset-0 bg-backdrop" />
           <aside className="absolute inset-y-0 left-0 w-[85vw] max-w-75 bg-surface shadow-xl flex flex-col"
                  onClick={e => e.stopPropagation()}>
@@ -526,7 +541,7 @@ function TopBar({
   // can DO — this just says what else the person IS.
   const roleWithPosition = me.admin_position ? `${roleLbl} · ${me.admin_position}` : roleLbl;
   return (
-    <header className="h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 sticky top-0 z-30">
+    <header className={`h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 sticky ${DEMO_CHROME_OFFSET} z-30`}>
       {showMobileMenu && (
         <Button variant="ghost" isIconOnly size="sm" onPress={onOpenMobile}
                 aria-label="เปิดเมนู" className="md:hidden shrink-0 size-9!">

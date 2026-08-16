@@ -20,6 +20,10 @@ const nextConfig: NextConfig = {
     return [
       { source: "/api/v1/:path*", destination: `${backend}/api/v1/:path*` },
       { source: "/api/health", destination: `${backend}/api/health` },
+      // BETA demo sandbox (internal/demo) — deliberately its own top-level
+      // prefix, not nested under /api/v1: see internal/demo/handlers.go's
+      // apiRoot comment for why sharing that prefix breaks auth entirely.
+      { source: "/api/demo/:path*", destination: `${backend}/api/demo/:path*` },
     ];
   },
   async headers() {

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { api } from "../lib/api";
+import { api, isDemoMode } from "../lib/api";
 
 /**
  * Enforces the 15-minute idle timeout and reacts to a single-device-login
@@ -45,7 +45,7 @@ const CHANNEL_NAME = "tapay:session-activity";
 // machinery there would just generate 401s that redirect back to a page
 // that's already /login, or spend heartbeats on the public share links,
 // which are intentionally not authenticated at all (see router.go).
-const SKIP_PREFIXES = ["/login", "/p/"];
+const SKIP_PREFIXES = ["/login", "/p/", "/demo"];
 
 type BroadcastMsg = { type: "activity"; at: number } | { type: "logout" };
 
@@ -75,13 +75,22 @@ export default function SessionActivityGuard() {
     }
 
     function redirectToLogin() {
-      if (window.location.pathname.startsWith("/login")) return;
+      // A demo tester idling out must land back on /demo, never /login —
+      // same reasoning as api.ts's handleAuthRedirect, which this component
+      // otherwise duplicates without going through: /login authenticates
+      // against production, which a sandbox visitor has no account for, and
+      // sending them there reads as "you got logged out of the real
+      // system." Checked fresh here (not hoisted out of the closure) since
+      // this function is only ever called once per mount, right when the
+      // timeout actually fires.
+      const authPage = isDemoMode() ? "/demo" : "/login";
+      if (window.location.pathname.startsWith(authPage)) return;
       const next = window.location.pathname + window.location.search;
       // Best-effort: the session is already dead server-side (that's WHY this
       // fired), so this mainly clears the cookie a little sooner than the
       // browser would notice on its own. Never block the redirect on it.
       void api.post("/auth/logout").catch(() => {});
-      window.location.assign(`/login?reason=session_idle&next=${encodeURIComponent(next)}`);
+      window.location.assign(`${authPage}?reason=session_idle&next=${encodeURIComponent(next)}`);
     }
 
     function maybeHeartbeat() {

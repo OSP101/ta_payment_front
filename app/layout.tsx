@@ -3,6 +3,8 @@ import { Kanit } from "next/font/google";
 import "./globals.css";
 import SWRProvider from "./components/SWRProvider";
 import SessionActivityGuard from "./components/SessionActivityGuard";
+import DemoBanner from "./components/DemoBanner";
+import DemoGuidePanel from "./components/DemoGuidePanel";
 
 const kanit = Kanit({
   variable: "--font-kanit",
@@ -18,10 +20,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="th" className={`${kanit.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
+      {/* paddingRight reserves space for DemoGuidePanel's fixed dock — see
+          that component's own doc comment. 0px outside demo mode (the var
+          is unset), so this is a no-op for every non-demo page/session. */}
+      <body className="min-h-full flex flex-col" style={{ paddingRight: "var(--demo-panel-w, 0px)" }}>
         <SWRProvider>
+          <DemoBanner />
           <SessionActivityGuard />
           {children}
+          <DemoGuidePanel />
         </SWRProvider>
       </body>
     </html>
