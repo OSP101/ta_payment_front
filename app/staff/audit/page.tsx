@@ -9,6 +9,22 @@ interface Row {
   actor_id?: string; actor_role?: string;
   action: string; entity: string; entity_id?: string;
   ip?: string; note?: string;
+  /** Only a subset of actions record these (see internal/audit's Entry.Before/
+   *  After) — most rows have both null. */
+  before?: unknown; after?: unknown;
+}
+
+/** Pretty-prints before/after for the tooltip, capped so one huge batch-edit
+ *  row (e.g. worklog.staff_edit_batch) can't blow up the tooltip's layout —
+ *  the cap is stated explicitly rather than silently cutting the JSON. */
+function formatDiff(before: unknown, after: unknown): string | null {
+  if (before == null && after == null) return null;
+  const cap = (v: unknown, label: string) => {
+    if (v == null) return null;
+    const s = JSON.stringify(v, null, 2);
+    return `${label}:\n${s.length > 1500 ? s.slice(0, 1500) + "\n… (ตัดข้อความ)" : s}`;
+  };
+  return [cap(before, "ก่อน"), cap(after, "หลัง")].filter(Boolean).join("\n\n");
 }
 
 interface UserLite {
@@ -71,6 +87,21 @@ function buildColumns(resolveActor: (id: string) => string | null): DataColumn<R
       id: "note", label: "Note",
       className: "font-mono text-xs text-(--ink-3)",
       render: r => r.note ?? "",
+    },
+    {
+      id: "diff", label: "การเปลี่ยนแปลง",
+      className: "font-mono text-xs text-(--ink-3)",
+      render: r => {
+        const diff = formatDiff(r.before, r.after);
+        if (!diff) return <span className="text-(--ink-4)">-</span>;
+        return (
+          <TipWrap content={diff} placement="left">
+            <span className="text-(--brand) cursor-help underline decoration-dotted">
+              ดูข้อมูล
+            </span>
+          </TipWrap>
+        );
+      },
     },
   ];
 }

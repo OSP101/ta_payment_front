@@ -46,8 +46,10 @@ export interface Profile {
   status: string;
   reject_reason?: string | null;
   prefix?: string;
-  // No bank/ID fields: they are never stored (PDPA, migration 0047). Staff read
-  // them from the creditor-form PDF in the review workspace.
+  // No bank/ID fields here: bank details are never stored at all (PDPA,
+  // migration 0047), and the citizen ID — though stored encrypted since
+  // migration 0076 — is never returned by this API either. Staff read both
+  // from the creditor-form PDF in the review workspace.
   current_round?: number;
 }
 

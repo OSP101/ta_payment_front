@@ -533,6 +533,10 @@ export interface Me {
   /** 0 when totp_enabled is false. Shown on /account so a user notices
    *  before they run out. */
   recovery_codes_remaining: number;
+  /** When this TA accepted the current PDPA notice version, or absent if
+   *  never. app/ta/(home)/documents/page.tsx gates the profile form (Step 1)
+   *  behind PdpaConsentModal until this is set. */
+  pdpa_consented_at?: string | null;
 }
 
 /**
@@ -568,6 +572,70 @@ export const mfaRegenerateRecoveryCodes = (password: string) =>
  *  MFAService.AdminReset's doc comment for why staff cannot call this. */
 export const mfaAdminReset = (userId: string, password: string) =>
   api.post<{ ok: true }>(`/users/${userId}/2fa/reset`, { password });
+
+/** Records that the TA accepted the PDPA notice shown by PdpaConsentModal
+ *  before the profile form unlocks — see internal/service/pdpa_consent.go. */
+export const pdpaConsent = () => api.post<{ ok: true }>("/me/pdpa-consent");
+
+/**
+ * PDPA self-service data access/erasure — see internal/service/data_export.go
+ * and data_deletion.go. Mirrors those Go types field-for-field.
+ */
+export interface MyDataExport {
+  profile: {
+    email: string;
+    title?: string;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    student_id?: string;
+    department?: string;
+    roles: string[];
+    totp_enabled: boolean;
+  };
+  ta_profile?: { citizen_id_last4?: string; status: string };
+  pdpa_consent?: { version: number; consented_at: string };
+  sessions: Array<{
+    id: string; created_at: string; last_activity_at: string;
+    ip?: string; user_agent?: string; revoked_at?: string; revoke_reason?: string;
+  }>;
+  documents: Array<{ kind: string; filename: string; status: string; uploaded_at: string }>;
+  recent_activity: Array<{ at: string; action: string; entity: string; entity_id?: string; ip?: string }>;
+}
+export const dataExport = () => api.get<MyDataExport>("/me/data-export");
+
+/** Password-gated — reuses DocsService.RevealCitizenID's audited decrypt
+ *  path with actor == target == the caller. */
+export const citizenIdReveal = (password: string) =>
+  api.post<{ national_id: string }>("/me/citizen-id/reveal", { password });
+
+export interface DataDeletionRequest {
+  id: string;
+  user_id: string;
+  reason?: string;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
+  review_note?: string;
+  executed_at?: string;
+}
+export interface DataDeletionRequestForReview extends DataDeletionRequest {
+  requester_email: string;
+  requester_name: string;
+  has_payment_history: boolean;
+}
+export const requestDataDeletion = (reason: string) =>
+  api.post<{ ok: true }>("/me/data-deletion-request", { reason });
+/** null when the TA has never submitted a request. */
+export const myDeletionRequest = () =>
+  api.get<DataDeletionRequest | null>("/me/data-deletion-request");
+/** Admin-only — see router.go's RequireRole(rbac.RoleAdmin) on this route. */
+export const listDeletionRequests = (status?: string) =>
+  api.get<DataDeletionRequestForReview[]>(
+    `/staff/data-deletion-requests${status ? `?status=${status}` : ""}`);
+export const reviewDeletionRequest = (id: string, approve: boolean, note: string) =>
+  api.post<{ ok: true }>(`/staff/data-deletion-requests/${id}/review`, { approve, note });
 
 export interface Term {
   id: string;

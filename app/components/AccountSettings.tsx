@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, Briefcase, GraduationCap, KeyRound, Mail, Phone, Settings2, ShieldCheck, User,
+  ArrowRight, Briefcase, Database, GraduationCap, KeyRound, Mail, Phone, Settings2, ShieldCheck, User,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import { formatFullName } from "../lib/prefixes";
@@ -86,6 +86,21 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
             }
           />
         </div>
+      </Panel>
+
+      <Panel title="ความเป็นส่วนตัว" description="ข้อมูลของคุณภายใต้ PDPA" className="mb-4">
+        <SecurityRow
+          icon={<Database size={18} />}
+          title="ข้อมูลของฉัน"
+          description="ดูข้อมูลทั้งหมดที่ระบบจัดเก็บไว้ ดาวน์โหลด หรือขอให้ลบข้อมูล"
+          action={
+            <Link href="/account/my-data">
+              <Button variant="secondary" size="sm">
+                เปิดดู <ArrowRight size={13} />
+              </Button>
+            </Link>
+          }
+        />
       </Panel>
     </>
   );

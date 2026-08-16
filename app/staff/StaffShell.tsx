@@ -8,6 +8,7 @@ import {
   Megaphone,
   Settings,
   ScrollText,
+  ShieldOff,
   Bell,
   CalendarOff,
   Route,
@@ -96,6 +97,11 @@ const buildNav = (s: Executive): NavSection[] => [
       { label: "วันหยุดราชการ", href: "/staff/holidays", icon: CalendarOff },
       { label: "ตั้งค่า", href: "/staff/settings", icon: Settings },
       { label: "Audit Log", href: "/staff/audit", icon: ScrollText },
+      // Admin-only server-side (RequireRole(rbac.RoleAdmin)) — same convention
+      // as Audit Log above, shown to all staff/admin and left to the backend
+      // to 403 a non-admin who follows it, rather than hiding it here (this
+      // shell has no per-item role-visibility mechanism to begin with).
+      { label: "คำขอลบข้อมูล (PDPA)", href: "/staff/data-deletion-requests", icon: ShieldOff },
     ],
   },
 ];

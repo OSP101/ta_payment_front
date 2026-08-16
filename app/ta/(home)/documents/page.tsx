@@ -6,7 +6,7 @@ import {
   AlertTriangle, Save, Upload, Download, CheckCircle2, Circle, XCircle,
   IdCard, Wallet, FileSignature, CreditCard, BookOpen, FileText,
 } from "lucide-react";
-import { api, type UploadProgress } from "../../../lib/api";
+import { api, type Me, type UploadProgress } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import {
   THAI_BANKS, findBank, normalizeAccountNo, normalizeNationalID, STUDENT_ID_PATTERN,
@@ -15,6 +15,7 @@ import { THAI_PREFIXES, isThaiPrefix } from "../../../lib/prefixes";
 import Signature from "../../../components/Signature";
 import PdfFrame from "../../../components/PdfFrame";
 import UploadProgressModal from "../../../components/UploadProgressModal";
+import PdpaConsentModal from "../../../components/PdpaConsentModal";
 import {
   PageHeader, Panel, Button, TextInput, FieldGroup, StatusChip, Alert, Chip,
   SelectField,
@@ -73,11 +74,15 @@ const emptyProfile: Profile = {
   signature_svg: "", signature_png_b64: "", status: "pending",
 };
 
-// PDPA: these never reach the database (migration 0047 dropped the columns).
-// They live in this form only, long enough to be printed into the creditor-form
-// PDF, and the server always returns them blank. Anything that re-syncs from
-// the server must therefore preserve the local value instead of adopting the
-// blank one — see the merge in ProfilePage.
+// PDPA: none of these come back from the server on reload — bank details and
+// the signature are never persisted at all (migration 0047 dropped those
+// columns; they live in this form only, long enough to be printed into the
+// creditor-form PDF). The national ID IS persisted now (migration 0076,
+// encrypted — see internal/service/citizen_id.go) but GetProfile still never
+// selects it back out (see that handler's own comment), so it's session-only
+// here too. Anything that re-syncs from the server must therefore preserve
+// the local value instead of adopting the blank one — see the merge in
+// ProfilePage.
 const SESSION_ONLY_FIELDS = [
   "national_id", "bank_name", "bank_branch", "branch_code",
   "account_no", "account_name", "signature_svg", "signature_png_b64",
@@ -108,11 +113,13 @@ const DOC_LABEL: Record<string, string> = Object.fromEntries(
 // concrete on-page action for it — regardless of staff review status,
 // which is a separate signal (StatusChip) shown alongside.
 // Step 1 is complete once the TA has SUBMITTED a valid form — which is what
-// `status` records. It cannot be judged from the field values any more: the
-// national ID, bank details and signature are never stored (migration 0047),
-// so on the next page load those boxes come back empty by design. Judging
-// completeness from them would mark a finished step as unfinished forever,
-// which is exactly the bug this replaced.
+// `status` records. It cannot be judged from the field values any more: bank
+// details and the signature are never stored (migration 0047), and the
+// national ID — though stored encrypted since migration 0076 — is never
+// selected back out by GetProfile either (see that function's own comment),
+// so on the next page load those boxes come back empty by design either way.
+// Judging completeness from them would mark a finished step as unfinished
+// forever, which is exactly the bug this replaced.
 function isProfileStepDone(p: Profile | undefined) {
   return !!p && p.status !== "pending" && p.status !== "";
 }
@@ -227,6 +234,7 @@ export default function ProfilePage() {
     (p: string) => api.get<Profile>(p).catch(() => emptyProfile),
   );
   const { data: docs } = useSWR<Doc[]>("/me/documents");
+  const { data: me } = useSWR<Me>("/me");
   const [form, setForm] = useState<Profile>(emptyProfile);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["profile"]));
 
@@ -413,6 +421,12 @@ export default function ProfilePage() {
                       // Auto-advance to the next step after a successful save.
                       setExpanded(new Set(["creditor_form"]));
                     }}
+                    pdpaConsented={me ? !!me.pdpa_consented_at : undefined}
+                    // PdpaConsentModal already revalidates the shared "/me"
+                    // SWR key on accept — this callback exists only so the
+                    // gate above re-evaluates on the next render, which the
+                    // mutate()-triggered re-fetch causes on its own.
+                    onPdpaAccepted={() => {}}
                   />
                 ) : step.id === "creditor_form" ? (
                   <CreditorFormStep
@@ -494,12 +508,15 @@ function StepHead({
 /* -------------------------------------------------------------------------- */
 
 function ProfileStep({
-  form, setForm, saved, onSaved,
+  form, setForm, saved, onSaved, pdpaConsented, onPdpaAccepted,
 }: {
   form: Profile;
   setForm: (p: Profile) => void;
   saved: string | boolean | undefined;
   onSaved: () => void;
+  /** From Me.pdpa_consented_at — undefined while /me is still loading. */
+  pdpaConsented: boolean | undefined;
+  onPdpaAccepted: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -568,6 +585,19 @@ function ProfileStep({
     []
   );
 
+  // Nothing in this form is fillable until the TA has accepted the PDPA
+  // notice — see PdpaConsentModal and DocsService.UpsertProfile's own
+  // server-side check of the same fact. Rendered in place of the field grid,
+  // not layered on top of it, so there is no way to type into a field before
+  // accepting. Skipped while pdpaConsented is still undefined (first /me
+  // load) to avoid a one-frame flash of the notice for someone who already
+  // consented. This must stay AFTER every hook above — an early return
+  // before them would call fewer hooks on the gated render than the
+  // unlocked one, which React rejects.
+  if (pdpaConsented === false) {
+    return <PdpaConsentModal onAccepted={onPdpaAccepted} />;
+  }
+
   return (
     <div>
       <div className="grid md:grid-cols-2 gap-3">
@@ -602,7 +632,7 @@ function ProfileStep({
               ? <span className="text-warning">{nidChecksumWarn}</span>
               : nidDigits.length > 0 && !nidErr
                 ? `กรอกครบ ${nidDigits.length}/13`
-                : "ระบบไม่จัดเก็บเลขบัตรลงฐานข้อมูล ใช้พิมพ์ลงแบบฟอร์มเจ้าหนี้เท่านั้น"
+                : "ระบบจัดเก็บเลขบัตรนี้แบบเข้ารหัส ใช้เพื่อพิมพ์ลงแบบฟอร์มเจ้าหนี้และยืนยันตัวตนกับธนาคารเท่านั้น"
           }
           error={nidErr}
         >
@@ -630,7 +660,7 @@ function ProfileStep({
             options={bankOptions}
           />
         </FieldGroup>
-        <FieldGroup label="สาขา">
+        <FieldGroup label="สาขา" hint="สาขาของธนาคารที่ไปเปิดบัญชี">
           <TextInput value={form.bank_branch}
             onChange={e => setForm({ ...form, bank_branch: e.target.value })}
             placeholder="เช่น ขอนแก่น" />
@@ -808,8 +838,8 @@ function CreditorFormStep({
         icon={<AlertTriangle size={16} />}
         title={doc ? "กรอกข้อมูลขั้นตอนที่ 1 อีกครั้งเพื่อสร้างฟอร์มใหม่" : "กรอกข้อมูลในขั้นตอนที่ 1 ให้ครบก่อน"}
         description={doc
-          ? "ระบบไม่จัดเก็บเลขบัตร ข้อมูลธนาคาร และลายเซ็นไว้ในฐานข้อมูล (PDPA) ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง"
-          : "ระบบจะสร้างฟอร์มจากข้อมูลที่กรอก โดยไม่บันทึกข้อมูลเหล่านั้นลงฐานข้อมูล"}
+          ? "ระบบจัดเก็บเฉพาะเลขบัตรประชาชนแบบเข้ารหัส ส่วนข้อมูลธนาคารและลายเซ็นไม่ถูกบันทึกไว้ในฐานข้อมูล (PDPA) ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง"
+          : "ระบบจะสร้างฟอร์มจากข้อมูลที่กรอก โดยข้อมูลธนาคารและลายเซ็นจะไม่ถูกบันทึกลงฐานข้อมูล"}
       />
     );
   }
