@@ -13,7 +13,7 @@ import {
   REGEXP_ONLY_DIGITS,
   Spinner,
 } from "@heroui/react";
-import { Check, Copy, LogOut, ShieldAlert, ShieldCheck, Smartphone } from "lucide-react";
+import { Check, Copy, Download, LogOut, ShieldAlert, ShieldCheck, Smartphone } from "lucide-react";
 import { api, errMessage, mfaEnable, mfaSetup, type MFASetupResult } from "../lib/api";
 import { notify } from "../lib/notify";
 
@@ -73,6 +73,16 @@ export default function Setup2FAPage() {
     }
   }
 
+  function downloadCodes() {
+    const blob = new Blob([codesText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const el = document.createElement("a");
+    el.href = url;
+    el.download = "ta-payment-recovery-codes.txt";
+    el.click();
+    URL.revokeObjectURL(url);
+  }
+
   function finish() {
     router.push("/");
     router.refresh();
@@ -119,9 +129,14 @@ export default function Setup2FAPage() {
                     </code>
                   ))}
                 </div>
-                <Button variant="secondary" onClick={copyCodes}>
-                  <Copy size={14} /> {copied ? "คัดลอกแล้ว" : "คัดลอกทั้งหมด"}
-                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="secondary" fullWidth onClick={copyCodes}>
+                    <Copy size={14} /> {copied ? "คัดลอกแล้ว" : "คัดลอกทั้งหมด"}
+                  </Button>
+                  <Button variant="secondary" fullWidth onClick={downloadCodes}>
+                    <Download size={14} /> ดาวน์โหลด (.txt)
+                  </Button>
+                </div>
                 <Checkbox isSelected={savedAck} onChange={setSavedAck}>
                   <Checkbox.Content>
                     <Checkbox.Control>

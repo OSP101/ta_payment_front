@@ -68,7 +68,7 @@ export async function requireRole(...roles: string[]): Promise<Me> {
     // real account they almost certainly don't have.
     redirect(c.get("demo_base_path")?.value ? "/demo" : "/login");
   }
-  if (!roles.some(r => me.roles.includes(r))) redirect("/");
+  if (!roles.some(r => me.roles.includes(r))) redirect("/403");
   // Demo slots never enforce mandatory 2FA (Cfg.IsDemoSlot skips AccountGuard's
   // mustEnroll branch entirely — see mfaSetupRequired's own comment), so a demo
   // staff/admin walkthrough account's real totp_enabled: false must not bounce
