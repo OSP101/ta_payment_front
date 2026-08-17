@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, FieldError, InputGroup, Label, TextField } from "@heroui/react";
+import { Button, Card, FieldError, InputGroup, Label, Modal, TextField } from "@heroui/react";
 import {
   FlaskConical, LogIn, Clock, MonitorSmartphone, LogOut,
   Shield, Users, GraduationCap, UserRound, Mail, ArrowRight,
@@ -13,10 +13,12 @@ import {
   demoLogin,
   errMessage,
   setDemoApiPrefix,
+  setDemoPassword,
   type DemoAccount,
   type DemoEnterResult,
 } from "../lib/api";
 import { notify } from "../lib/notify";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -75,12 +77,14 @@ const REASON_INFO: Record<string, { icon: React.ReactNode; title: string; descri
 
 export default function DemoEntryPage() {
   const router = useRouter();
+  useDocumentTitle("ห้องทดลองใช้งาน (BETA)");
   const [email, setEmail] = useState("");
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [entering, setEntering] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<DemoEnterResult | null>(null);
   const [reason, setReason] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     setReason(new URLSearchParams(window.location.search).get("reason"));
@@ -124,6 +128,12 @@ export default function DemoEntryPage() {
     try {
       await demoLogin(workspace.base_path, account.email, workspace.demo_password);
       setDemoApiPrefix(workspace.base_path);
+      // Persist alongside base_path so demoSwitchAccount (used by the
+      // guided TA/lecturer-actor steps to hop between seeded accounts
+      // mid-walkthrough) has it available from any page, not just this
+      // one's own now-gone component state — see setDemoPassword's doc
+      // comment in api.ts.
+      setDemoPassword(workspace.demo_password);
       // Straight to the role's own real page — DemoGuidePanel.tsx (docked to
       // the right edge, mounted globally) shows the walkthrough on top of
       // it, so there is no separate destination to route through first.
@@ -137,10 +147,41 @@ export default function DemoEntryPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
+      <Modal.Backdrop isOpen={showIntro} onOpenChange={setShowIntro}>
+        <Modal.Container>
+          <Modal.Dialog className="sm:max-w-[420px]">
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Icon className="bg-warning-soft text-warning-soft-foreground">
+                <FlaskConical className="size-5" />
+              </Modal.Icon>
+              <Modal.Heading>คุณกำลังเข้าสู่ห้องทดลอง (Sandbox)</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="flex flex-col gap-2 text-sm">
+              <p>
+                หน้านี้เป็นห้องทดลองที่แยกต่างหากจากระบบจริงทั้งหมด ข้อมูลที่คุณกรอกหรือสร้างขึ้นในห้องนี้
+                <span className="font-medium text-foreground"> จะไม่ถูกเก็บบันทึกจริง </span>
+                และจะไม่ถูกนำไปใช้กับข้อมูลจริงของมหาวิทยาลัยแต่อย่างใด
+              </p>
+              <p>
+                เราอยากให้คุณลองใช้งานเครื่องมือต่าง ๆ ตามขั้นตอนที่ระบบแนะนำ เพื่อให้คุ้นเคยกับระบบก่อนใช้งานจริง
+                และช่วยเราหาจุดบกพร่องในช่วงเปิดทดลองใช้งาน (BETA) — หากพบปัญหาหรือมีข้อเสนอแนะระหว่างเล่น
+                รบกวนส่งฟีดแบ็คกลับมาให้เราด้วย จะเป็นประโยชน์มากในการปรับปรุงระบบ
+              </p>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button className="w-full" slot="close">
+                เข้าใจแล้ว เริ่มทดลองใช้งาน
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+
       <header className="border-b border-warning-soft-border bg-warning-soft px-6 h-14 flex items-center gap-2">
         <FlaskConical size={18} className="text-warning-soft-foreground" />
         <div className="font-semibold text-[15px] text-warning-soft-foreground">
-          ห้องทดลองใช้งาน TA Payment (BETA)
+          ห้องทดลองใช้งาน COCO TAS (BETA)
         </div>
       </header>
 
@@ -251,6 +292,23 @@ export default function DemoEntryPage() {
               </Button>
             </div>
           )}
+
+          {/* Same footer as the login page — one copyright/credit block for
+              the whole app, not a second wording invented for this screen. */}
+          <p className="text-center text-xs text-muted mt-6">
+            © {new Date().getFullYear()} College of Computing, Khon Kaen University
+          </p>
+          <p className="text-center text-xs text-muted mt-1">
+            Developed by{" "}
+            <a
+              href="https://osp101.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              ITII Development Team
+            </a>
+          </p>
         </div>
       </main>
     </div>

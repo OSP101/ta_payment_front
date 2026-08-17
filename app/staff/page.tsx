@@ -111,7 +111,7 @@ export default function StaffDashboard() {
         title="แดชบอร์ดผู้ดูแลระบบ"
         description={termText
           ? `ภาพรวมการดำเนินงาน ${termText}`
-          : "ภาพรวมการดำเนินงานของระบบ TA Payment"}
+          : "ภาพรวมการดำเนินงานของระบบ COCO TAS"}
       />
 
       {noTerms ? (

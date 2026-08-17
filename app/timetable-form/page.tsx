@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import useSWR from "swr";
 import { Printer, FileDown } from "lucide-react";
 import { Button, Spinner, Alert } from "../components/ui";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 /**
  * The faculty's signed form — "ตารางเรียนและตารางปฏิบัติงาน (TA)".
@@ -114,6 +115,7 @@ export default function TimetableFormPage() {
 }
 
 function TimetableFormInner() {
+  useDocumentTitle("ตารางเรียนและตารางปฏิบัติงาน");
   const q = useSearchParams();
   const termId = q.get("term_id");
   const userId = q.get("user_id");

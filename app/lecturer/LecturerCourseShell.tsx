@@ -94,7 +94,7 @@ export default function LecturerCourseShell({
     },
   ];
 
-  const brandTitle = "TA Payment";
+  const brandTitle = "COCO TAS";
   const userMenuItems: UserMenuItem[] = [
     { id: "account",  label: "ตั้งค่าบัญชี", href: "/account",     icon: IdCard },
     { id: "announce", label: "ประกาศ",   href: "/announcements",  icon: Megaphone },

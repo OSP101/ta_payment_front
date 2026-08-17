@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import useSWR from "swr";
 import {
   Alert,
   Button,
@@ -14,19 +16,34 @@ import {
   Spinner,
 } from "@heroui/react";
 import { Check, Copy, Download, LogOut, ShieldAlert, ShieldCheck, Smartphone } from "lucide-react";
-import { api, errMessage, mfaEnable, mfaSetup, type MFASetupResult } from "../lib/api";
+import { api, errMessage, mfaEnable, mfaSetup, type Me, type MFASetupResult } from "../lib/api";
 import { notify } from "../lib/notify";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 /**
- * Forced 2FA enrolment — landed on via AccountGuard's mfa_setup_required
- * (see internal/handler/middleware.go), the mandatory-tier twin of
- * /change-password. Bare client page: NO shared layout, NO requireRole
- * wrapper — same reasoning as /change-password (app/change-password/page.tsx),
- * since a server-side layout fetch would itself get blocked by the very
- * 403 this page exists to resolve.
+ * Also reached voluntarily — AccountSettings links "เปิดใช้งาน [2FA]" straight
+ * here for anyone who hasn't enabled it yet, mandatory or not. Mirrors
+ * mfaMandatoryFor in internal/handler/middleware.go: only admin/staff/
+ * executive accounts are actually forced (AccountGuard's mfa_setup_required).
+ * Everyone else arrived by choice and gets a way back out.
+ */
+function mfaMandatoryFor(me: Me): boolean {
+  return me.roles.includes("admin") || me.roles.includes("staff") || !!me.is_executive;
+}
+
+/**
+ * Landed on either via AccountGuard's mfa_setup_required (forced — see
+ * mfaMandatoryFor above) or by choice from Account Settings. Bare client
+ * page: NO shared layout, NO requireRole wrapper — same reasoning as
+ * /change-password (app/change-password/page.tsx), since a server-side
+ * layout fetch would itself get blocked by the very 403 this page exists to
+ * resolve for the forced case.
  */
 export default function Setup2FAPage() {
   const router = useRouter();
+  useDocumentTitle("ตั้งค่ายืนยันตัวตนสองขั้นตอน");
+  const { data: me } = useSWR<Me>("/me");
+  const voluntary = !!me && !mfaMandatoryFor(me);
   const [setup, setSetup] = useState<MFASetupResult | null>(null);
   const [setupErr, setSetupErr] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -111,7 +128,9 @@ export default function Setup2FAPage() {
           <p className="text-sm text-muted mt-1">
             {recoveryCodes
               ? "เก็บรหัสเหล่านี้ไว้ในที่ปลอดภัย ใช้แทนแอปยืนยันตัวตนได้เมื่อทำอุปกรณ์หาย"
-              : "บัญชีนี้ต้องเปิดใช้งาน 2FA ก่อนใช้งานระบบต่อ"}
+              : voluntary
+                ? "เพิ่มความปลอดภัยให้บัญชีของคุณด้วยการยืนยันตัวตนสองขั้นตอน"
+                : "บัญชีนี้ต้องเปิดใช้งาน 2FA ก่อนใช้งานระบบต่อ"}
           </p>
         </div>
 
@@ -230,9 +249,25 @@ export default function Setup2FAPage() {
                   </Description>
                 </div>
 
-                <Button type="submit" size="lg" fullWidth isPending={verifying}>
-                  {verifying ? "กำลังตรวจสอบ…" : "ยืนยันและเปิดใช้งาน"}
-                </Button>
+                {/* Only the voluntary path gets a way out — the forced
+                    (mandatory-role) path has no account to go back to using
+                    yet, same reasoning as /change-password's forced flow. */}
+                {voluntary ? (
+                  <div className="flex gap-2 w-full">
+                    <Link href="/account" className="flex-1">
+                      <Button type="button" variant="ghost" size="lg" fullWidth isDisabled={verifying}>
+                        ยกเลิก
+                      </Button>
+                    </Link>
+                    <Button type="submit" size="lg" className="flex-1" isPending={verifying}>
+                      {verifying ? "กำลังตรวจสอบ…" : "ยืนยันและเปิดใช้งาน"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button type="submit" size="lg" fullWidth isPending={verifying}>
+                    {verifying ? "กำลังตรวจสอบ…" : "ยืนยันและเปิดใช้งาน"}
+                  </Button>
+                )}
               </form>
             )}
           </Card.Content>

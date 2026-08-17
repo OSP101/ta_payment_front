@@ -62,7 +62,7 @@ export default async function PublicDocumentProgressPage(
           </span>
           <div className="leading-tight">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-ink-1">TA Payment</span>
+              <span className="text-sm font-semibold text-ink-1">COCO TAS</span>
               <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide leading-none text-amber-800">
                 Beta
               </span>

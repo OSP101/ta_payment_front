@@ -7,6 +7,7 @@ import Shell, { type NavSection, type NavStatus, type UserMenuItem } from "../co
 import NotificationBell from "../components/NotificationBell";
 import TaTourLauncher from "./tours/TourLauncher";
 import { useTAOnboarding } from "./useTAOnboarding";
+import { EnrollmentScopeSwitcher } from "./EnrollmentScopeModal";
 
 // The TA's pages now live in the left sidebar rather than behind the avatar
 // dropdown. Hiding a whole feature set inside a menu that people read as
@@ -74,11 +75,12 @@ export default function TAShell({
   return (
     <Shell
       me={me}
-      brandTitle="TA Payment"
+      brandTitle="COCO TAS"
       nav={nav}
       userMenuItems={userMenuItems}
       topBarAccessory={
         <>
+          <EnrollmentScopeSwitcher />
           <TaTourLauncher />
           <div data-tour="notif-bell" className="shrink-0">
             <NotificationBell seeAllHref="/ta/notifications" />

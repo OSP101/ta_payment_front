@@ -7,6 +7,7 @@ import { Bell, BellRing, Check } from "lucide-react";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 import { IconButton } from "./ui";
+import useUnreadCount from "../lib/useUnreadCount";
 
 interface Notif {
   id: string;
@@ -29,8 +30,9 @@ export default function NotificationBell({
   const { data } = useSWR<Notif[]>("/me/notifications?limit=10");
   const list = data ?? [];
 
-  const unread = list.filter(n => !n.read_at);
-  const show = unread.length > 0;
+  // Accurate total, not capped by the 10-item preview list above.
+  const unreadCount = useUnreadCount();
+  const show = unreadCount > 0;
 
   async function markRead(id: string) {
     try {
@@ -56,7 +58,7 @@ export default function NotificationBell({
       <IconButton
         variant="ghost"
         size="sm"
-        label={show ? `การเตือน ${unread.length} รายการ` : "การเตือน"}
+        label={show ? `การเตือน ${unreadCount} รายการ` : "การเตือน"}
         className="relative"
       >
         {show ? <BellRing size={18} /> : <Bell size={18} />}
@@ -65,7 +67,7 @@ export default function NotificationBell({
             aria-hidden
             className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center leading-none"
           >
-            {unread.length > 9 ? "9+" : unread.length}
+            {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </IconButton>

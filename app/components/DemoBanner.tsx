@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import useSWR from "swr";
 import { FlaskConical } from "lucide-react";
 import { Button } from "@heroui/react";
-import { api, isDemoMode, setDemoApiPrefix } from "../lib/api";
+import { api, isDemoMode, setDemoApiPrefix, setDemoPassword, type Me } from "../lib/api";
+import { DEMO_ACCOUNT_LABELS } from "../lib/demoStepGuides";
 
 /**
  * CSS variable Shell.tsx's fixed/sticky chrome (sidebar, mobile drawer,
@@ -49,6 +51,14 @@ export default function DemoBanner() {
     setActive(isDemoMode());
   }, [pathname]);
 
+  // Which of the 9 seeded accounts is logged in right now — worth showing
+  // once the guided TA/lecturer-actor steps (DemoGuidePanel.tsx's
+  // SubStepRow) make switching accounts a normal, frequent mid-session
+  // action instead of a one-time pick on /demo. Same isDemoMode()-gated
+  // useSWR("/me") pattern as useScenarioEngine's own canActOn — SWR dedupes
+  // it against that hook's identical key, so this costs nothing extra.
+  const { data: me } = useSWR<Me>(isDemoMode() ? "/me" : null);
+
   // Keep BANNER_HEIGHT_VAR pixel-exact against the banner's REAL rendered
   // height rather than a hardcoded guess — the same one-line strip wraps to
   // two lines on a narrow viewport, and a stale/guessed height would leave
@@ -84,6 +94,7 @@ export default function DemoBanner() {
       /* ignore — clearing local state below still gets them out */
     }
     setDemoApiPrefix(null);
+    setDemoPassword(null);
     router.push("/demo");
     router.refresh();
   }
@@ -105,6 +116,11 @@ export default function DemoBanner() {
         <span>
           โหมดทดลอง — ข้อมูลทั้งหมดในหน้านี้เป็นข้อมูลจำลอง ไม่ใช่ข้อมูลจริง
         </span>
+        {me && (
+          <span className="text-warning-soft-foreground/70">
+            · กำลังใช้งานเป็น: <span className="font-semibold">{DEMO_ACCOUNT_LABELS[me.email] ?? me.email}</span>
+          </span>
+        )}
         <Button size="sm" variant="ghost" onPress={exit} className="h-6 px-2 text-xs">
           ออกจากโหมดทดลอง
         </Button>

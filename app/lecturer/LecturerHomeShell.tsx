@@ -85,7 +85,7 @@ export default function LecturerHomeShell({
   return (
     <Shell
       me={me}
-      brandTitle="TA Payment"
+      brandTitle="COCO TAS"
       nav={buildNav(pendingCourses, me.is_executive === true)}
       userMenuItems={userMenuItems}
       topBarAccessory={

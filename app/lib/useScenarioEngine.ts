@@ -11,9 +11,11 @@ import {
   demoCheckpointStatus,
   demoSaveCheckpoint,
   demoRestoreCheckpoint,
+  demoSwitchAccount,
   errMessage,
   isDemoMode,
   setDemoApiPrefix,
+  setDemoPassword,
   type DemoScenarioEvent,
   type DemoProblemEvent,
   type DemoActorRole,
@@ -157,6 +159,18 @@ export function useScenarioEngine() {
   const runStep = (item: DemoScenarioEvent) => run(item, demoRunScenarioEvent);
   const runProblem = (item: DemoProblemEvent) => run(item, demoRunProblemEvent);
 
+  // Guided mode's primary action: just go LOOK at the real page, no API
+  // call — the trainee does the actual clicking/typing there themselves,
+  // guided by demoStepGuides.ts's checklist in the still-docked panel.
+  // Same reachability guard run() uses (has a path, current login can
+  // actually reach it, not already there) so this never sends a
+  // lecturer/TA tester into a 403 on a staff-only screen either.
+  function goToStep(item: DemoScenarioEvent) {
+    if (item.related_path && canActOn(item) && item.related_path !== currentUrl) {
+      router.push(item.related_path);
+    }
+  }
+
   async function resetWorkspace() {
     setResetting(true);
     try {
@@ -170,9 +184,34 @@ export function useScenarioEngine() {
       notify.info(errMessage(e));
     } finally {
       setDemoApiPrefix(null);
+      setDemoPassword(null);
       setResetting(false);
       router.push("/demo");
       router.refresh();
+    }
+  }
+
+  const [switching, setSwitching] = useState(false);
+
+  // Guided TA/lecturer-actor sub-steps' "สลับไปเป็น {label} แล้วไปทำเอง"
+  // button: re-login as a DIFFERENT seeded account in the same workspace,
+  // then go straight to that record's own real page — one click instead of
+  // "go find the account picker, remember the password, come back". See
+  // demoSwitchAccount's doc comment for why this is safe to do with no
+  // password prompt (a published, non-secret constant, not a real
+  // credential). Refetches events afterward same as run() does, since
+  // canActOn/`me` both depend on who's logged in now.
+  async function switchAndGo(email: string, path: string) {
+    setSwitching(true);
+    try {
+      await demoSwitchAccount(email);
+      await globalMutate("/me");
+      router.push(path);
+      refetchEvents();
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setSwitching(false);
     }
   }
 
@@ -214,7 +253,17 @@ export function useScenarioEngine() {
     runs,
     runStep,
     runProblem,
+    goToStep,
+    switchAndGo,
+    switching,
+    // Manual "ตรวจสอบอีกครั้ง" recheck: the pathname-change effect above
+    // already refetches on navigation, but guided sub-steps are verified by
+    // DB state that can change without a route change (e.g. saving a form
+    // inside a modal that stays on the same URL) — expose the same fetch
+    // the effect uses so DemoGuidePanel can offer an explicit recheck.
+    refetchEvents,
     canActOn,
+    me,
     checkpointSavedAt,
     resetting,
     resetWorkspace,

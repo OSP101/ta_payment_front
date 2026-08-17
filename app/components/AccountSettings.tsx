@@ -1,12 +1,13 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import {
   ArrowRight, Briefcase, Database, GraduationCap, KeyRound, Mail, Phone, Settings2, ShieldCheck, User,
 } from "lucide-react";
-import type { Me } from "../lib/api";
+import type { Enrollment, Me } from "../lib/api";
 import { formatFullName } from "../lib/prefixes";
-import { Button, Panel } from "./ui";
+import { Button, Chip, Panel } from "./ui";
 import ProfilePhotoCard from "./ProfilePhotoCard";
 import TwoFactorManageModal from "./TwoFactorManageModal";
 
@@ -26,7 +27,7 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
 
       <Panel
         title="ข้อมูลส่วนตัว"
-        description="ข้อมูลนี้จัดการโดยเจ้าหน้าที่ หากต้องการแก้ไข โปรดติดต่อเจ้าหน้าที่"
+        description="หากต้องการแก้ไข โปรดติดต่อเจ้าหน้าที่"
         className="mb-4"
       >
         <div className="grid md:grid-cols-2 gap-4">
@@ -48,6 +49,11 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
           )}
         </div>
       </Panel>
+
+      {/* Only TAs have an education-level history — a lecturer/staff/admin
+          account never has a ta_enrollments row (see migration 0094), so the
+          panel would only ever render empty for them. */}
+      {me?.roles?.includes("ta") && <EducationHistoryPanel userId={me.id} />}
 
       <Panel title="ความปลอดภัย" description="รหัสผ่านและการยืนยันตัวตน" className="mb-4">
         <div className="divide-y divide-[var(--hairline)] -my-2">
@@ -134,6 +140,51 @@ function SecurityRow({
       </div>
       <div className="shrink-0">{action}</div>
     </div>
+  );
+}
+
+/**
+ * Read-only history of the TA's own (student_id, study_level) periods — see
+ * migration 0094 (ta_enrollments) and EnrollmentService. Same endpoint the
+ * staff "ประวัติการศึกษา" action reads; GET /users/:id/enrollments allows
+ * self-access (authed_forSelfOrStaff), only RECORDING a transition is
+ * staff/admin-only, so this panel is view-only by construction — there is no
+ * write action here.
+ */
+function EducationHistoryPanel({ userId }: { userId: string }) {
+  const { data, isLoading } = useSWR<{ items: Enrollment[] }>(`/users/${userId}/enrollments`);
+  const items = data?.items ?? [];
+  // Nothing to show before the TA's first profile submission creates their
+  // first enrollment row — omit the panel entirely rather than show an empty
+  // shell (see DocsService.UpsertProfile's comment for when that row appears).
+  if (!isLoading && items.length === 0) return null;
+
+  return (
+    <Panel
+      title="ประวัติการศึกษา"
+      description="ระดับการศึกษาและรหัสนักศึกษาของคุณในแต่ละช่วง — แก้ไขได้โดยเจ้าหน้าที่เท่านั้น"
+      className="mb-4"
+    >
+      {isLoading ? (
+        <div className="text-sm text-muted">กำลังโหลด…</div>
+      ) : (
+        <div className="space-y-2">
+          {items.map(e => (
+            <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--hairline)] px-3 py-2">
+              <div>
+                <div className="text-sm font-medium">{e.student_id} — {studyLabel(e.study_level)}</div>
+                <div className="text-xs text-muted">
+                  {new Date(e.started_at).toLocaleDateString("th-TH")}
+                  {" – "}
+                  {e.ended_at ? new Date(e.ended_at).toLocaleDateString("th-TH") : "ปัจจุบัน"}
+                </div>
+              </div>
+              {!e.ended_at && <Chip tone="success">ปัจจุบัน</Chip>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
   );
 }
 
