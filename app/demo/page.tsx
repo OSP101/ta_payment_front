@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, FieldError, InputGroup, Label, TextField } from "@heroui/react";
+import { Button, Card, FieldError, InputGroup, Label, Modal, TextField } from "@heroui/react";
 import {
   FlaskConical, LogIn, Clock, MonitorSmartphone, LogOut,
   Shield, Users, GraduationCap, UserRound, Mail, ArrowRight,
@@ -18,6 +18,7 @@ import {
   type DemoEnterResult,
 } from "../lib/api";
 import { notify } from "../lib/notify";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -76,12 +77,14 @@ const REASON_INFO: Record<string, { icon: React.ReactNode; title: string; descri
 
 export default function DemoEntryPage() {
   const router = useRouter();
+  useDocumentTitle("ห้องทดลองใช้งาน (BETA)");
   const [email, setEmail] = useState("");
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [entering, setEntering] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<DemoEnterResult | null>(null);
   const [reason, setReason] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     setReason(new URLSearchParams(window.location.search).get("reason"));
@@ -144,10 +147,41 @@ export default function DemoEntryPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
+      <Modal.Backdrop isOpen={showIntro} onOpenChange={setShowIntro}>
+        <Modal.Container>
+          <Modal.Dialog className="sm:max-w-[420px]">
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Icon className="bg-warning-soft text-warning-soft-foreground">
+                <FlaskConical className="size-5" />
+              </Modal.Icon>
+              <Modal.Heading>คุณกำลังเข้าสู่ห้องทดลอง (Sandbox)</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="flex flex-col gap-2 text-sm">
+              <p>
+                หน้านี้เป็นห้องทดลองที่แยกต่างหากจากระบบจริงทั้งหมด ข้อมูลที่คุณกรอกหรือสร้างขึ้นในห้องนี้
+                <span className="font-medium text-foreground"> จะไม่ถูกเก็บบันทึกจริง </span>
+                และจะไม่ถูกนำไปใช้กับข้อมูลจริงของมหาวิทยาลัยแต่อย่างใด
+              </p>
+              <p>
+                เราอยากให้คุณลองใช้งานเครื่องมือต่าง ๆ ตามขั้นตอนที่ระบบแนะนำ เพื่อให้คุ้นเคยกับระบบก่อนใช้งานจริง
+                และช่วยเราหาจุดบกพร่องในช่วงเปิดทดลองใช้งาน (BETA) — หากพบปัญหาหรือมีข้อเสนอแนะระหว่างเล่น
+                รบกวนส่งฟีดแบ็คกลับมาให้เราด้วย จะเป็นประโยชน์มากในการปรับปรุงระบบ
+              </p>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button className="w-full" slot="close">
+                เข้าใจแล้ว เริ่มทดลองใช้งาน
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+
       <header className="border-b border-warning-soft-border bg-warning-soft px-6 h-14 flex items-center gap-2">
         <FlaskConical size={18} className="text-warning-soft-foreground" />
         <div className="font-semibold text-[15px] text-warning-soft-foreground">
-          ห้องทดลองใช้งาน TA Payment (BETA)
+          ห้องทดลองใช้งาน COCO TAS (BETA)
         </div>
       </header>
 

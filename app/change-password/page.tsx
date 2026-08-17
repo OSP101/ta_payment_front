@@ -7,6 +7,7 @@ import { Alert, Button, Card, FieldError, InputGroup, Label, Meter, TextField } 
 import { IconButton } from "../components/ui";
 import { Check, Eye, EyeOff, KeyRound, ShieldAlert, X } from "lucide-react";
 import { api, errMessage, type Me } from "../lib/api";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 const SPECIAL_CHAR_RE = /[!@#$%^&*()\-_=+[\]{};:,.<>/?]/;
 
@@ -21,6 +22,7 @@ const STRENGTH_LEVELS: { label: string; color: "danger" | "warning" | "accent" |
 ];
 
 export default function ChangePasswordPage() {
+  useDocumentTitle("เปลี่ยนรหัสผ่าน");
   // Same SWR key every other page already fetches "/me" under — decides
   // whether this is the forced first-login change (no current password to
   // confirm) or a voluntary change from Account Settings (backend requires

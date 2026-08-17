@@ -25,6 +25,8 @@ import { notify } from "../lib/notify";
 import { formatFullName } from "../lib/prefixes";
 import UserAvatar from "./UserAvatar";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "./BetaNotice";
+import useDocumentTitle from "../lib/useDocumentTitle";
+import useUnreadCount from "../lib/useUnreadCount";
 
 const SIDEBAR_KEY = "ta-payment:sidebar-collapsed";
 /** Expanded panel, 256px. Down from w-68/w-72 (272/288). Measured, not
@@ -191,6 +193,19 @@ export default function Shell({
     const active = flatItems.find(i => i.href === activeHref);
     return active?.label ?? brandTitle;
   }, [flatItems, activeHref, brandTitle]);
+
+  // /account, /announcements, /notifications and /document-progress aren't in
+  // the sidebar — they live in the user dropdown — so the tab title needs its
+  // own match against userMenuItems too, separate from activeHref (which only
+  // drives sidebar highlighting).
+  const tabTitle = useMemo(() => {
+    if (currentTitle !== brandTitle) return currentTitle;
+    const items = userMenuItems ?? [];
+    const href = matchActiveHref(items, pathname);
+    return items.find(i => i.href === href)?.label ?? null;
+  }, [currentTitle, brandTitle, userMenuItems, pathname]);
+
+  useDocumentTitle(tabTitle, useUnreadCount());
 
   return (
     <div className="min-h-screen flex bg-background">

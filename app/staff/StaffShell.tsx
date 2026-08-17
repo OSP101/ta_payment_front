@@ -134,7 +134,7 @@ function StaffShellInner({ me, children }: { me: Me; children: React.ReactNode }
   return (
     <Shell
       me={me}
-      brandTitle="TA Payment"
+      brandTitle="COCO TAS"
       nav={nav}
       userMenuItems={userMenuItems}
       topBarScope={<TermSwitcher />}

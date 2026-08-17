@@ -49,7 +49,7 @@ export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => voi
             <HModal.Body>
               <div className="max-h-80 overflow-y-auto pr-1 text-sm leading-6 text-foreground space-y-4">
                 <p>
-                  ก่อนกรอกข้อมูลในขั้นตอนนี้ ระบบ TA Payment ขอแจ้งให้ท่านทราบและขอความยินยอมในการเก็บรวบรวม
+                  ก่อนกรอกข้อมูลในขั้นตอนนี้ ระบบ COCO TAS ขอแจ้งให้ท่านทราบและขอความยินยอมในการเก็บรวบรวม
                   ใช้ และเปิดเผยข้อมูลส่วนบุคคลของท่าน ดังนี้
                 </p>
                 <div>

@@ -14,7 +14,7 @@ const kanit = Kanit({
 });
 
 export const metadata: Metadata = {
-  title: "TA Payment",
+  title: "COCO TAS",
   description: "ระบบบริหารจัดการและเบิกจ่ายค่าตอบแทนผู้ช่วยสอน วิทยาลัยการคอมพิวเตอร์ ม.ขอนแก่น",
 };
 

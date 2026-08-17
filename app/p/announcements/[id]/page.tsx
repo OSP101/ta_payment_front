@@ -53,7 +53,7 @@ const CAT_META: Record<Category, { label: string; icon: React.ReactNode; classNa
   urgent:  { label: "ด่วน",               icon: <Radio size={14} />,         className: "bg-red-50 text-red-700 border-red-200" },
 };
 
-const SITE_NAME = "TA Payment · วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น";
+const SITE_NAME = "COCO TAS · วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น";
 
 async function getAnnouncement(id: string): Promise<PublicAnn | null> {
   try {
@@ -145,7 +145,7 @@ export default async function PublicAnnouncementPage(
           </span>
           <div className="leading-tight">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-ink-1">TA Payment</span>
+              <span className="text-sm font-semibold text-ink-1">COCO TAS</span>
               <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide leading-none text-amber-800">
                 Beta
               </span>
@@ -175,7 +175,7 @@ export default async function PublicAnnouncementPage(
       </main>
 
       <footer className="mx-auto max-w-[760px] px-5 pb-10 text-center text-xs text-ink-4">
-        ประกาศจากระบบ TA Payment วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น
+        ประกาศจากระบบ COCO TAS วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น
       </footer>
     </div>
   );

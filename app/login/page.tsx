@@ -20,6 +20,7 @@ import { Alert, IconButton } from "../components/ui";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "../components/BetaNotice";
 import { api, errMessage, setDemoApiPrefix, login, loginTwoFactor, type Me } from "../lib/api";
 import { notify } from "../lib/notify";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const THAI_RE = /[฀-๿]/;
@@ -84,6 +85,7 @@ export default function LoginPage() {
   // the in-flight challenge) or, on a tab that once visited /demo, resolve
   // the code POST against a stale demo slot instead of production.
   const [challenge, setChallenge] = useState<string | null>(null);
+  useDocumentTitle(challenge ? "ยืนยันตัวตนสองขั้นตอน" : "เข้าสู่ระบบ");
   const [code, setCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
@@ -199,7 +201,7 @@ export default function LoginPage() {
           <div className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
             T
           </div>
-          <div className="font-semibold text-[15px] text-foreground">TA Payment</div>
+          <div className="font-semibold text-[15px] text-foreground">COCO TAS</div>
           <BetaBadge onClick={() => setBetaOpen(true)} />
         </div>
         {/* <div className="text-xs text-muted">วิทยาลัยการคอมพิวเตอร์ ม.ขอนแก่น</div> */}
@@ -213,7 +215,7 @@ export default function LoginPage() {
               T
             </div>
             <h1 className="mt-4 text-[22px] font-semibold text-foreground">
-              {challenge ? "ยืนยันตัวตนสองขั้นตอน" : "เข้าสู่ระบบ TA Payment"}
+              {challenge ? "ยืนยันตัวตนสองขั้นตอน" : "เข้าสู่ระบบ COCO TAS"}
             </h1>
             <p className="text-sm text-muted mt-1">
               {challenge

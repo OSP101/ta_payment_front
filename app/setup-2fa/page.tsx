@@ -18,6 +18,7 @@ import {
 import { Check, Copy, Download, LogOut, ShieldAlert, ShieldCheck, Smartphone } from "lucide-react";
 import { api, errMessage, mfaEnable, mfaSetup, type Me, type MFASetupResult } from "../lib/api";
 import { notify } from "../lib/notify";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 /**
  * Also reached voluntarily — AccountSettings links "เปิดใช้งาน [2FA]" straight
@@ -40,6 +41,7 @@ function mfaMandatoryFor(me: Me): boolean {
  */
 export default function Setup2FAPage() {
   const router = useRouter();
+  useDocumentTitle("ตั้งค่ายืนยันตัวตนสองขั้นตอน");
   const { data: me } = useSWR<Me>("/me");
   const voluntary = !!me && !mfaMandatoryFor(me);
   const [setup, setSetup] = useState<MFASetupResult | null>(null);

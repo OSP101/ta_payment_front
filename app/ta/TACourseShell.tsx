@@ -86,7 +86,7 @@ export default function TACourseShell({
   return (
     <Shell
       me={me}
-      brandTitle="TA Payment"
+      brandTitle="COCO TAS"
       nav={nav}
       userMenuItems={userMenuItems}
       // สลับวิชาได้จากแถบบนเหมือนฝั่งอาจารย์ — รายการมาจาก /me/ta-courses
