@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Kanit } from "next/font/google";
 import "./globals.css";
 import SWRProvider from "./components/SWRProvider";
@@ -28,7 +29,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <DemoBanner />
           <SessionActivityGuard />
           {children}
-          <DemoGuidePanel />
+          {/* DemoGuidePanel pulls in useScenarioEngine, which calls
+              useSearchParams() unconditionally (before its own `if
+              (!active) return null`, since hooks can't be conditional) —
+              Suspense here is what lets /_not-found and other fully-static
+              routes prerender instead of failing the build. */}
+          <Suspense fallback={null}>
+            <DemoGuidePanel />
+          </Suspense>
         </SWRProvider>
       </body>
     </html>
