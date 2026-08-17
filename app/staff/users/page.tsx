@@ -8,14 +8,14 @@ import {
   TextField as HTextField,
   type SortDescriptor,
 } from "@heroui/react";
-import { Check, Copy, KeyRound, LockOpen, Pencil, Plus, ShieldAlert, ShieldOff, UserCheck, UserX } from "lucide-react";
-import { api, errMessage, mfaAdminReset, type Me } from "../../lib/api";
-import { THAI_BANKS } from "../../lib/banks";
+import { Check, Copy, GraduationCap, KeyRound, LockOpen, Pencil, Plus, ShieldAlert, ShieldOff, UserCheck, UserX } from "lucide-react";
+import { api, errMessage, mfaAdminReset, type Enrollment, type Me } from "../../lib/api";
+import { STUDENT_ID_PATTERN, THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
 import {
   Alert, Button, Chip, FieldGroup, Modal,
-  PageHeader, Panel, Select,
+  PageHeader, Panel, Select, TextArea,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 
@@ -38,6 +38,10 @@ interface User {
   phone?: string | null;
   study_level?: string | null;
   study_year?: number | null;
+  /** Denormalized copy of the TA's currently-active ta_enrollments row (see
+   *  migration 0094) — kept in sync by EnrollmentService.RecordTransition, not
+   *  editable directly here. Use the "ประวัติการศึกษา" action to change it. */
+  student_id?: string | null;
   roles: string[];
   /** สิทธิ์ผู้บริหาร — เห็นแดชบอร์ดสถิติงบแบบอ่านอย่างเดียว (ไม่ใช่ role) */
   is_executive?: boolean;
@@ -131,6 +135,15 @@ function vBranchCode(v: string): string | null {
 }
 function vSelect(v: string, allowed: readonly string[]): string | null {
   return allowed.includes(v) ? null : "กรุณาเลือกจากรายการ";
+}
+function vStudentID(v: string): string | null {
+  return STUDENT_ID_PATTERN.test(v.trim()) ? null : "รูปแบบรหัสนักศึกษาไม่ถูกต้อง (XXXXXXXXX-X)";
+}
+// Student ID renders as `XXXXXXXXX-X` — same auto-formatting as the TA's own
+// documents/page.tsx so pasting either `123456789-0` or `1234567890` works.
+function formatStudentID(s: string): string {
+  const d = s.replace(/\D/g, "").slice(0, 10);
+  return d.length <= 9 ? d : d.slice(0, 9) + "-" + d.slice(9);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -288,6 +301,7 @@ export default function UsersPage() {
   const [reactivating, setReactivating] = useState<User | null>(null);
   const [unlocking, setUnlocking] = useState<User | null>(null);
   const [resetting2FA, setResetting2FA] = useState<User | null>(null);
+  const [historyFor, setHistoryFor] = useState<User | null>(null);
 
   // The password-gate unlock is admin-only, and the API additionally refuses an
   // admin unlocking themselves (see service.ClearPasswordGateLockout — otherwise
@@ -356,6 +370,11 @@ export default function UsersPage() {
         : "-",
     },
     {
+      id: "student_id", label: "รหัสนักศึกษา",
+      className: "text-(--ink-3)",
+      render: u => u.student_id ?? "-",
+    },
+    {
       id: "status", label: "สถานะ",
       render: u => u.is_active
         ? <Chip tone="success">ใช้งาน</Chip>
@@ -372,6 +391,11 @@ export default function UsersPage() {
           <Button variant="ghost" size="sm" onClick={() => setResetting(u)}>
             <KeyRound size={14} /> รีเซ็ตรหัส
           </Button>
+          {u.roles.includes("ta") && (
+            <Button variant="ghost" size="sm" onClick={() => setHistoryFor(u)}>
+              <GraduationCap size={14} /> ประวัติการศึกษา
+            </Button>
+          )}
           {canUnlock(u) && (
             <Button variant="ghost" size="sm" onClick={() => setUnlocking(u)}>
               <LockOpen size={14} /> ปลดล็อก
@@ -473,6 +497,7 @@ export default function UsersPage() {
       {reactivating && <ReactivateModal user={reactivating} onClose={() => setReactivating(null)} />}
       {unlocking && <UnlockPasswordGateModal user={unlocking} onClose={() => setUnlocking(null)} />}
       {resetting2FA && <Reset2FAModal user={resetting2FA} onClose={() => setResetting2FA(null)} />}
+      {historyFor && <EnrollmentHistoryModal user={historyFor} onClose={() => setHistoryFor(null)} />}
     </div>
   );
 }
@@ -645,7 +670,6 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     roles: [...user.roles],
     is_executive: user.is_executive === true,
     admin_position: user.admin_position ?? "",
-    study_level: user.study_level ?? "undergrad",
     study_year: user.study_year != null ? String(user.study_year) : "",
   });
   const [showErrors, setShowErrors] = useState(false);
@@ -658,7 +682,6 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     first_name: vName(form.first_name, "ชื่อ"),
     last_name: vName(form.last_name, "นามสกุล"),
     roles: form.roles.length === 0 ? "เลือกบทบาทอย่างน้อยหนึ่งอย่าง" : null,
-    study_level: form.roles.includes("ta") ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
     phone: vPhone(form.phone),
   }), [form]);
   const hasErrors = Object.values(errors).some(Boolean);
@@ -684,11 +707,14 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         ...(form.admin_position !== (user.admin_position ?? "")
           ? { admin_position: form.admin_position.trim() }
           : {}),
-        study_level: isTa ? form.study_level : null,
+        // study_level is deliberately NOT sent here — changing it now goes
+        // through the "ประวัติการศึกษา" action (EnrollmentHistoryModal) only,
+        // so every level change is captured in ta_enrollments. See that
+        // modal's comment for why this form no longer edits it at all.
         // null clears study_year server-side; the request-validation layer
         // rejects a literal 0 (gte=1) before Update's own clear-sentinel
         // logic ever runs, so non-applicable saves must send null, not 0.
-        study_year: isTa && form.study_level === "undergrad"
+        study_year: isTa && user.study_level === "undergrad"
           ? (form.study_year ? Number(form.study_year) : null)
           : null,
       });
@@ -769,16 +795,21 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 </span>
               </span>
             </label>
+            {isTa && (
+              <div className="text-sm rounded-lg border border-border bg-surface px-3 py-2.5">
+                <span className="text-muted">ระดับการศึกษาปัจจุบัน: </span>
+                <span className="font-medium">
+                  {user.study_level
+                    ? (STUDY_LEVELS.find(l => l.value === user.study_level)?.label ?? user.study_level)
+                    : "-"}
+                </span>
+                <span className="block text-xs text-muted mt-0.5">
+                  เปลี่ยนระดับ/รหัสนักศึกษาผ่านปุ่ม &quot;ประวัติการศึกษา&quot; ในตารางแทน — เพื่อให้ประวัติการเปลี่ยนระดับถูกบันทึกไว้ครบ
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
-              {isTa && (
-                <VSelect label="ระดับการศึกษา" value={form.study_level}
-                  onChange={v => setForm({ ...form, study_level: v })}
-                  error={errors.study_level} show={showErrors}
-                >
-                  {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </VSelect>
-              )}
-              {isTa && form.study_level === "undergrad" && (
+              {isTa && user.study_level === "undergrad" && (
                 <VSelect label="ชั้นปี (ระบบคำนวณอัตโนมัติจากรหัส นศ. เมื่อมี)" value={form.study_year}
                   onChange={v => setForm({ ...form, study_year: v })}
                   error={null} show={showErrors}
@@ -803,6 +834,136 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
             ในหน้า "ตรวจสอบแบบฟอร์มใบแจ้งหนี้" แทน */}
 
         {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+      </div>
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * History (view-only) + "record a level transition" for one TA's
+ * ta_enrollments (migration 0094). This is the ONLY place staff change a
+ * TA's student_id/study_level after their first profile submission —
+ * EditUserModal above deliberately no longer edits study_level, so every
+ * later change is captured here instead of silently overwriting
+ * users.study_level with no history. Submitting closes the TA's current
+ * active period and opens a new one in the same backend transaction
+ * (EnrollmentService.RecordTransition) — there is no separate "close" step.
+ */
+function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const key = `/users/${user.id}/enrollments`;
+  const { data, isLoading, error } = useSWR<{ items: Enrollment[] }>(key);
+
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ student_id: "", study_level: "undergrad", note: "" });
+  const [showErrors, setShowErrors] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  const errors = useMemo(() => ({
+    student_id: vStudentID(form.student_id),
+    study_level: vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)),
+  }), [form]);
+  const hasErrors = Object.values(errors).some(Boolean);
+
+  async function submit() {
+    setShowErrors(true);
+    if (hasErrors) return;
+    setPending(true); setErr(null);
+    try {
+      await api.post(`/users/${user.id}/enrollments`, {
+        student_id: form.student_id.trim(),
+        study_level: form.study_level,
+        note: form.note.trim() || undefined,
+      });
+      mutate(key);
+      // The table's "ระดับ"/"รหัสนักศึกษา" columns read users.student_id/
+      // study_level, which RecordTransition just kept in sync — refresh them.
+      mutate((k: string) => k.startsWith("/users"));
+      setForm({ student_id: "", study_level: "undergrad", note: "" });
+      setShowErrors(false);
+      setAdding(false);
+    } catch (e) {
+      setErr((e as Error).message);
+      notify.error(e);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const items = data?.items ?? [];
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`ประวัติการศึกษา — ${formatFullName(user)}`}
+      size="lg"
+      footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
+    >
+      <div className="space-y-4">
+        <div>
+          <div className="text-xs text-muted mb-2">ช่วงการศึกษาที่ผ่านมา</div>
+          {isLoading ? (
+            <div className="text-sm text-muted">กำลังโหลด…</div>
+          ) : error ? (
+            <Alert status="danger" title="โหลดประวัติไม่สำเร็จ" description={errMessage(error)} />
+          ) : items.length === 0 ? (
+            <div className="text-sm text-muted">ยังไม่มีประวัติ</div>
+          ) : (
+            <div className="space-y-2">
+              {items.map(e => (
+                <div key={e.id} className="rounded-lg border border-border px-3 py-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">
+                      {e.student_id} — {STUDY_LEVELS.find(l => l.value === e.study_level)?.label ?? e.study_level}
+                    </div>
+                    <div className="text-xs text-muted">
+                      {new Date(e.started_at).toLocaleDateString("th-TH")}
+                      {" – "}
+                      {e.ended_at ? new Date(e.ended_at).toLocaleDateString("th-TH") : "ปัจจุบัน"}
+                    </div>
+                    {e.note && <div className="text-xs text-muted mt-0.5">{e.note}</div>}
+                  </div>
+                  {!e.ended_at && <Chip tone="success">active</Chip>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {adding ? (
+          <div className="border-t border-border pt-4 space-y-3">
+            <div className="text-xs text-muted">
+              บันทึกการเปลี่ยนระดับ — ช่วงเดิมที่ยัง active อยู่จะถูกปิดโดยอัตโนมัติ
+            </div>
+            <VField label="รหัสนักศึกษาใหม่" required placeholder="XXXXXXXXX-X"
+              value={form.student_id} onChange={v => setForm({ ...form, student_id: formatStudentID(v) })}
+              error={errors.student_id} show={showErrors}
+            />
+            <VSelect label="ระดับการศึกษาใหม่" value={form.study_level}
+              onChange={v => setForm({ ...form, study_level: v })}
+              error={errors.study_level} show={showErrors}
+            >
+              {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </VSelect>
+            <FieldGroup label="หมายเหตุ (ถ้ามี)">
+              <TextArea rows={2} value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
+            </FieldGroup>
+            {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" onClick={() => { setAdding(false); setErr(null); }}>ยกเลิก</Button>
+              <Button variant="primary" onClick={submit} disabled={pending || (showErrors && hasErrors)}>
+                บันทึก
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="primary" onClick={() => setAdding(true)}>
+            <Plus size={16} /> บันทึกการเปลี่ยนระดับ
+          </Button>
+        )}
       </div>
     </Modal>
   );

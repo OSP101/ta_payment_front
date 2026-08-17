@@ -3,6 +3,8 @@
 //
 // Uploads are the exception — see UPLOAD_ORIGIN below.
 
+import { beginRequest, endRequest } from "./loadingBar";
+
 export type ApiErrorBody = { error: string };
 
 /** Typed error carrying the HTTP status so callers/UI can branch on it. */
@@ -81,6 +83,45 @@ export function isDemoMode(): boolean {
 
 export function getDemoBasePath(): string | null {
   return isDemoMode() ? apiPrefix : null;
+}
+
+/**
+ * Same sessionStorage-persistence pattern as apiPrefix above, for the one
+ * other thing a demo session needs to survive a client-side navigation:
+ * DemoEnterResult.demo_password — a shared, intentionally-published
+ * constant (see internal/demo's DemoPassword doc comment), not a real
+ * secret. Without this, only app/demo/page.tsx's own onPick (which holds it
+ * in a plain useState that's gone once the tester navigates away) could log
+ * into a seeded account — every OTHER page would have no way to switch
+ * which of the 9 seeded accounts is currently logged in, which is exactly
+ * what the guided TA/lecturer-actor steps need mid-walkthrough (see
+ * DemoGuidePanel.tsx's SubStepRow: "สลับไปเป็น {label} แล้วไปทำเอง").
+ */
+const DEMO_PASSWORD_KEY = "ta-payment:demo-password";
+let demoPassword: string | null = null;
+if (typeof window !== "undefined") {
+  try {
+    if (!window.location.pathname.startsWith("/login")) {
+      demoPassword = window.sessionStorage.getItem(DEMO_PASSWORD_KEY);
+    }
+  } catch {
+    /* storage blocked — account switching just won't be offered */
+  }
+}
+
+export function setDemoPassword(password: string | null) {
+  demoPassword = password;
+  if (typeof window === "undefined") return;
+  try {
+    if (password) window.sessionStorage.setItem(DEMO_PASSWORD_KEY, password);
+    else window.sessionStorage.removeItem(DEMO_PASSWORD_KEY);
+  } catch {
+    /* not fatal — demoPassword itself is already updated for this tab */
+  }
+}
+
+export function getDemoPassword(): string | null {
+  return demoPassword;
 }
 
 /**
@@ -230,31 +271,42 @@ async function parseError(path: string, res: Response): Promise<ApiError> {
   return toApiError(path, res.status, await res.text().catch(() => ""));
 }
 
-async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${apiPrefix}${path}`, {
-      ...init,
-      credentials: "include",
-      signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        "Content-Type": "application/json",
-        ...(init.headers as Record<string, string> | undefined),
-      },
-    });
-  } catch (e) {
-    // Network failure or timeout — no HTTP status.
-    if (e instanceof DOMException && e.name === "TimeoutError") {
-      throw new ApiError(408, humanMessage(408, ""));
-    }
-    throw new ApiError(0, humanMessage(0, ""));
-  }
-  if (!res.ok) throw await parseError(path, res);
+// /auth/heartbeat fires silently in the background on user activity (see
+// SessionActivityGuard) — it never reflects something the user is waiting
+// on, so it must not flash the top loading bar.
+const SILENT_PATHS = ["/auth/heartbeat"];
 
-  const ct = res.headers.get("content-type") ?? "";
-  if (res.status === 204) return undefined as unknown as T;
-  if (ct.includes("application/json")) return (await res.json()) as T;
-  return (await res.blob()) as unknown as T;
+async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const tracked = !SILENT_PATHS.includes(path);
+  if (tracked) beginRequest();
+  try {
+    let res: Response;
+    try {
+      res = await fetch(`${apiPrefix}${path}`, {
+        ...init,
+        credentials: "include",
+        signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+        headers: {
+          "Content-Type": "application/json",
+          ...(init.headers as Record<string, string> | undefined),
+        },
+      });
+    } catch (e) {
+      // Network failure or timeout — no HTTP status.
+      if (e instanceof DOMException && e.name === "TimeoutError") {
+        throw new ApiError(408, humanMessage(408, ""));
+      }
+      throw new ApiError(0, humanMessage(0, ""));
+    }
+    if (!res.ok) throw await parseError(path, res);
+
+    const ct = res.headers.get("content-type") ?? "";
+    if (res.status === 204) return undefined as unknown as T;
+    if (ct.includes("application/json")) return (await res.json()) as T;
+    return (await res.blob()) as unknown as T;
+  } finally {
+    if (tracked) endRequest();
+  }
 }
 
 /**
@@ -297,6 +349,28 @@ export const demoResetWorkspace = (email: string) =>
 export const demoLogin = (basePath: string, email: string, password: string) =>
   demoFetch<{ user: Me }>(`${basePath}/auth/login`, { email, password });
 
+/**
+ * Switch which seeded account is logged in, from anywhere in the app —
+ * reuses demoLogin verbatim with the password persisted by setDemoPassword
+ * above, so nothing (not the tester, not this code) types it in a form a
+ * second time. There is no dedicated switch/impersonate endpoint on the
+ * backend — this is a full re-login against the SAME workspace's
+ * base_path, exactly like the very first pick on /demo (see
+ * internal/demo/auth.go's LoginHandler.Login: it treats "already logged in
+ * as another seeded account in this slot" no differently from a fresh
+ * login). Throws (via demoFetch) if getDemoPassword() is null — that only
+ * happens if sessionStorage was cleared or blocked mid-session, in which
+ * case the caller's catch should send the tester back through /demo.
+ */
+export const demoSwitchAccount = (email: string) => {
+  const basePath = getDemoBasePath();
+  const password = getDemoPassword();
+  if (!basePath || !password) {
+    return Promise.reject(new Error("ไม่พบข้อมูลห้องทดลอง กรุณาเข้าห้องทดลองใหม่อีกครั้ง"));
+  }
+  return demoLogin(basePath, email, password);
+};
+
 // The simulator panel's own two endpoints — unlike demoEnter/demoLogin
 // above, these run AFTER login, under the claimed slot's own prefix, so
 // they go through the normal api.get/post (apiPrefix-aware) below rather
@@ -322,6 +396,33 @@ export interface DemoScenarioEvent {
    *  tester has no access to a staff-actor step's (always staff-only)
    *  related_path, so offering that link would just send them into a 403. */
   actor_role: DemoActorRole;
+  /** The real page ActorRole itself would use, for the 2 guided
+   *  TA/lecturer-actor events with no per-course URL (ta_schedules,
+   *  ta_docs) — see internal/demo's ScenarioEvent.ActorPath doc comment.
+   *  Distinct from related_path, which is always a staff-viewing screen. */
+  actor_path?: string;
+  /** DB-verified checkpoints within this event — present for every event
+   *  that creates more than one record (see internal/demo's
+   *  ScenarioEventStatus.SubSteps doc comment). `key` matches an entry in
+   *  demoStepGuides.ts, which owns the field-level "what to click/type"
+   *  copy this type deliberately does NOT carry — that's unverified guide
+   *  text, not something the backend can confirm mid-form. */
+  sub_steps?: DemoSubStep[];
+}
+
+export interface DemoSubStep {
+  key: string;
+  label: string;
+  done: boolean;
+  /** Seeded account email this specific record needs — only set for the 5
+   *  TA/lecturer-actor events' sub-steps (different records genuinely need
+   *  different logins). See internal/demo's SubStep.Actor doc comment. */
+  actor?: string;
+  /** This record's own real page — set only for the 3 course-scoped
+   *  TA/lecturer events; falls back to the parent DemoScenarioEvent's own
+   *  actor_path for ta_schedules/ta_docs. See internal/demo's
+   *  SubStep.ActorPath doc comment. */
+  actor_path?: string;
 }
 
 export const demoScenarioEvents = () => api.get<{ items: DemoScenarioEvent[] }>("/scenario/events");
@@ -374,30 +475,35 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => req<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   del: <T>(path: string) => req<T>(path, { method: "DELETE" }),
   upload: async <T>(path: string, form: FormData): Promise<T> => {
-    let res: Response;
+    beginRequest();
     try {
-      res = await fetch(`${UPLOAD_ORIGIN}${apiPrefix}${path}`, {
-        method: "POST",
-        body: form,
-        // Required both ways: same-origin through the rewrite, and cross-origin
-        // when UPLOAD_ORIGIN is set — without it the cookie is dropped and every
-        // upload 401s.
-        credentials: "include",
-        // Deliberately not setting Content-Type: the browser has to generate the
-        // multipart boundary. Setting it by hand also turns this into a
-        // preflighted request for no benefit.
-        signal: AbortSignal.timeout(TIMEOUT_MS * 3), // uploads may be large
-      });
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "TimeoutError") {
-        throw new ApiError(408, humanMessage(408, ""));
+      let res: Response;
+      try {
+        res = await fetch(`${UPLOAD_ORIGIN}${apiPrefix}${path}`, {
+          method: "POST",
+          body: form,
+          // Required both ways: same-origin through the rewrite, and cross-origin
+          // when UPLOAD_ORIGIN is set — without it the cookie is dropped and every
+          // upload 401s.
+          credentials: "include",
+          // Deliberately not setting Content-Type: the browser has to generate the
+          // multipart boundary. Setting it by hand also turns this into a
+          // preflighted request for no benefit.
+          signal: AbortSignal.timeout(TIMEOUT_MS * 3), // uploads may be large
+        });
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "TimeoutError") {
+          throw new ApiError(408, humanMessage(408, ""));
+        }
+        throw new ApiError(0, humanMessage(0, ""));
       }
-      throw new ApiError(0, humanMessage(0, ""));
+      if (!res.ok) throw await parseError(path, res);
+      const ct = res.headers.get("content-type") ?? "";
+      if (res.status === 204 || !ct.includes("application/json")) return undefined as unknown as T;
+      return (await res.json()) as T;
+    } finally {
+      endRequest();
     }
-    if (!res.ok) throw await parseError(path, res);
-    const ct = res.headers.get("content-type") ?? "";
-    if (res.status === 204 || !ct.includes("application/json")) return undefined as unknown as T;
-    return (await res.json()) as T;
   },
   uploadWithProgress,
 };
@@ -504,6 +610,20 @@ export function errMessage(e: unknown): string {
 // SWR-compatible fetcher — typed for direct use as `useSWR(key, fetcher)`.
 export const fetcher = <T>(path: string): Promise<T> => api.get<T>(path);
 
+/** One period from GET /users/:id/enrollments — see migration 0094
+ *  (ta_enrollments) and internal/service/enrollment.go. `ended_at` unset
+ *  means this is the TA's current, active period. */
+export interface Enrollment {
+  id: string;
+  user_id: string;
+  student_id: string;
+  study_level: string;
+  started_at: string;
+  ended_at?: string;
+  created_by?: string;
+  note?: string;
+}
+
 export interface Me {
   id: string;
   email: string;
@@ -537,6 +657,11 @@ export interface Me {
    *  never. app/ta/(home)/documents/page.tsx gates the profile form (Step 1)
    *  behind PdpaConsentModal until this is set. */
   pdpa_consented_at?: string | null;
+  /** Which ta_enrollments period THIS session is viewing (migration 0096) —
+   *  a display filter only, set via setEnrollmentScope. Absent/undefined
+   *  means no selection yet (or the TA has 0-1 periods and was never asked)
+   *  — EnrollmentScopeModal in app/ta/layout.tsx watches this. */
+  selected_enrollment_id?: string | null;
 }
 
 /**
@@ -576,6 +701,13 @@ export const mfaAdminReset = (userId: string, password: string) =>
 /** Records that the TA accepted the PDPA notice shown by PdpaConsentModal
  *  before the profile form unlocks — see internal/service/pdpa_consent.go. */
 export const pdpaConsent = () => api.post<{ ok: true }>("/me/pdpa-consent");
+
+/** Sets which ta_enrollments period this session is viewing — see
+ *  EnrollmentService.SetSessionScope and migration 0096. Takes effect on the
+ *  next request; callers should `mutate("/me")` after this resolves so
+ *  Me.selected_enrollment_id reflects the change immediately. */
+export const setEnrollmentScope = (enrollmentId: string) =>
+  api.post<{ ok: true }>("/me/enrollment-scope", { enrollment_id: enrollmentId });
 
 /**
  * PDPA self-service data access/erasure — see internal/service/data_export.go

@@ -13,6 +13,7 @@ import {
   demoLogin,
   errMessage,
   setDemoApiPrefix,
+  setDemoPassword,
   type DemoAccount,
   type DemoEnterResult,
 } from "../lib/api";
@@ -124,6 +125,12 @@ export default function DemoEntryPage() {
     try {
       await demoLogin(workspace.base_path, account.email, workspace.demo_password);
       setDemoApiPrefix(workspace.base_path);
+      // Persist alongside base_path so demoSwitchAccount (used by the
+      // guided TA/lecturer-actor steps to hop between seeded accounts
+      // mid-walkthrough) has it available from any page, not just this
+      // one's own now-gone component state — see setDemoPassword's doc
+      // comment in api.ts.
+      setDemoPassword(workspace.demo_password);
       // Straight to the role's own real page — DemoGuidePanel.tsx (docked to
       // the right edge, mounted globally) shows the walkthrough on top of
       // it, so there is no separate destination to route through first.
@@ -251,6 +258,23 @@ export default function DemoEntryPage() {
               </Button>
             </div>
           )}
+
+          {/* Same footer as the login page — one copyright/credit block for
+              the whole app, not a second wording invented for this screen. */}
+          <p className="text-center text-xs text-muted mt-6">
+            © {new Date().getFullYear()} College of Computing, Khon Kaen University
+          </p>
+          <p className="text-center text-xs text-muted mt-1">
+            Developed by{" "}
+            <a
+              href="https://osp101.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              ITII Development Team
+            </a>
+          </p>
         </div>
       </main>
     </div>

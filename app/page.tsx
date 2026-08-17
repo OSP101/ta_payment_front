@@ -5,7 +5,10 @@ import NoRoleNotice from "./NoRoleNotice";
 // Root — dispatch to the appropriate role home based on the user's roles.
 export default async function RootRedirect() {
   const me = await getMe();
-  if (!me) redirect("/login");
+  // BETA: send an unauthenticated visitor to the demo sandbox entry instead
+  // of straight to a real login form — /demo is where a first-time visitor
+  // is meant to land during this phase, not /login.
+  if (!me) redirect("/demo");
   if (me.roles.includes("admin") || me.roles.includes("staff")) redirect("/staff");
   if (me.roles.includes("lecturer")) redirect("/lecturer");
   if (me.roles.includes("ta")) redirect("/ta");

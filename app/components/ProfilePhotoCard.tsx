@@ -84,7 +84,7 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
   return (
     <Panel
       title="รูปโปรไฟล์"
-      description="รูปนี้จะแสดงบนแถบด้านบนและในรายการที่มีชื่อคุณ"
+      description="รูปโปรไฟล์ของคุณในระบบ"
       className="mb-4"
     >
       <div

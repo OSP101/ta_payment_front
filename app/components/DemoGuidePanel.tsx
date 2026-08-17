@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Accordion, Button, ProgressBar, Tabs } from "@heroui/react";
 import {
   FlaskConical,
@@ -10,17 +10,24 @@ import {
   AlertCircle,
   Loader2,
   ArrowUpRight,
+  ArrowRightLeft,
   Bookmark,
   History,
   RotateCcw,
+  RotateCw,
   PanelRightClose,
   PanelRightOpen,
   Users,
   GraduationCap,
   UserRound,
+  MousePointerClick,
+  Wand2,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
-import { isDemoMode, type DemoScenarioEvent, type DemoProblemEvent, type DemoActorRole } from "../lib/api";
+import { isDemoMode, type DemoScenarioEvent, type DemoProblemEvent, type DemoActorRole, type DemoSubStep } from "../lib/api";
 import { useScenarioEngine, type RunState } from "../lib/useScenarioEngine";
+import { STEP_GUIDES, DEMO_ACCOUNT_LABELS } from "../lib/demoStepGuides";
 import { ConfirmDialog } from "./ui";
 
 const PANEL_WIDTH_VAR = "--demo-panel-w";
@@ -39,40 +46,195 @@ const ACTOR_ICON: Record<DemoActorRole, typeof Users> = {
   ta: UserRound,
 };
 
-/** One accordion item's body — description, run button, result, and a link
- *  to go see the effect on the real page. Shared by both tabs; only
+/** One sub-group's own field-level checklist — collapsible so a 3-course
+ *  step doesn't dump ~30 instruction lines on screen at once. Purely
+ *  guide text, not verified line-by-line (see demoStepGuides.ts's doc
+ *  comment for why): only `sub.done`, read from the backend's per-record
+ *  DB check, decides the checkmark.
+ *
+ *  sub.actor (only set for the 5 TA/lecturer-actor events' sub-steps — see
+ *  api.ts's DemoSubStep doc comment) drives its own little action button:
+ *  "ไปทำเอง" if the currently logged-in demo account already IS that
+ *  actor, or "สลับไปเป็น {label} แล้วไปทำเอง" (one click: re-login as that
+ *  seeded account, then navigate) if it isn't. Sub-steps with no `actor`
+ *  (the 3 staff-actor multi-record events) show no button of their own —
+ *  those use StepBody's single shared "ไปทำเอง" above the whole list,
+ *  since every record there is done from the same staff login. */
+function SubStepRow({ sub, lines, expanded, onToggle, currentEmail, onGoTo, onSwitchAndGo }: {
+  sub: DemoSubStep;
+  lines: string[];
+  expanded: boolean;
+  onToggle: () => void;
+  currentEmail?: string;
+  onGoTo: (path: string) => void;
+  onSwitchAndGo: (email: string, path: string) => void;
+}) {
+  const path = sub.actor_path;
+  const isCurrentActor = !!sub.actor && sub.actor === currentEmail;
+  return (
+    <div className="border border-border rounded-md">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-sm"
+      >
+        {sub.done ? (
+          <CheckCircle2 size={14} className="shrink-0 text-success" />
+        ) : (
+          <span className="shrink-0 size-3.5 rounded-full border border-border" />
+        )}
+        <span className="flex-1">{sub.label}</span>
+        {expanded ? (
+          <ChevronDown size={14} className="shrink-0 text-muted" />
+        ) : (
+          <ChevronRight size={14} className="shrink-0 text-muted" />
+        )}
+      </button>
+      {expanded && (
+        <div className="flex flex-col gap-2 px-2.5 pb-2.5">
+          <ol className="flex flex-col gap-1 pl-5 text-xs text-muted list-decimal">
+            {lines.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ol>
+          {sub.actor && path && (
+            <div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onPress={() => (isCurrentActor ? onGoTo(path) : onSwitchAndGo(sub.actor!, path))}
+              >
+                {isCurrentActor ? <MousePointerClick size={13} /> : <ArrowRightLeft size={13} />}
+                {isCurrentActor ? "ไปทำเอง" : `สลับไปเป็น ${DEMO_ACCOUNT_LABELS[sub.actor] ?? sub.actor} แล้วไปทำเอง`}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One accordion item's body — description, action buttons, result, and a
+ *  link to go see the effect on the real page. Shared by both tabs; only
  *  whether `done` is ever true differs (problem cases never report it — see
  *  DemoProblemEvent's doc comment), which just changes the checkmark.
  *
  *  canAct is whether the CURRENTLY logged-in demo account is this step's own
  *  actor_role (see useScenarioEngine's canActOn) — when it isn't, the "go
- *  see the real page" link never renders (every related_path is a
- *  staff-only screen today, so offering it to a lecturer/TA login would
- *  just send them into a 403), replaced by a badge that says whose step
- *  this actually is. Running the step itself is unaffected either way — the
- *  backend acts as whichever role the step needs regardless of who's
- *  logged in, same as it always has. */
+ *  see the real page" link and the guided "ไปทำเอง" button never render
+ *  (every related_path is a staff-only screen today, so offering either to
+ *  a lecturer/TA login would just send them into a 403), replaced by a
+ *  badge that says whose step this actually is. The fallback "ให้ระบบทำ..."
+ *  button is unaffected either way — the backend acts as whichever role the
+ *  step needs regardless of who's logged in, same as it always has.
+ *
+ *  Guided mode (STEP_GUIDES has an entry for this key) shows a field-level
+ *  checklist plus "ไปทำเอง" (navigate only, no API call — the trainee does
+ *  the real clicking/typing themselves) alongside the old one-click
+ *  fallback, now relabeled to make clear it finishes whatever's left rather
+ *  than being the only way through. Every event now has a guide entry (see
+ *  demoStepGuides.ts), but the 5 TA/lecturer-actor events don't gate on
+ *  `canAct` the way the 7 staff-actor ones do — their sub-steps carry their
+ *  OWN required account (SubStep.actor) and switch to it directly (see
+ *  SubStepRow above), since different records genuinely need different
+ *  logins. Only problem-case events (no STEP_GUIDES entry at all) fall
+ *  through to the single-button, no-checklist rendering below.
+ *
+ *  isStaffViewer (from the logged-in account's OWN roles, not this event's)
+ *  decides how a role MISMATCH renders: a staff viewer is presumed to be
+ *  running the full end-to-end walkthrough, so every event still shows in
+ *  full (staff needs the per-sub-step "สลับไปเป็น..." buttons to actually
+ *  perform the TA/lecturer-actor events by hand). A lecturer/TA viewer,
+ *  though, is presumed to be exploring from inside THEIR OWN role's pages —
+ *  stepping through every OTHER role's field-level instructions is noise
+ *  they didn't ask for, so those events collapse to a one-line "not your
+ *  step" note plus a large, hard-to-miss auto-fill button, so a lecturer
+ *  browsing /lecturer can skip straight past staff's own steps to reach
+ *  whichever one is actually theirs. */
 function StepBody({
+  item,
   description,
   relatedPath,
   actorRole,
   canAct,
+  isStaffViewer,
+  currentEmail,
   state,
   onRun,
+  onGoToStep,
+  onGoToPath,
+  onSwitchAndGo,
+  onRecheck,
 }: {
+  item: DemoScenarioEvent | DemoProblemEvent;
   description: string;
   relatedPath?: string;
   actorRole: DemoActorRole;
   canAct: boolean;
+  isStaffViewer: boolean;
+  currentEmail?: string;
   state: RunState;
   onRun: () => void;
+  onGoToStep: () => void;
+  onGoToPath: (path: string) => void;
+  onSwitchAndGo: (email: string, path: string) => void;
+  onRecheck: () => void;
 }) {
-  const effectivelyDone = state.status === "done";
+  const done = "done" in item && item.done;
+  const subSteps = "sub_steps" in item ? item.sub_steps : undefined;
+  const eventActorPath = "actor_path" in item ? item.actor_path : undefined;
+  const guide = STEP_GUIDES[item.key];
+  const isGuided = !!guide;
+  // Sub-groups that each need their OWN account (the 5 TA/lecturer-actor
+  // events) handle "go do this" entirely per-row via SubStepRow — the
+  // shared top-level button/badge below only applies when every record in
+  // this event shares one actor (the 3 staff-actor multi-record events, and
+  // every single-record event).
+  const hasPerSubActor = !!subSteps?.some(s => s.actor);
+  // A non-staff viewer looking at an event outside their own role: collapse
+  // the detail, push the auto-fill shortcut front and center. Staff never
+  // collapses — see this function's own doc comment.
+  const collapsedForOtherRole = !isStaffViewer && !canAct;
   const ActorIcon = ACTOR_ICON[actorRole];
+  const [expandedSub, setExpandedSub] = useState<string | null>(
+    () => subSteps?.find(s => !s.done)?.key ?? subSteps?.[0]?.key ?? null,
+  );
+
+  if (collapsedForOtherRole) {
+    return (
+      <div className="flex flex-col gap-3 pb-1">
+        <div className="flex items-start gap-1.5 text-xs text-muted bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
+          <ActorIcon size={13} className="shrink-0 mt-0.5" />
+          <span>
+            ขั้นตอนของ<span className="font-medium text-foreground">{ACTOR_LABEL[actorRole]}</span> — ไม่ใช่ขั้นตอนของ
+            บัญชีนี้ ให้ระบบสร้างให้เลยเพื่อไปขั้นตอนถัดไป
+          </span>
+        </div>
+        <Button size="md" fullWidth variant="primary" isPending={state.status === "running"} onPress={onRun}>
+          {state.status === "running" ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+          ให้ระบบทำส่วนที่เหลือให้อัตโนมัติ
+        </Button>
+        {state.status === "done" && state.message && (
+          <div className="flex items-start gap-1.5 text-sm text-success">
+            <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+            <span>{state.message}</span>
+          </div>
+        )}
+        {state.status === "error" && state.message && (
+          <div className="flex items-start gap-1.5 text-sm text-danger">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <span>{state.message}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 pb-1">
       <p className="text-sm text-muted">{description}</p>
-      {!canAct && (
+      {!canAct && !hasPerSubActor && (
         <div className="flex items-start gap-1.5 text-xs text-muted bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
           <ActorIcon size={13} className="shrink-0 mt-0.5" />
           <span>
@@ -81,17 +243,75 @@ function StepBody({
           </span>
         </div>
       )}
-      <div>
-        <Button
-          size="sm"
-          variant={state.status === "done" ? "secondary" : "primary"}
-          isPending={state.status === "running"}
-          onPress={onRun}
-        >
-          {state.status === "running" ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-          {state.status === "done" ? "ทำอีกครั้ง" : "ทำขั้นตอนนี้"}
-        </Button>
-      </div>
+
+      {isGuided ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {!hasPerSubActor && canAct && (
+              <Button size="sm" variant="primary" onPress={onGoToStep}>
+                <MousePointerClick size={14} />
+                ไปทำเอง
+              </Button>
+            )}
+            <Button size="sm" variant="tertiary" isPending={state.status === "running"} onPress={onRun}>
+              {state.status === "running" ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+              ให้ระบบทำส่วนที่เหลือให้อัตโนมัติ
+            </Button>
+          </div>
+
+          {subSteps && subSteps.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              {subSteps.map(sub => (
+                <SubStepRow
+                  key={sub.key}
+                  sub={{ ...sub, actor_path: sub.actor_path ?? eventActorPath }}
+                  lines={guide[sub.key] ?? []}
+                  expanded={expandedSub === sub.key}
+                  onToggle={() => setExpandedSub(expandedSub === sub.key ? null : sub.key)}
+                  currentEmail={currentEmail}
+                  onGoTo={onGoToPath}
+                  onSwitchAndGo={onSwitchAndGo}
+                />
+              ))}
+              {done && guide._after && (
+                <div className="flex flex-col gap-1 text-xs text-warning bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
+                  {guide._after.map((line, i) => (
+                    <span key={i}>{line}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <ol className="flex flex-col gap-1 pl-4 text-xs text-muted list-decimal">
+              {(guide._flat ?? []).map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ol>
+          )}
+
+          <button
+            type="button"
+            onClick={onRecheck}
+            className="inline-flex w-fit items-center gap-1 text-xs text-muted hover:text-foreground"
+          >
+            <RotateCw size={12} />
+            ตรวจสอบอีกครั้ง
+          </button>
+        </>
+      ) : (
+        <div>
+          <Button
+            size="sm"
+            variant={state.status === "done" ? "secondary" : "primary"}
+            isPending={state.status === "running"}
+            onPress={onRun}
+          >
+            {state.status === "running" ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+            {state.status === "done" ? "ทำอีกครั้ง" : "ทำขั้นตอนนี้"}
+          </Button>
+        </div>
+      )}
+
       {state.status === "done" && state.message && (
         <div className="flex items-start gap-1.5 text-sm text-success">
           <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
@@ -104,7 +324,7 @@ function StepBody({
           <span>{state.message}</span>
         </div>
       )}
-      {effectivelyDone && relatedPath && canAct && (
+      {done && relatedPath && canAct && (
         <Link
           href={relatedPath}
           className="inline-flex w-fit items-center gap-1 text-sm font-medium text-accent hover:underline"
@@ -141,6 +361,7 @@ function StepBody({
 export default function DemoGuidePanel() {
   const [active, setActive] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -196,6 +417,12 @@ export default function DemoGuidePanel() {
 
   if (!active) return null;
 
+  // Staff (and admin, who carries the "staff" role too — see seed.go's
+  // demoAccounts) is presumed to be running the full walkthrough; a
+  // lecturer/TA login is presumed to be exploring their own role's pages
+  // only — see StepBody's own doc comment for what this changes.
+  const isStaffViewer = !!engine.me?.roles.includes("staff");
+
   const doneCount = engine.events?.filter(e => e.done).length ?? 0;
   const total = engine.events?.length ?? 0;
   const progressPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
@@ -228,12 +455,19 @@ export default function DemoGuidePanel() {
               <Accordion.Panel>
                 <Accordion.Body>
                   <StepBody
+                    item={item}
                     description={item.description}
                     relatedPath={item.related_path}
                     actorRole={item.actor_role}
                     canAct={engine.canActOn(item)}
+                    isStaffViewer={isStaffViewer}
+                    currentEmail={engine.me?.email}
                     state={engine.runs[item.key] ?? { status: "idle" }}
                     onRun={() => runFn(item)}
+                    onGoToStep={() => engine.goToStep(item as DemoScenarioEvent)}
+                    onGoToPath={path => router.push(path)}
+                    onSwitchAndGo={(email, path) => engine.switchAndGo(email, path)}
+                    onRecheck={engine.refetchEvents}
                   />
                 </Accordion.Body>
               </Accordion.Panel>
