@@ -117,16 +117,29 @@ export function useScenarioEngine() {
     [me],
   );
 
+  // Whether the CURRENTLY logged-in demo account can actually reach
+  // `related_path` — every related_path is a staff-only screen (see
+  // ScenarioEvent.RelatedPath's own doc comment), so this is a plain "staff"
+  // role check, NOT canActOn(item). Those two only coincide for the 7
+  // staff-actor events (actor_role IS "staff" there); for the 5 per-sub-actor
+  // events (ta_schedules, ta_requests, ta_docs, worklog_submit,
+  // worklog_approve) actor_role is "ta"/"lecturer" — canActOn(item) is true
+  // for a TA/lecturer viewer on THEIR OWN event, but related_path is still
+  // staff's screen, so navigating there sent that very viewer into a real
+  // 403 the instant they hit "ให้ระบบทำส่วนที่เหลือให้อัตโนมัติ" for their own
+  // step. Confirmed live: TA1 clicking that button on "TA ส่งเอกสาร" landed
+  // on /staff/review's access-denied page.
+  const canViewRelatedPath = !!me?.roles.includes("staff");
+
   async function run(item: DemoScenarioEvent | DemoProblemEvent, caller: (key: string) => Promise<{ message: string }>) {
     const key = item.key;
     setRuns(r => ({ ...r, [key]: { status: "running" } }));
     // Navigate to the step's own real page first — but only if it HAS one,
-    // the CURRENT login can actually reach it (canActOn — every
-    // related_path is staff-only today, so a lecturer/TA tester offered
-    // one would just hit a 403), and we're not sitting on it already. This
+    // the CURRENT login can actually reach it (canViewRelatedPath — see its
+    // own doc comment above), and we're not sitting on it already. This
     // is the whole point of the panel being docked rather than a modal:
     // the real screen is right there on the left the instant this fires.
-    const shouldNavigate = !!item.related_path && canActOn(item) && item.related_path !== currentUrl;
+    const shouldNavigate = !!item.related_path && canViewRelatedPath && item.related_path !== currentUrl;
     if (shouldNavigate) router.push(item.related_path!);
     try {
       if (shouldNavigate) {
@@ -163,10 +176,13 @@ export function useScenarioEngine() {
   // call — the trainee does the actual clicking/typing there themselves,
   // guided by demoStepGuides.ts's checklist in the still-docked panel.
   // Same reachability guard run() uses (has a path, current login can
-  // actually reach it, not already there) so this never sends a
-  // lecturer/TA tester into a 403 on a staff-only screen either.
+  // actually reach it via canViewRelatedPath, not already there) so this
+  // never sends a lecturer/TA tester into a 403 on a staff-only screen
+  // either. Not currently reachable for a per-sub-actor event (DemoGuidePanel
+  // only wires this button up when !hasPerSubActor), but using the same
+  // correct check here too rather than relying on that staying true forever.
   function goToStep(item: DemoScenarioEvent) {
-    if (item.related_path && canActOn(item) && item.related_path !== currentUrl) {
+    if (item.related_path && canViewRelatedPath && item.related_path !== currentUrl) {
       router.push(item.related_path);
     }
   }

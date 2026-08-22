@@ -208,12 +208,13 @@ function StepBody({
           <ActorIcon size={13} className="shrink-0 mt-0.5" />
           <span>
             ขั้นตอนของ<span className="font-medium text-foreground">{ACTOR_LABEL[actorRole]}</span> — ไม่ใช่ขั้นตอนของ
-            บัญชีนี้ ให้ระบบสร้างให้เลยเพื่อไปขั้นตอนถัดไป
+            บัญชีนี้ <span className="font-medium text-foreground">ไม่ต้องทำเอง</span> กดปุ่มด้านล่างให้ระบบทำแทน
+            แล้วจะไปขั้นตอนถัดไปให้อัตโนมัติ
           </span>
         </div>
         <Button size="md" fullWidth variant="primary" isPending={state.status === "running"} onPress={onRun}>
           {state.status === "running" ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-          ให้ระบบทำส่วนที่เหลือให้อัตโนมัติ
+          กดให้ระบบทำขั้นตอนนี้แทน
         </Button>
         {state.status === "done" && state.message && (
           <div className="flex items-start gap-1.5 text-sm text-success">
@@ -414,6 +415,48 @@ export default function DemoGuidePanel() {
     const current = engine.events.find(e => !e.done);
     setExpandedKey(current?.key ?? engine.events[0]?.key ?? null);
   }, [engine.events, expandedKey]);
+
+  // Auto-advance the wizard: once whichever "เส้นทางหลัก" step is currently
+  // expanded finishes running (own account or "ให้ระบบทำ...ให้อัตโนมัติ" —
+  // either way runs land here), jump the accordion to the next not-yet-done
+  // step instead of leaving the trainee staring at a finished item and
+  // having to hunt for what's next themselves. A short delay so the success
+  // message is actually readable before the panel moves on. Deliberately
+  // scoped to `engine.events` (the ordered path) — "เคสที่ต้องรับมือ" problem
+  // cases are explicitly unordered (see their own tab copy), so a finished
+  // problem case never triggers this.
+  //
+  // The pending advance is tracked on a plain ref, NOT scheduled via a
+  // useEffect cleanup timeout — run()'s own refetchEvents() resolves shortly
+  // after the done transition and changes `engine.events`'s identity, which
+  // re-fires this effect; a cleanup-owned timer would be cancelled by that
+  // unrelated re-run before its 900ms was up, silently killing every
+  // auto-advance. A ref-owned timer survives re-renders; expandedKeyRef lets
+  // the timeout callback notice if the trainee already clicked elsewhere in
+  // the meantime and skip stepping on their manual choice.
+  const prevRunStatusRef = useRef<Record<string, RunState["status"]>>({});
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expandedKeyRef = useRef(expandedKey);
+  expandedKeyRef.current = expandedKey;
+  useEffect(() => {
+    const prev = prevRunStatusRef.current;
+    const curr = Object.fromEntries(Object.entries(engine.runs).map(([k, v]) => [k, v.status]));
+    const justFinished = !!expandedKey && prev[expandedKey] !== "done" && curr[expandedKey] === "done";
+    prevRunStatusRef.current = curr;
+    if (!justFinished || !engine.events) return;
+    const idx = engine.events.findIndex(e => e.key === expandedKey);
+    if (idx === -1) return;
+    const next = engine.events.slice(idx + 1).find(e => !e.done);
+    if (!next) return;
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    const sourceKey = expandedKey;
+    advanceTimerRef.current = setTimeout(() => {
+      if (expandedKeyRef.current === sourceKey) setExpandedKey(next.key);
+    }, 900);
+  }, [engine.runs, engine.events, expandedKey]);
+  useEffect(() => () => {
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+  }, []);
 
   if (!active) return null;
 

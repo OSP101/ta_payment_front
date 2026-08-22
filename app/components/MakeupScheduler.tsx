@@ -17,8 +17,16 @@ import { api, ApiError } from "../lib/api";
 import { notify } from "../lib/notify";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Modal, Chip, Alert,
-  ConfirmDialog, EmptyState, DatePicker, TimePicker,
+  ConfirmDialog, EmptyState, DatePicker, TimePicker, TipWrap,
 } from "./ui";
+// The TA-actor makeup/remind endpoints (assertMakeupManager +
+// RequireApprovedTAProfile — see router.go's `/teaching-courses/:id/makeup/...`
+// and `/holiday-impacts/.../remind`) reject an unapproved TA the same way the
+// worklog page's own actions do, so this shares the same lock affordance
+// rather than letting a TA fill the whole modal and only find out on submit.
+// useTAApproval() defaults to {approved:true} outside a <TAApprovalProvider>
+// (the lecturer viewer never mounts one), so this is a no-op there.
+import { LockedActionButton, useTAApproval } from "../ta/TAGate";
 
 export interface Makeup {
   id: string;
@@ -112,6 +120,8 @@ type Viewer = "lecturer" | "ta";
 
 export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer }) {
   const isTA = viewer === "ta";
+  const { approved } = useTAApproval();
+  const taLocked = isTA && !approved;
   const { data: course } = useSWR<TC>(`/teaching-courses/${tcId}`);
   const { data: impacts, isLoading } = useSWR<ImpactsResponse>(`/teaching-courses/${tcId}/holiday-impacts`);
 
@@ -176,9 +186,9 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
           ? "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ คุณกำหนดวันชดเชยเองได้ (กรุณาตกลงกับอาจารย์ก่อน) หรือจะแจ้งเตือนให้อาจารย์กำหนดก็ได้ ถ้ายังไม่มีวันชดเชยจะลงเวลาปฏิบัติงานของคาบนั้นไม่ได้"
           : "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ และสถานะการกำหนดวันชดเชย TA จะลงชั่วโมงคาบที่ตกวันหยุดไม่ได้จนกว่าจะมีการกำหนดวันชดเชย"}
         actions={
-          <Button variant="secondary" onClick={() => setManualOpen(true)} disabled={!course?.sections?.length}>
+          <LockedActionButton variant="secondary" onClick={() => setManualOpen(true)} disabled={!course?.sections?.length}>
             <Plus size={14} /> เพิ่มวันชดเชย (กรณีอื่น)
-          </Button>
+          </LockedActionButton>
         }
       />
 
@@ -243,9 +253,9 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                     // The nudge stays TA-only: it exists so a TA who does not
                     // want to decide the date can push it back to the lecturer.
                     isTA && unresolvedHere > 0 ? (
-                      <Button variant="secondary" size="sm" onClick={() => setRemindTarget(imp)}>
+                      <LockedActionButton variant="secondary" size="sm" onClick={() => setRemindTarget(imp)}>
                         <Bell size={13} /> แจ้งเตือนอาจารย์
-                      </Button>
+                      </LockedActionButton>
                     ) : undefined
                   }
                   padded={false}
@@ -299,25 +309,33 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                         </div>
                         {sec.makeup ? (
                           <div className="flex items-center gap-1">
-                            <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => setEditingSlot({ impact: imp, section: sec })}>
-                              <Pencil size={14} />
-                            </IconButton>
-                            <IconButton
-                              label="ลบ"
-                              variant="ghost" size="sm"
-                              onClick={() => setDeletingMakeup({
-                                sectionId: sec.section_id,
-                                makeupId: sec.makeup!.id,
-                                date: sec.makeup!.makeup_date,
-                              })}
-                            >
-                              <Trash2 size={14} />
-                            </IconButton>
+                            {/* IconButton's own hover Tip won't fire while
+                                disabled (see LockedActionButton's doc comment),
+                                so the lock reason needs its own wrapping span. */}
+                            <TipWrap content={taLocked ? "รอเจ้าหน้าที่อนุมัติเอกสาร" : undefined} className="inline-flex">
+                              <IconButton label="แก้ไข" variant="ghost" size="sm" disabled={taLocked} onClick={() => setEditingSlot({ impact: imp, section: sec })}>
+                                <Pencil size={14} />
+                              </IconButton>
+                            </TipWrap>
+                            <TipWrap content={taLocked ? "รอเจ้าหน้าที่อนุมัติเอกสาร" : undefined} className="inline-flex">
+                              <IconButton
+                                label="ลบ"
+                                variant="ghost" size="sm"
+                                disabled={taLocked}
+                                onClick={() => setDeletingMakeup({
+                                  sectionId: sec.section_id,
+                                  makeupId: sec.makeup!.id,
+                                  date: sec.makeup!.makeup_date,
+                                })}
+                              >
+                                <Trash2 size={14} />
+                              </IconButton>
+                            </TipWrap>
                           </div>
                         ) : (
-                          <Button variant="primary" size="sm" onClick={() => setEditingSlot({ impact: imp, section: sec })}>
+                          <LockedActionButton variant="primary" size="sm" onClick={() => setEditingSlot({ impact: imp, section: sec })}>
                             <Plus size={14} /> กำหนดวันชดเชย
-                          </Button>
+                          </LockedActionButton>
                         )}
                       </div>
                     ))}

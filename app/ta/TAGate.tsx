@@ -58,12 +58,17 @@ export function LockedActionButton({
 
 // Persistent banner shown at the top of every TA page (except the profile
 // page and the home course-list, which already communicate this via their
-// own UI + the inline OnboardingChecklistCard).
+// own UI + the inline OnboardingChecklistCard — and the schedule page, which
+// the banner's own claim below does not hold for: PUT /me/schedule
+// intentionally does NOT require an approved profile — see that page's own
+// doc comment and router.go's — so telling an unapproved TA this menu "จะถูก
+// ล็อก" here was simply false, and had them believe they had to submit
+// documents before they could even save a class schedule).
 export function TAApprovalBanner() {
   const { approved, status } = useTAApproval();
   const pathname = usePathname();
   if (approved) return null;
-  if (pathname === "/ta/documents" || pathname === "/ta") return null;
+  if (pathname === "/ta/documents" || pathname === "/ta" || pathname === "/ta/schedule") return null;
 
   return (
     <div className="mb-4">
