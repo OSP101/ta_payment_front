@@ -1,17 +1,17 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
-import { Tabs } from "@heroui/react";
+import { Tabs, ScrollShadow } from "@heroui/react";
 import {
   FileDown, History, Merge, Download, FileText, Users, GraduationCap, Banknote, FileSignature,
-  CalendarRange, Check,
+  CalendarRange, Check, ChevronDown, AlertTriangle,
 } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api } from "../../lib/api";
 import { useTerm } from "../TermContext";
 import {
-  PageHeader, Panel, Button, IconButton, Chip, EmptyState, Modal, Select, TabLabel,
+  PageHeader, Button, IconButton, Chip, EmptyState, Modal, Select, TabLabel,
   ConfirmDialog, Avatar, TipWrap, Alert,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
@@ -23,17 +23,34 @@ import {
 
 /**
  * สรุปงบและปะหน้าจ่ายตรง — everything about the term's TWO payout documents
- * (สรุปรายวิชาที่ขอใช้ TA, ปะหน้าจ่ายตรง) plus the รหัสคู่ review both of them
- * depend on. Split out onto its own page (10/08/2026) after briefly living
- * under ใบแต่งตั้งทีเอ ("ส่งออกเอกสาร"): staff wanted to READ the numbers on
- * screen before downloading anything, not just a row of download buttons
- * bolted onto the appointment-order page. The preview tables below hit the
- * same backend source (buildCourseSummaryBlocks / buildTransferCoverSheets)
- * as the .xlsx download, so the screen and the file can never disagree.
+ * (สรุปรายวิชาที่ขอใช้ TA, ปะหน้าจ่ายตรง). Split out onto its own page
+ * (10/08/2026) after briefly living under ใบแต่งตั้งทีเอ ("ส่งออกเอกสาร"):
+ * staff wanted to READ the numbers on screen before downloading anything, not
+ * just a row of download buttons bolted onto the appointment-order page. The
+ * preview tables below hit the same backend source (buildCourseSummaryBlocks /
+ * buildTransferCoverSheets) as the .xlsx download, so the screen and the file
+ * can never disagree.
+ *
+ * Both download buttons pass through useCourseGroupGate first (16/08/2026) —
+ * a standalone "รหัสคู่" button used to be the only way to review a class
+ * taught under two registrar codes (the curriculum transition leaves the old
+ * code open for students who have not graduated yet, running side by side
+ * with the new one). Staff kept forgetting it existed and shipping documents
+ * with the same class printed as two separate rows, so the check now runs
+ * automatically in front of every download instead of living behind a button
+ * nobody remembered to press.
  */
+type PreviewTab = "course_summary" | "transfer_cover";
+
+// The active tab is decided HERE, not inside PreviewSection, because the
+// download/history buttons live in the page header now (28/08/2026 — staff
+// asked for them level with the page title itself, not down by the tab
+// strip) and PageHeader's own row has no visibility into which tab is
+// selected below it otherwise.
 export default function BudgetSummaryPage() {
   const { termId, term } = useTerm();
   const termLabel = term ? `${term.academic_year}/${term.semester}` : "";
+  const [tab, setTab] = useState<PreviewTab>("course_summary");
   return (
     <div>
       <PageHeader
@@ -41,19 +58,15 @@ export default function BudgetSummaryPage() {
         description="ตรวจตัวเลขสรุปรายวิชาที่ขอใช้ TA และปะหน้าจ่ายตรงบนหน้าจอ ก่อนดาวน์โหลดเป็นไฟล์ Excel พร้อมตรวจสอบรหัสวิชาคู่"
         actions={
           termId ? (
-            <>
+            tab === "course_summary" ? (
               <CourseSummaryDownloadButton termId={termId} termLabel={termLabel} />
-              {/* หนึ่งปุ่ม หนึ่ง zip (12/08/2026) — ข้างในยังคงเป็น 2 ไฟล์แยกกัน
-                  (ป.ตรี / บัณฑิตศึกษา) เพราะทำเบิกไม่เหมือนกัน แค่รวมปุ่มดาวน์โหลด
-                  เข้าด้วยกันไม่ให้แถวปุ่มรก — แต่ละไฟล์ยังผ่าน gate ของตัวเองอิสระ
-                  ต่อกัน ไม่ใช่การรวม gate เข้าด้วยกัน */}
+            ) : (
               <TransferCoverDownloadButton termId={termId} termLabel={termLabel} />
-              <CourseGroupReviewButton termId={termId} />
-            </>
+            )
           ) : null
         }
       />
-      {termId && <PreviewSection termId={termId} />}
+      {termId && <PreviewSection termId={termId} tab={tab} setTab={setTab} />}
     </div>
   );
 }
@@ -62,46 +75,43 @@ export default function BudgetSummaryPage() {
 /* On-screen preview                                                          */
 /* -------------------------------------------------------------------------- */
 
-type PreviewTab = "course_summary" | "transfer_cover";
-
-// PreviewSection gates the whole preview on the term having issued at least
-// one คำสั่งแต่งตั้ง (appointment order) round. Before that, "who is the TA
-// on this course" is only a request someone approved — the appointment order
-// is the step that turns it into the confirmed, official roster, and that
-// roster is what these two documents are supposed to report on. Showing
-// preview numbers built from pre-appointment data would let staff sign off on
-// a set of names that could still change before the order is ever printed.
-function PreviewSection({ termId }: { termId: string }) {
+// PreviewSection's TABLE CONTENT is gated on the term having issued at least
+// one คำสั่งแต่งตั้ง (appointment order) round — before that, "who is the TA on
+// this course" is only a request someone approved, and the appointment order
+// is the step that turns it into the confirmed, official roster these two
+// documents are supposed to report on. The DOWNLOAD BUTTONS are deliberately
+// NOT behind that same gate — they live in the page header (BudgetSummaryPage,
+// 28/08/2026), driven by the SAME tab state passed down here, so staff can
+// still generate either file before an appointment order exists.
+function PreviewSection({
+  termId, tab, setTab,
+}: {
+  termId: string; tab: PreviewTab; setTab: (tab: PreviewTab) => void;
+}) {
   const router = useRouter();
-  const [tab, setTab] = useState<PreviewTab>("course_summary");
   const { data: rounds, isLoading: roundsLoading } = useSWR<{ items: { id: string }[] }>(
     `/exports/appointment-order/rounds?term_id=${termId}`
   );
+  const noRounds = !roundsLoading && !rounds?.items.length;
 
-  if (roundsLoading) return <PreviewSectionSkeleton />;
-
-  if (!rounds?.items.length) {
-    return (
-      <Panel>
-        <EmptyState
-          icon={<FileSignature size={26} />}
-          title="ยังไม่เคยออกคำสั่งแต่งตั้งทีเอ"
-          description="ต้องออกคำสั่งแต่งตั้งอย่างน้อย 1 ครั้งก่อน จึงจะแสดงสรุปงบและปะหน้าจ่ายตรงได้ เนื่องจากคำสั่งแต่งตั้งเป็นสิ่งยืนยันว่ารายชื่อทีเอที่ใช้งานจริงคือใคร"
-          action={
-            <Button variant="primary" onClick={() => router.push("/staff/appointments")}>
-              <FileSignature size={16} /> ไปออกคำสั่งแต่งตั้ง
-            </Button>
-          }
-        />
-      </Panel>
-    );
-  }
+  const noRoundsNotice = (
+    <EmptyState
+      icon={<FileSignature size={26} />}
+      title="ยังไม่เคยออกคำสั่งแต่งตั้งทีเอ"
+      description="ต้องออกคำสั่งแต่งตั้งอย่างน้อย 1 ครั้งก่อน จึงจะแสดงสรุปงบและปะหน้าจ่ายตรงได้ เนื่องจากคำสั่งแต่งตั้งเป็นสิ่งยืนยันว่ารายชื่อทีเอที่ใช้งานจริงคือใคร"
+      action={
+        <Button variant="primary" onClick={() => router.push("/staff/appointments")}>
+          <FileSignature size={16} /> ไปออกคำสั่งแต่งตั้ง
+        </Button>
+      }
+    />
+  );
 
   return (
-    <Panel padded={false}>
-      <Tabs selectedKey={tab} onSelectionChange={k => setTab(String(k) as PreviewTab)}>
+    <div>
+      <Tabs variant="secondary" selectedKey={tab} onSelectionChange={k => setTab(String(k) as PreviewTab)}>
         <Tabs.ListContainer>
-          <Tabs.List aria-label="เลือกเอกสารที่จะดูสรุป" className="px-4 pt-2">
+          <Tabs.List aria-label="เลือกเอกสารที่จะดูสรุป">
             <Tabs.Tab id="course_summary">
               <TabLabel icon={<FileDown size={14} />} active={tab === "course_summary"}>
                 สรุปรายวิชาที่ขอใช้ TA
@@ -118,17 +128,29 @@ function PreviewSection({ termId }: { termId: string }) {
         </Tabs.ListContainer>
 
         <Tabs.Panel id="course_summary">
-          <div className="p-4">
-            <CourseSummaryPreviewPanel termId={termId} />
+          <div className="pt-5">
+            {roundsLoading ? (
+              <PreviewTableSkeleton />
+            ) : noRounds ? (
+              noRoundsNotice
+            ) : (
+              <CourseSummaryPreviewPanel termId={termId} />
+            )}
           </div>
         </Tabs.Panel>
         <Tabs.Panel id="transfer_cover">
-          <div className="p-4">
-            <TransferCoverPreviewSection termId={termId} />
+          <div className="pt-5">
+            {roundsLoading ? (
+              <PreviewTableSkeleton />
+            ) : noRounds ? (
+              noRoundsNotice
+            ) : (
+              <TransferCoverPreviewSection termId={termId} />
+            )}
           </div>
         </Tabs.Panel>
       </Tabs>
-    </Panel>
+    </div>
   );
 }
 
@@ -142,14 +164,14 @@ function PreviewSection({ termId }: { termId: string }) {
 // bug report: no visual difference between "still fetching" and "empty").
 function PreviewTableSkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-border">
-      <div className="border-b border-hairline px-4 py-3">
+    <div>
+      <div className="pb-3">
         <div className="h-4 w-56 animate-pulse rounded bg-surface-secondary" />
         <div className="mt-2 h-3 w-24 animate-pulse rounded bg-surface-secondary" />
       </div>
       <div className="divide-y divide-hairline">
         {[0, 1, 2, 3].map(i => (
-          <div key={i} className="flex items-center gap-4 px-4 py-3.5">
+          <div key={i} className="flex items-center gap-4 py-3.5">
             <div className="h-3 w-14 shrink-0 animate-pulse rounded bg-surface-secondary" />
             <div className="h-3 flex-1 animate-pulse rounded bg-surface-secondary" />
             <div className="h-3 w-20 shrink-0 animate-pulse rounded bg-surface-secondary" />
@@ -158,20 +180,6 @@ function PreviewTableSkeleton() {
         ))}
       </div>
     </div>
-  );
-}
-
-function PreviewSectionSkeleton() {
-  return (
-    <Panel padded={false}>
-      <div className="flex gap-2 border-b border-hairline px-4 pt-2 pb-3">
-        <div className="h-8 w-44 animate-pulse rounded-lg bg-surface-secondary" />
-        <div className="h-8 w-32 animate-pulse rounded-lg bg-surface-secondary" />
-      </div>
-      <div className="p-4">
-        <PreviewTableSkeleton />
-      </div>
-    </Panel>
   );
 }
 
@@ -333,13 +341,16 @@ function CourseSummaryPreviewPanel({ termId }: { termId: string }) {
   );
   const sheets = data?.sheets ?? [];
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       {!!data?.warnings.length && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
-          <div className="font-medium">มีรายการที่ควรตรวจสอบ {data.warnings.length} รายการ</div>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4">
-            {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
-          </ul>
+        <div className="flex items-start gap-2 text-xs text-amber-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">มีรายการที่ควรตรวจสอบ {data.warnings.length} รายการ</div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
         </div>
       )}
       {isLoading && !data ? (
@@ -358,10 +369,14 @@ function CourseSummaryPreviewPanel({ termId }: { termId: string }) {
           description="เมื่อมีคำขอ TA ที่อนุมัติแล้วในเทอมนี้ สรุปจะมาแสดงที่นี่ แยกตามหลักสูตร"
         />
       ) : (
-        sheets.map(sheet => {
+        sheets.map((sheet, i) => {
           const courseRows = groupCourseSummaryRows(sheet.rows);
           return (
-            <Panel key={sheet.curriculum_code} title={sheet.sheet} description={`${courseRows.length} รายวิชา`}>
+            <div key={sheet.curriculum_code} className={i > 0 ? "pt-8 border-t border-hairline" : ""}>
+              <div className="mb-3">
+                <div className="text-[15px] font-semibold text-foreground">{sheet.sheet}</div>
+                <div className="text-xs text-muted mt-0.5">{courseRows.length} รายวิชา</div>
+              </div>
               <DataTable
                 ariaLabel={`สรุปรายวิชาที่ขอใช้ TA — ${sheet.sheet}`}
                 columns={courseSummaryColumns}
@@ -376,7 +391,7 @@ function CourseSummaryPreviewPanel({ termId }: { termId: string }) {
                 onRetry={() => void retry()}
                 emptyTitle="ไม่มีวิชาในหลักสูตรนี้"
               />
-            </Panel>
+            </div>
           );
         })
       )}
@@ -437,21 +452,29 @@ function transferCoverQuery(level: TransferCoverLevel, months?: string[]) {
 function TransferCoverPreviewSection({ termId }: { termId: string }) {
   const [level, setLevel] = useState<TransferCoverLevel>("undergrad");
   return (
-    <div className="space-y-4">
-      <div className="inline-flex rounded-lg border border-border p-0.5">
-        {(["undergrad", "graduate"] as const).map(l => (
-          <button
-            key={l}
-            type="button"
-            onClick={() => setLevel(l)}
-            className={
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-              (level === l ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
-            }
-          >
-            {transferCoverLevelLabel[l]}
-          </button>
-        ))}
+    <div className="space-y-8">
+      {/* Boxed on purpose (28/08/2026, per staff feedback) — this cluster has
+          its OWN small tab-like control (the ป.ตรี/บัณฑิตศึกษา toggle), so
+          leaving it flat like the rest of the page read as a second,
+          competing tab strip right under the real one. The border here is
+          doing real work: telling the two apart. */}
+      <div className="rounded-xl border border-brand/20 bg-brand-soft/40 p-4">
+        <div className="inline-flex rounded-lg border border-brand/20 bg-white p-0.5 mb-4">
+          {(["undergrad", "graduate"] as const).map(l => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setLevel(l)}
+              className={
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+                (level === l ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
+              }
+            >
+              {transferCoverLevelLabel[l]}
+            </button>
+          ))}
+        </div>
+        <TransferCoverCoveragePanel termId={termId} level={level} />
       </div>
       <TransferCoverPreviewPanel termId={termId} level={level} />
     </div>
@@ -464,13 +487,15 @@ function TransferCoverPreviewSection({ termId }: { termId: string }) {
 // otherwise answer from memory, and the cost of getting it wrong is a TA who
 // is never paid for a month they worked. Scoped to ONE level: the two files
 // are issued on independent schedules, so issuing ป.ตรี must never make the
-// บัณฑิตศึกษา screen believe its own months are already covered.
+// บัณฑิตศึกษา screen believe its own months are already covered. Rendered
+// inside TransferCoverPreviewSection's own boxed cluster, alongside the level
+// toggle — not from TransferCoverPreviewPanel below, which stays flat.
 function TransferCoverCoveragePanel({ termId, level }: { termId: string; level: TransferCoverLevel }) {
   const { data } = useSWR<MonthCoverage>(`/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery(level)}`);
   if (!data?.months.length) return null;
   const pending = data.months.filter(m => !m.issued);
   return (
-    <div className="rounded-lg border border-border px-3 py-2.5">
+    <div>
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span className="font-medium text-ink-1">สถานะการออกเอกสารรายเดือน</span>
         {data.fiscal_split.crosses && (
@@ -508,14 +533,16 @@ function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: T
   );
   const sheets = data?.sheets ?? [];
   return (
-    <div className="space-y-4">
-      <TransferCoverCoveragePanel termId={termId} level={level} />
+    <div className="space-y-8">
       {!!data?.warnings.length && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
-          <div className="font-medium">มีรายการที่ควรตรวจสอบ {data.warnings.length} รายการ</div>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4">
-            {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
-          </ul>
+        <div className="flex items-start gap-2 text-xs text-amber-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">มีรายการที่ควรตรวจสอบ {data.warnings.length} รายการ</div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
         </div>
       )}
       {isLoading && !data ? (
@@ -534,12 +561,17 @@ function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: T
           description="เมื่อวิชาในเทอมนี้มีบันทึกเวลาที่คิดเงินแล้ว สรุปจะมาแสดงที่นี่ แยกตามหลักสูตร"
         />
       ) : (
-        sheets.map(sheet => (
-          <Panel
+        sheets.map((sheet, i) => (
+          <div
             key={`${sheet.sheet_name}-${sheet.track}`}
-            title={sheet.sheet_name}
-            description={`${sheet.track_th} · ${sheet.rows.length} รายการ · รวม ${fmtBaht(sheet.total_baht)} บาท`}
+            className={i > 0 ? "pt-8 border-t border-hairline" : ""}
           >
+            <div className="mb-3">
+              <div className="text-[15px] font-semibold text-foreground">{sheet.sheet_name}</div>
+              <div className="text-xs text-muted mt-0.5">
+                {sheet.track_th} · {sheet.rows.length} รายการ · รวม {fmtBaht(sheet.total_baht)} บาท
+              </div>
+            </div>
             <DataTable
               ariaLabel={`ปะหน้าจ่ายตรง — ${sheet.sheet_name} (${sheet.track_th})`}
               columns={transferCoverColumns}
@@ -554,7 +586,7 @@ function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: T
               onRetry={() => void retry()}
               emptyTitle="ไม่มีรายชื่อในหลักสูตรนี้"
             />
-          </Panel>
+          </div>
         ))
       )}
     </div>
@@ -575,6 +607,8 @@ function CourseSummaryDownloadButton({ termId, termLabel }: { termId: string; te
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [warnings, setWarnings] = useState<string[] | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const groupGate = useCourseGroupGate(termId);
 
   async function downloadNow() {
     setDownloading(true);
@@ -586,6 +620,9 @@ function CourseSummaryDownloadButton({ termId, termLabel }: { termId: string; te
       el.download = `course-summary-${termLabel.replace("/", "-") || "term"}.xlsx`;
       el.click();
       URL.revokeObjectURL(url);
+      // A download just added a row to the generation ledger — refresh the
+      // history modal if it happens to be showing this term already.
+      void mutate(`/exports/terms/${termId}/course-summary/history`);
     } catch (e) {
       toast.danger("ดาวน์โหลดไม่สำเร็จ", { description: (e as Error).message });
     } finally {
@@ -593,8 +630,7 @@ function CourseSummaryDownloadButton({ termId, termLabel }: { termId: string; te
     }
   }
 
-  async function start() {
-    if (!termId) return;
+  async function checkWarningsThenDownload() {
     setChecking(true);
     try {
       const res = await api.get<{ warnings: string[] }>(`/exports/terms/${termId}/course-summary/warnings`);
@@ -610,11 +646,27 @@ function CourseSummaryDownloadButton({ termId, termLabel }: { termId: string; te
     }
   }
 
+  function start() {
+    if (!termId) return;
+    void groupGate.guard(() => void checkWarningsThenDownload());
+  }
+
   return (
     <>
-      <Button variant="secondary" disabled={!termId} isPending={checking} onClick={start}>
+      <Button variant="secondary" disabled={!termId} isPending={checking || groupGate.checking} onClick={start}>
         <FileDown size={16} /> สรุปรายวิชาที่ขอใช้ TA
       </Button>
+      {/* variant="secondary" to match its neighbour — IconButton defaults to
+          "primary" (a solid-fill circle), which next to outlined buttons in
+          the same row would read as a mismatched style. */}
+      <IconButton
+        label="ประวัติการสร้างเอกสาร"
+        variant="secondary"
+        disabled={!termId}
+        onClick={() => setHistoryOpen(true)}
+      >
+        <History size={16} />
+      </IconButton>
       <ConfirmDialog
         open={warnings !== null}
         onClose={() => setWarnings(null)}
@@ -634,8 +686,99 @@ function CourseSummaryDownloadButton({ termId, termLabel }: { termId: string; te
           </div>
         }
       />
+      {historyOpen && (
+        <CourseSummaryHistoryModal termId={termId} onClose={() => setHistoryOpen(false)} />
+      )}
+      {groupGate.modal}
     </>
   );
+}
+
+// CourseSummaryHistoryModal lists every generation on the ledger (who, when,
+// how many courses) with a reprint action per row. Reprint re-renders from the
+// frozen snapshot rather than recomputing — a student count or TA approval
+// corrected after the fact must not silently change a document already handed
+// to someone (see ExportService.ReprintCourseSummary).
+function CourseSummaryHistoryModal({
+  termId, onClose,
+}: {
+  termId: string; onClose: () => void;
+}) {
+  const { data: history } = useSWR<CourseSummaryExportSummary[]>(
+    `/exports/terms/${termId}/course-summary/history`
+  );
+  const [reprinting, setReprinting] = useState<string | null>(null);
+
+  async function reprint(h: CourseSummaryExportSummary) {
+    setReprinting(h.id);
+    try {
+      const blob = await api.get<Blob>(`/exports/course-summary/${h.id}/reprint`);
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = "course-summary.xlsx";
+      el.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.danger("ดาวน์โหลดไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setReprinting(null);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="ประวัติการสร้างเอกสารสรุปรายวิชาที่ขอใช้ TA"
+      icon={<History size={20} />}
+      size="xl"
+      footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
+    >
+      {!history?.length ? (
+        <EmptyState
+          icon={<FileText size={26} />}
+          title="ยังไม่เคยสร้างเอกสาร"
+          description="เอกสารที่สร้างแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม"
+        />
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {history.map(h => (
+            <li key={h.id} className="py-3 flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ink-1">
+                  {new Date(h.generated_at).toLocaleString("th-TH", {
+                    dateStyle: "medium", timeStyle: "short",
+                  })}
+                </div>
+                <div className="text-xs text-ink-3">
+                  {h.course_count} วิชา
+                  {h.generated_by && ` · โดย ${h.generated_by}`}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void reprint(h)}
+                disabled={reprinting !== null}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+              >
+                <Download size={12} />
+                {reprinting === h.id ? "กำลังดาวน์โหลด…" : "ดาวน์โหลดฉบับเดิม"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
+  );
+}
+
+interface CourseSummaryExportSummary {
+  id: string;
+  term_id: string;
+  generated_at: string;
+  generated_by?: string;
+  course_count: number;
 }
 
 interface TransferCoverBlocker {
@@ -815,6 +958,7 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
   const [blockers, setBlockers] = useState<{ undergrad: TransferCoverBlocker[]; graduate: TransferCoverBlocker[] } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const groupGate = useCourseGroupGate(termId);
 
   async function downloadNow(months: string[], skippedLevel: TransferCoverLevel | null) {
     setDownloading(true);
@@ -887,7 +1031,12 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
 
   return (
     <>
-      <Button variant="secondary" disabled={!termId} onClick={() => setPickerOpen(true)}>
+      <Button
+        variant="secondary"
+        disabled={!termId}
+        isPending={groupGate.checking}
+        onClick={() => void groupGate.guard(() => setPickerOpen(true))}
+      >
         <Banknote size={16} /> ปะหน้าจ่ายตรง
       </Button>
       {/* variant="secondary" to match its neighbour — IconButton defaults to
@@ -936,6 +1085,7 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
       {historyOpen && (
         <TransferCoverHistoryModal termId={termId} onClose={() => setHistoryOpen(false)} />
       )}
+      {groupGate.modal}
     </>
   );
 }
@@ -982,6 +1132,7 @@ function TransferCoverHistoryModal({
       onClose={onClose}
       title="ประวัติการสร้างเอกสารปะหน้าจ่ายตรง"
       icon={<History size={20} />}
+      size="xl"
       footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
     >
       <div className="mb-3 inline-flex rounded-lg border border-border p-0.5">
@@ -1066,29 +1217,68 @@ interface CurriculumLite {
   sheet_name: string;
 }
 
-// CourseGroupReviewButton / Modal — a class taught under two registrar codes
-// (a rename, a section split, whatever the term's own reason) must be merged
-// before ใบ A / ใบ B print it as one row with its money added together. The
-// backend already detects candidates (DetectCourseGroups, matched by name +
-// schedule signature) and confirms them (ConfirmCourseGroup) — this is the
-// screen that was missing to review and act on that list.
-function CourseGroupReviewButton({ termId }: { termId: string }) {
+// useCourseGroupGate — the check every download now goes through instead of
+// staff having to remember a separate "รหัสคู่" button. guard(proceed) checks
+// for unconfirmed course-group candidates (DetectCourseGroups: same name_th +
+// a matching section schedule — the exact signal a curriculum transition
+// leaves behind when the old registrar code stays open alongside the new
+// one); if none exist, proceed runs immediately, otherwise the gate modal
+// opens and proceed is held until staff dismiss it (merge everything, merge
+// some and continue, or continue without merging).
+function useCourseGroupGate(termId: string) {
+  const [checking, setChecking] = useState(false);
   const [open, setOpen] = useState(false);
-  return (
-    <>
-      {/* variant="secondary" (not "ghost") so this sits at the same visual
-          weight as its two siblings in the header — all three are equally
-          important term-level actions, not one primary flow with a minor
-          extra tacked on. */}
-      <Button variant="secondary" disabled={!termId} onClick={() => setOpen(true)}>
-        <Merge size={16} /> รหัสคู่
-      </Button>
-      {open && <CourseGroupReviewModal termId={termId} onClose={() => setOpen(false)} />}
-    </>
+  const proceedRef = useRef<(() => void) | null>(null);
+
+  async function guard(proceed: () => void) {
+    if (!termId) return;
+    setChecking(true);
+    try {
+      const candidates = await api.get<CourseGroupCandidate[]>(`/terms/${termId}/course-groups/candidates`);
+      if (candidates.length > 0) {
+        proceedRef.current = proceed;
+        setOpen(true);
+      } else {
+        proceed();
+      }
+    } catch (e) {
+      toast.danger("ตรวจสอบรหัสวิชาคู่ไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  function continueAnyway() {
+    setOpen(false);
+    const proceed = proceedRef.current;
+    proceedRef.current = null;
+    proceed?.();
+  }
+
+  const modal = open && (
+    <CourseGroupGateModal
+      termId={termId}
+      onClose={() => { setOpen(false); proceedRef.current = null; }}
+      onContinue={continueAnyway}
+    />
   );
+
+  return { guard, checking, modal };
 }
 
-function CourseGroupReviewModal({ termId, onClose }: { termId: string; onClose: () => void }) {
+// CourseGroupGateModal — a class taught under two registrar codes (a rename,
+// a section split, or right now the curriculum transition leaving the old
+// code open for students who have not graduated) must be merged before ใบ A
+// / ใบ B print it as one row with its money and student counts added
+// together. The backend already detects candidates (DetectCourseGroups) and
+// confirms them (ConfirmCourseGroup); this modal is the review step, shown in
+// front of a download instead of behind a button staff had to remember to
+// press on their own.
+function CourseGroupGateModal({
+  termId, onClose, onContinue,
+}: {
+  termId: string; onClose: () => void; onContinue: () => void;
+}) {
   const candidatesKey = `/terms/${termId}/course-groups/candidates`;
   const { data: candidates } = useSWR<CourseGroupCandidate[]>(candidatesKey);
   const { data: curricula } = useSWR<CurriculumLite[]>("/curricula");
@@ -1098,6 +1288,18 @@ function CourseGroupReviewModal({ termId, onClose }: { termId: string; onClose: 
   // anything already in course_group_members), so a stale index just means
   // that row is gone, never a wrong one being acted on.
   const [choices, setChoices] = useState<Record<number, { primaryId: string; curriculumCode: string }>>({});
+  // Staff read the first 2-3 candidates, missed that the list kept going below
+  // the fold, and confirmed a download thinking they'd reviewed everything —
+  // this tracks whether ScrollShadow can still see content below so the "เลื่อน
+  // ลงดู" hint only shows while it's actually true, not as a permanent fixture.
+  const [moreBelow, setMoreBelow] = useState(false);
+
+  // Nothing left to review once every candidate is merged or the list was
+  // empty to begin with — resume the download on its own instead of making
+  // staff press a second button right after their last "ยืนยันรวมวิชา".
+  useEffect(() => {
+    if (candidates && candidates.length === 0) onContinue();
+  }, [candidates, onContinue]);
 
   function choiceFor(idx: number, c: CourseGroupCandidate) {
     const existing = choices[idx];
@@ -1135,19 +1337,34 @@ function CourseGroupReviewModal({ termId, onClose }: { termId: string; onClose: 
     <Modal
       open
       onClose={onClose}
-      title="ตรวจสอบรหัสวิชาคู่"
+      title={
+        candidates?.length
+          ? `พบวิชาที่อาจเป็นรหัสคู่กัน (${candidates.length} รายการ)`
+          : "พบวิชาที่อาจเป็นรหัสคู่กัน"
+      }
       icon={<Merge size={20} />}
       size="xl"
-      footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>ยกเลิกการดาวน์โหลด</Button>
+          <Button variant="primary" onClick={onContinue}>ดาวน์โหลดต่อโดยไม่รวมที่เหลือ</Button>
+        </>
+      }
     >
+      <p className="text-sm text-muted mb-3">
+        ระบบพบวิชาที่ชื่อ ผู้สอน และตารางสอนตรงกัน ซึ่งอาจเป็นวิชาเดียวกันที่มีสองรหัส
+        (เช่นช่วงเปลี่ยนผ่านหลักสูตรที่รหัสเก่ายังต้องเปิดให้นักศึกษาที่ยังไม่จบ) เลือกรวมรหัส
+        ด้านล่างเพื่อให้เอกสารพิมพ์เป็นแถวเดียว โดยนำรหัสวิชามาต่อกันและรวมจำนวนนักศึกษาเข้าด้วยกัน
+        หรือกดดาวน์โหลดต่อเพื่อพิมพ์แยกกันตามเดิม
+      </p>
       {!candidates?.length ? (
-        <EmptyState
-          icon={<Merge size={26} />}
-          title="ไม่มีวิชาที่ต้องตรวจสอบ"
-          description="ระบบจะแจ้งเตือนที่นี่เมื่อพบวิชาสองรหัสที่ชื่อและตารางสอนตรงกัน"
-        />
+        <div className="py-6 text-center text-sm text-muted">กำลังตรวจสอบ…</div>
       ) : (
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="relative">
+          <ScrollShadow
+            className="space-y-4 max-h-[60vh] pr-1"
+            onVisibilityChange={v => setMoreBelow(v === "bottom" || v === "both")}
+          >
           {candidates.map((c, idx) => {
             const choice = choiceFor(idx, c);
             return (
@@ -1190,6 +1407,14 @@ function CourseGroupReviewModal({ termId, onClose }: { termId: string; onClose: 
               </div>
             );
           })}
+          </ScrollShadow>
+          {moreBelow && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-1">
+              <span className="flex items-center gap-1 rounded-full bg-ink-1 px-2.5 py-1 text-[11px] font-medium text-white shadow-md">
+                เลื่อนลงเพื่อดูวิชาที่เหลือ <ChevronDown size={12} className="animate-bounce" />
+              </span>
+            </div>
+          )}
         </div>
       )}
     </Modal>

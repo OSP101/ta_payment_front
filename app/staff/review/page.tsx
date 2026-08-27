@@ -9,7 +9,7 @@ import {
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, StatusChip, Spinner, Alert, TabLabel, Modal, Chip, SearchField,
+  PageHeader, Button, IconButton, StatusChip, Spinner, Alert, TabLabel, Modal, Chip, SearchField,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { ReviewWorkspace } from "./ReviewWorkspace";
@@ -66,25 +66,26 @@ export default function ReviewPage() {
           the old combined "อนุมัติและดาวน์โหลด" click. */}
       <NotDownloadedNotice people={approved.data} />
 
-      <Panel padded={false}>
-        <Tabs
-          selectedKey={bucket}
-          onSelectionChange={k => setBucket(String(k) as Bucket)}
-        >
-          <Tabs.ListContainer>
-            <Tabs.List aria-label="สถานะการตรวจสอบ" data-tour="review-tabs" className="px-4 pt-2">
-              {BUCKETS.map(b => (
-                <Tabs.Tab key={b.id} id={b.id}>
-                  <TabLabel icon={b.icon} count={counts[b.id]} active={bucket === b.id}>
-                    {b.label}
-                  </TabLabel>
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs.ListContainer>
+      <Tabs
+        variant="secondary"
+        selectedKey={bucket}
+        onSelectionChange={k => setBucket(String(k) as Bucket)}
+      >
+        <Tabs.ListContainer>
+          <Tabs.List aria-label="สถานะการตรวจสอบ" data-tour="review-tabs">
+            {BUCKETS.map(b => (
+              <Tabs.Tab key={b.id} id={b.id}>
+                <TabLabel icon={b.icon} count={counts[b.id]} active={bucket === b.id}>
+                  {b.label}
+                </TabLabel>
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs.ListContainer>
 
-          <Tabs.Panel id="pending">
+        <Tabs.Panel id="pending">
+          <div className="pt-5">
             <PendingList
               data={pending.data}
               loading={pending.isLoading}
@@ -93,8 +94,10 @@ export default function ReviewPage() {
               onOpen={id => setWorkspaceFor(id)}
               incomplete={incomplete.data}
             />
-          </Tabs.Panel>
-          <Tabs.Panel id="approved">
+          </div>
+        </Tabs.Panel>
+        <Tabs.Panel id="approved">
+          <div className="pt-5">
             <DecidedTable
               data={approved.data}
               loading={approved.isLoading}
@@ -103,9 +106,9 @@ export default function ReviewPage() {
               bucket="approved"
               onRedownload={u => setRedownloadFor(u)}
             />
-          </Tabs.Panel>
-        </Tabs>
-      </Panel>
+          </div>
+        </Tabs.Panel>
+      </Tabs>
 
       <ReviewWorkspace
         open={workspaceFor !== null}
@@ -182,20 +185,18 @@ function PendingList({
   }
   if (error) {
     return (
-      <div className="p-4">
-        <Alert
-          status="danger"
-          title="โหลดข้อมูลไม่สำเร็จ"
-          action={onRetry ? (
-            <Button variant="secondary" size="sm" onClick={onRetry}>ลองใหม่</Button>
-          ) : undefined}
-        />
-      </div>
+      <Alert
+        status="danger"
+        title="โหลดข้อมูลไม่สำเร็จ"
+        action={onRetry ? (
+          <Button variant="secondary" size="sm" onClick={onRetry}>ลองใหม่</Button>
+        ) : undefined}
+      />
     );
   }
 
   return (
-    <div className="p-4">
+    <div>
       <div data-tour="review-pending" className="mb-3">
         <SearchField
           value={q}
@@ -209,7 +210,7 @@ function PendingList({
           {q ? "ไม่พบผลลัพธ์" : "ไม่มีเอกสารที่รอตรวจ"}
         </div>
       ) : (
-        <ul className="divide-y divide-[var(--hairline)] rounded-lg border border-[var(--hairline)]">
+        <ul className="divide-y divide-[var(--hairline)] border-t border-[var(--hairline)]">
           {filtered.map(u => (
             <li key={u.user_id}>
               {/* Clicking the name opens the full-screen workspace. The old
@@ -371,22 +372,20 @@ function DecidedTable({
   ];
 
   return (
-    <div className="p-4">
-      <DataTable
-        ariaLabel="รายชื่อ TA"
-        rows={data}
-        loading={loading}
-        error={error}
-        onRetry={onRetry}
-        rowKey={u => u.user_id}
-        searchFn={u => `${u.full_name} ${u.email}`}
-        searchPlaceholder="ค้นหาชื่อ / อีเมล…"
-        initialSort={{ column: "verified_at", direction: "descending" }}
-        pageSize={20}
-        emptyTitle={emptyText}
-        columns={columns}
-      />
-    </div>
+    <DataTable
+      ariaLabel="รายชื่อ TA"
+      rows={data}
+      loading={loading}
+      error={error}
+      onRetry={onRetry}
+      rowKey={u => u.user_id}
+      searchFn={u => `${u.full_name} ${u.email}`}
+      searchPlaceholder="ค้นหาชื่อ / อีเมล…"
+      initialSort={{ column: "verified_at", direction: "descending" }}
+      pageSize={20}
+      emptyTitle={emptyText}
+      columns={columns}
+    />
   );
 }
 

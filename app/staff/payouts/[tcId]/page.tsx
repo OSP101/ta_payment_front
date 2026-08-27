@@ -2,8 +2,10 @@
 import { use, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { ArrowLeft, ClipboardEdit, History } from "lucide-react";
-import { PageHeader, Panel, Button, ConfirmDialog } from "../../../components/ui";
+import { ArrowLeft, ClipboardEdit, Download, History } from "lucide-react";
+import { api } from "../../../lib/api";
+import { notify } from "../../../lib/notify";
+import { PageHeader, Panel, Button, Modal } from "../../../components/ui";
 import { StaffWorklogEditor } from "../../../components/StaffWorklogEditor";
 import { ExportPreviewBody } from "../../../components/ExportPreviewBody";
 import { useTerm } from "../../TermContext";
@@ -30,6 +32,10 @@ interface ExportBatch {
   total_baht: number;
   generated_at: string;
   generated_by_name?: string;
+  // file_name is what to save the re-download as. Empty only for a batch
+  // whose file failed to persist at generation time (or predates file
+  // retention) — see ExportHandler.BatchDownload's "no file" response.
+  file_name?: string;
 }
 
 export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tcId: string }> }) {
@@ -104,44 +110,80 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
 
 function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void }) {
   const { data } = useSWR<ExportBatch[]>(`/exports/course/${tcId}/history`);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  // Re-serves the exact ZIP that export produced (ExportHandler.BatchDownload)
+  // — no re-export, so it does not re-lock anything already locked.
+  async function download(b: ExportBatch) {
+    setDownloading(b.id);
+    try {
+      const blob = await api.get<Blob>(`/exports/batch/${b.id}/download`);
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = b.file_name || "export.zip";
+      el.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      notify.error(e, "ดาวน์โหลดไม่สำเร็จ");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   return (
-    <ConfirmDialog
+    <Modal
       open
       onClose={onClose}
-      onConfirm={onClose}
-      confirmLabel="ปิด"
       title="ประวัติการส่งออก"
       icon={<History size={20} />}
-      message={
-        !data ? (
-          <p className="text-sm text-muted">กำลังโหลด…</p>
-        ) : data.length === 0 ? (
-          <p className="text-sm text-muted">ยังไม่เคยส่งออกวิชานี้</p>
-        ) : (
-          <div className="max-h-72 overflow-y-auto">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-surface-secondary text-ink-2">
-                <tr>
-                  <th className="px-2 py-1 text-left">เวลา</th>
-                  <th className="px-2 py-1 text-left">ผู้ส่งออก</th>
-                  <th className="px-2 py-1 text-right">จำนวน TA</th>
-                  <th className="px-2 py-1 text-right">ยอดรวม</th>
+      size="xl"
+      footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
+    >
+      {!data ? (
+        <p className="text-sm text-muted">กำลังโหลด…</p>
+      ) : data.length === 0 ? (
+        <p className="text-sm text-muted">ยังไม่เคยส่งออกวิชานี้</p>
+      ) : (
+        <div className="max-h-[28rem] overflow-y-auto overflow-x-auto rounded-lg border border-border">
+          <table className="data-table w-full text-sm">
+            <thead className="sticky top-0 bg-surface-secondary text-ink-2">
+              <tr>
+                <th className="px-3 py-2 text-left">เวลา</th>
+                <th className="px-3 py-2 text-left">ผู้ส่งออก</th>
+                <th className="px-3 py-2 text-right">จำนวน TA</th>
+                <th className="px-3 py-2 text-right">ยอดรวม</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.map(b => (
+                <tr key={b.id} className="border-t border-hairline">
+                  <td className="px-3 py-2 tabular">{b.generated_at.slice(0, 16).replace("T", " ")}</td>
+                  <td className="px-3 py-2">{b.generated_by_name}</td>
+                  <td className="px-3 py-2 text-right tabular">{b.ta_count}</td>
+                  <td className="px-3 py-2 text-right tabular">{b.total_baht.toLocaleString()}</td>
+                  <td className="px-3 py-2 text-right">
+                    {/* Whether a re-download actually succeeds depends on
+                        server-side file retention (older rows may predate
+                        it) — resolved by trying, with a clear error toast
+                        on failure, rather than guessing client-side. */}
+                    <button
+                      type="button"
+                      onClick={() => void download(b)}
+                      disabled={downloading !== null}
+                      className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+                    >
+                      <Download size={12} />
+                      {downloading === b.id ? "กำลังดาวน์โหลด…" : "ดาวน์โหลด"}
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {data.map(b => (
-                  <tr key={b.id} className="border-t border-hairline">
-                    <td className="px-2 py-1 tabular">{b.generated_at.slice(0, 16).replace("T", " ")}</td>
-                    <td className="px-2 py-1">{b.generated_by_name}</td>
-                    <td className="px-2 py-1 text-right tabular">{b.ta_count}</td>
-                    <td className="px-2 py-1 text-right tabular">{b.total_baht.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-      }
-    />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
   );
 }

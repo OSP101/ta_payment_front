@@ -8,7 +8,7 @@ import { api } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
+  PageHeader, Button, IconButton, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import OpenCourseModal from "./OpenCourseModal";
@@ -92,60 +92,57 @@ export default function TeachingPage() {
       />
 
       {noTerms ? (
-        <Panel padded={false}>
-          <EmptyState
-            icon={<CalendarPlus size={28} />}
-            title="ยังไม่ได้สร้างปีการศึกษา / ภาคเรียน"
-            description="ก่อนกำหนดวิชาที่เปิดสอน ต้องสร้างปีการศึกษาและภาคเรียนอย่างน้อย 1 รายการก่อน จึงจะเลือกได้ว่าวิชาที่เปิดสอนอยู่ในปีไหน ภาคไหน"
-            action={
-              <Link href="/staff/settings?tab=terms">
-                <Button variant="primary">
-                  <CalendarPlus size={16} /> สร้างปีการศึกษา / ภาคเรียน
-                </Button>
-              </Link>
-            }
-          />
-        </Panel>
+        <EmptyState
+          icon={<CalendarPlus size={28} />}
+          title="ยังไม่ได้สร้างปีการศึกษา / ภาคเรียน"
+          description="ก่อนกำหนดวิชาที่เปิดสอน ต้องสร้างปีการศึกษาและภาคเรียนอย่างน้อย 1 รายการก่อน จึงจะเลือกได้ว่าวิชาที่เปิดสอนอยู่ในปีไหน ภาคไหน"
+          action={
+            <Link href="/staff/settings?tab=terms">
+              <Button variant="primary">
+                <CalendarPlus size={16} /> สร้างปีการศึกษา / ภาคเรียน
+              </Button>
+            </Link>
+          }
+        />
       ) : (
-        <Panel padded={false}>
-          <div className="p-4">
-            {/* Missing-count reminder: staff often forget to fill the enrolled
-                student count (the budget depends on it, and export is blocked
-                without it). One click filters the list down to the offenders. */}
-            {missingCourses.length > 0 && (
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/30 px-3 py-2 text-sm">
-                <span className="text-amber-800 dark:text-amber-200">
-                  มี <b>{missingCourses.length}</b> วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา ต้องกรอกก่อนจึงจะส่งออกได้
-                </span>
-                <Button
-                  variant={onlyMissing ? "primary" : "secondary"}
-                  size="sm"
-                  className="ms-auto"
-                  onClick={() => { setOnlyMissing(v => !v); setOnlyWba(false); }}
-                >
-                  {onlyMissing ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่กรอก"}
-                </Button>
-              </div>
-            )}
-            {/* WBA reminder: the registrar file had no timetable for these
-                courses — the lecturer (or staff on their behalf) must fill the
-                section schedules in, otherwise TA requests are blocked. */}
-            {wbaCourses.length > 0 && (
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
-                <span className="text-red-800 dark:text-red-200">
-                  มี <b>{wbaCourses.length}</b> วิชาที่ยังไม่ระบุเวลาเรียน (WBA) อาจารย์หรือเจ้าหน้าที่ต้องกรอกตารางเรียนก่อน จึงจะส่งคำขอ TA ได้
-                </span>
-                <Button
-                  variant={onlyWba ? "primary" : "secondary"}
-                  size="sm"
-                  className="ms-auto"
-                  onClick={() => { setOnlyWba(v => !v); setOnlyMissing(false); }}
-                >
-                  {onlyWba ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่มีตาราง"}
-                </Button>
-              </div>
-            )}
-            <div data-tour="teaching-table">
+        <div>
+          {/* Missing-count reminder: staff often forget to fill the enrolled
+              student count (the budget depends on it, and export is blocked
+              without it). One click filters the list down to the offenders. */}
+          {missingCourses.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/30 px-3 py-2 text-sm">
+              <span className="text-amber-800 dark:text-amber-200">
+                มี <b>{missingCourses.length}</b> วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา ต้องกรอกก่อนจึงจะส่งออกได้
+              </span>
+              <Button
+                variant={onlyMissing ? "primary" : "secondary"}
+                size="sm"
+                className="ms-auto"
+                onClick={() => { setOnlyMissing(v => !v); setOnlyWba(false); }}
+              >
+                {onlyMissing ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่กรอก"}
+              </Button>
+            </div>
+          )}
+          {/* WBA reminder: the registrar file had no timetable for these
+              courses — the lecturer (or staff on their behalf) must fill the
+              section schedules in, otherwise TA requests are blocked. */}
+          {wbaCourses.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
+              <span className="text-red-800 dark:text-red-200">
+                มี <b>{wbaCourses.length}</b> วิชาที่ยังไม่ระบุเวลาเรียน (WBA) อาจารย์หรือเจ้าหน้าที่ต้องกรอกตารางเรียนก่อน จึงจะส่งคำขอ TA ได้
+              </span>
+              <Button
+                variant={onlyWba ? "primary" : "secondary"}
+                size="sm"
+                className="ms-auto"
+                onClick={() => { setOnlyWba(v => !v); setOnlyMissing(false); }}
+              >
+                {onlyWba ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่มีตาราง"}
+              </Button>
+            </div>
+          )}
+          <div data-tour="teaching-table">
             <DataTable
               ariaLabel="วิชาที่เปิดสอน"
               rows={shownCourses}
@@ -162,9 +159,8 @@ export default function TeachingPage() {
               minWidth="1080px"
               columns={makeCourseColumns(setEditStudents)}
             />
-            </div>
           </div>
-        </Panel>
+        </div>
       )}
 
       <OpenCourseModal

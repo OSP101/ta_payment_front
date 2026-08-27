@@ -16,7 +16,7 @@ import type { Attachment } from "../../components/AttachmentGallery";
 import RichText from "../../components/RichText";
 import {
   PageHeader, Panel, Button, TextInput, TextArea, FieldGroup,
-  Chip, EmptyState, Modal, Alert,
+  Chip, EmptyState, Modal, Alert, TabLabel,
 } from "../../components/ui";
 
 // ============================================================================
@@ -391,13 +391,20 @@ export default function AnnouncePage() {
         description="สร้าง กำหนดเวลา และเผยแพร่ประกาศไปยังผู้ใช้ตามกลุ่ม"
       />
 
-      <Tabs selectedKey={tab} onSelectionChange={(k) => setTab(String(k))}>
+      <Tabs variant="secondary" selectedKey={tab} onSelectionChange={(k) => setTab(String(k))}>
         <Tabs.ListContainer>
           <Tabs.List data-tour="announce-tabs">
-            <Tabs.Tab id="compose"><Sparkles size={14} /> เขียน / แก้ไข</Tabs.Tab>
+            <Tabs.Tab id="compose">
+              <TabLabel icon={<Sparkles size={14} />} active={tab === "compose"}>
+                เขียน / แก้ไข
+              </TabLabel>
+              <Tabs.Indicator />
+            </Tabs.Tab>
             <Tabs.Tab id="manage">
-              <Megaphone size={14} /> จัดการประกาศ
-              <span className="ms-1 text-xs text-muted">({counts.all})</span>
+              <TabLabel icon={<Megaphone size={14} />} count={counts.all} active={tab === "manage"}>
+                จัดการประกาศ
+              </TabLabel>
+              <Tabs.Indicator />
             </Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>

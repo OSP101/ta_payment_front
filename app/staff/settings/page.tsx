@@ -6,6 +6,9 @@ import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles
 import {
   Tabs, Pagination, toast, Accordion, Switch,
   DatePicker, DateField, Calendar, I18nProvider,
+  Autocomplete, ListBox, useFilter, Label, Description,
+  SearchField as HSearchField,
+  type Key,
 } from "@heroui/react";
 import { parseDate, parseDateTime, type DateValue } from "@internationalized/date";
 import { api, ApiError, demoTesters, demoAddTester, demoRemoveTester, type DemoTester } from "../../lib/api";
@@ -52,7 +55,7 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน วิชา ภาคเรียน และฝ่ายบริหาร" />
-      <Tabs defaultSelectedKey={initialTab}>
+      <Tabs variant="secondary" defaultSelectedKey={initialTab}>
         <Tabs.ListContainer>
           <Tabs.List aria-label="หมวดตั้งค่า" data-tour="settings-tabs">
             <Tabs.Tab id="rate">อัตราค่าตอบแทน<Tabs.Indicator /></Tabs.Tab>
@@ -1983,22 +1986,43 @@ function WindowFormModal({
 
 interface AdminOfficer {
   id?: string;
+  // The account this seat is bound to. full_name is display-only on the
+  // client — the server always resolves it from user_id at save time, so
+  // typing over it here would have no effect (see AdminOfficerService.Upsert).
+  user_id: string;
   academic_prefix: string;
   full_name: string;
   title: string;
   is_active: boolean;
+  linked_email?: string | null;
+  linked_active?: boolean | null;
 }
 
-// Full Thai academic titles (except "ดร." which has no long form). The value
-// is stored verbatim and concatenated before the name in the appointment order,
-// so titles without a trailing "." attach directly to the name
-// ("รองศาสตราจารย์" + "สมชาย") the way the registrar template writes them.
-const PREFIX_PRESETS = [
-  "", "อาจารย์", "ดร.",
-  "ผู้ช่วยศาสตราจารย์", "ผู้ช่วยศาสตราจารย์ ดร.",
-  "รองศาสตราจารย์", "รองศาสตราจารย์ ดร.",
-  "ศาสตราจารย์", "ศาสตราจารย์ ดร.",
-] as const;
+// The pool an officer's name is picked from — any non-TA account. Only the
+// fields the picker needs to search and display; see /users (UserService.List).
+interface LinkableUser {
+  id: string;
+  email: string;
+  title?: string | null;
+  first_name: string;
+  last_name: string;
+  roles: string[];
+  is_active: boolean;
+}
+
+// Academic prefix is never picked here — it always tracks the linked
+// account's own title (see staff/users/page.tsx's TITLE_OPTIONS), the account
+// uses the abbreviated form, documents print the spelled-out form. The
+// backend re-derives this the same way at save time (see
+// AdminOfficerService.Upsert) — this copy only drives the live preview.
+const USER_TITLE_TO_PREFIX: Record<string, string> = {
+  "อาจารย์": "อาจารย์",
+  "อ. ดร.": "ดร.",
+  "ผศ.": "ผู้ช่วยศาสตราจารย์",
+  "ผศ. ดร.": "ผู้ช่วยศาสตราจารย์ ดร.",
+  "รศ. ดร.": "รองศาสตราจารย์ ดร.",
+  "ศ. ดร.": "ศาสตราจารย์ ดร.",
+};
 
 /* -------------------------------------------------------------------------- */
 /* หลักสูตร — sheet identity the payout documents print under                  */
@@ -2155,40 +2179,20 @@ function CurriculumEditModal({
   );
 }
 
+// ตำแหน่งฝ่ายบริหารเป็นรายการคงที่ (ดูตำแหน่งเดิมในระบบ) — หน้านี้จึงไม่มีปุ่ม
+// "เพิ่ม"/"ลบ" อีกต่อไป มีแต่มอบหมาย/เปลี่ยนตัวผู้ดำรงตำแหน่งที่มีอยู่แล้ว การ
+// ถือตำแหน่งที่เปิดใช้งานอยู่คือสิ่งที่ให้สิทธิ์เข้าดูแดชบอร์ดผู้บริหารด้วย
+// (ดู userTitleToPrefix/rbac.RoleExecutive ฝั่ง backend) — จึงไม่มีช่องติ๊กแยก
+// ที่หน้าจัดการผู้ใช้อีกแล้ว
 function AdminOfficersSection() {
   const { data } = useSWR<AdminOfficer[]>("/settings/admin-officers?include_inactive=1");
-  const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AdminOfficer | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<AdminOfficer | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const rows = useMemo(
-    () => (data ?? []).slice().sort((a, b) => a.full_name.localeCompare(b.full_name, "th")),
+    () => (data ?? []).slice().sort((a, b) => a.title.localeCompare(b.title, "th")),
     [data],
   );
 
-  function openAdd() {
-    setEditing(null);
-    setFormOpen(true);
-  }
-  function openEdit(o: AdminOfficer) {
-    setEditing(o);
-    setFormOpen(true);
-  }
-  async function doDelete() {
-    if (!deleteTarget?.id) return;
-    setDeleting(true);
-    try {
-      await api.del(`/settings/admin-officers/${deleteTarget.id}`);
-      await mutate("/settings/admin-officers?include_inactive=1");
-      toast.success(`ลบรายชื่อ ${deleteTarget.full_name} เรียบร้อยแล้ว`);
-      setDeleteTarget(null);
-    } catch (e) {
-      toast.danger("ลบไม่สำเร็จ", { description: (e as Error).message });
-    } finally {
-      setDeleting(false);
-    }
-  }
   async function toggleActive(o: AdminOfficer) {
     try {
       await api.post("/settings/admin-officers", { ...o, is_active: !o.is_active });
@@ -2201,24 +2205,18 @@ function AdminOfficersSection() {
 
   return (
     <Panel
-      title="รายชื่อฝ่ายบริหาร"
-      description="รายชื่อและตำแหน่งของคณบดี / รองคณบดี / หัวหน้าสาขา / ผู้รับรอง สำหรับใส่ในเอกสารราชการที่ระบบสร้างให้อัตโนมัติ"
-      actions={
-        <Button variant="primary" onClick={openAdd}>
-          <Plus size={14} />เพิ่มรายชื่อ
-        </Button>
-      }
+      title="ตำแหน่งฝ่ายบริหาร"
+      description="ตำแหน่งเป็นรายการคงที่ (คณบดี / รองคณบดี / หัวหน้าสาขา ฯลฯ) — มอบหมายอาจารย์เข้าดำรงตำแหน่งได้ที่นี่ ผู้ดำรงตำแหน่งที่เปิดใช้งานอยู่จะเห็นแดชบอร์ดผู้บริหารโดยอัตโนมัติ"
     >
       {rows.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีรายชื่อฝ่ายบริหาร กด "เพิ่มรายชื่อ" เพื่อเริ่ม</div>
+        <div className="text-sm text-muted py-4">ยังไม่มีข้อมูลตำแหน่งฝ่ายบริหารในระบบ</div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="data-table w-full">
             <thead>
               <tr>
-                <th>คำนำหน้า</th>
-                <th>ชื่อ-นามสกุล</th>
                 <th>ตำแหน่งบริหาร</th>
+                <th>ผู้ดำรงตำแหน่ง</th>
                 <th>สถานะ</th>
                 <th className="actions" />
               </tr>
@@ -2226,24 +2224,30 @@ function AdminOfficersSection() {
             <tbody>
               {rows.map(o => (
                 <tr key={o.id} className={!o.is_active ? "opacity-60" : ""}>
-                  <td className="tabular">{o.academic_prefix || <span className="text-muted">—</span>}</td>
-                  <td>{o.full_name}</td>
-                  <td>{o.title}</td>
+                  <td className="font-medium">{o.title}</td>
                   <td>
-                    {o.is_active
-                      ? <Chip tone="success">เปิดใช้งาน</Chip>
-                      : <Chip tone="neutral">ปิดใช้งาน</Chip>}
+                    {o.academic_prefix}{o.full_name}
+                    {o.linked_email && (
+                      <div className="text-xs text-muted mt-0.5">{o.linked_email}</div>
+                    )}
+                  </td>
+                  <td>
+                    <div className="flex flex-col gap-1 items-start">
+                      {o.is_active
+                        ? <Chip tone="success">เปิดใช้งาน</Chip>
+                        : <Chip tone="neutral">ปิดใช้งาน</Chip>}
+                      {o.linked_active === false && (
+                        <Chip tone="warn">บัญชีถูกปิดใช้งาน</Chip>
+                      )}
+                    </div>
                   </td>
                   <td className="actions">
                     <div className="inline-flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(o)}>
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(o)}>
                         <Pencil size={13} />แก้ไข
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => toggleActive(o)}>
                         {o.is_active ? <><PowerOff size={13} />ปิด</> : <><Power size={13} />เปิด</>}
-                      </Button>
-                      <Button variant="danger-soft" size="sm" onClick={() => setDeleteTarget(o)}>
-                        <Trash2 size={13} />ลบ
                       </Button>
                     </div>
                   </td>
@@ -2255,88 +2259,88 @@ function AdminOfficersSection() {
       )}
 
       <AdminOfficerFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
         editing={editing}
-        onSaved={(name, mode) => {
-          setFormOpen(false);
-          toast.success(mode === "edit" ? `แก้ไข ${name} เรียบร้อยแล้ว` : `เพิ่ม ${name} เรียบร้อยแล้ว`);
+        onClose={() => setEditing(null)}
+        onSaved={name => {
+          setEditing(null);
+          toast.success(`มอบหมาย ${name} เรียบร้อยแล้ว`);
         }}
-      />
-
-      <ConfirmSaveModal
-        open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={doDelete}
-        saving={deleting}
-        title="ยืนยันลบรายชื่อฝ่ายบริหาร?"
-        description={
-          deleteTarget
-            ? `ลบ "${deleteTarget.academic_prefix}${deleteTarget.full_name}" (${deleteTarget.title}) หากใช้ในเอกสารเก่าอาจมีผลกระทบ ควรใช้ "ปิดใช้งาน" แทนหากไม่แน่ใจ`
-            : ""
-        }
-        variant="danger"
-        confirmLabel="ลบถาวร"
-        confirmIcon={<Trash2 size={14} />}
       />
     </Panel>
   );
 }
 
+// Reassigns who holds one FIXED seat — there is no add/delete here any more
+// (see AdminOfficersSection's comment and AdminOfficerService.Upsert, which
+// now rejects a create). Only the account and the active/inactive status are
+// editable; the position name itself is the seat's own fixed identity.
 function AdminOfficerFormModal({
-  open, onClose, editing, onSaved,
+  editing, onClose, onSaved,
 }: {
-  open: boolean;
-  onClose: () => void;
   editing: AdminOfficer | null;
-  onSaved: (name: string, mode: "add" | "edit") => void;
+  onClose: () => void;
+  onSaved: (name: string) => void;
 }) {
-  const isEdit = editing !== null;
+  const open = editing !== null;
   const [draft, setDraft] = useState<AdminOfficer>({
-    academic_prefix: "", full_name: "", title: "", is_active: true,
+    user_id: "", academic_prefix: "", full_name: "", title: "", is_active: true,
   });
-  const [customPrefix, setCustomPrefix] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    if (editing) {
-      setDraft(editing);
-      // If the stored prefix isn't in the preset list, it must have been typed
-      // manually — reopen in custom mode so the user sees + can edit the value.
-      setCustomPrefix(!PREFIX_PRESETS.includes(editing.academic_prefix as typeof PREFIX_PRESETS[number]));
-    } else {
-      setDraft({
-        academic_prefix: "",
-        full_name: "",
-        title: "",
-        is_active: true,
+  // Any non-TA account can hold a seat — dean/vice-dean are lecturers, the
+  // claim-form certifier is often staff. Fetched whole (the college has ~40
+  // such accounts) rather than server-searched, same tradeoff as TaAutocomplete.
+  const { data: usersData } = useSWR<{ items: LinkableUser[] }>(
+    open ? "/users?limit=500&status=active" : null,
+  );
+  const candidates = useMemo(() => {
+    const list = (usersData?.items ?? []).filter(u => u.roles.some(r => r !== "ta"));
+    // The currently-linked account stays pickable even if it no longer
+    // qualifies (deactivated, or switched to a TA-only role since) — otherwise
+    // opening this seat would show a blank picker for no visible reason.
+    if (editing?.user_id && !list.some(u => u.id === editing.user_id)) {
+      list.unshift({
+        id: editing.user_id,
+        email: editing.linked_email ?? "",
+        first_name: editing.full_name,
+        last_name: "",
+        roles: [],
+        is_active: editing.linked_active ?? true,
       });
-      setCustomPrefix(false);
     }
-    setError(null);
-  }, [open, editing]);
+    return list;
+  }, [usersData, editing]);
+  const { contains } = useFilter({ sensitivity: "base" });
+  const selectedUser = candidates.find(u => u.id === draft.user_id) ?? null;
 
-  const nameTrim = draft.full_name.trim();
-  const titleTrim = draft.title.trim();
-  const canSave = nameTrim !== "" && titleTrim !== "";
+  useEffect(() => {
+    if (!editing) return;
+    setDraft(editing);
+    setError(null);
+  }, [editing]);
+
+  function pickUser(u: LinkableUser) {
+    setDraft(d => ({
+      ...d,
+      user_id: u.id,
+      full_name: `${u.first_name} ${u.last_name}`.trim(),
+      // Always tracks the account — never a staff-chosen override, see the
+      // note on USER_TITLE_TO_PREFIX above.
+      academic_prefix: USER_TITLE_TO_PREFIX[u.title ?? ""] ?? "",
+    }));
+  }
+
+  const canSave = draft.user_id !== "";
 
   async function save() {
-    if (!canSave) return;
+    if (!canSave || !editing) return;
     setSaving(true);
     setError(null);
     try {
-      const payload = {
-        ...draft,
-        academic_prefix: draft.academic_prefix.trim(),
-        full_name: nameTrim,
-        title: titleTrim,
-        ...(isEdit && editing ? { id: editing.id } : {}),
-      };
-      await api.post("/settings/admin-officers", payload);
+      await api.post("/settings/admin-officers", { ...draft, id: editing.id });
       await mutate("/settings/admin-officers?include_inactive=1");
-      onSaved(nameTrim, isEdit ? "edit" : "add");
+      onSaved(draft.full_name);
     } catch (e) {
       setError((e as Error).message || "บันทึกไม่สำเร็จ");
     } finally {
@@ -2350,8 +2354,8 @@ function AdminOfficerFormModal({
       onClose={onClose}
       title={
         <span className="inline-flex items-center gap-2">
-          {isEdit ? <Pencil size={18} /> : <Plus size={18} />}
-          {isEdit ? `แก้ไขรายชื่อ ${editing!.full_name}` : "เพิ่มรายชื่อฝ่ายบริหาร"}
+          <Pencil size={18} />
+          {editing ? `เปลี่ยนตัวผู้ดำรงตำแหน่ง: ${editing.title}` : ""}
         </span>
       }
       size="lg"
@@ -2359,74 +2363,76 @@ function AdminOfficerFormModal({
         <>
           <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
           <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
-            {isEdit ? <><Save size={14} />บันทึกการแก้ไข</> : <><Plus size={14} />เพิ่มรายชื่อ</>}
+            <Save size={14} />บันทึก
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <div className={customPrefix ? "grid grid-cols-1 sm:grid-cols-4 gap-3" : ""}>
-          <FieldGroup label="คำนำหน้าทางวิชาการ" hint="เลือก 'อื่น ๆ (พิมพ์เอง)' หากไม่มีในรายการ">
-            <Select
-              value={customPrefix ? "__custom__" : draft.academic_prefix}
-              onChange={e => {
-                const v = e.target.value;
-                if (v === "__custom__") {
-                  setCustomPrefix(true);
-                  setDraft({ ...draft, academic_prefix: "" });
-                } else {
-                  setCustomPrefix(false);
-                  setDraft({ ...draft, academic_prefix: v });
-                }
-              }}
-            >
-              {PREFIX_PRESETS.map(p => (
-                <option key={p || "none"} value={p}>{p || "— ไม่มี —"}</option>
-              ))}
-              <option value="__custom__">อื่น ๆ (พิมพ์เอง)…</option>
-            </Select>
-          </FieldGroup>
-          {customPrefix && (
-            <div className="sm:col-span-3">
-              <FieldGroup label="คำนำหน้า (พิมพ์เอง)" hint="กรอกคำนำหน้าที่ต้องการ">
-                <TextInput
-                  value={draft.academic_prefix}
-                  onChange={e => setDraft({ ...draft, academic_prefix: e.target.value })}
-                  placeholder="เช่น ผศ.ดร."
-                  maxLength={40}
-                  autoFocus
-                />
-              </FieldGroup>
-            </div>
-          )}
+        <div className="flex flex-col gap-1.5">
+          <Autocomplete
+            selectionMode="single"
+            value={draft.user_id || null}
+            onChange={(k: Key | null) => {
+              const id = k ? String(k) : "";
+              const u = candidates.find(x => x.id === id);
+              if (u) pickUser(u);
+            }}
+            className="w-full"
+            placeholder="พิมพ์ชื่อหรืออีเมลเพื่อค้นหา…"
+          >
+            <Label>ชื่อ-นามสกุล</Label>
+            <Autocomplete.Trigger>
+              <Autocomplete.Value>
+                {({ defaultChildren, isPlaceholder }) => {
+                  if (isPlaceholder || !selectedUser) return defaultChildren;
+                  return (
+                    <span className="truncate">
+                      {selectedUser.first_name} {selectedUser.last_name}
+                      {selectedUser.email && (
+                        <span className="text-muted text-xs ml-1">· {selectedUser.email}</span>
+                      )}
+                    </span>
+                  );
+                }}
+              </Autocomplete.Value>
+              <Autocomplete.ClearButton />
+              <Autocomplete.Indicator />
+            </Autocomplete.Trigger>
+            <Autocomplete.Popover>
+              <Autocomplete.Filter filter={contains}>
+                <HSearchField autoFocus name="admin-officer-user-search" variant="secondary">
+                  <HSearchField.Group>
+                    <HSearchField.SearchIcon />
+                    <HSearchField.Input placeholder="ค้นหาชื่อหรืออีเมล…" />
+                    <HSearchField.ClearButton />
+                  </HSearchField.Group>
+                </HSearchField>
+                <ListBox renderEmptyState={() => (
+                  <div className="text-sm text-muted p-3 text-center">ไม่พบบัญชีที่ตรงกัน</div>
+                )}>
+                  {candidates.map(u => (
+                    <ListBox.Item key={u.id} id={u.id} textValue={`${u.first_name} ${u.last_name} ${u.email}`}>
+                      <div className="flex flex-col min-w-0">
+                        <Label>{u.first_name} {u.last_name}</Label>
+                        <Description className="text-xs">{u.email}</Description>
+                      </div>
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Autocomplete.Filter>
+            </Autocomplete.Popover>
+          </Autocomplete>
+          <div className="text-xs text-muted">
+            เลือกจากบัญชีผู้ใช้ที่มีอยู่ในระบบ — ชื่อและคำนำหน้าจะตรงกับบัญชีเสมอ
+          </div>
         </div>
 
-        <FieldGroup label="ชื่อ-นามสกุล" hint="ไม่ต้องใส่คำนำหน้า">
-          <TextInput
-            value={draft.full_name}
-            onChange={e => setDraft({ ...draft, full_name: e.target.value })}
-            placeholder="เช่น สมชาย ใจดี"
-            autoFocus={!isEdit}
-          />
-        </FieldGroup>
-
-        {/* This field is load-bearing, not just decoration: the คำสั่ง reads it
-            to decide whether the signer holds the dean's seat or is standing in
-            for it, and prints the acting form when they are not. Say so here —
-            a title typed as "รักษาการคณบดี" would otherwise silently produce
-            "รักษาการคณบดี รักษาการแทน คณบดี…". */}
         <FieldGroup
-          label="ตำแหน่งบริหาร (Title)"
-          hint="ใส่ตำแหน่งจริงตามที่ต้องการให้ปรากฏในเอกสาร ถ้าไม่ได้ขึ้นต้นด้วย “คณบดี” ระบบจะพิมพ์ใบแต่งตั้งเป็น “รักษาการแทน คณบดี…” ให้เอง"
+          label="สถานะ"
+          hint="ปิดใช้งานจะไม่ถูกนำไปใช้ในเอกสารใหม่ และผู้ดำรงตำแหน่งจะไม่เห็นแดชบอร์ดผู้บริหารอีกต่อไป"
         >
-          <TextInput
-            value={draft.title}
-            onChange={e => setDraft({ ...draft, title: e.target.value })}
-            placeholder="เช่น คณบดีวิทยาลัยการคอมพิวเตอร์ หรือ รองคณบดีฝ่ายวิชาการ"
-          />
-        </FieldGroup>
-
-        <FieldGroup label="สถานะ" hint="ปิดใช้งานจะไม่ถูกนำไปใช้ในเอกสารใหม่">
           <div className="flex items-center gap-3 pt-2">
             <Switch
               isSelected={draft.is_active}
@@ -2447,9 +2453,9 @@ function AdminOfficerFormModal({
           <div className="text-xs text-muted uppercase tracking-wider mb-1">ตัวอย่างการปรากฏในเอกสาร</div>
           <div className="text-sm">
             <div className="font-medium">
-              {(draft.academic_prefix || "") + (nameTrim || "— ยังไม่กรอกชื่อ —")}
+              {(draft.academic_prefix || "") + (draft.full_name || "— ยังไม่เลือกบัญชี —")}
             </div>
-            <div className="text-muted">{titleTrim || "— ยังไม่กรอกตำแหน่ง —"}</div>
+            <div className="text-muted">{editing?.title}</div>
           </div>
         </div>
 

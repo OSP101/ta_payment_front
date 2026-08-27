@@ -15,7 +15,7 @@ import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
 import {
   Alert, Button, Chip, FieldGroup, Modal,
-  PageHeader, Panel, Select, TextArea,
+  PageHeader, Select, TextArea,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 
@@ -434,61 +434,59 @@ export default function UsersPage() {
         }
       />
 
-      <Panel padded={false} data-tour="users-table">
-        <div className="p-4">
-          <DataTable
-            ariaLabel="ผู้ใช้ทั้งหมดในระบบ"
-            rows={data?.items}
-            loading={isLoading}
-            error={error}
-            onRetry={() => mutate(listKey)}
-            rowKey={u => u.id}
-            searchFn={userHaystack}
-            searchPlaceholder="ค้นหาชื่อ / อีเมล…"
-            filters={[
-              {
-                id: "role",
-                placeholder: "ทุกบทบาท",
-                options: [
-                  { id: "", label: "ทุกบทบาท" },
-                  { id: "admin", label: "Admin / ผู้ดูแลระบบ" },
-                  { id: "staff", label: "เจ้าหน้าที่" },
-                  { id: "lecturer", label: "อาจารย์" },
-                  { id: "ta", label: "ผู้ช่วยสอน (TA)" },
-                ],
-                // Unused in server mode — the API applies these. Kept so the
-                // component keeps working if the table is ever taken off it.
-                predicate: (u, v) => u.roles.includes(v),
-              },
-              {
-                id: "active",
-                placeholder: "ทุกสถานะ",
-                options: [
-                  { id: "", label: "ทุกสถานะ" },
-                  { id: "active", label: "ใช้งาน" },
-                  { id: "inactive", label: "ปิดใช้งาน" },
-                ],
-                predicate: (u, v) => (v === "active" ? u.is_active : !u.is_active),
-              },
-            ]}
-            pageSize={PAGE_SIZE}
-            emptyTitle="ไม่พบผู้ใช้"
-            emptyDescription="ลองปรับเงื่อนไขการค้นหา"
-            columns={columns}
-            server={{
-              total: data?.total ?? 0,
-              page,
-              onPageChange: setPage,
-              query,
-              onQueryChange: setQuery,
-              filterValues,
-              onFilterChange: setFilterValues,
-              sort,
-              onSortChange: setSort,
-            }}
-          />
-        </div>
-      </Panel>
+      <div data-tour="users-table">
+        <DataTable
+          ariaLabel="ผู้ใช้ทั้งหมดในระบบ"
+          rows={data?.items}
+          loading={isLoading}
+          error={error}
+          onRetry={() => mutate(listKey)}
+          rowKey={u => u.id}
+          searchFn={userHaystack}
+          searchPlaceholder="ค้นหาชื่อ / อีเมล…"
+          filters={[
+            {
+              id: "role",
+              placeholder: "ทุกบทบาท",
+              options: [
+                { id: "", label: "ทุกบทบาท" },
+                { id: "admin", label: "Admin / ผู้ดูแลระบบ" },
+                { id: "staff", label: "เจ้าหน้าที่" },
+                { id: "lecturer", label: "อาจารย์" },
+                { id: "ta", label: "ผู้ช่วยสอน (TA)" },
+              ],
+              // Unused in server mode — the API applies these. Kept so the
+              // component keeps working if the table is ever taken off it.
+              predicate: (u, v) => u.roles.includes(v),
+            },
+            {
+              id: "active",
+              placeholder: "ทุกสถานะ",
+              options: [
+                { id: "", label: "ทุกสถานะ" },
+                { id: "active", label: "ใช้งาน" },
+                { id: "inactive", label: "ปิดใช้งาน" },
+              ],
+              predicate: (u, v) => (v === "active" ? u.is_active : !u.is_active),
+            },
+          ]}
+          pageSize={PAGE_SIZE}
+          emptyTitle="ไม่พบผู้ใช้"
+          emptyDescription="ลองปรับเงื่อนไขการค้นหา"
+          columns={columns}
+          server={{
+            total: data?.total ?? 0,
+            page,
+            onPageChange: setPage,
+            query,
+            onQueryChange: setQuery,
+            filterValues,
+            onFilterChange: setFilterValues,
+            sort,
+            onSortChange: setSort,
+          }}
+        />
+      </div>
 
       <CreateUserModal open={creating} onClose={() => setCreating(false)} />
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} />}
@@ -668,7 +666,6 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     phone: user.phone ?? "",
     // Preserve the full role set (incl. admin) rather than collapsing to one.
     roles: [...user.roles],
-    is_executive: user.is_executive === true,
     admin_position: user.admin_position ?? "",
     study_year: user.study_year != null ? String(user.study_year) : "",
   });
@@ -701,9 +698,6 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         // Only send roles when they actually changed, so an unrelated edit never
         // rewrites the user's role set.
         ...(rolesChanged ? { roles: form.roles } : {}),
-        ...(form.is_executive !== (user.is_executive === true)
-          ? { is_executive: form.is_executive }
-          : {}),
         ...(form.admin_position !== (user.admin_position ?? "")
           ? { admin_position: form.admin_position.trim() }
           : {}),
@@ -779,22 +773,17 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
               error={null} show={false}
               placeholder="เช่น หัวหน้าสาขาวิชาวิทยาการคอมพิวเตอร์"
             />
-            {/* สิทธิ์ ไม่ใช่บทบาท: เห็นเฉพาะหน้าสถิติงบแบบอ่านอย่างเดียว
-                (/executive) ไม่เพิ่มเมนูงานหรืออำนาจแก้ไขใด ๆ */}
-            <label className="flex items-start gap-2.5 rounded-lg border border-border bg-surface px-3 py-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 accent-[var(--brand)]"
-                checked={form.is_executive}
-                onChange={e => setForm({ ...form, is_executive: e.target.checked })}
-              />
-              <span className="text-sm">
-                <span className="font-medium">สิทธิ์ผู้บริหาร</span>
+            {/* สิทธิ์ผู้บริหารไม่ได้ติ๊กตรงนี้อีกต่อไป — มาจากการถือตำแหน่งฝ่ายบริหาร
+                ที่ยังเปิดใช้งานอยู่ (หน้า "ตั้งค่า > ฝ่ายบริหาร") เท่านั้น ที่นี่แสดง
+                ผลลัพธ์ให้ดูอย่างเดียวเพื่อไม่ให้สับสนว่าทำไมช่องติ๊กหายไป */}
+            {user.is_executive && (
+              <div className="text-sm rounded-lg border border-border bg-surface px-3 py-2.5">
+                <span className="font-medium">สิทธิ์ผู้บริหาร: มี</span>
                 <span className="block text-xs text-muted mt-0.5">
-                  ให้เข้าดูหน้ามุมมองผู้บริหาร (สรุปการใช้งบประมาณ) ได้อย่างเดียว แก้ไขข้อมูลไม่ได้
+                  มาจากการดำรงตำแหน่งฝ่ายบริหารที่เปิดใช้งานอยู่ — จัดการที่หน้า &quot;ตั้งค่า &gt; ฝ่ายบริหาร&quot;
                 </span>
-              </span>
-            </label>
+              </div>
+            )}
             {isTa && (
               <div className="text-sm rounded-lg border border-border bg-surface px-3 py-2.5">
                 <span className="text-muted">ระดับการศึกษาปัจจุบัน: </span>

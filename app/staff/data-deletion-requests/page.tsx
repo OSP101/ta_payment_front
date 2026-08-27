@@ -67,32 +67,34 @@ export default function DataDeletionRequestsPage() {
         description="พิจารณาคำขอให้ลบข้อมูลส่วนบุคคลจาก TA — อนุมัติจะปิดใช้งานบัญชีและลบข้อมูลที่ไม่จำเป็นทันที ส่วนข้อมูลที่มีผลทางการเงินจะยังคงถูกเก็บไว้หากมีประวัติเบิกจ่าย"
       />
 
-      <Panel padded={false}>
-        <Tabs selectedKey={bucket} onSelectionChange={k => setBucket(String(k) as Bucket)}>
-          <Tabs.ListContainer>
-            <Tabs.List aria-label="สถานะคำขอลบข้อมูล" className="px-4 pt-2">
-              {BUCKETS.map(b => (
-                <Tabs.Tab key={b.id} id={b.id}>
-                  <TabLabel icon={b.icon} count={counts[b.id]} active={bucket === b.id}>
-                    {b.label}
-                  </TabLabel>
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs.ListContainer>
+      <Tabs variant="secondary" selectedKey={bucket} onSelectionChange={k => setBucket(String(k) as Bucket)}>
+        <Tabs.ListContainer>
+          <Tabs.List aria-label="สถานะคำขอลบข้อมูล">
+            {BUCKETS.map(b => (
+              <Tabs.Tab key={b.id} id={b.id}>
+                <TabLabel icon={b.icon} count={counts[b.id]} active={bucket === b.id}>
+                  {b.label}
+                </TabLabel>
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs.ListContainer>
 
-          {BUCKETS.map(b => (
-            <Tabs.Panel key={b.id} id={b.id}>
-              <RequestList
-                data={swrByBucket[b.id].data}
-                error={swrByBucket[b.id].error}
-                onReview={setReviewing}
-              />
-            </Tabs.Panel>
-          ))}
-        </Tabs>
-      </Panel>
+        {BUCKETS.map(b => (
+          <Tabs.Panel key={b.id} id={b.id}>
+            <div className="pt-5">
+              <Panel padded={false}>
+                <RequestList
+                  data={swrByBucket[b.id].data}
+                  error={swrByBucket[b.id].error}
+                  onReview={setReviewing}
+                />
+              </Panel>
+            </div>
+          </Tabs.Panel>
+        ))}
+      </Tabs>
 
       {reviewing && (
         <ReviewModal
