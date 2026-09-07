@@ -97,8 +97,8 @@ function PreviewSection({
   const noRoundsNotice = (
     <EmptyState
       icon={<FileSignature size={26} />}
-      title="ยังไม่เคยออกคำสั่งแต่งตั้งทีเอ"
-      description="ต้องออกคำสั่งแต่งตั้งอย่างน้อย 1 ครั้งก่อน จึงจะแสดงสรุปงบและปะหน้าจ่ายตรงได้ เนื่องจากคำสั่งแต่งตั้งเป็นสิ่งยืนยันว่ารายชื่อทีเอที่ใช้งานจริงคือใคร"
+      title="ยังไม่เคยออกคำสั่งแต่งตั้ง TA"
+      description="ต้องออกคำสั่งแต่งตั้งอย่างน้อย 1 ครั้งก่อน จึงจะแสดงสรุปงบและปะหน้าจ่ายตรงได้ เนื่องจากคำสั่งแต่งตั้งเป็นสิ่งยืนยันว่ารายชื่อ TA ที่ใช้งานจริงคือใคร"
       action={
         <Button variant="primary" onClick={() => router.push("/staff/appointments")}>
           <FileSignature size={16} /> ไปออกคำสั่งแต่งตั้ง
@@ -860,9 +860,22 @@ function TransferCoverMonthModal({
   // not cross the boundary just gets everything, as before.
   const suggested = useMemo(() => suggestMonths(all, split), [all, split]);
 
-  const months = selected ?? suggested;
+  // A month still waiting on somebody can never be part of this document, so it
+  // is filtered out of the suggestion rather than preselected and then refused.
+  const readyOf = (list: string[]) =>
+    list.filter(ym => all.find(m => m.year_month === ym)?.ready !== false);
+  const notReady = all.filter(m => m.ready === false);
+  const months = readyOf(selected ?? suggested);
   const reissuing = months.filter(ym => all.find(m => m.year_month === ym)?.issued);
   const notCovered = all.filter(m => !m.issued && !months.includes(m.year_month));
+
+  // A selection drawing on two budget years cannot be keyed into ERP under
+  // either of them, and nothing on the finished sheet would show the mistake —
+  // so the server refuses it outright. Mirrored here so the officer is stopped
+  // at the picker with the split spelled out, rather than after pressing.
+  const straddles = split?.crosses
+    ? months.some(m => split.before.includes(m)) && months.some(m => split.after.includes(m))
+    : false;
 
   return (
     <Modal
@@ -877,7 +890,7 @@ function TransferCoverMonthModal({
           <Button
             variant="primary"
             isPending={isPending}
-            disabled={months.length === 0}
+            disabled={months.length === 0 || straddles}
             onClick={() => onConfirm(months)}
           >
             <Banknote size={14} /> ตรวจสอบและดาวน์โหลด
@@ -890,6 +903,12 @@ function TransferCoverMonthModal({
           <div className="h-4 w-64 animate-pulse rounded bg-surface-secondary" />
           <div className="h-9 w-full animate-pulse rounded bg-surface-secondary" />
         </div>
+      ) : all.length > 0 && all.every(m => m.ready === false) ? (
+        <EmptyState
+          icon={<CalendarRange size={26} />}
+          title="ยังออกเอกสารไม่ได้"
+          description="ยังไม่มีเดือนใดที่อนุมัติและส่งการเงินครบ ตรวจและส่งการเงินให้ครบอย่างน้อยหนึ่งเดือนก่อน แล้วจึงกลับมาออกเอกสาร"
+        />
       ) : all.length === 0 ? (
         <EmptyState
           icon={<CalendarRange size={26} />}
@@ -909,21 +928,52 @@ function TransferCoverMonthModal({
           <div className="flex flex-wrap gap-2">
             {split?.crosses && (
               <>
-                <Button variant="secondary" size="sm" onClick={() => setSelected(split.before)}>
-                  งบปีเก่า ({monthLabels(all, split.before).length} เดือน)
+                <Button
+                  variant="secondary" size="sm"
+                  disabled={readyOf(split.before).length === 0}
+                  onClick={() => setSelected(readyOf(split.before))}
+                >
+                  งบปีเก่า ({readyOf(split.before).length} เดือน)
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setSelected(split.after)}>
-                  งบปีใหม่ ({monthLabels(all, split.after).length} เดือน)
+                <Button
+                  variant="secondary" size="sm"
+                  disabled={readyOf(split.after).length === 0}
+                  onClick={() => setSelected(readyOf(split.after))}
+                >
+                  งบปีใหม่ ({readyOf(split.after).length} เดือน)
                 </Button>
               </>
             )}
-            <Button variant="ghost" size="sm" onClick={() => setSelected(all.map(m => m.year_month))}>
-              ทั้งภาคเรียน
-            </Button>
+            {/* Offered only when it is a legal document: on a crossing term the
+                whole semester is two appropriations, never one sheet. */}
+            {!split?.crosses && (
+              <Button
+                variant="ghost" size="sm"
+                disabled={readyOf(all.map(m => m.year_month)).length === 0}
+                onClick={() => setSelected(readyOf(all.map(m => m.year_month)))}
+              >
+                ทั้งภาคเรียน
+              </Button>
+            )}
           </div>
+
+          {notReady.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+              <b>เดือน {notReady.map(m => m.label).join(", ")} ยังเลือกไม่ได้</b> —
+              ต้องให้อาจารย์อนุมัติบันทึกเวลา เจ้าหน้าที่ตรวจ และส่งการเงินให้ครบก่อน
+              เพราะการเงินคีย์ตัวเลขจากเอกสารนี้เข้าระบบ ERP โดยตรง ยอดจึงต้องนิ่งแล้ว
+            </div>
+          )}
 
           <MonthChips months={all} selected={months} onChange={setSelected} />
 
+          {straddles && (
+            <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900">
+              <b>เลือกข้ามปีงบประมาณในฉบับเดียวไม่ได้</b> — เดือนที่เลือกอยู่คร่อมวันที่ 30 ก.ย.
+              ต้องออกเป็นคนละฉบับ เพราะการเงินคีย์เข้าระบบ ERP ต่อหนึ่งฉบับได้เพียงปีงบเดียว
+              กดปุ่ม “งบปีเก่า” หรือ “งบปีใหม่” ด้านบนเพื่อเลือกให้ถูกชุด
+            </div>
+          )}
           {reissuing.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
               เดือน {monthLabels(all, reissuing).join(", ")} เคยออกเอกสารไปแล้ว
@@ -1234,8 +1284,13 @@ function useCourseGroupGate(termId: string) {
     if (!termId) return;
     setChecking(true);
     try {
-      const candidates = await api.get<CourseGroupCandidate[]>(`/terms/${termId}/course-groups/candidates`);
-      if (candidates.length > 0) {
+      // ?? []: the endpoint answers with an empty list now, but a nil slice on
+      // the Go side marshals to `null`, and reaching for .length on that is what
+      // broke this button for every term with no duplicate codes — the ordinary
+      // case. Belt and braces, since the cost of being wrong here is the whole
+      // download failing.
+      const candidates = await api.get<CourseGroupCandidate[] | null>(`/terms/${termId}/course-groups/candidates`);
+      if ((candidates ?? []).length > 0) {
         proceedRef.current = proceed;
         setOpen(true);
       } else {

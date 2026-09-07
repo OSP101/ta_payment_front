@@ -444,10 +444,10 @@ function EmptyCell({ t }: { t?: TimelineRow }) {
  * So the cell now says three things, in the order they are needed:
  *
  *   1. the number;
- *   2. WHETHER IT IS WORTH OPENING — "ทีเอเพิ่มเอง 2" is the only content on
+ *   2. WHETHER IT IS WORTH OPENING — "TA เพิ่มเอง 2" is the only content on
  *      this screen that selects work for a human, because a generated row is a
  *      copy of times the lecturer already entered and holds nothing a second
- *      person can check. A month marked "ระบบสร้างล้วน" can be signed off
+ *      person can check. A month marked "สร้างอัตโนมัติทั้งหมด" can be signed off
  *      without reading it, and saying so is what makes the click meaningful
  *      rather than merely possible;
  *   3. the actions — "ดู" widest of the three, because it is the safe
@@ -501,10 +501,10 @@ function Cell({
           <span className="text-emerald-800">ตรวจแล้ว · {r.row_count} รายการ</span>
         ) : r.manual_count > 0 ? (
           <span className="rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900">
-            ทีเอเพิ่มเอง {r.manual_count}
+            TA เพิ่มเอง {r.manual_count}
           </span>
         ) : (
-          <span className="text-muted">{r.row_count} รายการ · ระบบสร้างล้วน</span>
+          <span className="text-muted">{r.row_count} รายการ · สร้างอัตโนมัติทั้งหมด</span>
         )}
       </div>
 

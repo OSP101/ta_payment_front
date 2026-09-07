@@ -1,7 +1,7 @@
 "use client";
 import useSWR, { mutate } from "swr";
 import { useEffect, Fragment, use, useMemo, useState } from "react";
-import { Check, X, CircleAlert, ChevronDown, History, Link2, Users, CalendarCheck, AlertTriangle } from "lucide-react";
+import { Check, X, CircleAlert, ChevronDown, History, Link2, Users, CalendarCheck, AlertTriangle, ArrowUp, ArrowDown } from "lucide-react";
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
@@ -587,16 +587,334 @@ function TACard({
   );
 }
 
+/** One month of one budget pool, as the settlement priced it. */
+interface MonthSettlement { year_month: string; baht: number; paid_baht: number; paid: boolean }
+interface TrackSettlement { months?: MonthSettlement[] }
 /** What the budget can and cannot pay for, from the server's own settlement. */
 interface Settlement {
+  regular?: TrackSettlement;
+  special?: TrackSettlement;
   unpaid_months?: string[];
   partial_months?: string[];
+  /** Months inside partial_months where a WHOLE budget pool was paid nothing
+   *  while another was paid — "ได้บางส่วน" is true of the course and a lie to
+   *  everyone on the empty pool, so those months get named per pool. */
+  track_unpaid_months?: { year_month: string; zero_tracks: string[] }[];
   dropped_baht: number;
   spilled_baht?: number;
   over_budget: boolean;
 }
 /** committed = what approval has already spent · forecast = plus everything logged. */
-interface SettlementView { committed: Settlement; forecast: Settlement }
+interface SettlementView {
+  committed: Settlement;
+  forecast: Settlement;
+  /** Which cutting rule the figures above were produced under. */
+  settlement_mode: "chronological" | "spread";
+  /** The same forecast under the OTHER rule — so the choice can be compared
+   *  before it is made rather than after. */
+  alternative_forecast?: Settlement;
+  can_change_mode: boolean;
+  locked_months?: string[];
+  /** "finance_sent" = nobody may change it · "staff_reviewed" = staff only. */
+  lock_reason?: "finance_sent" | "staff_reviewed";
+  /** Exported months whose claim documents would need downloading again. */
+  reexport_months?: string[];
+}
+
+/** Total paid per month across both pools — what a TA on this course actually
+ *  sees arrive, which is the number the lecturer is choosing between. */
+function paidByMonth(s?: Settlement): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const track of [s?.regular, s?.special]) {
+    for (const m of track?.months ?? []) {
+      out.set(m.year_month, (out.get(m.year_month) ?? 0) + m.paid_baht);
+    }
+  }
+  return out;
+}
+
+/** What the month's work is WORTH, before the budget touches it. The screen was
+ *  unreadable without it: both rules pay out nearly the same total, so showing
+ *  only what each pays made the shortfall invisible and the choice look
+ *  pointless — "กดเปลี่ยนแล้วก็เท่ากัน ก็คือได้เงินอยู่ดี". The missing number was
+ *  never the payout, it was the bill. */
+function workByMonth(s?: Settlement): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const track of [s?.regular, s?.special]) {
+    for (const m of track?.months ?? []) {
+      out.set(m.year_month, (out.get(m.year_month) ?? 0) + m.baht);
+    }
+  }
+  return out;
+}
+
+const MODE_LABEL: Record<string, string> = {
+  chronological: "จ่ายเรียงตามวัน",
+  spread: "เฉลี่ยทุกเดือน",
+};
+const MODE_BLURB: Record<string, string> = {
+  chronological: "จ่ายไล่ตามวันที่จนงบหมด เดือนต้นเทอมได้เต็ม ส่วนที่ขาดไปรวมอยู่ที่เดือนท้ายเทอม",
+  spread: "แบ่งงบให้ทุกเดือนเท่า ๆ กัน ไม่มีเดือนใดได้เต็ม แต่ส่วนที่ขาดกระจายทุกเดือน",
+};
+
+/**
+ * One mode's outcome in a sentence: how many months leave somebody with
+ * nothing, and the smallest month.
+ *
+ * Counted PER POOL, not on the combined total. ภาคปกติ and ภาคพิเศษ are separate
+ * budgets that run out at different points, so a month can pay the regular
+ * track in full and the special track nothing — and summing the two hides
+ * exactly the person this screen exists to protect. Reading the combined figure
+ * had this card claiming "ได้รับครบทุกเดือน" directly underneath a red warning
+ * naming the month nobody on ภาคพิเศษ gets paid for.
+ */
+function outcomeOf(s: Settlement | undefined, months: string[]) {
+  let zero = 0;
+  for (const m of months) {
+    const stranded = [s?.regular, s?.special].some(track => {
+      const row = track?.months?.find(x => x.year_month === m);
+      return !!row && row.baht > 0 && row.paid_baht <= 0;
+    });
+    if (stranded) zero++;
+  }
+  const paid = paidByMonth(s);
+  const vals = months.map(m => paid.get(m) ?? 0);
+  return { zero, min: vals.length ? Math.min(...vals) : 0 };
+}
+
+const bahtOf = (n: number) => `฿${Math.round(n).toLocaleString()}`;
+
+/** "2026-06" → "มิ.ย. 69". The comparison table has four columns and the delta
+ *  is the one worth reading; full month names pushed it off a phone screen. */
+function shortMonthTH(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  if (!y || !m || m < 1 || m > 12) return key;
+  return `${MONTH_TH_SHORT[m - 1]} ${String((y + 543) % 100).padStart(2, "0")}`;
+}
+
+/**
+ * The choice between the two ways of cutting a short budget.
+ *
+ * Its own panel, deliberately NOT inside the red shortfall alert. It began life
+ * nested there — the shortfall is what makes the choice relevant, so it seemed
+ * to belong — and the result was unreadable: a table, a paragraph and a button
+ * all tinted as alarm, with nothing to tell the reader where the warning ended
+ * and the decision began. A warning and a decision are different things and
+ * need different rooms.
+ *
+ * Shown only when the course is actually short: when the money covers
+ * everything both rules pay the same คาบ, and a switch that changes nothing is
+ * just another thing to worry about.
+ */
+function SettlementModeChoice({
+  tcId, view, onChanged,
+}: { tcId: string; view: SettlementView; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const current = view.settlement_mode;
+  const other = current === "spread" ? "chronological" : "spread";
+  const now = paidByMonth(view.forecast);
+  const then = paidByMonth(view.alternative_forecast);
+  const months = Array.from(new Set([...now.keys(), ...then.keys()])).sort();
+  if (!months.length) return null;
+
+  async function apply() {
+    setBusy(true);
+    try {
+      await api.patch(`/teaching-courses/${tcId}/settlement-mode`, { settlement_mode: other });
+      notify.success(
+        view.reexport_months?.length
+          ? `เปลี่ยนเป็น “${MODE_LABEL[other]}” แล้ว กรุณาดาวน์โหลดใบเบิกใหม่`
+          : `เปลี่ยนเป็น “${MODE_LABEL[other]}” แล้ว`,
+      );
+      onChanged();
+    } catch (e) {
+      notify.error(e, "เปลี่ยนวิธีแบ่งงบไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  const totalNow = months.reduce((t, m) => t + (now.get(m) ?? 0), 0);
+  const totalThen = months.reduce((t, m) => t + (then.get(m) ?? 0), 0);
+  const outNow = outcomeOf(view.forecast, months);
+  const outThen = outcomeOf(view.alternative_forecast, months);
+  // The bill. Identical under both rules — the same คาบ at the same rates — which
+  // is exactly why it has to be on screen: without it the two payout columns
+  // look like two ways of paying everybody, and the shortfall is nowhere.
+  const work = workByMonth(view.forecast);
+  const totalWork = months.reduce((t, m) => t + (work.get(m) ?? 0), 0);
+  const shortNow = totalWork - totalNow;
+
+  // One card per rule, the live one first. Each says who carries the shortfall
+  // under it, because that — not the payout total — is the actual choice.
+  const card = (mode: string, o: { zero: number; min: number }, total: number, active: boolean) => (
+    <div
+      key={mode}
+      className={`flex flex-col rounded-xl border p-3.5 ${
+        active ? "border-primary bg-primary/5" : "border-(--hairline) bg-surface"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-foreground">{MODE_LABEL[mode]}</span>
+        {active && <Chip tone="info">ใช้อยู่</Chip>}
+      </div>
+      <p className="mt-1 text-xs leading-relaxed text-muted">{MODE_BLURB[mode]}</p>
+      <div className="mt-2.5 mb-auto text-sm">
+        {o.zero > 0 ? (
+          <span className="font-semibold text-red-700">มี {o.zero} เดือนที่บางภาคไม่ได้รับค่าตอบแทน</span>
+        ) : (
+          <span className="font-semibold text-emerald-700">ได้รับค่าตอบแทนทุกเดือน</span>
+        )}
+        <div className="mt-0.5 text-xs text-muted">
+          เบิกได้รวม <span className="tabular-nums font-medium text-foreground">{bahtOf(total)}</span>
+          {" · "}ขาด <span className="tabular-nums font-medium text-red-700">{bahtOf(totalWork - total)}</span>
+        </div>
+      </div>
+      {!active && view.can_change_mode && (
+        <Button size="sm" fullWidth className="mt-3 self-stretch" disabled={busy} onClick={() => setConfirming(true)}>
+          ใช้วิธีนี้
+        </Button>
+      )}
+    </div>
+  );
+
+  /** One payout cell: what the month got, and how far short that is. */
+  const payCell = (paid: number, w: number) => {
+    const gap = w - paid;
+    return (
+      <>
+        <div className="tabular-nums">{paid <= 0 ? "ไม่ได้รับ" : bahtOf(paid)}</div>
+        <div className={`text-xs ${gap <= 0.5 ? "text-emerald-700" : "text-red-700"}`}>
+          {gap <= 0.5 ? "ครบ" : `ขาด ${bahtOf(gap)}`}
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <Panel
+      className="mb-3"
+      title="วิธีแบ่งงบให้ TA"
+      description="งบไม่พอจ่ายทุกคาบ เลือกได้ว่าส่วนที่ขาดจะไปตกอยู่ที่เดือนใด โดย TA ทุกคนถูกหักเป็นสัดส่วนเท่ากัน"
+    >
+      {/* The arithmetic of the shortfall, which the screen never showed. The
+          third figure is the one that answers "มันขาดยังไง" — and the line under
+          it answers the follow-up, that switching does not make it smaller. */}
+      <div className="mb-3 flex flex-wrap items-end gap-x-6 gap-y-2 rounded-lg bg-surface-secondary px-3.5 py-3">
+        <div>
+          <div className="text-xs text-muted">ค่าตอบแทนตามงานที่ทำจริง</div>
+          <div className="text-lg font-semibold tabular-nums">{bahtOf(totalWork)}</div>
+        </div>
+        <div className="text-lg text-muted">−</div>
+        <div>
+          <div className="text-xs text-muted">งบที่เบิกได้</div>
+          <div className="text-lg font-semibold tabular-nums">{bahtOf(totalNow)}</div>
+        </div>
+        <div className="text-lg text-muted">=</div>
+        <div>
+          <div className="text-xs text-muted">ขาด</div>
+          <div className="text-lg font-semibold tabular-nums text-red-700">{bahtOf(shortNow)}</div>
+        </div>
+        <p className="basis-full text-xs text-muted">
+          ส่วนที่ขาดเกิดจากงบประมาณรายวิชามีจำกัด <b>การเปลี่ยนวิธีไม่ทำให้ส่วนที่ขาดลดลง</b>
+          สิ่งที่เลือกได้คือส่วนที่ขาดจะไปตกอยู่ที่เดือนใด
+          <br />
+          <b>TA ทุกคนถูกหักเป็นสัดส่วนเท่ากันเสมอ</b> ผู้ที่ปฏิบัติงานเท่ากันจะได้รับเท่ากัน
+          ไม่ว่าจะปฏิบัติงานวันใดหรือเดือนใด
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {card(current, outNow, totalNow, true)}
+        {card(other, outThen, totalThen, false)}
+      </div>
+
+      {/* Two different closures with two different answers: one the lecturer can
+          act on by asking staff, one nobody can act on without the administrator. */}
+      {!view.can_change_mode && (
+        <p className="mt-3 rounded-lg bg-surface-secondary px-3 py-2 text-xs text-muted">
+          {view.lock_reason === "staff_reviewed" ? (
+            <>เจ้าหน้าที่ตรวจสอบเดือน {(view.locked_months ?? []).join(", ")} แล้ว
+            อาจารย์จึงเปลี่ยนวิธีแบ่งงบไม่ได้ หากต้องการเปลี่ยน กรุณาติดต่อเจ้าหน้าที่</>
+          ) : (
+            <>เปลี่ยนวิธีแบ่งงบไม่ได้ เนื่องจากเดือน {(view.locked_months ?? []).join(", ")} ส่งการเงินไปแล้ว
+            หากจำเป็นต้องแก้ กรุณาให้ผู้ดูแลระบบปลดล็อกก่อน</>
+          )}
+        </p>
+      )}
+
+      <div className="mt-4">
+        <div className="mb-1.5 text-xs font-semibold text-muted">
+          ส่วนที่ขาดตกอยู่ที่เดือนใด
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted">
+                <th className="py-1.5 pr-3 text-left font-medium">เดือน</th>
+                <th className="py-1.5 pr-3 text-right font-medium">ควรได้รับ</th>
+                <th className="py-1.5 pr-3 text-right font-medium">
+                  {MODE_LABEL[current]}<div className="font-normal">(ใช้อยู่)</div>
+                </th>
+                <th className="py-1.5 text-right font-medium">{MODE_LABEL[other]}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.map(m => {
+                const w = work.get(m) ?? 0;
+                return (
+                  <tr key={m} className="border-t border-(--hairline) align-top">
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{shortMonthTH(m)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-muted">{bahtOf(w)}</td>
+                    <td className="py-1.5 pr-3 text-right">{payCell(now.get(m) ?? 0, w)}</td>
+                    <td className="py-1.5 text-right">{payCell(then.get(m) ?? 0, w)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-(--hairline) font-semibold align-top">
+                <td className="py-1.5 pr-3">รวม</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{bahtOf(totalWork)}</td>
+                <td className="py-1.5 pr-3 text-right">{payCell(totalNow, totalWork)}</td>
+                <td className="py-1.5 text-right">{payCell(totalThen, totalWork)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {/* The two totals are almost never identical, and claiming they are
+            would be a lie the lecturer can check against the row above. A คาบ is
+            paid whole or not at all, so dividing the budget by month can strand
+            a few baht no month's next คาบ is cheap enough to spend. */}
+        {Math.abs(totalThen - totalNow) >= 1 && (
+          <p className="mt-2 text-xs text-muted">
+            สองวิธีเบิกได้ต่างกัน {bahtOf(Math.abs(totalThen - totalNow))} เนื่องจากเบิกได้ทีละทั้งคาบ
+            เศษงบที่เหลือไม่พอค่าคาบถัดไป
+          </p>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title={`เปลี่ยนเป็น “${MODE_LABEL[other]}”?`}
+        message={
+          (view.reexport_months?.length
+            ? `เดือน ${view.reexport_months.join(", ")} ส่งออกใบเบิกไปแล้ว การเปลี่ยนจะทำให้ต้องดาวน์โหลดใบเบิกใหม่อีกครั้ง เพราะยอดในไฟล์เดิมคำนวณด้วยวิธีเก่า — `
+            : "") +
+          "TA ทุกคนในวิชานี้จะได้รับแจ้งเตือน และเดือนที่ได้รับค่าตอบแทนจะเปลี่ยนไปตามตารางด้านบน " +
+          "เปลี่ยนกลับได้จนกว่าจะมีเดือนใดถูกส่งการเงิน"
+        }
+        confirmLabel="เปลี่ยน"
+        isPending={busy}
+        onConfirm={apply}
+        onClose={() => setConfirming(false)}
+      />
+    </Panel>
+  );
+}
 
 /**
  * Budget state for the course, in the lecturer's own terms.
@@ -607,22 +925,29 @@ interface SettlementView { committed: Settlement; forecast: Settlement }
  * finds out on payday, so it names the months rather than quoting a shortfall.
  */
 function BudgetNotice({ tcId }: { tcId: string }) {
-  const { data } = useSWR<SettlementView>(
-    tcId ? `/teaching-courses/${tcId}/budget-settlement` : null,
-  );
+  const key = tcId ? `/teaching-courses/${tcId}/budget-settlement` : null;
+  const { data, mutate: refresh } = useSWR<SettlementView>(key);
   // Read the FORECAST, not the settled figure. By the time approved spending
   // crosses the line the lecturer has already approved months that will not be
   // paid — warning then is warning after the fact.
-  const view = data?.forecast;
+  if (!data) return null;
+  const view = data.forecast;
   if (!view?.over_budget) return null;
   const unpaid = view.unpaid_months ?? [];
-  const partial = view.partial_months ?? [];
-  if (!unpaid.length && !partial.length) return null;
-  // "ได้ไม่ครบทุกคาบ" and "ไม่ได้เลย" are different news. Since the cutoff moved
-  // off the month boundary a month can be part-paid, and calling that "จะไม่ได้
-  // รับค่าตอบแทน" would be wrong.
+  const zeroed = view.track_unpaid_months ?? [];
+  // Months whose only trouble is "some คาบ missing" — the ones named per pool
+  // below say something sharper and would otherwise be said twice.
+  const zeroedMonths = new Set(zeroed.map(z => z.year_month));
+  const partial = (view.partial_months ?? []).filter(m => !zeroedMonths.has(m));
+  if (!unpaid.length && !partial.length && !zeroed.length) return null;
+  // Three different pieces of news, and saying the wrong one is how a TA finds
+  // out on payday that the screen lied to them. "ไม่ได้รับเลย" is the whole
+  // course; "ภาคพิเศษไม่ได้รับเลย" is one pool emptied while the other was paid
+  // in full; "ได้ไม่ครบทุกคาบ" is everyone short by some คาบ.
   const what = [
     partial.length ? `${partial.map(formatMonthTH).join(", ")} ได้ไม่ครบทุกคาบ` : "",
+    ...zeroed.map(z =>
+      `${formatMonthTH(z.year_month)} ${z.zero_tracks.map(t => TRACK_LABEL[t] ?? t).join("และ")}ไม่ได้รับเลย`),
     unpaid.length ? `${unpaid.map(formatMonthTH).join(", ")} ไม่ได้รับค่าตอบแทน` : "",
   ].filter(Boolean).join(" และ");
   // Already committed vs still avoidable changes what the lecturer can do about
@@ -633,25 +958,37 @@ function BudgetNotice({ tcId }: { tcId: string }) {
   // the other pool's leftover was overlooked.
   const spilled = view.spilled_baht ?? 0;
   return (
-    <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-red-300 bg-red-50 px-3.5 py-3 text-sm text-red-900">
-      <AlertTriangle size={17} className="mt-0.5 shrink-0" />
-      <div className="min-w-0">
-        <div className="font-semibold">
-          {committed
-            ? `งบรายวิชาไม่พอแล้ว ${what}`
-            : `ถ้าอนุมัติครบตามที่ TA ลงไว้ งบจะไม่พอ ${what}`}
-        </div>
-        <div className="mt-0.5 text-red-900/85">
-          อนุมัติได้ตามปกติ ระบบจะบันทึกชั่วโมงไว้ครบ แต่คาบที่เกินงบ
-          (รวม ฿{Math.round(view.dropped_baht).toLocaleString()}) จะไม่ถูกนำไปเบิก
-          มีผลกับ TA ทุกคนในวิชานี้เท่ากัน
-          {spilled > 0 && (
-            <> (นับงบภาคพิเศษที่เหลือ ฿{Math.round(spilled).toLocaleString()}
-            มาช่วยคาบที่สอนร่วมกันแล้ว)</>
-          )}
+    <>
+      <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-red-300 bg-red-50 px-3.5 py-3 text-sm text-red-900">
+        <AlertTriangle size={17} className="mt-0.5 shrink-0" />
+        <div className="min-w-0">
+          <div className="font-semibold">
+            {committed
+              ? `งบรายวิชาไม่พอแล้ว ${what}`
+              : `ถ้าอนุมัติครบตามที่ TA ลงไว้ งบจะไม่พอ ${what}`}
+          </div>
+          <div className="mt-0.5 text-red-900/85">
+            อนุมัติได้ตามปกติ ระบบจะบันทึกชั่วโมงไว้ครบ แต่คาบที่เกินงบ
+            (รวม ฿{Math.round(view.dropped_baht).toLocaleString()}) จะไม่ถูกนำไปเบิก
+            {/* The guarantee is now per PERSON, not per คาบ (settleTrack,
+                07/09/2026): the pool is shared out in proportion to what each TA
+                is owed, so everybody loses the same fraction. It still holds
+                only WITHIN a pool — ภาคปกติ and ภาคพิเศษ are separate budgets
+                that run out at different points. */}
+            {" "}TA ทุกคนถูกหักเป็นสัดส่วนเท่ากัน แต่ภาคปกติกับภาคพิเศษใช้งบคนละส่วน
+            {spilled > 0 && (
+              <> (นับงบภาคพิเศษที่เหลือ ฿{Math.round(spilled).toLocaleString()}
+              มาช่วยคาบที่สอนร่วมกันแล้ว)</>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      {/* Beside the warning rather than inside it, and above the queue: the
+          shortfall is what makes this choice relevant, so it belongs here
+          rather than in course settings — but it is a decision, not an alarm,
+          and reads as one only when it has its own surface. */}
+      <SettlementModeChoice tcId={tcId} view={data} onChanged={() => refresh()} />
+    </>
   );
 }
 

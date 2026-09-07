@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, use, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid } from "lucide-react";
@@ -125,6 +125,20 @@ function validateRow(w: WorkLog): string | null {
 
 // One row of GET /me/submission-periods (PendingByTA) — enough to decide
 // whether a month is still open for TA writes.
+/** Which months the budget falls short in, and how badly — see the backend's
+ *  classifyMonths. unpaid = nobody paid; partial = everyone short some คาบ;
+ *  track_unpaid = one whole budget pool emptied while another was paid. */
+interface Shortfall {
+  unpaid_months?: string[];
+  partial_months?: string[];
+  track_unpaid_months?: { year_month: string; zero_tracks: string[] }[];
+  dropped_baht: number;
+  over_budget: boolean;
+}
+
+/** ภาคปกติ / ภาคพิเศษ are separate budgets, so shortfalls are named by pool. */
+const TRACK_LABEL: Record<string, string> = { regular: "ภาคปกติ", special: "ภาคพิเศษ" };
+
 interface MyPeriod {
   period_id: string;
   label: string;
@@ -589,8 +603,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // settlement the export uses, so what the TA is warned about is exactly what
   // will be dropped — not a second guess at the same sum.
   const { data: settlement } = useSWR<{
-    committed: { unpaid_months?: string[]; partial_months?: string[]; dropped_baht: number; over_budget: boolean };
-    forecast: { unpaid_months?: string[]; partial_months?: string[]; dropped_baht: number; over_budget: boolean };
+    committed: Shortfall;
+    forecast: Shortfall;
   }>(tcId ? `/teaching-courses/${tcId}/budget-settlement` : null);
   // The forecast, so the TA hears about it while there is still a term left to
   // change something in — not once the money is already spent.
@@ -602,9 +616,18 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // Since the cutoff moved from the month to the คาบ, a month can be part-paid.
   // Kept apart from unpaidMonths so the chip never tells somebody they get
   // nothing for a month they are in fact partly paid for.
-  const partialMonths = useMemo(
-    () => new Set(budgetForecast?.over_budget ? (budgetForecast.partial_months ?? []) : []),
+  // Months where a WHOLE budget pool was emptied while another was paid. ภาคปกติ
+  // and ภาคพิเศษ are separate budgets, so "ได้ไม่ครบทุกคาบ" can be true of the
+  // course while a TA on the empty side is paid nothing at all that month.
+  const zeroedTracks = useMemo(
+    () => new Map((budgetForecast?.over_budget ? (budgetForecast.track_unpaid_months ?? []) : [])
+      .map(z => [z.year_month, z.zero_tracks] as const)),
     [budgetForecast],
+  );
+  const partialMonths = useMemo(
+    () => new Set((budgetForecast?.over_budget ? (budgetForecast.partial_months ?? []) : [])
+      .filter(m => !zeroedTracks.has(m))),
+    [budgetForecast, zeroedTracks],
   );
 
   const { data: myPeriods } = useSWR<MyPeriod[]>("/me/submission-periods");
@@ -1553,7 +1576,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
 
       {/* The budget ran out before the term did. Stated in months, because that
           is the unit the cutoff works in and the only form a TA can act on. */}
-      {(unpaidMonths.size > 0 || partialMonths.size > 0) && (
+      {(unpaidMonths.size > 0 || partialMonths.size > 0 || zeroedTracks.size > 0) && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <span>
@@ -1563,14 +1586,27 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             {partialMonths.size > 0 && (
               <>
                 <b>{[...partialMonths].map(formatMonthTH).join(", ")}</b> ได้ไม่ครบทุกคาบ
-                {unpaidMonths.size > 0 ? " และ " : " "}
+                {(zeroedTracks.size > 0 || unpaidMonths.size > 0) ? " และ " : " "}
               </>
             )}
+            {/* Named by pool: telling somebody on ภาคพิเศษ that ตุลาคม "ได้ไม่ครบ"
+                when their side of the budget paid nothing is the lie this
+                wording exists to stop. */}
+            {[...zeroedTracks].map(([m, tracks], i) => (
+              <Fragment key={m}>
+                <b>{formatMonthTH(m)}</b> {tracks.map(t => TRACK_LABEL[t] ?? t).join("และ")}ไม่ได้รับค่าตอบแทน
+                {(i < zeroedTracks.size - 1 || unpaidMonths.size > 0) ? " และ " : " "}
+              </Fragment>
+            ))}
             {unpaidMonths.size > 0 && (
               <><b>{[...unpaidMonths].map(formatMonthTH).join(", ")}</b> ไม่ได้รับค่าตอบแทน </>
             )}
             ชั่วโมงยังถูกบันทึกไว้ครบและอาจารย์อนุมัติได้ตามปกติ แต่คาบที่เกินงบจะไม่ถูกนำไปเบิก
-            <br /><span className="text-red-900/75">งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น ทุกคนถูกตัดที่คาบเดียวกัน ใครสอนคาบไหนก่อนได้ก่อน</span>
+            {/* Not "ใครสอนคาบไหนก่อนได้ก่อน" any more: the budget is shared out
+                between people in proportion to what each is owed before it is
+                spent, so being timetabled late no longer costs a TA anything
+                (settleTrack, 07/09/2026). */}
+            <br /><span className="text-red-900/75">งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น ทุกคนถูกหักเป็นสัดส่วนเท่ากัน ผู้ที่ปฏิบัติงานเท่ากันจะได้รับเท่ากัน</span>
           </span>
         </div>
       )}
@@ -1705,6 +1741,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             monthsInReview={monthsInReview}
             unpaidMonths={unpaidMonths}
             partialMonths={partialMonths}
+            zeroedTracks={zeroedTracks}
             tcId={tcId}
             sectionId={activeAssignment?.section_id}
           />
@@ -2920,6 +2957,8 @@ interface MonthlyWorklogViewProps {
   monthsInReview?: Set<string>;
   unpaidMonths?: Set<string>;
   partialMonths?: Set<string>;
+  /** month → the budget pools that were paid nothing for it. */
+  zeroedTracks?: Map<string, string[]>;
   tcId?: string;
   sectionId?: string;
 }
@@ -2929,6 +2968,7 @@ function MonthlyWorklogView({
   monthsInReview,
   unpaidMonths,
   partialMonths,
+  zeroedTracks,
   rows, loading, columns, termStart, termEnd, view, onQuickAdd,
   impacts, monthLocks, tcId, sectionId,
 }: MonthlyWorklogViewProps) {
@@ -3154,6 +3194,11 @@ function MonthlyWorklogView({
                   {partialMonths?.has(month) && (
                     <span className="ml-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
                       งบไม่ถึงบางคาบ
+                    </span>
+                  )}
+                  {zeroedTracks?.has(month) && (
+                    <span className="ml-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700">
+                      งบไม่ถึง · {(zeroedTracks.get(month) ?? []).map(t => TRACK_LABEL[t] ?? t).join("และ")}ไม่ได้รับค่าตอบแทน
                     </span>
                   )}
                 </div>

@@ -24,6 +24,11 @@ export interface TermMonth {
 export interface TermMonthStatus extends TermMonth {
   /** A document covering this month has already been generated. */
   issued: boolean;
+  /** false while the month still has work waiting on a TA, a lecturer, or the
+   *  finance step. Only ปะหน้าจ่ายตรง sets it — its figures are keyed straight
+   *  into the university's ERP, so a month that is still moving must not be
+   *  selectable at all. Undefined elsewhere, which reads as "no such gate". */
+  ready?: boolean;
 }
 
 export interface FiscalSplitInfo {
@@ -98,20 +103,29 @@ export function MonthChips({
     <div className="flex flex-wrap gap-2">
       {months.map(m => {
         const on = selected.includes(m.year_month);
+        // ready === false is a hard no: the document's figures go into ERP, so a
+        // month still waiting on somebody cannot be part of one. Left clickable
+        // it would only be refused on press, which is a worse way to find out.
+        const blocked = m.ready === false;
         return (
           <button
             key={m.year_month}
             type="button"
+            disabled={blocked}
+            title={blocked ? "ยังอนุมัติ/ส่งการเงินไม่ครบ จึงยังออกเอกสารเดือนนี้ไม่ได้" : undefined}
             onClick={() => toggle(m.year_month)}
             aria-pressed={on}
             className={
               "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors " +
-              (on
-                ? "border-accent bg-accent-soft text-accent-soft-foreground"
-                : "border-border text-ink-2 hover:border-accent")
+              (blocked
+                ? "cursor-not-allowed border-border bg-surface-secondary text-ink-4"
+                : on
+                  ? "border-accent bg-accent-soft text-accent-soft-foreground"
+                  : "border-border text-ink-2 hover:border-accent")
             }
           >
             {m.label}
+            {blocked && <span className="text-[10px] text-ink-4">ยังไม่พร้อม</span>}
             {/* An already-issued month is not forbidden — reissuing to correct a
                 file is normal — but it must never be picked by accident. */}
             {m.issued && <span className="text-[10px] text-ink-4">ออกแล้ว</span>}

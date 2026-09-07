@@ -442,7 +442,7 @@ export function WorklogReviewModal({
               rows={3}
             />
             {rejectReason.trim() === "" && (
-              <p className="text-xs text-red-600">ต้องระบุเหตุผล เพื่อให้ทีเอรู้ว่าต้องแก้อะไร</p>
+              <p className="text-xs text-red-600">ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร</p>
             )}
           </div>
         }
@@ -793,7 +793,7 @@ function WeekTable({
                       </td>
                       <td className="px-1 py-1">
                         {d.source === "manual" ? (
-                          <Chip tone="warn">ทีเอเพิ่มเอง</Chip>
+                          <Chip tone="warn">TA เพิ่มเอง</Chip>
                         ) : (
                           <span className="text-[11px] text-muted">ระบบ</span>
                         )}
@@ -906,7 +906,7 @@ function CommitDialog({
       if (res.failed > 0) {
         notify.error(`บันทึก ${res.applied} รายการ · ไม่ผ่าน ${res.failed}: ${(res.errors ?? []).join(" · ")}`);
       } else {
-        notify.success(`บันทึกการแก้ไข ${res.applied} รายการ แจ้งอาจารย์และทีเอแล้ว`);
+        notify.success(`บันทึกการแก้ไข ${res.applied} รายการ แจ้งอาจารย์และ TA แล้ว`);
       }
       if (me?.id) clearAddForm(me.id, reasonAid);
       onDone();
@@ -923,7 +923,7 @@ function CommitDialog({
         <Alert
           status="warning"
           title={`จะแก้ ${entries.length} รายการของเดือนนี้`}
-          description="เหตุผลจะถูกส่งถึงอาจารย์ผู้สอนและทีเอ พร้อมบันทึกไว้ในประวัติการแก้ไขถาวร"
+          description="เหตุผลจะถูกส่งถึงอาจารย์ผู้สอนและ TA พร้อมบันทึกไว้ในประวัติการแก้ไขถาวร"
         />
 
         <ul className="max-h-32 space-y-0.5 overflow-auto text-xs text-muted">

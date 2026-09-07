@@ -242,7 +242,7 @@ function TimetableFormInner() {
       {data.year_month && (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <OutTable
-            title={`ทีเอเพิ่มเอง (${manualOut.length})`}
+            title={`TA เพิ่มเอง (${manualOut.length})`}
             hint="ไม่ตรงช่องใดในตาราง และเป็นรายการที่พิมพ์เอง"
             rows={manualOut}
             highlight

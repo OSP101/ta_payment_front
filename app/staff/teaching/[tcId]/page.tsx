@@ -40,6 +40,11 @@ interface TC {
   id: string;
   code: string;
   name_th: string;
+  name_en?: string;
+  credits: number;
+  lecture_hrs: number;
+  lab_hrs: number;
+  self_hrs: number;
   starts_on?: string;
   ends_on?: string;
   num_students: number;
@@ -57,6 +62,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SectionRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SectionRow | null>(null);
 
@@ -95,7 +101,14 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
       {tc ? (
         <PageHeader
           title={`${tc.code} — ${tc.name_th}`}
-          description={`นักศึกษา ${tc.num_students} คน (ปกติ ${tc.num_students_regular} · พิเศษ ${tc.num_students_special})`}
+          description={`${tc.credits} (${tc.lecture_hrs}-${tc.lab_hrs}-${tc.self_hrs}) · นักศึกษา ${tc.num_students} คน (ปกติ ${tc.num_students_regular} · พิเศษ ${tc.num_students_special})`}
+          actions={
+            !locked && (
+              <Button variant="secondary" size="sm" onClick={() => setInfoOpen(true)}>
+                <Pencil size={14} />แก้ไขข้อมูลรายวิชา
+              </Button>
+            )
+          }
         />
       ) : (
         // Title/description bars instead of literal "…" text — a fixed-width
@@ -204,6 +217,15 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
           </Button>
         </div>
       </div>
+
+      {tc && (
+        <CourseInfoModal
+          open={infoOpen}
+          tcId={tcId}
+          tc={tc}
+          onClose={() => setInfoOpen(false)}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}
@@ -529,4 +551,177 @@ function formatExportedAt(iso?: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Course identity                                                            */
+/* -------------------------------------------------------------------------- */
+
+// KKU course codes: legacy six digits ("342233"), or two capitals plus six
+// ("CP353201"). Same pattern the backend enforces — checked here only so the
+// reader is told before they press save, never instead of the server.
+const COURSE_CODE_RE = /^(?:[A-Z]{2}[0-9]{6}|[0-9]{6})$/;
+
+/**
+ * Correcting a course after it is open.
+ *
+ * The registrar file is where these normally come from, but it arrives with
+ * typos and with courses missing, and the only fix used to be deleting the
+ * course and re-entering every section and schedule by hand.
+ *
+ * หลักสูตร sits on the SECTION, not the course. It is offered here because staff
+ * set it once for the whole course when they open one, and the open dialog
+ * already promises it can be corrected "ที่หน้าตั้งค่ารายวิชา" — this is that
+ * page. Saving it writes every section; per-section overrides stay on each
+ * section's own editor, so the field starts blank rather than showing one
+ * section's value as if it spoke for all of them.
+ *
+ * ระดับ (ปริญญาตรี / บัณฑิตศึกษา) is deliberately absent: it decides the pay
+ * rate and which caps apply, so changing it would re-price work already logged.
+ */
+function CourseInfoModal({
+  open, tcId, tc, onClose,
+}: { open: boolean; tcId: string; tc: TC; onClose: () => void }) {
+  const [code, setCode] = useState(tc.code);
+  const [nameTH, setNameTH] = useState(tc.name_th);
+  const [nameEN, setNameEN] = useState(tc.name_en ?? "");
+  const [credits, setCredits] = useState(String(tc.credits));
+  const [lec, setLec] = useState(String(tc.lecture_hrs));
+  const [lab, setLab] = useState(String(tc.lab_hrs));
+  const [self, setSelf] = useState(String(tc.self_hrs));
+  const [curriculum, setCurriculum] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  // Re-seed whenever the dialog opens, so a cancelled edit does not linger.
+  useEffect(() => {
+    if (!open) return;
+    setCode(tc.code);
+    setNameTH(tc.name_th);
+    setNameEN(tc.name_en ?? "");
+    setCredits(String(tc.credits));
+    setLec(String(tc.lecture_hrs));
+    setLab(String(tc.lab_hrs));
+    setSelf(String(tc.self_hrs));
+    setCurriculum("");
+    setErr("");
+  }, [open, tc]);
+
+  const codeUpper = code.toUpperCase().replace(/\s+/g, "");
+  const codeBad = codeUpper.length > 0 && !COURSE_CODE_RE.test(codeUpper);
+  const nameBad = nameTH.trim() === "";
+  const canSave = !codeBad && !nameBad && codeUpper !== "" && !saving;
+
+  const num = (v: string) => Math.min(30, Math.max(0, Math.floor(Number(v) || 0)));
+
+  async function save() {
+    setSaving(true);
+    setErr("");
+    try {
+      await api.patch(`/teaching-courses/${tcId}/info`, {
+        code: codeUpper,
+        name_th: nameTH.trim(),
+        name_en: nameEN.trim(),
+        credits: num(credits),
+        lecture_hrs: num(lec),
+        lab_hrs: num(lab),
+        self_hrs: num(self),
+        // Only sent when the officer actually picked one — an untouched field
+        // must not overwrite section-level values they never looked at.
+        ...(curriculum ? { curriculum } : {}),
+      });
+      await mutate(`/teaching-courses/${tcId}`);
+      await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
+      toast.success("บันทึกข้อมูลรายวิชาแล้ว");
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={<span className="inline-flex items-center gap-2"><Pencil size={18} />แก้ไขข้อมูลรายวิชา</span>}
+      size="md"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="primary" onClick={save} disabled={!canSave} isPending={saving}>
+            <Save size={14} />บันทึก
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {err && <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={err} />}
+
+        <div className="grid grid-cols-2 gap-3">
+          <FieldGroup
+            label="รหัสวิชา"
+            hint="ตัวเลข 6 หลัก หรืออักษร 2 ตัวตามด้วยตัวเลข 6 หลัก"
+            error={codeBad ? "รูปแบบรหัสวิชาไม่ถูกต้อง เช่น CP353201 หรือ 342233" : undefined}
+          >
+            <TextInput
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase().replace(/\s+/g, ""))}
+              autoComplete="off"
+              maxLength={8}
+            />
+          </FieldGroup>
+          <FieldGroup label="หน่วยกิต">
+            <TextInput
+              value={credits}
+              onChange={e => setCredits(e.target.value.replace(/\D+/g, ""))}
+              inputMode="numeric"
+              maxLength={2}
+            />
+          </FieldGroup>
+        </div>
+
+        <FieldGroup
+          label="ชื่อวิชา (ไทย)"
+          error={nameBad ? "ชื่อวิชาต้องไม่ว่าง" : undefined}
+        >
+          <TextInput value={nameTH} onChange={e => setNameTH(e.target.value)} autoComplete="off" />
+        </FieldGroup>
+
+        <FieldGroup label="ชื่อวิชา (อังกฤษ)" hint="เว้นว่างได้">
+          <TextInput value={nameEN} onChange={e => setNameEN(e.target.value)} autoComplete="off" />
+        </FieldGroup>
+
+        <div>
+          <div className="mb-1.5 text-sm font-medium">ชั่วโมงต่อสัปดาห์</div>
+          <div className="grid grid-cols-3 gap-3">
+            <FieldGroup label="บรรยาย">
+              <TextInput value={lec} onChange={e => setLec(e.target.value.replace(/\D+/g, ""))} inputMode="numeric" maxLength={2} />
+            </FieldGroup>
+            <FieldGroup label="ปฏิบัติการ">
+              <TextInput value={lab} onChange={e => setLab(e.target.value.replace(/\D+/g, ""))} inputMode="numeric" maxLength={2} />
+            </FieldGroup>
+            <FieldGroup label="ศึกษาด้วยตนเอง">
+              <TextInput value={self} onChange={e => setSelf(e.target.value.replace(/\D+/g, ""))} inputMode="numeric" maxLength={2} />
+            </FieldGroup>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            แสดงเป็น {num(credits)} ({num(lec)}-{num(lab)}-{num(self)}) · ชั่วโมงบรรยาย/ปฏิบัติการกำหนดว่ากลุ่มเรียนลงตารางแบบใดได้
+          </p>
+        </div>
+
+        <SelectField
+          label="หลักสูตร (ใช้กับทุกกลุ่มเรียน)"
+          value={curriculum}
+          onChange={setCurriculum}
+          options={[{ id: "", label: "ไม่เปลี่ยน" }, ...CURRICULUM_OPTIONS.slice(1)]}
+        />
+        <p className="-mt-2 text-xs text-muted">
+          เลือกแล้วจะเขียนทับหลักสูตรของทุกกลุ่มเรียนในรายวิชานี้
+          หากต้องการกำหนดต่างกันรายกลุ่ม ให้แก้ที่แต่ละ section
+        </p>
+      </div>
+    </Modal>
+  );
 }

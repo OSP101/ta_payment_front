@@ -78,7 +78,7 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
       <Panel
         data-tour="payout-grid"
         title="ตรวจรายเดือน"
-        description="แต่ละช่องคือ TA หนึ่งคนในหนึ่งเดือน กดตัวเลขชั่วโมงเพื่อดูรายการรายวัน"
+        description="แต่ละช่องคือ TA หนึ่งคนในหนึ่งเดือน กดปุ่ม “ดู” เพื่อเปิดรายการรายวัน"
         className="mb-3"
       >
         <ReviewGrid tcId={tcId} onChanged={revalidateAll} />

@@ -40,7 +40,7 @@ export default function AppointmentsPage() {
     <div>
       <PageHeader
         title="ใบแต่งตั้งทีเอ"
-        description="ออกคำสั่งแต่งตั้งทีเอตามรอบที่ยื่นขอ พร้อมประวัติการออกคำสั่งและปุ่มดาวน์โหลดฉบับเดิม"
+        description="ออกคำสั่งแต่งตั้ง TA ตามรอบที่ยื่นขอ พร้อมประวัติการออกคำสั่งและปุ่มดาวน์โหลดฉบับเดิม"
       />
       {termId && <AppointmentSection termId={termId} />}
     </div>
@@ -249,7 +249,7 @@ function AppointmentSection({ termId }: { termId: string }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-lg font-semibold text-ink-1">
-              {pending > 0 ? `ทีเอ ${pending} คน รอออกคำสั่งแต่งตั้ง` : "ออกคำสั่งครบทุกคนแล้ว"}
+              {pending > 0 ? `TA ${pending} คน รอออกคำสั่งแต่งตั้ง` : "ออกคำสั่งครบทุกคนแล้ว"}
             </div>
             {/* No "·" separators: they wrap onto the next line on a phone and
                 sit there as a stray dot. Spacing alone does the job. */}
@@ -291,7 +291,7 @@ function AppointmentSection({ termId }: { termId: string }) {
         )}
         {pending === 0 && (
           <div className="px-5 py-3 text-sm text-ink-3">
-            ทีเอที่อนุมัติแล้วได้รับคำสั่งแต่งตั้งครบทุกคน เมื่ออนุมัติคำขอใหม่ รายชื่อจะมาแสดงที่นี่
+            TA ที่อนุมัติแล้วได้รับคำสั่งแต่งตั้งครบทุกคน เมื่ออนุมัติคำขอใหม่ รายชื่อจะมาแสดงที่นี่
           </div>
         )}
       </div>
@@ -426,7 +426,7 @@ function AppointmentSection({ termId }: { termId: string }) {
                 ? "ไม่มีรายชื่อค้าง จึงยังไม่ต้องออกคำสั่งรอบใหม่"
                 : missing.length > 0
                   ? `กรอกให้ครบก่อน: ${missing.join(" · ")}`
-                  : `จะได้ไฟล์ Word 1 ไฟล์ สำหรับทีเอ ${pending} คน`}
+                  : `จะได้ไฟล์ Word 1 ไฟล์ สำหรับ TA ${pending} คน`}
             </span>
             <Button variant="primary" onClick={generate} disabled={!canGenerate}>
               <FileSignature size={14} /> {busy ? "กำลังสร้าง…" : "สร้างไฟล์คำสั่ง (.docx)"}
