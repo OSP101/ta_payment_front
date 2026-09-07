@@ -907,7 +907,7 @@ function TransferCoverMonthModal({
         <EmptyState
           icon={<CalendarRange size={26} />}
           title="ยังออกเอกสารไม่ได้"
-          description="ยังไม่มีเดือนใดที่อนุมัติและส่งการเงินครบ ตรวจและส่งการเงินให้ครบอย่างน้อยหนึ่งเดือนก่อน แล้วจึงกลับมาออกเอกสาร"
+          description="ยังไม่มีเดือนใดที่ส่งออกใบเบิกจ่ายครบ ตรวจและส่งออกเอกสารของเดือนนั้นให้ครบอย่างน้อยหนึ่งเดือนก่อน แล้วจึงกลับมาออกเอกสาร"
         />
       ) : all.length === 0 ? (
         <EmptyState
@@ -960,7 +960,7 @@ function TransferCoverMonthModal({
           {notReady.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
               <b>เดือน {notReady.map(m => m.label).join(", ")} ยังเลือกไม่ได้</b> —
-              ต้องให้อาจารย์อนุมัติบันทึกเวลา เจ้าหน้าที่ตรวจ และส่งการเงินให้ครบก่อน
+              ต้องให้อาจารย์อนุมัติบันทึกเวลา เจ้าหน้าที่ตรวจ และส่งออกใบเบิกจ่ายให้ครบก่อน
               เพราะการเงินคีย์ตัวเลขจากเอกสารนี้เข้าระบบ ERP โดยตรง ยอดจึงต้องนิ่งแล้ว
             </div>
           )}
@@ -1074,7 +1074,7 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
     switch (b.kind) {
       case "waiting_ta": return `${who} ยังไม่ส่งบันทึกเวลา (${months})`;
       case "waiting_lecturer": return `${who} รออาจารย์อนุมัติ (${months})`;
-      case "not_finance_sent": return `${who} ตรวจสอบแล้วแต่ยังไม่ส่งการเงิน (${months})`;
+      case "not_exported": return `${who} ตรวจสอบแล้วแต่ยังไม่ได้ส่งออกใบเบิกจ่าย (${months})`;
       default: return `${who} (${months})`;
     }
   }

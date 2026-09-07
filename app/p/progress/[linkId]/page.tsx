@@ -43,7 +43,7 @@ export async function generateMetadata(
   return {
     title,
     description: "ติดตามความคืบหน้าการเดินเอกสารเบิกจ่ายผู้ช่วยสอน",
-    alternates: { canonical: `${siteURL()}/p/document-progress/${linkId}` },
+    alternates: { canonical: `${siteURL()}/p/progress/${linkId}` },
     robots: { index: false, follow: false },
   };
 }

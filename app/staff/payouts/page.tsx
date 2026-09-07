@@ -159,6 +159,11 @@ export default function PayoutsPage() {
   // point is the next action. It is a count at the foot instead, and chased from
   // the course page.
   const act = cards.filter(c => bucketOf(c) === "act");
+  // round2 counts towards "is there anything on this screen at all" — see the
+  // empty-state condition below. A course that has shipped round 1 and still
+  // owes round 2 is in no other bucket, so leaving it out hid the whole page
+  // behind "ยังไม่มีวิชาที่ต้องดำเนินการ" and took the outstanding second
+  // document with it — the exact miss this bucket was created to prevent.
   const round2 = cards.filter(c => bucketOf(c) === "round2");
   const done = cards.filter(c => bucketOf(c) === "done");
   const waiting = cards.filter(c => bucketOf(c) === "waiting").length;
@@ -180,7 +185,7 @@ export default function PayoutsPage() {
         <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted">
           <Spinner size="sm" /> กำลังโหลด…
         </div>
-      ) : act.length === 0 && done.length === 0 ? (
+      ) : act.length === 0 && round2.length === 0 && done.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<ClipboardCheck size={24} />}

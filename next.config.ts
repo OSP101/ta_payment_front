@@ -16,6 +16,23 @@ const nextConfig: NextConfig = {
     // refusal produces a message the user can act on.
     proxyClientMaxBodySize: "16mb",
   },
+  async redirects() {
+    return [
+      // The public board moved from /p/document-progress/<token> to
+      // /p/progress/<token> (08/09/2026) — the link is pasted into a LINE
+      // group and read off a phone, and the path was as long as the token.
+      //
+      // Permanent, and kept indefinitely: links posted under the old path are
+      // sitting in chat histories that nobody is going to go back and edit.
+      // The token itself is unchanged, so an old link lands on exactly the
+      // board it always did.
+      {
+        source: "/p/document-progress/:linkId",
+        destination: "/p/progress/:linkId",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       { source: "/api/v1/:path*", destination: `${backend}/api/v1/:path*` },

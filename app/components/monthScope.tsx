@@ -112,7 +112,7 @@ export function MonthChips({
             key={m.year_month}
             type="button"
             disabled={blocked}
-            title={blocked ? "ยังอนุมัติ/ส่งการเงินไม่ครบ จึงยังออกเอกสารเดือนนี้ไม่ได้" : undefined}
+            title={blocked ? "ยังอนุมัติ/ส่งออกใบเบิกจ่ายไม่ครบ จึงยังออกเอกสารเดือนนี้ไม่ได้" : undefined}
             onClick={() => toggle(m.year_month)}
             aria-pressed={on}
             className={

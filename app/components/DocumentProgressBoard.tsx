@@ -152,6 +152,8 @@ export function DocumentProgressBoard({
 
 interface ShareLink {
   id: string;
+  /** The short URL token. `id` stays the row identity; only this is shared. */
+  slug: string;
   term_id: string;
   created_at: string;
   created_by_name?: string;
@@ -169,7 +171,12 @@ function ShareLinkPanel({ termId }: { termId: string }) {
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const url = data && typeof window !== "undefined" ? `${window.location.origin}/p/document-progress/${data.id}` : "";
+  // The slug, not the id: the link gets pasted into a chat and read off a
+  // phone, so it carries a 12-character token instead of a 36-character UUID.
+  // Links issued before slugs existed fall back to the id, which the backend
+  // still resolves.
+  const token = data ? data.slug || data.id : "";
+  const url = token && typeof window !== "undefined" ? `${window.location.origin}/p/progress/${token}` : "";
 
   async function create() {
     setBusy(true);
@@ -276,6 +283,11 @@ function RoundBoard({
 }) {
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Target stage of a pending BACKWARD move, awaiting confirmation. Going
+  // forward is a record of something that happened and is instant; going back
+  // ERASES the timestamps of every stage it passes, and this board is the only
+  // record that those desks were ever reached. 0 means the full reset.
+  const [confirmBack, setConfirmBack] = useState<number | null>(null);
 
   const note = noteDraft ?? p.note ?? "";
   // TAs never see the final "คณบดีลงนาม" stage — clamp the visible range so the
@@ -379,7 +391,14 @@ function RoundBoard({
                   <button
                     type="button"
                     disabled={!canClick}
-                    onClick={() => canClick && setStage(isCurrent ? st.n - 1 : st.n)}
+                    onClick={() => {
+                      if (!canClick) return;
+                      // Clicking the CURRENT circle steps back off it. Forward
+                      // is instant; back asks, because it drops this stage's
+                      // date and nothing else records it.
+                      if (isCurrent) setConfirmBack(st.n - 1);
+                      else setStage(st.n);
+                    }}
                     title={title}
                     className={
                       "relative z-10 grid place-items-center w-8 h-8 rounded-full transition-colors " +
@@ -434,7 +453,7 @@ function RoundBoard({
                   บันทึกหมายเหตุ
                 </Button>
                 {p.stage > 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => setStage(0)} disabled={busy}>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmBack(0)} disabled={busy}>
                     <RotateCcw size={12} /> รีเซ็ต
                   </Button>
                 )}
@@ -459,6 +478,30 @@ function RoundBoard({
         stage={p.stage}
         role={p.current_role ?? ""}
         allExported={p.all_exported}
+      />
+
+      {/* Every backward move passes through here. The wording says what is
+          LOST, not what the button is called: an officer who reads
+          "ย้อนกลับ?" and clicks ตกลง has not been told that the dates go with
+          it, and those dates are the only record the term has of when each
+          desk signed. */}
+      <ConfirmDialog
+        open={confirmBack !== null}
+        onClose={() => setConfirmBack(null)}
+        onConfirm={async () => {
+          const target = confirmBack ?? 0;
+          setConfirmBack(null);
+          await setStage(target);
+        }}
+        danger
+        isPending={busy}
+        title={confirmBack === 0 ? "รีเซ็ตความคืบหน้าทั้งเทอม?" : "ย้อนกลับขั้นก่อนหน้า?"}
+        message={
+          confirmBack === 0
+            ? `ความคืบหน้าจะกลับไปเป็น “ยังไม่เริ่ม” และวันที่ของทุกขั้นที่บันทึกไว้แล้ว (${displayStage} ขั้น) จะถูกลบทิ้ง กรอกกลับเข้ามาใหม่ไม่ได้ ต้องไล่กดทีละขั้นอีกครั้ง`
+            : `ขั้น “${STAGES[(confirmBack ?? 1)]?.label ?? ""}” จะถูกยกเลิก และวันที่ที่บันทึกไว้ของขั้นนี้จะหายไป`
+        }
+        confirmLabel={confirmBack === 0 ? "รีเซ็ต" : "ย้อนกลับ"}
       />
     </div>
   );
@@ -720,7 +763,7 @@ const STAGE_LIST_TITLE: Record<string, string> = {
   certifier: "สถานะรายชื่อผู้รับรองในแต่ละวิชา",
 };
 
-// Exported so the public share-link page (app/p/document-progress/[linkId])
+// Exported so the public share-link page (app/p/progress/[linkId])
 // can render the exact same read-only board off its own (unauthenticated)
 // checklist endpoint — same component, different URL underneath.
 export function ViewerRoundBoard({
