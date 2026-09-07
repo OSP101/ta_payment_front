@@ -23,6 +23,9 @@ interface TC {
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
+  credits: number;
+  lecture_hrs: number;
+  lab_hrs: number;
   sections?: Section[];
 }
 interface Budget {
@@ -147,17 +150,13 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
                 <span className="text-muted ml-1">คน</span>
                 <span className="text-xs text-muted ml-2">(อนุมัติแล้ว)</span>
               </InfoItem>
-              {budget && (
-                <>
-                  <Divider />
-                  <InfoItem label="หน่วยกิต">
-                    <span className="text-lg font-semibold tabular-nums">{budget.credits}</span>
-                    <span className="text-xs text-muted ml-2">
-                      (Lec {budget.lecture_credits} / Lab {budget.lab_credits})
-                    </span>
-                  </InfoItem>
-                </>
-              )}
+              <Divider />
+              <InfoItem label="หน่วยกิต">
+                <span className="text-lg font-semibold tabular-nums">{course.credits}</span>
+                <span className="text-xs text-muted ml-2">
+                  (Lec {course.lecture_hrs} / Lab {course.lab_hrs})
+                </span>
+              </InfoItem>
             </div>
           </Panel>
 

@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import useSWR, { mutate } from "swr";
-import { Save, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users } from "lucide-react";
+import { Save, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users, SquareArrowOutUpRight } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
@@ -11,8 +12,18 @@ import {
   PageHeader, Button, IconButton, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
-import OpenCourseModal from "./OpenCourseModal";
-import ImportModal from "./ImportModal";
+
+// Both modals are heavy (forms, section-schedule editors, autocompletes) but
+// only one person in ten ever opens them in a given visit — code-split them
+// out of the initial page bundle (see
+// https://nextjs.org/docs/app/guides/lazy-loading) instead of shipping their
+// JS to everyone who just wants to look at the course list. ssr:false because
+// they're pure client interaction (react-aria portals) with nothing to render
+// server-side; no loading fallback needed since both stay closed (`open`
+// prop) until the reader clicks a button, by which point the tiny chunk has
+// almost always already fetched.
+const OpenCourseModal = dynamic(() => import("./OpenCourseModal"), { ssr: false });
+const ImportModal = dynamic(() => import("./ImportModal"), { ssr: false });
 
 interface TC {
   id: string; code: string; name_th: string; term_id: string;
@@ -273,6 +284,21 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
       className: "text-right",
       render: c => (
         <div className="inline-flex items-center gap-1 whitespace-nowrap">
+          {/* Settings: this course's own staff-side page (sections, schedule,
+              curriculum, lecturers) — stays in this tab. */}
+          <IconButton
+            label="ตั้งค่ารายวิชา"
+            variant="ghost"
+            size="sm"
+            render={props => (
+              <a
+                {...(props as unknown as React.ComponentProps<"a">)}
+                href={`/staff/teaching/${c.id}`}
+              />
+            )}
+          >
+            <Settings size={14} />
+          </IconButton>
           {/* Open the lecturer view in a new tab so staff can operate on the
               course on behalf of the lecturer without losing their place in
               this list. The lecturer shell shows an admin banner when the
@@ -283,7 +309,7 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
               never applied — it navigated in place. As a real anchor,
               middle-click and "open in new tab" work too. */}
           <IconButton
-            label="จัดการ (แท็บใหม่)"
+            label="ไปหน้ารายวิชา (แท็บใหม่)"
             variant="ghost"
             size="sm"
             render={props => (
@@ -298,7 +324,7 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
               />
             )}
           >
-            <Settings size={14} />
+            <SquareArrowOutUpRight size={14} />
           </IconButton>
           <DeleteCourseButton course={c} />
         </div>
@@ -356,6 +382,10 @@ function DeleteCourseButton({ course }: { course: TC }) {
             การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
           </p>
         }
+        requireTyped={[
+          { label: "พิมพ์รหัสและชื่อวิชาเพื่อยืนยัน", expected: `${course.code} ${course.name_th}` },
+          { label: 'พิมพ์ "Delete this subject" เพื่อยืนยัน', expected: "Delete this subject" },
+        ]}
       />
     </>
   );

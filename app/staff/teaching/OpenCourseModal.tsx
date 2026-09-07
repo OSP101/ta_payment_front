@@ -30,6 +30,10 @@ interface Draft {
   code: string;
   name_en: string;
   level: "undergrad" | "graduate";
+  // Which curriculum/program the course serves — applied to every section on
+  // open. "" = ยังไม่ระบุ, left NULL on the backend (same convention as the
+  // per-section field in the staff settings page).
+  curriculum: string;
   credits: number;
   lecture_hrs: number;
   lab_hrs: number;
@@ -50,6 +54,7 @@ const EMPTY: Draft = {
   code: "",
   name_en: "",
   level: "undergrad",
+  curriculum: "",
   credits: 3,
   lecture_hrs: 3,
   lab_hrs: 0,
@@ -66,9 +71,21 @@ function clampHrs(v: string): number {
   return Math.min(30, Math.max(0, Math.floor(Number(v) || 0)));
 }
 
-// KKU course-code formats: legacy = 6 digits ("342233"); current = 2 uppercase
-// letters + 6 digits ("CP353201", "SC363001"). Backend enforces the same rule.
-const COURSE_CODE_RE = /^(?:[A-Z]{2}\d{6}|\d{6})$/;
+// Same source as the settings "หลักสูตร" tab (CurriculaSection in
+// staff/settings/page.tsx) — only the undergrad rows are choosable here:
+// sections.curriculum stores an undergrad-shaped token (CS/IT/GIS/AI/CY/
+// KKBS/OTHER); the graduate rows (CS_GRAD, DSAI_GRAD) are a print-time
+// derivation from that token + course level, never a value a section holds
+// directly (see printCurriculumCode in the backend's curriculum.go).
+interface CurriculumRow {
+  code: string;
+  full_name_th: string;
+  level: "undergrad" | "graduate";
+}
+
+// KKU course-code formats: legacy = 6 digits ("342233"); current = SC or CP
+// prefix + 6 digits ("CP353201", "SC363001"). Backend enforces the same rule.
+const COURSE_CODE_RE = /^(?:SC\d{6}|CP\d{6}|\d{6})$/;
 
 // Strip everything that can never be part of a course code — whitespace, Thai
 // characters, symbols — uppercase what remains, and cap at max length (2+6).
@@ -100,10 +117,12 @@ function buildSections(
   regular: number, special: number,
   schedules: Record<string, SectionScheduleRow[]>,
   students: Record<string, number>,
+  curriculum: string,
 ): {
   sec_no: string;
   track: "regular" | "special";
   num_students: number;
+  curriculum?: string;
   schedules: ReturnType<typeof toApiPayload>;
 }[] {
   // num_students is captured per section on the form (drives budget). Missing
@@ -112,6 +131,7 @@ function buildSections(
     sec_no,
     track,
     num_students: students[sec_no] ?? 0,
+    ...(curriculum ? { curriculum } : {}),
     schedules: toApiPayload(schedules[sec_no] ?? []),
   });
   return [
@@ -146,6 +166,18 @@ export default function OpenCourseModal({
     () => new Set((openCourses ?? []).map(c => c.code)), [openCourses],
   );
   const lecturers = useMemo(() => lecturerData?.items ?? [], [lecturerData]);
+  // Curriculum choices come straight from the DB (same /curricula list the
+  // settings "หลักสูตร" tab edits) so a renamed/added programme shows up here
+  // without a code change. Fetched whenever the modal is open, not just when
+  // pickLecturers is set — every course-open form offers this field.
+  const { data: curriculaData } = useSWR<CurriculumRow[]>(open ? "/curricula" : null);
+  const curriculumOptions = useMemo(() => {
+    const rows = (curriculaData ?? []).filter(c => c.level === "undergrad");
+    return [
+      { id: "", label: "ยังไม่ระบุ" },
+      ...rows.map(c => ({ id: c.code, label: `${c.full_name_th} (${c.code})` })),
+    ];
+  }, [curriculaData]);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -236,6 +268,7 @@ export default function OpenCourseModal({
         ...(pickLecturers ? { lecturer_ids: draft.lecturer_ids } : {}),
         sections: buildSections(
           draft.regular_sections, draft.special_sections, draft.schedules, draft.students,
+          draft.curriculum,
         ),
       };
       const res = await api.post<{ id: string }>("/teaching-courses", body);
@@ -278,7 +311,9 @@ export default function OpenCourseModal({
           <div className="text-xs text-muted mb-3">
             สำหรับวิชาที่ไม่มีในไฟล์นำเข้า กรอกรหัสและข้อมูลหน่วยกิตเอง
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Code : name = 1/3 : 2/3 — the code is short and fixed-format,
+              the name is the field that actually needs the room. */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <FieldGroup
               label="รหัสวิชา"
               hint={codeError ? undefined : "ตัวเลข 6 หลัก หรือ ตัวอักษรใหญ่ 2 ตัว + ตัวเลข 6 หลัก เช่น CP353201"}
@@ -291,6 +326,17 @@ export default function OpenCourseModal({
                 className={"tabular" + (codeError ? " ring-1 ring-danger" : "")}
               />
             </FieldGroup>
+            <div className="md:col-span-2">
+              <FieldGroup label="ชื่อวิชา (อังกฤษ)">
+                <TextInput
+                  value={draft.name_en}
+                  onChange={e => setDraft(d => ({ ...d, name_en: e.target.value }))}
+                  placeholder="WEB PROGRAMMING"
+                />
+              </FieldGroup>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             <FieldGroup label="ระดับ">
               <Select
                 value={draft.level}
@@ -300,14 +346,15 @@ export default function OpenCourseModal({
                 <option value="graduate">บัณฑิตศึกษา</option>
               </Select>
             </FieldGroup>
-          </div>
-          <div className="mt-3">
-            <FieldGroup label="ชื่อวิชา (อังกฤษ)">
-              <TextInput
-                value={draft.name_en}
-                onChange={e => setDraft(d => ({ ...d, name_en: e.target.value }))}
-                placeholder="WEB PROGRAMMING"
-              />
+            <FieldGroup label="หลักสูตร" hint="ใช้กับทุก section ของวิชานี้ แก้ทีหลังได้ที่หน้าตั้งค่ารายวิชา">
+              <Select
+                value={draft.curriculum}
+                onChange={e => setDraft(d => ({ ...d, curriculum: e.target.value }))}
+              >
+                {curriculumOptions.map(o => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </Select>
             </FieldGroup>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">

@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mutate } from "swr";
 import { Modal as HModal, Checkbox, Button as HButton } from "@heroui/react";
-import { ShieldCheck } from "lucide-react";
+import { ChevronDown, ShieldCheck } from "lucide-react";
 import { errMessage, pdpaConsent } from "../lib/api";
 import { notify } from "../lib/notify";
 
@@ -18,6 +18,27 @@ import { notify } from "../lib/notify";
 export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => void }) {
   const [ack, setAck] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [hasReadToEnd, setHasReadToEnd] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 8) {
+      setHasReadToEnd(true);
+    }
+  }
+
+  // Content short enough to not need scrolling shouldn't block acceptance.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && el.scrollHeight <= el.clientHeight) {
+      setHasReadToEnd(true);
+    }
+  }, []);
+
+  function scrollToBottom() {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }
 
   async function accept() {
     setSubmitting(true);
@@ -47,7 +68,12 @@ export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => voi
               </p>
             </HModal.Header>
             <HModal.Body>
-              <div className="max-h-80 overflow-y-auto pr-1 text-sm leading-6 text-foreground space-y-4">
+              <div className="relative">
+              <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="max-h-80 overflow-y-auto pr-1 text-sm leading-6 text-foreground space-y-4"
+              >
                 <p>
                   ก่อนกรอกข้อมูลในขั้นตอนนี้ ระบบ COCO TAS ขอแจ้งให้ท่านทราบและขอความยินยอมในการเก็บรวบรวม
                   ใช้ และเปิดเผยข้อมูลส่วนบุคคลของท่าน ดังนี้
@@ -55,9 +81,10 @@ export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => voi
                 <div>
                   <p className="font-semibold">1. ข้อมูลที่จัดเก็บ</p>
                   <p>
-                    เลขบัตรประชาชน 13 หลัก (จัดเก็บในระบบแบบเข้ารหัส) รหัสนักศึกษา เบอร์โทรศัพท์
-                    ชื่อ-นามสกุล คำนำหน้าชื่อ ส่วนข้อมูลบัญชีธนาคาร/พร้อมเพย์และลายมือชื่อ ระบบจะใช้เพื่อสร้าง
-                    แบบแจ้งเจ้าหนี้เท่านั้น โดย<strong>ไม่บันทึกลงฐานข้อมูล</strong>ของระบบ
+                    เลขบัตรประชาชน 13 หลัก รหัสนักศึกษา เบอร์โทรศัพท์ ชื่อ-นามสกุล คำนำหน้าชื่อ
+                    โดยเลขบัตรประชาชน<strong>ถูกจัดเก็บในฐานข้อมูลแบบเข้ารหัส</strong>
+                    (ดูมาตรการรักษาความปลอดภัยในข้อ 3) ส่วนข้อมูลบัญชีธนาคาร/พร้อมเพย์และลายมือชื่อ
+                    ระบบใช้เพื่อสร้างแบบแจ้งเจ้าหนี้เท่านั้น โดย<strong>ไม่บันทึกลงฐานข้อมูล</strong>ของระบบ
                   </p>
                 </div>
                 <div>
@@ -73,8 +100,10 @@ export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => voi
                   <p className="font-semibold">3. มาตรการรักษาความปลอดภัย</p>
                   <ul className="list-disc pl-5 space-y-1">
                     <li>
-                      เลขบัตรประชาชนที่จัดเก็บถูกเข้ารหัสด้วยมาตรฐาน XChaCha20-Poly1305 แยกกุญแจเข้ารหัส
-                      เฉพาะ ไม่ปะปนกับข้อมูลอื่น
+                      เลขบัตรประชาชนที่จัดเก็บถูกเข้ารหัสด้วยมาตรฐาน XChaCha20-Poly1305
+                      ซึ่งเป็นมาตรฐานการเข้ารหัสระดับสากลที่องค์กรและระบบความปลอดภัยทั่วโลกใช้งานอยู่
+                      โดยแยกกุญแจเข้ารหัสเฉพาะ ไม่ปะปนกับข้อมูลอื่น แม้มีผู้เข้าถึงฐานข้อมูลโดยตรง
+                      ก็ไม่สามารถอ่านค่าเลขบัตรประชาชนที่แท้จริงได้หากไม่มีกุญแจเข้ารหัส
                     </li>
                     <li>
                       บัญชีเจ้าหน้าที่/ผู้ดูแลระบบที่มีสิทธิ์เข้าถึงข้อมูลของท่านต้องยืนยันตัวตนสองชั้น
@@ -107,23 +136,34 @@ export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => voi
                     ข้อมูลจริง
                   </p>
                 </div>
+                <div className="pt-4 mt-2 border-t border-[var(--hairline)]">
+                  <Checkbox isSelected={ack} onChange={setAck} isDisabled={!hasReadToEnd}>
+                    <Checkbox.Content>
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                      ข้าพเจ้าได้อ่านและเข้าใจข้อความข้างต้น และยินยอมให้เก็บรวบรวมข้อมูลตามที่ระบุ
+                    </Checkbox.Content>
+                  </Checkbox>
+                </div>
               </div>
-              <div className="mt-4 pt-4 border-t border-[var(--hairline)]">
-                <Checkbox isSelected={ack} onChange={setAck}>
-                  <Checkbox.Content>
-                    <Checkbox.Control>
-                      <Checkbox.Indicator />
-                    </Checkbox.Control>
-                    ข้าพเจ้าได้อ่านและเข้าใจข้อความข้างต้น และยินยอมให้เก็บรวบรวมข้อมูลตามที่ระบุ
-                  </Checkbox.Content>
-                </Checkbox>
+              {!hasReadToEnd && (
+                <button
+                  type="button"
+                  onClick={scrollToBottom}
+                  aria-label="เลื่อนลงเพื่ออ่านต่อ"
+                  className="absolute bottom-2 left-1/2 -translate-x-1/2 flex size-8 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-md"
+                >
+                  <ChevronDown className="size-4" />
+                </button>
+              )}
               </div>
             </HModal.Body>
             <HModal.Footer>
               <HButton
                 className="w-full"
                 variant="primary"
-                isDisabled={!ack || submitting}
+                isDisabled={!ack || !hasReadToEnd || submitting}
                 isPending={submitting}
                 onPress={accept}
               >

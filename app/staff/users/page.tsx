@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
   FieldError as HFieldError,
@@ -8,7 +8,7 @@ import {
   TextField as HTextField,
   type SortDescriptor,
 } from "@heroui/react";
-import { Check, Copy, GraduationCap, KeyRound, LockOpen, Pencil, Plus, ShieldAlert, ShieldOff, UserCheck, UserX } from "lucide-react";
+import { Camera, Copy, Files, GraduationCap, KeyRound, LockOpen, Pencil, Plus, ShieldAlert, ShieldOff, UserCheck, UserX } from "lucide-react";
 import { api, errMessage, mfaAdminReset, type Enrollment, type Me } from "../../lib/api";
 import { STUDENT_ID_PATTERN, THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
@@ -18,6 +18,13 @@ import {
   PageHeader, Select, TextArea,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
+import UserAvatar from "../../components/UserAvatar";
+import AvatarCropper from "../../components/AvatarCropper";
+
+/** Mirrors ProfilePhotoCard's own picker rules (app/components/ProfilePhotoCard.tsx)
+ *  — kept in sync by hand since the two forms upload to different endpoints. */
+const AVATAR_ACCEPT = "image/jpeg,image/png,image/webp";
+const AVATAR_MAX_PICK_BYTES = 12 * 1024 * 1024;
 
 /** Returns `value` after it has stopped changing for `ms`. */
 function useDebounced<T>(value: T, ms: number): T {
@@ -50,6 +57,7 @@ interface User {
   is_active: boolean;
   /** เปิดใช้งาน 2FA แล้วหรือยัง — บังคับสำหรับ admin/staff/ผู้บริหาร */
   totp_enabled?: boolean;
+  avatar_url?: string | null;
 }
 
 /**
@@ -69,9 +77,6 @@ const STUDY_LEVELS: { value: string; label: string }[] = [
   { value: "phd", label: "ปริญญาเอก" },
 ];
 const ROLE_OPTIONS = ["staff", "lecturer", "ta"] as const;
-// Full role set for the edit multi-select — includes admin so an admin user
-// stays fully editable instead of being silently demoted.
-const ALL_ROLES = ["admin", "staff", "lecturer", "ta"] as const;
 
 // "ผู้บริหาร" now names the executive FLAG (read-only budget analytics), so
 // admin reverts to the name the backend's own messages use — ผู้ดูแลระบบ.
@@ -82,14 +87,6 @@ const ROLE_LABEL: Record<string, string> = {
   lecturer: "อาจารย์",
   ta: "ผู้ช่วยสอน",
 };
-
-/** Order-independent comparison of two role lists. */
-function sameRoles(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  const sa = [...a].sort();
-  const sb = [...b].sort();
-  return sa.every((v, i) => v === sb[i]);
-}
 
 /* -------------------------------------------------------------------------- */
 /* Validators                                                                 */
@@ -205,40 +202,6 @@ function VSelect({
   );
 }
 
-/** Multi-select role editor (checkbox chips) — preserves every assigned role. */
-function RolesField({
-  label, value, onChange, error, show,
-}: {
-  label: React.ReactNode;
-  value: string[];
-  onChange: (roles: string[]) => void;
-  error: string | null;
-  show: boolean;
-}) {
-  const invalid = show && !!error;
-  return (
-    <FieldGroup label={label} error={invalid ? error : undefined}>
-      <div className="flex gap-2 flex-wrap">
-        {ALL_ROLES.map(r => {
-          const on = value.includes(r);
-          return (
-            <button
-              key={r}
-              type="button"
-              onClick={() => onChange(on ? value.filter(x => x !== r) : [...value, r])}
-              className={`chip cursor-pointer transition ${on ? "chip-brand" : "chip-neutral"}`}
-              aria-pressed={on}
-            >
-              {on ? <Check size={12} className="me-1 inline" /> : null}
-              {ROLE_LABEL[r] ?? r}
-            </button>
-          );
-        })}
-      </div>
-    </FieldGroup>
-  );
-}
-
 /* -------------------------------------------------------------------------- */
 
 const PAGE_SIZE = 15;
@@ -338,11 +301,13 @@ export default function UsersPage() {
     {
       id: "email", label: "อีเมล", sortable: true,
       sortValue: u => u.email,
-      className: "text-(--ink-3)",
+      className: "text-(--ink-3) whitespace-nowrap",
+      headerClassName: "whitespace-nowrap",
       render: u => u.email,
     },
     {
       id: "roles", label: "บทบาท",
+      headerClassName: "whitespace-nowrap",
       render: u => {
         // 2FA is mandatory for admin/staff/ผู้บริหาร (see AccountGuard's
         // mfa_setup_required) — only flag the gap for those, since a
@@ -364,25 +329,29 @@ export default function UsersPage() {
     },
     {
       id: "level", label: "ระดับ",
-      className: "text-(--ink-3)",
+      className: "text-(--ink-3) whitespace-nowrap",
+      headerClassName: "whitespace-nowrap",
       render: u => u.study_level
         ? (STUDY_LEVELS.find(l => l.value === u.study_level)?.label ?? u.study_level)
         : "-",
     },
     {
       id: "student_id", label: "รหัสนักศึกษา",
-      className: "text-(--ink-3)",
+      className: "text-(--ink-3) whitespace-nowrap",
+      headerClassName: "whitespace-nowrap",
       render: u => u.student_id ?? "-",
     },
     {
       id: "status", label: "สถานะ",
+      className: "whitespace-nowrap",
+      headerClassName: "whitespace-nowrap",
       render: u => u.is_active
         ? <Chip tone="success">ใช้งาน</Chip>
         : <Chip tone="danger">ปิด</Chip>,
     },
     {
       id: "actions", label: <span className="sr-only">การจัดการ</span>,
-      className: "text-right",
+      className: "text-right whitespace-nowrap",
       render: u => (
         <div className="flex gap-1 justify-end">
           <Button variant="ghost" size="sm" onClick={() => setEditing(u)}>
@@ -512,12 +481,45 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
   const [pending, setPending] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
+  // Profile picture, staged locally until the account exists. There is no
+  // user id to upload against until `submit()` returns one, so the cropped
+  // blob just sits here — see the upload-after-create step in submit().
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [pickedPhoto, setPickedPhoto] = useState<File | null>(null); // pre-crop, feeds AvatarCropper
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null); // post-crop, ready to upload
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null); // object URL for photoBlob
+
   useEffect(() => {
     if (open) {
       setForm({ email: "", title: "นาย", first_name: "", last_name: "", phone: "", role: "ta", study_level: "undergrad", study_year: "" });
       setErr(null); setTempPassword(null); setShowErrors(false);
+      setPickedPhoto(null); setPhotoBlob(null); setPhotoPreview(null);
     }
   }, [open]);
+
+  // Revoke the previous object URL whenever it's replaced or the modal unmounts
+  // — otherwise every re-crop leaks the last preview's memory.
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
+
+  function pickPhoto(f: File | undefined | null) {
+    if (!f) return;
+    if (!AVATAR_ACCEPT.split(",").includes(f.type)) {
+      notify.error("รองรับเฉพาะไฟล์ JPEG, PNG หรือ WebP");
+      return;
+    }
+    if (f.size > AVATAR_MAX_PICK_BYTES) {
+      notify.error("ไฟล์ใหญ่เกิน 12MB กรุณาเลือกไฟล์ที่เล็กกว่านี้");
+      return;
+    }
+    setPickedPhoto(f);
+  }
+
+  function confirmPhoto(blob: Blob) {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoBlob(blob);
+    setPhotoPreview(URL.createObjectURL(blob));
+    setPickedPhoto(null);
+  }
 
   const showYear = form.role === "ta" && form.study_level === "undergrad";
 
@@ -563,6 +565,18 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
       };
       const res = await api.post<{ user: User; temp_password: string }>("/users", body);
       mutate((k: string) => k.startsWith("/users"));
+      // The account exists now, so the staged picture can finally go somewhere.
+      // A failure here must not hide the temp password the user still needs —
+      // it's reported alongside success, not in place of it.
+      if (photoBlob) {
+        try {
+          const photoForm = new FormData();
+          photoForm.append("file", photoBlob, "avatar.jpg");
+          await api.upload(`/users/${res.user.id}/avatar`, photoForm);
+        } catch (e) {
+          notify.error(errMessage(e) || "อัปโหลดรูปโปรไฟล์ไม่สำเร็จ ผู้ใช้ถูกสร้างแล้วและอัปโหลดรูปเองภายหลังได้");
+        }
+      }
       setTempPassword(res.temp_password);
     } catch (e) {
       setErr((e as Error).message);
@@ -589,9 +603,45 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
       }
     >
       {tempPassword ? (
-        <TempPasswordPanel email={form.email} password={tempPassword} />
+        <TempPasswordPanel
+          name={`${form.first_name} ${form.last_name}`.trim()}
+          email={form.email}
+          password={tempPassword}
+          role={ROLE_LABEL[form.role] ?? form.role}
+        />
       ) : (
         <div className="space-y-3">
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0">
+              <UserAvatar
+                firstName={form.first_name}
+                lastName={form.last_name}
+                src={photoPreview}
+                className="size-16 text-lg"
+              />
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                aria-label={photoBlob ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
+                className="absolute bottom-0 -end-0.5 size-6 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <Camera size={12} />
+              </button>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm text-foreground">รูปโปรไฟล์ (ไม่บังคับ)</div>
+              <div className="text-xs text-muted mt-0.5">
+                JPEG, PNG, WebP ขนาดไม่เกิน 12MB — ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก
+              </div>
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept={AVATAR_ACCEPT}
+              className="hidden"
+              onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }}
+            />
+          </div>
           <VField
             label="อีเมล" required type="email" placeholder="you@kkumail.com"
             value={form.email} onChange={v => setForm({ ...form, email: v })}
@@ -651,6 +701,12 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
           {err && <Alert status="danger" title="ไม่สามารถสร้างผู้ใช้ได้" description={err} />}
         </div>
       )}
+      <AvatarCropper
+        file={pickedPhoto}
+        open={!!pickedPhoto}
+        onCancel={() => setPickedPhoto(null)}
+        onConfirm={confirmPhoto}
+      />
     </Modal>
   );
 }
@@ -664,43 +720,76 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     first_name: user.first_name,
     last_name: user.last_name,
     phone: user.phone ?? "",
-    // Preserve the full role set (incl. admin) rather than collapsing to one.
-    roles: [...user.roles],
-    admin_position: user.admin_position ?? "",
     study_year: user.study_year != null ? String(user.study_year) : "",
   });
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const isTa = form.roles.includes("ta");
+  const isTa = user.roles.includes("ta");
   const errors = useMemo(() => ({
     email: vEmail(form.email),
     title: form.title === "" ? null : vSelect(form.title, TITLE_OPTIONS),
     first_name: vName(form.first_name, "ชื่อ"),
     last_name: vName(form.last_name, "นามสกุล"),
-    roles: form.roles.length === 0 ? "เลือกบทบาทอย่างน้อยหนึ่งอย่าง" : null,
     phone: vPhone(form.phone),
   }), [form]);
   const hasErrors = Object.values(errors).some(Boolean);
+
+  // Photo edits upload immediately (the account already exists, unlike the
+  // create form which has to stage the crop until it gets an id back) — same
+  // endpoint added for the create flow, see internal/handler/avatar.go.
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [pickedPhoto, setPickedPhoto] = useState<File | null>(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
+  // `user` is a snapshot taken when this modal opened — mutate() refetches
+  // the table behind it, but won't push a new prop into an already-open
+  // modal. Track the just-uploaded URL locally so the preview updates without
+  // the admin having to close and reopen the form.
+  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url);
+
+  function pickPhoto(f: File | undefined | null) {
+    if (!f) return;
+    if (!AVATAR_ACCEPT.split(",").includes(f.type)) {
+      notify.error("รองรับเฉพาะไฟล์ JPEG, PNG หรือ WebP");
+      return;
+    }
+    if (f.size > AVATAR_MAX_PICK_BYTES) {
+      notify.error("ไฟล์ใหญ่เกิน 12MB กรุณาเลือกไฟล์ที่เล็กกว่านี้");
+      return;
+    }
+    setPickedPhoto(f);
+  }
+
+  async function confirmPhoto(blob: Blob) {
+    setPhotoSaving(true);
+    try {
+      const photoForm = new FormData();
+      photoForm.append("file", blob, "avatar.jpg");
+      const res = await api.upload<{ avatar_url: string }>(`/users/${user.id}/avatar`, photoForm);
+      setAvatarUrl(res.avatar_url);
+      mutate((k: string) => k.startsWith("/users"));
+      setPickedPhoto(null);
+      notify.success("บันทึกรูปโปรไฟล์แล้ว");
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
 
   async function submit() {
     setShowErrors(true);
     if (hasErrors) return;
     setPending(true); setErr(null);
     try {
-      const rolesChanged = !sameRoles(form.roles, user.roles);
       await api.patch(`/users/${user.id}`, {
         email: form.email.trim(),
         title: form.title,
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         phone: form.phone.trim(),
-        // Only send roles when they actually changed, so an unrelated edit never
-        // rewrites the user's role set.
-        ...(rolesChanged ? { roles: form.roles } : {}),
-        ...(form.admin_position !== (user.admin_position ?? "")
-          ? { admin_position: form.admin_position.trim() }
-          : {}),
+        // Roles are deliberately never sent from here — see the read-only
+        // "สิทธิ์การใช้งาน" field below for why.
         // study_level is deliberately NOT sent here — changing it now goes
         // through the "ประวัติการศึกษา" action (EnrollmentHistoryModal) only,
         // so every level change is captured in ta_enrollments. See that
@@ -727,7 +816,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
       open
       onClose={onClose}
       title="แก้ไขข้อมูลผู้ใช้"
-      size="xl"
+      size="lg"
       footer={<>
         <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
         <Button variant="primary" onClick={submit}
@@ -738,6 +827,37 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         <div>
           <div className="text-xs text-muted mb-2">ข้อมูลทั่วไป</div>
           <div className="space-y-3">
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                <UserAvatar
+                  firstName={form.first_name}
+                  lastName={form.last_name}
+                  src={avatarUrl}
+                  className="size-16 text-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  aria-label={avatarUrl ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
+                  className="absolute bottom-0 -end-0.5 size-6 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
+                  <Camera size={12} />
+                </button>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-foreground">รูปโปรไฟล์</div>
+                <div className="text-xs text-muted mt-0.5">
+                  JPEG, PNG, WebP ขนาดไม่เกิน 12MB — ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก
+                </div>
+              </div>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept={AVATAR_ACCEPT}
+                className="hidden"
+                onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }}
+              />
+            </div>
             <VField label="อีเมล" required type="email"
               value={form.email} onChange={v => setForm({ ...form, email: v })}
               error={errors.email} show={showErrors}
@@ -759,20 +879,25 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 error={errors.last_name} show={showErrors}
               />
             </div>
-            <RolesField
-              label="บทบาท (เลือกได้หลายอย่าง)"
-              value={form.roles}
-              onChange={roles => setForm({ ...form, roles })}
-              error={errors.roles} show={showErrors}
+            <VField label="เบอร์โทรศัพท์" type="tel" placeholder="0812345678"
+              value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v) })}
+              error={errors.phone} show={showErrors}
             />
-            {/* ป้ายแสดงผลเฉยๆ: คนคนหนึ่งอาจมีตำแหน่งบริหารควบคู่กับบทบาทสอน เช่น
-                หัวหน้าสาขาวิชา — ไม่ผูกกับสิทธิ์การใช้งานหรือเอกสารที่ออกจากระบบ
-                (เอกสารทางการใช้รายชื่อแยกที่หน้า "ตั้งค่า") */}
-            <VField label="ตำแหน่งบริหาร (ถ้ามี)" value={form.admin_position}
-              onChange={v => setForm({ ...form, admin_position: v })}
-              error={null} show={false}
-              placeholder="เช่น หัวหน้าสาขาวิชาวิทยาการคอมพิวเตอร์"
-            />
+            {/* Read-only by design: reassigning a role is a security-sensitive
+                action (it can grant admin/staff access), so it does not belong
+                in a general-purpose edit form where it is easy to change by
+                accident alongside a phone number or title. There is currently
+                no supported way to change a role after creation — recreate the
+                account under the new role if one is genuinely needed. */}
+            <div>
+              <div className="text-sm text-foreground mb-1.5">สิทธิ์การใช้งาน</div>
+              <div className="flex gap-1 flex-wrap">
+                {user.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
+              </div>
+              <div className="text-xs text-muted mt-1.5">
+                เปลี่ยนบทบาทหลังสร้างบัญชีไม่ได้ — หากต้องการเปลี่ยน ให้สร้างบัญชีใหม่ด้วยบทบาทที่ถูกต้อง
+              </div>
+            </div>
             {/* สิทธิ์ผู้บริหารไม่ได้ติ๊กตรงนี้อีกต่อไป — มาจากการถือตำแหน่งฝ่ายบริหาร
                 ที่ยังเปิดใช้งานอยู่ (หน้า "ตั้งค่า > ฝ่ายบริหาร") เท่านั้น ที่นี่แสดง
                 ผลลัพธ์ให้ดูอย่างเดียวเพื่อไม่ให้สับสนว่าทำไมช่องติ๊กหายไป */}
@@ -797,24 +922,18 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 </span>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              {isTa && user.study_level === "undergrad" && (
-                <VSelect label="ชั้นปี (ระบบคำนวณอัตโนมัติจากรหัส นศ. เมื่อมี)" value={form.study_year}
-                  onChange={v => setForm({ ...form, study_year: v })}
-                  error={null} show={showErrors}
-                >
-                  <option value="">ไม่ระบุ</option>
-                  <option value="1">ปี 1</option>
-                  <option value="2">ปี 2</option>
-                  <option value="3">ปี 3</option>
-                  <option value="4">ปี 4</option>
-                </VSelect>
-              )}
-              <VField label="เบอร์โทรศัพท์" type="tel" placeholder="0812345678"
-                value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v) })}
-                error={errors.phone} show={showErrors}
-              />
-            </div>
+            {isTa && user.study_level === "undergrad" && (
+              <VSelect label="ชั้นปี (ระบบคำนวณอัตโนมัติจากรหัส นศ. เมื่อมี)" value={form.study_year}
+                onChange={v => setForm({ ...form, study_year: v })}
+                error={null} show={showErrors}
+              >
+                <option value="">ไม่ระบุ</option>
+                <option value="1">ปี 1</option>
+                <option value="2">ปี 2</option>
+                <option value="3">ปี 3</option>
+                <option value="4">ปี 4</option>
+              </VSelect>
+            )}
           </div>
         </div>
 
@@ -824,6 +943,13 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
 
         {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
       </div>
+      <AvatarCropper
+        file={pickedPhoto}
+        open={!!pickedPhoto}
+        isSaving={photoSaving}
+        onCancel={() => { if (!photoSaving) setPickedPhoto(null); }}
+        onConfirm={confirmPhoto}
+      />
     </Modal>
   );
 }
@@ -991,7 +1117,12 @@ function ResetPasswordModal({ user, onClose }: { user: User; onClose: () => void
           </>}
     >
       {pw ? (
-        <TempPasswordPanel email={user.email} password={pw} />
+        <TempPasswordPanel
+          name={`${user.first_name} ${user.last_name}`.trim()}
+          email={user.email}
+          password={pw}
+          role={user.roles.map(r => ROLE_LABEL[r] ?? r).join(", ")}
+        />
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
@@ -1248,13 +1379,23 @@ function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
   );
 }
 
-function TempPasswordPanel({ email, password }: { email: string; password: string }) {
+function TempPasswordPanel({ name, email, password, role }: { name: string; email: string; password: string; role?: string }) {
   const [copied, setCopied] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
   async function copy() {
     try {
       await navigator.clipboard.writeText(password);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    } catch { /* noop */ }
+  }
+  async function copyAll() {
+    try {
+      await navigator.clipboard.writeText(
+        `Name: ${name}\nEmail: ${email}\n${role ? `Role: ${role}\n` : ""}Password: ${password}`
+      );
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 1500);
     } catch { /* noop */ }
   }
   return (
@@ -1268,6 +1409,12 @@ function TempPasswordPanel({ email, password }: { email: string; password: strin
         <div className="text-xs text-muted mb-1">อีเมล</div>
         <div className="text-sm font-mono">{email}</div>
       </div>
+      {role && (
+        <div>
+          <div className="text-xs text-muted mb-1">บทบาท</div>
+          <div className="text-sm">{role}</div>
+        </div>
+      )}
       <div>
         <div className="text-xs text-muted mb-1">รหัสผ่านชั่วคราว</div>
         <div className="flex items-center gap-2">
@@ -1279,6 +1426,9 @@ function TempPasswordPanel({ email, password }: { email: string; password: strin
           </Button>
         </div>
       </div>
+      <Button variant="primary" size="sm" className="w-full" onClick={copyAll}>
+        <Files size={14} /> {copiedAll ? "คัดลอกแล้ว" : "คัดลอกอีเมลและรหัสผ่าน"}
+      </Button>
     </div>
   );
 }

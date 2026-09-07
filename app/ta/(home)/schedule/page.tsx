@@ -8,7 +8,7 @@ import { icsToBlocks, applyClassKinds, type IcsImportResult, type ClassKindRow }
 import TermSelect from "../../../components/TermSelect";
 import ScheduleGrid, {
   type Block, type BlockKind, type DraftRange,
-  KIND_LABEL, blockTitle,
+  KIND_LABEL, blockTitle, fmtTime,
 } from "../../../components/ScheduleGrid";
 import {
   PageHeader, Panel, Select, Modal, Button, IconButton, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog, TipWrap,
@@ -45,10 +45,9 @@ const COURSE_CODE_RE = /^[A-Za-z0-9]*$/;
 const SEC_NO_RE = /^[0-9]*$/;
 
 // Full-value rule, checked on save. KKU course codes are either six digits
-// (old style, e.g. 322201) or a faculty prefix plus six digits (new style,
-// e.g. SC363001, CP020002). Verified against all 127 course codes currently
-// in teaching_courses — every one matches.
-const COURSE_CODE_FORMAT = /^[A-Z]{0,4}[0-9]{6}$/;
+// (old style, e.g. 322201) or SC/CP plus six digits (new style, e.g.
+// SC363001, CP020002). Kept in sync with staff/teaching/OpenCourseModal.tsx.
+const COURSE_CODE_FORMAT = /^(?:SC|CP)?[0-9]{6}$/;
 
 function parseHM(t: string): number { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
 function inRange(t: string): boolean {
@@ -310,7 +309,7 @@ export default function TASchedulePage() {
     for (const b of local) {
       if (b.is_wba) continue;
       if (!inRange(b.start_time) || !inRange(b.end_time)) {
-        const msg = `คาบ ${b.start_time}–${b.end_time} อยู่นอกช่วง ${String(START_HR).padStart(2,"0")}:00–${String(END_HR).padStart(2,"0")}:00`;
+        const msg = `คาบ ${fmtTime(b.start_time)}–${fmtTime(b.end_time)} อยู่นอกช่วง ${String(START_HR).padStart(2,"0")}:00–${String(END_HR).padStart(2,"0")}:00`;
         setSaveError(msg);
         if (!silent) notify.error(msg);
         return false;
@@ -322,8 +321,24 @@ export default function TASchedulePage() {
         return false;
       }
     }
-    // Overlapping blocks are allowed — two sections of the same course often
-    // share a time slot when co-taught. Only invalid time ranges block save.
+    // Overlapping time slots are allowed (two sections co-taught can share a
+    // room/time), but the same course can only have one lecture period and
+    // one lab period — a course code repeated under the same kind is always
+    // a duplicate entry, not a legitimate second occurrence.
+    const seenByCourseKind = new Map<string, Block>();
+    for (const b of local) {
+      if (b.is_wba || !b.course_code) continue;
+      const key = `${b.course_code}|${b.kind}`;
+      const dup = seenByCourseKind.get(key);
+      if (dup) {
+        const kindLabel = b.kind ? KIND_LABEL[b.kind] : "คาบเรียน";
+        const msg = `วิชา ${b.course_code} ลง${kindLabel}ซ้ำกัน 2 คาบ กรุณาลบคาบที่ซ้ำออกก่อนบันทึก`;
+        setSaveError(msg);
+        if (!silent) notify.error(msg);
+        return false;
+      }
+      seenByCourseKind.set(key, b);
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -470,7 +485,7 @@ export default function TASchedulePage() {
                   <div key={b.id} className="flex items-center gap-3 px-4 py-2.5">
                     <div className="w-20 shrink-0 text-sm text-slate-700">{DOW_LABEL[b.day_of_week]}</div>
                     <div className="w-28 shrink-0 text-sm tabular-nums text-slate-700">
-                      {b.start_time}–{b.end_time}
+                      {fmtTime(b.start_time)}–{fmtTime(b.end_time)}
                     </div>
                     <div className="flex-1 min-w-0 text-sm">
                       <div className="font-medium truncate">
@@ -540,6 +555,11 @@ export default function TASchedulePage() {
           return day.find(x =>
             overlaps(x.start_time, x.end_time, candidate.start_time, candidate.end_time)) ?? null;
         }}
+        checkDuplicateCourseKind={(candidate) => {
+          return local.find(x =>
+            !x.is_wba && x.id !== candidate.id &&
+            x.course_code === candidate.course_code && x.kind === candidate.kind) ?? null;
+        }}
       />
 
       <ConfirmDialog
@@ -584,9 +604,10 @@ interface EditorProps {
   onSave: (b: Block) => void;
   onDelete: (id: string) => void;
   checkOverlap: (candidate: Block) => Block | null;
+  checkDuplicateCourseKind: (candidate: Block) => Block | null;
 }
 
-function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOverlap }: EditorProps) {
+function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOverlap, checkDuplicateCourseKind }: EditorProps) {
   const isEdit = mode.kind === "edit";
   const isOpen = mode.kind !== "closed";
 
@@ -644,7 +665,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
     if (other) {
       const otherTitle = blockTitle(other) || "คาบเรียน";
       // Informational — overlap is allowed (two sections meeting together).
-      setOverlapWarn(`จะซ้อนกับ "${otherTitle}" ${other.start_time}–${other.end_time} ระบบจะจัดชั้นให้ในตาราง`);
+      setOverlapWarn(`จะซ้อนกับ "${otherTitle}" ${fmtTime(other.start_time)}–${fmtTime(other.end_time)} ระบบจะจัดชั้นให้ในตาราง`);
     }
   }, [isOpen, isEdit, block?.id, termId, courseCode, courseName, kind, secNo, dow, start, end, note, checkOverlap]);
 
@@ -679,6 +700,28 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
     if (parseHM(start) >= parseHM(end)) {
       setError("เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม");
       return;
+    }
+    if (code) {
+      const dup = checkDuplicateCourseKind({
+        id: isEdit ? (block?.id ?? "") : "__new__",
+        term_id: termId,
+        course_code: code,
+        course_name: name,
+        kind, sec_no: sec,
+        day_of_week: dow,
+        start_time: start,
+        end_time: end,
+        note: noteTrim,
+        is_wba: false,
+      });
+      if (dup) {
+        const kindLabel = kind ? KIND_LABEL[kind] : "คาบเรียน";
+        setError(
+          `วิชานี้มี${kindLabel}อยู่แล้ววัน${DOW_LABEL[dup.day_of_week]} เวลา ${fmtTime(dup.start_time)}–${fmtTime(dup.end_time)} น. ` +
+          `ลงซ้ำอีกคาบไม่ได้ กรุณาแก้ไขคาบเดิมแทน`
+        );
+        return;
+      }
     }
     const saved: Block = {
       id: isEdit ? (block?.id ?? "") : "b-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
@@ -977,7 +1020,7 @@ function IcsPreview({ result }: { result: IcsImportResult }) {
               {result.blocks.map(b => (
                 <tr key={b.id}>
                   <td className="px-3 py-1.5">{DOW_LABEL[b.day_of_week]}</td>
-                  <td className="px-3 py-1.5 tabular-nums">{b.start_time}–{b.end_time}</td>
+                  <td className="px-3 py-1.5 tabular-nums">{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</td>
                   <td className="px-3 py-1.5 font-medium">{b.course_code}</td>
                   <td className="px-3 py-1.5 tabular-nums">{b.sec_no}</td>
                   <td className="px-3 py-1.5">

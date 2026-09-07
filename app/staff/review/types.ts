@@ -70,6 +70,19 @@ export const DOC_KIND_LABEL: Record<string, string> = {
   creditor_form: "แบบฟอร์มเจ้าหนี้",
 };
 
+// The order these get printed/stacked per person: creditor form first, then
+// ID, then bank book — staff hand-collate the physical printout in this
+// sequence, so the review workspace and the export bundle must both match it
+// instead of falling back to upload order. Any kind not listed here (there
+// shouldn't be one) sorts after all three, in its original order.
+export const DOC_KIND_PRINT_ORDER = ["creditor_form", "national_id", "bank_book"];
+
+export function byPrintOrder(a: { kind: string }, b: { kind: string }): number {
+  const ia = DOC_KIND_PRINT_ORDER.indexOf(a.kind);
+  const ib = DOC_KIND_PRINT_ORDER.indexOf(b.kind);
+  return (ia === -1 ? DOC_KIND_PRINT_ORDER.length : ia) - (ib === -1 ? DOC_KIND_PRINT_ORDER.length : ib);
+}
+
 export function fmtDate(s?: string | null): string {
   if (!s) return "-";
   try {

@@ -85,15 +85,28 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
 
   return (
     <div>
-      <PageHeader
-        title={tc ? `${tc.code} — ${tc.name_th}` : "…"}
-        description={tc ? `นักศึกษา ${tc.num_students} คน (ปกติ ${tc.num_students_regular} · พิเศษ ${tc.num_students_special})` : undefined}
-        actions={
-          <Link href="/staff/teaching">
-            <Button variant="ghost"><ArrowLeft size={14} />กลับ</Button>
-          </Link>
-        }
-      />
+      <Link
+        href="/staff/teaching"
+        className="mb-2 inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-[var(--brand)]"
+      >
+        <ArrowLeft size={16} /> กลับไปรายการวิชา
+      </Link>
+
+      {tc ? (
+        <PageHeader
+          title={`${tc.code} — ${tc.name_th}`}
+          description={`นักศึกษา ${tc.num_students} คน (ปกติ ${tc.num_students_regular} · พิเศษ ${tc.num_students_special})`}
+        />
+      ) : (
+        // Title/description bars instead of literal "…" text — a fixed-width
+        // placeholder in the exact shape of the real header means the swap
+        // reads as content filling in, not the page changing shape underneath
+        // the reader (the flash the settings page was reported for).
+        <div className="mb-6" aria-hidden>
+          <div className="h-8 w-80 animate-pulse rounded bg-surface-secondary" />
+          <div className="mt-2 h-4 w-56 animate-pulse rounded bg-surface-secondary" />
+        </div>
+      )}
 
       {locked && (
         <div className="mb-4">
@@ -119,7 +132,16 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         }
         padded={false}
       >
-        {sortedSecs.length === 0 ? (
+        {!tc ? (
+          <div className="divide-y divide-border" aria-hidden>
+            {Array.from({ length: 2 }, (_, i) => (
+              <div key={i} className="p-4">
+                <div className="h-4 w-40 animate-pulse rounded bg-surface-secondary" />
+                <div className="mt-3 h-10 w-full animate-pulse rounded bg-surface-secondary" />
+              </div>
+            ))}
+          </div>
+        ) : sortedSecs.length === 0 ? (
           <EmptyState
             icon={<Clock size={28} />}
             title="ยังไม่มี section"
@@ -198,6 +220,10 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
             การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
           </p>
         }
+        requireTyped={tc ? [
+          { label: "พิมพ์รหัสและชื่อวิชาเพื่อยืนยัน", expected: `${tc.code} ${tc.name_th}` },
+          { label: 'พิมพ์ "Delete this subject" เพื่อยืนยัน', expected: "Delete this subject" },
+        ] : undefined}
       />
     </div>
   );

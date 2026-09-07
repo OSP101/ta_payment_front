@@ -33,7 +33,7 @@ import { Info } from "lucide-react";
 import { I18nProvider } from "react-aria-components";
 import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
 import type React from "react";
-import { Children, isValidElement } from "react";
+import { Children, isValidElement, useEffect, useState } from "react";
 
 /* -------------------------------------------------------------------------- */
 /* Tooltip helpers                                                            */
@@ -357,9 +357,9 @@ export function Chip({ tone = "neutral", children }: { tone?: ChipTone; children
     // button wears. A soft tint reads as a label: something the screen is
     // telling you, not something you can press. Buttons keep their solid fills,
     // so the two families no longer overlap.
-    <HChip color={CHIP_COLOR[tone]} variant="soft">
+    <HChip color={CHIP_COLOR[tone]} variant="soft" className="whitespace-nowrap">
       {leadingIcons}
-      <HChip.Label>{rest}</HChip.Label>
+      <HChip.Label className="whitespace-nowrap">{rest}</HChip.Label>
     </HChip>
   );
 }
@@ -847,6 +847,15 @@ export function Modal({
 /* ConfirmDialog — shared confirmation for destructive/irreversible actions   */
 /* -------------------------------------------------------------------------- */
 
+// One "type X to confirm" field inside a ConfirmDialog — see requireTyped.
+export interface TypedConfirmField {
+  /** Field label, e.g. "พิมพ์รหัสและชื่อวิชา". */
+  label: string;
+  /** The exact string the user must type (case-sensitive, whitespace as-is). */
+  expected: string;
+  placeholder?: string;
+}
+
 export function ConfirmDialog({
   open,
   onClose,
@@ -858,6 +867,7 @@ export function ConfirmDialog({
   danger = false,
   isPending = false,
   icon,
+  requireTyped,
 }: {
   open: boolean;
   onClose: () => void;
@@ -869,7 +879,18 @@ export function ConfirmDialog({
   danger?: boolean;
   isPending?: boolean;
   icon?: React.ReactNode;
+  // When set, the confirm button stays disabled until every field's typed
+  // value matches its `expected` string exactly — a GitHub-style "type the
+  // name to confirm" gate for actions destructive enough that a single click
+  // (even behind a modal) isn't friction enough. Values reset whenever the
+  // dialog closes so a stale match can't carry over to the next open.
+  requireTyped?: TypedConfirmField[];
 }) {
+  const [typed, setTyped] = useState<string[]>(() => (requireTyped ?? []).map(() => ""));
+  useEffect(() => {
+    if (open) setTyped((requireTyped ?? []).map(() => ""));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const typedOk = !requireTyped || requireTyped.every((f, i) => typed[i] === f.expected);
   return (
     <Modal
       open={open}
@@ -880,13 +901,25 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="tertiary" onPress={onClose} disabled={isPending}>{cancelLabel}</Button>
-          <Button variant={danger ? "danger" : "primary"} onPress={onConfirm} isPending={isPending}>
+          <Button variant={danger ? "danger" : "primary"} onPress={onConfirm} isPending={isPending} disabled={!typedOk}>
             {confirmLabel}
           </Button>
         </>
       }
     >
-      {typeof message === "string" ? <p className="text-sm text-muted">{message}</p> : message}
+      <div className="space-y-3">
+        {typeof message === "string" ? <p className="text-sm text-muted">{message}</p> : message}
+        {requireTyped?.map((f, i) => (
+          <FieldGroup key={i} label={f.label}>
+            <TextInput
+              value={typed[i] ?? ""}
+              onChange={e => setTyped(t => t.map((v, j) => (j === i ? e.target.value : v)))}
+              placeholder={f.placeholder ?? f.expected}
+              autoComplete="off"
+            />
+          </FieldGroup>
+        ))}
+      </div>
     </Modal>
   );
 }

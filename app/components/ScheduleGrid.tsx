@@ -20,6 +20,11 @@ export interface Block {
   is_wba: boolean;
 }
 
+// The API sends "HH:MM:SS"; every display of a time drops the seconds.
+export function fmtTime(t: string): string {
+  return t.slice(0, 5);
+}
+
 export function blockTitle(b: Pick<Block, "course_code" | "course_name" | "course_label">): string {
   const code = b.course_code?.trim() ?? "";
   const name = b.course_name?.trim() ?? "";
@@ -429,7 +434,7 @@ export default function ScheduleGrid({
                   b.sec_no ? `sec ${b.sec_no}` : "",
                   KIND_LABEL[b.kind],
                 ].filter(Boolean).join(" · ");
-                const tipText = `${heading}${meta ? " · " + meta : ""} · ${b.start_time}–${b.end_time}`;
+                const tipText = `${heading}${meta ? " · " + meta : ""} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}`;
                 return (
                   <HTooltip key={b.id} delay={200}>
                     <HTooltip.Trigger
@@ -462,7 +467,7 @@ export default function ScheduleGrid({
                       <div className="px-1.5 py-1 pointer-events-none">
                         <div className="font-medium truncate">{heading}</div>
                         <div className="opacity-90 tabular-nums text-[10px] leading-tight truncate">
-                          {b.start_time}–{b.end_time}{meta ? " · " + meta : ""}
+                          {fmtTime(b.start_time)}–{fmtTime(b.end_time)}{meta ? " · " + meta : ""}
                         </div>
                       </div>
                       {/* right resize handle */}

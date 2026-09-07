@@ -14,7 +14,7 @@ import {
   Button, Chip, Spinner, Select, TextArea, FieldGroup, Modal, TipWrap,
 } from "../../components/ui";
 import {
-  DOC_KIND_LABEL, REJECT_PRESETS, OTHER_PRESET,
+  DOC_KIND_LABEL, DOC_KIND_PRINT_ORDER, byPrintOrder, REJECT_PRESETS, OTHER_PRESET,
   type Pending, type Doc, type Profile,
 } from "./types";
 
@@ -43,7 +43,7 @@ interface DetailResp {
   documents: Doc[];
 }
 
-const REQUIRED_KINDS = ["national_id", "bank_book", "creditor_form"];
+const REQUIRED_KINDS = DOC_KIND_PRINT_ORDER;
 
 /** DOM id for a document panel, used by the sticky jump-to nav. */
 const docAnchor = (docId: string) => `doc-${docId}`;
@@ -354,7 +354,10 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
   const key = `/ta-review/${person.user_id}/docs`;
   const { data, isLoading } = useSWR<DetailResp>(key);
 
-  const docs = (data?.documents ?? []).filter(d => !d.superseded);
+  // Sorted to the print order (creditor form, ID, bank book) so the jump nav,
+  // the stacked previews, and the exported/downloaded bundle all agree on the
+  // same sequence — staff hand-collate the printout in this order.
+  const docs = (data?.documents ?? []).filter(d => !d.superseded).sort(byPrintOrder);
   const required = docs.filter(d => REQUIRED_KINDS.includes(d.kind));
   const approved = required.filter(d => d.status === "approved").length;
 

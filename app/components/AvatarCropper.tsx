@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Label, Slider } from "@heroui/react";
-import { RotateCcw, RotateCw, ZoomIn, ZoomOut, Undo2 } from "lucide-react";
+import { FlipHorizontal, RotateCcw, RotateCw, ZoomIn, ZoomOut, Undo2 } from "lucide-react";
 import { Button, Modal } from "./ui";
 
 /**
@@ -23,9 +23,9 @@ const OUT = 512;
 const TARGET_BYTES = 220 * 1024;
 const MAX_ZOOM = 4;
 
-type Transform = { zoom: number; rot: number; x: number; y: number };
+type Transform = { zoom: number; rot: number; x: number; y: number; flip: boolean };
 
-const IDENTITY: Transform = { zoom: 1, rot: 0, x: 0, y: 0 };
+const IDENTITY: Transform = { zoom: 1, rot: 0, x: 0, y: 0, flip: false };
 
 export default function AvatarCropper({
   file,
@@ -125,7 +125,7 @@ export default function AvatarCropper({
         ctx.translate(size / 2 + t.x * k, size / 2 + t.y * k);
         ctx.rotate((t.rot * Math.PI) / 180);
         const s = cover * t.zoom * k;
-        ctx.scale(s, s);
+        ctx.scale(t.flip ? -s : s, s);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
       }
       ctx.restore();
@@ -182,6 +182,10 @@ export default function AvatarCropper({
 
   function rotate(deg: number) {
     setT(prev => clamp({ ...prev, rot: (prev.rot + deg + 360) % 360 }));
+  }
+
+  function flip() {
+    setT(prev => ({ ...prev, flip: !prev.flip }));
   }
 
   async function confirm() {
@@ -275,14 +279,13 @@ export default function AvatarCropper({
           <Button variant="tertiary" size="sm" onPress={() => rotate(90)} disabled={!img}>
             <RotateCw size={14} /> หมุนขวา
           </Button>
+          <Button variant="tertiary" size="sm" onPress={flip} disabled={!img}>
+            <FlipHorizontal size={14} /> กลับด้าน
+          </Button>
           <Button variant="ghost" size="sm" onPress={() => setT(IDENTITY)} disabled={!img}>
             <Undo2 size={14} /> รีเซ็ต
           </Button>
         </div>
-
-        <p className="text-[11px] text-muted text-center">
-          บันทึกเป็น JPEG ขนาด {OUT}×{OUT} พิกเซล และบีบอัดให้ไม่เกิน {Math.round(TARGET_BYTES / 1024)} KB โดยอัตโนมัติ
-        </p>
       </div>
     </Modal>
   );

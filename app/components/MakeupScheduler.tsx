@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
-  CalendarOff, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MapPin, Bell, Send,
+  CalendarOff, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MapPin, Bell, Send, Ban,
 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
 import { notify } from "../lib/notify";
@@ -30,10 +30,12 @@ import { LockedActionButton, useTAApproval } from "../ta/TAGate";
 
 export interface Makeup {
   id: string;
-  makeup_date: string;
+  // Absent when waived — a "no makeup needed" row has no replacement date.
+  makeup_date?: string | null;
   start_time?: string;
   end_time?: string;
   note?: string;
+  waived?: boolean;
 }
 export interface AffectedSection {
   section_id: string;
@@ -126,7 +128,8 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
   const { data: impacts, isLoading } = useSWR<ImpactsResponse>(`/teaching-courses/${tcId}/holiday-impacts`);
 
   const [editingSlot, setEditingSlot] = useState<{ impact: HolidayImpact; section: AffectedSection } | null>(null);
-  const [deletingMakeup, setDeletingMakeup] = useState<{ sectionId: string; makeupId: string; date: string } | null>(null);
+  const [waivingSlot, setWaivingSlot] = useState<{ impact: HolidayImpact; section: AffectedSection } | null>(null);
+  const [deletingMakeup, setDeletingMakeup] = useState<{ sectionId: string; makeupId: string; date: string; waived: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [remindTarget, setRemindTarget] = useState<HolidayImpact | null>(null);
@@ -163,7 +166,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
     setDeleting(true);
     try {
       await api.del(`/teaching-courses/${tcId}/makeup/${deletingMakeup.sectionId}/${deletingMakeup.makeupId}`);
-      notify.success("ลบวันชดเชยแล้ว");
+      notify.success(deletingMakeup.waived ? "ยกเลิกการไม่มีการชดเชยแล้ว" : "ลบวันชดเชยแล้ว");
       await refresh();
     } catch (e) {
       notify.error(e);
@@ -283,11 +286,19 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          {sec.makeup ? (
+                          {sec.makeup?.waived ? (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Ban size={16} className="text-muted" />
+                              <span className="text-sm font-medium text-muted">ไม่มีการชดเชย</span>
+                              {sec.makeup.note && (
+                                <span className="text-xs text-muted">— {sec.makeup.note}</span>
+                              )}
+                            </div>
+                          ) : sec.makeup ? (
                             <div className="flex items-center gap-2 flex-wrap">
                               <CheckCircle2 size={16} className="text-success" />
                               <span className="text-sm font-medium">
-                                ชดเชย: {formatThaiDate(sec.makeup.makeup_date)}
+                                ชดเชย: {formatThaiDate(sec.makeup.makeup_date!)}
                               </span>
                               {sec.makeup.start_time && sec.makeup.end_time && (
                                 <span className="text-xs text-muted tabular-nums">
@@ -312,20 +323,23 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             {/* IconButton's own hover Tip won't fire while
                                 disabled (see LockedActionButton's doc comment),
                                 so the lock reason needs its own wrapping span. */}
-                            <TipWrap content={taLocked ? "รอเจ้าหน้าที่อนุมัติเอกสาร" : undefined} className="inline-flex">
-                              <IconButton label="แก้ไข" variant="ghost" size="sm" disabled={taLocked} onClick={() => setEditingSlot({ impact: imp, section: sec })}>
-                                <Pencil size={14} />
-                              </IconButton>
-                            </TipWrap>
-                            <TipWrap content={taLocked ? "รอเจ้าหน้าที่อนุมัติเอกสาร" : undefined} className="inline-flex">
+                            {!sec.makeup.waived && (
+                              <TipWrap content={taLocked ? "รอเจ้าหน้าที่อนุมัติเอกสาร" : undefined} className="inline-flex">
+                                <IconButton label="แก้ไข" variant="ghost" size="sm" disabled={taLocked} onClick={() => setEditingSlot({ impact: imp, section: sec })}>
+                                  <Pencil size={14} />
+                                </IconButton>
+                              </TipWrap>
+                            )}
+                            <TipWrap content={taLocked ? "รอเจ้าหน้าที่อนุมัติเอกสาร" : (sec.makeup.waived ? "ยกเลิกการไม่มีการชดเชย" : "ลบ")} className="inline-flex">
                               <IconButton
-                                label="ลบ"
+                                label={sec.makeup.waived ? "ยกเลิก" : "ลบ"}
                                 variant="ghost" size="sm"
                                 disabled={taLocked}
                                 onClick={() => setDeletingMakeup({
                                   sectionId: sec.section_id,
                                   makeupId: sec.makeup!.id,
-                                  date: sec.makeup!.makeup_date,
+                                  date: sec.makeup!.waived ? "" : sec.makeup!.makeup_date!,
+                                  waived: !!sec.makeup!.waived,
                                 })}
                               >
                                 <Trash2 size={14} />
@@ -333,9 +347,17 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             </TipWrap>
                           </div>
                         ) : (
-                          <LockedActionButton variant="primary" size="sm" onClick={() => setEditingSlot({ impact: imp, section: sec })}>
-                            <Plus size={14} /> กำหนดวันชดเชย
-                          </LockedActionButton>
+                          <div className="flex items-center gap-1">
+                            <LockedActionButton variant="primary" size="sm" onClick={() => setEditingSlot({ impact: imp, section: sec })}>
+                              <Plus size={14} /> กำหนดวันชดเชย
+                            </LockedActionButton>
+                            <LockedActionButton
+                              variant="secondary" size="sm"
+                              onClick={() => setWaivingSlot({ impact: imp, section: sec })}
+                            >
+                              <Ban size={14} /> ไม่มีการชดเชย
+                            </LockedActionButton>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -378,7 +400,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                 <IconButton
                   label="ลบ"
                   variant="ghost" size="sm"
-                  onClick={() => setDeletingMakeup({ sectionId: section.id, makeupId: makeup.id, date: makeup.makeup_date })}
+                  onClick={() => setDeletingMakeup({ sectionId: section.id, makeupId: makeup.id, date: makeup.makeup_date, waived: false })}
                 >
                   <Trash2 size={14} />
                 </IconButton>
@@ -424,12 +446,24 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
         onConfirm={handleDeleteMakeup}
         isPending={deleting}
         danger
-        title="ลบวันชดเชย"
-        confirmLabel="ลบ"
+        title={deletingMakeup?.waived ? "ยกเลิกการไม่มีการชดเชย" : "ลบวันชดเชย"}
+        confirmLabel={deletingMakeup?.waived ? "ยกเลิก" : "ลบ"}
         message={deletingMakeup
-          ? `ต้องการลบวันชดเชย ${formatThaiDate(deletingMakeup.date)} หรือไม่? รายการชั่วโมง (ร่าง) ของ TA ในวันนี้จะถูกลบด้วย ระบบจะปฏิเสธการลบถ้ามีชั่วโมงที่ส่งอนุมัติแล้ว`
+          ? (deletingMakeup.waived
+              ? "ต้องการยกเลิกสถานะ 'ไม่มีการชดเชย' หรือไม่? คาบนี้จะกลับไปเป็นสถานะยังไม่ได้กำหนดวันชดเชยอีกครั้ง"
+              : `ต้องการลบวันชดเชย ${formatThaiDate(deletingMakeup.date)} หรือไม่? รายการชั่วโมง (ร่าง) ของ TA ในวันนี้จะถูกลบด้วย ระบบจะปฏิเสธการลบถ้ามีชั่วโมงที่ส่งอนุมัติแล้ว`)
           : ""}
       />
+
+      {waivingSlot && (
+        <WaiveConfirmModal
+          tcId={tcId}
+          impact={waivingSlot.impact}
+          section={waivingSlot.section}
+          onClose={() => setWaivingSlot(null)}
+          onSaved={async () => { setWaivingSlot(null); await refresh(); }}
+        />
+      )}
     </div>
   );
 }
@@ -571,6 +605,89 @@ function MakeupFormModal({
 
         <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
           <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น เลื่อนไปเรียนวันเสาร์" />
+        </FieldGroup>
+
+        {error && <Alert status="danger" title={error} icon={<AlertTriangle size={14} />} />}
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// WaiveConfirmModal — declare "no makeup needed" for ONE PERIOD of a
+// cancelled day. Same identity (section, original_date, kind) as a filed
+// makeup — see migration 0104 — so this period is resolved without a date.
+// ---------------------------------------------------------------------------
+
+function WaiveConfirmModal({
+  tcId, impact, section, onClose, onSaved,
+}: {
+  tcId: string;
+  impact: HolidayImpact;
+  section: AffectedSection;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setError(null);
+    setSaving(true);
+    try {
+      await api.post(`/teaching-courses/${tcId}/makeup/${section.section_id}/waive`, {
+        original_date: impact.original_date,
+        kind: section.kind,
+        note: note || null,
+      });
+      notify.success("บันทึก 'ไม่มีการชดเชย' แล้ว");
+      await onSaved();
+    } catch (e) {
+      if (e instanceof ApiError) setError(e.message);
+      else notify.error(e);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="ไม่มีการชดเชย"
+      icon={<Ban size={18} />}
+      size="md"
+      footer={
+        <div className="flex justify-end gap-2 w-full">
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving}>ยืนยัน</Button>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <div className="rounded-lg bg-surface-secondary border border-(--hairline) px-3 py-2 text-xs text-muted flex flex-col gap-0.5">
+          <div>
+            <span>วันเดิม: </span>
+            <span className="font-semibold text-foreground">{formatThaiDate(impact.original_date)}</span>
+            <span className="ml-2">({impact.holiday_name_th})</span>
+          </div>
+          <div>
+            <span>section {section.sec_no} · </span>
+            <span>{KIND_LABEL[section.kind]}</span>
+            <span> · {section.start_time.slice(0, 5)}–{section.end_time.slice(0, 5)}</span>
+          </div>
+        </div>
+
+        <Alert
+          status="warning"
+          icon={<AlertTriangle size={14} />}
+          title="ยืนยันว่าคาบนี้หยุดจริง ไม่มีการสอนชดเชย"
+          description="ระบบจะถือว่าคาบนี้แก้ไขเรียบร้อยแล้ว (เหมือนกำหนดวันชดเชย) และจะไม่แจ้งเตือนอีก"
+        />
+
+        <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
+          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น หยุดจริงตามประกาศคณะ ไม่ต้องชดเชย" />
         </FieldGroup>
 
         {error && <Alert status="danger" title={error} icon={<AlertTriangle size={14} />} />}

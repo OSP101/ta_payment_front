@@ -6,6 +6,45 @@ import {
 import { ArrowDownAZ, ArrowUpAZ } from "lucide-react";
 import { EmptyState, SearchField, SelectField, Spinner, Alert, Button, type SelectOption } from "./ui";
 
+// Skeleton placeholders shown while the first page of data is still in
+// flight (rows === undefined). Replaces a bare spinner: a spinner-then-pop-in
+// reads as a flash/flicker (กระพริบ/วูบวาป — the reported symptom), while a
+// skeleton shaped like the eventual rows makes the transition read as content
+// filling in rather than the page changing shape.
+function TableRowsSkeleton({ columns }: { columns: number }) {
+  return (
+    <div className="flex flex-col gap-3 py-2" aria-hidden>
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="flex items-center gap-4">
+          {Array.from({ length: columns }, (_, j) => (
+            <div
+              key={j}
+              className="h-3.5 flex-1 animate-pulse rounded bg-surface-secondary"
+              style={{ animationDelay: `${i * 40}ms` }}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CardRowsSkeleton() {
+  return (
+    <ul className="flex flex-col gap-2" aria-hidden>
+      {Array.from({ length: 4 }, (_, i) => (
+        <li key={i} className="rounded-lg border border-(--hairline) bg-surface p-3">
+          <div className="h-4 w-2/3 animate-pulse rounded bg-surface-secondary" style={{ animationDelay: `${i * 40}ms` }} />
+          <div className="mt-2.5 flex flex-col gap-1.5">
+            <div className="h-3 w-full animate-pulse rounded bg-surface-secondary" style={{ animationDelay: `${i * 40}ms` }} />
+            <div className="h-3 w-1/2 animate-pulse rounded bg-surface-secondary" style={{ animationDelay: `${i * 40}ms` }} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* DataTable — reusable HeroUI table with search / filters / sort / pagination */
 /* -------------------------------------------------------------------------- */
@@ -17,6 +56,8 @@ export interface DataColumn<T> {
   isRowHeader?: boolean;
   /** Extra classes for body cells (e.g. "text-right", "whitespace-nowrap"). */
   className?: string;
+  /** Extra classes for the header cell. Defaults to className when unset. */
+  headerClassName?: string;
   render: (row: T) => React.ReactNode;
   /** Required when sortable — value used for comparison. */
   sortValue?: (row: T) => string | number;
@@ -296,10 +337,7 @@ export function DataTable<T>({
 
           {pageRows.length === 0 ? (
             loading && !rowsLoaded ? (
-              <div className="py-14 flex flex-col items-center justify-center gap-2 text-(--ink-3)">
-                <Spinner />
-                <div className="text-xs">กำลังโหลดข้อมูล…</div>
-              </div>
+              <CardRowsSkeleton />
             ) : (
               <EmptyState
                 title={hasQuery ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}
@@ -347,7 +385,10 @@ export function DataTable<T>({
             <Table.Header>
               {columns.map(c =>
                 c.sortable ? (
-                  <Table.Column key={c.id} id={c.id} isRowHeader={c.isRowHeader} allowsSorting>
+                  <Table.Column
+                    key={c.id} id={c.id} isRowHeader={c.isRowHeader}
+                    className={c.headerClassName} allowsSorting
+                  >
                     {({ sortDirection }) => (
                       <Table.SortableColumnHeader sortDirection={sortDirection}>
                         {c.label}
@@ -355,7 +396,10 @@ export function DataTable<T>({
                     )}
                   </Table.Column>
                 ) : (
-                  <Table.Column key={c.id} id={c.id} isRowHeader={c.isRowHeader}>
+                  <Table.Column
+                    key={c.id} id={c.id} isRowHeader={c.isRowHeader}
+                    className={c.headerClassName}
+                  >
                     {c.label}
                   </Table.Column>
                 ),
@@ -364,10 +408,7 @@ export function DataTable<T>({
             <Table.Body
               renderEmptyState={() =>
                 loading && !rowsLoaded ? (
-                  <div className="py-14 flex flex-col items-center justify-center gap-2 text-(--ink-3)">
-                    <Spinner />
-                    <div className="text-xs">กำลังโหลดข้อมูล…</div>
-                  </div>
+                  <TableRowsSkeleton columns={columns.length} />
                 ) : (
                   <EmptyState
                     title={hasQuery ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}

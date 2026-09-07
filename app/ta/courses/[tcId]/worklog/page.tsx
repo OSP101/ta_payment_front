@@ -993,6 +993,94 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const activeScope = activeAssignment?.reimburse_scope;
   const canGenerate = !!activeAssignment?.has_schedule;
 
+  // Weekly caps for the active assignment, shared between the "add row" modal
+  // and the inline table's stepper so both enforce the same ใบคำขอ-declared
+  // ceiling — a TA shouldn't be able to type past it in either place.
+  const weeklyCapsInfo = useMemo(
+    () =>
+      activeAssignment
+        ? {
+            lecture: activeAssignment.weekly_cap_lecture,
+            lab: activeAssignment.weekly_cap_lab,
+            review: activeAssignment.weekly_cap_review,
+            other: activeAssignment.weekly_cap_other,
+            lectureLabShared: activeAssignment.weekly_lecture_lab_shared,
+            capsSet: activeAssignment.weekly_caps_set,
+          }
+        : undefined,
+    [activeAssignment],
+  );
+  function capForActivity(a: string): number {
+    if (!weeklyCapsInfo) return 0;
+    switch (a) {
+      case "lecture": return weeklyCapsInfo.lecture;
+      case "lab":     return weeklyCapsInfo.lab;
+      case "review":  return weeklyCapsInfo.review;
+      case "other":   return weeklyCapsInfo.other;
+      default:        return 0; // makeup — no weekly cap enforced
+    }
+  }
+  // The section's weekly grid and its makeup dates — what the คาบ-must-exist
+  // check reads. Shared with the add dialog so both paths judge a row the same
+  // way the server's validateClassWindow does.
+  const activeSectionSchedules = useMemo(
+    () => course?.sections?.find(s => s.id === activeAssignment?.section_id)?.schedules,
+    [course, activeAssignment],
+  );
+  const rowDateIndex = useMemo(
+    () => buildDateIndex(impacts?.impacts, activeAssignment?.section_id),
+    [impacts, activeAssignment],
+  );
+  // The TA's own declared grading slots. ตรวจงาน entries must fall inside one of
+  // these (or a grading date the lecturer filed against the section) — the
+  // server decides, since only it can see the lecturer's dates. Shown on the
+  // form so the expectation is visible before the TA types, rather than only
+  // arriving as a refusal afterwards.
+  const { data: dutySlots } = useSWR<{ items: { kind: string; day_of_week: number; start_time: string; end_time: string }[] }>(
+    aid ? `/assignments/${aid}/review-schedules` : null,
+  );
+  const reviewSlotLabels = useMemo(
+    () =>
+      (dutySlots?.items ?? [])
+        .filter(s => s.kind === "review")
+        .map(s => `${DAY_TH_SHORT[s.day_of_week] ?? "?"} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`),
+    [dutySlots],
+  );
+  // Why this date is outside what the course can accept, or null when it is
+  // fine. The term bounds are staff's own data (teaching_courses.starts_on /
+  // ends_on) and hold unconditionally; the month floor is the back-dating rule,
+  // which the server waives when staff have explicitly kept that month's period
+  // open — so this defers in exactly the same case, and never refuses a write
+  // the server would have taken.
+  function dateRangeError(iso: string): string | null {
+    if (!iso) return "โปรดระบุวันที่ปฏิบัติงาน";
+    if (course?.starts_on && iso < course.starts_on) {
+      return `ภาคการศึกษาเริ่ม ${formatWorkDate(course.starts_on)} ลงเวลาก่อนหน้านั้นไม่ได้`;
+    }
+    if (course?.ends_on && iso > course.ends_on) {
+      return `ภาคการศึกษาสิ้นสุด ${formatWorkDate(course.ends_on)} ลงเวลาหลังจากนั้นไม่ได้`;
+    }
+    const minIso = currentMonthStartIso();
+    if (iso < minIso && !monthDeadlines.has((iso ?? "").slice(5, 7))) {
+      return `ลงเวลาย้อนหลังได้ตั้งแต่ ${formatWorkDate(minIso)} เป็นต้นไปเท่านั้น (งวดของเดือนนั้นปิดแล้ว)`;
+    }
+    return null;
+  }
+
+  // The most this ROW can hold without pushing its activity's weekly total
+  // (across the other rows in the same ISO week) past what the workload form
+  // declares. Mirrors AddWorklogModal's effectiveMax so a TA can't type past
+  // the ใบคำขอ ceiling from either the "add" dialog or the inline stepper.
+  function rowEffectiveMax(w: WorkLog): number {
+    if (!weeklyCapsInfo || !weeklyCapsInfo.capsSet) return MAX_ROW_HOURS;
+    const cap = capForActivity(w.activity);
+    if (cap <= 0) return MAX_ROW_HOURS;
+    const used = weeklyUsedHours(
+      logs, w.work_date, w.activity, weeklyCapsInfo.lectureLabShared, w.id,
+    );
+    return Math.min(MAX_ROW_HOURS, Math.max(0, cap - used));
+  }
+
   // Refetches the visible log AND the per-section tallies. The tallies drive the
   // section cards and the sidebar badge, so leaving them stale meant a section
   // still advertising rows the TA had just sent — the cards would have been
@@ -1008,6 +1096,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     const w = view(l);
     const err = validateRow(w);
     if (err) { notify.error(err); return; }
+    const rangeErr = dateRangeError(w.work_date);
+    if (rangeErr) { notify.error(rangeErr); return; }
+    // Same คาบ-must-exist rule the add dialog and the server apply, so editing a
+    // row's date/time into a slot with no class is refused here too.
+    const windowErr = classWindowError(
+      w.activity, w.work_date, w.start_time, w.end_time, activeSectionSchedules, rowDateIndex,
+    );
+    if (windowErr) { notify.error(windowErr); return; }
     const lock = monthLockFor(w.work_date) ?? monthLockFor(l.work_date);
     if (lock) { notify.error(monthLockMessage(lock)); return; }
     setSavingId(l.id);
@@ -1060,6 +1156,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     if (!aid) return false;
     const err = validateRow({ ...form, id: "", assignment_id: aid, status: "draft" });
     if (err) { notify.error(err); return false; }
+    // Backstop for the dialog's own checks — this is the only entry point the
+    // create path has, so it should not depend on a caller having run them.
+    const rangeErr = dateRangeError(form.work_date);
+    if (rangeErr) { notify.error(rangeErr); return false; }
     const lock = monthLockFor(form.work_date);
     if (lock) { notify.error(monthLockMessage(lock)); return false; }
     setCreating(true);
@@ -1203,7 +1303,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         return rowEditable(w) ? (
           <DatePicker value={w.work_date}
                       onChange={v => patch(l, { work_date: v })}
-                      minValue={currentMonthStartIso()}
+                      // Same bounds the add dialog uses: inside the term staff
+                      // opened, and no earlier than this month's 1st.
+                      minValue={
+                        course?.starts_on && course.starts_on > currentMonthStartIso()
+                          ? course.starts_on
+                          : currentMonthStartIso()
+                      }
+                      maxValue={course?.ends_on}
                       label="วันที่ปฏิบัติงาน" />
         ) : formatWorkDate(w.work_date);
       },
@@ -1237,7 +1344,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       render: l => {
         const w = view(l);
         return rowEditable(w) ? (
-          <HoursStepper value={w.hours} onChange={v => patch(l, { hours: v })} />
+          <HoursStepper value={w.hours} onChange={v => patch(l, { hours: v })} max={rowEffectiveMax(w)} />
         ) : <span className="tabular">{w.hours.toFixed(1)}</span>;
       },
     },
@@ -1752,18 +1859,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         impacts={impacts?.impacts ?? []}
         sectionId={activeAssignment?.section_id}
         tcId={tcId}
-        weeklyCaps={activeAssignment ? {
-          lecture: activeAssignment.weekly_cap_lecture,
-          lab: activeAssignment.weekly_cap_lab,
-          review: activeAssignment.weekly_cap_review,
-          other: activeAssignment.weekly_cap_other,
-          lectureLabShared: activeAssignment.weekly_lecture_lab_shared,
-          capsSet: activeAssignment.weekly_caps_set,
-        } : undefined}
+        weeklyCaps={weeklyCapsInfo}
         existingLogs={logs}
         sectionSchedules={
           course?.sections?.find(s => s.id === activeAssignment?.section_id)?.schedules
         }
+        termStart={course?.starts_on}
+        termEnd={course?.ends_on}
+        reviewSlotLabels={reviewSlotLabels}
         userId={userId}
         aid={aid}
       />
@@ -1939,8 +2042,20 @@ interface AddWorklogModalProps {
   };
   existingLogs?: WorkLog[];
   // Section's weekly time slots — used to prefill start/end times to the
-  // natural class period when the TA picks lecture or lab.
+  // natural class period when the TA picks lecture or lab, and to refuse a
+  // lecture/lab/makeup entry that falls outside every real คาบ (same rule the
+  // server enforces in validateClassWindow).
   sectionSchedules?: SectionScheduleSlot[];
+  // The term's own bounds, as staff entered them when opening the course. The
+  // server refuses anything outside [starts_on, ends_on]; without them here the
+  // field happily accepted a date the save could only bounce.
+  termStart?: string;
+  termEnd?: string;
+  // The TA's declared grading slots, pre-formatted ("จันทร์ 08:00–10:00"). Shown
+  // as a hint when the activity is ตรวจงาน. Not used to block: the server also
+  // accepts grading dates the lecturer filed for the section, which this side
+  // cannot see, so refusing here would be stricter than the rule actually is.
+  reviewSlotLabels?: string[];
   // Namespace + selector for draftStorage.readAddForm/writeAddForm so a
   // half-filled form survives a modal close / page reload. When userId or
   // aid are empty (e.g. modal opens before /me resolves) persistence is a
@@ -2015,10 +2130,52 @@ function defaultTimesForActivity(
   };
 }
 
+// classWindowError mirrors the server's validateClassWindow: a บรรยาย/ปฏิบัติการ
+// entry must sit inside a period this section actually runs on that weekday.
+// Returns a Thai reason, or null when the entry is fine — or when this side
+// cannot know enough to judge, in which case the server still decides. It is
+// deliberately never stricter than the server: a makeup date opens a window the
+// weekly grid does not describe, and a section with no timetable filed yet has
+// no grid to check against, so both defer.
+function classWindowError(
+  activity: string,
+  workDate: string,
+  start: string,
+  end: string,
+  schedules: SectionScheduleSlot[] | undefined,
+  dateIndex: Map<string, DateStatus>,
+): string | null {
+  if (activity !== "lecture" && activity !== "lab") return null;
+  if (!schedules || schedules.length === 0) return null;
+  if (dateIndex.get(workDate)?.isMakeupDay) return null;
+  const [y, m, d] = (workDate ?? "").split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d);
+  if (Number.isNaN(dt.getTime())) return null;
+  const s = parseHM(start);
+  const e = parseHM(end);
+  if (Number.isNaN(s) || Number.isNaN(e)) return null;
+
+  const label = ACTIVITY_LABEL[activity] ?? activity;
+  const sameDay = schedules.filter(x => x.day_of_week === dt.getDay() && x.kind === activity);
+  if (sameDay.length === 0) {
+    return `วันที่ ${formatWorkDate(workDate)} ไม่มีคาบ${label}ของกลุ่มนี้ตามตารางสอน ลงเวลาไม่ได้`;
+  }
+  const windows: string[] = [];
+  for (const x of sameDay) {
+    const xs = parseHM((x.start_time ?? "").slice(0, 5));
+    const xe = parseHM((x.end_time ?? "").slice(0, 5));
+    if (Number.isNaN(xs) || Number.isNaN(xe)) return null; // unparseable → defer
+    windows.push(`${(x.start_time ?? "").slice(0, 5)}–${(x.end_time ?? "").slice(0, 5)}`);
+    if (s >= xs && e <= xe) return null;
+  }
+  return `เวลาที่กรอกต้องอยู่ในคาบ${label}จริงของวันนี้ (${windows.join(", ")})`;
+}
+
 function AddWorklogModal({
   open, onClose, onSave, isPending, scope, sectionNo, sectionTrack, defaultDate,
   impacts, sectionId, tcId, blockedMonth, weeklyCaps, existingLogs, sectionSchedules,
-  userId, aid,
+  termStart, termEnd, reviewSlotLabels, userId, aid,
 }: AddWorklogModalProps) {
   // Per-date lookup rebuilt only when impacts/section change — cheap since the
   // impacts list is capped to the term's holidays (< a dozen typically).
@@ -2207,10 +2364,28 @@ function AddWorklogModal({
       ...form, id: "", assignment_id: "__new__", status: "draft",
     });
     if (err) { setError(err); return; }
+    // Inside the term staff opened. Checked before everything else: a date
+    // outside it is not a quota question, it is not a date the course exists on.
+    if (termStart && workDate < termStart) {
+      setError(`ภาคการศึกษาเริ่ม ${formatWorkDate(termStart)} ลงเวลาก่อนหน้านั้นไม่ได้`);
+      return;
+    }
+    if (termEnd && workDate > termEnd) {
+      setError(`ภาคการศึกษาสิ้นสุด ${formatWorkDate(termEnd)} ลงเวลาหลังจากนั้นไม่ได้`);
+      return;
+    }
     // The month has to be able to accept the row at all — checked before the
-    // quota, because "this month is closed" makes the quota moot.
+    // quota, because "this month is closed" makes the quota moot. blockedMonth
+    // is the period-aware answer (it reads the real submission_periods rows), so
+    // it is what decides back-dating too — a month staff deliberately kept open
+    // must stay writable here.
     const monthErr = blockedMonth?.(workDate);
     if (monthErr) { setError(monthErr); return; }
+    // The คาบ has to exist. Mirrors the server's validateClassWindow so a TA is
+    // told on the form, not after a round-trip, that no บรรยาย/ปฏิบัติการ of this
+    // section runs at that hour on that day.
+    const windowErr = classWindowError(activity, workDate, start, end, sectionSchedules, dateIndex);
+    if (windowErr) { setError(windowErr); return; }
     // Weekly quota preflight — mirrors the server-side enforceWeeklyActivityCap
     // check. Gives the TA a clear reason before hitting the network.
     if (weeklyInfo && hours > weeklyInfo.remaining + 0.01) {
@@ -2336,11 +2511,39 @@ function AddWorklogModal({
           </div>
         )}
 
-        <FieldGroup label="วันที่ปฏิบัติงาน">
+        {activity === "review" && (
+          <div className="rounded-lg border border-(--hairline) bg-surface-secondary px-3 py-2 text-xs text-muted">
+            {reviewSlotLabels && reviewSlotLabels.length > 0 ? (
+              <>
+                ลงเวลาตรวจงานได้ในช่วงที่คุณแจ้งไว้{" "}
+                <span className="font-semibold text-foreground">{reviewSlotLabels.join(", ")}</span>{" "}
+                หรือวันตรวจงานที่อาจารย์กำหนด
+              </>
+            ) : (
+              <>ยังไม่ได้กำหนด “ตารางตรวจการบ้านของคุณ” — เพิ่มช่วงเวลาก่อน จึงจะลงเวลาตรวจงานได้</>
+            )}
+          </div>
+        )}
+
+        <FieldGroup
+          label="วันที่ปฏิบัติงาน"
+          hint={
+            termStart && termEnd
+              ? `ภาคการศึกษา ${formatWorkDate(termStart)} – ${formatWorkDate(termEnd)}`
+              : undefined
+          }
+        >
           <DatePicker
             value={workDate}
             onChange={v => { markDirty(); setWorkDate(v); }}
-            minValue={currentMonthStartIso()}
+            // Lower bound is whichever is later: the term's own start, or the
+            // 1st of this month (past months are closed to back-dating).
+            minValue={
+              termStart && termStart > currentMonthStartIso()
+                ? termStart
+                : currentMonthStartIso()
+            }
+            maxValue={termEnd}
             label="วันที่ปฏิบัติงาน"
             autoFocus
           />

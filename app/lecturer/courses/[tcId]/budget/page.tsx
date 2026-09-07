@@ -27,7 +27,10 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
   const { tcId } = use(params);
   const [helpTrack, setHelpTrack] = useState<"regular" | "special" | null>(null);
 
-  const { data: course } = useSWR<{ id: string; code: string; name_th: string; num_students: number }>(
+  const { data: course } = useSWR<{
+    id: string; code: string; name_th: string; num_students: number;
+    lecture_hrs: number; lab_hrs: number;
+  }>(
     tcId ? `/teaching-courses/${tcId}` : null,
   );
   const budgetKey = tcId ? `/teaching-courses/${tcId}/budget` : null;
@@ -93,7 +96,10 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
 
           <Panel title="ข้อมูลวิชา" className="mb-4" data-tour="budget-info">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <Info k="หน่วยกิต (Lec/Lab)" v={`${b.credits} (${b.lecture_credits}/${b.lab_credits})`} />
+              <Info
+                k="หน่วยกิต"
+                v={course ? `${b.credits} (Lec ${course.lecture_hrs} / Lab ${course.lab_hrs})` : `${b.credits}`}
+              />
               <Info k="เพดานงบ/วิชา" v={`${b.per_course_max.toLocaleString()} บ.`} />
               <Info k="จำนวน TA ตรี / บัณฑิต" v={<Chip tone="brand">{b.suggested_tas.undergrad} / {b.suggested_tas.graduate}</Chip>} />
             </div>

@@ -167,9 +167,32 @@ const STATE_LABEL: Record<string, { tone: "success" | "warn" | "danger"; label: 
   dropped: { tone: "danger",  label: "ตัดออกทั้งกลุ่ม" },
 };
 
+/** One TA plus every section they were sent on, grouped from the flat per-section rows. */
+interface GroupedAssignment {
+  ta_name: string;
+  email: string;
+  level: string;
+  sections: RequestAssignmentDetail[];
+}
+
+/** The API returns one row per (TA, section) — group by TA so a person who
+ * covers several sections shows up once, with their sections listed inside,
+ * instead of repeating their name once per section. */
+function groupByTa(list: RequestAssignmentDetail[]): GroupedAssignment[] {
+  const byEmail = new Map<string, GroupedAssignment>();
+  for (const a of list) {
+    const key = a.email || a.ta_name;
+    const g = byEmail.get(key);
+    if (g) g.sections.push(a);
+    else byEmail.set(key, { ta_name: a.ta_name, email: a.email, level: a.level, sections: [a] });
+  }
+  return [...byEmail.values()];
+}
+
 /** Who was actually sent in this round — opened from the history table. */
 function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { data: d } = useSWR<RequestDetail>(id ? `/ta-requests/${id}` : null);
+  const grouped = d?.assignments?.length ? groupByTa(d.assignments) : [];
   return (
     <Modal open={!!id} onClose={onClose} title="รายละเอียดคำขอ" icon={<Eye size={18} />} size="lg">
       {!d ? (
@@ -185,27 +208,37 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
               {d.reject_reason}
             </div>
           )}
-          {!d.assignments?.length ? (
+          {!grouped.length ? (
             <div className="text-xs text-muted text-center py-6">ไม่มีรายชื่อ TA ในคำขอนี้</div>
           ) : (
             <ul className="space-y-2">
-              {d.assignments.map((a, i) => {
-                const st = STATE_LABEL[a.state];
-                return (
-                  <li key={i} className="rounded-lg border border-hairline p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="font-medium text-ink-1">{a.ta_name}</div>
-                      {st && <Chip tone={st.tone}>{st.label}</Chip>}
-                    </div>
-                    <div className="text-xs text-muted mt-0.5">
-                      {a.email} · กลุ่ม {a.section_no} · {LEVEL_LABEL[a.level] ?? a.level} · {a.total_hrs.toFixed(1)} ชม./สัปดาห์
-                    </div>
-                    {a.state_reason && (
-                      <div className="text-xs text-amber-700 mt-1">{a.state_reason}</div>
-                    )}
-                  </li>
-                );
-              })}
+              {grouped.map((g, i) => (
+                <li key={i} className="rounded-lg border border-hairline p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium text-ink-1">{g.ta_name}</div>
+                    <Chip tone="neutral">{LEVEL_LABEL[g.level] ?? g.level}</Chip>
+                  </div>
+                  <div className="text-xs text-muted mt-0.5">{g.email}</div>
+                  <ul className="mt-2 space-y-1.5">
+                    {g.sections.map((a, j) => {
+                      const st = STATE_LABEL[a.state];
+                      return (
+                        <li key={j} className="rounded-md bg-slate-50 border border-hairline px-2.5 py-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs text-ink-2">
+                              กลุ่ม {a.section_no} · {a.total_hrs.toFixed(1)} ชม./สัปดาห์
+                            </span>
+                            {st && <Chip tone={st.tone}>{st.label}</Chip>}
+                          </div>
+                          {a.state_reason && (
+                            <div className="text-xs text-amber-700 mt-1">{a.state_reason}</div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              ))}
             </ul>
           )}
         </div>
