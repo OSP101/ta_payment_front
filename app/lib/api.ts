@@ -43,6 +43,12 @@ const TIMEOUT_MS = 20000;
  * demo session, not something anything needs to re-render on.
  */
 const DEMO_PREFIX_KEY = "ta-payment:demo-api-prefix";
+// เข้าคู่กับ DEMO_BASE_PATH ใน app/lib/session.ts — รูปแบบเดียวที่ slotBasePath()
+// (internal/demo/handlers.go) จะออกมาได้ · เสี่ยงต่ำกว่าเวอร์ชัน server-side
+// เพราะต้องมี XSS ที่เขียน sessionStorage ได้อยู่แล้วจึงจะยัดค่านี้ได้ แต่ req()
+// เรียก fetch(`${apiPrefix}${path}`, {credentials:"include"}) ตรง ๆ — ค่าที่ขึ้น
+// ต้นด้วย "//" หรือมี scheme จะทำให้ fetch ยิงออกนอกโดเมนแทนที่จะเป็น path สัมพัทธ์
+const API_PREFIX_PATTERN = /^\/api\/demo\/w\/\d{1,3}$/;
 let apiPrefix = "/api/v1";
 if (typeof window !== "undefined") {
   try {
@@ -59,7 +65,7 @@ if (typeof window !== "undefined") {
     // render, before that effect fires).
     if (!window.location.pathname.startsWith("/login")) {
       const saved = window.sessionStorage.getItem(DEMO_PREFIX_KEY);
-      if (saved) apiPrefix = saved;
+      if (saved && API_PREFIX_PATTERN.test(saved)) apiPrefix = saved;
     }
   } catch {
     /* storage blocked — stay on production */
@@ -67,6 +73,7 @@ if (typeof window !== "undefined") {
 }
 
 export function setDemoApiPrefix(prefix: string | null) {
+  if (prefix && !API_PREFIX_PATTERN.test(prefix)) return;
   apiPrefix = prefix ?? "/api/v1";
   if (typeof window === "undefined") return;
   try {
@@ -343,8 +350,11 @@ async function demoFetch<T>(path: string, body: unknown): Promise<T> {
 export const demoEnter = (email: string) =>
   demoFetch<DemoEnterResult>("/api/demo/enter", { email });
 
-export const demoResetWorkspace = (email: string) =>
-  demoFetch<{ base_path: string }>("/api/demo/reset", { email });
+// DEMO-01: there used to be a demoResetWorkspace() here calling the
+// unauthenticated POST /api/demo/reset — removed on both ends. The real
+// "เริ่มใหม่ทั้งหมด" button already went through the authenticated
+// <base_path>/scenario/reset route instead (see useScenarioEngine.ts), so
+// this was dead code pointing at a route that is now also gone.
 
 export const demoLogin = (basePath: string, email: string, password: string) =>
   demoFetch<{ user: Me }>(`${basePath}/auth/login`, { email, password });
@@ -751,6 +761,10 @@ export interface DataDeletionRequest {
   reviewed_by?: string;
   review_note?: string;
   executed_at?: string;
+  /** PDPA-01: NULL even after status is "approved" when the document/avatar
+   * blob delete has not finished successfully yet — see migration 0109. */
+  scrub_completed_at?: string;
+  scrub_error?: string;
 }
 export interface DataDeletionRequestForReview extends DataDeletionRequest {
   requester_email: string;

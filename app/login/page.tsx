@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Button,
   Card,
@@ -198,9 +199,14 @@ export default function LoginPage() {
       {/* Top brand strip */}
       <header className="border-b border-border px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
-            T
-          </div>
+          <Image
+            src="/images/logo-cp-1.png"
+            alt=""
+            width={28}
+            height={28}
+            priority
+            className="w-7 h-7 shrink-0 object-contain"
+          />
           <div className="font-semibold text-[15px] text-foreground">COCO TAS</div>
           <BetaBadge onClick={() => setBetaOpen(true)} />
         </div>
@@ -211,9 +217,14 @@ export default function LoginPage() {
       <main className="flex-1 flex items-center justify-center px-4 py-10 bg-background">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
-            <div className="w-14 h-14 mx-auto rounded-xl flex items-center justify-center text-accent-foreground text-xl font-bold shadow-sm bg-accent">
-              T
-            </div>
+            <Image
+              src="/images/logo-cp.png"
+              alt="วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น"
+              width={388}
+              height={112}
+              priority
+              className="mx-auto h-14 w-auto object-contain"
+            />
             <h1 className="mt-4 text-[22px] font-semibold text-foreground">
               {challenge ? "ยืนยันตัวตนสองขั้นตอน" : "เข้าสู่ระบบ COCO TAS"}
             </h1>
@@ -404,17 +415,6 @@ export default function LoginPage() {
 
           <p className="text-center text-xs text-muted mt-6">
             © {new Date().getFullYear()} College of Computing, Khon Kaen University
-          </p>
-          <p className="text-center text-xs text-muted mt-1">
-            Developed by{" "}
-            <a
-              href="https://osp101.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              ITII Development Team
-            </a>
           </p>
         </div>
       </main>

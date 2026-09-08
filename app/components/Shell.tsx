@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -361,9 +362,14 @@ function BrandMark({ brandTitle, onBetaClick }: { brandTitle: string; onBetaClic
         aria-label={`${brandTitle} ไปหน้าแรก`}
         className="flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 hover:bg-surface-secondary transition-colors min-w-0"
       >
-        <div className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
-          T
-        </div>
+        <Image
+          src="/images/logo-cp-1.png"
+          alt=""
+          width={28}
+          height={28}
+          priority
+          className="w-7 h-7 shrink-0 object-contain"
+        />
         <div className="font-semibold text-[15px] text-foreground leading-tight truncate">{brandTitle}</div>
       </Link>
       <BetaBadge onClick={onBetaClick} />

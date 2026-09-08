@@ -78,19 +78,8 @@ export default async function PublicDocumentProgressPage(
 
       {/* Same footer as the login page — one copyright/credit block for the
           whole app, not a second wording invented for this screen. */}
-      <p className="text-center text-xs text-muted mt-6">
+      <p className="text-center text-xs text-muted mt-6 pb-10">
         © {new Date().getFullYear()} College of Computing, Khon Kaen University
-      </p>
-      <p className="text-center text-xs text-muted mt-1 pb-10">
-        Developed by{" "}
-        <a
-          href="https://osp101.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 hover:underline"
-        >
-          ITII Development Team
-        </a>
       </p>
     </div>
   );

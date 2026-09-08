@@ -518,10 +518,23 @@ export interface SignatureItem {
   exported: boolean;
   role: string;
   role_label: string;
-  /** The person. Absent for the certifier, who is one officer per course. */
+  /** The person. Absent for the certifier, who is one officer per course, and
+   * on the public board (PDPA-03 — users.id is a login-required join key and
+   * must not ride along on an anonymous link). */
   signer_id?: string | null;
+  /** Public board's stand-in for signer_id: a short hash, stable enough to
+   * dedupe React keys but not reversible to a user id. Absent on the
+   * authenticated board, which has signer_id instead. */
+  signer_ref?: string | null;
   responsible: string;
   signed_at?: string | null;
+}
+
+/** A key stable enough to dedupe a list of SignatureItem across renders,
+ * working on both the authenticated board (signer_id) and the public one
+ * (signer_ref instead) — see the PDPA-03 note on SignatureItem above. */
+function signatureItemKey(it: SignatureItem): string {
+  return it.role + (it.signer_id ?? it.signer_ref ?? "");
 }
 
 function SignatureChecklistPanel({
@@ -688,7 +701,7 @@ function SignatureChecklistPanel({
                   const signed = !!it.signed_at;
                   return (
                     <button
-                      key={it.role + (it.signer_id ?? "")}
+                      key={signatureItemKey(it)}
                       type="button"
                       disabled={!canEdit || busy}
                       onClick={() => canEdit && toggle(it, !signed)}
@@ -995,7 +1008,7 @@ function ViewerStageSigners({
               </div>
               <ul className="mt-2 space-y-1.5">
                 {g.items.map(it => (
-                  <li key={it.role + (it.signer_id ?? "")} className="flex items-baseline gap-2 text-sm">
+                  <li key={signatureItemKey(it)} className="flex items-baseline gap-2 text-sm">
                     {it.signed_at
                       ? <Check size={15} aria-hidden className="text-emerald-600 shrink-0 translate-y-0.5" />
                       : <X size={15} aria-hidden className="text-red-600 shrink-0 translate-y-0.5" />}

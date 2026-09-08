@@ -5,6 +5,17 @@ import { api, type Me } from "./api";
 const backend = process.env.API_URL ?? "http://localhost:8080";
 
 /**
+ * รูปแบบเดียวที่ demo_base_path ถูกต้อง — ต้องตรงกับ slotBasePath() ใน
+ * internal/demo/handlers.go เป๊ะ ๆ
+ *
+ * ค่านี้มาจากคุกกี้ที่ client ถือ และถูกเอาไปต่อเป็น URL ที่เซิร์ฟเวอร์ fetch
+ * พร้อมแนบคุกกี้ session · ถ้าไม่ validate ค่าอย่าง "@evil.com" จะทำให้
+ * `${backend}${demoBasePath}` ถูก parse เป็น host = evil.com (userinfo trick)
+ * แล้วโทเคนของผู้ใช้จะถูกส่งออกไปนอกระบบ
+ */
+const DEMO_BASE_PATH = /^\/api\/demo\/w\/\d{1,3}$/;
+
+/**
  * BETA-only: which backend URL + cookie a server-rendered request should
  * use — production's own "/api/v1" + "access_token", or a claimed demo
  * slot's own path + "demo_access_token" (see internal/demo/auth.go, which
@@ -18,7 +29,7 @@ async function resolveSession(): Promise<{ apiBase: string; cookieHeader: string
   const c = await cookies();
   const demoToken = c.get("demo_access_token")?.value;
   const demoBasePath = c.get("demo_base_path")?.value;
-  if (demoToken && demoBasePath) {
+  if (demoToken && demoBasePath && DEMO_BASE_PATH.test(demoBasePath)) {
     return { apiBase: `${backend}${demoBasePath}`, cookieHeader: `demo_access_token=${demoToken}` };
   }
   const token = c.get("access_token")?.value;

@@ -128,10 +128,23 @@ function RequestList({
             {r.review_note && (
               <div className="text-xs text-muted mt-1">หมายเหตุการพิจารณา: {r.review_note}</div>
             )}
+            {/* PDPA-01: status=approved does not mean the files are actually
+                gone yet — scrub_completed_at is the real signal. The
+                scheduler retries automatically, but staff need to see a
+                request that has been stuck for a while. */}
+            {r.status === "approved" && !r.scrub_completed_at && (
+              <div className="text-xs text-danger mt-1">
+                ⚠ ลบไฟล์เอกสาร/รูปโปรไฟล์ยังไม่สำเร็จ — ระบบจะลองใหม่อัตโนมัติ
+                {r.scrub_error && <> ({r.scrub_error})</>}
+              </div>
+            )}
           </div>
           <Chip tone={r.has_payment_history ? "warn" : "neutral"}>
             {r.has_payment_history ? "มีประวัติจ่ายเงินแล้ว" : "ไม่มีประวัติจ่ายเงิน"}
           </Chip>
+          {r.status === "approved" && !r.scrub_completed_at && (
+            <Chip tone="danger">ลบไฟล์ค้าง</Chip>
+          )}
           <StatusChip status={r.status} />
           {r.status === "pending" && (
             <Button variant="secondary" size="sm" onClick={() => onReview(r)}>
