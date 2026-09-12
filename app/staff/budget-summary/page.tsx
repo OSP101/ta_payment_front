@@ -18,7 +18,7 @@ import { DataTable, type DataColumn } from "../../components/DataTable";
 import UserAvatar from "../../components/UserAvatar";
 import {
   MonthChips, monthLabels, monthsQuery, suggestMonths,
-  type MonthCoverage,
+  type MonthCoverage, type TermMonth,
 } from "../../components/monthScope";
 
 /**
@@ -51,6 +51,12 @@ export default function BudgetSummaryPage() {
   const { termId, term } = useTerm();
   const termLabel = term ? `${term.academic_year}/${term.semester}` : "";
   const [tab, setTab] = useState<PreviewTab>("course_summary");
+  // เบิกจ่ายเดือน/คงเหลือ's month selection — lifted here (not local to the
+  // preview panel) for the same reason `tab` is: CourseSummaryDownloadButton
+  // lives in the page header, outside the preview panel, and must resolve
+  // the SAME months the screen is showing so the downloaded file can never
+  // disagree with it. null = let the backend default (every term month).
+  const [selectedMonths, setSelectedMonths] = useState<string[] | null>(null);
   return (
     <div>
       <PageHeader
@@ -59,14 +65,19 @@ export default function BudgetSummaryPage() {
         actions={
           termId ? (
             tab === "course_summary" ? (
-              <CourseSummaryDownloadButton termId={termId} termLabel={termLabel} />
+              <CourseSummaryDownloadButton termId={termId} termLabel={termLabel} selectedMonths={selectedMonths} />
             ) : (
               <TransferCoverDownloadButton termId={termId} termLabel={termLabel} />
             )
           ) : null
         }
       />
-      {termId && <PreviewSection termId={termId} tab={tab} setTab={setTab} />}
+      {termId && (
+        <PreviewSection
+          termId={termId} tab={tab} setTab={setTab}
+          selectedMonths={selectedMonths} setSelectedMonths={setSelectedMonths}
+        />
+      )}
     </div>
   );
 }
@@ -84,9 +95,10 @@ export default function BudgetSummaryPage() {
 // 28/08/2026), driven by the SAME tab state passed down here, so staff can
 // still generate either file before an appointment order exists.
 function PreviewSection({
-  termId, tab, setTab,
+  termId, tab, setTab, selectedMonths, setSelectedMonths,
 }: {
   termId: string; tab: PreviewTab; setTab: (tab: PreviewTab) => void;
+  selectedMonths: string[] | null; setSelectedMonths: (v: string[] | null) => void;
 }) {
   const router = useRouter();
   const { data: rounds, isLoading: roundsLoading } = useSWR<{ items: { id: string }[] }>(
@@ -134,7 +146,9 @@ function PreviewSection({
             ) : noRounds ? (
               noRoundsNotice
             ) : (
-              <CourseSummaryPreviewPanel termId={termId} />
+              <CourseSummaryPreviewPanel
+                termId={termId} selectedMonths={selectedMonths} setSelectedMonths={setSelectedMonths}
+              />
             )}
           </div>
         </Tabs.Panel>
@@ -185,6 +199,15 @@ function PreviewTableSkeleton() {
 
 const fmtBaht = (n: number) => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// CourseSummaryMonthAmount is one course's เบิกจ่ายเดือน figure for ONE month
+// — never summed with any other month (11/09/2026: staff asked to see each
+// month on its own, not pooled into a range).
+interface CourseSummaryMonthAmount {
+  year_month: string;
+  label: string; // "มิถุนายน"
+  regular: number;
+  special: number;
+}
 interface CourseSummaryPreviewRow {
   course_code: string;
   course_name_th: string;
@@ -195,6 +218,7 @@ interface CourseSummaryPreviewRow {
   num_special: number;
   apply_regular: number;
   apply_special: number;
+  paid_by_month: CourseSummaryMonthAmount[];
   ta_student_id?: string;
   ta_name?: string;
   ta_level_th?: string;
@@ -228,6 +252,7 @@ interface CourseSummaryDisplayRow {
   num_special: number;
   apply_regular: number;
   apply_special: number;
+  paid_by_month: CourseSummaryMonthAmount[];
   tas: TAInfo[];
 }
 
@@ -242,6 +267,7 @@ function groupCourseSummaryRows(rows: CourseSummaryPreviewRow[]): CourseSummaryD
         lecturer: r.lecturer, claim_kind: r.claim_kind,
         num_regular: r.num_regular, num_special: r.num_special,
         apply_regular: r.apply_regular, apply_special: r.apply_special,
+        paid_by_month: r.paid_by_month,
         tas: [],
       };
       byCourse.set(r.course_code, g);
@@ -292,56 +318,133 @@ function TAAvatarStack({ tas }: { tas: TAInfo[] }) {
   );
 }
 
-const courseSummaryColumns: DataColumn<CourseSummaryDisplayRow>[] = [
-  {
-    id: "course_code", label: "รหัสวิชา", isRowHeader: true, sortable: true,
-    sortValue: r => r.course_code, render: r => <span className="font-medium tabular-nums">{r.course_code}</span>,
-  },
-  {
-    id: "course_name_th", label: "ชื่อวิชา", sortable: true,
-    sortValue: r => r.course_name_th, render: r => r.course_name_th,
-  },
-  { id: "credit_text", label: "หน่วยกิต", className: "whitespace-nowrap", hideOnMobile: true, render: r => r.credit_text },
-  {
-    id: "lecturer", label: "อาจารย์ผู้สอน", sortable: true,
-    sortValue: r => r.lecturer, render: r => r.lecturer,
-  },
-  {
-    id: "claim_kind", label: "ประเภทเบิก", hideOnMobile: true,
-    render: r => r.claim_kind ? <Chip tone="info">{r.claim_kind}</Chip> : null,
-  },
-  {
-    id: "ta", label: "TA", sortable: true,
-    sortValue: r => r.tas.length ? r.tas.map(t => t.name).join(", ") : "~",
-    render: r => <TAAvatarStack tas={r.tas} />,
-  },
-  {
-    id: "num", label: "จำนวนนักศึกษา (ปกติ/พิเศษ)", className: "text-right whitespace-nowrap", hideOnMobile: true,
-    render: r => `${r.num_regular} / ${r.num_special}`,
-  },
-  // The budget the course is allotted, per track — the one money figure this
-  // document reports. เบิกจ่ายจริง/คงเหลือ were dropped from both the .xlsx and
-  // this table (10/08/2026): actual spend belongs to the payout screens, and
-  // the college's own reference workbook only ever totalled this pair.
-  {
-    id: "apply", label: "ขออนุมัติเบิกจ่าย (บาท)", className: "text-right whitespace-nowrap", sortable: true,
-    sortValue: r => r.apply_regular + r.apply_special,
-    render: r => (
-      <div className="text-right tabular-nums">
-        <div>ปกติ {fmtBaht(r.apply_regular)}</div>
-        <div className="text-xs text-ink-4">พิเศษ {fmtBaht(r.apply_special)}</div>
-      </div>
-    ),
-  },
-];
+// buildCourseSummaryColumns is a function (not a static const) because the
+// เบิกจ่ายเดือน columns are now one PER SELECTED MONTH (11/09/2026, reversing
+// the SAME DAY's earlier cumulative-through-one-month design per staff's
+// follow-up: months must never be pooled into one combined figure) — the
+// column set itself depends on how many months are currently selected.
+function buildCourseSummaryColumns(
+  monthMeta: { year_month: string; label: string }[],
+): DataColumn<CourseSummaryDisplayRow>[] {
+  const monthCols: DataColumn<CourseSummaryDisplayRow>[] = monthMeta.map(m => ({
+    id: `paid_${m.year_month}`,
+    label: `เบิกจ่ายเดือน ${m.label} (บาท)`,
+    className: "text-right whitespace-nowrap",
+    hideOnMobile: true,
+    sortable: true,
+    sortValue: r => {
+      const p = r.paid_by_month.find(x => x.year_month === m.year_month);
+      return (p?.regular ?? 0) + (p?.special ?? 0);
+    },
+    render: r => {
+      const p = r.paid_by_month.find(x => x.year_month === m.year_month);
+      return (
+        <div className="text-right tabular-nums">
+          <div>ปกติ {fmtBaht(p?.regular ?? 0)}</div>
+          <div className="text-xs text-ink-4">พิเศษ {fmtBaht(p?.special ?? 0)}</div>
+        </div>
+      );
+    },
+  }));
 
-function CourseSummaryPreviewPanel({ termId }: { termId: string }) {
-  const { data, error, isLoading, mutate: retry } = useSWR<{ sheets: CourseSummaryPreviewSheet[]; warnings: string[] }>(
-    `/exports/terms/${termId}/course-summary/preview`
-  );
+  return [
+    {
+      id: "course_code", label: "รหัสวิชา", isRowHeader: true, sortable: true,
+      sortValue: r => r.course_code, render: r => <span className="font-medium tabular-nums">{r.course_code}</span>,
+    },
+    {
+      id: "course_name_th", label: "ชื่อวิชา", sortable: true,
+      sortValue: r => r.course_name_th, render: r => r.course_name_th,
+    },
+    { id: "credit_text", label: "หน่วยกิต", className: "whitespace-nowrap", hideOnMobile: true, render: r => r.credit_text },
+    {
+      id: "lecturer", label: "อาจารย์ผู้สอน", sortable: true,
+      sortValue: r => r.lecturer, render: r => r.lecturer,
+    },
+    {
+      id: "claim_kind", label: "ประเภทเบิก", hideOnMobile: true,
+      render: r => r.claim_kind ? <Chip tone="info">{r.claim_kind}</Chip> : null,
+    },
+    {
+      id: "ta", label: "TA", sortable: true,
+      sortValue: r => r.tas.length ? r.tas.map(t => t.name).join(", ") : "~",
+      render: r => <TAAvatarStack tas={r.tas} />,
+    },
+    {
+      id: "num", label: "จำนวนนักศึกษา (ปกติ/พิเศษ)", className: "text-right whitespace-nowrap", hideOnMobile: true,
+      render: r => `${r.num_regular} / ${r.num_special}`,
+    },
+    // The budget the course is allotted, per track — what L:M reports in the
+    // .xlsx.
+    {
+      id: "apply", label: "ขออนุมัติเบิกจ่าย (บาท)", className: "text-right whitespace-nowrap", sortable: true,
+      sortValue: r => r.apply_regular + r.apply_special,
+      render: r => (
+        <div className="text-right tabular-nums">
+          <div>ปกติ {fmtBaht(r.apply_regular)}</div>
+          <div className="text-xs text-ink-4">พิเศษ {fmtBaht(r.apply_special)}</div>
+        </div>
+      ),
+    },
+    ...monthCols,
+    // คงเหลือ — added back 11/09/2026 per staff request, reversing the
+    // 10/08/2026 decision to drop it: ขออนุมัติเบิกจ่ายข้างบน minus the SUM of
+    // every visible month column, same arithmetic the .xlsx formula uses, so
+    // the screen and the file can never disagree.
+    {
+      id: "remaining", label: "คงเหลือ (บาท)", className: "text-right whitespace-nowrap", sortable: true,
+      sortValue: r => {
+        const paidReg = r.paid_by_month.reduce((s, p) => s + p.regular, 0);
+        const paidSpec = r.paid_by_month.reduce((s, p) => s + p.special, 0);
+        return (r.apply_regular - paidReg) + (r.apply_special - paidSpec);
+      },
+      render: r => {
+        const paidReg = r.paid_by_month.reduce((s, p) => s + p.regular, 0);
+        const paidSpec = r.paid_by_month.reduce((s, p) => s + p.special, 0);
+        const remainRegular = r.apply_regular - paidReg;
+        const remainSpecial = r.apply_special - paidSpec;
+        return (
+          <div className="text-right tabular-nums">
+            <div className={remainRegular < 0 ? "font-medium text-danger" : ""}>{fmtBaht(remainRegular)}</div>
+            <div className={"text-xs " + (remainSpecial < 0 ? "font-medium text-danger" : "text-ink-4")}>
+              {fmtBaht(remainSpecial)}
+            </div>
+          </div>
+        );
+      },
+    },
+  ];
+}
+
+function CourseSummaryPreviewPanel({
+  termId, selectedMonths, setSelectedMonths,
+}: {
+  termId: string; selectedMonths: string[] | null; setSelectedMonths: (v: string[] | null) => void;
+}) {
+  const { data: monthsData } = useSWR<{ months: TermMonth[] }>(`/exports/terms/${termId}/course-summary/months`);
+  const allMonths = monthsData?.months ?? [];
+  // MonthChips wants TermMonthStatus (TermMonth + issued) — this document has
+  // no per-month "already issued" concept the way ปะหน้าจ่ายตรง does, so every
+  // chip is simply never flagged issued.
+  const monthChipsData = allMonths.map(m => ({ ...m, issued: false }));
+  const effectiveSelected = selectedMonths ?? allMonths.map(m => m.year_month);
+
+  const qs = monthsQuery(selectedMonths ?? []);
+  const { data, error, isLoading, mutate: retry } = useSWR<{
+    sheets: CourseSummaryPreviewSheet[]; warnings: string[]; months: string[]; month_labels: Record<string, string>;
+  }>(`/exports/terms/${termId}/course-summary/preview${qs}`);
   const sheets = data?.sheets ?? [];
+  const monthMeta = (data?.months ?? []).map(ym => ({ year_month: ym, label: data?.month_labels?.[ym] ?? ym }));
+  const columns = buildCourseSummaryColumns(monthMeta);
+
   return (
     <div className="space-y-8">
+      {allMonths.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium text-ink-2">เลือกเดือนที่จะแสดงเบิกจ่ายเดือน</div>
+          <MonthChips months={monthChipsData} selected={effectiveSelected} onChange={setSelectedMonths} />
+        </div>
+      )}
       {!!data?.warnings.length && (
         <div className="flex items-start gap-2 text-xs text-amber-800">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
@@ -379,13 +482,17 @@ function CourseSummaryPreviewPanel({ termId }: { termId: string }) {
               </div>
               <DataTable
                 ariaLabel={`สรุปรายวิชาที่ขอใช้ TA — ${sheet.sheet}`}
-                columns={courseSummaryColumns}
+                columns={columns}
                 rows={courseRows}
                 rowKey={r => r.course_code}
                 searchFn={r => `${r.course_code} ${r.course_name_th} ${r.lecturer} ${r.tas.map(t => t.name).join(" ")}`}
                 searchPlaceholder="ค้นหารหัสวิชา ชื่อวิชา อาจารย์ หรือ TA"
                 initialSort={{ column: "course_code", direction: "ascending" }}
-                minWidth="64rem"
+                // Grows with how many เบิกจ่ายเดือน columns are on screen —
+                // one money-pair column per selected month, plus ขออนุมัติ
+                // and คงเหลือ, so a 5-month term doesn't get squashed against
+                // the fixed base width the 3-money-column layout used to need.
+                minWidth={`${40 + 8 * (2 + monthMeta.length)}rem`}
                 loading={isLoading}
                 error={error}
                 onRetry={() => void retry()}
@@ -603,17 +710,26 @@ function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: T
 // warnings never block the download — they just get a confirmation step so
 // staff know what to double check (a missing student count, a course with no
 // approved TA yet) before they hand the file onward.
-function CourseSummaryDownloadButton({ termId, termLabel }: { termId: string; termLabel: string }) {
+function CourseSummaryDownloadButton({
+  termId, termLabel, selectedMonths,
+}: {
+  termId: string; termLabel: string; selectedMonths: string[] | null;
+}) {
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [warnings, setWarnings] = useState<string[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const groupGate = useCourseGroupGate(termId);
+  // Same qs the preview panel builds — null means "let the backend pick the
+  // default" (every term month), which resolves identically on both sides,
+  // so the file always matches whatever months the screen is currently
+  // showing.
+  const qs = monthsQuery(selectedMonths ?? []);
 
   async function downloadNow() {
     setDownloading(true);
     try {
-      const blob = await api.get<Blob>(`/exports/terms/${termId}/course-summary.xlsx`);
+      const blob = await api.get<Blob>(`/exports/terms/${termId}/course-summary.xlsx${qs}`);
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
       el.href = url;
@@ -633,7 +749,7 @@ function CourseSummaryDownloadButton({ termId, termLabel }: { termId: string; te
   async function checkWarningsThenDownload() {
     setChecking(true);
     try {
-      const res = await api.get<{ warnings: string[] }>(`/exports/terms/${termId}/course-summary/warnings`);
+      const res = await api.get<{ warnings: string[] }>(`/exports/terms/${termId}/course-summary/warnings${qs}`);
       if (res.warnings.length > 0) {
         setWarnings(res.warnings);
       } else {
@@ -753,6 +869,7 @@ function CourseSummaryHistoryModal({
                 </div>
                 <div className="text-xs text-ink-3">
                   {h.course_count} วิชา
+                  {h.month_label && ` · เบิกจ่ายเดือน ${h.month_label}`}
                   {h.generated_by && ` · โดย ${h.generated_by}`}
                 </div>
               </div>
@@ -779,6 +896,10 @@ interface CourseSummaryExportSummary {
   generated_at: string;
   generated_by?: string;
   course_count: number;
+  /** Which months' เบิกจ่ายเดือน columns this generation showed — empty for
+   *  generations before 11/09/2026, which covered the whole term the same
+   *  way an empty month selection still does. */
+  month_label?: string;
 }
 
 interface TransferCoverBlocker {

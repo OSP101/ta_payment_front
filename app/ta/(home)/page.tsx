@@ -1,5 +1,6 @@
 "use client";
 import useSWR from "swr";
+import { bahtSplitText, hoursSplitText } from "../../lib/trackSplit";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -110,8 +111,14 @@ interface TAStatus {
   teaching_course_id: string;
   stage: "draft" | "submitted" | "approved" | "exported";
   hours_approved: number;
+  hours_approved_regular: number;
+  hours_approved_special: number;
   hours_pending: number;
+  hours_pending_regular: number;
+  hours_pending_special: number;
   estimated_baht: number;
+  estimated_baht_regular: number;
+  estimated_baht_special: number;
 }
 
 interface TC {
@@ -642,8 +649,10 @@ function CourseCard({
         <span>นักศึกษา {course.num_students} คน</span>
         {status && (
           <>
-            <span>· อนุมัติ {status.hours_approved.toFixed(1)} ชม.</span>
-            {status.hours_pending > 0 && <span>· รอ {status.hours_pending.toFixed(1)} ชม.</span>}
+            <span>· อนุมัติ {hoursSplitText(status.hours_approved_regular, status.hours_approved_special)}</span>
+            {status.hours_pending > 0 && (
+              <span>· รอ {hoursSplitText(status.hours_pending_regular, status.hours_pending_special)}</span>
+            )}
           </>
         )}
       </div>
@@ -651,6 +660,11 @@ function CourseCard({
       {status && (
         <div className="mt-2 text-sm font-medium text-success">
           ฿{status.estimated_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          {status.estimated_baht_special > 0 && status.estimated_baht_regular > 0 && (
+            <span className="ml-1.5 text-xs font-normal text-muted">
+              {bahtSplitText(status.estimated_baht_regular, status.estimated_baht_special)}
+            </span>
+          )}
         </div>
       )}
 

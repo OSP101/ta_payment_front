@@ -5,6 +5,7 @@ import { CheckCircle2, Undo2, Check, BellRing, CalendarDays } from "lucide-react
 import { api, errMessage } from "../../../lib/api";
 import { useTerm, useTermKey } from "../../TermContext";
 import { notify } from "../../../lib/notify";
+import { HoursSplit } from "../../../lib/trackSplit";
 import {
   Button, Spinner, ConfirmDialog, TextArea,
 } from "../../../components/ui";
@@ -35,6 +36,9 @@ interface ReviewRow {
   course_code: string;
   status: string;
   approved_hours: number;
+  /** By the track the hour is billed on — the split the two claim sheets print. */
+  approved_hours_regular: number;
+  approved_hours_special: number;
   approved_baht: number;
   open_rows: number;
   // Rows the TA never sent before their period closed. Not outstanding work —
@@ -481,8 +485,8 @@ function Cell({
 
   return (
     <div className={"rounded-lg border px-2 py-1.5 text-center " + tone}>
-      <div className={"tabular text-sm font-medium " + (reviewed ? "text-emerald-900" : blocked ? "text-amber-900" : "")}>
-        {r.approved_hours.toFixed(1)} ชม.
+      <div className={"text-sm font-medium " + (reviewed ? "text-emerald-900" : blocked ? "text-amber-900" : "")}>
+        <HoursSplit stacked regular={r.approved_hours_regular ?? r.approved_hours} special={r.approved_hours_special ?? 0} />
       </div>
 
       <div className="mt-1 text-[11px] leading-tight">

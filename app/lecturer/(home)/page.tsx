@@ -8,6 +8,7 @@ import {
   CircleAlert, Wallet, ClipboardCheck, Send, UserPlus, ChevronDown,
 } from "lucide-react";
 import type { Term } from "../../lib/api";
+import { hoursSplitText } from "../../lib/trackSplit";
 import AnnouncementFeed from "../../components/AnnouncementFeed";
 import {
   PageHeader, Panel, EmptyState, Chip, Button, SelectField, Alert,
@@ -31,7 +32,11 @@ interface LecturerCourseStatus {
   ta_count: number;
   ta_pending_count: number;
   hours_pending_approval: number;
+  hours_pending_regular: number;
+  hours_pending_special: number;
   hours_approved: number;
+  hours_approved_regular: number;
+  hours_approved_special: number;
   estimated_baht: number;
   budget_max: number;
   budget_used: number;
@@ -599,7 +604,7 @@ function AlertsSection({
                     return {
                       id: c.id,
                       href: `/lecturer/courses/${c.id}/reports`,
-                      label: `${c.code} ${ov.ta_pending_count} คน (${ov.hours_pending_approval.toFixed(1)} ชม.)`,
+                      label: `${c.code} ${ov.ta_pending_count} คน (${hoursSplitText(ov.hours_pending_regular, ov.hours_pending_special)})`,
                     };
                   })}
                 />
@@ -727,9 +732,9 @@ function CourseCard({
             <span className="inline-flex items-center gap-1 font-medium text-foreground">
               <Users size={12} /> TA {ov!.ta_count} คน
             </span>
-            <span className="text-muted">· อนุมัติแล้ว {ov!.hours_approved.toFixed(1)} ชม.</span>
+            <span className="text-muted">· อนุมัติแล้ว {hoursSplitText(ov!.hours_approved_regular, ov!.hours_approved_special)}</span>
             {ov!.hours_pending_approval > 0 && (
-              <span className="text-muted">· รอตรวจ {ov!.hours_pending_approval.toFixed(1)} ชม.</span>
+              <span className="text-muted">· รอตรวจ {hoursSplitText(ov!.hours_pending_regular, ov!.hours_pending_special)}</span>
             )}
           </>
         ) : (

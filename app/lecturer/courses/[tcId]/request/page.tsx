@@ -162,6 +162,10 @@ type WindowState =
 
 const GRAD_MIN_HRS = 10;
 const GRAD_MAX_HRS = 12;
+// Mirrors the backend's gradReviewHourCap (ta_request.go) — ตรวจการบ้าน
+// (grade_hrs) is the only duty grad TAs can log through this form, capped
+// flat regardless of how much of the 10-12h total is still remaining.
+const GRAD_REVIEW_HOUR_CAP = 2;
 // ประกาศ 731/2565 + 1080/2565 คุมเป็น "ชม./วัน" แต่ฟอร์มกรอกเป็น "ชม./สัปดาห์"
 // จึงแปลงด้วยจำนวนวันทำการ (ต้องตรงกับ workingDaysPerWeek ฝั่ง backend ไม่งั้น
 // ฟอร์มจะยอมให้กรอกแล้วไปโดนตีกลับตอนส่ง)
@@ -195,6 +199,9 @@ function workloadOf(a: Assignment, sectionId: string): WorkloadFields {
 /** Weekly hours for one section, using only the fields its level applies to. */
 function sectionHours(w: WorkloadFields, level: string): number {
   if (level === "master" || level === "phd") {
+    // prep_hrs/other_hrs count toward the 10-12h regulation TOTAL (this sum)
+    // but are otherwise administrative-only — see the isGrad workload block
+    // below and authz.go's AllowOther/WeeklyCapOther.
     return w.help_teach_hrs + w.prep_hrs + w.grade_hrs + w.other_hrs;
   }
   return w.check_work_hrs + w.attendance_hrs + w.ug_other_hrs + w.lab_hrs + w.lab_other_hrs;
@@ -1137,29 +1144,55 @@ function AssignmentBlock({
                       {isGrad ? (
                         (() => {
                           // Grad regulation bounds the TA's TOTAL at 12 h/week,
-                          // so each field may only grow by what the total has
-                          // left — computed across sections, counting a
-                          // co-taught group once.
+                          // so ช่วยสอน/เตรียมการสอน/อื่นๆ may each only grow by
+                          // what the total has left — computed across
+                          // sections, counting a co-taught group once.
+                          // ตรวจการบ้าน (grade_hrs) additionally carries its
+                          // own flat gradReviewHourCap ceiling (2h/week,
+                          // mirrored from the backend's
+                          // validateGradWorkloadCaps).
+                          //
+                          // Decided with the office (2026-09-11, revised same
+                          // day after seeing the live form block submission
+                          // below the 10h floor): grad TAs only get ONE
+                          // billable/loggable worklog duty — ตรวจการบ้าน,
+                          // ≤2h/week, same as undergrad's simplicity. But
+                          // เตรียมการสอน/อื่นๆ (prep_hrs/other_hrs) stay on
+                          // THIS form — lecturers still need them to reach
+                          // the 10-12h graduate-school regulation total
+                          // without artificially inflating ช่วยสอน. They are
+                          // administrative only from here on: never turned
+                          // into a worklog duty card or a payable hour (see
+                          // AllowOther/WeeklyCapOther in authz.go, hardcoded
+                          // false/0 for grad regardless of these values).
                           const remaining = Math.max(0, GRAD_MAX_HRS - total);
                           const cap = (v: number) => v + remaining;
                           return (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <HrsRow label="ช่วยสอน" hrs={w.help_teach_hrs} desc={w.help_teach_desc}
-                                max={cap(w.help_teach_hrs)}
-                                onH={v => onWorkload(idx, sid, { help_teach_hrs: v })}
-                                onD={v => onWorkload(idx, sid, { help_teach_desc: v })} />
-                              <HrsRow label="เตรียมการสอน" hrs={w.prep_hrs} desc={w.prep_desc}
-                                max={cap(w.prep_hrs)}
-                                onH={v => onWorkload(idx, sid, { prep_hrs: v })}
-                                onD={v => onWorkload(idx, sid, { prep_desc: v })} />
-                              <HrsRow label="ตรวจแบบทดสอบ" hrs={w.grade_hrs} desc={w.grade_desc}
-                                max={cap(w.grade_hrs)}
-                                onH={v => onWorkload(idx, sid, { grade_hrs: v })}
-                                onD={v => onWorkload(idx, sid, { grade_desc: v })} />
-                              <HrsRow label="อื่น ๆ" hrs={w.other_hrs} desc={w.other_desc}
-                                max={cap(w.other_hrs)}
-                                onH={v => onWorkload(idx, sid, { other_hrs: v })}
-                                onD={v => onWorkload(idx, sid, { other_desc: v })} />
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <HrsRow label="ช่วยสอน" hrs={w.help_teach_hrs} desc={w.help_teach_desc}
+                                  max={cap(w.help_teach_hrs)}
+                                  onH={v => onWorkload(idx, sid, { help_teach_hrs: v })}
+                                  onD={v => onWorkload(idx, sid, { help_teach_desc: v })} />
+                                <HrsRow label="ตรวจการบ้าน (ไม่เกิน 2 ชม./สัปดาห์)" hrs={w.grade_hrs} desc={w.grade_desc}
+                                  max={Math.min(GRAD_REVIEW_HOUR_CAP, cap(w.grade_hrs))}
+                                  onH={v => onWorkload(idx, sid, { grade_hrs: v })}
+                                  onD={v => onWorkload(idx, sid, { grade_desc: v })} />
+                              </div>
+                              {/* <div className="text-[11px] text-ink-3">
+                                สองรายการถัดไปใช้เพื่อให้ครบ 10–12 ชม./สัปดาห์ตามระเบียบบัณฑิตศึกษาเท่านั้น
+                                — ไม่ถูกนำไปสร้างตารางลงเวลาหรือคำนวณค่าตอบแทน
+                              </div> */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <HrsRow label="เตรียมการสอน" hrs={w.prep_hrs} desc={w.prep_desc}
+                                  max={cap(w.prep_hrs)}
+                                  onH={v => onWorkload(idx, sid, { prep_hrs: v })}
+                                  onD={v => onWorkload(idx, sid, { prep_desc: v })} />
+                                <HrsRow label="อื่น ๆ ระบุ" hrs={w.other_hrs} desc={w.other_desc}
+                                  max={cap(w.other_hrs)}
+                                  onH={v => onWorkload(idx, sid, { other_hrs: v })}
+                                  onD={v => onWorkload(idx, sid, { other_desc: v })} />
+                              </div>
                             </div>
                           );
                         })()

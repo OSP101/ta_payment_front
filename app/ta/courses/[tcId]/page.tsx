@@ -1,6 +1,7 @@
 "use client";
 import { use, useMemo } from "react";
 import useSWR from "swr";
+import { bahtSplitText, hoursSplitText } from "../../../lib/trackSplit";
 import Link from "next/link";
 import { BookOpen, Clock, Wallet, CalendarClock, ArrowRight, MapPin, AlertTriangle, CircleAlert } from "lucide-react";
 import { ApiError } from "../../../lib/api";
@@ -38,8 +39,14 @@ interface TAStatus {
   teaching_course_id: string;
   stage: "draft" | "submitted" | "approved" | "exported";
   hours_approved: number;
+  hours_approved_regular: number;
+  hours_approved_special: number;
   hours_pending: number;
+  hours_pending_regular: number;
+  hours_pending_special: number;
   estimated_baht: number;
+  estimated_baht_regular: number;
+  estimated_baht_special: number;
 }
 
 interface Assignment {
@@ -154,21 +161,27 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
               icon={<CalendarClock size={18} />}
               tone={myStatus?.stage === "approved" ? "success" : myStatus?.stage === "submitted" ? "warn" : "brand"}
             />
+            {/* Hours and money are named by track: ภาคปกติ and ภาคพิเศษ are
+                paid at different rates from different budgets, so one total
+                would say nothing about what arrives. */}
             <StatCard
               label="ชม.อนุมัติแล้ว"
               value={(myStatus?.hours_approved ?? 0).toFixed(1)}
+              hint={(myStatus?.hours_approved ?? 0) > 0 ? hoursSplitText(myStatus?.hours_approved_regular ?? 0, myStatus?.hours_approved_special ?? 0) : undefined}
               icon={<Clock size={18} />}
               tone="success"
             />
             <StatCard
               label="ชม.รออนุมัติ"
               value={(myStatus?.hours_pending ?? 0).toFixed(1)}
+              hint={(myStatus?.hours_pending ?? 0) > 0 ? hoursSplitText(myStatus?.hours_pending_regular ?? 0, myStatus?.hours_pending_special ?? 0) : undefined}
               icon={<Clock size={18} />}
               tone="warn"
             />
             <StatCard
               label="ยอดเงินโดยประมาณ"
               value={`฿${(myStatus?.estimated_baht ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+              hint={(myStatus?.estimated_baht ?? 0) > 0 ? bahtSplitText(myStatus?.estimated_baht_regular ?? 0, myStatus?.estimated_baht_special ?? 0) : undefined}
               icon={<Wallet size={18} />}
               tone="brand"
             />

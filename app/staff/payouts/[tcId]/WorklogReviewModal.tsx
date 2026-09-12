@@ -3,16 +3,18 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
   ClipboardCheck, ChevronLeft, ChevronRight, CheckCircle2, Check, Undo2,
-  Pencil, Trash2, X, ShieldCheck, ImagePlus, RotateCcw,
+  Pencil, Trash2, X, ShieldCheck, ImagePlus, RotateCcw, Settings2,
 } from "lucide-react";
 import { api, errMessage, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
+import { HoursSplit } from "../../../lib/trackSplit";
 import {
   Modal, Button, Spinner, Chip, TextArea, TextInput, Alert, IconButton,
   ConfirmDialog,
 } from "../../../components/ui";
 import { packLanes, parseTime } from "../../../components/ScheduleGrid";
 import { readAddForm, writeAddForm, clearAddForm } from "../../../lib/draftStorage";
+import { WorkloadEditModal } from "../../../components/WorkloadEditModal";
 
 /**
  * One TA's month, checked against their own week.
@@ -167,6 +169,7 @@ export function WorklogReviewModal({
   const [pending, setPending] = useState<Record<string, Pending>>({});
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [pinnedKey, setPinnedKey] = useState<string | null>(null);
+  const [workloadEditOpen, setWorkloadEditOpen] = useState(false);
   const [commitOpen, setCommitOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -220,8 +223,12 @@ export function WorklogReviewModal({
   // rows are already on the client and a second endpoint could disagree with
   // what the table below is showing.
   const totals = useMemo(() => {
-    const t: Record<string, number> = { lecture: 0, lab: 0, review: 0, other: 0 };
-    for (const d of shown) t[d.activity] = (t[d.activity] ?? 0) + d.hours;
+    const t: Record<string, number> = { lecture: 0, lab: 0, review: 0, other: 0, regular: 0, special: 0 };
+    for (const d of shown) {
+      t[d.activity] = (t[d.activity] ?? 0) + d.hours;
+      // The total is named by track: the two are paid at different rates.
+      t[d.track === "special" ? "special" : "regular"] += d.hours;
+    }
     return t;
   }, [shown]);
 
@@ -311,6 +318,10 @@ export function WorklogReviewModal({
               <Chip tone="warn">ยังมี {target.openRows} รายการไม่ปิด</Chip>
             ) : null}
 
+            <Button variant="ghost" size="sm" onPress={() => setWorkloadEditOpen(true)}>
+              <Settings2 size={14} /> แก้ไขภาระงาน
+            </Button>
+
             <span className="flex-1" />
 
             {pendingCount > 0 && (
@@ -396,7 +407,7 @@ export function WorklogReviewModal({
                   <Stat label="บรรยาย" value={totals.lecture} />
                   <Stat label="ปฏิบัติการ" value={totals.lab} />
                   <Stat label="ตรวจงาน + อื่นๆ" value={totals.review + totals.other} />
-                  <Stat label="รวม" value={shown.reduce((a, d) => a + d.hours, 0)} strong />
+                  <Stat label="รวม" value={<HoursSplit stacked regular={totals.regular} special={totals.special} />} strong />
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--hairline)]">
@@ -466,16 +477,26 @@ export function WorklogReviewModal({
           }}
         />
       )}
+
+      {target && (
+        <WorkloadEditModal
+          open={workloadEditOpen}
+          onClose={() => setWorkloadEditOpen(false)}
+          tcId={tcId}
+          taId={target.taId}
+          taName={target.taName}
+        />
+      )}
     </Modal>
   );
 }
 
-function Stat({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+function Stat({ label, value, strong }: { label: string; value: number | React.ReactNode; strong?: boolean }) {
   return (
     <div className="rounded-lg bg-surface-secondary px-2 py-1.5">
       <div className="text-[11px] text-muted">{label}</div>
       <div className={"tabular " + (strong ? "text-sm font-medium" : "text-sm")}>
-        {value.toFixed(1)} ชม.
+        {typeof value === "number" ? `${value.toFixed(1)} ชม.` : value}
       </div>
     </div>
   );

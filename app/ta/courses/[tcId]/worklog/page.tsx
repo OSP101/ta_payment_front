@@ -613,11 +613,11 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     () => new Set(budgetForecast?.over_budget ? (budgetForecast.unpaid_months ?? []) : []),
     [budgetForecast],
   );
-  // Since the cutoff moved from the month to the คาบ, a month can be part-paid.
+  // A short budget pays a month PART of its worth, so a month can be part-paid.
   // Kept apart from unpaidMonths so the chip never tells somebody they get
   // nothing for a month they are in fact partly paid for.
   // Months where a WHOLE budget pool was emptied while another was paid. ภาคปกติ
-  // and ภาคพิเศษ are separate budgets, so "ได้ไม่ครบทุกคาบ" can be true of the
+  // and ภาคพิเศษ are separate budgets, so "ได้ไม่เต็มจำนวน" can be true of the
   // course while a TA on the empty side is paid nothing at all that month.
   const zeroedTracks = useMemo(
     () => new Map((budgetForecast?.over_budget ? (budgetForecast.track_unpaid_months ?? []) : [])
@@ -1575,7 +1575,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       )}
 
       {/* The budget ran out before the term did. Stated in months, because that
-          is the unit the cutoff works in and the only form a TA can act on. */}
+          is the unit the documents pay in and the only form a TA can act on. */}
       {(unpaidMonths.size > 0 || partialMonths.size > 0 || zeroedTracks.size > 0) && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
@@ -1585,7 +1585,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               : "ถ้าอาจารย์อนุมัติครบตามที่ลงไว้ งบจะไม่พอ "}
             {partialMonths.size > 0 && (
               <>
-                <b>{[...partialMonths].map(formatMonthTH).join(", ")}</b> ได้ไม่ครบทุกคาบ
+                <b>{[...partialMonths].map(formatMonthTH).join(", ")}</b> ได้ไม่เต็มจำนวน
                 {(zeroedTracks.size > 0 || unpaidMonths.size > 0) ? " และ " : " "}
               </>
             )}
@@ -1601,12 +1601,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             {unpaidMonths.size > 0 && (
               <><b>{[...unpaidMonths].map(formatMonthTH).join(", ")}</b> ไม่ได้รับค่าตอบแทน </>
             )}
-            ชั่วโมงยังถูกบันทึกไว้ครบและอาจารย์อนุมัติได้ตามปกติ แต่คาบที่เกินงบจะไม่ถูกนำไปเบิก
-            {/* Not "ใครสอนคาบไหนก่อนได้ก่อน" any more: the budget is shared out
-                between people in proportion to what each is owed before it is
-                spent, so being timetabled late no longer costs a TA anything
-                (settleTrack, 07/09/2026). */}
-            <br /><span className="text-red-900/75">งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น ทุกคนถูกหักเป็นสัดส่วนเท่ากัน ผู้ที่ปฏิบัติงานเท่ากันจะได้รับเท่ากัน</span>
+            ชั่วโมงบันทึกไว้ครบ แต่ส่วนที่เกินงบจะไม่ถูกนำไปเบิก
+            {/* Not "ใครสอนคาบไหนก่อนได้ก่อน": the budget is shared out between
+                people as money, in proportion to what each is owed, so being
+                timetabled late costs a TA nothing and nobody's คาบ is singled
+                out (settleTrack, 11/09/2026). */}
+            <br /><span className="text-red-900/75">งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น ทุกคนถูกหักเป็นสัดส่วนเท่ากัน</span>
           </span>
         </div>
       )}
@@ -3193,7 +3193,7 @@ function MonthlyWorklogView({
                   )}
                   {partialMonths?.has(month) && (
                     <span className="ml-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
-                      งบไม่ถึงบางคาบ
+                      งบไม่ถึง · ได้ไม่เต็มจำนวน
                     </span>
                   )}
                   {zeroedTracks?.has(month) && (
