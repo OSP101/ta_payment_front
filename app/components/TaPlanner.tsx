@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   Calculator, ChevronDown, CircleCheck, TriangleAlert, Sparkles, Users, Wallet, Plus, Info,
@@ -328,8 +328,19 @@ interface Option {
 /** sessionStorage key a plan travels under from the budget page to the form. */
 export const planHandoffKey = (tcId: string) => `ta-plan-handoff:${tcId}`;
 
+/** What the form's current rows would cost — handed to the page so the confirm
+ *  dialog can show each person's money before the lecturer commits. */
+export interface DraftEstimate {
+  people: { index: number; owed: number; share: number; perMonth: number; hours: number }[];
+  regularTotal: number; regularCap: number;
+  specialTotal: number; specialCap: number; hasSpecial: boolean;
+  verdict: "ok" | "tight" | "over";
+  over: number;
+  months: number;
+}
+
 export function TaPlanner({
-  tcId, schedules, drafts, scope, onApplyPlan, variant = "request",
+  tcId, schedules, drafts, scope, onApplyPlan, onDraftEstimate, variant = "request",
 }: {
   tcId: string;
   /** Section timetables from /teaching-courses/:id — to detect shared sittings. */
@@ -337,6 +348,7 @@ export function TaPlanner({
   drafts: PlanDraft[];
   scope: Scope;
   onApplyPlan?: (items: PlanItem[]) => void;
+  onDraftEstimate?: (est: DraftEstimate | null) => void;
   /**
    * "request": collapsible card above the form, evaluates the form's drafts.
    * "budget": the standalone budget page — always open, also lists the
@@ -355,6 +367,22 @@ export function TaPlanner({
   );
 
   const model = useMemo(() => f ? buildModel(f, groups, scope, drafts) : null, [f, groups, scope, drafts]);
+
+  useEffect(() => {
+    if (!onDraftEstimate) return;
+    if (!f || !model) { onDraftEstimate(null); return; }
+    const months = f.rates.term_months || 4;
+    const ev = model.draftEval;
+    onDraftEstimate({
+      people: ev.people.map(p => {
+        const owed = p.cost.regular + p.cost.special + p.cost.lump;
+        return { index: p.index, owed, share: p.share, perMonth: p.share / months, hours: p.cost.hoursRegular + p.cost.hoursSpecial };
+      }),
+      regularTotal: ev.regularTotal, regularCap: model.regular.cap,
+      specialTotal: ev.specialTotal, specialCap: model.special.cap, hasSpecial: model.hasSpecial,
+      verdict: ev.verdict, over: ev.overRegular + ev.overSpecial, months,
+    });
+  }, [f, model, onDraftEstimate]);
 
   if (!f || !model) {
     return <div className="mb-4 h-28 rounded-xl bg-surface-secondary animate-pulse" />;
@@ -508,7 +536,8 @@ interface Pool {
 }
 
 interface DraftEval {
-  people: { name: string; level: string; cost: PersonCost; share: number }[];
+  /** index = position in the drafts array, so the form can line these up with its rows. */
+  people: { index: number; name: string; level: string; cost: PersonCost; share: number }[];
   regularTotal: number;
   specialTotal: number;
   lumpTotal: number;
@@ -886,8 +915,10 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
 
   // The form as it stands.
   const people = drafts
-    .filter(d => d.section_ids.length > 0)
-    .map(d => ({
+    .map((d, index) => ({ d, index }))
+    .filter(({ d }) => d.section_ids.length > 0)
+    .map(({ d, index }) => ({
+      index,
       name: d.ta_name || "ยังไม่เลือกชื่อ",
       level: d.level,
       cost: personCost(d.level, d.section_ids, sid => d.workloads[sid], f, groups, scope),

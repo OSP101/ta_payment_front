@@ -25,7 +25,7 @@ import {
   PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
-import { TaPlanner, planHandoffKey, type PlanItem } from "../../../../components/TaPlanner";
+import { TaPlanner, planHandoffKey, type PlanItem, type DraftEstimate } from "../../../../components/TaPlanner";
 
 /**
  * On a short screen the planner card fills the viewport and the numbered
@@ -69,6 +69,8 @@ function ScrollToFormHint({ targetRef }: { targetRef: React.RefObject<HTMLDivEle
     </div>
   );
 }
+
+const fmtBahtEst = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                       */
@@ -515,6 +517,65 @@ function RequestFormSection({
     setScope(defaultScope);
   }, [defaultScope]);
 
+  /* --- draft persistence ----------------------------------------------- */
+  // What the lecturer typed lives on the server (one draft per lecturer per
+  // course), so a refresh, a session timeout or another machine brings the
+  // form back as it was. Loaded once per course; saved three seconds after the
+  // last change; dropped on a successful submit.
+  type DraftPayload = { v: 1; scope: "lecture" | "lab" | "both"; assignments: Assignment[] };
+  const draftKey = tcId ? `/teaching-courses/${tcId}/request-draft` : null;
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const lastSavedJson = useRef<string>("");
+  useEffect(() => {
+    if (!draftKey) return;
+    let cancelled = false;
+    setDraftReady(false);
+    api.get<{ payload: DraftPayload; updated_at: string } | undefined>(draftKey)
+      .then(d => {
+        if (cancelled) return;
+        const p = d?.payload;
+        if (p && p.v === 1 && Array.isArray(p.assignments)) {
+          // Only rows for sections that still exist — a section removed since
+          // the draft was written would otherwise resurrect as a phantom.
+          const live = new Set((course?.sections ?? []).map(sec => sec.id));
+          const rows = p.assignments
+            .map(a => ({ ...a, section_ids: a.section_ids.filter(sid => live.has(sid)) }))
+            .filter(a => a.section_ids.length > 0 || a.ta_id);
+          if (rows.length > 0) {
+            setAssignments(rows);
+            if (p.scope) setScope(p.scope);
+            setDraftSavedAt(d?.updated_at ? new Date(d.updated_at) : null);
+            lastSavedJson.current = JSON.stringify({ v: 1, scope: p.scope, assignments: rows });
+          }
+        }
+      })
+      .catch(() => { /* no draft or offline — start blank */ })
+      .finally(() => { if (!cancelled) setDraftReady(true); });
+    return () => { cancelled = true; };
+    // course.sections is only used to prune; wait for it, then load once per course.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey, course?.sections !== undefined]);
+
+  useEffect(() => {
+    if (!draftKey || !draftReady) return;
+    const payload: DraftPayload = { v: 1, scope, assignments };
+    const json = JSON.stringify(payload);
+    if (json === lastSavedJson.current) return;
+    const t = setTimeout(() => {
+      if (assignments.length === 0) {
+        // Emptied by hand → forget the draft rather than store an empty one.
+        lastSavedJson.current = json;
+        api.del(draftKey).then(() => setDraftSavedAt(null)).catch(() => {});
+        return;
+      }
+      api.put<{ updated_at: string }>(draftKey, payload)
+        .then(r => { lastSavedJson.current = json; setDraftSavedAt(new Date(r.updated_at)); })
+        .catch(() => { /* retried on the next change */ });
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [draftKey, draftReady, scope, assignments]);
+
   /* --- derived --------------------------------------------------------- */
   const firstSectionId = course?.sections?.[0]?.id ?? "";
 
@@ -636,6 +697,10 @@ function RequestFormSection({
     for (const s of course?.sections ?? []) out[s.id] = s.schedules ?? [];
     return out;
   }, [course?.sections]);
+  // The planner's estimate of what each row will earn — shown again in the
+  // confirm dialog so the money is in front of the lecturer at the moment of
+  // decision, not only in a card they may have scrolled past.
+  const [estimate, setEstimate] = useState<DraftEstimate | null>(null);
   const plannerDrafts = useMemo(() => {
     const byId = new Map(allTas.map(t => [t.id, t]));
     return assignments.map(a => {
@@ -795,6 +860,10 @@ function RequestFormSection({
       // fetch. Clear the form and force both to refresh.
       setAssignments([]);
       setConflictsByTa({});
+      // The submitted form is no longer a draft.
+      lastSavedJson.current = JSON.stringify({ v: 1, scope, assignments: [] });
+      setDraftSavedAt(null);
+      if (draftKey) api.del(draftKey).catch(() => {});
       if (candidatesKey) mutate(candidatesKey);
       if (res.status === "submitted") {
         // Deferred decision: at least one TA has no timetable yet, so there is
@@ -833,6 +902,11 @@ function RequestFormSection({
           <div className="font-semibold">ส่งคำขอผู้ช่วยสอน</div>
           <div className="text-xs text-muted">ทำทีละขั้นตามหมายเลข แล้วกด “ส่งคำขอ” ด้านล่าง</div>
         </div>
+        {draftSavedAt && assignments.length > 0 && (
+          <div className="ml-auto text-xs text-muted flex items-center gap-1 shrink-0" title="ระบบเก็บสิ่งที่กรอกไว้ให้อัตโนมัติ เปิดจากเครื่องไหนก็ได้ค่าเดิม">
+            <CheckCircle2 size={12} /> บันทึกร่างแล้ว {draftSavedAt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+          </div>
+        )}
       </div>
 
       {late && (
@@ -855,6 +929,7 @@ function RequestFormSection({
         schedules={plannerSchedules}
         drafts={plannerDrafts}
         onApplyPlan={applyPlan}
+        onDraftEstimate={setEstimate}
       />
       </div>
 
@@ -1078,20 +1153,63 @@ function RequestFormSection({
               const secLabels = a.section_ids
                 .map(sid => secs.find(s => s.id === sid)?.sec_no)
                 .filter(Boolean);
+              const est = estimate?.people.find(p => p.index === i);
+              const cut = est ? est.share < est.owed - 0.5 : false;
               return (
-                <li key={i} className="rounded-lg border border-hairline p-2.5">
-                  <div className="font-medium text-ink-1">
-                    {ta ? `${ta.first_name} ${ta.last_name}` : "-"}
+                <li key={i} className="rounded-lg border border-hairline p-2.5 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium text-ink-1">
+                      {ta ? `${ta.first_name} ${ta.last_name}` : "-"}
+                    </div>
+                    <div className="text-xs text-ink-3 mt-0.5">
+                      กลุ่ม {secLabels.join(", ") || "-"} ·{" "}
+                      {a.level === "master" || a.level === "phd" ? "บัณฑิตศึกษา" : "ปริญญาตรี"} ·{" "}
+                      {total.toFixed(1)} ชม./สัปดาห์
+                    </div>
                   </div>
-                  <div className="text-xs text-ink-3 mt-0.5">
-                    กลุ่ม {secLabels.join(", ") || "-"} ·{" "}
-                    {a.level === "master" || a.level === "phd" ? "บัณฑิตศึกษา" : "ปริญญาตรี"} ·{" "}
-                    {total.toFixed(1)} ชม./สัปดาห์
-                  </div>
+                  {est && (
+                    <div className="shrink-0 text-right tabular-nums">
+                      <div className="text-xs text-ink-3">จะได้ประมาณ</div>
+                      <div className={"font-semibold " + (cut ? "text-danger" : "text-ink-1")}>
+                        {cut && <s className="font-normal text-ink-3 mr-1">{fmtBahtEst(est.owed)}</s>}
+                        {fmtBahtEst(est.share)}
+                      </div>
+                      <div className="text-xs text-ink-3">≈ {fmtBahtEst(est.perMonth)}/เดือน · {est.hours.toLocaleString("th-TH", { maximumFractionDigits: 1 })} ชม./เทอม</div>
+                    </div>
+                  )}
                 </li>
               );
             })}
           </ul>
+
+          {estimate && estimate.people.length > 0 && (
+            <div className={
+              "rounded-lg border p-2.5 text-xs space-y-1 " +
+              (estimate.verdict === "over" ? "border-danger/30 bg-danger-soft/40" : estimate.verdict === "tight" ? "border-warning/30 bg-warning-soft/40" : "border-success/30 bg-success-soft/40")
+            }>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">งบภาคปกติที่จะใช้ (รวม TA เดิม)</span>
+                <span className={"tabular-nums " + (estimate.regularTotal > estimate.regularCap + 0.5 ? "text-danger font-semibold" : "")}>
+                  {fmtBahtEst(estimate.regularTotal)} / {fmtBahtEst(estimate.regularCap)}
+                </span>
+              </div>
+              {estimate.hasSpecial && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">งบภาคพิเศษที่จะใช้</span>
+                  <span className={"tabular-nums " + (estimate.specialTotal > estimate.specialCap + 0.5 ? "text-danger font-semibold" : "")}>
+                    {fmtBahtEst(estimate.specialTotal)} / {fmtBahtEst(estimate.specialCap)}
+                  </span>
+                </div>
+              )}
+              <div className="pt-0.5 text-ink-2">
+                {estimate.verdict === "over"
+                  ? <>เกินงบ <b>{fmtBahtEst(estimate.over)}</b> — ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขที่ขีดฆ่าคือค่างานเต็ม) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า หรือย้อนกลับไปลดจำนวนคน/ชั่วโมง</>
+                  : estimate.verdict === "tight"
+                    ? <>พอดีงบแบบตึง ๆ — ถ้ามีคาบชดเชยเพิ่มระหว่างเทอมอาจเกินได้เล็กน้อย</>
+                    : <>อยู่ในงบ — ตัวเลขเป็นประมาณการจากจำนวนคาบสอนจริงตามปฏิทิน</>}
+              </div>
+            </div>
+          )}
 
           {gradSpecial && <GradSpecialAlert g={gradSpecial} />}
 

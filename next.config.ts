@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const backend = process.env.API_URL ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
+  // Set by the Dockerfile only. Standalone emits .next/standalone with a
+  // self-contained server.js and a pruned node_modules, so the runtime image
+  // carries ~1/4 of the full install. Left off outside Docker so `next dev`
+  // / `next start` on a developer machine behave exactly as before.
+  output: process.env.NEXT_OUTPUT_STANDALONE === "1" ? "standalone" : undefined,
   experimental: {
     // Next buffers a proxied request body in memory so it can be read twice,
     // and caps that buffer at 10 MB by default. Document uploads are capped at
