@@ -12,12 +12,13 @@ import {
 } from "../../../components/ui";
 import { CourseSubmissionPanel } from "../../../components/CourseSubmissionPanel";
 import { type TARequestRow } from "../../RequestsTable";
+import { courseCodeLabel } from "../../../lib/courseCode";
 
 interface Section {
   id: string; sec_no: string; track: string; room?: string;
 }
 interface TC {
-  id: string; code: string; name_th: string; term_id: string;
+  id: string; code: string; alt_codes?: string[]; name_th: string; term_id: string;
   /** คาบที่ตรงวันหยุดและยังไม่กำหนดวันชดเชย */
   unresolved_makeups?: number;
   num_students: number;
@@ -84,7 +85,7 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
   return (
     <div>
       <PageHeader
-        title={course ? `${course.code} ${course.name_th}` : "รายวิชา"}
+        title={course ? `${courseCodeLabel(course)} ${course.name_th}` : "รายวิชา"}
         description="ภาพรวมสถานะและข้อมูลของรายวิชานี้"
         actions={
           <Link href="/lecturer">

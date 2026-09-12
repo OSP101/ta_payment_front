@@ -12,6 +12,7 @@ import {
   PageHeader, Button, IconButton, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
+import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 
 // Both modals are heavy (forms, section-schedule editors, autocompletes) but
 // only one person in ten ever opens them in a given visit — code-split them
@@ -26,7 +27,7 @@ const OpenCourseModal = dynamic(() => import("./OpenCourseModal"), { ssr: false 
 const ImportModal = dynamic(() => import("./ImportModal"), { ssr: false });
 
 interface TC {
-  id: string; code: string; name_th: string; term_id: string;
+  id: string; code: string; alt_codes?: string[]; name_th: string; term_id: string;
   credits: number; lecture_hrs: number; lab_hrs: number; self_hrs: number;
   num_students: number;
   num_students_regular: number;
@@ -159,7 +160,7 @@ export default function TeachingPage() {
               rows={shownCourses}
               loading={!!termId && !courses}
               rowKey={c => c.id}
-              searchFn={c => `${c.code} ${c.name_th}`}
+              searchFn={c => `${courseCodeLabel(c)} ${c.name_th}`}
               searchPlaceholder="ค้นหารหัสวิชา / ชื่อวิชา…"
               initialSort={{ column: "code", direction: "ascending" }}
               pageSize={10}
@@ -203,7 +204,7 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
       id: "code", label: "รหัสวิชา", sortable: true, isRowHeader: true,
       sortValue: c => c.code,
       className: "font-medium tabular-nums whitespace-nowrap",
-      render: c => c.code,
+      render: c => <CourseCode c={c} />,
     },
     {
       id: "name", label: "ชื่อวิชา", sortable: true,
@@ -265,7 +266,7 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
             </span>
             {missing && <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">ยังไม่กรอก</span>}
             <IconButton
-              label={`แก้ไขจำนวนนักศึกษา ${c.code}`}
+              label={`แก้ไขจำนวนนักศึกษา ${courseCodeLabel(c)}`}
               variant="ghost" size="sm"
               onClick={() => onEditStudents(c)}
             >
@@ -442,7 +443,7 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
       onClose={() => { if (!saving) onClose(); }}
       size="sm"
       icon={<Users size={18} />}
-      title={course ? `แก้ไขจำนวนนักศึกษา · ${course.code}` : ""}
+      title={course ? `แก้ไขจำนวนนักศึกษา · ${courseCodeLabel(course)}` : ""}
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>

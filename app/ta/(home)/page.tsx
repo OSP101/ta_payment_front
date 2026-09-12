@@ -15,6 +15,7 @@ import {
   PageHeader, Panel, EmptyState, Chip, SelectField, Spinner, Button,
   Alert, type SelectOption, type ChipTone,
 } from "../../components/ui";
+import { CourseCode } from "../../lib/courseCode";
 type SubmissionStage =
   | "pending"
   | "exported"
@@ -122,7 +123,7 @@ interface TAStatus {
 }
 
 interface TC {
-  id: string; code: string; name_th: string;
+  id: string; code: string; alt_codes?: string[]; name_th: string;
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
@@ -636,7 +637,7 @@ function CourseCard({
           <BookOpen size={17} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold tabular">{course.code}</div>
+          <div className="truncate font-semibold tabular"><CourseCode c={course} /></div>
           <div className="truncate text-xs text-muted">{course.name_th}</div>
         </div>
         <ArrowRight

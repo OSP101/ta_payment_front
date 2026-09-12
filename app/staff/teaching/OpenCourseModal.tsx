@@ -6,10 +6,11 @@ import type { Key } from "@heroui/react";
 import {
   Autocomplete, EmptyState, Label, ListBox, SearchField, useFilter, toast,
 } from "@heroui/react";
-import { BookPlus, CircleAlert, Clock, Check, Plus, X } from "lucide-react";
+import { BookPlus, CircleAlert, Clock, Check, Plus, X, GitMerge } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
+import { courseCodeLabel, courseCodes, pickPrimaryCode } from "../../lib/courseCode";
 import {
   Modal, Button, FieldGroup, TextInput, Alert, Chip, Select,
 } from "../../components/ui";
@@ -93,6 +94,26 @@ function sanitizeCode(v: string): string {
   return v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
 }
 
+// What the term's course list gives us for the duplicate-code and same-name
+// checks. lecture_hrs/lab_hrs gate the schedule editor when merging into it.
+interface OpenCourse {
+  id: string;
+  code: string;
+  alt_codes?: string[];
+  name_th: string;
+  name_en?: string | null;
+  lecture_hrs: number;
+  lab_hrs: number;
+  lecturer_names?: string;
+  exported_at?: string | null;
+}
+
+// Same-name test as the backend's normalizeCourseName: case- and
+// whitespace-insensitive.
+function normalizeCourseName(s: string): string {
+  return s.trim().toUpperCase().split(/\s+/).join(" ");
+}
+
 interface LecturerUser {
   id: string;
   title?: string | null;
@@ -158,12 +179,14 @@ export default function OpenCourseModal({
     open && pickLecturers ? "/users?role=lecturer&limit=200" : null,
   );
   // Courses already open this term — powers the live duplicate-code check so
-  // the user learns about a clash while typing, not on submit.
-  const { data: openCourses } = useSWR<{ code: string }[]>(
+  // the user learns about a clash while typing, not on submit, and the
+  // same-name check that offers to merge codes (see sameNameCourse).
+  const { data: openCourses } = useSWR<OpenCourse[]>(
     open && termId ? `/teaching-courses?term_id=${termId}` : null,
   );
   const existingCodes = useMemo(
-    () => new Set((openCourses ?? []).map(c => c.code)), [openCourses],
+    () => new Set((openCourses ?? []).flatMap(c => [c.code, ...(c.alt_codes ?? [])])),
+    [openCourses],
   );
   const lecturers = useMemo(() => lecturerData?.items ?? [], [lecturerData]);
   // Curriculum choices come straight from the DB (same /curricula list the
@@ -184,20 +207,41 @@ export default function OpenCourseModal({
   // Special sections are opt-in — regular is primary, special reveals via
   // "+ เปิดภาคพิเศษด้วย" so the UI stops treating them as equal peers.
   const [showSpecial, setShowSpecial] = useState(false);
+  // Same name already open under another code: staff must say whether this is
+  // the same class (merge — students added together, one budget) or not.
+  const [mergeChoice, setMergeChoice] = useState<"merge" | "separate" | null>(null);
 
   // Reset every time the modal is (re)opened.
   useEffect(() => {
-    if (open) { setDraft(EMPTY); setErr(null); setShowSpecial(false); }
+    if (open) { setDraft(EMPTY); setErr(null); setShowSpecial(false); setMergeChoice(null); }
   }, [open]);
+
+  const sameNameCourse = useMemo(() => {
+    const key = normalizeCourseName(draft.name_en);
+    if (!key) return null;
+    return (openCourses ?? []).find(c =>
+      normalizeCourseName(c.name_th) === key || normalizeCourseName(c.name_en ?? "") === key,
+    ) ?? null;
+  }, [openCourses, draft.name_en]);
+  // A different match resets the answer — it was given about another course.
+  useEffect(() => { setMergeChoice(null); }, [sameNameCourse?.id]);
+  const mergeTarget = sameNameCourse && mergeChoice === "merge" ? sameNameCourse : null;
+  const mergeLocked = !!sameNameCourse?.exported_at;
+  // Sections merged in under a second code are numbered "<code>-<n>" on the
+  // course, so the two "sec 1"s stay apart (same rule as the import).
+  const secLabel = (n: string) => (mergeTarget ? `${draft.code}-${n}` : n);
 
   // Which meeting kinds the typed course has — drives what the schedule editor
   // lets the lecturer pick. See [[schedule-kind-rules]].
+  // When merging, the target course's credit split is the one that gates.
+  const gateLectureHrs = mergeTarget ? mergeTarget.lecture_hrs : draft.lecture_hrs;
+  const gateLabHrs = mergeTarget ? mergeTarget.lab_hrs : draft.lab_hrs;
   const allowedKinds = useMemo<("lecture" | "lab")[]>(() => {
     const k: ("lecture" | "lab")[] = [];
-    if (draft.lecture_hrs > 0) k.push("lecture");
-    if (draft.lab_hrs > 0) k.push("lab");
+    if (gateLectureHrs > 0) k.push("lecture");
+    if (gateLabHrs > 0) k.push("lab");
     return k.length > 0 ? k : ["lecture", "lab"];
-  }, [draft.lecture_hrs, draft.lab_hrs]);
+  }, [gateLectureHrs, gateLabHrs]);
 
   const totalSections = draft.regular_sections + draft.special_sections;
 
@@ -236,13 +280,18 @@ export default function OpenCourseModal({
   // Progressive reveal gates: each step unlocks the next only when its
   // required fields are filled cleanly. When pickLecturers is on, an extra
   // "อาจารย์ผู้สอน" step sits between course and sections (shifting numbers).
-  const step1Done = codeValid && !codeDuplicate;
-  const lecturersDone = !pickLecturers || draft.lecturer_ids.length > 0;
+  // A same-name match blocks step 1 until staff answer merge-or-separate; a
+  // merge into an exported (locked) course is not offered at all.
+  const mergeUndecided = !!sameNameCourse && !mergeLocked && mergeChoice === null;
+  const step1Done = codeValid && !codeDuplicate && !mergeUndecided;
+  // A merge keeps the target's lecturers — the lecturer step is skipped.
+  const askLecturers = pickLecturers && !mergeTarget;
+  const lecturersDone = !askLecturers || draft.lecturer_ids.length > 0;
   const sectionsReady = step1Done && lecturersDone;
   const sectionsDone = sectionsReady && totalSections > 0;
   const step3Done = sectionsDone && scheduleComplete && studentsComplete && !scheduleBlocked;
-  const secStepNo = pickLecturers ? 3 : 2;
-  const schedStepNo = pickLecturers ? 4 : 3;
+  const secStepNo = askLecturers ? 3 : 2;
+  const schedStepNo = askLecturers ? 4 : 3;
 
   const canSubmit = step3Done && !saving;
 
@@ -251,6 +300,25 @@ export default function OpenCourseModal({
     setSaving(true);
     setErr(null);
     try {
+      if (mergeTarget) {
+        // Fold the typed code and its sections into the existing course. The
+        // course keeps its own level, credits and lecturers; the budget is
+        // recomputed from the combined student counts server-side.
+        await api.post(`/teaching-courses/${mergeTarget.id}/merge-code`, {
+          code: draft.code,
+          sections: buildSections(
+            draft.regular_sections, draft.special_sections, draft.schedules, draft.students,
+            draft.curriculum,
+          ),
+        });
+        await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
+        toast.success("รวมรหัสวิชาแล้ว", {
+          description: `${draft.code} รวมเข้ากับ ${courseCodeLabel(mergeTarget)} ${mergeTarget.name_th}`,
+        });
+        onClose();
+        router.push(`${redirectBase}/${mergeTarget.id}`);
+        return;
+      }
       // starts_on/ends_on omitted — staff fills the teaching window later.
       // Backend columns are nullable and worklog validation defaults to an
       // unbounded window when null.
@@ -299,7 +367,9 @@ export default function OpenCourseModal({
         <>
           <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
           <Button variant="primary" onClick={submit} disabled={!canSubmit} isPending={saving}>
-            <BookPlus size={14} />เปิดรายวิชา
+            {mergeTarget
+              ? <><GitMerge size={14} />รวมเข้ากับ {mergeTarget.code}</>
+              : <><BookPlus size={14} />เปิดรายวิชา</>}
           </Button>
         </>
       }
@@ -336,6 +406,46 @@ export default function OpenCourseModal({
               </FieldGroup>
             </div>
           </div>
+          {sameNameCourse && codeValid && !codeDuplicate && (
+            <div className="mt-3">
+              {mergeLocked ? (
+                <Alert
+                  status="warning"
+                  title={`มีวิชาชื่อนี้เปิดอยู่แล้ว: ${courseCodeLabel(sameNameCourse)} ${sameNameCourse.name_th}`}
+                  description="วิชานั้นส่งออกไฟล์แล้ว รวมรหัสเพิ่มไม่ได้ วิชานี้จะเปิดแยก"
+                />
+              ) : (
+                <div className="rounded-lg border border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20 p-3 text-sm">
+                  <p className="font-medium inline-flex items-center gap-1.5">
+                    <GitMerge size={14} />
+                    มีวิชาชื่อนี้เปิดอยู่แล้ว: <span className="tabular">{courseCodeLabel(sameNameCourse)}</span> {sameNameCourse.name_th}
+                    {sameNameCourse.lecturer_names && <span className="text-muted font-normal">· {sameNameCourse.lecturer_names}</span>}
+                  </p>
+                  <p className="text-xs text-muted mt-0.5">วิชาเดียวกันคนละรหัสใช่ไหม</p>
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    <label className="inline-flex items-start gap-2 cursor-pointer">
+                      <input type="radio" name="merge-choice" className="mt-1" checked={mergeChoice === "merge"} onChange={() => setMergeChoice("merge")} />
+                      <span>
+                        <b>ใช่ รวมเป็นวิชาเดียว</b>
+                        <span className="block text-xs text-muted">
+                          เพิ่ม {draft.code} เป็นอีกรหัสของวิชานี้ นับนักศึกษารวมกัน คิดงบก้อนเดียว ใช้ระดับ หน่วยกิต และอาจารย์ตามวิชาเดิม
+                          · เอกสารจะใช้รหัส {pickPrimaryCode([...courseCodes(sameNameCourse), draft.code])}
+                        </span>
+                      </span>
+                    </label>
+                    <label className="inline-flex items-start gap-2 cursor-pointer">
+                      <input type="radio" name="merge-choice" className="mt-1" checked={mergeChoice === "separate"} onChange={() => setMergeChoice("separate")} />
+                      <span>
+                        <b>ไม่ใช่ เปิดแยกเป็นวิชาใหม่</b>
+                        <span className="block text-xs text-muted">คนละวิชา คนละงบ</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {!mergeTarget && <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             <FieldGroup label="ระดับ">
               <Select
@@ -375,11 +485,12 @@ export default function OpenCourseModal({
                 onChange={e => setDraft(d => ({ ...d, self_hrs: clampHrs(e.target.value) }))} />
             </FieldGroup>
           </div>
+          </>}
         </StepCard>
 
         {/* Lecturer step — staff-only. A lecturer opening their own course is
             auto-assigned server-side and never sees this. */}
-        {pickLecturers && step1Done && (
+        {askLecturers && step1Done && (
           <StepCard n={2} title="อาจารย์ผู้สอน" done={lecturersDone}>
             <div className="text-xs text-muted mb-2">
               เลือกอาจารย์ผู้สอนของรายวิชานี้ (เลือกได้มากกว่า 1 คน)
@@ -402,7 +513,7 @@ export default function OpenCourseModal({
                 label={<span className="inline-flex items-center gap-2">ภาคปกติ <Chip tone="brand">regular</Chip></span>}
                 hint={
                   draft.regular_sections > 0
-                    ? `จะสร้าง sec ${regularSecNos(draft.regular_sections).join(", ")}`
+                    ? `จะสร้าง sec ${regularSecNos(draft.regular_sections).map(n => secLabel(n)).join(", ")}`
                     : "ยังไม่เปิด section ภาคปกติ"
                 }
               >
@@ -445,7 +556,7 @@ export default function OpenCourseModal({
                   }
                   hint={
                     draft.special_sections > 0
-                      ? `จะสร้าง sec ${specialSecNos(draft.special_sections, draft.regular_sections).join(", ")}`
+                      ? `จะสร้าง sec ${specialSecNos(draft.special_sections, draft.regular_sections).map(n => secLabel(n)).join(", ")}`
                       : "ยังไม่กำหนดจำนวน"
                   }
                 >

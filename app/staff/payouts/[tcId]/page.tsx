@@ -10,6 +10,7 @@ import { StaffWorklogEditor } from "../../../components/StaffWorklogEditor";
 import { ExportPreviewBody } from "../../../components/ExportPreviewBody";
 import { useTerm } from "../../TermContext";
 import { ReviewGrid } from "./ReviewGrid";
+import { courseCodeLabel } from "../../../lib/courseCode";
 
 /**
  * One course, top to bottom: check the months, then send the package.
@@ -24,7 +25,7 @@ import { ReviewGrid } from "./ReviewGrid";
  * and stays folded away rather than competing with the two normal ones.
  */
 
-interface TC { id: string; code: string; name_th: string; exported_at?: string | null }
+interface TC { id: string; code: string; alt_codes?: string[]; name_th: string; exported_at?: string | null }
 
 interface ExportBatch {
   id: string;
@@ -71,7 +72,7 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
       </Link>
 
       <PageHeader
-        title={tc ? `${tc.code} — ${tc.name_th}` : "…"}
+        title={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : "…"}
         description="ตรวจรายเดือนด้านบน แล้วส่งออกด้านล่าง"
       />
 

@@ -122,8 +122,6 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
           </div>
           <div className="text-xs text-muted mt-0.5">
             ลากไฟล์มาวางที่นี่ หรือเลือกไฟล์ รองรับ JPEG, PNG, WebP ขนาดไม่เกิน 12MB
-            <br />
-            ระบบจะครอบตัดและบีบอัดให้อัตโนมัติก่อนบันทึก
           </div>
           <div className="flex flex-wrap gap-2 justify-center sm:justify-start mt-3">
             <Button variant="primary" size="sm" onPress={() => inputRef.current?.click()}>

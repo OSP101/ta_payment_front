@@ -39,6 +39,10 @@ interface Rate {
   ug_regular_daily_hour_cap: number;    // ป.ตรี ปกติ 7 hrs/วัน
   ug_special_daily_hour_cap: number;    // ป.ตรี พิเศษ 6 hrs/วัน
   grad_regular_daily_hour_cap: number;  // บัณฑิต ปกติ 6 hrs/วัน
+  // Migration 0112 — TA planning ratios the planner on the lecturer's pages reads.
+  plan_students_per_ta: number;      // เกณฑ์ 1 TA ต่อ นศ. 25 คน
+  plan_min_students_per_ta: number;  // ไม่วางแผนเกิน 1 TA ต่อ นศ. 15 คน
+  plan_suggested_ta_cap: number;     // เพดานจำนวน TA ตามเกณฑ์ (0 = ไม่จำกัด)
   note?: string;
 }
 export default function SettingsPage() {
@@ -121,6 +125,9 @@ function PayRateSection() {
     ug_regular_daily_hour_cap: 7,
     ug_special_daily_hour_cap: 6,
     grad_regular_daily_hour_cap: 6,
+    plan_students_per_ta: 25,
+    plan_min_students_per_ta: 15,
+    plan_suggested_ta_cap: 3,
   };
   const [draft, setDraft] = useState<Rate>(empty);
 
@@ -153,6 +160,9 @@ function PayRateSection() {
     ug_regular_daily_hour_cap: vPositive(draft.ug_regular_daily_hour_cap),
     ug_special_daily_hour_cap: vPositive(draft.ug_special_daily_hour_cap),
     grad_regular_daily_hour_cap: vPositive(draft.grad_regular_daily_hour_cap),
+    plan_students_per_ta: vPositive(draft.plan_students_per_ta),
+    plan_min_students_per_ta: vPositive(draft.plan_min_students_per_ta) ??
+      (draft.plan_min_students_per_ta > draft.plan_students_per_ta ? "ต้องไม่มากกว่าเกณฑ์ นศ. ต่อ TA" : null),
   };
   const hasRateErrors = Object.values(rateErrors).some(Boolean);
   const effectiveFromError = !draft.effective_from ? "กรุณาระบุวันเริ่มใช้" : null;
@@ -218,6 +228,11 @@ function PayRateSection() {
             </ViewGroup>
             <ViewGroup title="เพดานรายวัน (ทุกคนคิดชั่วโมง)">
               <ViewRow label="ค่าตอบแทนสูงสุด/วัน" value={`${(data.daily_pay_cap_baht ?? 300).toLocaleString()} บาท`} />
+            </ViewGroup>
+            <ViewGroup title="เกณฑ์วางแผนจำนวน TA" hint="ใช้ในตัววางแผน TA บนหน้าอาจารย์">
+              <ViewRow label="เกณฑ์ 1 TA ต่อ นศ." value={`${data.plan_students_per_ta ?? 25} คน`} />
+              <ViewRow label="ไม่เกิน 1 TA ต่อ นศ." value={`${data.plan_min_students_per_ta ?? 15} คน`} />
+              <ViewRow label="เพดานจำนวน TA ตามเกณฑ์" value={(data.plan_suggested_ta_cap ?? 3) > 0 ? `${data.plan_suggested_ta_cap ?? 3} คน` : "ไม่จำกัด"} />
             </ViewGroup>
             <ViewGroup title="ข้อกำหนดทั่วไป" hint={`ใช้ตั้งแต่ ${data.effective_from}`}>
               <ViewRow label="จำนวนวิชา TA สูงสุด/คน" value={`${data.max_courses_per_student ?? 3} วิชา`} />
@@ -289,6 +304,17 @@ function PayRateSection() {
             <F label="ค่าตอบแทนสูงสุด/วัน (บาท)" type="number" min={0} value={draft.daily_pay_cap_baht}
                error={rateErrors.daily_pay_cap_baht}
                onChange={v => setDraft({ ...draft, daily_pay_cap_baht: Number(v) })} />
+          </EditGroup>
+
+          <EditGroup title="เกณฑ์วางแผนจำนวน TA" description="ตัววางแผนบนหน้าอาจารย์: ให้ครบตามเกณฑ์ก่อน แล้วเพิ่มคนได้จนถึงความหนาแน่นสูงสุด ถ้างบพอ">
+            <F label="เกณฑ์ 1 TA ต่อ นศ. (คน)" type="number" min={1} value={draft.plan_students_per_ta}
+               error={rateErrors.plan_students_per_ta}
+               onChange={v => setDraft({ ...draft, plan_students_per_ta: Number(v) })} />
+            <F label="ไม่เกิน 1 TA ต่อ นศ. (คน)" type="number" min={1} value={draft.plan_min_students_per_ta}
+               error={rateErrors.plan_min_students_per_ta}
+               onChange={v => setDraft({ ...draft, plan_min_students_per_ta: Number(v) })} />
+            <F label="เพดานจำนวน TA ตามเกณฑ์ (0 = ไม่จำกัด)" type="number" min={0} value={draft.plan_suggested_ta_cap}
+               onChange={v => setDraft({ ...draft, plan_suggested_ta_cap: Number(v) })} />
           </EditGroup>
 
           <EditGroup title="ข้อกำหนดทั่วไป" description="เริ่มใช้เมื่อไร + ข้อจำกัดตามระเบียบ (จำนวนเดือนของแต่ละเทอมกำหนดที่แท็บ 'ภาคเรียน')">

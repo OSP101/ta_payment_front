@@ -15,8 +15,9 @@ async function fetchCourseMeta(tcId: string): Promise<{ code: string; name_th: s
       cache: "no-store",
     });
     if (!res.ok) return null;
-    const j = (await res.json()) as { code: string; name_th: string };
-    return { code: j.code, name_th: j.name_th };
+    const j = (await res.json()) as { code: string; alt_codes?: string[]; name_th: string };
+    // Every registrar code the course is open under, primary first.
+    return { code: [j.code, ...(j.alt_codes ?? [])].join(" / "), name_th: j.name_th };
   } catch { return null; }
 }
 

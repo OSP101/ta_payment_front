@@ -8,6 +8,7 @@ import { ApiError } from "../../../lib/api";
 import {
   PageHeader, Panel, StatCard, EmptyState, Chip, Alert, Button, type ChipTone,
 } from "../../../components/ui";
+import { courseCodeLabel } from "../../../lib/courseCode";
 
 interface SectionSchedule {
   id: string;
@@ -28,6 +29,7 @@ interface Section {
 interface TC {
   id: string;
   code: string;
+  alt_codes?: string[];
   name_th: string;
   num_students: number;
   num_students_regular: number;
@@ -120,7 +122,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
   return (
     <div>
       <PageHeader
-        title={course ? `${course.code} ${course.name_th}` : "รายวิชา"}
+        title={course ? `${courseCodeLabel(course)} ${course.name_th}` : "รายวิชา"}
         description="ภาพรวมสถานะภาระงาน TA ในรายวิชานี้"
         actions={
           <Link href={`/ta/courses/${tcId}/worklog`}>

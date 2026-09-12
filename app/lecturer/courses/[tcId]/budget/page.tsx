@@ -1,16 +1,19 @@
 "use client";
-import { use, useState } from "react";
+import { use, useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import { AlertTriangle, Info as InfoIcon, Sparkles, HelpCircle, CircleAlert } from "lucide-react";
 import { ApiError } from "../../../../lib/api";
 import { PageHeader, Panel, Chip, EmptyState, Alert, Button, IconButton } from "../../../../components/ui";
 import { FormulaHelpModal } from "../../../../components/formula-help";
+import { TaPlanner, planHandoffKey, type PlanItem } from "../../../../components/TaPlanner";
 
 interface Budget {
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
   credits: number; lecture_credits: number; lab_credits: number;
+  lecture_hrs: number; lab_hrs: number;
   per_course_max: number; used_baht: number; remaining_baht: number; over_budget: boolean;
   weekly_workload_hours: number; monthly_pay_baht: number; term_pay_baht: number;
   weekly_workload_regular: number; monthly_pay_regular: number; term_pay_regular: number;
@@ -27,12 +30,25 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
   const { tcId } = use(params);
   const [helpTrack, setHelpTrack] = useState<"regular" | "special" | null>(null);
 
+  const router = useRouter();
   const { data: course } = useSWR<{
     id: string; code: string; name_th: string; num_students: number;
     lecture_hrs: number; lab_hrs: number;
+    sections?: { id: string; schedules?: { day_of_week: number; start_time: string; end_time: string }[] }[];
   }>(
     tcId ? `/teaching-courses/${tcId}` : null,
   );
+  const schedules = useMemo(() => {
+    const out: Record<string, { day_of_week: number; start_time: string; end_time: string }[]> = {};
+    for (const sec of course?.sections ?? []) out[sec.id] = sec.schedules ?? [];
+    return out;
+  }, [course?.sections]);
+  // A plan chosen here is carried to the request form, which reads it once on
+  // arrival — the lecturer lands on a form that already has the rows.
+  const goRequestWith = useCallback((items: PlanItem[]) => {
+    try { sessionStorage.setItem(planHandoffKey(tcId), JSON.stringify(items)); } catch { /* private mode */ }
+    router.push(`/lecturer/courses/${tcId}/request`);
+  }, [router, tcId]);
   const budgetKey = tcId ? `/teaching-courses/${tcId}/budget` : null;
   const { data: b, error: bError, isLoading: bLoading } = useSWR<Budget>(budgetKey);
   const courseName = course;
@@ -94,14 +110,26 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             </div>
           )}
 
-          <Panel title="ข้อมูลวิชา" className="mb-4" data-tour="budget-info">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {/* The planner: pools, approved TAs and what they will be paid, and
+              what still fits — all from the course's own timetable. */}
+          <TaPlanner
+            tcId={tcId}
+            variant="budget"
+            scope={course && course.lab_hrs <= 0 ? "lecture" : course && course.lecture_hrs <= 0 ? "lab" : "both"}
+            schedules={schedules}
+            drafts={[]}
+            onApplyPlan={goRequestWith}
+          />
+
+          <Panel title="ที่มาของเพดานงบ" className="mb-4" data-tour="budget-info">
+            <div className="grid grid-cols-2 gap-4">
               <Info
                 k="หน่วยกิต"
                 v={course ? `${b.credits} (Lec ${course.lecture_hrs} / Lab ${course.lab_hrs})` : `${b.credits}`}
               />
               <Info k="เพดานงบ/วิชา" v={`${b.per_course_max.toLocaleString()} บ.`} />
-              <Info k="จำนวน TA ตรี / บัณฑิต" v={<Chip tone="brand">{b.suggested_tas.undergrad} / {b.suggested_tas.graduate}</Chip>} />
+              {/* จำนวน TA ที่ควรมี ตอบโดยตัววางแผนด้านบนที่เดียว — ตัวเลขแนะนำ
+                  แบบเก่า (นศ./25 ไม่เกิน 3) ไม่ได้ดูงบและขัดกับแผน จึงเอาออก (12/09/2026) */}
             </div>
           </Panel>
 
@@ -166,6 +194,8 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             example={{
               lecCr: b.lecture_credits,
               labCr: b.lab_credits,
+              lecHrs: b.lecture_hrs,
+              labHrs: b.lab_hrs,
               students: helpTrack === "special" ? b.num_students_special : b.num_students_regular,
               trackLabel: helpTrack === "special" ? "ภาคพิเศษ" : "ภาคปกติ",
               isSpecial: helpTrack === "special",

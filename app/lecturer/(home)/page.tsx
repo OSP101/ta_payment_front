@@ -14,9 +14,10 @@ import {
   PageHeader, Panel, EmptyState, Chip, Button, SelectField, Alert,
   type SelectOption, type ChipTone,
 } from "../../components/ui";
+import { CourseCode } from "../../lib/courseCode";
 
 interface TC {
-  id: string; code: string; name_th: string;
+  id: string; code: string; alt_codes?: string[]; name_th: string;
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
@@ -708,7 +709,7 @@ function CourseCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate font-semibold tabular group-hover:underline group-hover:underline-offset-2">
-            {c.code}
+            <CourseCode c={c} />
           </div>
           <div className="truncate text-xs text-muted">{c.name_th}</div>
         </div>

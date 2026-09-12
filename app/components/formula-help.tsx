@@ -17,6 +17,9 @@ export interface FormulaConstants {
 export interface FormulaExample {
   lecCr: number;
   labCr: number;
+  /** Weekly contact hours from the credit code "3 (2-2-5)" — what the course stores. */
+  lecHrs?: number;
+  labHrs?: number;
   students: number;
   trackLabel: string;       // "ภาคปกติ" / "ภาคพิเศษ"
   isSpecial?: boolean;
@@ -26,7 +29,8 @@ export interface FormulaExample {
 const DEFAULT_EXAMPLE: FormulaExample = {
   lecCr: 2, labCr: 1, students: 5,
   trackLabel: "ภาคปกติ",
-  courseName: "ตัวอย่าง SW-TESTING (3 นก.)",
+  lecHrs: 2, labHrs: 2,
+  courseName: "ตัวอย่าง SW-TESTING (3 หน่วยกิต)",
 };
 
 export function FormulaHelpModal({
@@ -39,7 +43,7 @@ export function FormulaHelpModal({
 }) {
   const ex = example ?? DEFAULT_EXAMPLE;
   const { hrsPerLecCr, hrsPerLabCr, baseLec, baseLab, rate, termMonths } = constants;
-  const { lecCr, labCr, students, trackLabel, isSpecial, courseName } = ex;
+  const { lecCr, labCr, lecHrs, labHrs, students, trackLabel, isSpecial, courseName } = ex;
 
   const lecWL = students > 0 && baseLec > 0 ? lecCr * hrsPerLecCr * (students / baseLec) : 0;
   const labWL = students > 0 && baseLab > 0 ? labCr * hrsPerLabCr * (students / baseLab) : 0;
@@ -69,21 +73,32 @@ export function FormulaHelpModal({
 
         <HelpStep number={1} title="ข้อมูลตั้งต้นของวิชา" icon={<Users size={18} />} delay={0}>
           <div className="grid grid-cols-3 gap-3">
-            <InputChip icon={<BookOpen size={16} />} label="นก. บรรยาย" value={`${lecCr}`} />
-            <InputChip icon={<FlaskConical size={16} />} label="นก. ปฏิบัติ" value={`${labCr}`} />
+            <InputChip icon={<BookOpen size={16} />} label="หน่วยกิตบรรยาย" value={`${lecCr}`}
+              hint={lecHrs !== undefined ? `จากบรรยาย ${lecHrs} ชั่วโมง/สัปดาห์ (1 ชั่วโมง = 1 หน่วยกิต)` : undefined} />
+            <InputChip icon={<FlaskConical size={16} />} label="หน่วยกิตปฏิบัติการ" value={`${labCr}`}
+              hint={labHrs !== undefined ? `จากปฏิบัติการ ${labHrs} ชั่วโมง/สัปดาห์ (2 ชั่วโมง = 1 หน่วยกิต ปัดลง)` : undefined} />
             <InputChip
               icon={<Users size={16} />}
-              label={isSpecial ? "นศ. พิเศษ" : "นศ. ปกติ"}
+              label={isSpecial ? "นักศึกษาภาคพิเศษ" : "นักศึกษาภาคปกติ"}
               value={`${students} คน`}
               tone={isSpecial ? "warn" : "brand"}
             />
           </div>
+          {lecHrs !== undefined && labHrs !== undefined && (
+            <div className="mt-2 text-xs text-muted">
+              รหัสหน่วยกิตของวิชา <b>{lecCr + labCr} ({lecHrs}-{labHrs}-{(lecCr + labCr) * 3 - lecHrs - labHrs})</b> อ่านว่า
+              บรรยาย {lecHrs} ชั่วโมง ปฏิบัติการ {labHrs} ชั่วโมง ศึกษาด้วยตนเอง {(lecCr + labCr) * 3 - lecHrs - labHrs} ชั่วโมงต่อสัปดาห์
+              — สูตรงบใช้ <b>หน่วยกิต</b> ไม่ใช่ชั่วโมง: ปฏิบัติการ 2 ชั่วโมงนับเป็น 1 หน่วยกิต จึงได้ {lecCr} + {labCr} = {lecCr + labCr} หน่วยกิตพอดี
+              (ตามสมุดงบของคณะ ชีต 2_59 ปริญญาตรี)
+            </div>
+          )}
         </HelpStep>
 
-        <HelpStep number={2} title="คำนวณภาระงาน / สัปดาห์" icon={<Sigma size={18} />} delay={80}>
+        <HelpStep number={2} title="คำนวณภาระงานต่อสัปดาห์" icon={<Sigma size={18} />} delay={80}>
           <div className="text-xs text-muted mb-2">
-            บรรยาย 1 นก. = <b>{hrsPerLecCr}</b> ชม./สัปดาห์ (baseline {baseLec} นศ./sec) ·
-            ปฏิบัติ 1 นก. = <b>{hrsPerLabCr}</b> ชม./สัปดาห์ (baseline {baseLab} นศ./sec)
+            บรรยาย 1 หน่วยกิต = <b>{hrsPerLecCr}</b> ชั่วโมง/สัปดาห์ ต่อนักศึกษา {baseLec} คน ·
+            ปฏิบัติการ 1 หน่วยกิต = <b>{hrsPerLabCr}</b> ชั่วโมง/สัปดาห์ ต่อนักศึกษา {baseLab} คน
+            — จำนวนนักศึกษาจริงจึงถูกเทียบเป็นสัดส่วนกับฐานนี้
           </div>
           <div className="space-y-2">
             <CalcRow
@@ -91,27 +106,27 @@ export function FormulaHelpModal({
               label="บรรยาย"
               formula={`${lecCr} × ${hrsPerLecCr} × (${students} / ${baseLec})`}
               value={lecWL.toFixed(2)}
-              unit="ชม."
+              unit="ชั่วโมง"
             />
             <CalcRow
               icon={<FlaskConical size={14} className="text-purple-600" />}
-              label="ปฏิบัติ"
+              label="ปฏิบัติการ"
               formula={`${labCr} × ${hrsPerLabCr} × (${students} / ${baseLab})`}
               value={labWL.toFixed(2)}
-              unit="ชม."
+              unit="ชั่วโมง"
             />
             <div className="flex items-center justify-between p-3 rounded-lg bg-accent-soft border border-accent/30">
               <span className="text-sm font-medium flex items-center gap-2">
-                <Sigma size={14} /> ภาระงานรวม / สัปดาห์
+                <Sigma size={14} /> ภาระงานรวมต่อสัปดาห์
               </span>
-              <span className="tabular font-bold text-lg">{workload.toFixed(2)} ชม.</span>
+              <span className="tabular font-bold text-lg">{workload.toFixed(2)} ชั่วโมง</span>
             </div>
           </div>
         </HelpStep>
 
-        <HelpStep number={3} title="คูณด้วย effective rate → งบ/เดือน" icon={<Coins size={18} />} delay={160}>
+        <HelpStep number={3} title="คูณด้วยอัตราเฉลี่ยต่อชั่วโมงภาระงาน → งบต่อเดือน" icon={<Coins size={18} />} delay={160}>
           <div className="text-xs text-muted mb-2">
-            effective rate <b>฿{rate}</b> = (50% × ฿200 ตรี TA) + (50% × ฿400 บัณฑิต TA)
+            อัตราเฉลี่ย <b>฿{rate}</b> ต่อชั่วโมงภาระงานต่อเดือน = (50% × ฿200 ผู้ช่วยสอนปริญญาตรี) + (50% × ฿400 ผู้ช่วยสอนบัณฑิตศึกษา)
           </div>
           <div className="flex items-center gap-2 p-3 rounded-lg bg-slate-50 border border-border">
             <span className="tabular font-medium">{workload.toFixed(2)}</span>
@@ -124,9 +139,9 @@ export function FormulaHelpModal({
           </div>
         </HelpStep>
 
-        <HelpStep number={4} title="คูณด้วยจำนวนเดือน → งบทั้งเทอม" icon={<Calendar size={18} />} delay={240}>
+        <HelpStep number={4} title="คูณด้วยจำนวนเดือน → งบทั้งภาคเรียน" icon={<Calendar size={18} />} delay={240}>
           <div className="text-xs text-muted mb-2">
-            เทอมนี้มี <b>{termMonths}</b> เดือน (กำหนดที่ Settings → ภาคเรียน)
+            ภาคเรียนนี้มี <b>{termMonths}</b> เดือน (เจ้าหน้าที่กำหนดที่หน้าตั้งค่า → ภาคเรียน)
           </div>
           <div className="flex items-center gap-2 p-3 rounded-lg bg-linear-to-r from-emerald-50 to-emerald-100 border border-emerald-200">
             <span className="tabular font-medium">฿{monthly.toFixed(0)}</span>
@@ -148,7 +163,7 @@ export function FormulaHelpModal({
               ฿{term.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
             <span className="text-sm text-muted">
-              = {workload.toFixed(2)} ชม./สัปดาห์ × ฿{rate} × {termMonths} เดือน
+              = {workload.toFixed(2)} ชั่วโมง/สัปดาห์ × ฿{rate} × {termMonths} เดือน
             </span>
           </div>
         </div>
@@ -156,9 +171,9 @@ export function FormulaHelpModal({
         <div className="text-xs text-muted pt-2 border-t border-border flex items-start gap-2">
           <InfoIcon size={14} className="shrink-0 mt-0.5" />
           <span>
-            <b>หมายเหตุ:</b> ตัวเลขนี้เป็น <b>เพดานงบต่อวิชา</b> ค่าจ้างจริงต่อ TA เบิกตามชั่วโมงจริง
-            (ตรี ปกติ 40 บ./ชม., พิเศษ 50 บ./ชม.) หรือเหมาจ่ายเดือน (โท ปกติ 3,000, พิเศษ 4,000)
-            รวมทุก TA ต้องไม่เกินเพดานงบนี้
+            <b>หมายเหตุ:</b> ตัวเลขนี้เป็น <b>เพดานงบต่อวิชา</b> ค่าตอบแทนจริงของผู้ช่วยสอนแต่ละคนเบิกตามชั่วโมงที่ทำจริง
+            (ปริญญาตรี ภาคปกติ 40 บาท/ชั่วโมง · ภาคพิเศษ 50 บาท/ชั่วโมง ไม่เกิน 2,000 บาท/เดือน · บัณฑิตศึกษา ภาคปกติ 50 บาท/ชั่วโมง)
+            หรือเหมาจ่ายทั้งภาคเรียน (บัณฑิตศึกษา ภาคพิเศษ 4,000 บาท/คน/วิชา) รวมทุกคนแล้วต้องไม่เกินเพดานงบนี้
           </span>
         </div>
       </div>
@@ -193,12 +208,14 @@ function HelpStep({
 }
 
 function InputChip({
-  icon, label, value, tone = "default",
+  icon, label, value, tone = "default", hint,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   tone?: "default" | "brand" | "warn";
+  /** Where the figure came from, when it is derived rather than typed in. */
+  hint?: string;
 }) {
   const bg = tone === "brand" ? "bg-accent-soft" : tone === "warn" ? "bg-warning-soft" : "bg-slate-50";
   const iconColor = tone === "brand" ? "text-accent" : tone === "warn" ? "text-warning-soft-foreground" : "text-muted";
@@ -208,6 +225,7 @@ function InputChip({
         {icon}<span>{label}</span>
       </div>
       <div className="text-lg font-semibold tabular">{value}</div>
+      {hint && <div className="mt-0.5 text-[11px] leading-snug text-muted">{hint}</div>}
     </div>
   );
 }

@@ -235,9 +235,18 @@ export default function Shell({
             <BrandBlock brandTitle={brandTitle} onBetaClick={() => setBetaOpen(true)} />
           ) : (
             <div className="h-14 flex items-center justify-center border-b border-border">
+              {/* Same logo as the open panel, so collapsing does not
+                  swap the brand for a different mark. */}
               <Link href="/" aria-label={`${brandTitle} ไปหน้าแรก`}
-                    className="w-7 h-7 rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm bg-accent">
-                T
+                    className="rounded-md p-1 hover:bg-surface-secondary transition-colors">
+                <Image
+                  src="/images/logo-cp-1.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  priority
+                  className="w-7 h-7 shrink-0 object-contain"
+                />
               </Link>
             </div>
           )}
@@ -375,6 +384,18 @@ function BrandMark({ brandTitle, onBetaClick }: { brandTitle: string; onBetaClic
       <BetaBadge onClick={onBetaClick} />
     </div>
   );
+}
+
+/** Executive titles are long ("รองคณบดีฝ่ายวิชาการ", "หัวหน้าสาขาวิชาวิทยาการ
+ *  คอมพิวเตอร์"); the top bar only has room for the rank. Longest prefix
+ *  first so "ผู้ช่วยคณบดี" is not read as "คณบดี". */
+const POSITION_RANKS = ["ผู้ช่วยอธิการบดี", "รองอธิการบดี", "อธิการบดี", "ผู้ช่วยคณบดี", "รองคณบดี", "คณบดี", "หัวหน้าสาขาวิชา", "หัวหน้าภาควิชา", "ผู้อำนวยการ"];
+function shortPosition(title: string): string {
+  const t = title.trim();
+  for (const rank of POSITION_RANKS) {
+    if (t.startsWith(rank)) return rank;
+  }
+  return t;
 }
 
 function matchActiveHref(items: NavItem[], pathname: string | null): string | null {
@@ -560,7 +581,8 @@ function TopBar({
   // สาขาวิชา, ประธานหลักสูตร, ...) alongside their teaching role. Appended
   // rather than replacing roleLbl, since the role still says what the account
   // can DO — this just says what else the person IS.
-  const roleWithPosition = me.admin_position ? `${roleLbl} · ${me.admin_position}` : roleLbl;
+  // Short form ("รองคณบดี") everywhere in the chrome; the full title lives on the profile page.
+  const roleWithPosition = me.admin_position ? `${roleLbl} · ${shortPosition(me.admin_position)}` : roleLbl;
   return (
     <header className={`h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 sticky ${DEMO_CHROME_OFFSET} z-30`}>
       {showMobileMenu && (

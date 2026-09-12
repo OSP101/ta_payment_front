@@ -14,6 +14,7 @@ import {
 import SectionScheduleEditor, {
   type SectionScheduleRow, validateRows, toApiPayload, ScheduleSummary,
 } from "../../../components/SectionScheduleEditor";
+import { courseCodeLabel } from "../../../lib/courseCode";
 
 interface SectionRow {
   id: string;
@@ -39,6 +40,7 @@ const CURRICULUM_OPTIONS = [
 interface TC {
   id: string;
   code: string;
+  alt_codes?: string[];
   name_th: string;
   name_en?: string;
   credits: number;
@@ -100,8 +102,8 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
 
       {tc ? (
         <PageHeader
-          title={`${tc.code} — ${tc.name_th}`}
-          description={`${tc.credits} (${tc.lecture_hrs}-${tc.lab_hrs}-${tc.self_hrs}) · นักศึกษา ${tc.num_students} คน (ปกติ ${tc.num_students_regular} · พิเศษ ${tc.num_students_special})`}
+          title={`${courseCodeLabel(tc)} — ${tc.name_th}`}
+          description={`${tc.alt_codes?.length ? `เปิดภายใต้ ${tc.alt_codes.length + 1} รหัส งบและจำนวนนักศึกษารวมกัน · ` : ""}${tc.credits} (${tc.lecture_hrs}-${tc.lab_hrs}-${tc.self_hrs}) · นักศึกษา ${tc.num_students} คน (ปกติ ${tc.num_students_regular} · พิเศษ ${tc.num_students_special})`}
           actions={
             !locked && (
               <Button variant="secondary" size="sm" onClick={() => setInfoOpen(true)}>
@@ -238,7 +240,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         confirmLabel="ลบรายวิชา"
         message={
           <p className="text-sm text-muted">
-            จะลบรายวิชา <b>{tc ? `${tc.code} ${tc.name_th}` : ""}</b> พร้อม section และตารางเวลาทั้งหมด
+            จะลบรายวิชา <b>{tc ? `${courseCodeLabel(tc)} ${tc.name_th}` : ""}</b> พร้อม section และตารางเวลาทั้งหมด
             การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
           </p>
         }
@@ -661,8 +663,8 @@ function CourseInfoModal({
 
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup
-            label="รหัสวิชา"
-            hint="ตัวเลข 6 หลัก หรืออักษร 2 ตัวตามด้วยตัวเลข 6 หลัก"
+            label={tc.alt_codes?.length ? "รหัสวิชาหลัก" : "รหัสวิชา"}
+            hint={tc.alt_codes?.length ? `รหัสที่รวมอยู่ด้วย: ${tc.alt_codes.join(", ")}` : "ตัวเลข 6 หลัก หรืออักษร 2 ตัวตามด้วยตัวเลข 6 หลัก"}
             error={codeBad ? "รูปแบบรหัสวิชาไม่ถูกต้อง เช่น CP353201 หรือ 342233" : undefined}
           >
             <TextInput

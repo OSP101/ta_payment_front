@@ -1,10 +1,10 @@
 "use client";
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import {
   Plus, Send, Trash2, ClipboardList, Wallet, CheckCircle2, AlertCircle, Info,
-  UserPlus, Copy, CalendarClock, CalendarOff, Clock,
+  UserPlus, Copy, CalendarClock, CalendarOff, Clock, ChevronDown,
 } from "lucide-react";
 import {
   RadioGroup, Radio, Description, Label,
@@ -25,7 +25,50 @@ import {
   PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
-import { TaBudgetCalculator } from "../../../../components/TaBudgetCalculator";
+import { TaPlanner, planHandoffKey, type PlanItem } from "../../../../components/TaPlanner";
+
+/**
+ * On a short screen the planner card fills the viewport and the numbered
+ * steps below it are out of sight — nothing says "the form is further down".
+ * A floating arrow points there until the steps scroll into view, then goes
+ * away for good (it is a hint, not a control worth keeping).
+ */
+function ScrollToFormHint({ targetRef }: { targetRef: React.RefObject<HTMLDivElement | null> }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const el = targetRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => {
+      const belowFold = !entry.isIntersecting && entry.boundingClientRect.top > 0;
+      // The planner above starts as a short loading skeleton, so the steps
+      // can sit inside the viewport for a moment before the card grows and
+      // pushes them down. Only a reach AFTER the user scrolled counts as
+      // "seen"; until then just track whether they are below the fold.
+      if (!belowFold && window.scrollY > 40) {
+        setShow(false);
+        io.disconnect();
+        return;
+      }
+      setShow(belowFold);
+    }, { threshold: 0.1 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [targetRef]);
+  if (!show) return null;
+  return (
+    <div className="fixed inset-x-0 bottom-6 z-20 flex justify-center pointer-events-none">
+      <button
+        type="button"
+        onClick={() => targetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-accent text-accent-foreground pl-4 pr-3 py-2 text-sm font-medium shadow-lg hover:opacity-90 transition-opacity"
+        aria-label="เลื่อนลงไปกรอกรายละเอียดคำขอ"
+      >
+        เลื่อนลงเพื่อกรอกรายละเอียดคำขอ
+        <ChevronDown size={16} className="animate-bounce" />
+      </button>
+    </div>
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                       */
@@ -191,6 +234,38 @@ const emptyWorkload = (): WorkloadFields => ({
   lab_hrs: 0, lab_other_hrs: 0, lab_other_desc: "",
 });
 
+const isGradLevel = (l: string) => l === "master" || l === "phd";
+
+/**
+ * Carry declared hours across the undergrad ↔ graduate field split.
+ * ป.ตรี: attendance + lab (+lab_other) are class time, check_work is grading,
+ * ug_other is other. บัณฑิต: help_teach is class time, grade_hrs is grading
+ * (≤ 2), other_hrs is other, prep_hrs tops the total up to the 10 h floor.
+ */
+function remapWorkloadLevel(w: WorkloadFields, toGrad: boolean, hrs: { lecture: number; lab: number }): WorkloadFields {
+  const out = emptyWorkload();
+  if (toGrad) {
+    out.help_teach_hrs = w.attendance_hrs + w.lab_hrs + w.lab_other_hrs;
+    out.grade_hrs = Math.min(GRAD_REVIEW_HOUR_CAP, w.check_work_hrs);
+    out.grade_desc = out.grade_hrs > 0 ? "ตรวจการบ้าน" : "";
+    out.other_hrs = w.ug_other_hrs;
+    out.other_desc = w.ug_other_desc;
+    out.prep_hrs = Math.max(0, GRAD_MIN_HRS - (out.help_teach_hrs + out.grade_hrs + out.other_hrs));
+    out.prep_desc = out.prep_hrs > 0 ? "เตรียมการสอน" : "";
+  } else {
+    // Class time goes back onto the section's own timetable: the lab first
+    // (it is the whole period), the rest as เช็คชื่อ within the lecture.
+    // Prep is administrative — dropped.
+    const lab = Math.min(w.help_teach_hrs, hrs.lab);
+    out.lab_hrs = lab;
+    out.attendance_hrs = Math.min(Math.max(0, w.help_teach_hrs - lab), hrs.lecture);
+    out.check_work_hrs = Math.min(w.grade_hrs, hrs.lecture);
+    out.ug_other_hrs = w.other_hrs;
+    out.ug_other_desc = w.other_desc;
+  }
+  return out;
+}
+
 /** Hours declared for one section, or zeroes if the lecturer hasn't filled it. */
 function workloadOf(a: Assignment, sectionId: string): WorkloadFields {
   return a.section_workloads[sectionId] ?? emptyWorkload();
@@ -216,6 +291,9 @@ interface CourseBudget {
   used_baht: number;
   remaining_baht: number;
   over_budget: boolean;
+  /** เพดานกองภาคพิเศษของวิชา — กองที่เหมาจ่ายบัณฑิตศึกษาถูกหักออกก่อน */
+  term_pay_special?: number;
+  rates?: { graduate_special_lumpsum?: number };
 }
 
 export default function RequestPage({ params }: { params: Promise<{ tcId: string }> }) {
@@ -324,6 +402,50 @@ function BudgetForecast({ budget }: { budget: CourseBudget }) {
         }
       />
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Graduate TA on a ภาคพิเศษ section — the flat lump vs. the special pool       */
+/* -------------------------------------------------------------------------- */
+
+interface GradSpecialFacts {
+  names: string[];
+  lump: number;
+  cap: number;
+  /** Lumps already committed by earlier approved requests on this course. */
+  already: number;
+  committed: number;
+  over: boolean;
+}
+
+function GradSpecialAlert({ g }: { g: GradSpecialFacts }) {
+  const fmt = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const who = g.names.join(", ");
+  return (
+    <Alert
+      status={g.over ? "danger" : "warning"}
+      icon={<Wallet size={18} />}
+      title={g.over
+        ? "TA บัณฑิตศึกษาใน section ภาคพิเศษ — งบภาคพิเศษไม่พอ"
+        : "TA บัณฑิตศึกษาใน section ภาคพิเศษ ได้เหมาจ่ายทั้งเทอม"}
+      description={
+        <>
+          <b>{who}</b> จะได้ค่าตอบแทนเหมาจ่าย {fmt(g.lump)}/คน/เทอม (ไม่คิดรายชั่วโมง)
+          หักจากงบภาคพิเศษของวิชานี้ก่อนใคร — งบภาคพิเศษมี {fmt(g.cap)}
+          {g.already > 0 && <> ผูกไว้แล้ว {fmt(g.already)} จากคำขอก่อนหน้า</>}
+          {" "}รวมเป็น {fmt(g.committed)}{" "}
+          {g.over ? (
+            <>
+              <b>เกินงบ {fmt(g.committed - g.cap)}</b> — TA ปริญญาตรีทุกคนใน section ภาคพิเศษ
+              จะเบิกชั่วโมงไม่ได้เลย ถ้าไม่ตั้งใจ ให้ย้าย TA คนนี้ไป section ภาคปกติ หรือเลือก TA ปริญญาตรีแทน
+            </>
+          ) : (
+            <>เหลือให้ TA ปริญญาตรีใน section ภาคพิเศษเบิกรายชั่วโมง {fmt(g.cap - g.committed)}</>
+          )}
+        </>
+      }
+    />
   );
 }
 
@@ -478,6 +600,86 @@ function RequestFormSection({
     return names;
   }, [assignments, allTas]);
 
+  // A graduate TA on a ภาคพิเศษ section is paid a flat term lump (4,000฿),
+  // taken off the top of the special pool before any hourly work is settled.
+  // On a small special section the pool is smaller than the lump, so every
+  // undergrad TA in that section is paid nothing — a fact that used to surface
+  // only afterwards, as over_budget on the course page (12/09/2026). Lumps
+  // already committed by earlier approved requests count too.
+  const { data: settlement } = useSWR<{ forecast?: { special?: { committed?: number } } }>(
+    tcId ? `/teaching-courses/${tcId}/budget-settlement` : null,
+  );
+  const gradSpecial = useMemo(() => {
+    const lump = budget?.rates?.graduate_special_lumpsum ?? 0;
+    const cap = budget?.term_pay_special ?? 0;
+    if (!lump || !cap) return null;
+    const specialIds = new Set(secs.filter(s => s.track === "special").map(s => s.id));
+    const byId = new Map(allTas.map(t => [t.id, t]));
+    const names: string[] = [];
+    for (const a of assignments) {
+      if (a.level !== "master" && a.level !== "phd") continue;
+      if (!a.section_ids.some(sid => specialIds.has(sid))) continue;
+      const t = a.ta_id ? byId.get(a.ta_id) : undefined;
+      names.push(t ? `${t.first_name} ${t.last_name}` : "TA ที่ยังไม่ได้เลือกชื่อ");
+    }
+    if (names.length === 0) return null;
+    const already = settlement?.forecast?.special?.committed ?? 0;
+    const committed = already + names.length * lump;
+    return { names, lump, cap, already, committed, over: committed > cap };
+  }, [assignments, allTas, secs, budget, settlement]);
+
+  // What the planner needs from the form: timetables (to see shared sittings)
+  // and the draft assignments with their declared hours, so its estimate is of
+  // THIS request, not a hypothetical one.
+  const plannerSchedules = useMemo(() => {
+    const out: Record<string, { day_of_week: number; start_time: string; end_time: string }[]> = {};
+    for (const s of course?.sections ?? []) out[s.id] = s.schedules ?? [];
+    return out;
+  }, [course?.sections]);
+  const plannerDrafts = useMemo(() => {
+    const byId = new Map(allTas.map(t => [t.id, t]));
+    return assignments.map(a => {
+      const t = a.ta_id ? byId.get(a.ta_id) : undefined;
+      return {
+        ta_id: a.ta_id,
+        ta_name: t ? `${t.first_name} ${t.last_name}` : undefined,
+        level: a.level,
+        section_ids: a.section_ids,
+        workloads: a.section_workloads,
+      };
+    });
+  }, [assignments, allTas]);
+  // A plan from the planner becomes empty-named rows with the hours filled in;
+  // the lecturer then only picks who. Appended, never replacing what they typed.
+  const applyPlan = useCallback((items: PlanItem[]) => {
+    setAssignments(prev => [
+      ...prev,
+      ...items.map(it => ({
+        section_ids: [...it.section_ids],
+        ta_id: "",
+        level: it.level,
+        section_workloads: { ...it.workloads },
+      })),
+    ]);
+    notify.success(`เพิ่ม ${items.length} รายการลงฟอร์มแล้ว เลือกชื่อ TA ให้แต่ละคน`);
+  }, []);
+
+  // A plan handed over from the budget page: applied once, then forgotten, so
+  // a reload does not add the rows twice.
+  useEffect(() => {
+    if (!tcId || !course?.sections) return;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(planHandoffKey(tcId));
+      if (raw) sessionStorage.removeItem(planHandoffKey(tcId));
+    } catch { /* private mode */ }
+    if (!raw) return;
+    try {
+      const items = JSON.parse(raw) as PlanItem[];
+      if (Array.isArray(items) && items.length) applyPlan(items);
+    } catch { /* stale or malformed — ignore */ }
+  }, [tcId, course?.sections, applyPlan]);
+
   const [confirming, setConfirming] = useState(false);
 
   /* --- helpers --------------------------------------------------------- */
@@ -511,7 +713,22 @@ function RequestFormSection({
     setAssignments(a => a.filter((_, i) => i !== idx));
   }
   function updateAssign(idx: number, patch: Partial<Assignment>) {
-    setAssignments(a => a.map((x, i) => i === idx ? { ...x, ...patch } : x));
+    setAssignments(a => a.map((x, i) => {
+      if (i !== idx) return x;
+      const next = { ...x, ...patch };
+      // The level decides WHICH fields carry the hours. When picking a TA flips
+      // the level (a plan row planned as ป.ตรี filled by a master's student, or
+      // the reverse), move the declared hours across instead of leaving them
+      // in fields the new level never reads — which showed as "0 ชม." and a
+      // blocked row with no hint why (12/09/2026).
+      if (patch.level && isGradLevel(patch.level) !== isGradLevel(x.level)) {
+        next.section_workloads = Object.fromEntries(
+          Object.entries(x.section_workloads).map(([sid, w]) =>
+            [sid, remapWorkloadLevel(w, isGradLevel(patch.level!), sectionWeeklyHours(secs.find(sx => sx.id === sid)))]),
+        );
+      }
+      return next;
+    }));
   }
   function updateWorkload(idx: number, sectionId: string, patch: Partial<WorkloadFields>) {
     setAssignments(a => a.map((x, i) => {
@@ -605,6 +822,7 @@ function RequestFormSection({
   ];
 
   const scopeLabel = scope === "lecture" ? "บรรยาย" : scope === "lab" ? "ปฏิบัติการ" : "บรรยาย+ปฏิบัติการ";
+  const stepsRef = useRef<HTMLDivElement>(null);
   return (
     <Panel className="mb-4">
       <div className="flex items-center gap-2 mb-4">
@@ -628,11 +846,15 @@ function RequestFormSection({
         </div>
       )}
 
-      {/* เครื่องคิดเลขงบ — ให้อาจารย์ลองคำนวณก่อนตัดสินใจว่าจะรับ TA กี่คน */}
+      {/* วางแผน TA — คิดจากตารางสอนจริงและงบที่เหลือ แนะนำจำนวน/ประเภท TA และ
+          ประเมินสิ่งที่กรอกอยู่ในฟอร์ม ก่อนตัดสินใจส่ง */}
       <div data-tour="req-calculator">
-      <TaBudgetCalculator
+      <TaPlanner
         tcId={tcId}
-        hasSpecialSection={(course?.sections ?? []).some(s => s.track === "special")}
+        scope={scope}
+        schedules={plannerSchedules}
+        drafts={plannerDrafts}
+        onApplyPlan={applyPlan}
       />
       </div>
 
@@ -640,7 +862,8 @@ function RequestFormSection({
       {budget?.over_budget && <BudgetForecast budget={budget} />}
 
       {/* Step progress indicator */}
-      <div className="rounded-xl border border-border bg-panel p-3 mb-4 overflow-x-auto">
+      <ScrollToFormHint targetRef={stepsRef} />
+      <div ref={stepsRef} className="rounded-xl border border-border bg-panel p-3 mb-4 overflow-x-auto scroll-mt-20">
         <ol className="flex items-center gap-2 min-w-max">
           {steps.map((s, i) => (
             <li key={s.n} className="flex items-center gap-2">
@@ -787,6 +1010,8 @@ function RequestFormSection({
           />
         )}
 
+        {gradSpecial && <GradSpecialAlert g={gradSpecial} />}
+
         {err && (
           <Alert status="danger" title="ส่งคำขอไม่สำเร็จ" description={err} icon={<AlertCircle size={18} />} />
         )}
@@ -867,6 +1092,8 @@ function RequestFormSection({
               );
             })}
           </ul>
+
+          {gradSpecial && <GradSpecialAlert g={gradSpecial} />}
 
           {waitingOnSchedule.length > 0 && (
             <>

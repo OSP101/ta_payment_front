@@ -12,6 +12,7 @@ import {
 import SectionScheduleEditor, {
   type SectionScheduleRow, validateRows, toApiPayload, ScheduleSummary,
 } from "../../../../components/SectionScheduleEditor";
+import { courseCodeLabel } from "../../../../lib/courseCode";
 
 interface SectionRow {
   id: string;
@@ -42,6 +43,7 @@ function lockReason(sec: SectionRow, courseLocked: boolean): string | null {
 interface TC {
   id: string;
   code: string;
+  alt_codes?: string[];
   name_th: string;
   // Credit-hour breakdown from the faculty course — drives which meeting kinds
   // the schedule editor exposes. See [[schedule-kind-rules]].
@@ -74,7 +76,7 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
     <div>
       <PageHeader
         title="ตั้งค่ารายวิชา"
-        description={tc ? `${tc.code} — ${tc.name_th}` : undefined}
+        description={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : undefined}
       />
 
       {locked && (
@@ -94,7 +96,7 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
           that row under a second tab hid the one thing the page is for. */}
       <Panel title="ข้อมูลรายวิชา" className="mb-4" data-tour="set-info">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <ReadOnly label="รหัสวิชา" value={tc?.code} tabular />
+          <ReadOnly label="รหัสวิชา" value={tc ? courseCodeLabel(tc) : undefined} tabular />
           <ReadOnly label="ชื่อวิชา" value={tc?.name_th} span={3} />
           <ReadOnly label="นักศึกษาทั้งหมด" value={tc ? `${tc.num_students} คน` : "—"} />
           <ReadOnly label="ภาคปกติ" value={tc ? `${tc.num_students_regular} คน` : "—"} />

@@ -6,8 +6,9 @@ import {
   EmptyState as HEmptyState, useFilter, type Key,
 } from "@heroui/react";
 import { BookOpen, ChevronsUpDown } from "lucide-react";
+import { courseCodeLabel } from "../lib/courseCode";
 
-interface TC { id: string; code: string; name_th: string; term_id?: string; }
+interface TC { id: string; code: string; alt_codes?: string[]; name_th: string; term_id?: string; }
 
 /**
  * Global course switcher shown in the top bar of every course sub-page —
@@ -36,7 +37,7 @@ export default function CourseSwitcher({
     course?.term_id ? `${siblingsPath}?term_id=${course.term_id}` : null,
   );
 
-  const label = course ? `${course.code} — ${course.name_th}` : "…";
+  const label = course ? `${courseCodeLabel(course)} — ${course.name_th}` : "…";
 
   // Only one course (or list still loading) → show the name as static text.
   if (!siblings || siblings.length <= 1) {
@@ -89,10 +90,10 @@ export default function CourseSwitcher({
           </SearchField>
           <ListBox renderEmptyState={() => <HEmptyState>ไม่พบวิชาที่ตรงกัน</HEmptyState>}>
             {siblings.map(c => (
-              <ListBox.Item key={c.id} id={c.id} textValue={`${c.code} ${c.name_th}`}>
+              <ListBox.Item key={c.id} id={c.id} textValue={`${courseCodeLabel(c)} ${c.name_th}`}>
                 <div className="flex items-center gap-2 min-w-0">
                   <BookOpen size={15} className="shrink-0 text-muted" />
-                  <Label className="truncate">{c.code} — {c.name_th}</Label>
+                  <Label className="truncate">{courseCodeLabel(c)} — {c.name_th}</Label>
                 </div>
                 <ListBox.ItemIndicator />
               </ListBox.Item>
