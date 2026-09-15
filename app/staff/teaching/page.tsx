@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import useSWR, { mutate } from "swr";
-import { Save, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users, SquareArrowOutUpRight } from "lucide-react";
+import { Save, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users, SquareArrowOutUpRight, History } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
@@ -25,6 +25,7 @@ import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 // almost always already fetched.
 const OpenCourseModal = dynamic(() => import("./OpenCourseModal"), { ssr: false });
 const ImportModal = dynamic(() => import("./ImportModal"), { ssr: false });
+const ImportHistoryModal = dynamic(() => import("./ImportHistoryModal"), { ssr: false });
 
 interface TC {
   id: string; code: string; alt_codes?: string[]; name_th: string; term_id: string;
@@ -64,6 +65,7 @@ export default function TeachingPage() {
   const { data: courses } = useSWR<TC[]>(useTermKey("/teaching-courses"));
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [onlyWba, setOnlyWba] = useState(false);
   // Course whose student counts are being edited in the modal (null = closed).
@@ -93,6 +95,9 @@ export default function TeachingPage() {
                   <FileSpreadsheet size={16} /> นำเข้า Excel
                 </Button>
               </span>
+              <Button variant="tertiary" disabled={!termId} onClick={() => setImportHistoryOpen(true)}>
+                <History size={16} /> ประวัติการนำเข้า
+              </Button>
               <span data-tour="teaching-open">
                 <Button variant="primary" disabled={!termId} onClick={() => setCreating(true)}>
                   <BookPlus size={16} /> เปิดรายวิชา
@@ -189,6 +194,12 @@ export default function TeachingPage() {
         onClose={() => setImporting(false)}
         termId={termId}
         termLabel={termLabel}
+      />
+
+      <ImportHistoryModal
+        open={importHistoryOpen}
+        onClose={() => setImportHistoryOpen(false)}
+        termId={termId}
       />
 
       <StudentCountsModal course={editStudents} onClose={() => setEditStudents(null)} />

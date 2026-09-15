@@ -114,14 +114,17 @@ function normalizeCourseName(s: string): string {
   return s.trim().toUpperCase().split(/\s+/).join(" ");
 }
 
-interface LecturerUser {
+// Exported for LecturerPanel.tsx (staff/teaching/[tcId]) — same shape and
+// picker used to assign lecturers when a course is opened is reused to
+// correct that assignment afterwards, via ReplaceLecturers.
+export interface LecturerUser {
   id: string;
   title?: string | null;
   first_name?: string | null;
   last_name?: string | null;
   email: string;
 }
-function lecturerName(u: LecturerUser): string {
+export function lecturerName(u: LecturerUser): string {
   return formatFullName(u) || u.email;
 }
 
@@ -773,7 +776,7 @@ function LecturerPicker({
   );
 }
 
-function LecturerAutocomplete({
+export function LecturerAutocomplete({
   items, onPick,
 }: {
   items: LecturerUser[];

@@ -15,6 +15,7 @@ import SectionScheduleEditor, {
   type SectionScheduleRow, validateRows, toApiPayload, ScheduleSummary,
 } from "../../../components/SectionScheduleEditor";
 import { courseCodeLabel } from "../../../lib/courseCode";
+import LecturerPanel from "./LecturerPanel";
 
 interface SectionRow {
   id: string;
@@ -54,6 +55,7 @@ interface TC {
   num_students_special: number;
   exported_at?: string;
   sections?: SectionRow[];
+  lecturers?: { id: string; first_name: string; last_name: string; is_primary: boolean }[];
 }
 
 export default function StaffTeachingCoursePage({ params }: { params: Promise<{ tcId: string }> }) {
@@ -131,6 +133,12 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
             title="รายวิชานี้ถูกล็อกแล้ว"
             description={`ส่งออกไฟล์เมื่อ ${formatExportedAt(tc?.exported_at)} ไม่สามารถแก้ไข section หรือตารางเวลาได้อีก`}
           />
+        </div>
+      )}
+
+      {tc && (
+        <div className="mb-6">
+          <LecturerPanel tcId={tcId} lecturers={tc.lecturers} />
         </div>
       )}
 

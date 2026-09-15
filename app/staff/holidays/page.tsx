@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Plus, Trash2, Pencil, Upload, AlertTriangle, CalendarOff, RefreshCw, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Pencil, Upload, AlertTriangle, CalendarOff, ChevronDown, Info } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
@@ -88,7 +88,6 @@ export default function StaffHolidaysPage() {
   const [showBulk, setShowBulk] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Holiday | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [syncing, setSyncing] = useState(false);
 
   // Year picker options — show current ±3 years so staff can jump between the
   // active term and next-year planning without typing.
@@ -101,23 +100,6 @@ export default function StaffHolidaysPage() {
 
   async function refresh() {
     await mutate(`/holidays?year=${year}`);
-  }
-
-  async function handleSyncFromBOT() {
-    setSyncing(true);
-    try {
-      const res = await api.post<{
-        fetched: number; inserted: number; updated: number; skipped: number;
-      }>(`/holidays/sync-from-bot?year=${year}`);
-      notify.success(
-        `ซิงก์จาก BOT สำเร็จ เพิ่มใหม่ ${res.inserted}, อัปเดต ${res.updated}, ข้าม ${res.skipped} จากทั้งหมด ${res.fetched}`,
-      );
-      await refresh();
-    } catch (e) {
-      notify.error(e);
-    } finally {
-      setSyncing(false);
-    }
   }
 
   async function handleDelete() {
@@ -152,15 +134,12 @@ export default function StaffHolidaysPage() {
         description="รายการวันหยุดที่ระบบใช้ตรวจสอบการลงเวลาปฏิบัติงานของ TA ถ้าคาบเรียนตรงกับวันหยุด TA จะลงชั่วโมงไม่ได้จนกว่าอาจารย์จะระบุวันชดเชย"
         actions={
           <>
-            <span data-tour="holidays-sync" className="flex gap-2">
+            <span className="flex gap-2">
               <Select value={String(year)} onChange={e => setYear(Number(e.target.value))} className="max-w-40">
                 {yearOpts.map(y => (
                   <option key={y} value={y}>ปี พ.ศ. {y + 543}</option>
                 ))}
               </Select>
-              <Button variant="secondary" onClick={handleSyncFromBOT} isPending={syncing} disabled={syncing}>
-                <RefreshCw size={14} /> ซิงก์จาก BOT (ปี พ.ศ. {year + 543})
-              </Button>
             </span>
             <span data-tour="holidays-add" className="flex gap-2">
               <Button variant="secondary" onClick={() => setShowBulk(true)}>
@@ -175,10 +154,10 @@ export default function StaffHolidaysPage() {
       />
 
       <Alert
-        status="warning"
-        icon={<AlertTriangle size={14} />}
-        title="กด “ซิงก์จาก BOT” เพื่อดึงวันหยุดจันทรคติ/วันชดเชยของปีนี้"
-        description="ระบบใช้ข้อมูลจากธนาคารแห่งประเทศไทย (BOT) ครอบคลุมวันหยุดพุทธศาสนา (มาฆบูชา วิสาขบูชา อาสาฬหบูชา เข้าพรรษา) และวันชดเชย การซิงก์ซ้ำจะไม่ทับชื่อที่ staff แก้ไว้ ส่วนวันหยุดพิเศษที่ ครม. ประกาศเพิ่มภายหลัง อาจต้องเพิ่มด้วยตนเอง"
+        status="accent"
+        icon={<Info size={14} />}
+        title="วันหยุดส่วนใหญ่ซิงก์เข้ามาอัตโนมัติจากระบบ TDBM ของวิทยาลัย"
+        description="ระบบดึงวันหยุด (และวันสอนชดเชยที่อาจารย์ยื่น) จาก TDBM ให้อัตโนมัติทุกชั่วโมง ไม่ต้องกดซิงก์เอง — ใช้หน้านี้เพิ่มวันหยุดที่ TDBM ไม่มี (เช่น กิจกรรมเฉพาะของคณะ) หรือแก้ไขช่วงเวลาของวันหยุดครึ่งวัน"
       />
 
       <div className="mt-4">

@@ -56,6 +56,13 @@ interface CommitResult {
   created_ids?: string[];
   skipped_codes?: string[];
   merged_codes?: string[];
+  // warning_count/warnings: rows this SHAPE is expected to produce (a course
+  // with no timetable at all — โครงงาน/สหกิจ/วิทยานิพนธ์). The import still
+  // succeeded; nothing here needs attention. Kept separate from error_count
+  // since 15/09/2026 — before that a clean import of a real file reported
+  // "error 65 รายการ" for exactly this, which read as broken.
+  warning_count?: number;
+  warnings?: string[];
   error_count: number;
   errors?: string[];
 }
@@ -413,7 +420,7 @@ function PreviewRow({
                 checked={decision === "proceed"}
                 onChange={() => onDecide("proceed")}
               />
-              <span>{mergeInto ? `รวมเข้า ${mergeInto}` : "สร้างโดยยังไม่ผูก"}</span>
+              <span>{mergeInto ? `รวมเข้า ${mergeInto}` : "สร้างโดยยังไม่ผูก (ผูกภายหลังได้ที่หน้าตั้งค่ารายวิชา)"}</span>
             </label>
             <label className="inline-flex items-center gap-1">
               <input
@@ -580,13 +587,23 @@ function SummaryChip({
 }
 
 function ResultView({ r }: { r: CommitResult }) {
+  const warningCount = r.warning_count ?? 0;
+  const errorCount = r.error_count ?? 0;
   return (
     <div className="space-y-3 text-sm">
       <Alert
         status="success"
         title={`นำเข้าเรียบร้อย · สร้าง ${r.created_ids?.length ?? 0} รายวิชา`}
-        description={`${r.merged_codes?.length ? `รวม ${r.merged_codes.length} รหัส · ` : ""}ข้าม ${r.skipped_codes?.length ?? 0} รายการ · error ${r.error_count} รายการ`}
+        description={`${r.merged_codes?.length ? `รวม ${r.merged_codes.length} รหัส · ` : ""}ข้าม ${r.skipped_codes?.length ?? 0} รายการ`}
       />
+      {/* Warnings and errors are shown as separate chips — a course with no
+          timetable (โครงงาน/สหกิจ/วิทยานิพนธ์) is expected and not a problem,
+          so it must not read as one next to a genuine data error. */}
+      <div className="flex flex-wrap gap-2">
+        <SummaryChip tone="success" label="นำเข้าสำเร็จ" count={r.created_ids?.length ?? 0} />
+        {warningCount > 0 && <SummaryChip tone="warn" label="เตือน (ไม่มีตารางเรียน)" count={warningCount} />}
+        <SummaryChip tone={errorCount > 0 ? "danger" : "neutral"} label="ผิดพลาด" count={errorCount} />
+      </div>
       {(r.merged_codes?.length ?? 0) > 0 && (
         <div>
           <p className="text-xs font-medium mb-1 text-(--ink-2)">รหัสที่รวมเป็นวิชาเดียว</p>
@@ -595,10 +612,22 @@ function ResultView({ r }: { r: CommitResult }) {
       )}
       {(r.errors?.length ?? 0) > 0 && (
         <div>
-          <p className="text-xs font-medium mb-1 text-(--ink-2)">รายการที่มีปัญหา</p>
+          <p className="text-xs font-medium mb-1 text-(--ink-2)">รายการที่มีปัญหา (ต้องตรวจ)</p>
           <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
             {r.errors!.map((e, i) => (
               <li key={i} className="text-red-700">• {e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {(r.warnings?.length ?? 0) > 0 && (
+        <div>
+          <p className="text-xs font-medium mb-1 text-(--ink-2)">
+            รายการที่เตือน (ไม่มีตารางเรียน — ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)
+          </p>
+          <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
+            {r.warnings!.map((w, i) => (
+              <li key={i} className="text-(--ink-3)">• {w}</li>
             ))}
           </ul>
         </div>

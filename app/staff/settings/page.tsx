@@ -14,9 +14,8 @@ import { parseDate, parseDateTime, type DateValue } from "@internationalized/dat
 import { api, ApiError, demoTesters, demoAddTester, demoRemoveTester, type DemoTester } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import {
-  PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select, ConfirmDialog, TipWrap,
+  PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select, TipWrap,
 } from "../../components/ui";
-import { RefreshCw } from "lucide-react";
 import { FormulaHelpModal } from "../../components/formula-help";
 
 interface Rate {
@@ -535,10 +534,6 @@ function TermsSection() {
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
   const [prefillYear, setPrefillYear] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Term | null>(null);
-  // After a successful term save, ask staff whether to pull BOT holidays for
-  // the calendar year(s) the term covers. Null = no prompt open.
-  const [syncPromptFor, setSyncPromptFor] = useState<{ startY: number; endY: number } | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [yearFilter, setYearFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Track whether we've done the initial auto-expand so subsequent data
@@ -633,43 +628,8 @@ function TermsSection() {
       setPendingYears(ys => ys.filter(y => y !== prefillYear));
     }
     toast.success(mode === "edit" ? `แก้ไข${label} เรียบร้อยแล้ว` : `เพิ่ม${label} เรียบร้อยแล้ว`);
-    // Prompt to sync BOT holidays for the calendar years this term covers.
-    // Only when we have both dates — an edit that skipped date fields still
-    // has them from `editing`, so this normally always runs.
-    if (saved.starts_on && saved.ends_on) {
-      const startY = new Date(saved.starts_on + "T00:00:00").getFullYear();
-      const endY = new Date(saved.ends_on + "T00:00:00").getFullYear();
-      if (Number.isFinite(startY) && Number.isFinite(endY) && startY <= endY) {
-        setSyncPromptFor({ startY, endY });
-      }
-    }
-  }
-
-  async function handleSyncBOT() {
-    if (!syncPromptFor) return;
-    const { startY, endY } = syncPromptFor;
-    setSyncing(true);
-    try {
-      const res = await api.post<{
-        years: { year: number; fetched: number; inserted: number; updated: number; skipped: number; error?: string }[];
-        total: { fetched: number; inserted: number; updated: number; skipped: number };
-      }>(`/holidays/sync-from-bot?start_year=${startY}&end_year=${endY}`);
-      const failed = res.years.filter(y => y.error);
-      const yearsLabel = res.years.map(y => y.year + 543).join(", ");
-      if (failed.length === 0) {
-        toast.success(
-          `ซิงก์วันหยุดจาก BOT สำเร็จ (ปี พ.ศ. ${yearsLabel}) เพิ่มใหม่ ${res.total.inserted}, อัปเดต ${res.total.updated}, ข้าม ${res.total.skipped}`,
-        );
-      } else {
-        const failLabel = failed.map(y => `พ.ศ. ${y.year + 543} (${y.error})`).join(", ");
-        toast.danger(`ซิงก์บางส่วนล้มเหลว: ${failLabel} สำเร็จ: เพิ่ม ${res.total.inserted} / อัปเดต ${res.total.updated}`);
-      }
-      setSyncPromptFor(null);
-    } catch (e) {
-      toast.danger((e as Error).message || "ซิงก์จาก BOT ไม่สำเร็จ");
-    } finally {
-      setSyncing(false);
-    }
+    // Holidays for the term's years now sync automatically from TDBM (see
+    // /staff/holidays) — no BOT prompt needed here any more.
   }
 
   return (
@@ -865,25 +825,6 @@ function TermsSection() {
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onDone={label => { setDeleteTarget(null); toast.success(`ลบ${label} เรียบร้อยแล้ว`); }}
-      />
-
-      <ConfirmDialog
-        open={syncPromptFor !== null}
-        onClose={() => setSyncPromptFor(null)}
-        onConfirm={handleSyncBOT}
-        isPending={syncing}
-        icon={<RefreshCw size={18} />}
-        title="ดึงวันหยุดราชการจาก BOT?"
-        confirmLabel="ดึงเลย"
-        cancelLabel="ข้าม"
-        message={
-          syncPromptFor
-            ? `เทอมนี้ครอบคลุมปี พ.ศ. ${syncPromptFor.startY === syncPromptFor.endY
-                ? syncPromptFor.startY + 543
-                : `${syncPromptFor.startY + 543}, ${syncPromptFor.endY + 543}`
-              } ต้องการดึงวันหยุด (จันทรคติ + วันชดเชย) จากธนาคารแห่งประเทศไทยเลยไหม? ถ้าข้าม สามารถซิงก์ทีหลังได้ที่หน้าจัดการวันหยุด`
-            : ""
-        }
       />
     </Panel>
   );
