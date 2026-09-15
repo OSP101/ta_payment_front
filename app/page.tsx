@@ -8,7 +8,7 @@ export default async function RootRedirect() {
   // BETA: send an unauthenticated visitor to the demo sandbox entry instead
   // of straight to a real login form — /demo is where a first-time visitor
   // is meant to land during this phase, not /login.
-  if (!me) redirect("/demo");
+  if (!me) redirect("/login");
   if (me.roles.includes("admin") || me.roles.includes("staff")) redirect("/staff");
   if (me.roles.includes("lecturer")) redirect("/lecturer");
   if (me.roles.includes("ta")) redirect("/ta");
