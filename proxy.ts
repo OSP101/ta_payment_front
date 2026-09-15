@@ -52,10 +52,15 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
+  // sitemap.xml and robots.txt used to be excluded alongside the real static
+  // assets (_next/static, _next/image, favicon.ico) — but unlike those, they
+  // are ordinary generated responses (app/sitemap.ts, app/robots.ts), and a
+  // scan flagged /sitemap.xml for shipping with no CSP header at all. The
+  // nonce this proxy mints goes unused on them (neither emits a <script> or
+  // <style>), but the header itself still applies and satisfies the check.
   matcher: [
     {
-      source:
-        "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+      source: "/((?!_next/static|_next/image|favicon.ico).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

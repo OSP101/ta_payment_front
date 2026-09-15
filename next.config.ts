@@ -52,17 +52,17 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:path*",
+        // Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options
+        // and Referrer-Policy used to be set here too — deploy/nginx/
+        // nginx.conf.template's :443 server block sets all four already, and
+        // with both layers active a ZAP scan flagged the response carrying
+        // two separate Strict-Transport-Security header lines (RFC 6797
+        // §8.1: a response must not have more than one). nginx is the actual
+        // TLS-terminating edge in every deployment this app ships behind
+        // (see deploy/), so it stays the single source for these four; only
+        // Permissions-Policy is unique to Next.js (nginx doesn't set it, and
+        // it only matters for pages the browser navigates, not the Go API).
         headers: [
-          // Sent unconditionally — browsers only ever honour this when the
-          // response itself arrived over HTTPS, so it's a no-op over plain
-          // HTTP in local dev rather than something that needs gating on
-          // NODE_ENV. No includeSubDomains: this app doesn't own every
-          // subdomain of its parent domain, and HSTS misapplied to one that
-          // isn't HTTPS-ready locks users out of it, not just this app.
-          { key: "Strict-Transport-Security", value: "max-age=63072000" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=()",
