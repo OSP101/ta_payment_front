@@ -553,6 +553,11 @@ export function TaPlanner({
 interface Pool {
   cap: number;
   existing: number;
+  /** existing split by TA level — existingUndergrad + existingGrad == existing.
+   *  Drives PoolCard's segmented bar (which level is actually spending this
+   *  pool) instead of the old single-colour budget-health bar. */
+  existingUndergrad: number;
+  existingGrad: number;
   existingTAs: number;
   students: number;
   /** cap − existing, floored at 0. */
@@ -571,12 +576,28 @@ interface DraftEval {
 }
 
 function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, drafts: PlanDraft[]) {
-  const mkPool = (t: PlanTrack): Pool => {
-    const existing = t.existing_baht + t.existing_lump_baht;
-    return { cap: t.cap_baht, existing, existingTAs: t.existing_tas, students: t.num_students, free: Math.max(0, t.cap_baht - existing) };
+  // Existing spend, split by TA level — summed straight from each approved
+  // TA's own row rather than trusting a second server-computed total, so the
+  // two numbers can never drift apart. Regular-pool spend is always billed
+  // hourly (regular_baht, whatever the level); special-pool spend is hourly
+  // for undergrad but a flat lump for grad (lump_baht) — see PersonCost.
+  const existingByLevel = (key: "regular_baht" | "special_baht", includeLump: boolean) => {
+    let ug = 0, grad = 0;
+    for (const p of f.existing) {
+      const amt = p[key] + (includeLump ? p.lump_baht : 0);
+      if (isGradLevel(p.level)) grad += amt; else ug += amt;
+    }
+    return { ug, grad };
   };
-  const regular = mkPool(f.tracks.regular);
-  const special = mkPool(f.tracks.special);
+  const mkPool = (t: PlanTrack, byLevel: { ug: number; grad: number }): Pool => {
+    const existing = t.existing_baht + t.existing_lump_baht;
+    return {
+      cap: t.cap_baht, existing, existingUndergrad: byLevel.ug, existingGrad: byLevel.grad,
+      existingTAs: t.existing_tas, students: t.num_students, free: Math.max(0, t.cap_baht - existing),
+    };
+  };
+  const regular = mkPool(f.tracks.regular, existingByLevel("regular_baht", false));
+  const special = mkPool(f.tracks.special, existingByLevel("special_baht", true));
   const specialSecs = f.sections.filter(s => s.track === "special");
   const hasSpecial = specialSecs.length > 0;
 
@@ -720,7 +741,11 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
         let pick: Sitting | null = null;
         let worst = 0;
         for (const sit of sits) {
-          const h = heads.get(sit.id)!;
+          // A sitting whose guideline was already fully covered by existing
+          // TAs (guide.get(sit.id) reduced to 0) never gets a heads entry in
+          // step 1's round-based loop — round < 0 is never true — so it must
+          // default here rather than assume step 1 always visited it.
+          const h = heads.get(sit.id) ?? { ug: 0, grad: 0 };
           const n = h.ug + h.grad;
           if (n >= ceiling.get(sit.id)!) continue;
           const ratio = sit.students / (n + 1);
@@ -868,7 +893,10 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
   const options: Option[] = [];
   if (R) {
     options.push({ ...toOption(R.best, regularSittings, "แนะนำ"), recommended: true });
-    for (const m of R.mixes) options.push(toOption(m, regularSittings, "มีบัณฑิต"));
+    for (const m of R.mixes) {
+      const o = toOption(m, regularSittings, "มีบัณฑิต");
+      if (!options.some(x => x.ug === o.ug && x.grad === o.grad && x.duty === o.duty)) options.push(o);
+    }
     // The plain guideline at the standard rung, when it differs — the cheaper
     // plan most courses have run so far.
     if (R.best.rung !== DUTY_STANDARD || [...R.best.heads.values()].some((h, i) => h.ug + h.grad !== [...R.guide.values()][i])) {
@@ -1011,8 +1039,22 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
 /* Pieces                                                                     */
 /* -------------------------------------------------------------------------- */
 
+// One fixed colour per TA level, used wherever this bar is drawn — a
+// lecturer learns "blue = ป.ตรี" once and it stays true across every pool
+// card. Matches the pattern the TA-facing worklog page uses for its own
+// per-activity bar, just with two segments instead of five.
+//
+// Blue vs rose rather than blue vs indigo — two blues sitting next to each
+// other in a 6px-tall bar read as one colour until you look very closely.
+// Also deliberately apart from the teal/orange ปกติ-พิเศษ bar on the
+// lecturer's course cards, so the two bars' colours never look related.
+const LEVEL_BAR_COLOR: Record<"undergrad" | "grad", string> = {
+  undergrad: "bg-blue-500",
+  grad: "bg-rose-500",
+};
+
 function PoolCard({ label, tone, pool, weeks }: { label: string; tone: "brand" | "warn"; pool: Pool; weeks: number }) {
-  const pct = pool.cap > 0 ? Math.min(100, Math.round((pool.existing / pool.cap) * 100)) : 0;
+  const pctOf = (n: number) => (pool.cap > 0 ? Math.min(100, (n / pool.cap) * 100) : 0);
   return (
     <div className="rounded-xl border border-border bg-panel p-3">
       <div className="flex items-center justify-between gap-2">
@@ -1023,12 +1065,37 @@ function PoolCard({ label, tone, pool, weeks }: { label: string; tone: "brand" |
         <span className="text-xs text-muted">งบทั้งเทอม</span>
         <span className="text-sm font-semibold tabular-nums">{baht(pool.cap)}</span>
       </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
-        <div className={"h-full " + (pct >= 100 ? "bg-danger" : pct >= 80 ? "bg-warning" : "bg-success")} style={{ width: `${pct}%` }} />
+      {/* Segmented by TA level rather than the old single traffic-light
+          colour — "who is this money going to" is the question a lecturer
+          actually has looking at this card. Whether the pool is running out
+          is still answered below (เหลือ turns red), just not by this bar. */}
+      <div className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
+        {pool.existingUndergrad > 0.5 && (
+          <div className={LEVEL_BAR_COLOR.undergrad} style={{ width: `${pctOf(pool.existingUndergrad)}%` }}
+               title={`ป.ตรี ${baht(pool.existingUndergrad)}`} />
+        )}
+        {pool.existingGrad > 0.5 && (
+          <div className={LEVEL_BAR_COLOR.grad} style={{ width: `${pctOf(pool.existingGrad)}%` }}
+               title={`บัณฑิต ${baht(pool.existingGrad)}`} />
+        )}
       </div>
-      <div className="mt-1 flex items-baseline justify-between gap-2 text-[11px]">
-        <span className="text-muted">
-          {pool.existingTAs > 0 ? `TA เดิม ${pool.existingTAs} คน ใช้ ≈ ${baht(pool.existing)}` : "ยังไม่มี TA ที่อนุมัติ"}
+      <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[11px]">
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted">
+          {pool.existingTAs > 0 ? (
+            <>
+              <span>TA เดิม {pool.existingTAs} คน</span>
+              {pool.existingUndergrad > 0.5 && (
+                <span className="inline-flex items-center gap-1">
+                  <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + LEVEL_BAR_COLOR.undergrad} /> ป.ตรี {baht(pool.existingUndergrad)}
+                </span>
+              )}
+              {pool.existingGrad > 0.5 && (
+                <span className="inline-flex items-center gap-1">
+                  <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + LEVEL_BAR_COLOR.grad} /> บัณฑิต {baht(pool.existingGrad)}
+                </span>
+              )}
+            </>
+          ) : "ยังไม่มี TA ที่อนุมัติ"}
         </span>
         <span className={"font-semibold tabular-nums " + (pool.free <= 0 ? "text-danger" : "text-ink-1")}>
           เหลือ {baht(pool.free)}

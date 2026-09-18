@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { ApiError } from "../../../lib/api";
 import {
-  PageHeader, Panel, Button, Chip, EmptyState, Alert, ProgressBar,
+  PageHeader, Panel, Button, Chip, EmptyState, Alert,
 } from "../../../components/ui";
 import { CourseSubmissionPanel } from "../../../components/CourseSubmissionPanel";
 import { type TARequestRow } from "../../RequestsTable";
@@ -32,6 +32,10 @@ interface TC {
 interface Budget {
   per_course_max: number;
   used_baht: number;
+  /** used_baht split by pool — used_baht_regular + used_baht_special == used_baht.
+   *  Drives the usage bar's two coloured segments below. */
+  used_baht_regular: number;
+  used_baht_special: number;
   remaining_baht: number;
   over_budget: boolean;
   credits: number;
@@ -44,6 +48,12 @@ interface Budget {
   num_students_special: number;
   suggested_tas: { undergrad: number; graduate: number };
 }
+
+// ภาคปกติ/ภาคพิเศษ get a warm/cool pair, deliberately far from the ป.ตรี/
+// บัณฑิต blue-indigo pair used on the budget-planner cards elsewhere — a
+// lecturer flipping between this card and that one shouldn't have to work
+// out whether blue means the same thing on both.
+const TRACK_BAR_COLOR = { regular: "bg-teal-500", special: "bg-orange-500" };
 
 /** 12,345 ฿ — ตัดเศษสตางค์ทิ้ง เพราะเป็นตัวเลข "โดยประมาณ" อยู่แล้ว */
 const baht = (n: number) => Math.round(n).toLocaleString("th-TH");
@@ -356,14 +366,48 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
         />
       </div>
 
-      <ProgressBar value={pct} tone={tone} />
-      <div className="text-xs text-muted mt-2">
-        ใช้ไปแล้ว ~{baht(budget.used_baht)} บ. ({pct.toFixed(0)}%)
-        {budget.over_budget
-          ? " เกินเพดานงบ (โดยประมาณ)"
-          : pct >= 80
-          ? " ใกล้เต็มงบ (โดยประมาณ)"
-          : ""}
+      {/* Segmented by pool rather than one flat fill — "how full" is still the
+          same %, but a lecturer can now also see whether it's ภาคปกติ or
+          ภาคพิเศษ money doing the filling. Whether the pool is in trouble is
+          still the tone above and the text below; the bar itself only says
+          which pool. */}
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-surface-secondary">
+        {budget.used_baht_regular > 0.5 && (
+          <div
+            className={TRACK_BAR_COLOR.regular}
+            style={{ width: `${Math.min(100, (budget.used_baht_regular / budget.per_course_max) * 100)}%` }}
+            title={`ภาคปกติ ~${baht(budget.used_baht_regular)} บ.`}
+          />
+        )}
+        {budget.used_baht_special > 0.5 && (
+          <div
+            className={TRACK_BAR_COLOR.special}
+            style={{ width: `${Math.min(100, (budget.used_baht_special / budget.per_course_max) * 100)}%` }}
+            title={`ภาคพิเศษ ~${baht(budget.used_baht_special)} บ.`}
+          />
+        )}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          {budget.used_baht_regular > 0.5 && (
+            <span className="inline-flex items-center gap-1">
+              <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + TRACK_BAR_COLOR.regular} /> ปกติ ~{baht(budget.used_baht_regular)}
+            </span>
+          )}
+          {budget.used_baht_special > 0.5 && (
+            <span className="inline-flex items-center gap-1">
+              <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + TRACK_BAR_COLOR.special} /> พิเศษ ~{baht(budget.used_baht_special)}
+            </span>
+          )}
+        </span>
+        <span>
+          ใช้ไปแล้ว ~{baht(budget.used_baht)} บ. ({pct.toFixed(0)}%)
+          {budget.over_budget
+            ? " เกินเพดานงบ (โดยประมาณ)"
+            : pct >= 80
+            ? " ใกล้เต็มงบ (โดยประมาณ)"
+            : ""}
+        </span>
       </div>
     </StatusCardShell>
   );

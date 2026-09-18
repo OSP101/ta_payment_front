@@ -41,7 +41,15 @@ interface LecturerCourseStatus {
   estimated_baht: number;
   budget_max: number;
   budget_used: number;
+  /** budget_used split by pool — used_regular + used_special == budget_used. */
+  budget_used_regular: number;
+  budget_used_special: number;
 }
+
+// Same warm/cool pair as the course-overview page's own usage bar — kept
+// apart from the blue/indigo ป.ตรี/บัณฑิต pair on the budget-planner cards so
+// "blue" doesn't quietly mean two different things across pages.
+const TRACK_BAR_COLOR = { regular: "bg-teal-500", special: "bg-orange-500" };
 
 /**
  * A course with no approved TA is not the same as a course nobody asked for.
@@ -759,11 +767,24 @@ function CourseCard({
                 {over ? `เกิน ${pct - 100}%` : `${pct}%`}
               </span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
-              <div
-                className={`h-full rounded-full transition-[width] ${barFill}`}
-                style={{ width: `${Math.min(100, pctRaw)}%` }}
-              />
+            {/* Segmented by pool instead of one flat fill — the % and the
+                over/near-full tone above still answer "is this okay?"; the
+                bar itself now also answers "okay using which pool's money?" */}
+            <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
+              {ov!.budget_used_regular > 0.5 && (
+                <div
+                  className={TRACK_BAR_COLOR.regular}
+                  style={{ width: `${Math.min(100, (ov!.budget_used_regular / ov!.budget_max) * 100)}%` }}
+                  title={`ภาคปกติ ${Math.round(ov!.budget_used_regular).toLocaleString("th-TH")} บ.`}
+                />
+              )}
+              {ov!.budget_used_special > 0.5 && (
+                <div
+                  className={TRACK_BAR_COLOR.special}
+                  style={{ width: `${Math.min(100, (ov!.budget_used_special / ov!.budget_max) * 100)}%` }}
+                  title={`ภาคพิเศษ ${Math.round(ov!.budget_used_special).toLocaleString("th-TH")} บ.`}
+                />
+              )}
             </div>
           </>
         ) : (

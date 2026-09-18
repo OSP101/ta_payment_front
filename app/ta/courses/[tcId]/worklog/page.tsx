@@ -206,6 +206,10 @@ interface Assignment {
   submitted_count: number;
   approved_count: number;
   hours_logged: number;
+  // Same total as hours_logged, split by activity — lecture/lab/review/
+  // makeup/other, always present even at 0 — so the progress bar below can
+  // be drawn as coloured segments instead of one undifferentiated fill.
+  hours_by_activity: Record<string, number>;
 }
 interface SectionScheduleSlot {
   id: string;
@@ -451,6 +455,17 @@ const ACTIVITY_LABEL: Record<string, string> = {
   review: "ตรวจงาน",
   makeup: "ชดเชย",
   other: "อื่น ๆ",
+};
+
+// One fixed colour per activity, used everywhere an activity breakdown is
+// drawn as a bar (the section cards' term-hour progress bar) so a TA learns
+// "blue = บรรยาย" once and it stays true across the page.
+const ACTIVITY_BAR_COLOR: Record<string, string> = {
+  lecture: "bg-blue-500",
+  lab: "bg-purple-500",
+  review: "bg-amber-500",
+  makeup: "bg-teal-500",
+  other: "bg-slate-400",
 };
 
 type Scope = "lecture" | "lab" | "both";
@@ -2965,7 +2980,6 @@ function SectionStrip({
           const active = a.id === activeId;
           const used = a.hours_logged ?? 0;
           const ceiling = a.term_hour_ceiling ?? 0;
-          const pct = ceiling > 0 ? Math.min(100, (used / ceiling) * 100) : 0;
           return (
             <div
               key={a.id}
@@ -3001,8 +3015,34 @@ function SectionStrip({
                     <div className="mt-1 text-xs text-muted tabular">
                       {used.toFixed(1)} / {ceiling.toFixed(1)} ชม.
                     </div>
-                    <div className="mt-1.5 h-1 rounded-full bg-surface-secondary overflow-hidden">
-                      <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+                    {/* One segment per activity, each sized against the same
+                        ceiling as the number above — so the segments always
+                        add up to exactly `pct`% instead of being stretched to
+                        fill the bar on their own and disagreeing with it. */}
+                    <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-surface-secondary">
+                      {Object.keys(ACTIVITY_LABEL)
+                        .filter(k => (a.hours_by_activity?.[k] ?? 0) > 0.001)
+                        .map(k => (
+                          <div
+                            key={k}
+                            className={ACTIVITY_BAR_COLOR[k]}
+                            style={{ width: `${Math.min(100, ((a.hours_by_activity?.[k] ?? 0) / ceiling) * 100)}%` }}
+                            title={`${ACTIVITY_LABEL[k]} ${(a.hours_by_activity?.[k] ?? 0).toFixed(1)} ชม.`}
+                          />
+                        ))}
+                    </div>
+                    {/* Legend — only activities this TA actually has hours in,
+                        so a lecture-only assignment doesn't show four unused
+                        colours nobody asked about. */}
+                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted">
+                      {Object.keys(ACTIVITY_LABEL)
+                        .filter(k => (a.hours_by_activity?.[k] ?? 0) > 0.001)
+                        .map(k => (
+                          <span key={k} className="inline-flex items-center gap-1">
+                            <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + ACTIVITY_BAR_COLOR[k]} />
+                            {ACTIVITY_LABEL[k]} {a.hours_by_activity[k].toFixed(1)}
+                          </span>
+                        ))}
                     </div>
                   </>
                 )}
@@ -3242,6 +3282,13 @@ function MonthlyWorklogView({
         const monthRows = byMonth.get(month) ?? [];
         const isCollapsed = collapsed.has(month);
         const subtotal = monthRows.reduce((s, r) => s + (view(r).hours || 0), 0);
+        // Same total, split by activity — view()'d so an unsaved edit to a
+        // row's activity or hours shows up here too, matching subtotal above.
+        const hoursByActivity: Record<string, number> = {};
+        for (const r of monthRows) {
+          const w = view(r);
+          hoursByActivity[w.activity] = (hoursByActivity[w.activity] ?? 0) + (w.hours || 0);
+        }
         const draftInMonth = monthRows.filter(r => r.status === "draft").length;
         const submittedInMonth = monthRows.filter(r => r.status === "submitted").length;
         const rejectedInMonth = monthRows.filter(r => r.status === "rejected").length;
@@ -3306,6 +3353,17 @@ function MonthlyWorklogView({
                 <div className="text-xs text-muted mt-1 flex flex-wrap items-center gap-1.5">
                   <span className="tabular">{monthRows.length} รายการ</span>
                   <span>· รวม <span className="font-semibold text-foreground tabular">{subtotal.toFixed(1)}</span> ชม.</span>
+                  {/* บรรยาย/ปฏิบัติการ/ฯลฯ that add up to the total above —
+                      only the activities actually present this month, same
+                      colours as the section card's own bar. */}
+                  {Object.keys(ACTIVITY_LABEL)
+                    .filter(k => (hoursByActivity[k] ?? 0) > 0.001)
+                    .map(k => (
+                      <span key={k} className="inline-flex items-center gap-1">
+                        <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + ACTIVITY_BAR_COLOR[k]} />
+                        {ACTIVITY_LABEL[k]} {hoursByActivity[k].toFixed(1)}
+                      </span>
+                    ))}
                   {/* In a closed month a bounced row is as lost as an unsent
                       one — the TA cannot fix and resend it either — so the two
                       collapse into one grey "หมดเวลาส่ง" rather than a red
