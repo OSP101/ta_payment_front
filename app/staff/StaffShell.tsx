@@ -15,6 +15,7 @@ import {
   IdCard,
   FileSignature,
   Calculator,
+  Database,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
@@ -95,6 +96,9 @@ const buildNav = (s: Executive): NavSection[] => [
     title: "ระบบ",
     items: [
       { label: "วันหยุดราชการ", href: "/staff/holidays", icon: CalendarOff },
+      // ตรวจสอบว่าระบบดึงวันสอนชดเชยจาก TDBM มาได้จริง — ตารางดิบ + สถานะจับคู่
+      // วิชา/กลุ่มเรียน ไม่ใช่หน้าจัดการ (แก้ไข/อนุมัติ ยังทำในระบบ TDBM เอง)
+      { label: "ข้อมูลจาก TDBM", href: "/staff/tdbm", icon: Database },
       { label: "ตั้งค่า", href: "/staff/settings", icon: Settings },
       { label: "Audit Log", href: "/staff/audit", icon: ScrollText },
       // Admin-only server-side (RequireRole(rbac.RoleAdmin)) — same convention

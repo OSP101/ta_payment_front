@@ -15,7 +15,7 @@ interface Holiday {
   holiday_date: string;
   name_th: string;
   name_en?: string;
-  source: "national" | "university" | "faculty" | "custom";
+  source: "national" | "university" | "faculty" | "custom" | "tdbm";
   note?: string;
   /** "HH:MM" window. Both absent = closed all day (every national/university
    *  holiday, and the only shape that existed before migration 0058). When set,
@@ -30,7 +30,14 @@ interface Holiday {
 // occupies only part of the day (a morning ceremony, an afternoon sports event),
 // which is exactly the case this form exists to capture. The API accepts a
 // window on any source — this is a data-entry guardrail, not a rule.
-const PARTIAL_DAY_SOURCES: Holiday["source"][] = ["faculty"];
+//
+// tdbm is included because TDBM never sends a half-day window at all (see
+// docs/TDBM-API-requirements.md) — every TDBM-synced row lands all-day, so
+// correcting a half-day closure TDBM doesn't know about has to happen here.
+// Without this, staff could see the field (canBePartial's `!!initial?.start_time`
+// fallback only helps a row that ALREADY has a window) but never toggle a
+// freshly-synced all-day TDBM row into one.
+const PARTIAL_DAY_SOURCES: Holiday["source"][] = ["faculty", "tdbm"];
 
 // "09:00–12:00" or "ทั้งวัน" — one renderer so the table, the form preview and
 // the confirm dialog cannot disagree.
@@ -44,12 +51,16 @@ const SOURCE_LABEL: Record<Holiday["source"], string> = {
   university: "มหาวิทยาลัย",
   faculty: "คณะ",
   custom: "อื่นๆ",
+  // Synced from TDBM (see /staff/tdbm) — not a manual-entry choice, so it has
+  // no entry in SOURCE_OPTIONS below, only here for display.
+  tdbm: "TDBM",
 };
 const SOURCE_TONE: Record<Holiday["source"], ChipTone> = {
   national: "danger",
   university: "warn",
   faculty: "brand",
   custom: "neutral",
+  tdbm: "info",
 };
 // ตัวเลือกประเภทวันหยุด — ใช้ร่วมกันทั้งฟอร์มเพิ่มและนำเข้าหลายรายการ
 const SOURCE_OPTIONS: { value: Holiday["source"]; label: string }[] = [

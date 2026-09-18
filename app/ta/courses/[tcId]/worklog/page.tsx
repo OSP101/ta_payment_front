@@ -4,6 +4,7 @@ import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid } from "lucide-react";
 import { api, type Me } from "../../../../lib/api";
+import { PayEstimateCard, type PayEstimate, type PayEstimateMonth } from "../../../../components/PayEstimate";
 import { notify } from "../../../../lib/notify";
 import {
   readAddForm, readDrafts, clearAddForm, clearDrafts, sweepStale, writeAddForm, writeDrafts,
@@ -398,6 +399,22 @@ interface GenerateResult {
   skipped_own_class: SkipGroup[] | null;
 }
 
+/**
+ * GET /assignments/:id/worklog/pay-rate — how this assignment's hours turn
+ * into money, so the "ส่งอนุมัติ" dialog can show "≈ ฿X" per month before the
+ * TA commits. A graduate on ภาคพิเศษ is paid a flat term lumpsum instead of by
+ * the hour (rate_per_hour is 0 in that case); everyone else is rate_per_hour ×
+ * hours, capped monthly only for undergrad ภาคพิเศษ (monthly_cap_baht > 0).
+ */
+interface PayRateEstimate {
+  level: string;
+  track: string;
+  is_lumpsum: boolean;
+  lumpsum_baht?: number;
+  rate_per_hour?: number;
+  monthly_cap_baht?: number;
+}
+
 // Draft payload for the "add row" modal — same shape as WorkLog but without
 // server-owned fields (id, status, assignment_id). Kept separate so the modal
 // form can't accidentally assign a status or bind to a persisted id.
@@ -555,6 +572,10 @@ function formatMonthTH(key: string): string {
   return `${MONTH_TH[m - 1]} ${y + 543}`;
 }
 
+// baht — the same rounding TaPlanner.tsx uses: whole baht only, since a
+// fraction of a satang means nothing to a TA reading this.
+const baht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
+
 // monthsInRange returns every month between two ISO dates, inclusive. Used to
 // pre-seed month sections from the term's start/end so a TA sees all months in
 // the semester — even ones with no entries yet — as clickable "add here" slots.
@@ -703,7 +724,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const [drafts, setDrafts] = useState<Record<string, Record<string, WorkLog>>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // Synchronous twin of `generating` — see generate()'s doc comment.
+  const generatingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   // quickAddDate: when the user clicks a month section's "+ เพิ่มในเดือนนี้"
@@ -712,10 +736,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const deletingIdRef = useRef<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmGenerate, setConfirmGenerate] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const bulkDeletingRef = useRef(false);
 
   // Stable reference so debounced effects that depend on `aidDrafts` don't
   // reset their timers on every render (a plain `drafts[aid] ?? {}` returns
@@ -867,12 +893,18 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // Browser-close / reload guard. Only nags when there's actually something
   // to lose. Step 2's persistence is belt-and-suspenders — even if the user
   // dismisses the prompt, the draft is already on disk.
+  //
+  // Also up while `generating`: สร้างอัตโนมัติ wipes and recreates the whole
+  // term's drafts server-side. A reload mid-request can't be told "the old
+  // drafts are gone but the new ones aren't written yet" — the tab must stay
+  // open until the request actually finishes, not just until the confirm
+  // dialog's own spinner LOOKS done.
   useEffect(() => {
-    if (!hasUnsaved) return;
+    if (!hasUnsaved && !generating) return;
     const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
-  }, [hasUnsaved]);
+  }, [hasUnsaved, generating]);
 
   // In-app nav guard — same intent as beforeunload, but for internal Link
   // clicks (breadcrumbs, sidebar, buttons). The hook returns pendingHref +
@@ -985,11 +1017,51 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // offering to send ten rows and an error saying it sent none. A TA who missed
   // a deadline was left pressing it.
   const editableRows = (logs ?? []).filter(l => isEditableStatus(l.status));
-  const submittableCount = editableRows.filter(l => !monthLockFor(l.work_date)).length;
+  const submittableRows = editableRows.filter(l => !monthLockFor(l.work_date));
+  const submittableCount = submittableRows.length;
   // The remainder is stranded: past the deadline, only staff can move it now.
   const strandedRows = editableRows.filter(l => !!monthLockFor(l.work_date));
   const strandedMonths = [...new Set(strandedRows.map(l => monthLockFor(l.work_date)!.label))];
   const canSubmit = !!aid && submittableCount > 0;
+
+  // What pressing "ส่งอนุมัติ" is actually worth, per month — the confirm
+  // dialog's whole point. Read-only and TA-scoped (see PayRateFor's Go doc
+  // comment for exactly what this is NOT: not a budget check, not final).
+  const { data: payRate } = useSWR<PayRateEstimate>(aid ? `/assignments/${aid}/worklog/pay-rate` : null);
+  const submitEstimate: PayEstimate | null = useMemo(() => {
+    if (!payRate || payRate.is_lumpsum) return null;
+    const rate = payRate.rate_per_hour ?? 0;
+    const cap = payRate.monthly_cap_baht ?? 0;
+    // Hours PER ACTIVITY per month, not just a monthly total — a TA asking
+    // "how much" usually also wants to see the ชั่วโมงบรรยาย/ปฏิบัติการ that
+    // add up to it, the same breakdown the monthly table above already shows
+    // per row, just summed.
+    const byMonth = new Map<string, Partial<Record<string, number>>>();
+    for (const r of submittableRows) {
+      const ym = monthKey(r.work_date);
+      const m = byMonth.get(ym) ?? {};
+      m[r.activity] = (m[r.activity] ?? 0) + (r.hours || 0);
+      byMonth.set(ym, m);
+    }
+    const activityKeys = Object.keys(ACTIVITY_LABEL); // fixed display order
+    const months: PayEstimateMonth[] = [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([ym, byActivity]) => {
+        const hours = Object.values(byActivity).reduce((s: number, h) => s + (h ?? 0), 0);
+        const raw = hours * rate;
+        const activities = activityKeys
+          .filter(k => (byActivity[k] ?? 0) > 0.001)
+          .map(k => ({ label: ACTIVITY_LABEL[k], hours: byActivity[k]! }));
+        return { ym, label: formatMonthTH(ym), activities, hours, baht: cap > 0 ? Math.min(raw, cap) : raw };
+      });
+    if (months.length === 0) return null;
+    return {
+      months,
+      total: months.reduce((s, m) => s + m.baht, 0),
+      capped: cap > 0,
+      footnote: "ยังไม่รวมรายการที่อาจารย์ยังไม่อนุมัติ และอาจลดลงหากงบของวิชานี้ไม่พอ",
+    };
+  }, [payRate, submittableRows]);
 
   const activeAssignment = assignments?.find(a => a.id === aid);
   // Server-derived, never re-computed here: the rule that decides it lives in
@@ -1054,6 +1126,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     () => buildDateIndex(impacts?.impacts, activeAssignment?.section_id),
     [impacts, activeAssignment],
   );
+  // Holidays this section still has no makeup date for — Generate silently
+  // SKIPS these (see the backend's holiday gate in Generate), so a TA who
+  // presses "สร้างอัตโนมัติ" without knowing this gets fewer rows than their
+  // timetable implies and no visible reason. Warned about up front instead.
+  const unresolvedForActiveCount = useMemo(
+    () => [...rowDateIndex.values()].filter(v => v.hasUnresolvedForThisSection).length,
+    [rowDateIndex],
+  );
   // The TA's own declared grading slots. ตรวจงาน entries must fall inside one of
   // these (or a grading date the lecturer filed against the section) — the
   // server decides, since only it can see the lecturer's dates. Shown on the
@@ -1069,6 +1149,13 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         .map(s => `${DAY_TH_SHORT[s.day_of_week] ?? "?"} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`),
     [dutySlots],
   );
+  // The lecturer's ใบคำขอ asked for ตรวจงาน hours (weekly_cap_review > 0) but the
+  // TA has never set a day/time for it — Generate reads ta_review_schedules to
+  // expand ตรวจงาน rows, so with none declared it silently produces ZERO of
+  // them (see the AllowReview block in Generate). A TA who never opened the
+  // "ตารางตรวจงาน" card above would otherwise only discover this by noticing
+  // the missing hours after the fact.
+  const missingReviewSchedule = (weeklyCapsInfo?.review ?? 0) > 0 && reviewSlotLabels.length === 0;
   // Why this date is outside what the course can accept, or null when it is
   // fine. The term bounds are staff's own data (teaching_courses.starts_on /
   // ends_on) and hold unconditionally; the month floor is the back-dating rule,
@@ -1141,9 +1228,19 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   }
 
   async function generate() {
-    setConfirmGenerate(false);
-    if (!aid) return;
+    // Guards the SAME instant a second click would race the first — the
+    // `disabled={generating}` on the confirm button only takes effect on the
+    // next render, which is a few ms too late for a fast double-click/double-
+    // tap or an Enter key held a beat too long. This ref check is synchronous.
+    if (generatingRef.current || !aid) return;
+    generatingRef.current = true;
     setGenerating(true);
+    // The confirm dialog stays open (isPending spins its button, and its own
+    // onClose already refuses to fire while isPending) until this settles —
+    // closed in `finally` below, never here up front. Closing early let the
+    // TA dismiss the modal and go do something else mid-request, which is
+    // exactly what "รอจนกว่าจะสร้างเสร็จ" rules out: nothing else on the page
+    // should be reachable while a wipe-and-recreate is in flight.
     try {
       const res = await api.post<GenerateResult>(`/assignments/${aid}/worklog/generate`);
       const n = res?.entries?.length ?? 0;
@@ -1172,7 +1269,11 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       }
     } catch (e) {
       notify.error(e);
-    } finally { setGenerating(false); }
+    } finally {
+      generatingRef.current = false;
+      setGenerating(false);
+      setConfirmGenerate(false);
+    }
   }
 
   async function createRow(form: NewWorkLog): Promise<boolean> {
@@ -1213,7 +1314,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   }
 
   async function deleteRow(id: string) {
-    if (!aid) return;
+    if (deletingIdRef.current || !aid) return;
     const target = (logs ?? []).find(l => l.id === id);
     const lock = target ? monthLockFor(target.work_date) : null;
     if (lock) {
@@ -1221,6 +1322,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       setConfirmDeleteId(null);
       return;
     }
+    deletingIdRef.current = id;
     setDeletingId(id);
     try {
       await api.del(`/assignments/${aid}/worklog/${id}`);
@@ -1230,14 +1332,16 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     } catch (e) {
       notify.error(e);
     } finally {
+      deletingIdRef.current = null;
       setDeletingId(null);
       setConfirmDeleteId(null);
     }
   }
 
   async function submit() {
-    setConfirmSubmit(false);
-    if (!aid) return;
+    // Same synchronous re-entrancy guard as generate() — see its comment.
+    if (submittingRef.current || !aid) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await api.post(`/assignments/${aid}/worklog/submit`);
@@ -1261,7 +1365,11 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       revalidate();
     } catch (e) {
       notify.error(e);
-    } finally { setSubmitting(false); }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+      setConfirmSubmit(false);
+    }
   }
 
   // Delete every draft row whose month key is in `months`. Only touches draft
@@ -1269,7 +1377,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // never sees a request it would reject. No bulk endpoint exists, so we
   // loop sequentially and swallow per-row errors to surface a summary toast.
   async function bulkDelete(months: Set<string>): Promise<void> {
-    if (!aid) return;
+    if (bulkDeletingRef.current || !aid) return;
     const targets = (logs ?? []).filter(
       l => l.status === "draft" && months.has(monthKey(l.work_date)),
     );
@@ -1277,6 +1385,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       notify.info("ไม่มีรายการฉบับร่างในเดือนที่เลือก");
       return;
     }
+    bulkDeletingRef.current = true;
     setBulkDeleting(true);
     let ok = 0;
     let failed = 0;
@@ -1303,6 +1412,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       else notify.error(`ลบสำเร็จ ${ok} รายการ ล้มเหลว ${failed} รายการ`);
       revalidate();
     } finally {
+      bulkDeletingRef.current = false;
       setBulkDeleting(false);
       setShowBulkDelete(false);
     }
@@ -1806,6 +1916,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         onClose={() => setConfirmSubmit(false)}
         onConfirm={submit}
         isPending={submitting}
+        size="lg"
         title="ส่งบันทึกเวลาให้อาจารย์อนุมัติ"
         confirmLabel={`ส่งอนุมัติ (${submittableCount} รายการ)`}
         message={
@@ -1840,6 +1951,17 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 ต้องกดส่งแยกอีกครั้ง
               </p>
             )}
+            {/* Roughly what this batch is worth, per month — not a promise: it
+                skips whether the course's budget can actually pay it (the
+                unpaid/partial-month banners above already cover that) and
+                whether the lecturer will approve every row as filed. */}
+            {payRate?.is_lumpsum && (
+              <p className="rounded-lg border border-hairline bg-surface-secondary px-3 py-2 text-xs text-ink-2">
+                <Clock size={13} className="mr-1 inline -mt-0.5" />
+                คุณอยู่ในกลุ่มที่ได้ค่าตอบแทนแบบ<b>เหมาจ่ายทั้งเทอม</b> (≈ {baht(payRate.lumpsum_baht ?? 0)}) ไม่ได้คิดตามชั่วโมงเป็นรายเดือน
+              </p>
+            )}
+            {submitEstimate && <PayEstimateCard estimate={submitEstimate} />}
           </div>
         }
       />
@@ -1861,12 +1983,47 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         onConfirm={generate}
         isPending={generating}
         danger={draftCount > 0}
+        size="md"
         title="สร้างตารางบันทึกเวลาอัตโนมัติ"
         confirmLabel="สร้างอัตโนมัติ"
         message={
-          draftCount > 0
-            ? `ระบบจะสร้างรายการจากตารางสอนของ section นี้ทั้งเทอม โดยจะเขียนทับ draft ที่มีอยู่ ${draftCount} รายการ ต้องการดำเนินการต่อหรือไม่?`
-            : "ระบบจะสร้างรายการบันทึกเวลาจากตารางสอนของ section นี้ทั้งเทอมให้อัตโนมัติ (ข้ามวันหยุดที่อาจารย์ยังไม่ระบุวันชดเชย) ต้องการดำเนินการต่อหรือไม่?"
+          <div className="space-y-2">
+            <p className="text-sm text-muted">
+              {draftCount > 0
+                ? `ระบบจะสร้างรายการจากตารางสอนของ section นี้ทั้งเทอม โดยจะเขียนทับ draft ที่มีอยู่ ${draftCount} รายการ ต้องการดำเนินการต่อหรือไม่?`
+                : "ระบบจะสร้างรายการบันทึกเวลาจากตารางสอนของ section นี้ทั้งเทอมให้อัตโนมัติ ต้องการดำเนินการต่อหรือไม่?"}
+            </p>
+            {/* Both warnings describe things Generate will silently do or skip
+                — surfaced here so a TA who presses through doesn't only find
+                out afterwards from a row count that looks wrong. Neither
+                blocks the button: both are recoverable by generating again
+                once fixed. */}
+            {unresolvedForActiveCount > 0 && (
+              <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                <span>
+                  มีวันหยุด <b>{unresolvedForActiveCount} วัน</b> ของ section นี้ที่อาจารย์ยังไม่ได้กำหนดวันชดเชย
+                  ระบบจะ<b>ข้ามวันเหล่านั้นไป</b>ทั้งหมด ไม่ได้สร้างรายการให้ — ดูรายละเอียดและแจ้งอาจารย์ได้ที่หน้า
+                  &quot;วันหยุดและวันชดเชย&quot; ก่อน แล้วค่อยกลับมาสร้างใหม่ก็ได้
+                </span>
+              </p>
+            )}
+            {missingReviewSchedule && (
+              <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                <span>
+                  อาจารย์อนุมัติชั่วโมง<b>ตรวจงาน</b>ให้คุณ แต่คุณยัง<b>ไม่ได้ตั้งวัน-เวลาตรวจงาน</b>ของตัวเอง
+                  (การ์ด &quot;ตารางตรวจการบ้านของคุณ&quot; ด้านบน) — ถ้าไม่ตั้งก่อนกด ระบบจะ<b>ไม่สร้างรายการตรวจงานให้เลย</b> ลืมไว้หรือเปล่า?
+                </span>
+              </p>
+            )}
+            {generating && (
+              <p className="flex items-center gap-2 text-xs text-muted">
+                <Clock size={13} className="shrink-0 animate-pulse" />
+                กำลังสร้างรายการ — กรุณารอจนกว่าจะเสร็จ อย่าปิดหรือรีเฟรชหน้านี้
+              </p>
+            )}
+          </div>
         }
       />
 

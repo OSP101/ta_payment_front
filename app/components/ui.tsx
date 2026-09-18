@@ -868,6 +868,7 @@ export function ConfirmDialog({
   isPending = false,
   icon,
   requireTyped,
+  size = "sm",
 }: {
   open: boolean;
   onClose: () => void;
@@ -885,6 +886,11 @@ export function ConfirmDialog({
   // (even behind a modal) isn't friction enough. Values reset whenever the
   // dialog closes so a stale match can't carry over to the next open.
   requireTyped?: TypedConfirmField[];
+  // Most confirms are a sentence and two buttons, hence the "sm" default —
+  // but one carrying real content (a warning list, a per-month breakdown)
+  // reads as cramped at that width. Widen just that call site instead of
+  // the type itself.
+  size?: "sm" | "md" | "lg";
 }) {
   const [typed, setTyped] = useState<string[]>(() => (requireTyped ?? []).map(() => ""));
   useEffect(() => {
@@ -896,7 +902,7 @@ export function ConfirmDialog({
       open={open}
       onClose={() => { if (!isPending) onClose(); }}
       title={title}
-      size="sm"
+      size={size}
       icon={icon}
       footer={
         <>

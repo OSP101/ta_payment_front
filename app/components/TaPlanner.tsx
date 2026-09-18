@@ -320,6 +320,30 @@ interface Option {
   /** Per-TA pay per month (the figure a TA actually reasons in). */
   perMonthUg: number;
   perMonthGrad: number;
+  /** Total students the plan's TAs cover — for the นศ. ต่อ TA figure. */
+  students: number;
+  /** One row per sitting the plan puts someone on — the "ดูรายละเอียด" view. */
+  sittings: OptionSitting[];
+}
+
+/** What one sitting looks like under a plan: who sits, what each does, what each costs. */
+interface OptionSitting {
+  label: string;
+  students: number;
+  ug: number;
+  grad: number;
+  /** ป.ตรี on this sitting — absent when the plan puts none here. */
+  ugPlan?: OptionPerson;
+  gradPlan?: OptionPerson;
+}
+
+/** One TA of one level on one sitting: weekly duties, term hours, term money. */
+interface OptionPerson {
+  duties: { label: string; hrs: number }[];
+  weeklyHrs: number;
+  termHrs: number;
+  termBaht: number;
+  monthBaht: number;
 }
 
 
@@ -772,16 +796,44 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
     return { best, mixes, guide, ceiling, build };
   };
 
+  // The weekly duties one TA of a level does on a sitting, in the words the
+  // form uses — the largest declaration across the sitting's sections, which
+  // is what personCost bills. Zero-hour duties are left out.
+  const dutiesOf = (level: "undergrad" | "master", wl: Record<string, PlanWorkload>) => {
+    const ws = Object.values(wl);
+    const mx = (pick: (w: PlanWorkload) => number) => Math.max(0, ...ws.map(pick));
+    const rows = level === "undergrad"
+      ? [
+          { label: "เช็คชื่อในคาบบรรยาย", hrs: mx(w => w.attendance_hrs) },
+          { label: "ดูแลแลบ", hrs: mx(w => w.lab_hrs + w.lab_other_hrs) },
+          { label: "ตรวจงาน", hrs: mx(w => w.check_work_hrs + w.ug_other_hrs) },
+        ]
+      : [
+          { label: "ช่วยสอน (บรรยาย + แลบ)", hrs: mx(w => w.help_teach_hrs) },
+          { label: "ตรวจงาน", hrs: mx(w => w.grade_hrs) },
+          { label: "เตรียมการสอน (ไม่คิดเงิน)", hrs: mx(w => w.prep_hrs) },
+        ];
+    return rows.filter(r => r.hrs > 0);
+  };
+  const personOf = (level: "undergrad" | "master", c: ReturnType<typeof costOn>): OptionPerson => ({
+    duties: dutiesOf(level, c.wl),
+    weeklyHrs: weeklyOf(c.cost),
+    termHrs: c.cost.hoursRegular + c.cost.hoursSpecial,
+    termBaht: c.baht,
+    monthBaht: c.baht / months,
+  });
+
   const toOption = (a: Alloc, sits: Sitting[], tag: string): Option => {
-    let ug = 0, grad = 0;
+    let ug = 0, grad = 0, students = 0;
     const split: string[] = [];
     const items: PlanItem[] = [];
+    const sittingRows: OptionSitting[] = [];
     const t = DUTY_LADDER[a.rung];
     let ugEach = 0, gradEach = 0, ugWeekly = 0, gradWeekly = 0;
     for (const sit of sits) {
       const h = a.heads.get(sit.id);
       if (!h || h.ug + h.grad === 0) continue;
-      ug += h.ug; grad += h.grad;
+      ug += h.ug; grad += h.grad; students += sit.students;
       split.push(`${sit.label}: ${h.ug + h.grad} คน`);
       const uc = costOn("undergrad", sit, t);
       const gc = costOn("master", sit, t);
@@ -789,6 +841,11 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
       ugWeekly = Math.max(ugWeekly, weeklyOf(uc.cost)); gradWeekly = Math.max(gradWeekly, weeklyOf(gc.cost));
       for (let i = 0; i < h.ug; i++) items.push({ level: "undergrad", section_ids: sit.secs.map(x => x.section_id), workloads: { ...uc.wl } });
       for (let i = 0; i < h.grad; i++) items.push({ level: "master", section_ids: sit.secs.map(x => x.section_id), workloads: { ...gc.wl } });
+      sittingRows.push({
+        label: sit.label, students: sit.students, ug: h.ug, grad: h.grad,
+        ugPlan: h.ug > 0 ? personOf("undergrad", uc) : undefined,
+        gradPlan: h.grad > 0 ? personOf("master", gc) : undefined,
+      });
     }
     const parts: string[] = [];
     if (ug) parts.push(`ป.ตรี ${ug} คน`);
@@ -801,7 +858,7 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
       key: `${tag}-${ug}-${grad}-${a.rung}-${sits.map(x => x.id).join(".")}`,
       title: parts.join(" + "), detail, tag, duty: t.label, split: sits.length > 1 ? split : [],
       perMonthUg: ugEach / months, perMonthGrad: gradEach / months,
-      ug, grad, cost: a.cost,
+      ug, grad, cost: a.cost, students, sittings: sittingRows,
       regularLeft: regular.free - a.cost.regular, specialLeft: special.free - a.cost.special - a.cost.lump, fits: a.fits,
       items,
     };
@@ -1162,6 +1219,7 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
   specialOnly?: boolean;
 }) {
   const total = o.cost.regular + o.cost.special + o.cost.lump;
+  const [more, setMore] = useState(false);
   return (
     <div className={
       "flex flex-col rounded-xl border p-3 " +
@@ -1193,6 +1251,12 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
         {o.fits ? <CircleCheck size={12} /> : <TriangleAlert size={12} />}
         {o.fits ? "พอดีงบ — เบิกได้เต็ม" : `เกินงบ ${baht(Math.max(0, -o.regularLeft) + Math.max(0, -o.specialLeft))} — จะถูกตัดตามสัดส่วน`}
       </div>
+      <button type="button" onClick={() => setMore(m => !m)} aria-expanded={more}
+        className="mt-2 flex items-center gap-1 self-start text-[11px] font-medium text-accent hover:underline">
+        <ChevronDown size={12} className={"transition-transform " + (more ? "rotate-180" : "")} />
+        {more ? "ซ่อนรายละเอียด" : "ดูรายละเอียดแผนนี้"}
+      </button>
+      {more && <OptionDetail o={o} total={total} />}
       {onApply && (
         <div className="mt-2">
           <Button size="sm" variant={o.recommended ? "primary" : "secondary"} onClick={onApply} fullWidth>
@@ -1200,6 +1264,75 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The long form of a plan card: headcount and นศ. ต่อ TA overall, then one
+ * block per sitting with who sits there, the weekly duties each TA is planned
+ * for, and what each earns. Every figure here is the same one the short card
+ * and the request form use — this only lays them out.
+ */
+function OptionDetail({ o, total }: { o: Option; total: number }) {
+  const heads = o.ug + o.grad;
+  const ratio = heads > 0 ? o.students / heads : 0;
+  const money: [string, number][] = [
+    ["งบปกติ", o.cost.regular],
+    ["งบพิเศษ (รายชั่วโมง)", o.cost.special],
+    ["งบพิเศษ (เหมาจ่ายบัณฑิต)", o.cost.lump],
+  ];
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border border-hairline bg-panel/70 p-2.5 text-[11px]">
+      <div className="grid grid-cols-3 gap-2">
+        <Stat label="TA ทั้งหมด" value={`${heads} คน`} />
+        <Stat label="นศ. ที่ดูแล" value={`${o.students} คน`} />
+        <Stat label="นศ. ต่อ TA" value={heads > 0 ? `≈ ${hrs1(ratio)} คน` : "—"} />
+      </div>
+
+      {o.sittings.map(s => {
+        const n = s.ug + s.grad;
+        return (
+          <div key={s.label} className="rounded-md border border-hairline p-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+              <span className="font-semibold text-ink-1">{s.label}</span>
+              <span className="text-muted">
+                นศ. {s.students} คน · TA {n} คน
+                {s.ug > 0 && <> (ป.ตรี {s.ug}{s.grad > 0 && ` + บัณฑิต ${s.grad}`})</>}
+                {s.ug === 0 && s.grad > 0 && <> (บัณฑิต {s.grad})</>}
+                {" · "}≈ {hrs1(n > 0 ? s.students / n : 0)} นศ./TA
+              </span>
+            </div>
+            {s.ugPlan && <PersonPlan title={`ป.ตรี ${s.ug} คน — แต่ละคน`} p={s.ugPlan} />}
+            {s.gradPlan && <PersonPlan title={`บัณฑิต ${s.grad} คน — แต่ละคน`} p={s.gradPlan} />}
+          </div>
+        );
+      })}
+
+      <div className="space-y-0.5 border-t border-hairline pt-1.5">
+        {money.filter(([, v]) => v > 0.5).map(([label, v]) => <Row key={label} label={label} value={baht(v)} />)}
+        <Row label="รวมทั้งแผน" value={baht(total)} strong />
+      </div>
+    </div>
+  );
+}
+
+function PersonPlan({ title, p }: { title: string; p: OptionPerson }) {
+  return (
+    <div className="mt-1.5">
+      <div className="font-medium text-ink-2">{title}</div>
+      <ul className="mt-0.5 space-y-0.5">
+        {p.duties.map(d => (
+          <li key={d.label} className="flex items-baseline justify-between gap-2">
+            <span className="text-muted">{d.label}</span>
+            <span className="tabular-nums">{hrs1(d.hrs)} ชม./สัปดาห์</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-0.5 flex items-baseline justify-between gap-2 border-t border-dashed border-hairline pt-0.5">
+        <span className="text-muted">คิดเงิน {hrs1(p.weeklyHrs)} ชม./สัปดาห์ · {hrs1(p.termHrs)} ชม./เทอม</span>
+        <span className="tabular-nums font-semibold text-ink-1">{baht(p.termBaht)} <span className="font-normal text-muted">(≈ {baht(p.monthBaht)}/เดือน)</span></span>
+      </div>
     </div>
   );
 }
