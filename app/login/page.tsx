@@ -16,10 +16,13 @@ import {
   Spinner,
   TextField,
 } from "@heroui/react";
-import { LogIn, Eye, EyeOff, Shield, Clock, MonitorSmartphone, LogOut, CheckCircle2, ShieldCheck } from "lucide-react";
+import { LogIn, Eye, EyeOff, Shield, Clock, MonitorSmartphone, LogOut, CheckCircle2, ShieldCheck, Mail, ArrowLeft } from "lucide-react";
 import { Alert, IconButton } from "../components/ui";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "../components/BetaNotice";
-import { api, errMessage, setDemoApiPrefix, login, loginTwoFactor, type Me } from "../lib/api";
+import {
+  api, errMessage, setDemoApiPrefix, login, loginTwoFactor, ssoExchange, ssoConfirm,
+  type Me, type SSOPending,
+} from "../lib/api";
 import { notify } from "../lib/notify";
 import useDocumentTitle from "../lib/useDocumentTitle";
 
@@ -91,6 +94,18 @@ export default function LoginPage() {
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
 
+  // KKU SSONext callback. KKU registers /login/sso (which renders this same
+  // component) as our callback and lands here with ?code=. The code is
+  // exchanged at once — that is the only way to learn WHOSE account it is —
+  // but no session exists until the person reads the confirm card and
+  // clicks; see service.SSOService for why that pause is a security
+  // property and not decoration.
+  type SSOState =
+    | { status: "exchanging" }
+    | { status: "confirm"; pending: SSOPending }
+    | { status: "error"; message: string };
+  const [sso, setSso] = useState<SSOState | null>(null);
+
   // Landing on /login is an unambiguous signal that whatever happens next is
   // REAL production auth — clear any demo apiPrefix left over from an
   // earlier /demo visit in this same tab before this page's own API calls
@@ -112,6 +127,44 @@ export default function LoginPage() {
   useEffect(() => {
     setReason(new URLSearchParams(window.location.search).get("reason"));
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ssoCode = params.get("code");
+    if (!ssoCode) return;
+    // A code is single use at KKU's end. Take it out of the address bar
+    // right away so a reload or a bookmark does not re-submit a spent code
+    // and show "หมดอายุ" for a login that already went through.
+    params.delete("code");
+    params.delete("ssoState");
+    const rest = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    setSso({ status: "exchanging" });
+    ssoExchange(ssoCode)
+      .then(pending => setSso({ status: "confirm", pending }))
+      .catch(e => setSso({ status: "error", message: errMessage(e) }));
+  }, []);
+
+  async function onConfirmSSO() {
+    if (sso?.status !== "confirm") return;
+    setLoading(true);
+    try {
+      const res = await ssoConfirm(sso.pending.ticket);
+      if ("mfa_required" in res) {
+        // Same second step as a password login — a KKU assertion says who
+        // this is, not that they hold the account's second factor.
+        setChallenge(res.challenge);
+        return;
+      }
+      finishLogin(res.user);
+    } catch (e) {
+      // The ticket is consumed either way; the only way forward is to start
+      // over from the KKU button.
+      setSso({ status: "error", message: errMessage(e) });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!hasSeenBetaNotice()) setBetaOpen(true);
@@ -226,14 +279,20 @@ export default function LoginPage() {
               className="mx-auto h-14 w-auto object-contain"
             />
             <h1 className="mt-4 text-[22px] font-semibold text-foreground">
-              {challenge ? "ยืนยันตัวตนสองขั้นตอน" : "เข้าสู่ระบบ COCO TAS"}
+              {challenge
+                ? "ยืนยันตัวตนสองขั้นตอน"
+                : sso
+                  ? "เข้าสู่ระบบด้วย KKU Account"
+                  : "เข้าสู่ระบบ COCO TAS"}
             </h1>
             <p className="text-sm text-muted mt-1">
               {challenge
                 ? (useRecoveryCode
                   ? "กรอกรหัสสำรองหนึ่งชุดที่คุณบันทึกไว้ตอนตั้งค่า 2FA"
                   : "กรอกรหัส 6 หลักจากแอปยืนยันตัวตนของคุณ")
-                : "ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน"}
+                : sso
+                  ? "ตรวจสอบบัญชีที่กำลังจะเข้าสู่ระบบก่อนดำเนินการต่อ"
+                  : "ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน"}
             </p>
           </div>
 
@@ -311,12 +370,65 @@ export default function LoginPage() {
                   </Link>
                   <Link
                     className="text-sm cursor-pointer text-muted"
-                    onPress={() => { setChallenge(null); setCode(""); setCodeError(null); setPassword(""); }}
+                    onPress={() => { setChallenge(null); setCode(""); setCodeError(null); setPassword(""); setSso(null); }}
                   >
                     ยกเลิก
                   </Link>
                 </div>
               </form>
+              ) : sso ? (
+              <div className="flex flex-col gap-4">
+                {sso.status === "exchanging" && (
+                  <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted">
+                    <Spinner size="sm" /> กำลังตรวจสอบบัญชี KKU ของคุณ…
+                  </div>
+                )}
+                {sso.status === "error" && (
+                  <>
+                    <Alert status="danger" title="เข้าสู่ระบบด้วย KKU ไม่สำเร็จ" description={sso.message} />
+                    {ssoUrl && (
+                      <a href={ssoUrl}>
+                        <Button variant="secondary" fullWidth>
+                          <Shield />
+                          ลองเข้าสู่ระบบด้วย KKU อีกครั้ง
+                        </Button>
+                      </a>
+                    )}
+                  </>
+                )}
+                {sso.status === "confirm" && (
+                  <>
+                    <div className="rounded-lg border border-border bg-surface px-4 py-3">
+                      <div className="text-xs text-muted mb-1">แอปพลิเคชันที่ขอเข้าถึง</div>
+                      <div className="font-semibold text-foreground">COCO TAS — ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน</div>
+                    </div>
+                    <div className="flex items-start gap-3 px-1">
+                      <Mail className="size-4 mt-0.5 text-muted shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground break-all">{sso.pending.email}</div>
+                        <div className="text-sm text-muted">
+                          {sso.pending.first_name} {sso.pending.last_name}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted">
+                      หากนี่ไม่ใช่บัญชีของคุณ อย่ากดดำเนินการต่อ — กด &ldquo;ใช้บัญชีอื่น&rdquo; แล้วเข้าสู่ระบบด้วยบัญชี KKU ของคุณเอง
+                    </p>
+                    <Button size="lg" fullWidth isPending={loading} onPress={onConfirmSSO}>
+                      {loading ? <Spinner color="current" size="sm" /> : <ShieldCheck />}
+                      {loading ? "กำลังเข้าสู่ระบบ…" : "อนุญาตและเข้าสู่ระบบ"}
+                    </Button>
+                  </>
+                )}
+                {sso.status !== "exchanging" && (
+                  <div className="flex items-center justify-center">
+                    <Link className="text-sm cursor-pointer text-muted" href="/login">
+                      <ArrowLeft className="size-3.5 inline mr-1" />
+                      {sso.status === "confirm" ? "ใช้บัญชีอื่น" : "กลับไปหน้าเข้าสู่ระบบ"}
+                    </Link>
+                  </div>
+                )}
+              </div>
               ) : (
               <>
               {ssoUrl && (

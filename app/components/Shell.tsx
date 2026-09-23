@@ -28,6 +28,8 @@ import UserAvatar from "./UserAvatar";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "./BetaNotice";
 import useDocumentTitle from "../lib/useDocumentTitle";
 import useUnreadCount from "../lib/useUnreadCount";
+import { DocsPanelProvider, DocsDock } from "./docs/DocsPanel";
+import { defaultAudience } from "../lib/docs/audience";
 
 const SIDEBAR_KEY = "ta-payment:sidebar-collapsed";
 /** Expanded panel, 256px. Down from w-68/w-72 (272/288). Measured, not
@@ -176,7 +178,15 @@ export default function Shell({
 
   async function logout() {
     try {
-      await api.post("/auth/logout");
+      const res = await api.post<{ ok: boolean; sso_logout_url?: string }>("/auth/logout");
+      // A session opened through KKU SSO is closed through KKU too, or the
+      // next person on a shared machine is signed straight back in as this
+      // user without a password prompt — see ssonext.Client.LogoutURL. KKU
+      // then redirects to our registered logout callback (/login).
+      if (res.sso_logout_url) {
+        window.location.assign(res.sso_logout_url);
+        return;
+      }
     } catch (e) {
       // The session cookie is httpOnly, so we can't clear it client-side. Warn
       // the user (shared-lab machines) but still navigate away.
@@ -209,6 +219,7 @@ export default function Shell({
   useDocumentTitle(tabTitle, useUnreadCount());
 
   return (
+    <DocsPanelProvider audience={defaultAudience(me)}>
     <div className="min-h-screen flex bg-background">
       {/* Desktop sidebar.
           Two widths: a full panel, and a 64px icon rail. The rail is the
@@ -346,8 +357,12 @@ export default function Shell({
           {children}
         </div>
       </main>
+      {/* Contextual manual — docks as a column beside <main> on wide screens
+          (the page narrows to make room), overlays on small ones. */}
+      <DocsDock />
       <BetaNoticeModal open={betaOpen} onClose={() => setBetaOpen(false)} />
     </div>
+    </DocsPanelProvider>
   );
 }
 

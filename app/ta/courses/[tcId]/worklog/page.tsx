@@ -16,6 +16,7 @@ import {
 } from "../../../../components/ui";
 import { type DataColumn } from "../../../../components/DataTable";
 import { LockedActionButton, useTAApproval } from "../../../TAGate";
+import DocsAnchor from "../../../../components/docs/DocsAnchor";
 
 // Max billable hours per single work-log entry. Kept in sync with backend.
 const MAX_ROW_HOURS = 7;
@@ -1645,6 +1646,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             >
               <Trash2 size={14} /> ลบฉบับร่าง
             </LockedActionButton>
+            <DocsAnchor audience="ta" slug="worklog/generate" label="คู่มือการสร้างรายการอัตโนมัติ / เพิ่มเอง" />
             <span data-tour="wl-generate">
             <TipWrap
               content={
@@ -2968,6 +2970,7 @@ function SectionStrip({
   return (
     <div data-tour="wl-sections" className="mb-4">
       <div className="mb-2 flex items-center gap-2 text-sm text-muted">
+        <DocsAnchor audience="ta" slug="worklog/multi-section" label="คู่มือกรณีดูแลหลาย section" />
         <LayoutGrid size={15} className="shrink-0" />
         <span>
           วิชานี้คุณดูแล <b className="font-medium text-foreground">{assignments.length} กลุ่ม</b>{" "}
@@ -3278,6 +3281,7 @@ function MonthlyWorklogView({
 
   return (
     <div data-tour="wl-months" className="flex flex-col gap-3">
+      <DocsAnchor audience="ta" slug="worklog/submit" label="คู่มือการส่งอนุมัติรายเดือน" strip className="mb-0" />
       {sortedMonths.map(month => {
         const monthRows = byMonth.get(month) ?? [];
         const isCollapsed = collapsed.has(month);
@@ -3706,6 +3710,7 @@ function DutySchedulePanels({ assignmentId }: { assignmentId: string }) {
   if (shown.length === 0) return null;
   return (
     <div data-tour="wl-duty" className="space-y-4">
+      <DocsAnchor audience="ta" slug="worklog/duty-schedule" label="คู่มือตารางงานประจำ" strip className="mb-0" />
       {shown.map(k => (
         <DutySchedulePanel key={k} assignmentId={assignmentId} kind={k} />
       ))}

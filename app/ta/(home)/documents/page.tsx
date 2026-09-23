@@ -20,6 +20,7 @@ import {
   PageHeader, Panel, Button, TextInput, FieldGroup, StatusChip, Alert, Chip,
   SelectField,
 } from "../../../components/ui";
+import DocsAnchor from "../../../components/docs/DocsAnchor";
 /* -------------------------------------------------------------------------- */
 /* Upload constraints — enforced in the browser so users get instant feedback  */
 /* and again on the server (see maxDocBytes / kind checks) for real safety.    */
@@ -102,6 +103,16 @@ const STEP_META: Array<{
   { id: "national_id",   n: 3, title: "สำเนาบัตรประชาชน",                subtitle: "รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อบนสำเนา ก่อนอัปโหลด",          icon: CreditCard },
   { id: "bank_book",     n: 4, title: "หน้าสมุดบัญชี",                    subtitle: "หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลขบัตร ปชช.", icon: BookOpen },
 ];
+
+// Which manual page explains each step — all four share /ta/documents, so
+// the page's own header button can't tell them apart; each step's body
+// carries its own book icon instead (see DocsAnchor).
+const STEP_DOC: Record<string, string> = {
+  profile: "documents/step1-profile",
+  creditor_form: "documents/step2-creditor-form",
+  national_id: "documents/step3-4-uploads",
+  bank_book: "documents/step3-4-uploads",
+};
 
 // Step titles by doc kind, for messages that name a specific document. Derived
 // from STEP_META so a rename cannot leave the two spellings disagreeing.
@@ -412,6 +423,7 @@ export default function ProfilePage() {
             </Accordion.Heading>
             <Accordion.Panel>
               <Accordion.Body className="pb-4">
+                <DocsAnchor audience="ta" slug={STEP_DOC[step.id]} label={`คู่มือขั้นที่ ${step.n}`} strip />
                 {step.id === "profile" ? (
                   <ProfileStep
                     form={form}

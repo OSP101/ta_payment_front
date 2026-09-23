@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "docs:media": "node scripts/docs-media-checklist.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.2",

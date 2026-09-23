@@ -383,3 +383,19 @@ select.field {
 .driver-popover.kku-tour .driver-popover-arrow-side-right { border-right-color: var(--panel-bg); }
 .driver-popover.kku-tour .driver-popover-arrow-side-top { border-top-color: var(--panel-bg); }
 .driver-popover.kku-tour .driver-popover-arrow-side-bottom { border-bottom-color: var(--panel-bg); }
+
+/* ── คู่มือการใช้งาน (docs) motion ─────────────────────────────────────
+   One entrance each for the contextual panel (slides in from the end
+   edge), the docs mobile menu (from the start edge) and overlays (fade).
+   Short and eased, the way Cloudflare's docs drawer moves — long enough
+   to read as "a panel opened", short enough not to feel like waiting.
+   Honors prefers-reduced-motion by dropping to an instant appear. */
+@keyframes docs-slide-in-end   { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes docs-slide-in-start { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes docs-fade-in        { from { opacity: 0; } to { opacity: 1; } }
+.docs-anim-slide-end   { animation: docs-slide-in-end 220ms cubic-bezier(.2,.8,.2,1) both; }
+.docs-anim-slide-start { animation: docs-slide-in-start 220ms cubic-bezier(.2,.8,.2,1) both; }
+.docs-anim-fade        { animation: docs-fade-in 180ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .docs-anim-slide-end, .docs-anim-slide-start, .docs-anim-fade { animation: none; }
+}

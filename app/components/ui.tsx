@@ -31,9 +31,32 @@ import {
 import Link from "next/link";
 import { Info } from "lucide-react";
 import { I18nProvider } from "react-aria-components";
+import DocsAnchor from "./docs/DocsAnchor";
+import { DOC_ANCHORS } from "../../content/docs/anchors";
+import { useDocsPanel } from "./docs/DocsPanel";
+import { resolveDocForRoute } from "../lib/docs/routeMap";
+import { findPage, screenSubPages } from "../../content/docs/registry";
+import type { Audience } from "../../content/docs/types";
+import { usePathname } from "next/navigation";
+import { BookOpen, ExternalLink } from "lucide-react";
 import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
 import type React from "react";
 import { Children, isValidElement, useEffect, useState } from "react";
+
+/* -------------------------------------------------------------------------- */
+/* Contextual docs anchor                                                     */
+/* -------------------------------------------------------------------------- */
+
+// A Panel/PageHeader whose `data-tour` key is listed in content/docs/anchors.ts
+// gets a small "read the manual for this section" book icon in its header
+// (Cloudflare-dashboard style). The tour anchors already mark every section
+// worth explaining, so the manual reuses them instead of each page wiring
+// its own icon. Outside a Shell (no DocsPanelProvider) the icon is a no-op.
+function docAnchorFor(dataTour?: string): React.ReactNode {
+  if (!dataTour) return null;
+  const a = DOC_ANCHORS[dataTour];
+  return a ? <DocsAnchor audience={a.audience} slug={a.slug} /> : null;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Tooltip helpers                                                            */
@@ -136,6 +159,7 @@ export function PageHeader({
   info,
   breadcrumb,
   actions,
+  docs,
   "data-tour": dataTour,
 }: {
   title: string;
@@ -146,9 +170,16 @@ export function PageHeader({
   info?: React.ReactNode;
   breadcrumb?: string;
   actions?: React.ReactNode;
+  // Which manual page the pill under the description opens. Almost never
+  // needed: by default it's resolved from the current route (the same lookup
+  // the manual uses everywhere), or from the `data-tour` key when
+  // content/docs/anchors.ts lists it. `false` hides the pill on a page that
+  // genuinely has no manual entry.
+  docs?: { audience: Audience; slug: string } | false;
   // Anchor for the onboarding tour (see app/staff/tours/).
   "data-tour"?: string;
 }) {
+  const docPill = docs === false ? null : <PageDocsPill explicit={docs} dataTour={dataTour} />;
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 mb-6" data-tour={dataTour}>
       <div className="min-w-0">
@@ -158,9 +189,75 @@ export function PageHeader({
           {info && <InfoTip content={info} size={16} />}
         </div>
         {description && <p className="text-sm text-muted mt-1">{description}</p>}
+        {docPill}
       </div>
-      {actions && <div className="flex gap-2 flex-wrap">{actions}</div>}
+      {actions && <div className="flex gap-2 flex-wrap items-center">{actions}</div>}
     </div>
+  );
+}
+
+/**
+ * The "📖 คู่มือ <หัวข้อ>" pill under every page title — the Cloudflare
+ * dashboard's per-page "<Topic> documentation" button. This replaced the
+ * top-bar "คู่มือการใช้งาน" button: a pill that names the exact topic, sitting
+ * where the eye lands first, beats one generic button in the chrome.
+ *
+ * Which doc: an explicit `docs` prop wins; else the `data-tour` key via
+ * content/docs/anchors.ts; else the current route via `resolveDocForRoute`
+ * (the reader's own audience comes from the DocsPanel context Shell sets
+ * up). No match → the audience's Getting Started page, labelled plainly.
+ * Renders nothing outside a Shell (login, public pages) where there is no
+ * drawer to open.
+ *
+ * Drawer or new tab: a screen whose manual is ONE page (ตรวจสอบเอกสาร TA)
+ * opens in the side drawer, so the screen stays visible while reading. A
+ * screen that is a whole *topic* — several doc pages describe its tabs,
+ * modals or sections (ลงเวลา has 6 sub-pages, คำขอ TA 6, ตั้งค่า 3) — opens
+ * the full manual in a new tab instead: those need the sidebar to step
+ * through the sub-pages, which a drawer showing one page at a time is bad
+ * at. Decided from the manual's own structure (`screenSubPages`), not per
+ * page by hand — and NOT from the size of the sidebar section, which also
+ * groups unrelated single screens (วันหยุด/TDBM/Audit under "ระบบ").
+ * Shared "common" pages (/account etc.) always use the drawer.
+ */
+function PageDocsPill({ explicit, dataTour }: { explicit?: { audience: Audience; slug: string }; dataTour?: string }) {
+  const { open, audience } = useDocsPanel();
+  const pathname = usePathname();
+  if (!audience) return null;
+
+  // The area of the app the page lives in beats the reader's own role: staff
+  // and admin can open /lecturer and /ta pages to act on someone's behalf, and
+  // the doc for /lecturer is in the lecturer manual regardless of who's
+  // reading. Pages with no role prefix (/account, /announcements) fall back
+  // to the reader's audience — their docs are shared across all three anyway.
+  // Access is still enforced by the embed route the drawer loads.
+  const path = pathname ?? "";
+  const areaAudience: Audience =
+    path.startsWith("/staff") ? "staff" : path.startsWith("/lecturer") ? "lecturer" : path.startsWith("/ta") ? "ta" : audience;
+  const mapped = dataTour ? DOC_ANCHORS[dataTour] : undefined;
+  const target = explicit ?? mapped ?? (() => {
+    const p = resolveDocForRoute(path, areaAudience);
+    return p ? { audience: areaAudience, slug: p.slug } : undefined;
+  })();
+  const page = target ? findPage(target.audience, target.slug) : undefined;
+  const bigTopic = !!page && page.audience !== "common" && screenSubPages(page, target!.audience).length > 0;
+  const label = !page ? "คู่มือการใช้งาน" : bigTopic ? `คู่มือ ${page.section}` : `คู่มือ ${page.title}`;
+  const pillClass = "mt-3 inline-flex items-center gap-1.5 rounded-full border border-(--brand)/40 bg-white px-3 py-1 text-sm text-(--brand) transition-colors hover:bg-accent-soft/40";
+
+  if (bigTopic && target) {
+    return (
+      <a href={`/docs/${target.audience}/${target.slug}`} target="_blank" rel="noopener" className={pillClass}>
+        <BookOpen size={15} />
+        {label}
+        <ExternalLink size={12} className="opacity-70" />
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={() => open(target ?? { audience: areaAudience })} className={pillClass}>
+      <BookOpen size={15} />
+      {label}
+    </button>
   );
 }
 
@@ -193,13 +290,14 @@ export function Panel({
   // Anchor for the onboarding tour (see app/staff/tours/).
   "data-tour"?: string;
 }) {
-  const hasHeader = title || description || actions || info;
+  const docAnchor = docAnchorFor(dataTour);
+  const hasHeader = title || description || actions || info || docAnchor;
   return (
     <HCard variant={variant} className={className} data-tour={dataTour}>
       {hasHeader && (
         <HCard.Header>
           <div className="w-full min-w-0">
-            {(title || actions || info) && (
+            {(title || actions || info || docAnchor) && (
               // The header wraps on a phone: a shrink-0 action next to a Thai
               // title left the title ~90px, one word per line, while the button
               // sat comfortably beside a five-line heading.
@@ -212,7 +310,12 @@ export function Panel({
                     </span>
                   </HCard.Title>
                 )}
-                {actions && <div className="flex gap-2 flex-wrap shrink-0">{actions}</div>}
+                {(actions || docAnchor) && (
+                  <div className="flex gap-2 flex-wrap shrink-0 items-center">
+                    {actions}
+                    {docAnchor}
+                  </div>
+                )}
               </div>
             )}
             {description && (
@@ -794,6 +897,7 @@ export function Modal({
   children,
   footer,
   icon,
+  placement,
 }: {
   open: boolean;
   onClose: () => void;
@@ -802,6 +906,10 @@ export function Modal({
   children: React.ReactNode;
   footer?: React.ReactNode;
   icon?: React.ReactNode;
+  /** HeroUI's "auto" (default) docks the dialog to the BOTTOM on phones,
+   *  which is right for confirmations but wrong for anything the on-screen
+   *  keyboard must not cover — a search box's results, for one. */
+  placement?: "auto" | "center" | "top" | "bottom";
 }) {
   const sizeCls = {
     sm: "sm:max-w-sm",
@@ -821,7 +929,7 @@ export function Modal({
   return (
     <HModal>
       <HModal.Backdrop isOpen={open} onOpenChange={o => { if (!o) onClose(); }}>
-        <HModal.Container size={size === "full" ? "full" : undefined}>
+        <HModal.Container size={size === "full" ? "full" : undefined} placement={placement}>
           <HModal.Dialog className={sizeCls}>
             <HModal.CloseTrigger />
             {(title || icon) && (

@@ -688,6 +688,25 @@ export const login = (email: string, password: string) =>
 export const loginTwoFactor = (challenge: string, code: string) =>
   api.post<{ user: Me }>("/auth/login/2fa", { challenge, code });
 
+/**
+ * KKU SSONext login — see internal/service/sso.go. KKU sends the browser
+ * back to /login/sso?code=…; exchange turns that code into a confirm ticket
+ * plus whose account it resolved to (no session yet), and confirm is the
+ * "yes, sign me in as that account" click. Confirm's result has the same
+ * shape as login(): either {user} or an MFA challenge to redeem via
+ * loginTwoFactor.
+ */
+export interface SSOPending {
+  ticket: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+export const ssoExchange = (code: string) =>
+  api.post<SSOPending>("/auth/sso/exchange", { code });
+export const ssoConfirm = (ticket: string) =>
+  api.post<LoginResult>("/auth/sso/confirm", { ticket });
+
 /** What /me/2fa/setup renders on the enrolment screen. secret is included so
  *  the page can offer "can't scan? type this instead" — the same secret is
  *  embedded in otpauth_url/the QR image, not additional exposure. */
