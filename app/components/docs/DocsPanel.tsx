@@ -7,6 +7,7 @@ import type { Audience } from "../../../content/docs/types";
 import type { DocPageMeta, DocsIndex } from "../../../content/docs/meta";
 import { DOC_ANCHORS } from "../../../content/docs/anchors";
 import { resolveDocForRoute } from "../../lib/docs/routeMap";
+import useIsDemo from "../../lib/useIsDemo";
 
 /**
  * Cloudflare-dashboard-style contextual help: the manual opens in a panel
@@ -166,6 +167,9 @@ function embedHref(t: DocsTarget): string {
  */
 export function DocsDock() {
   const { target, close } = useDocsPanel();
+  // See PageDocsPill: a new tab would lose the demo sandbox's per-tab API
+  // prefix and bounce to the real /login, so in demo it opens in this tab.
+  const demo = useIsDemo();
 
   useEffect(() => {
     if (!target) return;
@@ -198,11 +202,11 @@ export function DocsDock() {
               "Go to full documentation ↗". */}
           <Link
             href={fullDocsHref(target)}
-            target="_blank"
-            rel="noopener"
+            target={demo ? "_self" : "_blank"}
+            rel={demo ? undefined : "noopener"}
             className="ms-auto inline-flex items-center gap-1 text-xs text-muted underline underline-offset-2 hover:text-foreground"
           >
-            เปิดคู่มือฉบับเต็ม <ExternalLink size={12} />
+            เปิดคู่มือฉบับเต็ม {!demo && <ExternalLink size={12} />}
           </Link>
           <button type="button" onClick={close} aria-label="ปิดคู่มือ" className="ms-1 rounded-md p-1.5 hover:bg-slate-100">
             <X size={18} />

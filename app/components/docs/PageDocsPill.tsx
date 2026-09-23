@@ -3,6 +3,7 @@ import { usePathname } from "next/navigation";
 import { BookOpen, ExternalLink } from "lucide-react";
 import type { Audience } from "../../../content/docs/types";
 import { resolvePageDoc, useDocsPanel } from "./DocsPanel";
+import useIsDemo from "../../lib/useIsDemo";
 
 /**
  * The "📖 คู่มือ <หัวข้อ>" pill under every page title — the Cloudflare
@@ -32,6 +33,10 @@ import { resolvePageDoc, useDocsPanel } from "./DocsPanel";
 export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audience: Audience; slug: string }; dataTour?: string }) {
   const { open, audience, index } = useDocsPanel();
   const pathname = usePathname();
+  // The demo sandbox keeps its API prefix in per-tab sessionStorage: a new
+  // tab would start as production, its first heartbeat would 401 and bounce
+  // the tester to the real /login. In demo the topic opens in this tab.
+  const demo = useIsDemo();
   if (!audience) return null;
 
   const { target, page, bigTopic } = resolvePageDoc(index, audience, pathname ?? "", explicit, dataTour);
@@ -40,10 +45,15 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
 
   if (bigTopic && target.slug) {
     return (
-      <a href={`/docs/${target.audience}/${target.slug}`} target="_blank" rel="noopener" className={pillClass}>
+      <a
+        href={`/docs/${target.audience}/${target.slug}`}
+        target={demo ? "_self" : "_blank"}
+        rel={demo ? undefined : "noopener"}
+        className={pillClass}
+      >
         <BookOpen size={15} />
         {label}
-        <ExternalLink size={12} className="opacity-70" />
+        {!demo && <ExternalLink size={12} className="opacity-70" />}
       </a>
     );
   }
