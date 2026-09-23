@@ -11,7 +11,7 @@ import {
   type Key,
 } from "@heroui/react";
 import { parseDate, parseDateTime, type DateValue } from "@internationalized/date";
-import { api, ApiError, demoTesters, demoAddTester, demoRemoveTester, type DemoTester } from "../../lib/api";
+import { api, ApiError, demoTesters, demoAddTester, demoRemoveTester, type DemoTester, type Me } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select, TipWrap,
@@ -121,14 +121,29 @@ export default function SettingsPage() {
 /* Pay rate — read-only view + edit mode + confirm-save flow                  */
 /* -------------------------------------------------------------------------- */
 
+// Today in the browser's own calendar (Bangkok for every user of this system).
+// toISOString() is UTC, which is still "yesterday" until 07:00 here — the
+// wrong side of the line for a date whose past/future-ness now matters.
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function PayRateSection() {
   const { data } = useSWR<Rate>("/settings/pay-rate");
+  // Versions saved ahead of time. The backend only starts using one on its own
+  // date, so they are listed apart from "in force now" rather than shown as it.
+  const { data: scheduled } = useSWR<Rate[]>("/settings/pay-rate/scheduled");
+  const { data: me } = useSWR<Me>("/me");
+  const isAdmin = (me?.roles ?? []).includes("admin");
+  const [withdrawTarget, setWithdrawTarget] = useState<Rate | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showFormula, setShowFormula] = useState(false);
   const empty: Rate = {
-    effective_from: new Date().toISOString().slice(0, 10),
+    effective_from: todayLocal(),
     undergrad_regular: 40, undergrad_special: 50,
     graduate_regular: 50, graduate_special_lumpsum: 4000,
     ug_lecture_hours_per_credit: 3, ug_lab_hours_per_credit: 4.5,
@@ -154,7 +169,7 @@ function PayRateSection() {
   function startEdit() {
     setDraft({
       ...(data ?? empty),
-      effective_from: new Date().toISOString().slice(0, 10),
+      effective_from: todayLocal(),
     });
     setEditing(true);
   }
@@ -187,7 +202,9 @@ function PayRateSection() {
   const hasRateErrors = Object.values(rateErrors).some(Boolean);
   const effectiveFromError = !draft.effective_from ? "กรุณาระบุวันเริ่มใช้" : null;
   const effectiveFromPast =
-    !!draft.effective_from && draft.effective_from < new Date().toISOString().slice(0, 10);
+    !!draft.effective_from && draft.effective_from < todayLocal();
+  const effectiveFromFuture =
+    !!draft.effective_from && draft.effective_from > todayLocal();
   const canSaveRate = !hasRateErrors && !effectiveFromError;
 
   async function doSave() {
@@ -196,6 +213,7 @@ function PayRateSection() {
     try {
       await api.post("/settings/pay-rate", draft);
       await mutate("/settings/pay-rate");
+      await mutate("/settings/pay-rate/scheduled");
       setEditing(false);
       setConfirming(false);
       toast.success("บันทึกเวอร์ชันใหม่เรียบร้อยแล้ว", {
@@ -205,6 +223,23 @@ function PayRateSection() {
       toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function doWithdraw() {
+    if (!withdrawTarget?.id) return;
+    setWithdrawing(true);
+    try {
+      await api.del(`/settings/pay-rate/${withdrawTarget.id}`);
+      await mutate("/settings/pay-rate/scheduled");
+      toast.success("ยกเลิกอัตราที่ตั้งล่วงหน้าแล้ว", {
+        description: `เวอร์ชันที่จะเริ่มใช้ ${withdrawTarget.effective_from}`,
+      });
+      setWithdrawTarget(null);
+    } catch (e) {
+      toast.danger("ยกเลิกไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setWithdrawing(false);
     }
   }
 
@@ -230,6 +265,35 @@ function PayRateSection() {
         )
       }
     >
+      {/* Versions saved ahead of time — not in force until their date */}
+      {!editing && (scheduled?.length ?? 0) > 0 && (
+        <div className="mb-5 rounded-lg border border-warning/40 bg-warning-soft/40 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <CalendarDays size={16} />อัตราที่ตั้งล่วงหน้า (ยังไม่มีผล)
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            ระบบยังคำนวณด้วยอัตราปัจจุบันด้านล่างจนถึงวันเริ่มใช้ของแต่ละเวอร์ชัน
+            {isAdmin ? "" : " — ถ้าตั้งวันผิด แจ้งผู้ดูแลระบบให้ยกเลิก"}
+          </p>
+          <ul className="mt-3 space-y-2">
+            {scheduled!.map(r => (
+              <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                <span className="font-medium">เริ่มใช้ {r.effective_from}</span>
+                <span className="text-muted">
+                  ตรี {r.undergrad_regular}/{r.undergrad_special} · บัณฑิต {r.graduate_regular_hourly} บาท/ชม.
+                  · เหมาจ่าย {r.graduate_special_lumpsum.toLocaleString()} บาท/เดือน
+                </span>
+                {isAdmin && (
+                  <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setWithdrawTarget(r)}>
+                    <Trash2 size={14} />ยกเลิกเวอร์ชันนี้
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Current values — read-only */}
       {!editing && (
         data ? (
@@ -346,6 +410,14 @@ function PayRateSection() {
                onChange={v => setDraft({ ...draft, max_courses_per_student: Number(v) })} />
           </EditGroup>
 
+          {effectiveFromFuture && (
+            <Alert
+              status="accent"
+              icon={<CalendarDays size={16} />}
+              title="ตั้งอัตราล่วงหน้า"
+              description={`เวอร์ชันนี้จะเริ่มมีผลวันที่ ${draft.effective_from} — ก่อนถึงวันนั้นระบบยังคำนวณด้วยอัตราปัจจุบัน`}
+            />
+          )}
           {effectiveFromPast && (
             <Alert
               status="warning"
@@ -385,6 +457,18 @@ function PayRateSection() {
         saving={saving}
         title="ยืนยันสร้างเวอร์ชันใหม่?"
         description={`ระบบจะสร้างอัตราค่าตอบแทนเวอร์ชันใหม่ เริ่มใช้ ${draft.effective_from} เวอร์ชันเก่ายังเก็บไว้เป็นประวัติ`}
+      />
+
+      <ConfirmSaveModal
+        open={withdrawTarget !== null}
+        onClose={() => setWithdrawTarget(null)}
+        onConfirm={doWithdraw}
+        saving={withdrawing}
+        variant="danger"
+        confirmLabel="ยกเลิกเวอร์ชันนี้"
+        confirmIcon={<Trash2 size={14} />}
+        title="ยกเลิกอัตราที่ตั้งล่วงหน้า?"
+        description={`เวอร์ชันที่จะเริ่มใช้ ${withdrawTarget?.effective_from ?? ""} ยังไม่เคยถูกใช้คำนวณ ยกเลิกได้โดยไม่กระทบยอดใด ๆ (บันทึกไว้ในประวัติการใช้งาน)`}
       />
 
       <FormulaHelpModal

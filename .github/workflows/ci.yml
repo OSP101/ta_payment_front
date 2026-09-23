@@ -26,6 +26,17 @@ jobs:
       - name: Install
         run: npm ci
 
+      # The vendored heroui-react skill is loaded by coding agents as trusted
+      # guidance. skills-lock.json's computedHash cannot guard it: the fetch
+      # tool writes that hash itself, npm install rewrites it (differently per
+      # OS), and it has never matched the committed file. This checks the
+      # files that are actually committed and loaded against our own pin, and
+      # it BLOCKS — run after `npm ci` so a rewrite by the install is caught
+      # too. Updating the skill on purpose: replace the files, then regenerate
+      # the pin (command in AGENTS.md) in the same commit.
+      - name: Verify vendored skill content
+        run: sha256sum -c --strict .agents/skills/heroui-react.sha256
+
       - name: Typecheck
         run: npx tsc --noEmit
 

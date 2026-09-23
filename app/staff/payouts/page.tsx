@@ -91,6 +91,9 @@ interface CourseSummary {
   over_budget: boolean;
   ta_count: number;
   export_eligible: boolean;
+  /** TAs with approved work but no printed appointment order. The claim stays
+   *  blocked until the next order names them. */
+  awaiting_appointment?: string[];
   last_export_at?: string | null;
   /** This course's standing in each half of a term that crosses the budget
    *  year, in round order. Absent for a term that does not cross — there is
@@ -128,6 +131,8 @@ interface CourseCard {
   waitingTA: number;
   waitingLecturer: number;
   exportable: boolean;
+  /** Names of TAs holding the export up until an appointment order names them. */
+  awaitingAppointment: string[];
   exportedAt?: string | null;
   /** Empty for a non-crossing term — the row then shows no round language. */
   rounds: CourseRound[];
@@ -399,6 +404,10 @@ function statusOf(c: CourseCard): { tone: ChipTone; label: string } {
   // its export history says, and saying "ส่งออกแล้ว" over the top of it would
   // hide the only thing on the row an officer can act on.
   if (c.ready.length > 0) return { tone: "warn", label: `รอตรวจ ${c.ready.length} รายการ` };
+  // Before any round/export wording: no round can be issued until the next
+  // appointment order names these TAs, so "ยังต้องส่งอีก N รอบ" would point the
+  // officer at a download that refuses. The fix is the order, named as such.
+  if (c.awaitingAppointment.length > 0) return { tone: "warn", label: "รอออกคำสั่งแต่งตั้ง" };
   // In a crossing term the round bar already carries export state per round,
   // and a flat "ส่งออกแล้ว" beside it is at best redundant and at worst a
   // contradiction — it was the exact wording that made a course owing round 2
@@ -422,6 +431,11 @@ function blockedHint(c: CourseCard): string {
   const parts: string[] = [];
   if (c.waitingLecturer > 0) parts.push(`${c.waitingLecturer} รายการรออาจารย์อนุมัติ`);
   if (c.waitingTA > 0) parts.push(`${c.waitingTA} รายการ TA ยังไม่ส่ง`);
+  if (c.awaitingAppointment.length > 0) {
+    // Short on purpose: this line is truncated in the card, and the status chip
+    // already says the fix (issue the next appointment order).
+    parts.push(`รอคำสั่งแต่งตั้ง: ${c.awaitingAppointment.join(", ")}`);
+  }
   return parts.join(" · ");
 }
 
@@ -513,6 +527,11 @@ function roundsOwed(c: CourseCard): CourseRound[] {
  */
 function bucketOf(c: CourseCard): Bucket {
   if (c.ready.length > 0) return "act";
+  // A TA with approved work but no printed order holds the whole claim until the
+  // next appointment order names them — and issuing that order is the officer's
+  // job, so it is actionable, not "waiting". Left in "waiting" it collapsed into
+  // an anonymous count and the course looked idle.
+  if (c.awaitingAppointment.length > 0) return "act";
   if (c.exportable && !c.exportedAt) return "act";
   // Checked before anything about blocked months: a course can be exported and
   // still have a later month open, and it belongs under "done" — the money for
@@ -536,7 +555,7 @@ function buildCards(rows: ReviewRow[], summary: CourseSummary[]): CourseCard[] {
       c = {
         id, code, nameTH, lecturers: "", maxBaht: 0, usedBaht: 0, overBudget: false,
         ready: [], blocked: [], waitingTA: 0, waitingLecturer: 0,
-        exportable: false, exportedAt: null, rounds: [],
+        exportable: false, awaitingAppointment: [], exportedAt: null, rounds: [],
       };
       byId.set(id, c);
     }
@@ -573,6 +592,7 @@ function buildCards(rows: ReviewRow[], summary: CourseSummary[]): CourseCard[] {
     c.usedBaht = s.used_baht;
     c.overBudget = s.over_budget;
     c.exportable = s.export_eligible;
+    c.awaitingAppointment = s.awaiting_appointment ?? [];
     // last_export_at, not teaching_courses.exported_at: the course LIST endpoint
     // does not select that column, so the old screen's "ส่งออกแล้ว" chip was
     // reading undefined and could never light up. This value comes from

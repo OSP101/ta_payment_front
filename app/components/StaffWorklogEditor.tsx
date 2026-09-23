@@ -1,11 +1,11 @@
 "use client";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Save, Trash2, Plus, Lock, X, Pencil } from "lucide-react";
+import { Save, Trash2, Plus, Lock, X, Pencil, ShieldCheck } from "lucide-react";
 import { Accordion } from "@heroui/react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { TextInput, Select, Button, IconButton, Chip, EmptyState, Spinner, DatePicker, TimePicker, StatusChip } from "./ui";
+import { TextInput, Select, Button, IconButton, Chip, EmptyState, Spinner, DatePicker, TimePicker, StatusChip, Modal, Alert, TextArea } from "./ui";
 
 export interface StaffWorkLog {
   id: string;
@@ -283,10 +283,35 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
     (draft.parent_kind ?? null) !== (row.parent_kind ?? null) ||
     (draft.note ?? "") !== (row.note ?? "");
 
-  async function save() {
+  // An approved row is the lecturer's signed-off record and live money, so
+  // changing it needs the editor's password and a reason that is sent to every
+  // lecturer on the course — the same bar the monthly batch-edit dialog sets.
+  // The server enforces this; the dialog is here so the requirement is asked for
+  // up front rather than discovered as an error.
+  const needsStepUp = row.status === "approved";
+  const [stepUpOpen, setStepUpOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [password, setPassword] = useState("");
+  const reasonOK = reason.trim().length >= 10;
+
+  function closeStepUp() {
+    setStepUpOpen(false);
+    setPassword("");
+  }
+
+  function save() {
+    if (needsStepUp) {
+      setStepUpOpen(true);
+      return;
+    }
+    void submit();
+  }
+
+  async function submit(stepUp?: { password: string; reason: string }) {
     setBusy(true);
     try {
       await api.put(`/staff/worklogs`, {
+        ...(stepUp ?? {}),
         id: draft.id,
         assignment_id: draft.assignment_id,
         work_date: draft.work_date,
@@ -300,9 +325,13 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
       });
       notify.success("บันทึกแล้ว");
       setEditing(false);
+      setStepUpOpen(false);
+      setReason("");
+      setPassword("");
       onChanged();
     } catch (e) {
       notify.error(errMessage(e));
+      setPassword("");
     } finally {
       setBusy(false);
     }
@@ -418,6 +447,56 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
             <X size={13} />
           </IconButton>
         </div>
+        {stepUpOpen && (
+          <Modal open onClose={closeStepUp} size="md" title="ยืนยันการแก้ไขรายการที่อนุมัติแล้ว" icon={<ShieldCheck size={16} />}>
+            <div className="space-y-3 text-left whitespace-normal">
+              <Alert
+                status="warning"
+                title="รายการนี้อาจารย์อนุมัติแล้ว"
+                description="เหตุผลจะถูกส่งถึงอาจารย์ผู้สอนทุกคนของวิชานี้ และบันทึกไว้ในประวัติการแก้ไขถาวร"
+              />
+              <p className="text-xs text-muted">
+                {fmtWorkDate(row.work_date)} {row.start_time.slice(0, 5)}–{row.end_time.slice(0, 5)} ({row.hours.toFixed(2)} ชม.)
+                {" → "}
+                {draft.start_time.slice(0, 5)}–{draft.end_time.slice(0, 5)} ({Number(draft.hours).toFixed(2)} ชม.)
+              </p>
+              <div>
+                <label className="mb-1 block text-xs text-ink-2">เหตุผล (อย่างน้อย 10 ตัวอักษร)</label>
+                <TextArea
+                  className="w-full"
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  rows={3}
+                  placeholder="เช่น ลงเวลาผิดจากใบลงชื่อจริงของวันนั้น"
+                />
+                {!reasonOK && reason.length > 0 && (
+                  <p className="mt-1 text-xs text-red-600">ยังสั้นเกินไป ({reason.trim().length}/10)</p>
+                )}
+              </div>
+              <label className="block text-xs text-ink-2">
+                รหัสผ่านของคุณ
+                <TextInput
+                  className="mt-1 w-full"
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="ยืนยันว่าเป็นคุณจริง"
+                />
+              </label>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onPress={closeStepUp}>ยกเลิก</Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  isDisabled={busy || !reasonOK || password === ""}
+                  onPress={() => void submit({ password, reason: reason.trim() })}
+                >
+                  {busy ? <Spinner size="sm" /> : <ShieldCheck size={14} />} บันทึกการแก้ไข
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
       </td>
     </tr>
   );

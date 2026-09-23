@@ -20,6 +20,8 @@ interface PreviewCourse {
   // อาจเป็น null ได้ — Go marshal nil slice เป็น null (ไม่ใช่ []) จึงต้องกันทุกจุด
   officer_names: string[] | null;
   matched_lecturer_ids: string[] | null;
+  // Full names of the matched lecturers, same order as the ids.
+  matched_lecturer_names?: string[] | null;
   unmatched_names?: string[] | null;
   note?: string;
 }
@@ -539,17 +541,26 @@ function MergeGroups({
 function OfficerCell({ c }: { c: PreviewCourse }) {
   const officers = c.officer_names ?? [];
   const matched = c.matched_lecturer_ids ?? [];
+  const matchedNames = c.matched_lecturer_names ?? [];
   const unmatched = c.unmatched_names ?? [];
   if (officers.length === 0 && unmatched.length === 0) {
     return <span className="text-(--ink-4)">(ไม่ระบุ)</span>;
   }
+  // Each auto-matched lecturer becomes a co-owner of the course, so name them:
+  // a wrong match hidden behind "2 คน" is one nobody would catch.
   return (
-    <div className="flex flex-wrap gap-1">
-      {matched.length > 0 && (
-        <Chip tone="success">
-          <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} /> {matched.length} คน</span>
-        </Chip>
-      )}
+    <div className="flex flex-wrap gap-1" title={c.officer_raw ? `ในไฟล์: ${c.officer_raw}` : undefined}>
+      {matchedNames.length > 0
+        ? matchedNames.map((n, i) => (
+            <Chip key={matched[i] ?? n} tone="success">
+              <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} /> {n}</span>
+            </Chip>
+          ))
+        : matched.length > 0 && (
+            <Chip tone="success">
+              <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} /> {matched.length} คน</span>
+            </Chip>
+          )}
       {unmatched.map(n => (
         <Chip key={n} tone="warn">
           <span className="inline-flex items-center gap-1"><AlertTriangle size={10} /> {n}</span>

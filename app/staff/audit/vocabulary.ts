@@ -57,7 +57,12 @@ const LABELS: Record<string, string> = {
   "worklog.update": "แก้ไขชั่วโมง",
   "worklog.staff_edit": "เจ้าหน้าที่แก้ชั่วโมง",
   "worklog.staff_edit_batch": "เจ้าหน้าที่แก้ชั่วโมงหลายรายการ",
+  // The TA's own timetable decides which hours are payable (the own-class
+  // clash rule), so every save of it is on the record.
+  "ta_class_schedule.replace": "TA แก้ตารางเรียนของตนเอง",
   "pay_rate.create": "เปลี่ยนอัตราค่าตอบแทน",
+  "pay_rate.delete_scheduled": "ยกเลิกอัตราค่าตอบแทนที่ตั้งล่วงหน้า",
+  "system.db_restore": "กู้คืนฐานข้อมูลจากไฟล์สำรอง",
   "budget_cap.create": "เปลี่ยนเพดานงบ",
   "course.settlement_mode": "เปลี่ยนวิธีแบ่งงบของวิชา",
 
@@ -166,6 +171,8 @@ const WARN = new Set([
   "worklog.delete",
   "makeup.unwaive",
   "pay_rate.create",
+  "pay_rate.delete_scheduled",
+  "system.db_restore",
   "budget_cap.create",
   "course.settlement_mode",
   "user.update",
