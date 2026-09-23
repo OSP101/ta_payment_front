@@ -59,7 +59,7 @@ export interface ExportPreview {
   rows: PreviewRow[];
 }
 export interface ExportBlocker {
-  kind: "waiting_ta" | "waiting_lecturer" | "unreviewed";
+  kind: "waiting_ta" | "waiting_lecturer" | "class_clash" | "not_appointed" | "unreviewed";
   ta_name: string;
   months: string[];
   rows?: number;
@@ -367,6 +367,12 @@ export function ExportPreviewBody({
 function blockerText(b: ExportBlocker) {
   if (b.kind === "waiting_ta") return `ยังไม่ส่งบันทึกเวลา ${b.rows ?? 0} รายการ`;
   if (b.kind === "waiting_lecturer") return `รออาจารย์อนุมัติ ${b.rows ?? 0} รายการ`;
+  // Approved hours that now overlap the TA's own class timetable (the TA edited
+  // it after the hours were approved). Reject or edit those rows first.
+  if (b.kind === "class_clash") return `อนุมัติแล้วแต่ตรงกับตารางเรียนปัจจุบันของ TA ${b.rows ?? 0} รายการ — ตีกลับหรือแก้ไขก่อน`;
+  // Not a review the officer can do: the review queue does not list this TA
+  // until an appointment order names them.
+  if (b.kind === "not_appointed") return "ยังไม่อยู่ในคำสั่งแต่งตั้ง — ออกคำสั่งรอบถัดไปก่อน";
   return "ยังไม่ได้ตรวจสอบเบิกจ่าย";
 }
 

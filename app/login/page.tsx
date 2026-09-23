@@ -24,6 +24,7 @@ import {
   type Me, type SSOPending,
 } from "../lib/api";
 import { notify } from "../lib/notify";
+import { sameOriginPath } from "../lib/safePath";
 import useDocumentTitle from "../lib/useDocumentTitle";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -216,8 +217,10 @@ export default function LoginPage() {
       router.push("/change-password");
     } else {
       // Honour a ?next= redirect target set when the session expired mid-use.
+      // It is attacker-controllable via a crafted /login?next=... link, so it is
+      // resolved and origin-checked rather than prefix-matched.
       const next = new URLSearchParams(window.location.search).get("next");
-      router.push(next && next.startsWith("/") ? next : "/");
+      router.push(sameOriginPath(next));
     }
     router.refresh();
   }

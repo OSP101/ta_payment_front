@@ -6,6 +6,7 @@ import { Dropdown } from "@heroui/react";
 import { Bell, BellRing, Check } from "lucide-react";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
+import { isSameOrigin, sameOriginPath } from "../lib/safePath";
 import { IconButton } from "./ui";
 import useUnreadCount from "../lib/useUnreadCount";
 
@@ -101,10 +102,11 @@ export default function NotificationBell({
                 type="button"
                 onClick={() => {
                   if (!n.read_at) markRead(n.id);
-                  // Only in-app paths go through the router; guard against
-                  // absolute/external URLs which router.push rejects.
+                  // Only same-origin targets go through the router. Resolved
+                  // rather than prefix-matched, because "//host" also starts
+                  // with a slash but leaves the app's origin.
                   if (n.link) {
-                    if (n.link.startsWith("/")) router.push(n.link);
+                    if (isSameOrigin(n.link)) router.push(sameOriginPath(n.link));
                     else window.open(n.link, "_blank", "noopener");
                   }
                 }}
