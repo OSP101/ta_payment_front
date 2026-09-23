@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { getMe } from "../../lib/session";
 import { allowedAudiences, canViewAudience, defaultHomeRoute } from "../../lib/docs/audience";
-import { sidebarSections } from "../../../content/docs/registry";
+import { sidebarSections, toMeta } from "../../../content/docs/registry";
 import type { Audience } from "../../../content/docs/types";
 import DocsShell from "../../components/docs/DocsShell";
 
@@ -36,7 +36,10 @@ export default async function AudienceLayout({
     <DocsShell
       audience={audience}
       allowedAudiences={allowedAudiences(me)}
-      sections={sidebarSections(audience)}
+      sections={sidebarSections(audience).map(({ section, pages }) => ({
+        section,
+        pages: pages.map((p) => toMeta(p, audience)),
+      }))}
       homeHref={defaultHomeRoute(me)}
     >
       {children}

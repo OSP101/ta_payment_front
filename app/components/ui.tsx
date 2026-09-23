@@ -32,13 +32,9 @@ import Link from "next/link";
 import { Info } from "lucide-react";
 import { I18nProvider } from "react-aria-components";
 import DocsAnchor from "./docs/DocsAnchor";
+import PageDocsPill from "./docs/PageDocsPill";
 import { DOC_ANCHORS } from "../../content/docs/anchors";
-import { useDocsPanel } from "./docs/DocsPanel";
-import { resolveDocForRoute } from "../lib/docs/routeMap";
-import { findPage, screenSubPages } from "../../content/docs/registry";
 import type { Audience } from "../../content/docs/types";
-import { usePathname } from "next/navigation";
-import { BookOpen, ExternalLink } from "lucide-react";
 import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
 import type React from "react";
 import { Children, isValidElement, useEffect, useState } from "react";
@@ -193,71 +189,6 @@ export function PageHeader({
       </div>
       {actions && <div className="flex gap-2 flex-wrap items-center">{actions}</div>}
     </div>
-  );
-}
-
-/**
- * The "📖 คู่มือ <หัวข้อ>" pill under every page title — the Cloudflare
- * dashboard's per-page "<Topic> documentation" button. This replaced the
- * top-bar "คู่มือการใช้งาน" button: a pill that names the exact topic, sitting
- * where the eye lands first, beats one generic button in the chrome.
- *
- * Which doc: an explicit `docs` prop wins; else the `data-tour` key via
- * content/docs/anchors.ts; else the current route via `resolveDocForRoute`
- * (the reader's own audience comes from the DocsPanel context Shell sets
- * up). No match → the audience's Getting Started page, labelled plainly.
- * Renders nothing outside a Shell (login, public pages) where there is no
- * drawer to open.
- *
- * Drawer or new tab: a screen whose manual is ONE page (ตรวจสอบเอกสาร TA)
- * opens in the side drawer, so the screen stays visible while reading. A
- * screen that is a whole *topic* — several doc pages describe its tabs,
- * modals or sections (ลงเวลา has 6 sub-pages, คำขอ TA 6, ตั้งค่า 3) — opens
- * the full manual in a new tab instead: those need the sidebar to step
- * through the sub-pages, which a drawer showing one page at a time is bad
- * at. Decided from the manual's own structure (`screenSubPages`), not per
- * page by hand — and NOT from the size of the sidebar section, which also
- * groups unrelated single screens (วันหยุด/TDBM/Audit under "ระบบ").
- * Shared "common" pages (/account etc.) always use the drawer.
- */
-function PageDocsPill({ explicit, dataTour }: { explicit?: { audience: Audience; slug: string }; dataTour?: string }) {
-  const { open, audience } = useDocsPanel();
-  const pathname = usePathname();
-  if (!audience) return null;
-
-  // The area of the app the page lives in beats the reader's own role: staff
-  // and admin can open /lecturer and /ta pages to act on someone's behalf, and
-  // the doc for /lecturer is in the lecturer manual regardless of who's
-  // reading. Pages with no role prefix (/account, /announcements) fall back
-  // to the reader's audience — their docs are shared across all three anyway.
-  // Access is still enforced by the embed route the drawer loads.
-  const path = pathname ?? "";
-  const areaAudience: Audience =
-    path.startsWith("/staff") ? "staff" : path.startsWith("/lecturer") ? "lecturer" : path.startsWith("/ta") ? "ta" : audience;
-  const mapped = dataTour ? DOC_ANCHORS[dataTour] : undefined;
-  const target = explicit ?? mapped ?? (() => {
-    const p = resolveDocForRoute(path, areaAudience);
-    return p ? { audience: areaAudience, slug: p.slug } : undefined;
-  })();
-  const page = target ? findPage(target.audience, target.slug) : undefined;
-  const bigTopic = !!page && page.audience !== "common" && screenSubPages(page, target!.audience).length > 0;
-  const label = !page ? "คู่มือการใช้งาน" : bigTopic ? `คู่มือ ${page.section}` : `คู่มือ ${page.title}`;
-  const pillClass = "mt-3 inline-flex items-center gap-1.5 rounded-full border border-(--brand)/40 bg-white px-3 py-1 text-sm text-(--brand) transition-colors hover:bg-accent-soft/40";
-
-  if (bigTopic && target) {
-    return (
-      <a href={`/docs/${target.audience}/${target.slug}`} target="_blank" rel="noopener" className={pillClass}>
-        <BookOpen size={15} />
-        {label}
-        <ExternalLink size={12} className="opacity-70" />
-      </a>
-    );
-  }
-  return (
-    <button type="button" onClick={() => open(target ?? { audience: areaAudience })} className={pillClass}>
-      <BookOpen size={15} />
-      {label}
-    </button>
   );
 }
 

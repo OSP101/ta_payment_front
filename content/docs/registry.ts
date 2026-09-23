@@ -1,4 +1,9 @@
+// The manual's full text. Server-only: a client import would ship every
+// audience's pages — the staff manual included — to anyone who loads any
+// page's JS, gate or no gate. Client code works from `./meta` instead.
+import "server-only";
 import type { Audience, DocPage } from "./types";
+import { effectiveAudience, docHref, type DocPageMeta } from "./meta";
 import mediaData from "./media.json";
 import glossaryData from "./glossary.json";
 import { commonPages } from "./pages/common";
@@ -48,27 +53,9 @@ export function pagesForAudience(audience: Audience): DocPage[] {
   return BY_AUDIENCE[audience];
 }
 
-/**
- * A page's audience AS VIEWED from a given switch — pages authored with
- * `audience: "common"` resolve to whichever audience the reader currently
- * has selected, since that's the manual they're reading it from.
- *
- * Every link a page can turn into (`/docs/<audience>/<slug>`) has to run its
- * `audience` through this first. Call `docHref` instead of doing that by
- * hand — it existed nowhere before this fix, and every caller that computed
- * this inline (`DocsShell`'s NavList, the Getting Started page, the related-
- * links footer) had its own copy of the same ternary; `SearchDialog`'s own
- * copy was simply missing, which is exactly the bug a single shared function
- * closes off for every future caller at once.
- */
-export function effectiveAudience(page: DocPage, viewingAs: Audience): Audience {
-  return page.audience === "common" ? viewingAs : page.audience;
-}
-
-/** `/docs/<effective audience>/<slug>` for `page` as viewed from `viewingAs`. */
-export function docHref(page: DocPage, viewingAs: Audience): string {
-  return `/docs/${effectiveAudience(page, viewingAs)}/${page.slug}`;
-}
+// Defined in ./meta (pure, client-safe); re-exported so server callers keep
+// importing them from here.
+export { effectiveAudience, docHref };
 
 /**
  * The sub-pages that document the SAME app screen as `owner` — the pages
@@ -131,4 +118,19 @@ export function mediaForPage(page: DocPage): MediaEntry[] {
     }
   }
   return ids.map((id) => MEDIA[id]).filter((m): m is MediaEntry => !!m);
+}
+
+/** The client-safe view of `page` as listed under `viewingAs` — see
+ *  `DocPageMeta`. `hasSubPages` is computed here, where the pages are. */
+export function toMeta(page: DocPage, viewingAs: Audience): DocPageMeta {
+  return {
+    slug: page.slug,
+    audience: page.audience,
+    section: page.section,
+    order: page.order,
+    title: page.title,
+    description: page.description,
+    routes: page.routes,
+    hasSubPages: page.audience !== "common" && screenSubPages(page, viewingAs).length > 0,
+  };
 }

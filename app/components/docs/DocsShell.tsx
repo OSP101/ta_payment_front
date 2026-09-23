@@ -5,11 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { BookOpen, ChevronDown, ChevronRight, Menu, Search, X } from "lucide-react";
 import AudienceSwitch from "./AudienceSwitch";
 import SearchDialog from "./SearchDialog";
-import { AUDIENCE_LABEL, type Audience, type DocPage } from "../../../content/docs/types";
-import { docHref } from "../../../content/docs/registry";
+import type { Audience } from "../../../content/docs/types";
+import { docHref, type DocPageMeta } from "../../../content/docs/meta";
 import { APP_VERSION } from "../../lib/docs/version";
 
-export interface SidebarSection { section: string; pages: DocPage[] }
+// Metadata only — the server layout maps pages through `toMeta`, so no page
+// text rides along in this client component's props.
+export interface SidebarSection { section: string; pages: DocPageMeta[] }
 
 /**
  * The grouped sidebar list. Module-level on purpose: declared inside
@@ -212,7 +214,6 @@ export default function DocsShell({
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         currentAudience={audience}
-        searchableAudiences={allowedAudiences}
       />
     </div>
   );
