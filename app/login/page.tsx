@@ -20,7 +20,7 @@ import { LogIn, Eye, EyeOff, Shield, Clock, MonitorSmartphone, LogOut, CheckCirc
 import { Alert, IconButton } from "../components/ui";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "../components/BetaNotice";
 import {
-  api, errMessage, setDemoApiPrefix, login, loginTwoFactor, ssoExchange, ssoConfirm,
+  api, ApiError, errMessage, setDemoApiPrefix, login, loginTwoFactor, ssoExchange, ssoConfirm,
   type Me, type SSOPending,
 } from "../lib/api";
 import { notify } from "../lib/notify";
@@ -78,6 +78,10 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [ssoUrl, setSsoUrl] = useState<string | null>(null);
+  // KKU's logout — the only real way to "use another KKU account". A plain
+  // link back to /login leaves the KKU session alive, and the next KKU click
+  // signs the same person straight back in (shared lab machines).
+  const [ssoLogoutUrl, setSsoLogoutUrl] = useState<string | null>(null);
   const [betaOpen, setBetaOpen] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
 
@@ -104,7 +108,10 @@ export default function LoginPage() {
   type SSOState =
     | { status: "exchanging" }
     | { status: "confirm"; pending: SSOPending }
-    | { status: "error"; message: string };
+    // wrongAccount: KKU signed in someone this system has no account for —
+    // retrying with KKU would just return the same person, so the way out
+    // is switching KKU account, not "try again".
+    | { status: "error"; message: string; wrongAccount?: boolean };
   const [sso, setSso] = useState<SSOState | null>(null);
 
   // Landing on /login is an unambiguous signal that whatever happens next is
@@ -120,8 +127,11 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    api.get<{ enabled: boolean; url?: string }>("/auth/sso/url")
-      .then(r => { if (r.enabled && r.url) setSsoUrl(r.url); })
+    api.get<{ enabled: boolean; url?: string; logout_url?: string }>("/auth/sso/url")
+      .then(r => {
+        if (r.enabled && r.url) setSsoUrl(r.url);
+        if (r.enabled && r.logout_url) setSsoLogoutUrl(r.logout_url);
+      })
       .catch(() => {});
   }, []);
 
@@ -143,7 +153,12 @@ export default function LoginPage() {
     setSso({ status: "exchanging" });
     ssoExchange(ssoCode)
       .then(pending => setSso({ status: "confirm", pending }))
-      .catch(e => setSso({ status: "error", message: errMessage(e) }));
+      .catch(e => setSso({
+        status: "error",
+        message: errMessage(e),
+        // 403 from exchange is only ever "no account for this KKU email".
+        wrongAccount: e instanceof ApiError && e.status === 403,
+      }));
   }, []);
 
   async function onConfirmSSO() {
@@ -389,7 +404,7 @@ export default function LoginPage() {
                 {sso.status === "error" && (
                   <>
                     <Alert status="danger" title="เข้าสู่ระบบด้วย KKU ไม่สำเร็จ" description={sso.message} />
-                    {ssoUrl && (
+                    {ssoUrl && !sso.wrongAccount && (
                       <a href={ssoUrl}>
                         <Button variant="secondary" fullWidth>
                           <Shield />
@@ -415,7 +430,7 @@ export default function LoginPage() {
                       </div>
                     </div>
                     <p className="text-xs text-muted">
-                      หากนี่ไม่ใช่บัญชีของคุณ อย่ากดดำเนินการต่อ — กด &ldquo;ใช้บัญชีอื่น&rdquo; แล้วเข้าสู่ระบบด้วยบัญชี KKU ของคุณเอง
+                      หากนี่ไม่ใช่บัญชีของคุณ อย่ากดดำเนินการต่อ — กด &ldquo;ใช้บัญชี KKU อื่น&rdquo; ระบบจะออกจากบัญชี KKU นี้ให้ก่อน แล้วค่อยเข้าสู่ระบบด้วยบัญชีของคุณเอง
                     </p>
                     <Button size="lg" fullWidth isPending={loading} onPress={onConfirmSSO}>
                       {loading ? <Spinner color="current" size="sm" /> : <ShieldCheck />}
@@ -423,14 +438,21 @@ export default function LoginPage() {
                     </Button>
                   </>
                 )}
-                {sso.status !== "exchanging" && (
-                  <div className="flex items-center justify-center">
-                    <Link className="text-sm cursor-pointer text-muted" href="/login">
-                      <ArrowLeft className="size-3.5 inline mr-1" />
-                      {sso.status === "confirm" ? "ใช้บัญชีอื่น" : "กลับไปหน้าเข้าสู่ระบบ"}
-                    </Link>
-                  </div>
-                )}
+                {sso.status !== "exchanging" && (() => {
+                  // Switching person must end the KKU session (it returns to
+                  // /login afterwards); only fall back to /login when the
+                  // logout URL is unknown.
+                  const switching = sso.status === "confirm" || (sso.status === "error" && sso.wrongAccount);
+                  const href = switching && ssoLogoutUrl ? ssoLogoutUrl : "/login";
+                  return (
+                    <div className="flex items-center justify-center">
+                      <Link className="text-sm cursor-pointer text-muted" href={href}>
+                        <ArrowLeft className="size-3.5 inline mr-1" />
+                        {switching ? "ใช้บัญชี KKU อื่น" : "กลับไปหน้าเข้าสู่ระบบ"}
+                      </Link>
+                    </div>
+                  );
+                })()}
               </div>
               ) : (
               <>
