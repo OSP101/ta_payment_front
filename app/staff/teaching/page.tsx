@@ -13,7 +13,6 @@ import {
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
-import DocsAnchor from "../../components/docs/DocsAnchor";
 
 // Both modals are heavy (forms, section-schedule editors, autocompletes) but
 // only one person in ten ever opens them in a given visit — code-split them
@@ -91,8 +90,7 @@ export default function TeachingPage() {
         actions={
           noTerms ? null : (
             <>
-              <span data-tour="teaching-import" className="inline-flex items-center gap-1.5">
-                <DocsAnchor audience="staff" slug="teaching/import" label="คู่มือการนำเข้า Excel" />
+              <span data-tour="teaching-import" className="inline-flex">
                 <Button variant="secondary" disabled={!termId} onClick={() => setImporting(true)}>
                   <FileSpreadsheet size={16} /> นำเข้า Excel
                 </Button>
@@ -100,8 +98,7 @@ export default function TeachingPage() {
               <Button variant="tertiary" disabled={!termId} onClick={() => setImportHistoryOpen(true)}>
                 <History size={16} /> ประวัติการนำเข้า
               </Button>
-              <span data-tour="teaching-open" className="inline-flex items-center gap-1.5">
-                <DocsAnchor audience="staff" slug="teaching/manual-open" label="คู่มือการเปิดรายวิชาเอง" />
+              <span data-tour="teaching-open" className="inline-flex">
                 <Button variant="primary" disabled={!termId} onClick={() => setCreating(true)}>
                   <BookPlus size={16} /> เปิดรายวิชา
                 </Button>
@@ -163,7 +160,6 @@ export default function TeachingPage() {
             </div>
           )}
           <div data-tour="teaching-table">
-            <DocsAnchor audience="staff" slug="teaching/students" label="คู่มือตารางรายวิชาและการกรอกจำนวนนักศึกษา" strip />
             <DataTable
               ariaLabel="วิชาที่เปิดสอน"
               rows={shownCourses}

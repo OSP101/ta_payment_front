@@ -41,7 +41,24 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
 
   const { target, page, bigTopic } = resolvePageDoc(index, audience, pathname ?? "", explicit, dataTour);
   const label = !page ? "คู่มือการใช้งาน" : bigTopic ? `คู่มือ ${page.section}` : `คู่มือ ${page.title}`;
-  const pillClass = "mt-3 inline-flex items-center gap-1.5 rounded-full border border-(--brand)/40 bg-white px-3 py-1 text-sm text-(--brand) transition-colors hover:bg-accent-soft/40";
+  // The ONLY docs entry on a screen, so it is sized and coloured as a real
+  // button (tinted brand fill, not a hairline outline) — the small per-section
+  // icons it replaced were easy to miss and cluttered the toolbars.
+  const btnClass =
+    "mt-3 inline-flex max-w-full items-center gap-2 rounded-lg border border-(--brand)/25 bg-accent-soft/50 " +
+    "px-3.5 py-2 text-sm font-medium text-(--brand) transition-colors hover:bg-accent-soft hover:border-(--brand)/50 " +
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--brand)";
+  const inner = (
+    <>
+      <BookOpen size={17} className="shrink-0" />
+      <span className="truncate">{label}</span>
+      {bigTopic && page && page.subPageCount > 0 && (
+        <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-xs font-normal text-(--brand)/80">
+          {page.subPageCount + 1} หัวข้อ
+        </span>
+      )}
+    </>
+  );
 
   if (bigTopic && target.slug) {
     return (
@@ -49,18 +66,17 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
         href={`/docs/${target.audience}/${target.slug}`}
         target={demo ? "_self" : "_blank"}
         rel={demo ? undefined : "noopener"}
-        className={pillClass}
+        className={btnClass}
+        title="เปิดคู่มือฉบับเต็มในแท็บใหม่"
       >
-        <BookOpen size={15} />
-        {label}
-        {!demo && <ExternalLink size={12} className="opacity-70" />}
+        {inner}
+        {!demo && <ExternalLink size={13} className="shrink-0 opacity-70" />}
       </a>
     );
   }
   return (
-    <button type="button" onClick={() => open(target)} className={pillClass}>
-      <BookOpen size={15} />
-      {label}
+    <button type="button" onClick={() => open(target)} className={btnClass} title="เปิดคู่มือด้านข้าง">
+      {inner}
     </button>
   );
 }

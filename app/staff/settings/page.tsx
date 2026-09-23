@@ -17,7 +17,6 @@ import {
   PageHeader, Panel, Button, IconButton, TextInput, TextArea, FieldGroup, Chip, Modal, Alert, SearchField, Select, TipWrap,
 } from "../../components/ui";
 import { FormulaHelpModal } from "../../components/formula-help";
-import DocsAnchor from "../../components/docs/DocsAnchor";
 
 interface Rate {
   id?: string;
@@ -45,19 +44,6 @@ interface Rate {
   plan_suggested_ta_cap: number;     // เพดานจำนวน TA ตามเกณฑ์ (0 = ไม่จำกัด)
   note?: string;
 }
-// Per-tab "open the manual for THIS tab" strip. The header's คู่มือการใช้งาน
-// button can only resolve a doc from the URL, and every tab here shares
-// /staff/settings — so each tab points at its own page itself, the way a
-// Cloudflare dashboard section carries its own little book icon.
-function TabDocs({ slug }: { slug: string }) {
-  return (
-    <div className="mb-3 flex items-center justify-end gap-1.5 text-xs text-muted">
-      <span>ดูคู่มือของแท็บนี้</span>
-      <DocsAnchor audience="staff" slug={slug} />
-    </div>
-  );
-}
-
 export default function SettingsPage() {
   const params = useSearchParams();
   // Allow deep-linking to a specific tab, e.g. /staff/settings?tab=terms
@@ -71,9 +57,8 @@ export default function SettingsPage() {
     : "rate";
   return (
     <div>
-      {/* The page-level pill opens the whole ตั้งค่า topic in a new tab (its doc
-          section has one page per tab); each tab below also carries its own
-          "ดูคู่มือของแท็บนี้" icon that opens just that tab's page in the drawer. */}
+      {/* The page-level pill is this screen's one docs entry: it opens the
+          whole ตั้งค่า topic (one doc page per tab) in the full manual. */}
       <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน วิชา ภาคเรียน และฝ่ายบริหาร" />
       <Tabs variant="secondary" defaultSelectedKey={initialTab}>
         <Tabs.ListContainer>
@@ -89,15 +74,12 @@ export default function SettingsPage() {
         </Tabs.ListContainer>
 
         <Tabs.Panel id="rate" className="pt-6">
-          <TabDocs slug="settings/rates" />
           <PayRateSection />
         </Tabs.Panel>
         <Tabs.Panel id="terms" className="pt-6">
-          <TabDocs slug="settings/terms" />
           <TermsSection />
         </Tabs.Panel>
         <Tabs.Panel id="calendar" className="pt-6">
-          <TabDocs slug="settings/calendar" />
           <div className="space-y-6">
             <RequestWindowsSection />
             <SubmissionPeriodsSection />
@@ -107,7 +89,6 @@ export default function SettingsPage() {
           <CurriculaSection />
         </Tabs.Panel>
         <Tabs.Panel id="admins" className="pt-6">
-          <TabDocs slug="settings/admins" />
           <AdminOfficersSection />
         </Tabs.Panel>
         <Tabs.Panel id="email" className="pt-6">

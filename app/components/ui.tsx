@@ -31,28 +31,11 @@ import {
 import Link from "next/link";
 import { Info } from "lucide-react";
 import { I18nProvider } from "react-aria-components";
-import DocsAnchor from "./docs/DocsAnchor";
 import PageDocsPill from "./docs/PageDocsPill";
-import { DOC_ANCHORS } from "../../content/docs/anchors";
 import type { Audience } from "../../content/docs/types";
 import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
 import type React from "react";
 import { Children, isValidElement, useEffect, useState } from "react";
-
-/* -------------------------------------------------------------------------- */
-/* Contextual docs anchor                                                     */
-/* -------------------------------------------------------------------------- */
-
-// A Panel/PageHeader whose `data-tour` key is listed in content/docs/anchors.ts
-// gets a small "read the manual for this section" book icon in its header
-// (Cloudflare-dashboard style). The tour anchors already mark every section
-// worth explaining, so the manual reuses them instead of each page wiring
-// its own icon. Outside a Shell (no DocsPanelProvider) the icon is a no-op.
-function docAnchorFor(dataTour?: string): React.ReactNode {
-  if (!dataTour) return null;
-  const a = DOC_ANCHORS[dataTour];
-  return a ? <DocsAnchor audience={a.audience} slug={a.slug} /> : null;
-}
 
 /* -------------------------------------------------------------------------- */
 /* Tooltip helpers                                                            */
@@ -221,14 +204,13 @@ export function Panel({
   // Anchor for the onboarding tour (see app/staff/tours/).
   "data-tour"?: string;
 }) {
-  const docAnchor = docAnchorFor(dataTour);
-  const hasHeader = title || description || actions || info || docAnchor;
+  const hasHeader = title || description || actions || info;
   return (
     <HCard variant={variant} className={className} data-tour={dataTour}>
       {hasHeader && (
         <HCard.Header>
           <div className="w-full min-w-0">
-            {(title || actions || info || docAnchor) && (
+            {(title || actions || info) && (
               // The header wraps on a phone: a shrink-0 action next to a Thai
               // title left the title ~90px, one word per line, while the button
               // sat comfortably beside a five-line heading.
@@ -241,10 +223,9 @@ export function Panel({
                     </span>
                   </HCard.Title>
                 )}
-                {(actions || docAnchor) && (
+                {actions && (
                   <div className="flex gap-2 flex-wrap shrink-0 items-center">
                     {actions}
-                    {docAnchor}
                   </div>
                 )}
               </div>

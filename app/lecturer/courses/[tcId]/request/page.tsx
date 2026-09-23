@@ -26,7 +26,6 @@ import {
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 import { TaPlanner, planHandoffKey, type PlanItem, type DraftEstimate } from "../../../../components/TaPlanner";
-import DocsAnchor from "../../../../components/docs/DocsAnchor";
 
 /**
  * On a short screen the planner card fills the viewport and the numbered
@@ -924,7 +923,6 @@ function RequestFormSection({
       {/* วางแผน TA — คิดจากตารางสอนจริงและงบที่เหลือ แนะนำจำนวน/ประเภท TA และ
           ประเมินสิ่งที่กรอกอยู่ในฟอร์ม ก่อนตัดสินใจส่ง */}
       <div data-tour="req-calculator">
-      <DocsAnchor audience="lecturer" slug="request/overview" label="คู่มือการส่งคำขอ TA และเครื่องคิดเลขงบ" strip />
       <TaPlanner
         tcId={tcId}
         scope={scope}
@@ -996,7 +994,6 @@ function RequestFormSection({
               {/* Toolbar with add + create buttons */}
               <div data-tour="req-toolbar" className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 border border-hairline px-3 py-2">
                 <div className="flex items-center gap-2 text-xs text-ink-3">
-                  <DocsAnchor audience="lecturer" slug="request/step2-add-ta" label="คู่มือการเพิ่ม TA และกรอกชั่วโมง" />
                   รวม TA ในวิชานี้ <b className="text-ink-1">{assignments.length}</b> คน
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1098,7 +1095,6 @@ function RequestFormSection({
       {/* Inline footer */}
       <div data-tour="req-submit" className="mt-4 pt-3 border-t border-hairline flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xs text-ink-3">
-          <DocsAnchor audience="lecturer" slug="request/submit" label="คู่มือการส่งคำขอและอ่านผล" />
           <span>เพิ่มแล้ว <b className="text-ink-1">{assignments.length}</b> คน</span>
           <span>เบิก <b className="text-ink-1">{scopeLabel}</b></span>
         </div>

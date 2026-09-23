@@ -21,6 +21,8 @@ export interface DocPageMeta {
   /** Other pages document tabs/modals of this page's screen (see
    *  `screenSubPages`) — the pill opens such a topic in a new tab. */
   hasSubPages: boolean;
+  /** How many such sub-pages, shown on the pill ("5 หัวข้อ"). */
+  subPageCount: number;
 }
 
 /** The per-reader index `/docs-index` returns: one list per audience the

@@ -24,12 +24,11 @@ import useIsDemo from "../../lib/useIsDemo";
  * classes so the open/close state never has to know the viewport.
  *
  * One provider, mounted once in `Shell.tsx` (so every role's shell gets it
- * for free), and any number of triggers: `PageHeader`'s docs pill
- * (page-level, resolves the doc from the current route) and inline
- * `DocsAnchor` book icons that a page can drop next to any section heading
- * to open the doc for THAT section — which is also the honest answer to the
- * "one URL, four tabs" problem the code review found on /staff/settings:
- * the tab picks its own doc, the URL doesn't have to.
+ * for free), and ONE trigger per screen: `PageHeader`'s docs pill. Small
+ * per-section book icons were tried and removed: scattered next to buttons
+ * and tables they read as clutter, and a screen whose manual spans several
+ * pages is better served by one entry that opens the whole topic (see
+ * `PageDocsPill`) than by an icon per sub-page.
  *
  * The drawer body is an <iframe> of `/docs-embed/<audience>/<slug>`, a
  * chrome-less render of the same page the full manual shows. An iframe,

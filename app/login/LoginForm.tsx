@@ -62,6 +62,11 @@ const REASON_INFO: Record<
     title: "เซสชันสิ้นสุดแล้ว",
     description: "กรุณาเข้าสู่ระบบอีกครั้ง",
   },
+  signed_out: {
+    status: "success", icon: <CheckCircle2 size={16} />,
+    title: "ออกจากระบบเรียบร้อยแล้ว",
+    description: "ข้อมูลการเข้าสู่ระบบในเครื่องนี้ถูกล้างแล้ว หากใช้เครื่องสาธารณะ อย่าลืมออกจากระบบ KKU ด้วย",
+  },
   password_changed: {
     status: "success", icon: <CheckCircle2 size={16} />,
     title: "ตั้งรหัสผ่านใหม่สำเร็จ",

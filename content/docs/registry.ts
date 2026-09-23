@@ -123,6 +123,7 @@ export function mediaForPage(page: DocPage): MediaEntry[] {
 /** The client-safe view of `page` as listed under `viewingAs` — see
  *  `DocPageMeta`. `hasSubPages` is computed here, where the pages are. */
 export function toMeta(page: DocPage, viewingAs: Audience): DocPageMeta {
+  const subs = page.audience === "common" ? 0 : screenSubPages(page, viewingAs).length;
   return {
     slug: page.slug,
     audience: page.audience,
@@ -131,6 +132,7 @@ export function toMeta(page: DocPage, viewingAs: Audience): DocPageMeta {
     title: page.title,
     description: page.description,
     routes: page.routes,
-    hasSubPages: page.audience !== "common" && screenSubPages(page, viewingAs).length > 0,
+    hasSubPages: subs > 0,
+    subPageCount: subs,
   };
 }

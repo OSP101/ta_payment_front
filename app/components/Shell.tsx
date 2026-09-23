@@ -178,21 +178,17 @@ export default function Shell({
 
   async function logout() {
     try {
-      const res = await api.post<{ ok: boolean; sso_logout_url?: string }>("/auth/logout");
-      // A session opened through KKU SSO is closed through KKU too, or the
-      // next person on a shared machine is signed straight back in as this
-      // user without a password prompt — see ssonext.Client.LogoutURL. KKU
-      // then redirects to our registered logout callback (/login).
-      if (res.sso_logout_url) {
-        window.location.assign(res.sso_logout_url);
-        return;
-      }
+      await api.post("/auth/logout");
     } catch (e) {
       // The session cookie is httpOnly, so we can't clear it client-side. Warn
       // the user (shared-lab machines) but still navigate away.
       notify.error(e);
     }
-    router.push("/login");
+    // Local only, including for a session opened through KKU: ending the KKU
+    // session would sign the person out of every other KKU system they have
+    // open (see AuthHandler.Logout). The banner on /login says so, for the
+    // shared-machine case where that is what they actually wanted.
+    router.push("/login?reason=signed_out");
     router.refresh();
   }
 
