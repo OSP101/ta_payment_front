@@ -2,7 +2,7 @@
 import useSWR, { mutate } from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, CalendarPlus, Power, PowerOff } from "lucide-react";
+import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, CalendarPlus, Power, PowerOff, Mail, MailX, ChevronDown } from "lucide-react";
 import {
   Tabs, Pagination, toast, Accordion, Switch,
   DatePicker, DateField, Calendar, I18nProvider,
@@ -14,7 +14,7 @@ import { parseDate, parseDateTime, type DateValue } from "@internationalized/dat
 import { api, ApiError, demoTesters, demoAddTester, demoRemoveTester, type DemoTester, type Me } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import {
-  PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Chip, Modal, Alert, SearchField, Select, TipWrap,
+  PageHeader, Panel, Button, IconButton, TextInput, TextArea, FieldGroup, Chip, Modal, Alert, SearchField, Select, TipWrap,
 } from "../../components/ui";
 import { FormulaHelpModal } from "../../components/formula-help";
 import DocsAnchor from "../../components/docs/DocsAnchor";
@@ -66,7 +66,7 @@ export default function SettingsPage() {
   // land on the merged calendar tab instead of a 404.
   const rawTab = tabParam ?? "";
   const normalised = rawTab === "windows" || rawTab === "periods" ? "calendar" : rawTab;
-  const initialTab = ["rate", "terms", "calendar", "curricula", "admins", "demo-access"].includes(normalised)
+  const initialTab = ["rate", "terms", "calendar", "curricula", "admins", "email", "demo-access"].includes(normalised)
     ? normalised
     : "rate";
   return (
@@ -83,6 +83,7 @@ export default function SettingsPage() {
             <Tabs.Tab id="calendar">ปฏิทินเทอม<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="curricula">หลักสูตร<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="email">อีเมลแจ้งเตือน<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="demo-access">สิทธิ์ห้องทดลอง<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
@@ -108,6 +109,9 @@ export default function SettingsPage() {
         <Tabs.Panel id="admins" className="pt-6">
           <TabDocs slug="settings/admins" />
           <AdminOfficersSection />
+        </Tabs.Panel>
+        <Tabs.Panel id="email" className="pt-6">
+          <MailSettingsSection />
         </Tabs.Panel>
         <Tabs.Panel id="demo-access" className="pt-6">
           <DemoTestersSection />
@@ -1663,6 +1667,19 @@ interface RequestWindow {
   closes_at: string;
   is_open: boolean;
   note?: string | null;
+  // เปิดแล้วระบบส่งอีเมลแจ้งอาจารย์อัตโนมัติ (ตอนเปิดรับ + 3 วันก่อนครบกำหนด)
+  notify_lecturers?: boolean | null;
+  open_sent?: number;
+  closing_sent?: number;
+}
+
+// Mirrors TARequestService.WindowReadiness — who the automatic mail reaches,
+// and the course data still missing.
+interface WindowReadiness {
+  courses_total: number;
+  lecturers_ready: number;
+  courses_without_lecturer: { id: string; code: string; name_th: string }[];
+  lecturers_without_course: { id: string; name: string; email: string }[];
 }
 
 // กำหนดส่งไม่ได้ "ปิดรับ" อีกต่อไป — มีแค่ 2 สถานะเดียวกับฝั่งอาจารย์:
@@ -1708,6 +1725,7 @@ function RequestWindowsSection() {
         closes_at: end.toISOString(),
         is_open: true,
         note: "เปิดด่วน (30 วัน)",
+        notify_lecturers: true,
       });
       await mutate(swrKey);
       toast.success("เปิดรับสมัครทันทีแล้ว", { description: "ระยะเวลา 30 วัน" });
@@ -1748,6 +1766,7 @@ function RequestWindowsSection() {
         )
       }
     >
+      {!noTerms && termId && <WindowReadinessPanel termId={termId} />}
       {noTerms ? (
         <Alert
           status="warning"
@@ -1799,6 +1818,17 @@ function RequestWindowsSection() {
                     {formatThaiDateTime(w.opens_at)} → {formatThaiDateTime(w.closes_at)}
                   </div>
                   {w.note && <div className="text-xs text-muted truncate">{w.note}</div>}
+                  <div className="text-xs text-muted flex items-center gap-1 mt-0.5">
+                    {w.notify_lecturers ? (
+                      <>
+                        <Mail size={12} />
+                        แจ้งอาจารย์อัตโนมัติ · แจ้งเปิดรับแล้ว {w.open_sent ?? 0} คน
+                        {(w.closing_sent ?? 0) > 0 && ` · เตือนก่อนครบกำหนด ${w.closing_sent} คน`}
+                      </>
+                    ) : (
+                      <><MailX size={12} /> ไม่ส่งอีเมลแจ้งอาจารย์</>
+                    )}
+                  </div>
                 </div>
                 <div className="ms-auto flex items-center gap-2">
                   <IconButton
@@ -1848,6 +1878,78 @@ function RequestWindowsSection() {
         description="การลบจะไม่มีผลกับคำขอที่ส่งมาก่อนหน้านี้ แต่จะไม่สามารถลบได้ถ้ามีคำขออ้างอิงช่วงเวลานี้อยู่"
       />
     </Panel>
+  );
+}
+
+// "ความพร้อมก่อนแจ้งอาจารย์" — the automatic mail only reaches lecturers who
+// already have a course this term, so what staff need to see is the data that
+// would leave someone out: courses nobody is attached to (usually a registrar
+// name that did not match an account) and lecturers still without a course.
+function WindowReadinessPanel({ termId }: { termId: string }) {
+  const { data } = useSWR<WindowReadiness>(`/ta-request/windows/readiness?term_id=${termId}`);
+  const [showCourses, setShowCourses] = useState(false);
+  const [showLecturers, setShowLecturers] = useState(false);
+  if (!data) return null;
+
+  const missingCourses = data.courses_without_lecturer;
+  const idle = data.lecturers_without_course;
+  return (
+    <div className="mb-3 rounded-lg border border-hairline bg-panel px-4 py-3 space-y-2">
+      <div className="text-sm font-medium flex items-center gap-1.5">
+        <Mail size={14} /> ความพร้อมก่อนแจ้งอาจารย์
+      </div>
+      {data.courses_total === 0 ? (
+        <Alert
+          status="warning"
+          title="ยังไม่มีรายวิชาในภาคเรียนนี้"
+          description="ระบบจะยังไม่ส่งอีเมลถึงอาจารย์คนใด จนกว่าจะนำเข้าหรือเพิ่มรายวิชาที่หน้า 'วิชาที่เปิดสอน'"
+        />
+      ) : (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <Chip tone="success"><Check size={12} /> อาจารย์ที่มีวิชาแล้ว {data.lecturers_ready} คน (จะได้รับอีเมล)</Chip>
+          {missingCourses.length > 0 ? (
+            <button type="button" className="inline-flex items-center gap-1 cursor-pointer text-muted" aria-expanded={showCourses} onClick={() => setShowCourses(v => !v)}>
+              <Chip tone="warn"><CircleAlert size={12} /> วิชาที่ยังไม่มีอาจารย์ผูก {missingCourses.length} วิชา</Chip>
+              <ChevronDown size={14} className={showCourses ? "rotate-180" : ""} />
+            </button>
+          ) : (
+            <Chip tone="success"><Check size={12} /> ทุกวิชามีอาจารย์ผู้สอนแล้ว</Chip>
+          )}
+          {idle.length > 0 && (
+            <button type="button" className="inline-flex items-center gap-1 cursor-pointer text-muted" aria-expanded={showLecturers} onClick={() => setShowLecturers(v => !v)}>
+              <Chip tone="neutral">อาจารย์ที่ยังไม่มีวิชา {idle.length} คน (ยังไม่ส่ง)</Chip>
+              <ChevronDown size={14} className={showLecturers ? "rotate-180" : ""} />
+            </button>
+          )}
+        </div>
+      )}
+      {showCourses && missingCourses.length > 0 && (
+        <div className="text-xs">
+          <div className="text-muted mb-1">
+            อาจารย์ของวิชาเหล่านี้จะไม่ได้รับอีเมลและจะไม่เห็นวิชาที่หน้าแรก — ผูกอาจารย์ผู้สอนที่หน้า{" "}
+            <a href="/staff/teaching" className="underline">วิชาที่เปิดสอน</a>{" "}
+            แล้วระบบจะส่งอีเมลให้เองภายใน 1 ชั่วโมง
+          </div>
+          <ul className="list-disc ps-5 space-y-0.5">
+            {missingCourses.map(c => (
+              <li key={c.id}>
+                <a href={`/staff/teaching/${c.id}`} className="underline tabular">{c.code}</a> {c.name_th}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {showLecturers && idle.length > 0 && (
+        <div className="text-xs">
+          <div className="text-muted mb-1">
+            ส่วนใหญ่เป็นอาจารย์ที่ไม่ได้สอนภาคนี้ หากมีวิชาภายหลัง ระบบจะส่งอีเมลให้เอง
+          </div>
+          <ul className="list-disc ps-5 space-y-0.5">
+            {idle.map(l => <li key={l.id}>{l.name} <span className="text-muted">{l.email}</span></li>)}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1958,6 +2060,7 @@ function WindowFormModal({
   const [closesAt, setClosesAt] = useState("");
   const [isOpen, setIsOpen] = useState(true);
   const [note, setNote] = useState("");
+  const [notifyLecturers, setNotifyLecturers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1968,6 +2071,7 @@ function WindowFormModal({
       setClosesAt(isoToLocalMinute(editing.closes_at));
       setIsOpen(editing.is_open);
       setNote(editing.note ?? "");
+      setNotifyLecturers(!!editing.notify_lecturers);
     } else {
       const now = new Date();
       const end = new Date();
@@ -1976,6 +2080,7 @@ function WindowFormModal({
       setClosesAt(dateToLocalMinute(end));
       setIsOpen(true);
       setNote("");
+      setNotifyLecturers(true);
     }
     setErr(null);
   }, [open, editing]);
@@ -1996,6 +2101,7 @@ function WindowFormModal({
         closes_at: localMinuteToISO(closesAt),
         is_open: isOpen,
         note: note.trim() || null,
+        notify_lecturers: notifyLecturers,
       });
       onSaved();
     } catch (e) {
@@ -2043,12 +2149,148 @@ function WindowFormModal({
             {!isOpen && <PowerOff size={14} className="text-muted" />}
           </div>
         </FieldGroup>
+        <FieldGroup
+          label="แจ้งอาจารย์ทางอีเมล"
+          hint="ส่งเมื่อถึงเวลาเริ่มรับสมัคร และเตือนอีกครั้ง 3 วันก่อนครบกำหนดเฉพาะวิชาที่ยังไม่มีคำขอ ส่งเฉพาะอาจารย์ที่มีวิชาในภาคเรียนนี้แล้ว อาจารย์ที่ได้วิชาภายหลังจะได้รับอีเมลตามมาเอง ไม่ส่งซ้ำ"
+        >
+          <Switch isSelected={notifyLecturers} onChange={setNotifyLecturers} aria-label="แจ้งอาจารย์ทางอีเมล">
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <span>{notifyLecturers ? "ส่งอีเมลแจ้งอัตโนมัติ" : "ไม่ส่งอีเมล"}</span>
+            </Switch.Content>
+          </Switch>
+        </FieldGroup>
         <FieldGroup label="หมายเหตุ (ถ้ามี)">
           <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น 'รอบแรก' หรือ 'ขยายเวลาให้ CS'" />
         </FieldGroup>
         {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
       </div>
     </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* อีเมลแจ้งเตือน: contact block at the foot of every notification e-mail     */
+/* -------------------------------------------------------------------------- */
+
+// Mirrors MailContact / MailSettings in ta_payment_back/internal/service/mail_settings.go.
+interface MailSettings {
+  contact_heading: string;
+  contact_unit: string;
+  contact_detail: string;
+  updated_at?: string | null;
+  updated_by_name?: string | null;
+}
+
+function MailSettingsSection() {
+  const { data, mutate: reload } = useSWR<MailSettings>("/mail-settings");
+  const [heading, setHeading] = useState("");
+  const [unit, setUnit] = useState("");
+  const [detail, setDetail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string>("");
+  const [previewErr, setPreviewErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!data) return;
+    setHeading(data.contact_heading);
+    setUnit(data.contact_unit);
+    setDetail(data.contact_detail);
+  }, [data]);
+
+  const dirty = !!data && (heading !== data.contact_heading || unit !== data.contact_unit || detail !== data.contact_detail);
+
+  // Re-render the sample e-mail as staff type, a moment after they stop, so
+  // the preview is always the real template rather than a front-end copy.
+  useEffect(() => {
+    if (!data) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.post<{ html: string }>("/mail-settings/preview", {
+          contact_heading: heading, contact_unit: unit, contact_detail: detail,
+        });
+        setPreview(res.html);
+        setPreviewErr(null);
+      } catch (e) {
+        setPreviewErr((e as Error).message);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [data, heading, unit, detail]);
+
+  async function save() {
+    setSaving(true); setErr(null);
+    try {
+      await api.put("/mail-settings", { contact_heading: heading, contact_unit: unit, contact_detail: detail });
+      await reload();
+      toast.success("บันทึกข้อมูลการติดต่อแล้ว", { description: "อีเมลที่ส่งหลังจากนี้จะใช้ข้อความใหม่" });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Panel
+      title="ข้อมูลการติดต่อท้ายอีเมล"
+      description="ข้อความส่วนท้ายของอีเมลแจ้งเตือนทุกฉบับที่ระบบส่งถึงอาจารย์และผู้ช่วยสอน ใช้บอกว่าหากมีข้อสงสัยให้ติดต่อใคร"
+      actions={
+        <Button variant="primary" onClick={save} disabled={!dirty || saving} isPending={saving}>
+          <Save size={14} /> บันทึก
+        </Button>
+      }
+    >
+      {!data ? (
+        <div className="py-6 text-sm text-muted">กำลังโหลด…</div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <FieldGroup label="หัวข้อ" hint="ข้อความตัวหนาบรรทัดแรกของส่วนท้าย">
+              <TextInput value={heading} onChange={e => setHeading(e.target.value)} maxLength={200} />
+            </FieldGroup>
+            <FieldGroup label="หน่วยงานที่ติดต่อ" hint="เช่น ชื่องานหรือชื่อเจ้าหน้าที่ผู้รับผิดชอบ">
+              <TextArea value={unit} onChange={e => setUnit(e.target.value)} rows={2} maxLength={300} />
+            </FieldGroup>
+            <FieldGroup
+              label="รายละเอียดการติดต่อ (ถ้ามี)"
+              hint="พิมพ์บรรทัดละหนึ่งช่องทาง เช่น อาคารและห้อง หมายเลขโทรศัพท์ อีเมล ไม่เกิน 6 บรรทัด"
+            >
+              <TextArea
+                value={detail}
+                onChange={e => setDetail(e.target.value)}
+                rows={4}
+                placeholder={"อาคาร ... ชั้น ... ห้อง ...\nโทร 043-00-0000 ต่อ ...\nอีเมล ...@kku.ac.th"}
+              />
+            </FieldGroup>
+            {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+            {data.updated_at && (
+              <div className="text-xs text-muted">
+                แก้ไขล่าสุด {formatThaiDateTime(data.updated_at)}
+                {data.updated_by_name ? ` โดย ${data.updated_by_name}` : ""}
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-sm font-medium mb-2">ตัวอย่างอีเมล</div>
+            {previewErr ? (
+              <Alert status="warning" title="แสดงตัวอย่างไม่ได้" description={previewErr} />
+            ) : (
+              <iframe
+                title="ตัวอย่างอีเมล"
+                sandbox=""
+                srcDoc={preview}
+                className="w-full rounded-lg border border-hairline bg-white"
+                style={{ height: 760 }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }
 
