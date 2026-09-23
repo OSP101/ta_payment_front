@@ -28,6 +28,13 @@ import { api, isDemoMode } from "../lib/api";
  *     document.activeElement for "it's the iframe" sidesteps needing any
  *     cooperation from the iframe's content (which may be a same-origin PDF
  *     viewer today but there is no reason to couple this to that).
+ *  3. The manual drawer's <iframe> (/docs-embed, see DocsPanel). Reading and
+ *     scrolling there never focuses the frame, so (2) misses it. The embed
+ *     runs this component as a FOLLOWER only: it forwards its own activity
+ *     to the parent page (postMessage, same origin) and does nothing else —
+ *     no timer, no heartbeat, and above all no redirect, which would put the
+ *     login page inside the drawer. The parent treats a forwarded event
+ *     exactly like its own.
  */
 
 const IDLE_LIMIT_MS = 15 * 60 * 1000;
@@ -49,13 +56,39 @@ const SKIP_PREFIXES = ["/login", "/p/", "/demo"];
 
 type BroadcastMsg = { type: "activity"; at: number } | { type: "logout" };
 
+// postMessage type the /docs-embed frame sends its parent on activity.
+const EMBED_ACTIVITY = "tapay:docs-embed-activity";
+const EMBED_PREFIX = "/docs-embed";
+
 export default function SessionActivityGuard() {
   const pathname = usePathname();
   const skip = SKIP_PREFIXES.some(p => pathname.startsWith(p));
+  const embedded = pathname.startsWith(EMBED_PREFIX);
   const lastHandledRef = useRef(0);
 
+  // Follower mode inside the manual drawer's frame — see (3) above.
   useEffect(() => {
-    if (skip || typeof window === "undefined") return;
+    if (!embedded || typeof window === "undefined" || window.parent === window) return;
+    let last = 0;
+    const forward = () => {
+      const now = Date.now();
+      if (now - last < ACTIVITY_THROTTLE_MS) return;
+      last = now;
+      try {
+        window.parent.postMessage({ type: EMBED_ACTIVITY }, window.location.origin);
+      } catch {
+        /* parent gone — nothing to keep alive */
+      }
+    };
+    const events: (keyof WindowEventMap)[] = ["mousemove", "keydown", "click", "scroll", "touchstart", "wheel"];
+    for (const ev of events) window.addEventListener(ev, forward, { passive: true });
+    return () => {
+      for (const ev of events) window.removeEventListener(ev, forward);
+    };
+  }, [embedded]);
+
+  useEffect(() => {
+    if (skip || embedded || typeof window === "undefined") return;
 
     const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(CHANNEL_NAME) : null;
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -120,6 +153,13 @@ export default function SessionActivityGuard() {
       if (document.activeElement?.tagName === "IFRAME") onActivity(true);
     }, IFRAME_POLL_MS);
 
+    // Activity forwarded by the manual drawer's frame — same origin only.
+    const fromEmbed = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if ((e.data as { type?: unknown } | null)?.type === EMBED_ACTIVITY) onActivity(true);
+    };
+    window.addEventListener("message", fromEmbed);
+
     if (channel) {
       channel.onmessage = (e: MessageEvent<BroadcastMsg>) => {
         if (done) return;
@@ -138,9 +178,10 @@ export default function SessionActivityGuard() {
       for (const ev of events) window.removeEventListener(ev, localActivity);
       if (idleTimer) clearTimeout(idleTimer);
       clearInterval(iframePoll);
+      window.removeEventListener("message", fromEmbed);
       channel?.close();
     };
-  }, [skip]);
+  }, [skip, embedded]);
 
   return null;
 }

@@ -188,8 +188,12 @@ export function DocsDock() {
       <aside
         role="complementary"
         aria-label="คู่มือการใช้งาน"
-        className="docs-anim-slide-end fixed inset-y-0 end-0 z-50 flex w-[460px] max-w-[92vw] flex-col border-s border-border bg-white shadow-2xl
-                   lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:w-[440px] lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-[480px]"
+        // top/height read --demo-banner-h like Shell's own chrome (unset →
+        // 0px outside demo mode), so the demo banner never covers this
+        // header and its close button. Written out in full, not built from
+        // a shared string, so Tailwind's scanner sees every class.
+        className="docs-anim-slide-end fixed top-[var(--demo-banner-h,0px)] bottom-0 end-0 z-50 flex w-[460px] max-w-[92vw] flex-col border-s border-border bg-white shadow-2xl
+                   lg:sticky lg:top-[var(--demo-banner-h,0px)] lg:bottom-auto lg:z-10 lg:h-[calc(100vh_-_var(--demo-banner-h,0px))] lg:w-[440px] lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-[480px]"
       >
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-(--brand) text-white">

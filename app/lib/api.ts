@@ -63,7 +63,15 @@ if (typeof window !== "undefined") {
     // hard-load case that fix's effect runs too late for (DemoBanner reads
     // this same module-level apiPrefix synchronously on its own first
     // render, before that effect fires).
-    if (!window.location.pathname.startsWith("/login")) {
+    //
+    // /docs-embed is the manual drawer's <iframe> (DocsPanel). A same-origin
+    // frame shares the parent tab's sessionStorage, so it would come up in
+    // demo mode too — and DemoBanner, DemoGuidePanel and the scenario
+    // engine would all mount INSIDE the 440px drawer. The embed makes no
+    // API calls of its own (it is server-rendered), so it simply stays on
+    // the production prefix and every demo-only component stays off there.
+    const path = window.location.pathname;
+    if (!path.startsWith("/login") && !path.startsWith("/docs-embed")) {
       const saved = window.sessionStorage.getItem(DEMO_PREFIX_KEY);
       if (saved && API_PREFIX_PATTERN.test(saved)) apiPrefix = saved;
     }

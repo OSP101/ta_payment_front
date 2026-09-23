@@ -1,7 +1,8 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getMe } from "../../lib/session";
 import { canViewAudience } from "../../lib/docs/audience";
 import type { Audience } from "../../../content/docs/types";
+import EmbedNotice from "../../components/docs/EmbedNotice";
 
 const VALID: Audience[] = ["staff", "lecturer", "ta"];
 
@@ -26,15 +27,17 @@ export default async function EmbedLayout({
   const audience = raw as Audience;
 
   const me = await getMe();
-  // Inside a frame a login redirect would render the login page in the
-  // drawer; send the top-level window there instead via the full manual's
-  // own `next`, which is where the reader ends up anyway once signed in.
-  if (!me) redirect(`/login?next=/docs/${audience}`);
-  if (!canViewAudience(me, audience)) redirect("/403");
+  // No redirect() here: from inside a frame it navigates the FRAME, which
+  // put the login (or 403) page inside the drawer. A notice renders instead;
+  // its sign-in link targets the top window (see EmbedNotice). The children
+  // — the page content — are not rendered at all in either case.
+  const blocked = !me ? "expired" : !canViewAudience(me, audience) ? "forbidden" : null;
 
   return (
     <div className="min-h-screen bg-white px-5 py-5 sm:px-6">
-      <div className="mx-auto max-w-[760px]">{children}</div>
+      <div className="mx-auto max-w-[760px]">
+        {blocked ? <EmbedNotice kind={blocked} audience={audience} /> : children}
+      </div>
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { ArrowRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { effectiveAudience, gettingStarted, sidebarSections } from "../../../content/docs/registry";
 import { AUDIENCE_LABEL, type Audience } from "../../../content/docs/types";
+import { getMe } from "../../lib/session";
+import { canViewAudience } from "../../lib/docs/audience";
 
 const VALID: Audience[] = ["staff", "lecturer", "ta"];
 
@@ -13,6 +15,9 @@ export default async function EmbedHomePage({ params }: { params: Promise<{ audi
   const { audience: raw } = await params;
   if (!VALID.includes(raw as Audience)) notFound();
   const audience = raw as Audience;
+  // Same own-check as the content page: never rely on the layout alone.
+  const me = await getMe();
+  if (!me || !canViewAudience(me, audience)) return null;
   const href = (slug: string, aud: Audience) => `/docs-embed/${aud}/${slug}`;
 
   return (
