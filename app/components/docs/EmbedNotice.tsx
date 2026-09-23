@@ -17,10 +17,17 @@ export default function EmbedNotice({ kind, audience }: { kind: "expired" | "for
 
   useEffect(() => {
     try {
-      // Same origin, so the parent's location is readable. Resolved through
-      // sameOriginPath like every other ?next= this app builds.
-      const top = window.top ?? window;
-      setNext(sameOriginPath(top.location.pathname + top.location.search, fallback));
+      const top = window.top;
+      if (top && top !== window) {
+        // In the drawer: back to the page the reader was on. Same origin, so
+        // the parent's location is readable; resolved through sameOriginPath
+        // like every other ?next= this app builds.
+        setNext(sameOriginPath(top.location.pathname + top.location.search, fallback));
+      } else {
+        // Opened directly (not framed): the same page in the full manual,
+        // not the chrome-less embed.
+        setNext(sameOriginPath(window.location.pathname.replace(/^\/docs-embed(?=\/|$)/, "/docs"), fallback));
+      }
     } catch {
       /* not framed by us — keep the manual as the destination */
     }
