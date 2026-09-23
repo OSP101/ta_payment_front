@@ -12,6 +12,69 @@ import { APP_VERSION } from "../../lib/docs/version";
 export interface SidebarSection { section: string; pages: DocPage[] }
 
 /**
+ * The grouped sidebar list. Module-level on purpose: declared inside
+ * DocsShell's render it was a NEW component type on every state change, so
+ * React remounted the whole nav each time — keyboard focus fell to <body>
+ * after toggling a section, and the sidebar's scroll reset on every ⌘K.
+ */
+function NavList({
+  sections,
+  audience,
+  pathname,
+  collapsedSections,
+  onToggle,
+}: {
+  sections: SidebarSection[];
+  audience: Audience;
+  pathname: string | null;
+  collapsedSections: Set<string>;
+  onToggle: (section: string) => void;
+}) {
+  return (
+    <nav className="space-y-4">
+      {sections.map(({ section, pages }) => {
+        const collapsed = collapsedSections.has(section);
+        return (
+          <div key={section}>
+            <button
+              type="button"
+              onClick={() => onToggle(section)}
+              className="flex w-full items-center justify-between px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted hover:text-foreground"
+            >
+              {section}
+              {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+            </button>
+            {!collapsed && (
+              <ul className="mt-1 space-y-0.5">
+                {pages.map((p) => {
+                  const href = docHref(p, audience);
+                  const active = pathname === href;
+                  return (
+                    <li key={`${p.audience}:${p.slug}`}>
+                      <Link
+                        href={href}
+                        className={
+                          "block rounded-md px-2.5 py-1.5 text-sm transition-colors " +
+                          (active
+                            ? "bg-accent-soft/60 text-accent-soft-foreground font-medium"
+                            : "text-foreground/80 hover:bg-slate-100")
+                        }
+                      >
+                        {p.title}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
  * Chrome for every `/docs/[audience]/*` page: header (brand, audience
  * switch, search, version) + collapsible sidebar (desktop) / drawer
  * (mobile). Modeled on docs.docker.com / nextjs.org's own layout — segmented
@@ -63,49 +126,6 @@ export default function DocsShell({
       return next;
     });
   };
-
-  const NavList = () => (
-    <nav className="space-y-4">
-      {sections.map(({ section, pages }) => {
-        const collapsed = collapsedSections.has(section);
-        return (
-          <div key={section}>
-            <button
-              type="button"
-              onClick={() => toggleSection(section)}
-              className="flex w-full items-center justify-between px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted hover:text-foreground"
-            >
-              {section}
-              {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-            </button>
-            {!collapsed && (
-              <ul className="mt-1 space-y-0.5">
-                {pages.map((p) => {
-                  const href = docHref(p, audience);
-                  const active = pathname === href;
-                  return (
-                    <li key={`${p.audience}:${p.slug}`}>
-                      <Link
-                        href={href}
-                        className={
-                          "block rounded-md px-2.5 py-1.5 text-sm transition-colors " +
-                          (active
-                            ? "bg-accent-soft/60 text-accent-soft-foreground font-medium"
-                            : "text-foreground/80 hover:bg-slate-100")
-                        }
-                      >
-                        {p.title}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        );
-      })}
-    </nav>
-  );
 
   return (
     <div className="min-h-screen bg-surface">
@@ -164,7 +184,7 @@ export default function DocsShell({
       <div className="mx-auto flex max-w-[1400px]">
         <aside className="hidden lg:block w-64 shrink-0 border-e border-border px-3 py-6">
           <div className="sticky top-16 max-h-[calc(100vh-5rem)] overflow-y-auto pe-2">
-            <NavList />
+            <NavList sections={sections} audience={audience} pathname={pathname} collapsedSections={collapsedSections} onToggle={toggleSection} />
           </div>
         </aside>
 
@@ -178,7 +198,7 @@ export default function DocsShell({
                   <X size={18} />
                 </button>
               </div>
-              <NavList />
+              <NavList sections={sections} audience={audience} pathname={pathname} collapsedSections={collapsedSections} onToggle={toggleSection} />
             </div>
           </div>
         )}
