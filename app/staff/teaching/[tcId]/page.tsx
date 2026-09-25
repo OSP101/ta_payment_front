@@ -15,6 +15,7 @@ import SectionScheduleEditor, {
   type SectionScheduleRow, validateRows, toApiPayload, ScheduleSummary,
 } from "../../../components/SectionScheduleEditor";
 import { courseCodeLabel } from "../../../lib/courseCode";
+import { useTitleScope } from "../../../components/Shell";
 import LecturerPanel from "./LecturerPanel";
 
 interface SectionRow {
@@ -62,6 +63,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
   const { tcId } = use(params);
   const router = useRouter();
   const { data: tc } = useSWR<TC>(`/teaching-courses/${tcId}`);
+  useTitleScope(tc ? `${courseCodeLabel(tc)} ${tc.name_th}` : undefined);
   const locked = !!tc?.exported_at;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);

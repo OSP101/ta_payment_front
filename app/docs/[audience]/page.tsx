@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Rocket } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -5,6 +6,12 @@ import { docHref, gettingStarted, sidebarSections } from "../../../content/docs/
 import { AUDIENCE_LABEL, type Audience } from "../../../content/docs/types";
 
 const VALID: Audience[] = ["staff", "lecturer", "ta"];
+
+export async function generateMetadata({ params }: { params: Promise<{ audience: string }> }): Promise<Metadata> {
+  const { audience: raw } = await params;
+  if (!VALID.includes(raw as Audience)) return {};
+  return { title: `คู่มือ${AUDIENCE_LABEL[raw as Audience]}` };
+}
 
 const INTRO: Record<Audience, string> = {
   staff: "เส้นทางของเจ้าหน้าที่ในระบบ COCO TAS: จากเปิดเทอมใหม่จนถึงส่งเอกสารเบิกจ่ายเดือนสุดท้าย เรียงตามลำดับงานจริงในแต่ละเทอม",

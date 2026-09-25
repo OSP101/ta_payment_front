@@ -32,7 +32,7 @@ export default async function TACourseLayout({
   const { tcId } = await params;
   const meta = await fetchCourseMeta(tcId);
   return (
-    <TACourseShell me={me} tcId={tcId} courseCode={meta?.code}>
+    <TACourseShell me={me} tcId={tcId} courseCode={meta?.code} courseName={meta?.name_th}>
       {children}
     </TACourseShell>
   );

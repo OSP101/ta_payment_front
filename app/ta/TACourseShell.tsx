@@ -18,11 +18,12 @@ interface CourseInfo { unresolved_makeups?: number }
 // Per-course sidebar for TAs — same app-level Shell pattern as the lecturer's
 // per-course view, so the sidebar sits flush against the viewport edge.
 export default function TACourseShell({
-  me, tcId, courseCode, children,
+  me, tcId, courseCode, courseName, children,
 }: {
   me: Me;
   tcId: string;
   courseCode?: string;
+  courseName?: string;
   children: React.ReactNode;
 }) {
   // Rows the TA can still SEND, summed across every section they hold on this
@@ -89,6 +90,7 @@ export default function TACourseShell({
       brandTitle="COCO TAS"
       nav={nav}
       userMenuItems={userMenuItems}
+      titleScope={[courseCode, courseName].filter(Boolean).join(" ") || undefined}
       // สลับวิชาได้จากแถบบนเหมือนฝั่งอาจารย์ — รายการมาจาก /me/ta-courses
       // (เฉพาะวิชาที่ตัวเองเป็น TA) ไม่ใช่ทุกวิชาในเทอม
       topBarLeft={

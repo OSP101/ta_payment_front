@@ -36,6 +36,7 @@ export default async function CourseLayout({
       me={me}
       tcId={tcId}
       courseCode={meta?.code}
+      courseName={meta?.name_th}
     >
       {children}
     </LecturerCourseShell>

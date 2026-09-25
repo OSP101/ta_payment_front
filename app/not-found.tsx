@@ -2,9 +2,11 @@
 import { useRouter } from "next/navigation";
 import { FileQuestion } from "lucide-react";
 import { Button } from "./components/ui";
+import useDocumentTitle from "./lib/useDocumentTitle";
 
 export default function NotFound() {
   const router = useRouter();
+  useDocumentTitle("ไม่พบหน้า");
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-surface">
       <div className="w-full max-w-md text-center">

@@ -17,11 +17,12 @@ interface CourseInfo {
 interface PendingReport { teaching_course_id: string; ta_id: string }
 
 export default function LecturerCourseShell({
-  me, tcId, courseCode, children,
+  me, tcId, courseCode, courseName, children,
 }: {
   me: Me;
   tcId: string;
   courseCode?: string;
+  courseName?: string;
   children: React.ReactNode;
 }) {
   // คาบที่ตกวันหยุดและยังไม่กำหนดวันชดเชย — ถ้าไม่ทำ ระบบจะข้ามวันนั้น
@@ -112,6 +113,7 @@ export default function LecturerCourseShell({
       brandTitle={brandTitle}
       nav={nav}
       userMenuItems={userMenuItems}
+      titleScope={[courseCode, courseName].filter(Boolean).join(" ") || undefined}
       topBarLeft={
         <div data-tour="course-switcher" className="min-w-0">
           <CourseSwitcher tcId={tcId} />

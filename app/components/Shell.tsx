@@ -2,7 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Dropdown,
@@ -49,6 +49,32 @@ const RAIL_W = "w-16";
  * is simply unset and this falls back to `0px`, identical to not existing.
  */
 const DEMO_CHROME_OFFSET = "top-[var(--demo-banner-h,0px)]";
+
+/** Tab titles for routes that render inside a shell but have no sidebar or
+ *  dropdown entry to borrow a label from — reached from a banner or a
+ *  notification link instead. Without these the tab reads just "COCO TAS". */
+const UNLISTED_TITLES: Record<string, string> = {
+  "/ta/notifications": "การเตือน",
+  "/ta/reminders": "สถานะการเบิกจ่ายรายเดือน",
+  // In the lecturer/TA sidebars, but not the staff one.
+  "/document-progress": "ความคืบหน้าเอกสาร",
+  "/executive": "มุมมองผู้บริหาร",
+};
+
+// Lets a page inside the shell supply the title scope itself, for pages that
+// load their own subject (a staff course detail page) instead of getting it
+// from a layout the way the course shells do.
+const TitleScopeContext = createContext<(scope: string | undefined) => void>(() => {});
+
+/** Puts `scope` between the page name and the brand in the tab title while
+ *  the calling page is mounted — see Shell's `titleScope`. */
+export function useTitleScope(scope: string | undefined) {
+  const set = useContext(TitleScopeContext);
+  useEffect(() => {
+    set(scope);
+    return () => set(undefined);
+  }, [set, scope]);
+}
 
 export interface NavItem {
   label: string;
@@ -112,6 +138,11 @@ interface Props {
   // from topBarLeft because the page title still carries its weight here: the
   // term says which data, the title says which task.
   topBarScope?: React.ReactNode;
+  // What the pages under this shell belong to, placed between the page name
+  // and the brand in the tab title: "ภาพรวม | CP363205 Data … | COCO TAS".
+  // A course shell passes its code and name, so two open courses are
+  // distinguishable at a glance in the tab strip.
+  titleScope?: string;
   // When true, the sidebar and mobile drawer are omitted — used for a
   // browse-oriented "home" that mimics the lecturer's shell.
   hideSidebar?: boolean;
@@ -126,6 +157,7 @@ export default function Shell({
   topBarAccessory,
   topBarLeft,
   topBarScope,
+  titleScope,
   hideSidebar = false,
   children,
 }: Props) {
@@ -209,12 +241,20 @@ export default function Shell({
     if (currentTitle !== brandTitle) return currentTitle;
     const items = userMenuItems ?? [];
     const href = matchActiveHref(items, pathname);
-    return items.find(i => i.href === href)?.label ?? null;
+    return items.find(i => i.href === href)?.label
+      ?? (pathname ? UNLISTED_TITLES[pathname] : undefined)
+      ?? null;
   }, [currentTitle, brandTitle, userMenuItems, pathname]);
 
-  useDocumentTitle(tabTitle, useUnreadCount());
+  const [pageScope, setPageScope] = useState<string | undefined>();
+  const scope = titleScope ?? pageScope;
+  useDocumentTitle(
+    tabTitle && scope ? `${tabTitle} | ${scope}` : tabTitle,
+    useUnreadCount(),
+  );
 
   return (
+    <TitleScopeContext.Provider value={setPageScope}>
     <DocsPanelProvider audience={defaultAudience(me)}>
     <div className="min-h-screen flex bg-background">
       {/* Desktop sidebar.
@@ -359,6 +399,7 @@ export default function Shell({
       <BetaNoticeModal open={betaOpen} onClose={() => setBetaOpen(false)} />
     </div>
     </DocsPanelProvider>
+    </TitleScopeContext.Provider>
   );
 }
 

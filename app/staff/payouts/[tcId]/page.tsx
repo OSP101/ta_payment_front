@@ -11,6 +11,7 @@ import { ExportPreviewBody } from "../../../components/ExportPreviewBody";
 import { useTerm } from "../../TermContext";
 import { ReviewGrid } from "./ReviewGrid";
 import { courseCodeLabel } from "../../../lib/courseCode";
+import { useTitleScope } from "../../../components/Shell";
 
 /**
  * One course, top to bottom: check the months, then send the package.
@@ -43,6 +44,7 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
   const { tcId } = use(params);
   const { termId } = useTerm();
   const { data: tc } = useSWR<TC>(`/teaching-courses/${tcId}`);
+  useTitleScope(tc ? `${courseCodeLabel(tc)} ${tc.name_th}` : undefined);
   const [showEditor, setShowEditor] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 

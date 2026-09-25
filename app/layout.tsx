@@ -16,7 +16,9 @@ const kanit = Kanit({
 });
 
 export const metadata: Metadata = {
-  title: "COCO TAS",
+  // Server-rendered pages (the manual, the public /p links) give just their
+  // own name; client pages set the same "name | COCO TAS" via useDocumentTitle.
+  title: { default: "COCO TAS", template: "%s | COCO TAS" },
   description: "ระบบบริหารจัดการและเบิกจ่ายค่าตอบแทนผู้ช่วยสอน วิทยาลัยการคอมพิวเตอร์ ม.ขอนแก่น",
 };
 
