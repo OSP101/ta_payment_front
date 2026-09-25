@@ -8,13 +8,19 @@
 // chart, so an executive can stop reading after the sentence and an officer
 // can keep scrolling into the detail:
 //
-//   1. งบพอถึงสิ้นเทอมไหม        — budget, forecast, pace, where the money goes
+//   1. งบพอถึงสิ้นเทอมไหม        — budget, forecast, pace, courses at their cap
 //   2. ขอ TA สมเหตุสมผลไหม      — requested vs recommended vs ceiling, per course
 //   3. งานค้างอยู่ขั้นไหน         — the five TOR queues, returns, claim months
 //
 // Then every course in one searchable, sortable table. All figures come from
 // one request (/dashboard/analytics): the money is settle-priced, the same as
 // the printed claim and the Excel export.
+//
+// Each figure appears once (polish of 26/09/2026): the top is the term strip,
+// the decisions list and four KPIs with one headline number each; the whole
+// budget story lives in question 1 only. Every colour comes from a rule in
+// analysis.ts (RULES, capState, near_cap_ratio); a figure without a rule is
+// drawn in ink.
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -22,28 +28,31 @@ import useSWR from "swr";
 import {
   Download, Wallet, Users, BookOpen, Inbox, Sparkles, CircleCheck, TriangleAlert,
   OctagonAlert, Info, ArrowRight, CalendarClock, FileWarning, Undo2, CalendarX2, UserX, ChevronDown,
-  Gauge, Scale, Workflow, Table2,
+  Gauge, Scale, Workflow, Table2, BarChart3, AlignLeft,
 } from "lucide-react";
 import { Panel, Button, Select } from "../../components/ui";
 import { api, type Term } from "../../lib/api";
 import type { TermAnalytics, StaffingStatus, CourseStaffing } from "../types";
 import { curriculumTH } from "../types";
-import { MonthlyChart, CurriculumBars } from "../BudgetAnalytics";
 import {
-  budgetView, budgetAnswer, staffingStats, staffingAnswer, pipelineAnswer, buildInsights,
-  costPerStudent, STAFFING_META, PIPELINE_META, baht, bahtShort, num1, pct0, thDate, type Tone,
+  budgetView, budgetAnswer, courseRisk, staffingStats, staffingAnswer, pipelineAnswer, buildInsights,
+  flowShape, flowSentences, docsShape, CAP_META, RULES, STAFFING_META, PIPELINE_META,
+  money, num1, pct0, thDate, type Tone, type Answer as AnswerT, type CourseRef,
 } from "./analysis";
 import {
-  BudgetGauge, BudgetStack, StaffingScatter, StatusLegend, VerdictBar, FlowChart, Donut, Spark,
+  BudgetStack, StaffingScatter, StaffingRows, StatusLegend, VerdictBar, FlowChart, Donut, MiniBar,
 } from "./charts";
+import MonthlyChart from "./MonthlyChart";
+import CurriculumBars from "./CurriculumBars";
 import CourseExplorer from "./CourseExplorer";
 
+// Text colours on their tinted backgrounds all pass WCAG AA (≥ 4.5:1).
 const TONE: Record<Tone, { icon: typeof Info; text: string; bg: string; ring: string }> = {
-  good:   { icon: CircleCheck,   text: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30", ring: "border-emerald-200 dark:border-emerald-900" },
-  info:   { icon: Info,          text: "text-sky-700 dark:text-sky-400",         bg: "bg-sky-50 dark:bg-sky-950/30",         ring: "border-sky-200 dark:border-sky-900" },
-  warn:   { icon: TriangleAlert, text: "text-amber-700 dark:text-amber-400",     bg: "bg-amber-50 dark:bg-amber-950/30",     ring: "border-amber-200 dark:border-amber-900" },
-  danger: { icon: OctagonAlert,  text: "text-red-700 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-950/30",         ring: "border-red-200 dark:border-red-900" },
-  muted:  { icon: Info,          text: "text-[var(--ink-3)]",                     bg: "bg-slate-50 dark:bg-zinc-800/40",      ring: "border-[var(--border)]" },
+  good:   { icon: CircleCheck,   text: "text-emerald-800", bg: "bg-emerald-50", ring: "border-emerald-200" },
+  info:   { icon: Info,          text: "text-sky-800",     bg: "bg-sky-50",     ring: "border-sky-200" },
+  warn:   { icon: TriangleAlert, text: "text-amber-800",   bg: "bg-amber-50",   ring: "border-amber-200" },
+  danger: { icon: OctagonAlert,  text: "text-red-700",     bg: "bg-red-50",     ring: "border-red-200" },
+  muted:  { icon: Info,          text: "text-[var(--ink-2)]", bg: "bg-slate-50", ring: "border-[var(--border)]" },
 };
 
 export default function TermDashboard({
@@ -63,6 +72,7 @@ export default function TermDashboard({
   const [status, setStatus] = useState<StaffingStatus | "">("");
   const [selected, setSelected] = useState<string | null>(null);
   const [showAllInsights, setShowAllInsights] = useState(false);
+  const [flowAsChart, setFlowAsChart] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const view = useMemo(() => {
@@ -71,6 +81,7 @@ export default function TermDashboard({
     const rows = curriculum ? allRows.filter(r => r.curriculum === curriculum) : allRows;
     return {
       bv: budgetView(a),
+      risk: courseRisk(a),
       rows,
       st: staffingStats(rows),
       insights: buildInsights(a),
@@ -105,24 +116,32 @@ export default function TermDashboard({
     );
   }
 
-  const { bv, rows, st, insights } = view;
-  const bAns = budgetAnswer(bv);
+  const { bv, risk, rows, st, insights } = view;
+  const bAns = budgetAnswer(bv, risk);
   const sAns = staffingAnswer(st, a.plan.students_per_ta);
   const pAns = pipelineAnswer(a);
   const pendingTotal = a.pipeline?.stages.reduce((s, x) => s + x.count, 0) ?? 0;
+  const stale = a.pipeline?.stages.some(x => x.count > 0 && (x.oldest_days ?? 0) >= RULES.staleDays) ?? false;
   const returnedTotal = (a.pipeline?.docs_returned ?? 0) + (a.pipeline?.months_sent_back ?? 0) + (a.pipeline?.worklogs_rejected ?? 0);
-  const monthly = (a.monthly ?? []).map(m => m.baht);
-  const cps = costPerStudent(a.staffing ?? []);
   const compareOptions = (terms ?? []).filter(t => t.id !== a.term_id);
   const shownInsights = showAllInsights ? insights : insights.slice(0, 5);
+  const atRisk = [...risk.over, ...risk.near];
+  const scatterPts = rows.filter(r => r.requested > 0 && r.students > 0).length;
+  const flow = flowShape(a.flow ?? []);
+  const docs = docsShape(a.docs);
 
   const selectCourse = (id: string | null) => {
     setSelected(id);
     if (id) {
-      // Picking a course on the scatter clears a filter that would hide it.
+      // Picking a course anywhere clears a filter that would hide its row.
       const row = (a.staffing ?? []).find(r => r.teaching_course_id === id);
       if (row && status && row.status !== status) setStatus("");
+      if (row && curriculum && row.curriculum !== curriculum) setCurriculum("");
     }
+  };
+  const jumpTo = (id: string) => {
+    selectCourse(id);
+    document.getElementById("q-courses")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
@@ -140,7 +159,7 @@ export default function TermDashboard({
           ].map(n => (
             <a key={n.id} href={`#${n.id}`}
                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-surface px-3 py-1 text-xs text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--brand)]">
-              <n.icon size={13} />{n.label}
+              <n.icon size={14} />{n.label}
             </a>
           ))}
         </nav>
@@ -156,118 +175,130 @@ export default function TermDashboard({
       </div>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Hero: the 30-second read                                           */}
+      {/* Top: the term, then what needs a decision                          */}
       {/* ------------------------------------------------------------------ */}
-      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface">
-        <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <div className="relative flex flex-col items-center justify-center gap-2 border-b lg:border-b-0 lg:border-e border-[var(--hairline)] p-5
-                          bg-[radial-gradient(120%_90%_at_0%_0%,rgba(7,118,188,0.10),transparent_60%)]">
-            <div className="self-stretch flex items-center justify-between text-xs text-[var(--ink-3)]">
-              <span>ภาคเรียน <b className="text-[var(--ink-1)]">{a.term_label}</b></span>
-              {a.starts_on && a.ends_on && <span>{thDate(a.starts_on)} – {thDate(a.ends_on)}</span>}
-            </div>
-            <BudgetGauge b={bv} />
-            <div className="text-center">
-              <div className="text-xs text-[var(--ink-3)]">
-                งบรวมภาคเรียน (ผลรวมงบรายวิชาที่ขอ TA)
-              </div>
-              <div className="text-2xl font-semibold tabular-nums text-[var(--ink-1)]">
-                {baht(bv.used)} <span className="text-base font-normal text-[var(--ink-3)]">/ {baht(bv.base)} บาท</span>
-              </div>
-            </div>
-            <Answer tone={bAns.tone} text={bAns.text} compact />
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface" aria-labelledby="dash-decisions">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] bg-[radial-gradient(120%_140%_at_0%_0%,rgba(7,118,188,0.08),transparent_60%)] px-5 py-3 text-sm text-[var(--ink-2)]">
+          <span>ภาคเรียน <b className="text-[var(--ink-1)]">{a.term_label}</b></span>
+          {a.starts_on && a.ends_on && <span>{thDate(a.starts_on)} – {thDate(a.ends_on)}</span>}
+          {bv.elapsedPct != null && <span>ผ่านไป <b className="tabular-nums text-[var(--ink-1)]">{pct0(bv.elapsedPct)}</b> ของเทอม</span>}
+          {a.as_of && <span className="ms-auto text-xs text-[var(--ink-3)]">ข้อมูล ณ {thDate(a.as_of)}</span>}
+        </div>
+        <div className="p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]">
+              <Sparkles size={15} />
+            </span>
+            <h2 id="dash-decisions" className="text-base font-semibold text-[var(--ink-1)]">ข้อสังเกตที่ต้องตัดสินใจหรือติดตาม</h2>
+            <span className="hidden sm:inline text-xs text-[var(--ink-3)]">วิเคราะห์อัตโนมัติจากข้อมูลล่าสุด</span>
           </div>
-          <div className="p-5">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)] dark:bg-sky-950/50">
-                <Sparkles size={15} />
-              </span>
-              <h2 className="text-base font-semibold text-[var(--ink-1)]">ข้อสังเกตจากระบบ</h2>
-              <span className="hidden sm:inline text-xs text-[var(--ink-3)]">วิเคราะห์อัตโนมัติจากข้อมูลล่าสุด</span>
-            </div>
-            {insights.length === 0 ? (
-              <p className="text-sm text-[var(--ink-3)]">ยังไม่มีข้อมูลพอให้วิเคราะห์</p>
-            ) : (
-              <ul className="space-y-2">
-                {shownInsights.map((it, i) => {
-                  const T = TONE[it.tone];
-                  return (
-                    <li key={i}>
-                      <a href={it.target ? `#q-${it.target}` : undefined}
-                         className={`flex gap-3 rounded-xl border ${T.ring} ${T.bg} px-3 py-2.5 transition hover:shadow-sm`}>
-                        <T.icon size={17} className={`mt-0.5 shrink-0 ${T.text}`} />
-                        <div className="min-w-0 flex-1">
-                          <div className={`text-sm font-medium ${T.text}`}>{it.title}</div>
-                          {it.detail && <div className="text-xs text-[var(--ink-2)] mt-0.5">{it.detail}</div>}
-                        </div>
-                        {it.target && <ArrowRight size={14} className="mt-1 shrink-0 text-[var(--ink-4)]" />}
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {insights.length > 5 && (
-              <button type="button" onClick={() => setShowAllInsights(v => !v)}
-                      className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--brand)] hover:underline">
-                <ChevronDown size={13} className={showAllInsights ? "rotate-180" : ""} />
-                {showAllInsights ? "ย่อ" : `ดูทั้งหมด ${insights.length} ข้อ`}
-              </button>
-            )}
-          </div>
+          {insights.length === 0 ? (
+            <p className="flex items-center gap-2 text-sm text-emerald-800"><CircleCheck size={16} />ไม่มีเรื่องที่ต้องตัดสินใจหรือติดตามในตอนนี้</p>
+          ) : (
+            <ul className="grid gap-2 lg:grid-cols-2">
+              {shownInsights.map((it, i) => {
+                const T = TONE[it.tone];
+                return (
+                  <li key={i}>
+                    <a href={it.target ? `#q-${it.target}` : undefined}
+                       className={`flex h-full gap-3 rounded-xl border ${T.ring} ${T.bg} px-3 py-2.5 transition hover:shadow-sm`}>
+                      <T.icon size={18} className={`mt-0.5 shrink-0 ${T.text}`} aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-sm font-medium ${T.text}`}>{it.title}</div>
+                        {it.detail && <div className="text-xs text-[var(--ink-2)] mt-0.5">{it.detail}</div>}
+                      </div>
+                      {it.target && <ArrowRight size={15} className="mt-1 shrink-0 text-[var(--ink-3)]" aria-hidden />}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {insights.length > 5 && (
+            <button type="button" onClick={() => setShowAllInsights(v => !v)} aria-expanded={showAllInsights}
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--brand)] hover:underline">
+              <ChevronDown size={14} className={showAllInsights ? "rotate-180" : ""} />
+              {showAllInsights ? "ย่อ" : `ดูทั้งหมด ${insights.length} ข้อ`}
+            </button>
+          )}
         </div>
       </section>
 
       {/* ------------------------------------------------------------------ */}
-      {/* KPI row (TOR 3.13 figures)                                          */}
+      {/* KPI row (TOR 3.13 figures) — one headline number per card          */}
       {/* ------------------------------------------------------------------ */}
-      <div data-tour="dash-stats" className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <Kpi icon={<BookOpen size={18} />} label="รายวิชาที่ขอ TA"
-             value={<>{a.courses_with_ta}<small> / {a.courses_open} วิชา</small></>}
-             hint={a.pipeline?.courses_no_ta ? `วิชาที่มีนักศึกษาแต่ยังไม่ขอ ${a.pipeline.courses_no_ta} วิชา` : "ทุกวิชาที่มีนักศึกษาขอ TA แล้ว"}
+      <div data-tour="dash-stats" className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-4 gap-3">
+        <Kpi icon={<BookOpen size={18} />} label="รายวิชาที่ขอ TA" value={a.courses_with_ta} unit="วิชา"
+             sub={`จาก ${a.courses_open} วิชาที่เปิด${a.pipeline?.courses_no_ta ? ` · มีนักศึกษาแต่ยังไม่ขอ ${a.pipeline.courses_no_ta} วิชา` : ""}`}
              delta={b ? delta(a.courses_with_ta, b.courses_with_ta, b.term_label) : undefined} />
-        <Kpi icon={<Users size={18} />} label="TA ปฏิบัติงานจริง / ทั้งหมด"
-             value={<>{a.active_tas}<small> / {a.total_tas} คน</small></>}
-             hint={`ป.ตรี ${a.tas_undergrad} · บัณฑิต ${a.tas_graduate} · มีชั่วโมงอนุมัติแล้ว ${a.active_tas} คน`}
-             delta={b ? delta(a.total_tas, b.total_tas, b.term_label) : undefined} />
-        <Kpi icon={<Wallet size={18} />} label="งบรวม / เบิกจ่ายแล้ว / คงเหลือ"
-             value={<>{bahtShort(bv.base)}<small> บาท</small></>}
-             hint={`เบิกจ่ายแล้ว ${baht(bv.used)} · คงเหลือ ${baht(bv.remaining)} · จาก ${a.courses_with_ta} วิชาที่ขอ TA`}
-             extra={<Spark values={monthly} w={64} h={26} />}
-             delta={b ? delta(a.budget_allocated, b.budget_allocated, b.term_label, "บาท") : undefined} />
-        <Kpi icon={<Inbox size={18} />} label="รายการรอดำเนินการ" tone={pendingTotal > 0 ? "warn" : "good"}
-             value={<>{pendingTotal}<small> รายการ</small></>}
-             hint={returnedTotal > 0 ? `ถูกตีกลับให้แก้ไข ${returnedTotal} รายการ` : "ไม่มีรายการถูกตีกลับ"} />
+        <Kpi icon={<Users size={18} />} label="TA ปฏิบัติงานจริง" value={a.active_tas} unit="คน"
+             sub={`จาก ${a.total_tas} คนที่แต่งตั้ง · ป.ตรี ${a.tas_undergrad} · บัณฑิต ${a.tas_graduate}`}
+             title="TA ปฏิบัติงานจริง = มีบันทึกเวลาที่อนุมัติแล้วอย่างน้อย 1 รายการในภาคเรียนนี้"
+             delta={b ? delta(a.active_tas, b.active_tas, b.term_label) : undefined} />
+        <Kpi icon={<Wallet size={18} />} label="เบิกจ่ายแล้ว" value={Math.round(bv.used).toLocaleString("th-TH")} unit="บาท"
+             sub={bv.base > 0 ? `${pct0(bv.usedPct)} ของงบรวม ${money(bv.base)}` : "ยังไม่มีงบรวม"}
+             delta={b ? delta(a.budget_used, b.budget_used, b.term_label, "บาท") : undefined} />
+        <Kpi icon={<Inbox size={18} />} label="รายการรอดำเนินการ" value={pendingTotal} unit="รายการ"
+             tone={stale ? "warn" : undefined}
+             sub={`${stale ? `มีรายการรอนานเกิน ${RULES.staleDays} วัน · ` : ""}ถูกตีกลับให้แก้ไข ${returnedTotal} รายการ`} />
       </div>
 
       {/* ------------------------------------------------------------------ */}
       {/* Q1 — งบพอไหม                                                       */}
       {/* ------------------------------------------------------------------ */}
-      <Question id="q-budget" n={1} title="งบพอถึงสิ้นเทอมไหม?" answer={bAns} tour="dash-budget">
+      <Question id="q-budget" n={1} title="งบพอถึงสิ้นเทอมไหม?" answer={bAns} onCourse={jumpTo} tour="dash-budget">
         <Panel>
-          <BudgetStack b={bv} />
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <Metric label="เบิกจ่ายแล้ว" value={baht(bv.used)} unit="บาท" sub={`${pct0(bv.usedPct)} ของงบรวม`} />
-            <Metric label="คาดการณ์สิ้นเทอม" value={bv.projectedHigh - bv.projectedLow > 1 ? `${bahtShort(bv.projectedLow)}–${bahtShort(bv.projectedHigh)}` : baht(bv.projectedHigh)} unit="บาท"
-                    sub={bv.runRate ? "ต่ำสุดจากที่บันทึกแล้ว สูงสุดจากอัตราใช้จ่าย" : "จากชั่วโมงที่บันทึกแล้ว"} />
-            <Metric label="เฉลี่ยต่อเดือน" value={baht(bv.avgMonthly)} unit="บาท" sub={`${(a.monthly ?? []).filter(m => m.baht > 0).length} เดือนที่มีการเบิก`} />
-            <Metric label="ใช้ได้อีกต่อเดือน" value={bv.monthlyRoom != null ? baht(bv.monthlyRoom) : "–"} unit={bv.monthlyRoom != null ? "บาท" : ""}
-                    sub={bv.monthsLeft != null ? `เหลือเวลา ${num1(bv.monthsLeft)} เดือน` : "ยังไม่ได้ตั้งวันสิ้นสุดเทอม"}
-                    tone={bv.monthlyRoom != null && bv.monthlyRoom < bv.avgMonthly ? "warn" : undefined} />
-            <Metric label="ค่าเฉลี่ยต่อชั่วโมง" value={a.approved_hours > 0 ? num1(a.budget_used / a.approved_hours) : "–"} unit={a.approved_hours > 0 ? "บาท" : ""}
-                    sub={`${num1(a.approved_hours)} ชม. อนุมัติ`} />
-            <Metric label="ค่ากลางต่อนักศึกษา" value={cps.median > 0 ? baht(cps.median) : "–"} unit={cps.median > 0 ? "บาท/คน" : ""}
-                    sub={bv.unfunded > 0 ? `งานเกินเพดาน ${baht(bv.unfunded)} บาท` : "ไม่มีงานเกินเพดานวิชา"}
-                    tone={bv.unfunded > 0 ? "danger" : undefined} />
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+            <div>
+              <div className="text-sm text-[var(--ink-2)]">งบรวม <b className="text-lg tabular-nums text-[var(--ink-1)]">{money(bv.base)}</b></div>
+              <div className="text-xs text-[var(--ink-3)]">ผลรวมงบของ {a.courses_with_ta} วิชาที่ส่งคำขอ TA คำนวณจากจำนวนนักศึกษาและหน่วยกิต เงินย้ายข้ามวิชาไม่ได้</div>
+            </div>
+            <div className="text-sm text-[var(--ink-2)]">คงเหลือ <b className="text-lg tabular-nums text-[var(--ink-1)]">{money(bv.remaining)}</b></div>
           </div>
-          <p className="mt-4 flex items-start gap-2 rounded-lg bg-slate-50 dark:bg-zinc-800/50 px-3 py-2 text-xs text-[var(--ink-2)]">
-            <Info size={14} className="mt-0.5 shrink-0 text-[var(--ink-3)]" />
-            งบรวมของภาคเรียนคือผลรวมงบของทุกวิชาที่ส่งคำขอ TA ({a.courses_with_ta} วิชา) คำนวณจากจำนวนนักศึกษาและหน่วยกิตของแต่ละวิชา
-            เป็นยอดที่ต้องขอกันไว้สำหรับภาคเรียนนี้ และเพิ่มขึ้นเองเมื่อมีวิชาส่งคำขอเข้ามา
-          </p>
+          <BudgetStack b={bv} />
+          <div className="mt-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Metric label="คาดการณ์สิ้นเทอม"
+                      value={bv.projectedHigh - bv.projectedLow > 1 ? `${Math.round(bv.projectedLow).toLocaleString("th-TH")}–${money(bv.projectedHigh)}` : money(bv.projectedHigh)}
+                      sub={bv.runRate ? "ต่ำสุดจากชั่วโมงที่บันทึกแล้ว สูงสุดถ้าใช้ในอัตราเดิม" : "จากชั่วโมงที่บันทึกแล้ว"} />
+              <Metric label="งานที่ยังจ่ายไม่ได้" value={money(risk.unfunded)} tone={risk.unfunded > 0 ? "danger" : undefined}
+                      sub={risk.unfunded > 0 ? "ชั่วโมงที่เกินเพดานวิชา" : "ไม่มีวิชาใดเกินเพดาน"} />
+              <Metric label="ค่าเฉลี่ยต่อชั่วโมง" value={a.approved_hours > 0 ? `${num1(a.budget_used / a.approved_hours)} บาท` : "–"}
+                      sub={`จาก ${num1(a.approved_hours)} ชม. ที่อนุมัติ`} />
+            </div>
+            <div className="rounded-xl border border-[var(--hairline)] p-3">
+              <div className="mb-2 text-sm font-medium text-[var(--ink-1)]">วิชาที่ชนหรือใกล้เพดานงบ <span className="font-normal text-xs text-[var(--ink-3)]">(คาดการณ์ถึง {pct0(risk.ratio * 100)} ของเพดานวิชา)</span></div>
+              {atRisk.length === 0 ? (
+                <p className="flex items-center gap-2 text-sm text-emerald-800"><CircleCheck size={15} />ไม่มีวิชาใดใช้ถึง {pct0(risk.ratio * 100)} ของเพดาน</p>
+              ) : (
+                <ul className="divide-y divide-[var(--hairline)]">
+                  {atRisk.slice(0, 6).map(r => {
+                    const cs = r.unfunded_baht > 0 ? "over" : "near";
+                    return (
+                      <li key={r.teaching_course_id}>
+                        <button type="button" onClick={() => jumpTo(r.teaching_course_id)}
+                                className="grid w-full grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-lg px-1.5 py-2 text-start hover:bg-slate-50">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-[var(--ink-1)]">{r.code} <span className="text-xs font-medium" style={{ color: CAP_META[cs].ink }}>{CAP_META[cs].label}</span></div>
+                            <div className="text-xs text-[var(--ink-3)] tabular-nums">
+                              {money(r.forecast_baht)} จาก {money(r.cap_baht)}{r.unfunded_baht > 0 ? ` · จ่ายไม่ได้ ${money(r.unfunded_baht)}` : ""}
+                            </div>
+                          </div>
+                          <MiniBar value={r.forecast_baht} max={r.cap_baht} warnAt={risk.ratio} over={cs === "over"} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {atRisk.length > 6 && <p className="mt-1 text-xs text-[var(--ink-3)]">และอีก {atRisk.length - 6} วิชา ดูในตารางรายวิชา</p>}
+            </div>
+          </div>
         </Panel>
         <div className="grid gap-4 lg:grid-cols-5">
-          <Panel title="การเบิกจ่ายรายเดือน" description="แท่งคือยอดแต่ละเดือน เส้นสีเขียวคือยอดสะสม" className="min-w-0 lg:col-span-3">
+          <Panel title="การเบิกจ่ายสะสมเทียบเวลา"
+                 description="เส้นเขียวคือยอดสะสมจริง เส้นประคือเส้นอ้างอิงถ้าใช้เท่ากันทุกเดือน ไม่ใช่เป้าหมาย แท่งด้านล่างคือยอดแต่ละเดือน"
+                 className="min-w-0 lg:col-span-3">
             <MonthlyChart a={a} b={b ?? undefined} />
           </Panel>
           <Panel title="การใช้งบรายหลักสูตร" description="วิชาที่เปิดให้หลายหลักสูตร นับในหลักสูตรหลักของวิชา" className="min-w-0 lg:col-span-2">
@@ -279,7 +310,7 @@ export default function TermDashboard({
       {/* ------------------------------------------------------------------ */}
       {/* Q2 — ขอ TA สมเหตุสมผลไหม                                           */}
       {/* ------------------------------------------------------------------ */}
-      <Question id="q-staffing" n={2} title="แต่ละวิชาขอ TA เกินที่แนะนำหรือเกินจำนวนนักศึกษาไหม?" answer={sAns}
+      <Question id="q-staffing" n={2} title="แต่ละวิชาขอ TA เกินที่แนะนำหรือเกินจำนวนนักศึกษาไหม?" answer={sAns} onCourse={jumpTo}
                 action={view.curricula.length > 1 ? (
                   <Select aria-label="กรองหลักสูตร" value={curriculum} onChange={e => { setCurriculum(e.target.value); setSelected(null); }}>
                     <option value="">ทุกหลักสูตร</option>
@@ -287,17 +318,22 @@ export default function TermDashboard({
                   </Select>
                 ) : undefined}>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,5fr)]">
-          <Panel title="นักศึกษา เทียบ TA ที่ขอ"
-                 description={`จุดแต่ละจุดคือหนึ่งวิชา เหนือเส้นเขียวคือขอมากกว่าเกณฑ์ 1 ต่อ ${a.plan.students_per_ta} คน เหนือเส้นประแดงคือเกินเพดาน 1 ต่อ ${a.plan.min_students_per_ta} คน คลิกจุดเพื่อดูวิชาในตาราง`}
-                 className="min-w-0">
-            <div className="mb-3"><StatusLegend counts={st.counts} picked={status} onPick={s => { setStatus(s); document.getElementById("q-courses")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} /></div>
-            <StaffingScatter rows={rows} plan={a.plan} selected={selected} onSelect={id => { selectCourse(id); }} />
-            <p className="mt-2 text-[11px] text-[var(--ink-4)]">
-              ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน กลุ่มละ 1 คนต่อนักศึกษา {a.plan.students_per_ta} คน
-              {a.plan.suggested_ta_cap > 0 ? ` (สูงสุด ${a.plan.suggested_ta_cap} คนต่อกลุ่ม)` : ""} อย่างน้อยกลุ่มละ 1 คน
-              เส้นในกราฟเป็นเกณฑ์ระดับวิชาเพื่อให้เห็นภาพ ผลการเทียบของแต่ละวิชาคิดรายกลุ่มเรียน
-            </p>
-          </Panel>
+          {scatterPts >= RULES.scatterMinPoints ? (
+            <Panel title="นักศึกษา เทียบ TA ที่ขอ"
+                   description={`จุดแต่ละจุดคือหนึ่งวิชา เหนือเส้นเขียวคือขอมากกว่าเกณฑ์ 1 ต่อ ${a.plan.students_per_ta} คน เหนือเส้นประแดงคือเกินเพดาน 1 ต่อ ${a.plan.min_students_per_ta} คน คลิกจุดเพื่อดูวิชาในตาราง`}
+                   className="min-w-0">
+              <div className="mb-3"><StatusLegend counts={st.counts} picked={status} onPick={s => { setStatus(s); document.getElementById("q-courses")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} /></div>
+              <StaffingScatter rows={rows} plan={a.plan} selected={selected} onSelect={id => selectCourse(id)} />
+              <StaffingNote a={a} />
+            </Panel>
+          ) : (
+            <Panel title="TA ที่ขอ เทียบที่แนะนำและเพดาน"
+                   description={`มีวิชาที่ขอ TA ${st.withReq} วิชา แสดงเป็นรายวิชา (กราฟกระจายจะแสดงเมื่อมีตั้งแต่ ${RULES.scatterMinPoints} วิชา)`}
+                   className="min-w-0">
+              <StaffingRows rows={rows} selected={selected} onSelect={jumpTo} />
+              <StaffingNote a={a} />
+            </Panel>
+          )}
           <div className="space-y-4 min-w-0">
             <Panel title="สรุปการขอ TA">
               <div className="grid grid-cols-3 gap-2 text-center">
@@ -308,20 +344,20 @@ export default function TermDashboard({
               </div>
               <div className="mt-4">
                 <VerdictBar counts={st.counts} />
-                <div className="mt-1.5 flex justify-between text-[11px] text-[var(--ink-3)]">
+                <div className="mt-1.5 flex justify-between text-xs text-[var(--ink-3)]">
                   <span>{st.compliance != null ? `${pct0(st.compliance)} อยู่ในเกณฑ์หรือต่ำกว่า` : ""}</span>
                   <span>{st.withReq} วิชาที่ขอ</span>
                 </div>
               </div>
             </Panel>
             <Panel title="วิชาที่ควรทบทวน" description="ขอ TA มากกว่าที่แนะนำ เรียงจากเกินมากที่สุด">
-              <CourseList rows={st.review.slice(0, 6)} empty="ไม่มีวิชาที่ขอเกินที่แนะนำ" onPick={selectCourse}
-                          right={r => <span className="text-red-600 dark:text-red-400">+{r.requested - r.recommended}</span>} />
+              <CourseList rows={st.review.slice(0, 6)} empty="ไม่มีวิชาที่ขอเกินที่แนะนำ" onPick={jumpTo}
+                          right={r => <span className="text-red-700">+{r.requested - r.recommended}</span>} />
             </Panel>
             {st.under.length > 0 && (
               <Panel title="วิชาที่ TA อาจไม่พอ" description="ขอน้อยกว่าที่แนะนำ">
-                <CourseList rows={st.under.slice(0, 4)} empty="" onPick={selectCourse}
-                            right={r => <span className="text-sky-600 dark:text-sky-400">{r.requested - r.recommended}</span>} />
+                <CourseList rows={st.under.slice(0, 4)} empty="" onPick={jumpTo}
+                            right={r => <span className="text-sky-800">{r.requested - r.recommended}</span>} />
               </Panel>
             )}
           </div>
@@ -331,21 +367,21 @@ export default function TermDashboard({
       {/* ------------------------------------------------------------------ */}
       {/* Q3 — งานค้างอยู่ขั้นไหน                                            */}
       {/* ------------------------------------------------------------------ */}
-      <Question id="q-work" n={3} title="งานค้างอยู่ขั้นไหน?" answer={pAns}>
+      <Question id="q-work" n={3} title="งานค้างอยู่ขั้นไหน?" answer={pAns} onCourse={jumpTo}>
         {a.pipeline && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             {a.pipeline.stages.map((s, i) => {
               const m = PIPELINE_META[s.key];
-              const hot = pAns.bottleneck === s.key && s.count > 0;
+              const old = s.count > 0 && (s.oldest_days ?? 0) >= RULES.staleDays;
               const card = (
-                <div className={`relative h-full rounded-xl border p-3 transition ${hot ? "border-amber-300 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/20" : "border-[var(--border)] bg-surface"} ${staffLinks ? "hover:shadow-md" : ""}`}>
-                  <div className="flex items-center gap-2 text-[11px] text-[var(--ink-3)]">
-                    <span className={`inline-flex size-5 items-center justify-center rounded-full text-[10px] font-bold ${s.count > 0 ? "bg-[var(--brand)] text-white" : "bg-slate-200 text-slate-600 dark:bg-zinc-700 dark:text-zinc-300"}`}>{i + 1}</span>
+                <div className={`relative h-full rounded-xl border p-3 transition ${old ? "border-amber-300 bg-amber-50" : "border-[var(--border)] bg-surface"} ${staffLinks ? "hover:shadow-md" : ""}`}>
+                  <div className="flex items-center gap-2 text-xs text-[var(--ink-3)]">
+                    <span className={`inline-flex size-5 items-center justify-center rounded-full text-xs font-bold ${s.count > 0 ? "bg-[var(--brand)] text-white" : "bg-slate-200 text-slate-700"}`}>{i + 1}</span>
                     ขั้นที่ {i + 1}
                   </div>
                   <div className="mt-1.5 text-sm font-medium text-[var(--ink-1)]">{m.label}</div>
-                  <div className={`mt-1 text-2xl font-semibold tabular-nums ${s.count > 0 ? (hot ? "text-amber-700 dark:text-amber-400" : "text-[var(--ink-1)]") : "text-[var(--ink-4)]"}`}>{s.count}</div>
-                  <div className="mt-0.5 text-[11px] text-[var(--ink-3)] line-clamp-2">
+                  <div className={`mt-1 text-2xl font-semibold tabular-nums ${s.count > 0 ? (old ? "text-amber-800" : "text-[var(--ink-1)]") : "text-[var(--ink-3)]"}`}>{s.count}</div>
+                  <div className="mt-0.5 text-xs text-[var(--ink-3)] line-clamp-2">
                     {s.oldest_days != null && s.count > 0 ? `รอนานสุด ${s.oldest_days} วัน` : m.who}
                   </div>
                 </div>
@@ -357,39 +393,61 @@ export default function TermDashboard({
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]">
           <Panel title="รอบเบิกรายเดือนอยู่ที่ใคร"
-                 description="แต่ละรายการคือ TA หนึ่งคนในหนึ่งวิชาของเดือนนั้น แยกตามผู้ที่ต้องดำเนินการต่อ" className="min-w-0">
-            <FlowChart flow={a.flow ?? []} />
+                 description="แต่ละรายการคือ TA หนึ่งคนในหนึ่งวิชาของเดือนนั้น แยกตามผู้ที่ต้องดำเนินการต่อ" className="min-w-0"
+                 actions={flow.months.length > 0 && !flow.chart ? (
+                   <button type="button" onClick={() => setFlowAsChart(v => !v)} aria-pressed={flowAsChart}
+                           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--brand)] hover:bg-slate-50">
+                     {flowAsChart ? <><AlignLeft size={14} />ดูเป็นข้อความ</> : <><BarChart3 size={14} />ดูเป็นกราฟ</>}
+                   </button>
+                 ) : undefined}>
+            {flow.months.length === 0 ? (
+              <div className="py-10 text-center text-sm text-[var(--ink-3)]">ยังไม่มีการบันทึกเวลาในภาคเรียนนี้</div>
+            ) : flow.chart || flowAsChart ? (
+              <FlowChart months={flow.months} />
+            ) : (
+              <>
+                <ul className="space-y-2">
+                  {flowSentences(flow.months).map(l => (
+                    <li key={l.key} className="flex items-start gap-2 text-sm text-[var(--ink-1)]">
+                      <i className="mt-1.5 inline-block size-3 shrink-0 rounded-sm" style={{ background: l.color }} aria-hidden />
+                      <span>{l.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs text-[var(--ink-3)]">
+                  {flow.months.length < RULES.flowMinMonths
+                    ? "มีข้อมูลเดือนเดียว จึงสรุปเป็นข้อความ"
+                    : `ทุกเดือนแบ่งสัดส่วนใกล้เคียงกัน (ต่างกันไม่เกิน ${pct0(RULES.flowMinShareSpread * 100)}) จึงสรุปเป็นข้อความ`}
+                </p>
+              </>
+            )}
           </Panel>
           <div className="space-y-4 min-w-0">
             <DeadlineCard a={a} />
             <Panel title="เอกสาร TA" description="สถานะเอกสารของ TA ในภาคเรียนนี้">
-              <div className="flex items-center gap-4">
-                <Donut size={116} center={a.docs.approved} sub={`จาก ${a.docs.total} คน`} parts={[
-                  { label: "ตรวจผ่าน", value: a.docs.approved, color: "#16a34a" },
-                  { label: "รอตรวจ", value: a.docs.submitted, color: "#0ea5e9" },
-                  { label: "ต้องแก้ไข", value: a.docs.needs_fix, color: "#f59e0b" },
-                  { label: "ไม่ผ่าน", value: a.docs.rejected, color: "#dc2626" },
-                  { label: "ยังไม่ส่ง", value: a.docs.not_submitted, color: "#cbd5e1" },
-                ]} />
-                <ul className="flex-1 space-y-1 text-xs">
-                  {[
-                    ["ตรวจผ่าน", a.docs.approved, "#16a34a"], ["รอตรวจ", a.docs.submitted, "#0ea5e9"],
-                    ["ต้องแก้ไข", a.docs.needs_fix, "#f59e0b"], ["ไม่ผ่าน", a.docs.rejected, "#dc2626"],
-                    ["ยังไม่ส่ง / ไม่ครบ", a.docs.not_submitted, "#cbd5e1"],
-                  ].map(([l, v, c]) => (
-                    <li key={l as string} className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 text-[var(--ink-2)]"><i className="size-2.5 rounded-sm" style={{ background: c as string }} />{l}</span>
-                      <b className="tabular-nums">{v as number}</b>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {docs.chart ? (
+                <div className="flex items-center gap-4">
+                  <Donut size={116} center={a.docs.approved} sub={`จาก ${a.docs.total} คน`} parts={docs.parts} />
+                  <ul className="flex-1 space-y-1 text-xs">
+                    {docs.parts.map(p => (
+                      <li key={p.key} className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-[var(--ink-2)]"><i className="size-3 rounded-sm" style={{ background: p.color }} />{p.label}</span>
+                        <b className="tabular-nums">{p.value}</b>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className={`flex items-center gap-2 text-sm ${a.docs.total > 0 && a.docs.approved === a.docs.total ? "text-emerald-800" : "text-[var(--ink-1)]"}`}>
+                  {a.docs.total > 0 && a.docs.approved === a.docs.total && <CircleCheck size={16} />}{docs.sentence}
+                </p>
+              )}
             </Panel>
           </div>
         </div>
 
         {a.pipeline && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3">
             <Followup icon={<FileWarning size={16} />} label="เอกสาร TA ถูกตีกลับ" value={a.pipeline.docs_returned} who="TA ต้องแก้ไข" />
             <Followup icon={<Undo2 size={16} />} label="รอบเบิกถูกส่งกลับ" value={a.pipeline.months_sent_back + a.pipeline.worklogs_rejected}
                       who={`รอบเดือน ${a.pipeline.months_sent_back} · บันทึกเวลา ${a.pipeline.worklogs_rejected}`} />
@@ -404,9 +462,9 @@ export default function TermDashboard({
       {/* ------------------------------------------------------------------ */}
       <section id="q-courses" className="scroll-mt-20">
         <Panel title="รายวิชาทั้งหมดของภาคเรียน"
-               description="ค้นหา กรอง และเรียงได้ทุกคอลัมน์ ‘ใช้เพดาน’ คิดจากยอดที่จะจ่ายเมื่อชั่วโมงที่บันทึกแล้วผ่านการอนุมัติทั้งหมด">
+               description={`ค้นหา กรอง และเรียงได้ทุกคอลัมน์ ‘คาดการณ์เทียบเพดานวิชา’ คิดจากยอดที่จะจ่ายเมื่อชั่วโมงที่บันทึกแล้วผ่านการอนุมัติทั้งหมด ถึง ${pct0(risk.ratio * 100)} ถือว่าใกล้เพดาน`}>
           <CourseExplorer rows={rows} status={status} onStatus={setStatus} selected={selected} onSelect={setSelected}
-                          linkCourses={staffLinks} />
+                          linkCourses={staffLinks} ratio={risk.ratio} />
         </Panel>
       </section>
 
@@ -418,17 +476,17 @@ export default function TermDashboard({
 /* Pieces                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function Question({ id, n, title, answer, action, children, tour }: {
-  id: string; n: number; title: string; answer: { tone: Tone; text: string }; action?: React.ReactNode;
-  children: React.ReactNode; tour?: string;
+function Question({ id, n, title, answer, action, children, tour, onCourse }: {
+  id: string; n: number; title: string; answer: AnswerT; action?: React.ReactNode;
+  children: React.ReactNode; tour?: string; onCourse: (id: string) => void;
 }) {
   return (
-    <section id={id} className="scroll-mt-20 space-y-3" data-tour={tour}>
+    <section id={id} className="scroll-mt-20 space-y-3" data-tour={tour} aria-labelledby={`${id}-h`}>
       <div className="flex flex-wrap items-start gap-3">
-        <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)] text-sm font-semibold text-white shadow-sm">{n}</span>
+        <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)] text-sm font-semibold text-white shadow-sm" aria-hidden>{n}</span>
         <div className="min-w-0 flex-1 basis-64">
-          <h2 className="text-lg font-semibold text-[var(--ink-1)] leading-snug">{title}</h2>
-          <Answer tone={answer.tone} text={answer.text} />
+          <h2 id={`${id}-h`} className="text-lg font-semibold text-[var(--ink-1)] leading-snug">{title}</h2>
+          <AnswerLine answer={answer} onCourse={onCourse} />
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
@@ -437,63 +495,85 @@ function Question({ id, n, title, answer, action, children, tour }: {
   );
 }
 
-function Answer({ tone, text, compact }: { tone: Tone; text: string; compact?: boolean }) {
-  const T = TONE[tone];
+/** The answer sentence; `{courses}` becomes buttons that open the course's
+ *  row in the table. */
+function AnswerLine({ answer, onCourse }: { answer: AnswerT; onCourse: (id: string) => void }) {
+  const T = TONE[answer.tone];
+  const [head, tail] = answer.text.split("{courses}");
+  const list: CourseRef[] = answer.courses ?? [];
+  const shown = list.slice(0, RULES.maxNamedCourses);
   return (
-    <p className={`${compact ? "mt-1 text-center text-[13px]" : "mt-0.5 text-sm"} flex items-start gap-1.5 ${compact ? "justify-center" : ""} ${T.text}`}>
-      <T.icon size={compact ? 15 : 16} className="mt-0.5 shrink-0" />
-      <span>{text}</span>
+    <p className={`mt-1 flex items-start gap-1.5 text-[15px] font-medium leading-relaxed ${T.text}`}>
+      <T.icon size={17} className="mt-1 shrink-0" aria-hidden />
+      <span>
+        {head}
+        {tail !== undefined && (
+          <>
+            {shown.map((c, i) => (
+              <span key={c.id}>
+                {i > 0 && ", "}
+                <button type="button" onClick={() => onCourse(c.id)} className="underline decoration-dotted underline-offset-4 hover:decoration-solid">
+                  {c.code}
+                </button>
+              </span>
+            ))}
+            {list.length > shown.length && ` และอีก ${list.length - shown.length} วิชา`}
+            {tail}
+          </>
+        )}
+      </span>
     </p>
   );
 }
 
-function Kpi({ icon, label, value, hint, delta, extra, action, tone }: {
-  icon: React.ReactNode; label: string; value: React.ReactNode; hint?: string; delta?: string;
-  extra?: React.ReactNode; action?: React.ReactNode; tone?: "warn" | "good";
-}) {
-  const iconCls = tone === "warn" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-    : tone === "good" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
-    : "bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)] dark:bg-sky-950/50";
+function StaffingNote({ a }: { a: TermAnalytics }) {
   return (
-    <div className="relative flex flex-col rounded-xl border border-[var(--border)] bg-surface p-4">
+    <p className="mt-3 text-xs text-[var(--ink-3)]">
+      ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน กลุ่มละ 1 คนต่อนักศึกษา {a.plan.students_per_ta} คน
+      {a.plan.suggested_ta_cap > 0 ? ` (สูงสุด ${a.plan.suggested_ta_cap} คนต่อกลุ่ม)` : ""} อย่างน้อยกลุ่มละ 1 คน
+      เพดานคือ 1 ต่อ {a.plan.min_students_per_ta} คน ผลการเทียบของแต่ละวิชาคิดรายกลุ่มเรียน
+    </p>
+  );
+}
+
+function Kpi({ icon, label, value, unit, sub, delta, tone, title }: {
+  icon: React.ReactNode; label: string; value: React.ReactNode; unit: string; sub?: string; delta?: string;
+  tone?: "warn"; title?: string;
+}) {
+  const iconCls = tone === "warn" ? "bg-amber-100 text-amber-800" : "bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]";
+  return (
+    <div className="relative flex flex-col rounded-xl border border-[var(--border)] bg-surface p-4" title={title}>
       <div className="flex items-start gap-3">
-        <span className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg ${iconCls}`}>{icon}</span>
+        <span className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg ${iconCls}`} aria-hidden>{icon}</span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-[var(--ink-3)] line-clamp-1">{label}</span>
-            {action}
+          <div className="text-sm text-[var(--ink-2)]">{label}</div>
+          <div className="mt-0.5 text-2xl font-semibold tabular-nums leading-tight text-[var(--ink-1)]">
+            {value} <span className="text-sm font-normal text-[var(--ink-2)]">{unit}</span>
           </div>
-          <div className="mt-0.5 text-2xl font-semibold tabular-nums leading-tight whitespace-nowrap text-[var(--ink-1)] [&_small]:text-sm [&_small]:font-normal [&_small]:text-[var(--ink-3)]">{value}</div>
         </div>
       </div>
-      {(hint || extra) && (
-        <div className="mt-2 flex items-end justify-between gap-2">
-          {hint && <div className="min-w-0 flex-1 text-xs text-[var(--ink-3)] line-clamp-3">{hint}</div>}
-          {extra && <div className="shrink-0">{extra}</div>}
-        </div>
-      )}
-      {delta && <div className="mt-1 text-[11px] text-[var(--ink-4)]">{delta}</div>}
+      {sub && <div className="mt-2 text-xs text-[var(--ink-3)]">{sub}</div>}
+      {delta && <div className="mt-1 text-xs text-[var(--ink-3)]">{delta}</div>}
     </div>
   );
 }
 
-function Metric({ label, value, unit, sub, tone }: { label: string; value: string; unit?: string; sub?: string; tone?: "warn" | "danger" }) {
-  const c = tone === "danger" ? "text-red-600 dark:text-red-400" : tone === "warn" ? "text-amber-700 dark:text-amber-400" : "text-[var(--ink-1)]";
+function Metric({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "danger" }) {
   return (
-    <div className="rounded-lg bg-slate-50/80 dark:bg-zinc-800/40 px-3 py-2.5">
-      <div className="text-[11px] text-[var(--ink-3)]">{label}</div>
-      <div className={`mt-0.5 text-base font-semibold tabular-nums ${c}`}>{value} {unit && <span className="text-[11px] font-normal text-[var(--ink-3)]">{unit}</span>}</div>
-      {sub && <div className="text-[10.5px] text-[var(--ink-4)] leading-snug">{sub}</div>}
+    <div className="rounded-lg bg-slate-50 px-3 py-2.5">
+      <div className="text-xs text-[var(--ink-2)]">{label}</div>
+      <div className={`mt-0.5 text-base font-semibold tabular-nums ${tone === "danger" ? "text-red-700" : "text-[var(--ink-1)]"}`}>{value}</div>
+      {sub && <div className="text-xs text-[var(--ink-3)] leading-snug">{sub}</div>}
     </div>
   );
 }
 
 function MiniStat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "warn" }) {
   return (
-    <div className="rounded-lg bg-slate-50/80 dark:bg-zinc-800/40 px-2 py-2">
-      <div className={`text-lg font-semibold tabular-nums ${tone === "warn" ? "text-amber-700 dark:text-amber-400" : "text-[var(--ink-1)]"}`}>{value}</div>
-      <div className="text-[10.5px] text-[var(--ink-3)] leading-tight">{label}</div>
-      {sub && <div className="text-[10px] text-[var(--ink-4)]">{sub}</div>}
+    <div className="rounded-lg bg-slate-50 px-2 py-2">
+      <div className={`text-lg font-semibold tabular-nums ${tone === "warn" ? "text-amber-800" : "text-[var(--ink-1)]"}`}>{value}</div>
+      <div className="text-xs text-[var(--ink-3)] leading-tight">{label}</div>
+      {sub && <div className="text-xs text-[var(--ink-3)]">{sub}</div>}
     </div>
   );
 }
@@ -502,7 +582,7 @@ function CourseList({ rows, empty, onPick, right }: {
   rows: CourseStaffing[]; empty: string; onPick: (id: string) => void; right: (r: CourseStaffing) => React.ReactNode;
 }) {
   if (rows.length === 0) {
-    return <p className="flex items-center gap-2 py-2 text-sm text-emerald-700 dark:text-emerald-400"><CircleCheck size={15} />{empty}</p>;
+    return <p className="flex items-center gap-2 py-2 text-sm text-emerald-800"><CircleCheck size={15} />{empty}</p>;
   }
   return (
     <ul className="divide-y divide-[var(--hairline)] -my-1">
@@ -510,12 +590,12 @@ function CourseList({ rows, empty, onPick, right }: {
         const m = STAFFING_META[r.status];
         return (
           <li key={r.teaching_course_id}>
-            <button type="button" onClick={() => { onPick(r.teaching_course_id); document.getElementById("q-courses")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-                    className="flex w-full items-center gap-3 py-2 text-start hover:bg-slate-50 dark:hover:bg-zinc-800/40 -mx-2 px-2 rounded-lg">
-              <i className="size-2 shrink-0 rounded-full" style={{ background: m.color }} />
+            <button type="button" onClick={() => onPick(r.teaching_course_id)}
+                    className="flex w-full items-center gap-3 py-2 text-start hover:bg-slate-50 -mx-2 px-2 rounded-lg">
+              <i className="size-2.5 shrink-0 rounded-full" style={{ background: m.color }} aria-hidden />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-[var(--ink-1)]">{r.code} <span className="font-normal text-[var(--ink-3)] text-xs">{curriculumTH(r.curriculum)}</span></div>
-                <div className="text-[11px] text-[var(--ink-3)] tabular-nums">
+                <div className="text-xs text-[var(--ink-3)] tabular-nums">
                   นศ. {r.students} · ขอ {r.requested} · แนะนำ {r.recommended} · เพดาน {r.ceiling}
                 </div>
               </div>
@@ -530,12 +610,12 @@ function CourseList({ rows, empty, onPick, right }: {
 
 function Followup({ icon, label, value, who }: { icon: React.ReactNode; label: string; value: number; who: string }) {
   return (
-    <div className={`flex items-start gap-3 rounded-xl border p-3 ${value > 0 ? "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20" : "border-[var(--border)] bg-surface"}`}>
-      <span className={`mt-0.5 ${value > 0 ? "text-amber-600 dark:text-amber-400" : "text-[var(--ink-4)]"}`}>{icon}</span>
+    <div className={`flex items-start gap-3 rounded-xl border p-3 ${value > 0 ? "border-amber-200 bg-amber-50" : "border-[var(--border)] bg-surface"}`}>
+      <span className={`mt-0.5 ${value > 0 ? "text-amber-800" : "text-[var(--ink-3)]"}`} aria-hidden>{icon}</span>
       <div className="min-w-0">
-        <div className="text-xs text-[var(--ink-3)]">{label}</div>
-        <div className={`text-xl font-semibold tabular-nums ${value > 0 ? "text-[var(--ink-1)]" : "text-[var(--ink-4)]"}`}>{value}</div>
-        <div className="text-[11px] text-[var(--ink-4)] line-clamp-1">{who}</div>
+        <div className="text-xs text-[var(--ink-2)]">{label}</div>
+        <div className={`text-xl font-semibold tabular-nums ${value > 0 ? "text-[var(--ink-1)]" : "text-[var(--ink-3)]"}`}>{value}</div>
+        <div className="text-xs text-[var(--ink-3)] line-clamp-1">{who}</div>
       </div>
     </div>
   );
@@ -550,20 +630,21 @@ function DeadlineCard({ a }: { a: TermAnalytics }) {
       </Panel>
     );
   }
+  // Amber when the reminder window the office configured has started.
   const urgent = d.days_left <= d.remind_days;
   return (
-    <div className={`rounded-xl border p-4 ${urgent ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/30 dark:to-transparent dark:border-amber-800" : "border-[var(--border)] bg-surface"}`}>
+    <div className={`rounded-xl border p-4 ${urgent ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white" : "border-[var(--border)] bg-surface"}`}>
       <div className="flex items-start gap-3">
-        <div className={`flex size-14 shrink-0 flex-col items-center justify-center rounded-xl ${urgent ? "bg-amber-500 text-white" : "bg-[var(--brand)] text-white"}`}>
+        <div className={`flex size-14 shrink-0 flex-col items-center justify-center rounded-xl text-white ${urgent ? "bg-amber-700" : "bg-[var(--brand)]"}`}>
           <span className="text-xl font-bold leading-none tabular-nums">{d.days_left}</span>
-          <span className="text-[10px]">วัน</span>
+          <span className="text-xs">วัน</span>
         </div>
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ink-1)]"><CalendarClock size={15} />ปิดรอบส่งบันทึกเวลา {thDate(d.due_date)}</div>
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ink-1)]"><CalendarClock size={15} aria-hidden />ปิดรอบส่งบันทึกเวลา {thDate(d.due_date)}</div>
           <div className="text-xs text-[var(--ink-2)] mt-0.5">{d.labels.join(", ")}</div>
           <div className="text-xs mt-1.5 text-[var(--ink-3)]">
             {d.not_sent > 0
-              ? <>TA ยังไม่ส่ง / ต้องแก้ <b className="text-amber-700 dark:text-amber-400 tabular-nums">{d.not_sent}</b> รายการ</>
+              ? <>TA ยังไม่ส่ง / ต้องแก้ <b className="text-amber-800 tabular-nums">{d.not_sent}</b> รายการ</>
               : "ทุกรายการที่บันทึกไว้ส่งครบแล้ว"}
             {` · แจ้งเตือนอัตโนมัติล่วงหน้า ${d.remind_days} วัน`}
           </div>

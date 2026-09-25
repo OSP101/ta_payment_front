@@ -70,13 +70,21 @@ export interface TermAnalytics {
   budget_allocated: number;
   budget_used: number;
   approved_hours: number;
-  monthly: { year_month: string; baht: number }[] | null;
+  /** Gregorian "2026-06". baht is the month's whole disbursement (hourly +
+   *  the graduate lump dated to that month); lump_baht is the lump part. */
+  monthly: { year_month: string; baht: number; lump_baht?: number }[] | null;
   curricula: CurriculumStat[] | null;
   courses: CourseSpendStat[] | null;
 
   // ---- question-led dashboard (26/09/2026) ----
   /** Part of budget_used that is graduate-special lump sums. */
   budget_lump: number;
+  /** Lump no month carries yet. Σ monthly.baht + this = budget_used. */
+  budget_lump_undated?: number;
+  /** The one "ใกล้เพดาน" line (forecast ÷ course cap), from the server. */
+  near_cap_ratio?: number;
+  /** The server's today, "2026-09-26". */
+  as_of?: string;
   /** Projected term spend from everything logged (a floor). */
   budget_forecast: number;
   /** Logged work the course pools cannot pay. */
@@ -156,6 +164,8 @@ export interface MonthFlow {
   sent_back: number;
   total: number;
   baht: number;
+  /** Bucket key (the counter names above) → course codes in that bucket. */
+  codes?: Record<string, string[]>;
 }
 
 export interface DeadlineInfo {
