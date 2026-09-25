@@ -183,7 +183,7 @@ function deltaText(now: number, prev: number, prevLabel: string, digits = 0) {
 // existing bundle has none — adding one for this panel would be the heaviest
 // dependency in the app.
 
-function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnalytics }) {
+export function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnalytics }) {
   const months = a.monthly ?? [];
   const compare = b?.monthly ?? [];
   const W = 560, H = 230, L = 52, R = 10, T = 16, B = 34;
@@ -238,7 +238,7 @@ function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnalytics }) {
           <g>
             <line x1={L} y1={capY} x2={W - R} y2={capY} stroke="var(--danger,#dc2626)" strokeWidth="1.5" strokeDasharray="5 4" />
             <text x={W - R} y={capY - 4} textAnchor="end" fontSize="10" fill="var(--danger,#dc2626)">
-              เพดาน {baht(a.budget_allocated)}
+              งบรวม {baht(a.budget_allocated)}
             </text>
           </g>
         )}
@@ -260,7 +260,7 @@ function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnalytics }) {
       <div className="flex flex-wrap gap-4 mt-1 text-[11px] text-[var(--ink-3)]">
         <span><i className="inline-block size-2.5 rounded-sm bg-[var(--brand)] me-1.5 align-[-1px]" />ยอดต่อเดือน</span>
         <span><i className="inline-block size-2.5 rounded-sm bg-emerald-600 me-1.5 align-[-1px]" />ยอดสะสม</span>
-        <span><i className="inline-block size-2.5 rounded-sm bg-red-600 me-1.5 align-[-1px]" />เพดานรวม</span>
+        <span><i className="inline-block size-2.5 rounded-sm bg-red-600 me-1.5 align-[-1px]" />งบรวม</span>
         {b && compare.length > 0 && (
           <span className="text-[var(--ink-2)]">
             เทอม {b.term_label} เบิกรวม {baht(b.budget_used)} บ. ส่วนเทอมนี้ {baht(a.budget_used)} บ.
@@ -285,7 +285,7 @@ function thMonth(ym: string) {
 
 /* --------------------------- per-curriculum bars -------------------------- */
 
-function CurriculumBars({ a }: { a: TermAnalytics }) {
+export function CurriculumBars({ a }: { a: TermAnalytics }) {
   const rows = a.curricula ?? [];
   const [detail, setDetail] = useState<string | null>(null);
   if (rows.length === 0) {

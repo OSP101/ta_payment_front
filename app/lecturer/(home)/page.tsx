@@ -44,6 +44,9 @@ interface LecturerCourseStatus {
   /** budget_used split by pool — used_regular + used_special == budget_used. */
   budget_used_regular: number;
   budget_used_special: number;
+  /** The planner's per-sitting recommendation (ta_recommend.go) and ceiling. */
+  recommended_tas?: number;
+  ceiling_tas?: number;
 }
 
 // Same warm/cool pair as the course-overview page's own usage bar — kept
@@ -731,6 +734,11 @@ function CourseCard({
         <span>นักศึกษา {c.num_students} คน</span>
         {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
         {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
+        {(ov?.recommended_tas ?? 0) > 0 && (
+          <span title={`ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน ไม่ควรเกิน ${ov!.ceiling_tas} คน`}>
+            · แนะนำ TA {ov!.recommended_tas} คน
+          </span>
+        )}
       </div>
 
       {/* The TA line is the one this page is grouped by, so it gets its own row
@@ -741,6 +749,11 @@ function CourseCard({
             <span className="inline-flex items-center gap-1 font-medium text-foreground">
               <Users size={12} /> TA {ov!.ta_count} คน
             </span>
+            {(ov!.ceiling_tas ?? 0) > 0 && ov!.ta_count > ov!.ceiling_tas! ? (
+              <span className="rounded bg-danger-soft px-1.5 text-[10.5px] text-danger-soft-foreground">เกินเพดานต่อนักศึกษา</span>
+            ) : (ov!.recommended_tas ?? 0) > 0 && ov!.ta_count > ov!.recommended_tas! ? (
+              <span className="rounded bg-warning-soft px-1.5 text-[10.5px] text-warning-soft-foreground">มากกว่าที่แนะนำ {ov!.ta_count - ov!.recommended_tas!} คน</span>
+            ) : null}
             <span className="text-muted">· อนุมัติแล้ว {hoursSplitText(ov!.hours_approved_regular, ov!.hours_approved_special)}</span>
             {ov!.hours_pending_approval > 0 && (
               <span className="text-muted">· รอตรวจ {hoursSplitText(ov!.hours_pending_regular, ov!.hours_pending_special)}</span>

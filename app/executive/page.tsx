@@ -3,11 +3,12 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { PageHeader, Select } from "../components/ui";
 import type { Term } from "../lib/api";
-import BudgetAnalytics from "../staff/BudgetAnalytics";
+import TermDashboard from "../staff/insights/TermDashboard";
 
-// มุมมองผู้บริหาร — the same BudgetAnalytics section the staff dashboard
-// embeds, standing alone. Read-only by construction: the only endpoints this
-// page touches are /terms and /dashboard/analytics(.xlsx).
+// มุมมองผู้บริหาร — the same TermDashboard the staff dashboard embeds,
+// standing alone. Read-only by construction: the only endpoints this page
+// touches are /terms and /dashboard/analytics(.xlsx); no links into /staff
+// pages an executive cannot open.
 //
 // The term selector is local. The staff area's TermContext is the officer's
 // working scope (persisted, mirrored into the URL); an executive skimming
@@ -26,7 +27,7 @@ export default function ExecutivePage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title="มุมมองผู้บริหาร"
-          description="สรุปการใช้งบประมาณผู้ช่วยสอน แยกรายเดือน รายหลักสูตร และรายวิชา"
+          description="งบพอไหม แต่ละวิชาขอ TA เหมาะสมไหม และงานค้างอยู่ขั้นไหน สรุปจากข้อมูลล่าสุดของระบบ"
         />
         {(terms ?? []).length > 1 && (
           <Select aria-label="เลือกปีการศึกษา" value={termId}
@@ -39,7 +40,7 @@ export default function ExecutivePage() {
           </Select>
         )}
       </div>
-      {termId && <BudgetAnalytics termId={termId} />}
+      {termId && <TermDashboard termId={termId} />}
     </div>
   );
 }

@@ -2,21 +2,16 @@
 import useSWR from "swr";
 import Link from "next/link";
 import {
-  BookOpen,
-  GraduationCap,
-  Users,
-  ClipboardCheck,
-  FileText,
   ArrowUpRight,
   AlertTriangle,
   CheckCircle2,
   CalendarPlus,
   CalendarOff,
 } from "lucide-react";
-import { PageHeader, Panel, StatCard, Chip, Button, Alert, EmptyState } from "../components/ui";
+import { PageHeader, Panel, Button, Alert, EmptyState } from "../components/ui";
 import { type Executive, emptyExecutive } from "./types";
 import { useTerm, useTermKey } from "./TermContext";
-import BudgetAnalytics from "./BudgetAnalytics";
+import TermDashboard from "./insights/TermDashboard";
 
 function formatThaiDate(iso?: string): string {
   if (!iso) return "";
@@ -156,34 +151,13 @@ export default function StaffDashboard() {
 
           <TodoPanel todos={todos} loading={!data} />
 
-          {/* md stays at 2 columns: the sidebar is already open at that width, so a
-              3-column row leaves ~85px of text per card and clips the longer
-              labels. 3 columns only from lg. */}
-          <div data-tour="dash-stats" className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
-            <StatCard label="วิชาที่เปิดสอน" value={s.total_courses} icon={<BookOpen size={18} />} tone="brand"
-                      hint={termText || undefined} />
-            <StatCard label="TA ทั้งหมด" value={s.total_tas} icon={<Users size={18} />}
-                      hint="ปฏิบัติงานในเทอมนี้" />
-            <StatCard label="วิชาที่มีการขอใช้ TA" value={s.courses_with_ta} icon={<GraduationCap size={18} />} tone="success"
-                      hint={s.total_courses > 0 ? `${((s.courses_with_ta / s.total_courses) * 100).toFixed(0)}% ของวิชาที่เปิดสอน` : undefined} />
-            {/* The two review queues live on different pages — each card links to its own. */}
-            <StatCard label="แบบฟอร์มหนี้รอตรวจ" value={s.pending_reviews} icon={<FileText size={18} />}
-                      tone={s.pending_reviews > 0 ? "warn" : "default"}
-                      hint="ขั้นที่ 2" href="/staff/review" />
-            <StatCard label="วิชาที่รอตรวจ / รอส่งออก" value={s.payout_courses_actionable} icon={<ClipboardCheck size={18} />}
-                      tone={s.payout_courses_actionable > 0 ? "warn" : "default"}
-                      hint="ขั้นที่ 3" href="/staff/payouts" />
-            {/* No budget StatCard here any more: the analytics section below is the
-                budget's single source on this page (settle-based). A second figure
-                from the old hours×rate sum sat 12% above it and invited the
-                question "which one is right?" */}
-          </div>
+          {/* The question-led dashboard (แบบ A, 26/09/2026): KPI row, งบพอไหม,
+              ขอ TA เกินไหม, งานค้างที่ไหน, and every course. Same component the
+              executive page renders, so both audiences read identical numbers;
+              only staff get the links into their queues. */}
+          <TermDashboard termId={termId} staffLinks />
 
-          {/* มุมบริหาร — เงินไปไหน เร็วแค่ไหน หลักสูตรไหนใช้เยอะ. Same component the
-              executive page renders, so the two audiences read identical numbers. */}
-          <BudgetAnalytics termId={termId} />
-
-          <div className="grid gap-4 mt-4 lg:grid-cols-3">
+          <div className="grid gap-4 mt-6 lg:grid-cols-2">
             <Panel title="ทางลัด" description="เมนูใช้บ่อย" data-tour="dash-shortcuts">
               <ul className="divide-y divide-[var(--hairline)]">
                 <ShortcutRow href="/staff/approvals" title="อนุมัติคำขอ TA" />
@@ -193,23 +167,6 @@ export default function StaffDashboard() {
                 <ShortcutRow href="/staff/appointments" title="ใบแต่งตั้งทีเอ" />
                 <ShortcutRow href="/staff/budget-summary" title="สรุปงบและปะหน้าจ่ายตรง" />
               </ul>
-            </Panel>
-            {/* Deliberately no "รอตรวจ" lines here any more — those live in the
-                to-do panel at the top, and repeating them made two places to keep
-                in sync while telling the reader nothing new. */}
-            <Panel title="สถานะโดยรวม" description={`ภาพรวมของเทอม ${s.term_label || "—"}`}>
-              <div className="space-y-3">
-                <SummaryLine
-                  label="วิชาที่ยังไม่ขอใช้ TA"
-                  chip={<Chip tone={s.total_courses - s.courses_with_ta > 0 ? "warn" : "success"}>
-                    {s.total_courses - s.courses_with_ta} วิชา
-                  </Chip>}
-                />
-                <SummaryLine
-                  label="TA ที่ปฏิบัติงาน"
-                  chip={<Chip tone={s.total_tas > 0 ? "success" : "warn"}>{s.total_tas} คน</Chip>}
-                />
-              </div>
             </Panel>
             <Panel title="คู่มือระบบ" description="ลิงก์เอกสารและเวิร์กโฟลว์">
               <ul className="space-y-2 text-sm">
@@ -307,14 +264,5 @@ function ShortcutRow({ href, title, hint }: { href: string; title: string; hint?
         <ArrowUpRight size={16} className="text-[var(--ink-4)] group-hover:text-[var(--brand)]" />
       </Link>
     </li>
-  );
-}
-
-function SummaryLine({ label, chip }: { label: string; chip: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-[var(--hairline)] last:border-0">
-      <div className="text-sm text-[var(--ink-2)]">{label}</div>
-      {chip}
-    </div>
   );
 }

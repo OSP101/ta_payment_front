@@ -49,6 +49,9 @@ export interface CourseSpendStat {
   spent_baht: number;
   cap_baht: number;
   over_budget: boolean;
+  forecast_baht?: number;
+  unfunded_baht?: number;
+  students?: number;
 }
 
 export interface TermAnalytics {
@@ -61,12 +64,116 @@ export interface TermAnalytics {
   courses_open: number;
   courses_with_ta: number;
   total_tas: number;
+  /** งบรวมของภาคเรียน: the sum of each requesting course's budget (its formula
+   *  ceiling), counting only courses with a submitted/approved TA request —
+   *  the money to be set aside for the term. Derived, never entered. */
   budget_allocated: number;
   budget_used: number;
   approved_hours: number;
   monthly: { year_month: string; baht: number }[] | null;
   curricula: CurriculumStat[] | null;
   courses: CourseSpendStat[] | null;
+
+  // ---- question-led dashboard (26/09/2026) ----
+  /** Part of budget_used that is graduate-special lump sums. */
+  budget_lump: number;
+  /** Projected term spend from everything logged (a floor). */
+  budget_forecast: number;
+  /** Logged work the course pools cannot pay. */
+  budget_unfunded: number;
+  active_tas: number;
+  tas_undergrad: number;
+  tas_graduate: number;
+  plan: PlanRatios;
+  staffing: CourseStaffing[] | null;
+  pipeline: PipelineSummary | null;
+  flow: MonthFlow[] | null;
+  deadline: DeadlineInfo | null;
+  docs: DocStatusCounts;
+}
+
+export interface PlanRatios {
+  students_per_ta: number;
+  min_students_per_ta: number;
+  suggested_ta_cap: number;
+}
+
+export type StaffingStatus =
+  | "no_request" | "no_students" | "under" | "match" | "above_guide" | "over_ceiling";
+
+export interface CourseStaffing {
+  teaching_course_id: string;
+  code: string;
+  name_th: string;
+  curriculum: string;
+  level: string;
+  lecturers: string[];
+  students: number;
+  students_missing: boolean;
+  sittings: number;
+  recommended: number;
+  ceiling: number;
+  requested: number;
+  approved: number;
+  pending_request: boolean;
+  students_per_ta: number;
+  status: StaffingStatus;
+  spent_baht: number;
+  cap_baht: number;
+  forecast_baht: number;
+  unfunded_baht: number;
+  unresolved_makeups: number;
+}
+
+export type PipelineKey = "requests" | "documents" | "appointments" | "payout_review" | "export";
+
+export interface PipelineSummary {
+  stages: { key: PipelineKey; count: number; oldest_days?: number }[];
+  docs_returned: number;
+  months_sent_back: number;
+  worklogs_rejected: number;
+  requests_rejected: number;
+  missing_students: number;
+  unresolved_makeups: number;
+  courses_no_ta: number;
+  payout_courses: number;
+}
+
+export interface MonthFlow {
+  /** Buddhist-era "2569-06", as submission_periods stores it. */
+  year_month: string;
+  label: string;
+  due_date: string;
+  is_closed: boolean;
+  with_ta: number;
+  with_lecturer: number;
+  await_appointment: number;
+  staff_review: number;
+  ready_export: number;
+  exported: number;
+  finance_sent: number;
+  skipped: number;
+  sent_back: number;
+  total: number;
+  baht: number;
+}
+
+export interface DeadlineInfo {
+  due_date: string;
+  days_left: number;
+  months: string[];
+  labels: string[];
+  remind_days: number;
+  not_sent: number;
+}
+
+export interface DocStatusCounts {
+  not_submitted: number;
+  submitted: number;
+  needs_fix: number;
+  rejected: number;
+  approved: number;
+  total: number;
 }
 
 /** Must say the same words as the backend's CurriculumTH (analytics xlsx). */
