@@ -6,6 +6,7 @@ import { ArrowRight, Bell, Check, CheckCheck } from "lucide-react";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 import { PageHeader, Panel, EmptyState, Button } from "./ui";
+import { Skel, SkelRegion } from "./Skeletons";
 
 interface Notif {
   id: string;
@@ -32,8 +33,13 @@ export default function NotificationsList({
   const key = tab === "unread"
     ? "/me/notifications?limit=100&unread=1"
     : "/me/notifications?limit=100";
-  const { data } = useSWR<Notif[]>(key);
+  // keepPreviousData: flipping ทั้งหมด ⇄ ยังไม่อ่าน keeps the current list on
+  // screen (dimmed) until the other one lands, instead of blanking it.
+  // `isLoading && data` = showing the other tab's list; a plain focus
+  // revalidation of the same tab never dims.
+  const { data, error, isLoading } = useSWR<Notif[]>(key, { keepPreviousData: true });
   const list = data ?? [];
+  const loading = !data && !error;
 
   async function markRead(id: string) {
     try {
@@ -80,8 +86,14 @@ export default function NotificationsList({
         </Button>
       </div>
 
-      <Panel padded={false} data-tour="ntf-list">
-        {list.length === 0 ? (
+      <Panel
+        padded={false}
+        data-tour="ntf-list"
+        className={`transition-opacity ${isLoading && data ? "opacity-60" : ""}`}
+      >
+        {loading ? (
+          <NotifSkeleton />
+        ) : list.length === 0 ? (
           <EmptyState
             icon={<Bell size={28} />}
             title={tab === "unread" ? "ไม่มีการเตือนที่ยังไม่อ่าน" : "ยังไม่มีการเตือน"}
@@ -132,6 +144,26 @@ export default function NotificationsList({
         )}
       </Panel>
     </div>
+  );
+}
+
+/** Rows shaped like the real ones: icon tile, title, body, timestamp. */
+function NotifSkeleton() {
+  return (
+    <SkelRegion>
+      <ul className="divide-y divide-[var(--hairline)]">
+        {Array.from({ length: 5 }, (_, i) => (
+          <li key={i} className="flex items-start gap-3 px-4 py-3">
+            <Skel className="w-8 h-8 rounded-lg shrink-0" />
+            <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+              <Skel className="h-4 w-1/2" />
+              <Skel className="h-3 w-3/4" />
+              <Skel className="h-2.5 w-28" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </SkelRegion>
   );
 }
 

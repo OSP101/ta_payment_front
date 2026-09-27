@@ -11,6 +11,7 @@ import { notify } from "../../lib/notify";
 import {
   PageHeader, Panel, Button, Select, Chip, DatePicker, EmptyState,
 } from "../../components/ui";
+import { Skel, SkelList, SkelRegion } from "../../components/Skeletons";
 
 /**
  * ใบแต่งตั้งทีเอ (คำสั่ง) — its own section since 31/07/2026.
@@ -35,14 +36,17 @@ import {
  */
 
 export default function AppointmentsPage() {
-  const { termId } = useTerm();
+  const { termId, loaded } = useTerm();
   return (
     <div>
       <PageHeader
         title="ใบแต่งตั้งทีเอ"
         description="ออกคำสั่งแต่งตั้ง TA ตามรอบที่ยื่นขอ พร้อมประวัติการออกคำสั่งและปุ่มดาวน์โหลดฉบับเดิม"
       />
-      {termId && <AppointmentSection termId={termId} />}
+      {/* Mounted while /terms is still loading too (its keys stay null until a
+          term is known), so the form and panel frames draw at once and the
+          officer list starts loading in parallel. */}
+      {(termId || !loaded) && <AppointmentSection termId={termId} />}
     </div>
   );
 }
@@ -57,6 +61,9 @@ interface AdminOfficer {
   // document decides from the same field, and two copies of the rule would
   // eventually disagree about who signed with what authority.
   is_dean: boolean;
+  // Same server-side rule as is_dean (signer_authority.CanSignForDean): whether
+  // the order will accept this seat as signer. Optional for older APIs.
+  can_sign_for_dean?: boolean;
 }
 
 const THAI_MONTHS = [
@@ -143,7 +150,9 @@ function AppointmentSection({ termId }: { termId: string }) {
   const [busy, setBusy] = useState(false);
   const [reprinting, setReprinting] = useState<string | null>(null);
 
-  const deans = (officers ?? []).filter(o => o.is_active);
+  // Only seats the order accepts: listing a head of department here let staff
+  // pick them and then fail on submit ("ไม่สามารถลงนามแทนคณบดีได้").
+  const deans = (officers ?? []).filter(o => o.is_active && o.can_sign_for_dean !== false);
   const orderNo = `${orderNoNum.trim()}/${orderNoYear.trim()}`;
   // A คำสั่ง is issued under the dean's authority. When a deputy signs it, the
   // document prints the acting form — so the screen has to say so BEFORE the
@@ -240,6 +249,11 @@ function AppointmentSection({ termId }: { termId: string }) {
         className="overflow-hidden rounded-xl border border-border bg-panel-bg shadow-sm"
       >
         <div className="flex flex-wrap items-center gap-4 border-b border-hairline bg-brand-soft/50 px-5 py-4">
+          {/* Until the preview answers, pending reads 0 — which would show the
+              green "ออกคำสั่งครบทุกคนแล้ว" all-clear for a moment. */}
+          {!preview ? (
+            <Skel className="size-16 shrink-0 rounded-2xl" />
+          ) : (
           <div
             className={`flex size-16 shrink-0 items-center justify-center rounded-2xl text-3xl font-bold tabular-nums shadow-sm ${
               pending > 0 ? "bg-brand text-brand-fg" : "bg-emerald-100 text-emerald-700"
@@ -247,13 +261,17 @@ function AppointmentSection({ termId }: { termId: string }) {
           >
             {pending > 0 ? pending : <Check size={30} />}
           </div>
+          )}
           <div className="min-w-0 flex-1">
             <div className="text-lg font-semibold text-ink-1">
-              {pending > 0 ? `TA ${pending} คน รอออกคำสั่งแต่งตั้ง` : "ออกคำสั่งครบทุกคนแล้ว"}
+              {!preview
+                ? <Skel className="h-7 w-64 max-w-full" />
+                : pending > 0 ? `TA ${pending} คน รอออกคำสั่งแต่งตั้ง` : "ออกคำสั่งครบทุกคนแล้ว"}
             </div>
             {/* No "·" separators: they wrap onto the next line on a phone and
                 sit there as a stray dot. Spacing alone does the job. */}
             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+              {!preview && <Skel className="h-5 w-48" />}
               {preview && (
                 <>
                   <span>คำสั่งรอบที่ {preview.next_round}</span>
@@ -272,6 +290,11 @@ function AppointmentSection({ termId }: { termId: string }) {
         {/* The names themselves, grouped as they will print. Shown outright —
             hiding a one-line list behind a toggle costs a click and tells the
             reader nothing about how long the list is. */}
+        {!preview && (
+          <SkelRegion className="space-y-2 px-5 py-3">
+            {[0, 1, 2].map(i => <Skel key={i} className="h-5 w-full" />)}
+          </SkelRegion>
+        )}
         {pending > 0 && (
           <div className="max-h-64 overflow-y-auto px-5 py-3">
             <ul className="space-y-2">
@@ -289,7 +312,7 @@ function AppointmentSection({ termId }: { termId: string }) {
             </ul>
           </div>
         )}
-        {pending === 0 && (
+        {preview && pending === 0 && (
           <div className="px-5 py-3 text-sm text-ink-3">
             TA ที่อนุมัติแล้วได้รับคำสั่งแต่งตั้งครบทุกคน เมื่ออนุมัติคำขอใหม่ รายชื่อจะมาแสดงที่นี่
           </div>
@@ -422,7 +445,9 @@ function AppointmentSection({ termId }: { termId: string }) {
             className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-hairline pt-4"
           >
             <span className="me-auto text-xs text-ink-3">
-              {pending === 0
+              {!preview
+                ? ""
+                : pending === 0
                 ? "ไม่มีรายชื่อค้าง จึงยังไม่ต้องออกคำสั่งรอบใหม่"
                 : missing.length > 0
                   ? `กรอกให้ครบก่อน: ${missing.join(" · ")}`
@@ -440,7 +465,9 @@ function AppointmentSection({ termId }: { termId: string }) {
           data-tour="appt-history"
           padded={!rounds?.items?.length}
         >
-          {!rounds?.items?.length ? (
+          {!rounds ? (
+            <SkelList items={3} icon={false} />
+          ) : !rounds.items?.length ? (
             <EmptyState
               icon={<FileText size={26} />}
               title="ยังไม่เคยออกคำสั่ง"

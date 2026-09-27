@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CourseStaffing, MonthFlow, PlanRatios, StaffingStatus } from "../types";
 import { STAFFING_META, FLOW_BUCKETS, money, num1, thMonth, type BudgetView } from "./analysis";
+import { compareYearMonth } from "../../lib/dates";
 
 /* -------------------------------------------------------------------------- */
 /* Shared helpers                                                             */
@@ -376,8 +377,21 @@ export function VerdictBar({ counts }: { counts: Record<StaffingStatus, number> 
 /* Claim-month flow — who is holding each month's claims                      */
 /* -------------------------------------------------------------------------- */
 
-export function FlowChart({ months }: { months: MonthFlow[] }) {
+// year_month is the ACADEMIC key, so "2568-01" is มกราคม 2569: slicing its
+// year would print the wrong one for ม.ค.–พ.ค. The period's own label already
+// carries the calendar year; the fallback derives it the same way.
+function flowMonthLabel(f: MonthFlow): string {
+  if (f.label) return f.label;
+  const y = Number(f.year_month.slice(0, 4));
+  const m = Number(f.year_month.slice(5, 7));
+  return `${thMonth(f.year_month)} ${String(m < 6 ? y + 1 : y).slice(2)}`;
+}
+
+export function FlowChart({ months: input }: { months: MonthFlow[] }) {
   const t = useTip();
+  // The backend orders by the year_month text, which puts ม.ค.–พ.ค. ahead of
+  // มิ.ย.–ธ.ค. of the same academic year.
+  const months = [...input].sort((a, b) => compareYearMonth(a.year_month, b.year_month));
   const max = Math.max(1, ...months.map(f => f.total));
   if (months.length === 0) {
     return <div className="py-10 text-center text-sm text-[var(--ink-3)]">ยังไม่มีการบันทึกเวลาในภาคเรียนนี้</div>;
@@ -388,10 +402,10 @@ export function FlowChart({ months }: { months: MonthFlow[] }) {
         {months.map(f => {
           const done = f.exported + f.finance_sent;
           return (
-            <div key={f.year_month} className="grid grid-cols-[68px_minmax(0,1fr)_72px] items-center gap-3"
+            <div key={f.year_month} className="grid grid-cols-[92px_minmax(0,1fr)_72px] items-center gap-3"
                  role="img" aria-label={`${f.label}: ${FLOW_BUCKETS.filter(bk => f[bk.key as keyof MonthFlow]).map(bk => `${bk.label} ${f[bk.key as keyof MonthFlow]}`).join(", ")}`}>
               <div className="text-xs">
-                <div className="font-medium text-[var(--ink-1)]">{thMonth(f.year_month)} {f.year_month.slice(2, 4)}</div>
+                <div className="font-medium text-[var(--ink-1)]">{flowMonthLabel(f)}</div>
                 <div className="text-[var(--ink-3)]">ปิด {f.due_date.slice(8, 10)}/{f.due_date.slice(5, 7)}</div>
               </div>
               <div className="flex h-6 overflow-hidden rounded-md bg-[var(--hairline,#eef0f3)]"

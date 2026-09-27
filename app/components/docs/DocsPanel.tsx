@@ -8,6 +8,7 @@ import type { DocPageMeta, DocsIndex } from "../../../content/docs/meta";
 import { DOC_ANCHORS } from "../../../content/docs/anchors";
 import { resolveDocForRoute } from "../../lib/docs/routeMap";
 import useIsDemo from "../../lib/useIsDemo";
+import { Skel, SkelRegion } from "../Skeletons";
 
 /**
  * Cloudflare-dashboard-style contextual help: the manual opens in a panel
@@ -59,6 +60,9 @@ interface DocsPanelState {
    *  null while it loads / if it failed — callers then show the generic
    *  pill. Never page text; see content/docs/meta.ts. */
   index: DocsIndex | null;
+  /** True only while `/docs-index` is still on its way (not after a
+   *  failure) — the pill holds a placeholder for its topic label meanwhile. */
+  indexLoading: boolean;
 }
 
 /** What `resolvePageDoc` found for the screen a pill sits on. */
@@ -123,7 +127,7 @@ export function useDocsPanel(): DocsPanelState {
   if (!ctx) {
     // Outside a Shell (e.g. the login page) there's no drawer to open —
     // callers fall back to a plain link, so this is a no-op, not a throw.
-    return { target: null, open: () => {}, close: () => {}, audience: null, index: null };
+    return { target: null, open: () => {}, close: () => {}, audience: null, index: null, indexLoading: false };
   }
   return ctx;
 }
@@ -135,14 +139,14 @@ export function DocsPanelProvider({ audience, children }: { audience: Audience; 
   // Array key: keeps it out of the global fetcher's string-path space. Quiet
   // on failure (overrides SWRProvider's toast) — the pill simply stays
   // generic, which still opens the manual.
-  const { data: index } = useSWR(["docs-index"], fetchDocsIndex, {
+  const { data: index, isLoading: indexLoading } = useSWR(["docs-index"], fetchDocsIndex, {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
     onError: () => {},
   });
   const value = useMemo(
-    () => ({ target, open, close, audience, index: index ?? null }),
-    [target, open, close, audience, index],
+    () => ({ target, open, close, audience, index: index ?? null, indexLoading }),
+    [target, open, close, audience, index, indexLoading],
   );
   // The panel itself is NOT rendered here: `Shell` places `<DocsDock />`
   // inside its flex row so the docked layout can take a column next to
@@ -169,6 +173,9 @@ export function DocsDock() {
   // See PageDocsPill: a new tab would lose the demo sandbox's per-tab API
   // prefix and bounce to the real /login, so in demo it opens in this tab.
   const demo = useIsDemo();
+  // Which embed URL has finished loading. Until the current one has, the
+  // frame is an empty white box — a page-shaped placeholder sits behind it.
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
 
   useEffect(() => {
     if (!target) return;
@@ -215,12 +222,25 @@ export function DocsDock() {
             <X size={18} />
           </button>
         </header>
-        <iframe
-          key={embedHref(target)}
-          src={embedHref(target)}
-          title="คู่มือการใช้งาน"
-          className="min-h-0 flex-1 w-full border-0"
-        />
+        <div className="relative min-h-0 flex-1">
+          {loadedSrc !== embedHref(target) && (
+            <SkelRegion label="กำลังโหลดคู่มือ" className="absolute inset-0 flex flex-col gap-3 p-5">
+              <Skel className="h-3 w-24" />
+              <Skel className="h-7 w-3/4" />
+              <Skel className="h-3.5 w-full mt-2" />
+              <Skel className="h-3.5 w-full" />
+              <Skel className="h-3.5 w-2/3" />
+              <Skel className="h-40 w-full rounded-xl mt-3" />
+            </SkelRegion>
+          )}
+          <iframe
+            key={embedHref(target)}
+            src={embedHref(target)}
+            title="คู่มือการใช้งาน"
+            onLoad={() => setLoadedSrc(embedHref(target))}
+            className={"relative h-full w-full border-0 " + (loadedSrc === embedHref(target) ? "" : "opacity-0")}
+          />
+        </div>
       </aside>
     </>
   );

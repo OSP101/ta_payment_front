@@ -5,6 +5,7 @@ import {
   Calculator, ChevronDown, CircleCheck, TriangleAlert, Sparkles, Users, Wallet, Plus, Info,
 } from "lucide-react";
 import { Panel, Chip, Button } from "./ui";
+import { Skel, SkelValue } from "./Skeletons";
 
 /* -------------------------------------------------------------------------- */
 /* TA planner — the calculator on the request page.                            */
@@ -409,7 +410,32 @@ export function TaPlanner({
   }, [f, model, onDraftEstimate]);
 
   if (!f || !model) {
-    return <div className="mb-4 h-28 rounded-xl bg-surface-secondary animate-pulse" />;
+    // The real header (its title is fixed) with the figures and the open body
+    // as placeholders, so the card doesn't grow from a grey bar to full size.
+    return (
+      <Panel className="mb-4" padded={false}>
+        <div className="flex w-full items-center gap-2 px-4 py-3">
+          {collapsible && <ChevronDown size={16} className="text-muted" />}
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
+            <Calculator size={15} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">
+              {variant === "budget" ? "งบ TA ของวิชานี้" : "วางแผน TA ให้พอดีงบ"}{" "}
+              <span className="font-normal text-muted">(ประมาณการจากตารางสอนจริง)</span>
+            </div>
+            <div className="text-xs"><SkelValue className="h-3 w-64 max-w-full" /></div>
+          </div>
+        </div>
+        {open && (
+          <div className="border-t border-hairline px-4 py-4 space-y-4">
+            <Skel className="h-[104px] rounded-xl" />
+            <Skel className="h-8 w-44 rounded-lg" />
+            <Skel className="h-32 rounded-xl" />
+          </div>
+        )}
+      </Panel>
+    );
   }
 
   const { regular, special, hasSpecial, options, specialOptions, draftEval } = model;

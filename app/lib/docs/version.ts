@@ -5,7 +5,7 @@
  * screen. Bump this alongside a real release tag (see PLAN-manual-docs-platform.md
  * §5) — not on every commit.
  */
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.1.0";
 
 /** `"1.0.0"` → `"1.0"` — the granularity content and media are tagged at. */
 export function minorVersion(v: string = APP_VERSION): string {

@@ -16,7 +16,6 @@ import {
   Label as HLabel,
   TextField as HTextField,
   FieldError as HFieldError,
-  toast,
   type Key,
 } from "@heroui/react";
 import { api } from "../../../../lib/api";
@@ -26,6 +25,7 @@ import {
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 import { TaPlanner, planHandoffKey, type PlanItem, type DraftEstimate } from "../../../../components/TaPlanner";
+import { Skel, SkelValue } from "../../../../components/Skeletons";
 
 /**
  * On a short screen the planner card fills the viewport and the numbered
@@ -323,7 +323,9 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
   );
 
   const windowState = useWindowState(windows);
-  const windowLoading = !!course?.term_id && !windows;
+  // The window key needs the course's term, so "course not here yet" is also
+  // loading — otherwise the banner briefly claims "ไม่มีกำหนดส่ง".
+  const windowLoading = !course || (!!course.term_id && !windows);
   // WBA gate mirrors the backend: no TA request until every section has a
   // timetable — worklog validation and budget math both read it.
   const wbaBlocked = !!course?.has_missing_schedule;
@@ -370,14 +372,18 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
           canSend={canSend}
           late={windowState.phase === "late"}
           onSubmitted={() => {
+            // The form already toasts the actual verdict (approved / waiting on
+            // a TA timetable). A second "รอเจ้าหน้าที่ตรวจสอบ" toast contradicted
+            // it — requests are decided automatically, not by staff.
             mutate("/ta-requests");
-            toast.success("ส่งคำขอ TA เรียบร้อยแล้ว", { description: "รอเจ้าหน้าที่ตรวจสอบและอนุมัติ" });
           }}
         />
       )}
 
       <div data-tour="req-history">
-        <RequestsTable rows={courseReqs} loading={!allReqs} />
+        {/* undefined (not []) while loading, so the table shows skeleton rows
+            instead of flashing "ยังไม่มีคำขอ". */}
+        <RequestsTable rows={allReqs ? courseReqs : undefined} loading={!allReqs} />
       </div>
     </div>
   );
@@ -974,7 +980,11 @@ function RequestFormSection({
           title="เพิ่มรายชื่อ TA และกำหนดภาระงาน"
           description="เพิ่ม TA ทีละคน เลือก section และกรอกภาระงานของแต่ละคน"
           status={
-            assignments.length === 0
+            // No verdict while the saved draft is still loading — it may well
+            // hold the rows "ยังไม่ได้เพิ่ม TA" would deny.
+            !draftReady && assignments.length === 0
+              ? undefined
+              : assignments.length === 0
               ? { tone: "warn", text: "ยังไม่ได้เพิ่ม TA" }
               : !taChosen
               ? { tone: "warn", text: "ยังไม่ได้เลือก TA" }
@@ -987,14 +997,19 @@ function RequestFormSection({
               : { tone: "success", text: `${assignments.length} คน · พร้อมส่ง` }
           }
         >
-          {!course?.sections?.length ? (
+          {!course ? (
+            <div className="space-y-3">
+              <Skel className="h-11 w-full rounded-md" />
+              <Skel className="h-20 w-full rounded-lg" />
+            </div>
+          ) : !course.sections?.length ? (
             <EmptyState title="ยังไม่มี section ในรายวิชานี้" />
           ) : (
             <div className="space-y-3">
               {/* Toolbar with add + create buttons */}
               <div data-tour="req-toolbar" className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 border border-hairline px-3 py-2">
                 <div className="flex items-center gap-2 text-xs text-ink-3">
-                  รวม TA ในวิชานี้ <b className="text-ink-1">{assignments.length}</b> คน
+                  รวม TA ในวิชานี้ <b className="text-ink-1">{!draftReady && assignments.length === 0 ? <SkelValue className="h-3 w-4" /> : assignments.length}</b> คน
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -1038,7 +1053,10 @@ function RequestFormSection({
               )}
 
               {/* Unified assignment list */}
-              {assignments.length === 0 ? (
+              {assignments.length === 0 && !draftReady ? (
+                // Saved draft still loading — same footprint as the empty box.
+                <Skel className="h-20 w-full rounded-lg" />
+              ) : assignments.length === 0 ? (
                 <div className="text-xs text-ink-3 text-center py-8 border border-dashed border-hairline rounded-lg">
                   ยังไม่ได้เพิ่ม TA กดปุ่ม "เพิ่ม TA" ด้านบน
                 </div>
@@ -2262,7 +2280,18 @@ function formatThaiDateTime(iso: string): string {
 }
 
 function WindowStatusBanner({ state, loading }: { state: WindowState; loading: boolean }) {
-  if (loading) return null;
+  // The banner is always shown once loaded, so hold its space: chip + two lines.
+  if (loading) {
+    return (
+      <div className="mb-3 rounded-lg border border-border px-4 py-3 flex flex-wrap items-center gap-3" aria-hidden>
+        <Skel className="h-6 w-24 rounded-full" />
+        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+          <Skel className="h-4 w-64 max-w-full" />
+          <Skel className="h-3 w-80 max-w-full" />
+        </div>
+      </div>
+    );
+  }
 
   // ส่งช้า — ยังส่งได้ตามปกติ แต่ต้องรู้ว่าเงินจะออกช้า
   if (state.phase === "late") {

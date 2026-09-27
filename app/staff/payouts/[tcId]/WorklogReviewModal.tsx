@@ -8,6 +8,7 @@ import {
 import { api, errMessage, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import { HoursSplit } from "../../../lib/trackSplit";
+import { localDateISO } from "../../../lib/dates";
 import {
   Modal, Button, Spinner, Chip, TextArea, TextInput, Alert, IconButton,
   ConfirmDialog,
@@ -15,6 +16,7 @@ import {
 import { packLanes, parseTime } from "../../../components/ScheduleGrid";
 import { readAddForm, writeAddForm, clearAddForm } from "../../../lib/draftStorage";
 import { WorkloadEditModal } from "../../../components/WorkloadEditModal";
+import { Skel, SkelRegion } from "../../../components/Skeletons";
 
 /**
  * One TA's month, checked against their own week.
@@ -350,7 +352,22 @@ export function WorklogReviewModal({
           </div>
 
           {isLoading || !data ? (
-            <div className="flex flex-1 items-center justify-center"><Spinner /></div>
+            // Same two-pane split as the loaded view: the week on the left,
+            // the day rows on the right.
+            <SkelRegion className="grid min-h-0 flex-1 gap-3 overflow-hidden pt-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+              <div className="flex flex-col gap-2">
+                <Skel className="h-3 w-2/3" />
+                <Skel className="h-96 w-full rounded-lg" />
+              </div>
+              <div className="flex flex-col gap-3">
+                <Skel className="h-6 w-1/2" />
+                {Array.from({ length: 8 }, (_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    {Array.from({ length: 5 }, (_, j) => <Skel key={j} className="h-3.5 flex-1" />)}
+                  </div>
+                ))}
+              </div>
+            </SkelRegion>
           ) : (
             <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
               {/* ── left: the week ─────────────────────────────────────────── */}
@@ -626,7 +643,9 @@ function weekStart(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   const shift = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - shift);
-  return d.toISOString().slice(0, 10);
+  // Local parts: toISOString() is UTC, which turns local Monday 00:00 into
+  // Sunday in Bangkok.
+  return localDateISO(d);
 }
 // Spelled out, with the Buddhist year the rest of the system prints. "อ. 23/6"
 // saved a few pixels and cost the reviewer the one thing they cross-check

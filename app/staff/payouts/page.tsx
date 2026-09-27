@@ -7,7 +7,8 @@ import {
   Check, CircleDashed, Minus, CalendarClock,
 } from "lucide-react";
 import { useTerm, useTermKey } from "../TermContext";
-import { PageHeader, Panel, EmptyState, Chip, Spinner, type ChipTone } from "../../components/ui";
+import { PageHeader, Panel, EmptyState, Chip, type ChipTone } from "../../components/ui";
+import { Skel, SkelRegion } from "../../components/Skeletons";
 import { roundRangeLabel, type FiscalSplitInfo } from "../../components/monthScope";
 import { CertifierPicker } from "./CertifierPicker";
 
@@ -146,9 +147,11 @@ export default function PayoutsPage() {
   const queueKey = useTermKey("/submission-periods/review-queue");
   const summaryKey = useTermKey("/exports/summary");
 
-  const { data: queue, isLoading: qLoading } =
-    useSWR<{ items: ReviewRow[]; awaiting_appointment?: number }>(queueKey);
-  const { data: summary, isLoading: sLoading } = useSWR<PayoutDashboard>(summaryKey);
+  // keepPreviousData: a term switch keeps the old lists on screen until the new
+  // term's arrive, instead of dropping back to placeholders for a moment.
+  const { data: queue } =
+    useSWR<{ items: ReviewRow[]; awaiting_appointment?: number }>(queueKey, { keepPreviousData: true });
+  const { data: summary } = useSWR<PayoutDashboard>(summaryKey, { keepPreviousData: true });
 
   const split = summary?.fiscal_split;
   const crosses = !!split?.crosses && split.after.length > 0;
@@ -173,7 +176,9 @@ export default function PayoutsPage() {
   const done = cards.filter(c => bucketOf(c) === "done");
   const waiting = cards.filter(c => bucketOf(c) === "waiting").length;
 
-  const loading = qLoading || sLoading || !summary;
+  // Every row merges both responses (buildCards), so the sections wait for the
+  // pair — but only the rows do; the section chrome is drawn right away.
+  const loading = !queue || !summary;
   const open = (c: CourseCard) => router.push(`/staff/payouts/${c.id}`);
 
   return (
@@ -187,8 +192,23 @@ export default function PayoutsPage() {
       />
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted">
-          <Spinner size="sm" /> กำลังโหลด…
+        <div className="space-y-4">
+          <Section
+            icon={<ClipboardCheck size={14} />}
+            title="รอคุณดำเนินการ"
+            hint="ป้ายท้ายชื่อวิชาบอกว่าต้องทำอะไรต่อ"
+            empty=""
+          >
+            <CourseRowsSkeleton count={3} />
+          </Section>
+          <Section
+            icon={<Lock size={14} />}
+            title="ส่งออกแล้ว"
+            hint="ดาวน์โหลดซ้ำได้ · เดือนที่ส่งออกไปแล้วถูกล็อกไม่ให้แก้"
+            empty=""
+          >
+            <CourseRowsSkeleton count={2} />
+          </Section>
         </div>
       ) : act.length === 0 && round2.length === 0 && done.length === 0 ? (
         <Panel>
@@ -370,7 +390,8 @@ function Section({
   icon, title, hint, empty, count, children, tourId,
 }: {
   icon: React.ReactNode; title: string; hint: string; empty: string;
-  count: number; children: React.ReactNode; tourId?: string;
+  /** Omitted while loading — children (placeholders) are shown instead. */
+  count?: number; children: React.ReactNode; tourId?: string;
 }) {
   return (
     <Panel padded={false} data-tour={tourId}>
@@ -386,6 +407,30 @@ function Section({
         </div>
       )}
     </Panel>
+  );
+}
+
+/** Placeholder rows shaped like CourseRow: name + chip, a sub-line, money on the right. */
+function CourseRowsSkeleton({ count }: { count: number }) {
+  return (
+    <SkelRegion>
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="flex items-center gap-4 border-t border-[var(--hairline)] px-4 py-3 first:border-t-0">
+          <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <Skel className="h-4 w-48" />
+              <Skel className="h-5 w-20 rounded-full" />
+            </div>
+            <Skel className="h-3 w-1/3" />
+          </div>
+          <div className="hidden w-40 shrink-0 flex-col items-end gap-1.5 sm:flex">
+            <Skel className="h-4 w-20" />
+            <Skel className="h-3 w-24" />
+          </div>
+          <ChevronRight size={16} className="shrink-0 text-muted" />
+        </div>
+      ))}
+    </SkelRegion>
   );
 }
 
@@ -419,7 +464,9 @@ function statusOf(c: CourseCard): { tone: ChipTone; label: string } {
     }
     if (c.exportedAt) return { tone: "success", label: "ส่งครบทุกรอบ" };
   } else if (c.exportedAt) {
-    return { tone: "success", label: `ส่งออกแล้ว ${c.exportedAt.slice(0, 10)}` };
+    // Thai date like every other screen, not the raw ISO "2026-09-27".
+    const d = new Date(c.exportedAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+    return { tone: "success", label: `ส่งออกแล้ว ${d}` };
   }
   if (c.exportable && c.blocked.length > 0) return { tone: "info", label: "ส่งออกได้บางส่วน" };
   if (c.exportable) return { tone: "brand", label: "พร้อมส่งออก" };

@@ -12,6 +12,8 @@ import { PageHeader, Panel, Button, Alert, EmptyState } from "../components/ui";
 import { type Executive, emptyExecutive } from "./types";
 import { useTerm, useTermKey } from "./TermContext";
 import TermDashboard from "./insights/TermDashboard";
+import { Skel } from "../components/Skeletons";
+import { localDateISO } from "../lib/dates";
 
 function formatThaiDate(iso?: string): string {
   if (!iso) return "";
@@ -49,7 +51,8 @@ export default function StaffDashboard() {
   // looking at a dashboard scoped to a semester that ended weeks ago with
   // nothing on screen saying so.
   const activeTerm = terms?.find(t => t.is_active);
-  const todayISO = new Date().toISOString().slice(0, 10);
+  // Local date: toISOString() is UTC, still yesterday until 07:00 here.
+  const todayISO = localDateISO();
   const termExpired = !!activeTerm?.ends_on && activeTerm.ends_on < todayISO;
   const noActiveTerm = loaded && !noTerms && !activeTerm;
 
@@ -191,7 +194,8 @@ function TodoPanel({ todos, loading }: { todos: Todo[]; loading: boolean }) {
   // to turn into four outstanding items — a false all-clear is worse than a
   // brief gap.
   if (loading) {
-    return <div className="mb-5 h-24 rounded-xl border border-border bg-surface animate-pulse" />;
+    // Skel (not animate-pulse) so a cached/fast response never flashes grey.
+    return <Skel className="mb-5 h-24 rounded-xl" />;
   }
 
   if (todos.length === 0) {

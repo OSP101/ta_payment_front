@@ -132,7 +132,9 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
           {base > 0 && (
             <g>
               <line x1={L} x2={W - R} y1={y1(base)} y2={y1(base)} stroke="#b91c1c" strokeWidth="1.5" />
-              <text x={L + 4} y={y1(base) - 5} fontSize="12" fill="#b91c1c">งบรวม {money(base)}</text>
+              {/* Above the line, unless that would collide with the panel title
+                  at the top — then just below it. */}
+              <text x={L + 4} y={y1(base) - 5 < 30 ? y1(base) + 15 : y1(base) - 5} fontSize="12" fill="#b91c1c">งบรวม {money(base)}</text>
             </g>
           )}
           {pace && (

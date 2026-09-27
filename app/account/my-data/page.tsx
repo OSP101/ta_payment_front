@@ -10,6 +10,7 @@ import {
 } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { PageHeader, Panel, Button, IconButton, TextArea, Alert, Chip, StatusChip } from "../../components/ui";
+import { Skel, SkelList, SkelRegion, SkelRows, SkelValue } from "../../components/Skeletons";
 
 /**
  * PDPA self-service data access — "what do you have on me" (export/view) and
@@ -32,7 +33,9 @@ export default function MyDataPage() {
 
       {error && <Alert status="danger" title="โหลดข้อมูลไม่สำเร็จ" description={errMessage(error)} />}
 
-      {exp && (
+      {/* Panels render straight away with their own placeholders; only a
+          failed load (nothing to show, the alert above says why) hides them. */}
+      {(exp || !error) && (
         <>
           <ProfileSection exp={exp} />
           {isTA && <CitizenIdSection />}
@@ -52,27 +55,27 @@ export default function MyDataPage() {
   );
 }
 
-function ProfileSection({ exp }: { exp: MyDataExport }) {
-  const p = exp.profile;
+function ProfileSection({ exp }: { exp: MyDataExport | undefined }) {
+  const p = exp?.profile;
   return (
     <Panel title="ข้อมูลส่วนตัว" className="mb-4">
       <div className="grid md:grid-cols-2 gap-3 text-sm">
-        <Field label="อีเมล" value={p.email} />
-        <Field label="ชื่อ-นามสกุล" value={`${p.title ?? ""} ${p.first_name} ${p.last_name}`.trim()} />
-        <Field label="เบอร์โทรศัพท์" value={p.phone ?? "—"} />
-        <Field label="รหัสนักศึกษา" value={p.student_id ?? "—"} />
-        <Field label="หน่วยงาน" value={p.department ?? "—"} />
-        <Field label="บทบาท" value={p.roles.join(", ") || "—"} />
+        <Field label="อีเมล" value={p?.email} />
+        <Field label="ชื่อ-นามสกุล" value={p && `${p.title ?? ""} ${p.first_name} ${p.last_name}`.trim()} />
+        <Field label="เบอร์โทรศัพท์" value={p && (p.phone ?? "—")} />
+        <Field label="รหัสนักศึกษา" value={p && (p.student_id ?? "—")} />
+        <Field label="หน่วยงาน" value={p && (p.department ?? "—")} />
+        <Field label="บทบาท" value={p && (p.roles.join(", ") || "—")} />
       </div>
     </Panel>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value }: { label: string; value: string | undefined }) {
   return (
     <div>
       <div className="text-xs text-muted">{label}</div>
-      <div className="text-foreground">{value}</div>
+      <div className="text-foreground">{value ?? <SkelValue className="h-3.5 w-36" />}</div>
     </div>
   );
 }
@@ -154,13 +157,15 @@ function CitizenIdSection() {
   );
 }
 
-function DocumentsSection({ exp }: { exp: MyDataExport }) {
+function DocumentsSection({ exp }: { exp: MyDataExport | undefined }) {
   const DOC_LABEL: Record<string, string> = {
     creditor_form: "แบบแจ้งเจ้าหนี้", national_id: "สำเนาบัตรประชาชน", bank_book: "หน้าสมุดบัญชี",
   };
   return (
     <Panel title="เอกสาร" className="mb-4">
-      {exp.documents.length === 0 ? (
+      {!exp ? (
+        <SkelList items={3} icon={false} />
+      ) : exp.documents.length === 0 ? (
         <div className="text-sm text-muted">ยังไม่มีเอกสารที่อัปโหลด</div>
       ) : (
         <div className="flex flex-col divide-y divide-[var(--hairline)] -my-1">
@@ -180,7 +185,19 @@ function DocumentsSection({ exp }: { exp: MyDataExport }) {
   );
 }
 
-function SecuritySection({ exp }: { exp: MyDataExport }) {
+function SecuritySection({ exp }: { exp: MyDataExport | undefined }) {
+  if (!exp) {
+    return (
+      <Panel title="ความปลอดภัยและการเข้าสู่ระบบ" className="mb-4">
+        <SkelRegion className="flex items-center gap-3 mb-3">
+          <Skel className="size-4 rounded-full" />
+          <Skel className="h-3.5 w-40" />
+        </SkelRegion>
+        <div className="text-xs text-muted mb-2">ประวัติการเข้าสู่ระบบล่าสุด</div>
+        <SkelRows rows={4} columns={4} />
+      </Panel>
+    );
+  }
   return (
     <Panel title="ความปลอดภัยและการเข้าสู่ระบบ" className="mb-4">
       <div className="flex items-center gap-3 mb-3">
@@ -260,7 +277,7 @@ function ExportSection() {
 }
 
 function DeletionRequestSection() {
-  const { data: req, mutate: revalidate } = useSWR<DataDeletionRequest | null>(
+  const { data: req, isLoading, mutate: revalidate } = useSWR<DataDeletionRequest | null>(
     "/me/data-deletion-request");
   const [reason, setReason] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -283,7 +300,16 @@ function DeletionRequestSection() {
 
   return (
     <Panel title="ขอให้ลบข้อมูลของฉัน" className="mb-4">
-      {req && req.status === "pending" ? (
+      {/* The request button must not show before we know whether a request is
+          already pending — it would flip into the "pending" alert a moment later. */}
+      {isLoading ? (
+        <SkelRegion className="flex flex-col gap-2">
+          <Skel className="h-3.5 w-full" />
+          <Skel className="h-3.5 w-full" />
+          <Skel className="h-3.5 w-2/3" />
+          <Skel className="h-8 w-44 rounded-xl mt-1" />
+        </SkelRegion>
+      ) : req && req.status === "pending" ? (
         <Alert
           status="warning"
           title="คำขออยู่ระหว่างการพิจารณา"

@@ -3,8 +3,10 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import useSWR from "swr";
 import { Printer, FileDown } from "lucide-react";
-import { Button, Spinner, Alert } from "../components/ui";
+import { Button, Alert } from "../components/ui";
+import { Skel, SkelValue } from "../components/Skeletons";
 import useDocumentTitle from "../lib/useDocumentTitle";
+import { thaiDate } from "../lib/dates";
 
 /**
  * The faculty's signed form — "ตารางเรียนและตารางปฏิบัติงาน (TA)".
@@ -108,7 +110,7 @@ function span(b: Block): { start: number; end: number } | null {
 
 export default function TimetableFormPage() {
   return (
-    <Suspense fallback={<div className="p-10 flex justify-center"><Spinner /></div>}>
+    <Suspense fallback={<FormView data={undefined} formKey={null} yearMonth={null} />}>
       <TimetableFormInner />
     </Suspense>
   );
@@ -126,26 +128,43 @@ function TimetableFormInner() {
       (userId ? `&user_id=${userId}` : "") +
       (yearMonth ? `&year_month=${yearMonth}` : "")
     : null;
-  const { data, isLoading, error } = useSWR<FormData>(key);
+  const { data, error } = useSWR<FormData>(key);
 
   if (!termId) return <div className="p-6"><Alert status="danger" title="ต้องระบุภาคการศึกษา (term_id)" /></div>;
-  if (isLoading || !data) return <div className="p-10 flex justify-center"><Spinner /></div>;
-  if (error) return <div className="p-6"><Alert status="danger" title="โหลดฟอร์มไม่สำเร็จ" /></div>;
+  // Checked before the loading state: it used to come after `!data`, so a
+  // failed load kept the spinner up forever and this alert never showed.
+  if (error && !data) return <div className="p-6"><Alert status="danger" title="โหลดฟอร์มไม่สำเร็จ" /></div>;
 
+  return <FormView data={data} formKey={key} yearMonth={yearMonth} />;
+}
+
+/**
+ * The form itself. `data` undefined = still loading: the paper layout (toolbar,
+ * heading, legend, the hour grid, the signature line) is all fixed, so it is
+ * drawn straight away and only the parts that come from the TA's data hold a
+ * placeholder — the blocks land in the grid rather than the whole sheet
+ * replacing a spinner.
+ */
+function FormView({ data, formKey: key, yearMonth }: {
+  data: FormData | undefined; formKey: string | null; yearMonth: string | null;
+}) {
   // Weekend rows only when something actually falls there — otherwise two of the
   // seven rows are permanently blank and the grid loses a fifth of its width to
   // nothing. Makeups and grading slots legitimately land on Saturday.
-  const usedDays = new Set(data.blocks.map(b => b.day_of_week));
+  const usedDays = new Set((data?.blocks ?? []).map(b => b.day_of_week));
   const days = DAYS.filter(d => d.dow >= 1 && d.dow <= 5 ? true : usedDays.has(d.dow));
 
-  const duties = data.blocks.filter(b => b.kind !== "own_class");
+  const duties = (data?.blocks ?? []).filter(b => b.kind !== "own_class");
   // A block outside 08:00–21:00 cannot be drawn. Say so out loud: the 20:00
   // column bug was invisible for exactly as long as `span()` returned null and
   // the caller quietly rendered nothing, and a form that drops a duty without
   // saying anything is worse than one with an odd-looking column.
-  const unplaceable = data.blocks.filter(b => span(b) === null);
-  const manualOut = data.out_of_grid.filter(o => o.source === "manual");
-  const autoOut = data.out_of_grid.filter(o => o.source === "auto");
+  const unplaceable = (data?.blocks ?? []).filter(b => span(b) === null);
+  const manualOut = data?.out_of_grid.filter(o => o.source === "manual");
+  const autoOut = data?.out_of_grid.filter(o => o.source === "auto");
+  // The out-of-grid tables exist only for a month view; the URL already says
+  // whether this is one, so their space is held before the data arrives.
+  const monthView = data ? !!data.year_month : !!yearMonth;
 
   return (
     <div className="mx-auto max-w-[1200px] p-4 print:p-0">
@@ -166,16 +185,16 @@ function TimetableFormInner() {
           {/* Two ways out on purpose. Browser print is instant and lays the grid
               out exactly as seen; the server PDF is the one that can be filed,
               emailed, or pulled from the payout zip without a browser. */}
-          <Button variant="outline" onClick={() => window.open(`/api/v1${key}`.replace("/timetable-form?", "/timetable-form.pdf?"), "_blank", "noopener")}>
+          <Button variant="outline" disabled={!key} onClick={() => window.open(`/api/v1${key}`.replace("/timetable-form?", "/timetable-form.pdf?"), "_blank", "noopener")}>
             <FileDown size={14} /> ดาวน์โหลด PDF
           </Button>
-          <Button onClick={() => window.print()}>
+          <Button disabled={!data} onClick={() => window.print()}>
             <Printer size={14} /> พิมพ์ฟอร์ม
           </Button>
         </div>
       </div>
 
-      {!data.has_own_classes && (
+      {data && !data.has_own_classes && (
         <div className="no-print mb-3">
           <Alert
             status="warning"
@@ -199,11 +218,21 @@ function TimetableFormInner() {
 
       <div className="text-center">
         <div className="text-base font-semibold">ตารางเรียนและตารางปฏิบัติงาน (TA)</div>
-        <div className="text-sm">ภาคการศึกษา {data.term_label}{data.year_month ? ` · เดือน ${data.year_month}` : ""}</div>
+        <div className="text-sm">
+          {data
+            ? <>ภาคการศึกษา {data.term_label}{data.year_month ? ` · เดือน ${data.year_month}` : ""}</>
+            : <SkelValue className="h-3.5 w-48" />}
+        </div>
       </div>
       <div className="mt-2 text-sm">
-        ชื่อ <b>{data.ta_name}</b>
-        {data.student_id ? <>　รหัสนักศึกษา <b>{data.student_id}</b></> : null}
+        {data ? (
+          <>
+            ชื่อ <b>{data.ta_name}</b>
+            {data.student_id ? <>　รหัสนักศึกษา <b>{data.student_id}</b></> : null}
+          </>
+        ) : (
+          <>ชื่อ <SkelValue className="h-3.5 w-64" /></>
+        )}
       </div>
 
       <div className="mt-2 flex flex-wrap gap-3 text-[11px]">
@@ -231,7 +260,7 @@ function TimetableFormInner() {
           </div>
 
           {days.map(d => (
-            <DayRow key={d.dow} label={d.label} dow={d.dow} blocks={data.blocks} />
+            <DayRow key={d.dow} label={d.label} dow={d.dow} blocks={data?.blocks} />
           ))}
         </div>
       </div>
@@ -239,16 +268,16 @@ function TimetableFormInner() {
       {/* Out-of-grid entries. Split by origin, because "off the timetable" and
           "typed by a human" are different claims: a makeup is generated and lands
           off-grid by design, while a hand-typed row is the one to read. */}
-      {data.year_month && (
+      {monthView && (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <OutTable
-            title={`TA เพิ่มเอง (${manualOut.length})`}
+            title={manualOut ? `TA เพิ่มเอง (${manualOut.length})` : "TA เพิ่มเอง"}
             hint="ไม่ตรงช่องใดในตาราง และเป็นรายการที่พิมพ์เอง"
             rows={manualOut}
             highlight
           />
           <OutTable
-            title={`นอกตาราง แต่ระบบสร้าง (${autoOut.length})`}
+            title={autoOut ? `นอกตาราง แต่ระบบสร้าง (${autoOut.length})` : "นอกตาราง แต่ระบบสร้าง"}
             hint="ส่วนใหญ่คือคาบชดเชยที่ย้ายวัน"
             rows={autoOut}
           />
@@ -258,8 +287,8 @@ function TimetableFormInner() {
       {/* Signature blocks, grouped by lecturer exactly as the paper form does —
           one lecturer covering two of the TA's courses signs once. */}
       <div className="mt-8 grid gap-8 md:grid-cols-2">
-        <SignBlock name={data.ta_name} role="นักศึกษา" />
-        {data.signers.map(s => (
+        <SignBlock name={data?.ta_name} role="นักศึกษา" />
+        {data?.signers.map(s => (
           <SignBlock
             key={s.lecturer_id}
             name={s.lecturer_name}
@@ -273,9 +302,9 @@ function TimetableFormInner() {
 }
 
 /** One day = two stacked rows: the student's classes, then their TA duties. */
-function DayRow({ label, dow, blocks }: { label: string; dow: number; blocks: Block[] }) {
-  const own = blocks.filter(b => b.day_of_week === dow && b.kind === "own_class");
-  const duty = blocks.filter(b => b.day_of_week === dow && b.kind !== "own_class");
+function DayRow({ label, dow, blocks }: { label: string; dow: number; blocks: Block[] | undefined }) {
+  const own = blocks?.filter(b => b.day_of_week === dow && b.kind === "own_class");
+  const duty = blocks?.filter(b => b.day_of_week === dow && b.kind !== "own_class");
   const cols = `64px repeat(${HOURS.length}, minmax(0,1fr))`;
 
   return (
@@ -283,21 +312,31 @@ function DayRow({ label, dow, blocks }: { label: string; dow: number; blocks: Bl
       <div className="row-span-2 flex items-center justify-center bg-white px-1 text-[11px] font-medium">
         {label}
       </div>
-      <BlockLane blocks={own} />
-      <BlockLane blocks={duty} />
+      <BlockLane blocks={own} seed={dow} />
+      <BlockLane blocks={duty} seed={dow + 2} />
     </div>
   );
 }
 
 /** One lane of the day — blocks placed on the hour columns, gaps filled white. */
-function BlockLane({ blocks }: { blocks: Block[] }) {
+/** Where a loading lane draws its one placeholder bar — varied per row so the
+ *  sheet reads as "blocks coming", not as a striped pattern. [startCol, span] */
+const PLACEHOLDER_AT: [number, number][] = [[3, 3], [6, 2], [2, 4], [8, 3], [4, 2]];
+
+function BlockLane({ blocks, seed = 0 }: { blocks: Block[] | undefined; seed?: number }) {
+  const [phStart, phSpan] = PLACEHOLDER_AT[seed % PLACEHOLDER_AT.length];
   return (
     <>
       {/* Background cells so the lane keeps its height and gridlines when empty. */}
       {HOURS.map((_, i) => (
         <div key={`bg${i}`} className="min-h-[26px] bg-white" style={{ gridColumn: i + 2 }} />
       ))}
-      {blocks.map((b, i) => {
+      {!blocks && (
+        <div className="z-10 self-center px-1" style={{ gridColumn: `${phStart} / span ${phSpan}` }}>
+          <Skel className="h-4 w-full rounded-sm" />
+        </div>
+      )}
+      {blocks?.map((b, i) => {
         const sp = span(b);
         if (!sp) return null;
         const st = STYLE[b.kind];
@@ -321,21 +360,23 @@ function BlockLane({ blocks }: { blocks: Block[] }) {
 
 function OutTable({
   title, hint, rows, highlight,
-}: { title: string; hint: string; rows: OutOfGrid[]; highlight?: boolean }) {
+}: { title: string; hint: string; rows: OutOfGrid[] | undefined; highlight?: boolean }) {
   return (
     <div className="rounded-lg border border-[var(--hairline)] overflow-hidden">
-      <div className={"px-3 py-1.5 " + (highlight && rows.length > 0 ? "bg-amber-50" : "bg-surface-secondary")}>
+      <div className={"px-3 py-1.5 " + (highlight && rows && rows.length > 0 ? "bg-amber-50" : "bg-surface-secondary")}>
         <div className="text-xs font-medium">{title}</div>
         <div className="text-[11px] text-muted">{hint}</div>
       </div>
-      {rows.length === 0 ? (
+      {!rows ? (
+        <div className="px-3 py-2"><Skel className="h-3 w-2/3" /></div>
+      ) : rows.length === 0 ? (
         <div className="px-3 py-1.5 text-[11px] text-muted">ไม่มี</div>
       ) : (
         <table className="w-full text-[11px]">
           <tbody>
             {rows.map((o, i) => (
               <tr key={i} className="border-t border-[var(--hairline)]">
-                <td className="px-2 py-1 whitespace-nowrap text-muted">{o.work_date}</td>
+                <td className="px-2 py-1 whitespace-nowrap text-muted">{thaiDate(o.work_date)}</td>
                 <td className="px-1 py-1 whitespace-nowrap tabular">
                   {o.start_time.slice(0, 5)}–{o.end_time.slice(0, 5)}
                 </td>
@@ -351,11 +392,11 @@ function OutTable({
   );
 }
 
-function SignBlock({ name, role, detail }: { name: string; role: string; detail?: string[] }) {
+function SignBlock({ name, role, detail }: { name: string | undefined; role: string; detail?: string[] }) {
   return (
     <div className="text-center text-sm">
       <div className="mb-6">ลงชื่อ .................................................</div>
-      <div>( {name} )</div>
+      <div>( {name ?? <SkelValue className="h-3.5 w-40" />} )</div>
       <div className="text-xs text-muted">{role}</div>
       {detail?.map((d, i) => (
         <div key={i} className="text-[11px] text-muted">{d}</div>

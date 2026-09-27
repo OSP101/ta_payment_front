@@ -5,6 +5,7 @@ import { AlertTriangle, BadgeCheck } from "lucide-react";
 import { api, errMessage } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { Select } from "../../components/ui";
+import { Skel } from "../../components/Skeletons";
 
 /**
  * Who signs the ผู้รับรอง block on this term's claim forms.
@@ -43,7 +44,7 @@ interface Certifier {
 
 export function CertifierPicker({ termId }: { termId: string }) {
   const key = `/exports/terms/${termId}/certifier`;
-  const { data: current } = useSWR<Certifier>(key);
+  const { data: current, error: currentError } = useSWR<Certifier>(key);
   const { data: officers } = useSWR<Officer[]>("/settings/admin-officers");
   const [saving, setSaving] = useState(false);
 
@@ -63,7 +64,18 @@ export function CertifierPicker({ termId }: { termId: string }) {
     }
   }
 
-  if (!officers) return null;
+  // Hold the label + select's space (and don't show "ตามตำแหน่ง…" as the
+  // choice) until both the roster and the saved choice are known.
+  if (!officers || (current === undefined && !currentError)) {
+    return (
+      <div className="w-full sm:w-[22rem]">
+        <label className="mb-1 flex items-center gap-1 text-xs text-ink-2">
+          <BadgeCheck size={12} /> ผู้รับรองในเอกสารเบิกจ่าย
+        </label>
+        <Skel className="h-9 w-full rounded-lg" />
+      </div>
+    );
+  }
 
   return (
     <div data-tour="payouts-certifier" className="w-full sm:w-[22rem]">

@@ -8,6 +8,7 @@ import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 import { isSameOrigin, sameOriginPath } from "../lib/safePath";
 import { IconButton } from "./ui";
+import { Skel, SkelRegion } from "./Skeletons";
 import useUnreadCount from "../lib/useUnreadCount";
 
 interface Notif {
@@ -28,7 +29,7 @@ export default function NotificationBell({
   seeAllHref?: string;
 }) {
   const router = useRouter();
-  const { data } = useSWR<Notif[]>("/me/notifications?limit=10");
+  const { data, error } = useSWR<Notif[]>("/me/notifications?limit=10");
   const list = data ?? [];
 
   // Accurate total, not capped by the 10-item preview list above.
@@ -93,7 +94,21 @@ export default function NotificationBell({
         </div>
 
         <div className="max-h-[360px] overflow-y-auto">
-          {list.length === 0 ? (
+          {!data && !error ? (
+            // Opened before the preview arrived — rows, not a "no notifications" flash.
+            <SkelRegion>
+              {Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className="px-3 py-2.5 border-b border-border last:border-b-0 flex items-start gap-2">
+                  <span className="w-2 h-2 shrink-0" />
+                  <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                    <Skel className="h-3.5 w-2/3" />
+                    <Skel className="h-3 w-full" />
+                    <Skel className="h-2.5 w-20" />
+                  </div>
+                </div>
+              ))}
+            </SkelRegion>
+          ) : list.length === 0 ? (
             <div className="px-3 py-6 text-center text-xs text-muted">ยังไม่มีการเตือน</div>
           ) : (
             list.map(n => (

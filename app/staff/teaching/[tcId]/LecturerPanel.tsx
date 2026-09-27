@@ -12,6 +12,7 @@ import { Star, Pencil, X, Check } from "lucide-react";
 import { api } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import { Panel, Button, Chip, EmptyState } from "../../../components/ui";
+import { Skel, SkelRegion } from "../../../components/Skeletons";
 import {
   LecturerAutocomplete, lecturerName, type LecturerUser,
 } from "../OpenCourseModal";
@@ -24,10 +25,12 @@ interface CurrentLecturer {
 }
 
 export default function LecturerPanel({
-  tcId, lecturers,
+  tcId, lecturers, loading,
 }: {
   tcId: string;
   lecturers?: CurrentLecturer[];
+  /** The course itself is still loading — draw the panel with placeholder chips. */
+  loading?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -100,14 +103,19 @@ export default function LecturerPanel({
           : "แก้ไขได้เมื่อเปลี่ยนผู้สอน เพิ่มอาจารย์สอนร่วม หรือแก้ชื่อที่นำเข้าผิด"
       }
       actions={
-        !editing && (
+        !editing && !loading && (
           <Button variant="secondary" size="sm" onClick={startEdit}>
             <Pencil size={14} />แก้ไขอาจารย์ผู้สอน
           </Button>
         )
       }
     >
-      {!editing ? (
+      {loading ? (
+        <SkelRegion className="flex flex-wrap gap-1.5">
+          <Skel className="h-6 w-36 rounded-full" />
+          <Skel className="h-6 w-32 rounded-full" />
+        </SkelRegion>
+      ) : !editing ? (
         current.length === 0 ? (
           <EmptyState
             title="ยังไม่มีอาจารย์ผู้สอน"

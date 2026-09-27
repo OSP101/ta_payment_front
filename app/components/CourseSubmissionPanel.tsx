@@ -6,6 +6,7 @@ import { Accordion } from "@heroui/react";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Panel, Button, Chip, TextArea } from "./ui";
+import { Skel, SkelRegion } from "./Skeletons";
 import {
   SubmissionTimeline,
   type SubmissionTimelineData,
@@ -155,8 +156,17 @@ export function CourseSubmissionPanel({
   }
   if (isLoading || !data) {
     return (
-      <Panel title={title}>
-        <div className="text-sm text-muted py-4">กำลังโหลด…</div>
+      // One collapsed row per TA, the shape the accordion lands in.
+      <Panel title={title} padded={false}>
+        <SkelRegion className="divide-y divide-hairline">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="flex items-center gap-2 px-4 py-3.5">
+              <Skel className="h-4 w-40" />
+              <Skel className="h-5 w-14 rounded-full" />
+              <Skel className="ml-auto size-4 rounded" />
+            </div>
+          ))}
+        </SkelRegion>
       </Panel>
     );
   }

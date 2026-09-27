@@ -12,6 +12,7 @@ import {
 } from "../../components/ui";
 import { ChecksBlock } from "./ChecksBlock";
 import { TAListBlock } from "./TAListBlock";
+import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
 
 interface DecisionCheck {
   rule: string;
@@ -78,7 +79,7 @@ export default function TARequestsPage() {
   // filters rather than replacing them: switching term snaps them back to that
   // term, and the officer can widen again from there.
   const { data, error } = useSWR<RequestSummary[]>("/ta-requests");
-  const { terms, term, termId } = useTerm();
+  const { terms, term, termId, loaded } = useTerm();
   const activeTerm = terms?.find(t => t.is_active);
 
   const rows = useMemo(() => data ?? [], [data]);
@@ -103,12 +104,18 @@ export default function TARequestsPage() {
   // Re-seed on every term change, not just the first load: the switcher is a
   // deliberate act, so it should win over a filter the officer widened earlier.
   const seededFor = useRef<string | null>(null);
+  // Mirrors seededFor for rendering: until the first seed lands the filters
+  // still read "ทุกปี / ทุกภาค", and drawing the list then would flash every
+  // year's requests before narrowing to this term's.
+  const [firstSeedDone, setFirstSeedDone] = useState(false);
   useEffect(() => {
     if (!term || seededFor.current === termId) return;
     seededFor.current = termId;
     setYear(String(term.academic_year));
     setSem(String(term.semester));
+    setFirstSeedDone(true);
   }, [term, termId]);
+  const listReady = !!data && loaded && (!term || firstSeedDone);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -132,7 +139,8 @@ export default function TARequestsPage() {
       <PageHeader
         title="รายการคำขอ TA"
         description={(() => {
-          if (!data) return "กำลังโหลด…";
+          // The fixed half of the line stands on its own while the count loads.
+          if (!listReady || !data) return "ระบบตัดสินอัตโนมัติ";
           return `ระบบตัดสินอัตโนมัติ · แสดง ${filtered.length}/${data.length} รายการ`;
         })()}
       />
@@ -188,16 +196,16 @@ export default function TARequestsPage() {
           />
 
           <div className="ml-auto flex gap-2 text-xs">
-            <Chip tone="success"><CheckCircle2 size={12} /> อนุมัติ {approvedCount}</Chip>
-            <Chip tone="danger"><XCircle size={12} /> ปฏิเสธ {rejectedCount}</Chip>
+            <Chip tone="success"><CheckCircle2 size={12} /> อนุมัติ {listReady ? approvedCount : <SkelValue className="h-3 w-4" />}</Chip>
+            <Chip tone="danger"><XCircle size={12} /> ปฏิเสธ {listReady ? rejectedCount : <SkelValue className="h-3 w-4" />}</Chip>
           </div>
         </div>
 
         <div className="p-4">
           {error ? (
             <div className="py-10 text-center text-sm text-red-600">โหลดข้อมูลไม่สำเร็จ</div>
-          ) : !data ? (
-            <div className="py-10 text-center text-sm text-(--ink-3)">กำลังโหลด…</div>
+          ) : !listReady ? (
+            <RequestListSkeleton />
           ) : filtered.length === 0 ? (
             <div className="py-10 text-center text-sm text-(--ink-3)">
               ไม่พบคำขอตามเงื่อนไขที่เลือก
@@ -233,6 +241,23 @@ export default function TARequestsPage() {
         </div>
       </Panel>
     </div>
+  );
+}
+
+// Accordion rows while /ta-requests loads: status chip, code, name, lecturer.
+function RequestListSkeleton() {
+  return (
+    <SkelRegion className="divide-y divide-(--hairline)">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="flex items-center gap-2 py-3.5">
+          <Skel className="h-5 w-14 rounded-full" />
+          <Skel className="h-4 w-20" />
+          <Skel className="h-4 w-56 max-w-[40%]" />
+          <Skel className="h-3 w-28 max-w-[20%]" />
+          <Skel className="ml-auto size-4 rounded" />
+        </div>
+      ))}
+    </SkelRegion>
   );
 }
 
@@ -310,14 +335,21 @@ function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) 
           <Users size={13} /> รายชื่อ TA และภาระงาน
         </h4>
         {!d ? (
-          <div className="text-xs text-(--ink-3)">กำลังโหลดรายละเอียด…</div>
+          // One tile per TA the summary already counted, same grid as TAListBlock.
+          <SkelRegion className="grid gap-2 md:grid-cols-2">
+            {Array.from({ length: Math.min(Math.max(summary.ta_count, 1), 6) }, (_, i) => (
+              <Skel key={i} className="h-24 rounded-lg" />
+            ))}
+          </SkelRegion>
         ) : (
           <TAListBlock detail={d} />
         )}
       </section>
 
-      {d && (
+      {d ? (
         <MetaFooter d={d} />
+      ) : (
+        <div className="pt-2 border-t border-(--hairline)"><Skel className="h-3 w-2/3" /></div>
       )}
     </div>
   );

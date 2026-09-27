@@ -8,6 +8,7 @@ import { notify } from "../../../lib/notify";
 import { PageHeader, Panel, Button, Modal } from "../../../components/ui";
 import { StaffWorklogEditor } from "../../../components/StaffWorklogEditor";
 import { ExportPreviewBody } from "../../../components/ExportPreviewBody";
+import { SkelRows, SkelValue } from "../../../components/Skeletons";
 import { useTerm } from "../../TermContext";
 import { ReviewGrid } from "./ReviewGrid";
 import { courseCodeLabel } from "../../../lib/courseCode";
@@ -53,7 +54,10 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
   // and the sidebar badge, which are both derived from the same rows.
   const revalidateAll = () => {
     mutate(`/staff/courses/${tcId}/worklogs`);
-    mutate(`/exports/course/${tcId}/preview`);
+    // Matcher, not one exact key: the export panel reads the preview with a
+    // month-scope query (?months=...) and its coverage strip from a sibling
+    // key, and both change when a month is approved, edited or exported.
+    mutate(key => typeof key === "string" && key.startsWith(`/exports/course/${tcId}/`));
     mutate(`/teaching-courses/${tcId}`);
     mutate(`/teaching-courses/${tcId}/submission-timeline`);
     if (termId) {
@@ -74,7 +78,7 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
       </Link>
 
       <PageHeader
-        title={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : "…"}
+        title={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : <SkelValue className="h-7 w-72 max-w-full" />}
         description="ตรวจรายเดือนด้านบน แล้วส่งออกด้านล่าง"
       />
 
@@ -144,7 +148,7 @@ function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void })
       footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
     >
       {!data ? (
-        <p className="text-sm text-muted">กำลังโหลด…</p>
+        <SkelRows rows={4} columns={5} />
       ) : data.length === 0 ? (
         <p className="text-sm text-muted">ยังไม่เคยส่งออกวิชานี้</p>
       ) : (

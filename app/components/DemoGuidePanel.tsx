@@ -29,6 +29,8 @@ import { isDemoMode, type DemoScenarioEvent, type DemoProblemEvent, type DemoAct
 import { useScenarioEngine, type RunState } from "../lib/useScenarioEngine";
 import { STEP_GUIDES, DEMO_ACCOUNT_LABELS } from "../lib/demoStepGuides";
 import { ConfirmDialog } from "./ui";
+import DemoPresentationButton from "./DemoPresentationButton";
+import { Skel, SkelRegion, SkelValue } from "./Skeletons";
 
 const PANEL_WIDTH_VAR = "--demo-panel-w";
 const COLLAPSE_KEY = "ta-payment:demo-panel-collapsed";
@@ -474,7 +476,19 @@ export default function DemoGuidePanel() {
     items: T[] | null,
     runFn: (item: T) => void,
   ) {
-    if (!items) return <p className="text-sm text-muted px-1">กำลังโหลดรายการ…</p>;
+    // Rows shaped like the accordion triggers below (icon slot + label).
+    if (!items) {
+      return (
+        <SkelRegion className="flex flex-col">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="flex items-center gap-2.5 px-4 py-3">
+              <span className="size-4 shrink-0" />
+              <Skel className={`h-3.5 ${i % 2 ? "w-1/2" : "w-2/3"}`} />
+            </div>
+          ))}
+        </SkelRegion>
+      );
+    }
     return (
       <Accordion
         expandedKeys={expandedKey ? new Set([expandedKey]) : new Set()}
@@ -537,7 +551,7 @@ export default function DemoGuidePanel() {
           >
             <PanelRightOpen size={18} />
             <span className="text-[11px] font-medium tabular-nums">
-              {doneCount}/{total}
+              {engine.events ? `${doneCount}/${total}` : <SkelValue className="h-3 w-6" />}
             </span>
             <span className="[writing-mode:vertical-rl] text-xs font-medium">เครื่องจำลองเหตุการณ์</span>
           </button>
@@ -560,7 +574,7 @@ export default function DemoGuidePanel() {
               <div>
                 <div className="flex items-center justify-between text-xs text-muted mb-1">
                   <span>ความคืบหน้าเส้นทางหลัก</span>
-                  <span className="tabular-nums">{doneCount}/{total}</span>
+                  <span className="tabular-nums">{engine.events ? `${doneCount}/${total}` : <SkelValue className="h-3 w-8" />}</span>
                 </div>
                 <ProgressBar aria-label="ความคืบหน้า" value={progressPct} className="w-full">
                   <ProgressBar.Track>
@@ -593,6 +607,8 @@ export default function DemoGuidePanel() {
                   {renderList(engine.problems, engine.runProblem)}
                 </Tabs.Panel>
               </Tabs>
+
+              <DemoPresentationButton />
 
               <div className="border-t border-border pt-4 flex flex-col gap-2">
                 <Button size="sm" variant="tertiary" fullWidth isPending={engine.savingCheckpoint} onPress={engine.saveCheckpoint}>

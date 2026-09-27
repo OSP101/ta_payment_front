@@ -2,12 +2,10 @@
 // MakeupScheduler — the "วันหยุดและวันชดเชย" board, shared by the lecturer and
 // the TA course shells.
 //
-// Setting the compensation day used to be lecturer-only, and the TA screen was
-// a read-only mirror whose single action was nudging the lecturer. Now both
-// roles file the makeup themselves (backend: assertMakeupManager), so keeping
-// two page implementations in sync would be a standing bug source — the board,
-// both modals and the delete flow live here once and the two pages are thin
-// wrappers that differ only in `viewer`.
+// Setting the compensation day is the course's call (lecturer/staff; faculty
+// decision 27/09/2026: dates come from TDBM and the course, never from a TA).
+// The TA viewer is a read-only mirror whose one action is nudging the
+// lecturer. One component still serves both so the board cannot drift.
 import { useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
@@ -19,6 +17,7 @@ import {
   PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Modal, Chip, Alert,
   ConfirmDialog, EmptyState, DatePicker, TimePicker, TipWrap,
 } from "./ui";
+import { Skel, SkelRegion } from "./Skeletons";
 // The TA-actor makeup/remind endpoints (assertMakeupManager +
 // RequireApprovedTAProfile — see router.go's `/teaching-courses/:id/makeup/...`
 // and `/holiday-impacts/.../remind`) reject an unapproved TA the same way the
@@ -186,12 +185,16 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
           // The TA can now file the makeup themselves, so lead with that —
           // but say plainly that it is still the lecturer's call, otherwise a
           // TA who guesses a date has effectively rescheduled the class.
-          ? "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ คุณกำหนดวันชดเชยเองได้ (กรุณาตกลงกับอาจารย์ก่อน) หรือจะแจ้งเตือนให้อาจารย์กำหนดก็ได้ ถ้ายังไม่มีวันชดเชยจะลงเวลาปฏิบัติงานของคาบนั้นไม่ได้"
+          ? "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ วันชดเชยกำหนดโดยอาจารย์ผู้สอนหรือดึงจากระบบ TDBM ถ้ายังไม่มีวันชดเชยจะลงเวลาปฏิบัติงานของคาบนั้นไม่ได้ กด “แจ้งเตือนอาจารย์” เพื่อให้อาจารย์กำหนด"
           : "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ และสถานะการกำหนดวันชดเชย TA จะลงชั่วโมงคาบที่ตกวันหยุดไม่ได้จนกว่าจะมีการกำหนดวันชดเชย"}
         actions={
-          <LockedActionButton variant="secondary" onClick={() => setManualOpen(true)} disabled={!course?.sections?.length}>
-            <Plus size={14} /> เพิ่มวันชดเชย (กรณีอื่น)
-          </LockedActionButton>
+          // Makeups are the course's call; the API refuses every makeup
+          // write from a TA.
+          isTA ? undefined : (
+            <LockedActionButton variant="secondary" onClick={() => setManualOpen(true)} disabled={!course?.sections?.length}>
+              <Plus size={14} /> เพิ่มวันชดเชย (กรณีอื่น)
+            </LockedActionButton>
+          )
         }
       />
 
@@ -206,7 +209,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
             <>
               คาบเหล่านี้ตรงกับวันหยุด ระบบจะ<b>ข้ามวันนั้นในบันทึกเวลา</b>
               {" "}<b>คุณจะลงเวลาและเบิกค่าตอบแทนของคาบนั้นไม่ได้</b>
-              {" "}จนกว่าจะมีวันชดเชย กด “กำหนดวันชดเชย” เพื่อกรอกเอง หรือ “แจ้งเตือนอาจารย์” ให้อาจารย์กำหนด
+              {" "}จนกว่าจะมีวันชดเชย กด “แจ้งเตือนอาจารย์” ให้อาจารย์กำหนด
             </>
           ) : (
             <>
@@ -220,9 +223,30 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
 
       <div className="mt-4">
         {isLoading && !impacts ? (
-          <Panel>
-            <div className="flex justify-center py-10 text-sm text-muted">กำลังโหลด…</div>
-          </Panel>
+          // Two holiday panels (date heading + affected-class rows), the shape
+          // the list lands in.
+          <SkelRegion className="flex flex-col gap-3">
+            {[0, 1].map(i => (
+              <Panel key={i} padded={false}>
+                <div className="flex flex-col gap-2 p-4 border-b border-(--hairline)">
+                  <Skel className="h-5 w-64 max-w-full" />
+                  <Skel className="h-3 w-40" />
+                </div>
+                <div className="divide-y divide-(--hairline)">
+                  {[0, 1].map(j => (
+                    <div key={j} className="flex items-center gap-3 p-4">
+                      <div className="w-full shrink-0 sm:w-44 flex flex-col gap-1.5">
+                        <Skel className="h-6 w-28 rounded-full" />
+                        <Skel className="h-3 w-24" />
+                      </div>
+                      <Skel className="h-4 flex-1 max-w-72" />
+                      <Skel className="ml-auto h-8 w-32 rounded-lg" />
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            ))}
+          </SkelRegion>
         ) : !impacts || impacts.impacts.length === 0 ? (
           <Panel>
             <EmptyState
@@ -253,8 +277,8 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                     ? `หยุดเฉพาะช่วง ${holidayWindowLabel(imp)} · มี ${imp.affected_sections.length} คาบที่คาบเกี่ยวกับช่วงนี้ คาบนอกช่วงยังเรียนตามปกติ และกำหนดเป็นเวลาชดเชยในวันเดียวกันได้`
                     : `มี ${imp.affected_sections.length} คาบที่ได้รับผลกระทบ`}
                   actions={
-                    // The nudge stays TA-only: it exists so a TA who does not
-                    // want to decide the date can push it back to the lecturer.
+                    // The nudge is the TA's only action here: makeup dates are
+                    // the lecturer's (or TDBM's), so the TA asks for one.
                     isTA && unresolvedHere > 0 ? (
                       <LockedActionButton variant="secondary" size="sm" onClick={() => setRemindTarget(imp)}>
                         <Bell size={13} /> แจ้งเตือนอาจารย์
@@ -318,7 +342,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             </div>
                           )}
                         </div>
-                        {sec.makeup ? (
+                        {isTA ? null : sec.makeup ? (
                           <div className="flex items-center gap-1">
                             {/* IconButton's own hover Tip won't fire while
                                 disabled (see LockedActionButton's doc comment),
@@ -397,13 +421,15 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                   )}
                   {makeup.note && <span className="text-xs text-muted"> — {makeup.note}</span>}
                 </div>
-                <IconButton
-                  label="ลบ"
-                  variant="ghost" size="sm"
-                  onClick={() => setDeletingMakeup({ sectionId: section.id, makeupId: makeup.id, date: makeup.makeup_date, waived: false })}
-                >
-                  <Trash2 size={14} />
-                </IconButton>
+                {!isTA && (
+                  <IconButton
+                    label="ลบ"
+                    variant="ghost" size="sm"
+                    onClick={() => setDeletingMakeup({ sectionId: section.id, makeupId: makeup.id, date: makeup.makeup_date, waived: false })}
+                  >
+                    <Trash2 size={14} />
+                  </IconButton>
+                )}
               </div>
             ))}
           </div>

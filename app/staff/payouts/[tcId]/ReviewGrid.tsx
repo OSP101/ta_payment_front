@@ -6,10 +6,12 @@ import { api, errMessage } from "../../../lib/api";
 import { useTerm, useTermKey } from "../../TermContext";
 import { notify } from "../../../lib/notify";
 import { HoursSplit } from "../../../lib/trackSplit";
+import { compareYearMonth } from "../../../lib/dates";
 import {
   Button, Spinner, ConfirmDialog, TextArea,
 } from "../../../components/ui";
 import { TimetableModal } from "../../../components/TimetableModal";
+import { Skel, SkelRegion } from "../../../components/Skeletons";
 import { WorklogReviewModal, type ReviewTarget } from "./WorklogReviewModal";
 
 /**
@@ -72,10 +74,31 @@ const shortMonth = (label: string) => {
   return map[m] ?? m;
 };
 
+/** Placeholder shaped like the TA × month table: a name column and a few month cells per row. */
+function GridSkeleton() {
+  return (
+    <SkelRegion className="overflow-x-auto">
+      <div className="flex gap-3 px-2 py-1.5">
+        <Skel className="h-3 w-[144px] shrink-0" />
+        {Array.from({ length: 4 }, (_, i) => <Skel key={i} className="h-3 flex-1" />)}
+      </div>
+      {Array.from({ length: 3 }, (_, r) => (
+        <div key={r} className="flex gap-3 border-t border-[var(--hairline)] px-2 py-2">
+          <div className="flex w-[144px] shrink-0 flex-col gap-1.5">
+            <Skel className="h-4 w-28" />
+            <Skel className="h-4 w-24 rounded-md" />
+          </div>
+          {Array.from({ length: 4 }, (_, i) => <Skel key={i} className="h-20 flex-1 rounded-lg" />)}
+        </div>
+      ))}
+    </SkelRegion>
+  );
+}
+
 export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () => void }) {
   const { termId } = useTerm();
   const queueKey = useTermKey("/submission-periods/review-queue");
-  const { data, isLoading } = useSWR<{ items: ReviewRow[] }>(queueKey);
+  const { data, error } = useSWR<{ items: ReviewRow[] }>(queueKey);
   const rows = useMemo(
     () => (data?.items ?? []).filter(r => r.teaching_course_id === tcId),
     [data, tcId],
@@ -104,7 +127,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
   const months = useMemo(() => {
     const m = new Map<string, string>();
     for (const r of rows) m.set(r.year_month, r.period_label);
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    return [...m.entries()].sort((a, b) => compareYearMonth(a[0], b[0]));
   }, [rows]);
 
   const tas = useMemo(() => {
@@ -191,8 +214,11 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
     }
   }
 
-  if (isLoading) {
-    return <div className="flex justify-center py-8"><Spinner /></div>;
+  // !data rather than isLoading: the key is null until the term resolves, and
+  // isLoading is false in that gap — which flashed the "nothing to review"
+  // sentence before the real grid.
+  if (!data && !error) {
+    return <GridSkeleton />;
   }
   if (rows.length === 0) {
     return (
@@ -244,7 +270,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
                   if (!r) {
                     return (
                       <td key={ym} className="px-1.5 py-1.5 align-top">
-                        <EmptyCell t={timelineAt.get(`${taId}:${ym}`)} />
+                        <EmptyCell t={timelineAt.get(`${taId}:${ym}`)} loading={!timeline} />
                       </td>
                     );
                   }
@@ -316,7 +342,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
         months={
           detailFor
             ? rows.filter(r => r.ta_id === detailFor.ta_id)
-                  .sort((a, b) => a.year_month.localeCompare(b.year_month))
+                  .sort((a, b) => compareYearMonth(a.year_month, b.year_month))
                   .map(toTarget)
             : []
         }
@@ -400,7 +426,10 @@ const shortDue = (iso: string) => {
  * look identical to abandoned ones. Hence "ไม่มีบันทึกเวลาถึงกำหนด" — what the
  * record shows — rather than an accusation the data cannot support.
  */
-function EmptyCell({ t }: { t?: TimelineRow }) {
+function EmptyCell({ t, loading }: { t?: TimelineRow; loading?: boolean }) {
+  // The timeline is fetched separately from the grid; until it lands, hold the
+  // cell's space rather than showing "—" and swapping it for a reason chip.
+  if (!t && loading) return <Skel className="h-9 w-full rounded-lg" />;
   if (!t) return <div className="py-2 text-center text-muted">—</div>;
 
   if (t.status === "finance_sent") {

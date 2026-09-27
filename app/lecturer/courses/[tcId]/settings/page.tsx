@@ -13,6 +13,7 @@ import SectionScheduleEditor, {
   type SectionScheduleRow, validateRows, toApiPayload, ScheduleSummary,
 } from "../../../../components/SectionScheduleEditor";
 import { courseCodeLabel } from "../../../../lib/courseCode";
+import { Skel, SkelValue } from "../../../../components/Skeletons";
 
 interface SectionRow {
   id: string;
@@ -76,7 +77,9 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
     <div>
       <PageHeader
         title="ตั้งค่ารายวิชา"
-        description={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : undefined}
+        // A non-breaking space holds the description's line while loading, so
+        // the whole page doesn't shift down when the course name lands.
+        description={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : "\u00a0"}
       />
 
       {locked && (
@@ -96,21 +99,23 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
           that row under a second tab hid the one thing the page is for. */}
       <Panel title="ข้อมูลรายวิชา" className="mb-4" data-tour="set-info">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <ReadOnly label="รหัสวิชา" value={tc ? courseCodeLabel(tc) : undefined} tabular />
-          <ReadOnly label="ชื่อวิชา" value={tc?.name_th} span={3} />
-          <ReadOnly label="นักศึกษาทั้งหมด" value={tc ? `${tc.num_students} คน` : "—"} />
-          <ReadOnly label="ภาคปกติ" value={tc ? `${tc.num_students_regular} คน` : "—"} />
-          <ReadOnly label="ภาคพิเศษ" value={tc ? `${tc.num_students_special} คน` : "—"} />
+          {/* "—" means "the file has no value"; while loading it would be a
+              false claim, so each value waits as a placeholder instead. */}
+          <ReadOnly label="รหัสวิชา" value={tc ? courseCodeLabel(tc) : <SkelValue className="h-4 w-20" />} tabular />
+          <ReadOnly label="ชื่อวิชา" value={tc ? tc.name_th : <SkelValue className="h-4 w-56" />} span={3} />
+          <ReadOnly label="นักศึกษาทั้งหมด" value={tc ? `${tc.num_students} คน` : <SkelValue className="h-4 w-14" />} />
+          <ReadOnly label="ภาคปกติ" value={tc ? `${tc.num_students_regular} คน` : <SkelValue className="h-4 w-14" />} />
+          <ReadOnly label="ภาคพิเศษ" value={tc ? `${tc.num_students_special} คน` : <SkelValue className="h-4 w-14" />} />
           <ReadOnly
             label="จำนวน Section"
-            value={tc?.sections ? `${tc.sections.length} sec` : "—"}
+            value={!tc ? <SkelValue className="h-4 w-14" /> : tc.sections ? `${tc.sections.length} sec` : "—"}
           />
         </div>
       </Panel>
 
       <SectionsPanel
         tcId={tcId}
-        sections={tc?.sections ?? []}
+        sections={tc ? tc.sections ?? [] : undefined}
         locked={locked}
         allowedKinds={allowedKindsFromTC(tc)}
       />
@@ -139,11 +144,12 @@ function SectionsPanel({
   tcId, sections, locked, allowedKinds,
 }: {
   tcId: string;
-  sections: SectionRow[];
+  /** undefined while the course is loading — distinct from "no sections". */
+  sections: SectionRow[] | undefined;
   locked: boolean;
   allowedKinds: ("lecture" | "lab")[];
 }) {
-  const sortedSecs = [...sections].sort((a, b) => {
+  const sortedSecs = [...(sections ?? [])].sort((a, b) => {
     // regular before special, then by numeric sec_no when possible.
     if (a.track !== b.track) return a.track === "regular" ? -1 : 1;
     const na = Number(a.sec_no), nb = Number(b.sec_no);
@@ -179,7 +185,7 @@ function SectionsPanel({
         </div>
       )}
 
-      {sortedSecs.length === 0 ? (
+      {sections !== undefined && sortedSecs.length === 0 ? (
         <EmptyState
           title="ยังไม่มี section"
           description="เจ้าหน้าที่เป็นผู้เพิ่ม section จากไฟล์ทะเบียน"
@@ -200,6 +206,16 @@ function SectionsPanel({
               </tr>
             </thead>
             <tbody>
+              {/* Header is fixed chrome; only the rows wait for the course. */}
+              {sections === undefined && [0, 1, 2].map(i => (
+                <tr key={i} aria-hidden>
+                  <td><Skel className="h-4 w-8" /></td>
+                  <td><Skel className="h-6 w-20 rounded-full" /></td>
+                  <td className="num"><Skel className="ml-auto h-4 w-12" /></td>
+                  <td><Skel className="h-4 w-48" /></td>
+                  <td className="actions"><Skel className="ml-auto h-8 w-24 rounded-lg" /></td>
+                </tr>
+              ))}
               {sortedSecs.map(sec => (
                 <SectionEditRow
                   key={sec.id}

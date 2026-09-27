@@ -5,6 +5,7 @@ import { AlertCircle, Eye, Ban } from "lucide-react";
 import { Tooltip, Button } from "@heroui/react";
 import { Chip, Modal, ConfirmDialog } from "../components/ui";
 import { DataTable, type DataColumn } from "../components/DataTable";
+import { Skel, SkelList } from "../components/Skeletons";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 
@@ -196,7 +197,14 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
   return (
     <Modal open={!!id} onClose={onClose} title="รายละเอียดคำขอ" icon={<Eye size={18} />} size="lg">
       {!d ? (
-        <div className="text-sm text-muted py-6 text-center">กำลังโหลด…</div>
+        // Shaped like the loaded body: status line, then one card per TA.
+        <div className="space-y-3">
+          <div className="flex items-center gap-1.5">
+            <Skel className="h-6 w-20 rounded-full" />
+            <Skel className="h-3.5 w-28" />
+          </div>
+          <SkelList items={2} icon={false} bordered />
+        </div>
       ) : (
         <div className="space-y-3 text-sm">
           <div className="flex flex-wrap items-center gap-1.5">

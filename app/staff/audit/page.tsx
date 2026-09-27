@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search, X, Link2, KeyRound, Copy, User, ShieldAlert, Eye, AlertTriangle } from "lucide-react";
 import { PageHeader, Chip, TipWrap, Panel, Button, Modal } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
+import { Skel, SkelValue } from "../../components/Skeletons";
 import { actionLabel, severityOf, SUMMARY_GROUPS, type Severity } from "./vocabulary";
 
 /* -------------------------------------------------------------------------- *
@@ -120,13 +121,16 @@ export default function AuditPage() {
       // time and bury the real searches. The trail is history — it does not
       // change while you are reading it — so refresh is the explicit ลองใหม่.
       revalidateOnFocus: false,
+      // Every filter / page step is a new key; hold the old rows under the
+      // table's refetch overlay instead of blanking back to a skeleton.
+      keepPreviousData: true,
     });
   const { data: actions } = useSWR<{ items: string[] }>("/audit-logs/actions");
   // The overview strip. Same window as the table, so the numbers above and the
   // rows below always describe the same stretch of time.
   const { data: summary } = useSWR<{ actions: ActionCount[]; actors: Actor[] }>(
     `/audit-logs/summary?from=${encodeURIComponent(from)}`,
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, keepPreviousData: true },
   );
 
   const actionOptions = useMemo(() => [
@@ -468,7 +472,11 @@ function SummaryStrip({
     <Panel className="mb-3">
       {/* The headline verdict, in one sentence, before any number. */}
       <div className="mb-2 flex items-center gap-2 text-sm">
-        {alarming ? (
+        {/* No verdict until the counts are in — "ไม่พบเหตุการณ์ผิดปกติ" on
+            an empty summary would be a false all-clear. */}
+        {!summary ? (
+          <Skel className="h-5 w-56" />
+        ) : alarming ? (
           <>
             <ShieldAlert size={16} className="text-danger" />
             <span className="font-medium">มีเหตุการณ์ที่ควรตรวจสอบในช่วงนี้</span>
@@ -506,10 +514,10 @@ function SummaryStrip({
                     : "text-(--ink-1)",
                 ].join(" ")}
               >
-                {g.count}
+                {summary ? g.count : <SkelValue className="h-7 w-10" />}
               </div>
               <div className="text-xs text-(--ink-3)">
-                {on ? g.detail(g.count, g.ips) : "ไม่มี"}
+                {!summary ? <SkelValue className="h-3 w-24" /> : on ? g.detail(g.count, g.ips) : "ไม่มี"}
               </div>
             </button>
           );

@@ -14,6 +14,7 @@ import {
   PageHeader, Panel, Select, Modal, Button, IconButton, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog, TipWrap,
   TimePicker, Chip,
 } from "../../../components/ui";
+import { SkelValue } from "../../../components/Skeletons";
 // Schedule editing is intentionally NOT gated behind TA approval — the user
 // asked to unblock this page so students can lay out their timetable while
 // their documents are still under review. LockedActionButton / useTAApproval
@@ -143,6 +144,13 @@ export default function TASchedulePage() {
   // in the finance office. Past terms stay browsable — just frozen.
   const locked = sched?.locked === true;
   const lockReason = sched?.lock_reason ?? "";
+  // No editing until THIS term's saved schedule has arrived. A block drawn on
+  // the still-empty grid marks the page dirty, the [blocks] effect below then
+  // refuses to load the saved blocks over it, and the autosave would replace
+  // the TA's real schedule with just that one block. Same gate as `locked`,
+  // minus the banner — it lifts by itself once the response lands (and stays
+  // on if the load fails, which is the safe side).
+  const frozen = locked || sched === undefined;
   const [local, setLocal] = useState<Block[]>([]);
 
   // Track unsaved local edits. While dirty we must NOT let a background SWR
@@ -420,16 +428,16 @@ export default function TASchedulePage() {
             )}
             <TermSelect terms={terms} value={termId} onChange={requestTermChange} />
             <span data-tour="sch-ics">
-              <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={locked}>
+              <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={frozen}>
                 <FileUp size={14} /> อัปโหลด .ics
               </Button>
             </span>
             <span data-tour="sch-add">
-              <Button variant="secondary" onClick={() => openCreate()} disabled={isWba || locked}>
+              <Button variant="secondary" onClick={() => openCreate()} disabled={isWba || frozen}>
                 <Plus size={14} /> เพิ่มคาบเรียน
               </Button>
             </span>
-            <Button variant="primary" onClick={() => save(false)} disabled={saving || !dirty || locked}>
+            <Button variant="primary" onClick={() => save(false)} disabled={saving || !dirty || frozen}>
               <Save size={14} /> บันทึกทันที
             </Button>
           </>
@@ -467,10 +475,10 @@ export default function TASchedulePage() {
           // Locked: the grid still renders so past terms can be read, but every
           // mutating gesture — drag-to-create, move, resize, click-to-edit — is
           // disconnected rather than merely discouraged.
-          onCreateDraft={locked ? () => {} : openCreate}
-          onSelectBlock={locked ? () => {} : openEdit}
-          onMoveBlock={locked ? undefined : moveBlock}
-          onResizeBlock={locked ? undefined : resizeBlock}
+          onCreateDraft={frozen ? () => {} : openCreate}
+          onSelectBlock={frozen ? () => {} : openEdit}
+          onMoveBlock={frozen ? undefined : moveBlock}
+          onResizeBlock={frozen ? undefined : resizeBlock}
         />
         </div>
       )}
@@ -520,19 +528,21 @@ export default function TASchedulePage() {
       )}
 
       <Panel title="กรณีพิเศษ" className="mt-4" data-tour="sch-wba">
-        <label className={"flex items-center gap-2 text-sm " + ((canWba || isWba) && !locked ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
+        <label className={"flex items-center gap-2 text-sm " + ((canWba || isWba) && !frozen ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
           <input
             type="checkbox"
             checked={isWba}
-            disabled={locked || (!canWba && !isWba)}
+            disabled={frozen || (!canWba && !isWba)}
             onChange={e => toggleWba(e.target.checked)}
           />
-          <span>{isGrad ? "ฉันไม่มีตารางเรียนปกติ (นักศึกษาระดับบัณฑิตศึกษา)" : "ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)"}</span>
+          <span>{!me ? <SkelValue className="h-3.5 w-72 max-w-full" /> : isGrad ? "ฉันไม่มีตารางเรียนปกติ (นักศึกษาระดับบัณฑิตศึกษา)" : "ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)"}</span>
         </label>
         <p className="text-xs text-muted mt-1">
           เปิดตัวเลือกนี้เมื่อคุณไม่มีตารางเรียนประจำในภาคเรียนนี้ ระบบจะข้ามการตรวจสอบทับซ้อนตอนอาจารย์ยื่นคำร้อง
         </p>
-        {!canWba && !isWba && (
+        {/* Wait for /me: before it lands canWba is false for everyone, and
+            the eligibility warning flashed at graduate students too. */}
+        {me && !canWba && !isWba && (
           <p className="text-xs text-warning mt-1">
             โหมด WBA ใช้ได้เฉพาะนักศึกษาปริญญาตรีชั้นปีที่ 4 ขึ้นไป หรือนักศึกษาระดับบัณฑิตศึกษา
             {me?.study_level === "undergrad" && (me?.study_year ?? 0) < 1

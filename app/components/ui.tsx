@@ -141,8 +141,10 @@ export function PageHeader({
   docs,
   "data-tour": dataTour,
 }: {
-  title: string;
-  description?: string;
+  // A node, not just a string, so a title built from fetched data can hold a
+  // SkelValue while it loads instead of "…" (see components/Skeletons.tsx).
+  title: React.ReactNode;
+  description?: React.ReactNode;
   // Optional tooltip content rendered on an "i" icon next to the title.
   // Preferred over `description` for anything the reader only occasionally
   // needs — keeps the header visually clean without hiding the explanation.
@@ -167,7 +169,7 @@ export function PageHeader({
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">{title}</h1>
           {info && <InfoTip content={info} size={16} />}
         </div>
-        {description && <p className="text-sm text-muted mt-1">{description}</p>}
+        {description && <div className="text-sm text-muted mt-1">{description}</div>}
         {docPill}
       </div>
       {actions && <div className="flex gap-2 flex-wrap items-center">{actions}</div>}
@@ -764,7 +766,10 @@ export function SelectField({
   return (
     <HSelect
       className={className}
-      placeholder={placeholder}
+      // react-aria's own default placeholder is the English "Select an item",
+      // which showed through on every picker that had no value yet (e.g. the
+      // term picker on the TA timetable page before terms load).
+      placeholder={placeholder ?? "เลือก…"}
       isDisabled={isDisabled}
       isRequired={isRequired}
       isInvalid={!!error}

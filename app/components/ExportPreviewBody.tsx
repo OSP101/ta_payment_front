@@ -5,6 +5,7 @@ import { Download, Lock, CheckCircle2, AlertTriangle, CalendarRange } from "luci
 import { errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Button, Chip, Spinner } from "./ui";
+import { Skel, SkelRows, SkelRegion, SkelValue } from "./Skeletons";
 import {
   MonthChips, monthLabels, monthsQuery, suggestMonths,
   type MonthCoverage,
@@ -111,7 +112,7 @@ export function ExportPreviewBody({
   // though nothing above this panel actually remounts. Keeping the previous
   // month's numbers on screen while the new ones load (isValidating below)
   // reads as "updating in place" instead.
-  const { data, error, isLoading, isValidating } = useSWR<ExportPreview>(
+  const { data, error, isLoading } = useSWR<ExportPreview>(
     `/exports/course/${tcId}/preview${monthsQuery(scope)}`,
     { keepPreviousData: true },
   );
@@ -129,7 +130,10 @@ export function ExportPreviewBody({
     // fixed 1.5s timer revalidated before MarkCourseExported had committed).
     setDownloading(true);
     try {
+      // POST, not GET: the download locks the months, and a GET could be
+      // triggered by a link on another site.
       const res = await fetch(`/api/v1/exports/course/${tcId}.zip${monthsQuery(scope)}`, {
+        method: "POST",
         credentials: "include",
       });
       if (!res.ok) {
@@ -172,11 +176,28 @@ export function ExportPreviewBody({
   // Only the very first load (nothing cached yet, for any month scope) blocks
   // the whole panel. A later switch keeps rendering the previous data (via
   // keepPreviousData above) with an inline "updating" indicator instead.
+  // That first load draws the panel's own shape — the four stat labels, the
+  // table header, the (disabled) download button — with placeholder values.
   if (isLoading && !data) {
     return (
-      <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted">
-        <Spinner size="sm" /> กำลังคำนวณข้อมูลเบิกจ่าย…
-      </div>
+      <SkelRegion label="กำลังคำนวณข้อมูลเบิกจ่าย" className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {["งบรายวิชา", "รวมที่คำนวณได้", "จ่ายจริง (หลังตัดเดือนที่เกินงบ)", "จำนวน TA"].map(l => (
+            <SummaryStat key={l} label={l} value={<SkelValue className="h-4 w-20" />} />
+          ))}
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-hairline">
+          <div className="flex gap-4 bg-slate-50 px-3 py-2 text-sm text-ink-2">
+            {["ชื่อ TA", "ระดับ", "ชม.อนุมัติ", "เป็นเงิน", "จ่ายจริง", "ข้อมูล"].map(h => (
+              <span key={h} className="flex-1">{h}</span>
+            ))}
+          </div>
+          <SkelRows rows={3} columns={6} className="px-3" />
+        </div>
+        <div className="flex justify-end pt-1">
+          <Skel className="h-10 w-44 rounded-xl" />
+        </div>
+      </SkelRegion>
     );
   }
   if (error && !data) {
@@ -190,7 +211,11 @@ export function ExportPreviewBody({
 
   return (
     <div className="space-y-4">
-      {isValidating && (
+      {/* isLoading, not isValidating: with keepPreviousData isLoading is true
+          only while a NEW month scope has nothing cached, so this line shows on
+          a month switch but not on every background/focus revalidation (where
+          it popped in and out, nudging the whole panel). */}
+      {isLoading && (
         <div className="flex items-center gap-1.5 text-xs text-muted">
           <Spinner size="sm" /> กำลังอัปเดตข้อมูลตามเดือนที่เลือก…
         </div>
@@ -376,7 +401,7 @@ function blockerText(b: ExportBlocker) {
   return "ยังไม่ได้ตรวจสอบเบิกจ่าย";
 }
 
-function SummaryStat({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
+function SummaryStat({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "warn" }) {
   return (
     <div className={`rounded-lg border px-3 py-2 ${tone === "warn" ? "border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20" : "border-hairline bg-slate-50/60 dark:bg-slate-900/30"}`}>
       <div className="text-[11px] text-ink-3">{label}</div>

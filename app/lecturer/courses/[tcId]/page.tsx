@@ -13,6 +13,7 @@ import {
 import { CourseSubmissionPanel } from "../../../components/CourseSubmissionPanel";
 import { type TARequestRow } from "../../RequestsTable";
 import { courseCodeLabel } from "../../../lib/courseCode";
+import { Skel, SkelValue } from "../../../components/Skeletons";
 
 interface Section {
   id: string; sec_no: string; track: string; room?: string;
@@ -68,7 +69,7 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
   const courseKey = tcId ? `/teaching-courses/${tcId}` : null;
   const budgetKey = tcId ? `/teaching-courses/${tcId}/budget` : null;
 
-  const { data: course, error: courseError, isLoading: courseLoading } = useSWR<TC>(courseKey);
+  const { data: course, error: courseError } = useSWR<TC>(courseKey);
   const { data: allReqs } = useSWR<TARequestRow[]>("/ta-requests");
   const { data: budget } = useSWR<Budget>(budgetKey);
   const { data: pending } = useSWR<PendingReport[]>("/reports/pending");
@@ -126,53 +127,65 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
             }
           />
         </Panel>
-      ) : courseLoading || !course ? (
-        <div>
-          <div className="h-14 rounded-xl bg-surface-secondary animate-pulse mb-4" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            {[0, 1, 2].map(i => <div key={i} className="h-40 rounded-xl bg-surface-secondary animate-pulse" />)}
-          </div>
-          <div className="h-40 rounded-xl bg-surface-secondary animate-pulse" />
-        </div>
       ) : (
+        // No whole-page gate: the course, the request list, the budget and the
+        // pending reports are four independent requests, and each block below
+        // fills in from its own — the labels are fixed, only values wait.
         <>
           {/* Compact info strip — everything at a glance, no drilling */}
           <Panel className="mb-4" data-tour="course-info">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
               <InfoItem label="นักศึกษา">
-                <span className="text-lg font-semibold tabular-nums">{course.num_students}</span>
-                <span className="text-muted ml-1">คน</span>
-                <span className="text-xs text-muted ml-2">
-                  ({course.num_students_regular} ปกติ / {course.num_students_special} พิเศษ)
-                </span>
+                {course ? (
+                  <>
+                    <span className="text-lg font-semibold tabular-nums">{course.num_students}</span>
+                    <span className="text-muted ml-1">คน</span>
+                    <span className="text-xs text-muted ml-2">
+                      ({course.num_students_regular} ปกติ / {course.num_students_special} พิเศษ)
+                    </span>
+                  </>
+                ) : <InfoSkel />}
               </InfoItem>
               <Divider />
               <InfoItem label="Section">
-                <span className="text-lg font-semibold tabular-nums">
-                  {course.sections?.length ?? 0}
-                </span>
-                <span className="text-xs text-muted ml-2">
-                  ({regularSecs} ปกติ / {specialSecs} พิเศษ)
-                </span>
+                {course ? (
+                  <>
+                    <span className="text-lg font-semibold tabular-nums">
+                      {course.sections?.length ?? 0}
+                    </span>
+                    <span className="text-xs text-muted ml-2">
+                      ({regularSecs} ปกติ / {specialSecs} พิเศษ)
+                    </span>
+                  </>
+                ) : <InfoSkel />}
               </InfoItem>
               <Divider />
               <InfoItem label="TA ในรายวิชา">
-                <span className="text-lg font-semibold tabular-nums">{approvedTaCount}</span>
-                <span className="text-muted ml-1">คน</span>
-                <span className="text-xs text-muted ml-2">(อนุมัติแล้ว)</span>
+                {/* Matching falls back to the course code, so wait for both. */}
+                {course && allReqs ? (
+                  <>
+                    <span className="text-lg font-semibold tabular-nums">{approvedTaCount}</span>
+                    <span className="text-muted ml-1">คน</span>
+                    <span className="text-xs text-muted ml-2">(อนุมัติแล้ว)</span>
+                  </>
+                ) : <InfoSkel />}
               </InfoItem>
               <Divider />
               <InfoItem label="หน่วยกิต">
-                <span className="text-lg font-semibold tabular-nums">{course.credits}</span>
-                <span className="text-xs text-muted ml-2">
-                  (Lec {course.lecture_hrs} / Lab {course.lab_hrs})
-                </span>
+                {course ? (
+                  <>
+                    <span className="text-lg font-semibold tabular-nums">{course.credits}</span>
+                    <span className="text-xs text-muted ml-2">
+                      (Lec {course.lecture_hrs} / Lab {course.lab_hrs})
+                    </span>
+                  </>
+                ) : <InfoSkel />}
               </InfoItem>
             </div>
           </Panel>
 
           {/* วันชดเชยค้าง = TA ลงเวลาวันนั้นไม่ได้ → เบิกไม่ได้ ต้องดันให้เห็นตั้งแต่หน้าแรก */}
-          {!!course.unresolved_makeups && course.unresolved_makeups > 0 && (
+          {!!course?.unresolved_makeups && course.unresolved_makeups > 0 && (
             <div className="mb-4">
               <Alert
                 status="danger"
@@ -207,7 +220,12 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
           {/* Status cards — real state, not just navigation */}
           <div data-tour="course-cards" className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <BudgetStatusCard tcId={tcId} budget={budget} />
-            <RequestStatusCard tcId={tcId} counts={reqCounts} total={courseReqs.length} />
+            <RequestStatusCard
+              tcId={tcId}
+              counts={reqCounts}
+              total={courseReqs.length}
+              loading={allReqs === undefined || !course}
+            />
             <ReportStatusCard tcId={tcId} count={pendingReports.length} loading={pending === undefined} />
           </div>
 
@@ -220,10 +238,18 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
           <Panel
             data-tour="course-sections-list"
             title="Section ทั้งหมด"
-            description={`รายวิชานี้มี ${course.sections?.length ?? 0} section`}
+            description={
+              course
+                ? `รายวิชานี้มี ${course.sections?.length ?? 0} section`
+                : <>รายวิชานี้มี <SkelValue className="h-3 w-4" /> section</>
+            }
             className="mb-4"
           >
-            {(course.sections ?? []).length === 0 ? (
+            {!course ? (
+              <div className="flex flex-wrap gap-2">
+                {[0, 1, 2].map(i => <Skel key={i} className="h-8 w-28 rounded-full" />)}
+              </div>
+            ) : (course.sections ?? []).length === 0 ? (
               <div className="text-sm text-muted">ยังไม่มี section</div>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -264,6 +290,16 @@ function InfoItem({ label, children }: { label: string; children: React.ReactNod
       <div className="text-[11px] uppercase tracking-wider text-muted font-medium">{label}</div>
       <div className="mt-0.5 leading-none">{children}</div>
     </div>
+  );
+}
+
+/** Value line of an InfoItem while its request is in flight. */
+function InfoSkel() {
+  return (
+    <span className="inline-flex items-baseline gap-2">
+      <SkelValue className="h-5 w-8" />
+      <SkelValue className="h-3 w-24" />
+    </span>
   );
 }
 
@@ -327,8 +363,17 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
         href={`/lecturer/courses/${tcId}/budget`}
         hrefLabel="คำนวณงบ / ดูรายละเอียด"
       >
-        <div className="h-4 rounded bg-surface-secondary animate-pulse mb-2" />
-        <div className="h-3 rounded bg-surface-secondary animate-pulse w-2/3" />
+        {/* Same rows as the loaded card: total, two track boxes, bar, legend. */}
+        <div className="flex items-baseline justify-between mb-2">
+          <Skel className="h-3.5 w-16" />
+          <Skel className="h-6 w-28" />
+        </div>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Skel className="h-[58px] rounded-lg" />
+          <Skel className="h-[58px] rounded-lg" />
+        </div>
+        <Skel className="h-2 w-full rounded-full" />
+        <Skel className="mt-2 h-3 w-2/3" />
       </StatusCardShell>
     );
   }
@@ -435,11 +480,12 @@ function TrackBudget({
 }
 
 function RequestStatusCard({
-  tcId, counts, total,
+  tcId, counts, total, loading,
 }: {
   tcId: string;
   counts: Record<string, number>;
   total: number;
+  loading: boolean;
 }) {
   const active = counts.approved + counts.submitted + counts.pending;
   return (
@@ -450,7 +496,18 @@ function RequestStatusCard({
       href={`/lecturer/courses/${tcId}/request`}
       hrefLabel={total === 0 ? "ส่งคำขอ TA" : "จัดการคำขอ"}
     >
-      {total === 0 ? (
+      {loading ? (
+        <>
+          <div className="flex items-baseline gap-2 mb-2">
+            <Skel className="h-6 w-8" />
+            <Skel className="h-3 w-28" />
+          </div>
+          <div className="flex gap-1.5">
+            <Skel className="h-6 w-20 rounded-full" />
+            <Skel className="h-6 w-16 rounded-full" />
+          </div>
+        </>
+      ) : total === 0 ? (
         <div className="text-sm text-muted">
           ยังไม่มีคำขอ TA สำหรับวิชานี้
           <div className="text-xs mt-1">ส่งคำขอเพื่อระบุ TA และภาระงานรายสัปดาห์</div>
@@ -500,7 +557,13 @@ function ReportStatusCard({
       hrefLabel={count > 0 ? "ตรวจและอนุมัติ" : "ดูรายการ"}
     >
       {loading ? (
-        <div className="h-4 rounded bg-surface-secondary animate-pulse w-1/2" />
+        <>
+          <div className="flex items-baseline gap-2 mb-1">
+            <Skel className="h-6 w-8" />
+            <Skel className="h-3 w-24" />
+          </div>
+          <Skel className="h-3 w-3/4" />
+        </>
       ) : count === 0 ? (
         <div className="text-sm text-muted">
           ไม่มีรายงานรออนุมัติ

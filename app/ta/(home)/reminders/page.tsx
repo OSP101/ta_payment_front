@@ -4,10 +4,20 @@ import { Fragment, useState } from "react";
 import { CalendarClock, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { type Me } from "../../../lib/api";
 import { PageHeader, Panel, Chip, type ChipTone } from "../../../components/ui";
+import { Skel, SkelRegion, SkelRows, SkelValue } from "../../../components/Skeletons";
+
 import {
   SubmissionTimeline,
   type SubmissionTimelineData,
 } from "../../../components/SubmissionTimeline";
+
+// "2026-07-01" → "1 ก.ค. 2569": the page showed raw ISO dates, unlike every
+// other TA screen.
+function thDate(iso?: string | null): string {
+  if (!iso) return "-";
+  const d = new Date(iso.length === 10 ? iso + "T00:00:00+07:00" : iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+}
 
 interface PendingRow {
   period_id: string;
@@ -71,7 +81,20 @@ export default function TAReminderPage() {
         description="ติดตามสถานะบันทึกเวลาปฏิบัติงานแต่ละเดือน เมื่ออาจารย์อนุมัติงานครบ เจ้าหน้าที่จะตรวจสอบ ส่งออกไฟล์ แล้วส่งให้การเงิน (ไม่ต้องยืนยันด้วยตนเอง)"
       />
       {!data ? (
-        <div className="text-sm text-muted p-6">กำลังโหลด…</div>
+        // One month-card shaped placeholder per likely group, so the list
+        // lands in place instead of replacing a line of text.
+        <SkelRegion className="space-y-6">
+          {Array.from({ length: 2 }, (_, i) => (
+            <Panel
+              key={i}
+              title={<SkelValue className="h-4 w-32" />}
+              description={<SkelValue className="h-3 w-48" />}
+              actions={<SkelValue className="h-5 w-16 rounded-full" />}
+            >
+              <SkelRows rows={2} columns={5} />
+            </Panel>
+          ))}
+        </SkelRegion>
       ) : groups.length === 0 ? (
         <Panel title="ไม่มีรายการที่ต้องทำ">
           <div className="text-sm text-muted py-4">
@@ -95,8 +118,8 @@ export default function TAReminderPage() {
                   g.is_closed
                     ? "รอบนี้ปิดรับแล้ว"
                     : notYet
-                    ? `จะเปิดรับวันที่ ${g.starts_on} · กำหนดส่ง ${g.due_date}`
-                    : `เปิดรับ ${g.starts_on} → ${g.due_date}`
+                    ? `จะเปิดรับวันที่ ${thDate(g.starts_on)} · กำหนดส่ง ${thDate(g.due_date)}`
+                    : `เปิดรับ ${thDate(g.starts_on)} → ${thDate(g.due_date)}`
                 }
                 actions={
                   overdue ? (
@@ -177,6 +200,18 @@ function TimelineLoader({ periodId, tcId }: { periodId: string; tcId: string }) 
     me?.id ? `/submission-periods/${periodId}/courses/${tcId}/tas/${me.id}/timeline` : null,
   );
   if (error) return <div className="text-xs text-danger px-2">โหลดขั้นตอนไม่สำเร็จ</div>;
-  if (!data) return <div className="text-xs text-muted px-2">กำลังโหลด…</div>;
+  if (!data) {
+    return (
+      <SkelRegion label="กำลังโหลดขั้นตอน" className="rounded-xl border border-hairline px-4 py-3 flex flex-col gap-3">
+        <Skel className="h-4 w-28" />
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <Skel className="size-5 shrink-0 rounded-full" />
+            <Skel className="h-3.5 w-2/3" />
+          </div>
+        ))}
+      </SkelRegion>
+    );
+  }
   return <SubmissionTimeline data={data} title="สถานะการอนุมัติ" />;
 }

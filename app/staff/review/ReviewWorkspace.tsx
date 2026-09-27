@@ -10,8 +10,9 @@ import {
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import PdfFrame from "../../components/PdfFrame";
+import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
 import {
-  Button, Chip, Spinner, Select, TextArea, FieldGroup, Modal, TipWrap,
+  Button, Chip, Select, TextArea, FieldGroup, Modal, TipWrap,
 } from "../../components/ui";
 import {
   DOC_KIND_LABEL, DOC_KIND_PRINT_ORDER, byPrintOrder, REJECT_PRESETS, OTHER_PRESET,
@@ -368,7 +369,7 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
         <span>{person.email}</span>
         <span>·</span>
         <span>
-          อนุมัติแล้ว {approved}/{REQUIRED_KINDS.length} ไฟล์
+          อนุมัติแล้ว {data ? approved : <SkelValue className="h-3.5 w-4" />}/{REQUIRED_KINDS.length} ไฟล์
         </span>
       </div>
 
@@ -406,9 +407,19 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
       )}
 
       {isLoading ? (
-        <div className="flex items-center gap-2 py-16 text-sm text-muted">
-          <Spinner size="sm" /> กำลังโหลดเอกสาร…
-        </div>
+        // Shaped like the DocPanel stack below: a header strip over a tall
+        // preview area, one per required document.
+        <SkelRegion label="กำลังโหลดเอกสาร" className="mt-4 space-y-4">
+          {REQUIRED_KINDS.map(k => (
+            <div key={k} className="overflow-hidden rounded-xl border border-[var(--hairline)] bg-surface">
+              <div className="flex items-center gap-2 border-b border-[var(--hairline)] px-4 py-2.5">
+                <Skel className="h-4 w-32" />
+                <Skel className="h-3 w-40" />
+              </div>
+              <Skel className="h-[62vh] w-full rounded-none" />
+            </div>
+          ))}
+        </SkelRegion>
       ) : docs.length === 0 ? (
         <div className="py-16 text-center text-sm text-muted">
           ยังไม่มีเอกสารที่ส่งเข้ามา

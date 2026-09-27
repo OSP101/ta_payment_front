@@ -1,7 +1,8 @@
 "use client";
 import useSWR from "swr";
 import { FileWarning } from "lucide-react";
-import { EmptyState, Panel, Spinner } from "../../../components/ui";
+import { EmptyState, Panel } from "../../../components/ui";
+import { Skel, SkelList, SkelRegion } from "../../../components/Skeletons";
 import { ViewerRoundBoard, type TermProgress } from "../../../components/DocumentProgressBoard";
 import { useState } from "react";
 import { ApiError } from "../../../lib/api";
@@ -42,15 +43,10 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
   });
   const [activeRound, setActiveRound] = useState(1);
 
-  if (isLoading) {
-    return (
-      <Panel>
-        <div className="flex items-center gap-2 py-8 justify-center text-sm text-muted">
-          <Spinner size="sm" /> กำลังโหลด…
-        </div>
-      </Panel>
-    );
-  }
+  // The term heading, the stage route and the checklist all come from this
+  // one response (and a bad link must end on the "not found" panel), so the
+  // gate stays — but it draws the board's shape rather than a centred spinner.
+  if (isLoading) return <BoardSkeleton />;
 
   if (error || !data) {
     const notFound = error instanceof ApiError && error.status === 404;
@@ -103,5 +99,36 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
         checklistKey={`/public/document-progress/${linkId}/checklist?round=${current.round}`}
       />
     </div>
+  );
+}
+
+/** Heading, the ViewerRoundBoard status panel (headline + five-stage route)
+ *  and the checklist below it — the layout the real board lands in. */
+function BoardSkeleton() {
+  return (
+    <SkelRegion className="space-y-3">
+      <div className="flex flex-col gap-1.5">
+        <Skel className="h-6 w-72 max-w-full" />
+        <Skel className="h-4 w-80 max-w-full" />
+      </div>
+      <Panel padded={false}>
+        <div className="px-4 pt-4 flex flex-col gap-1.5">
+          <Skel className="h-3 w-20" />
+          <Skel className="h-6 w-56" />
+          <Skel className="h-4 w-72 max-w-full" />
+        </div>
+        <div className="px-4 py-5 flex items-start justify-between gap-2">
+          {Array.from({ length: 5 }, (_, i) => (
+            <div key={i} className="flex-1 flex flex-col items-center gap-2">
+              <Skel className="w-8 h-8 rounded-full" />
+              <Skel className="h-3 w-16" />
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel>
+        <SkelList items={4} />
+      </Panel>
+    </SkelRegion>
   );
 }

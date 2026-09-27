@@ -60,7 +60,7 @@ export default function TAShell({
 }) {
   // Same hook the checklist card uses — the sidebar marks and the card can no
   // longer drift apart (they did: the card counted a sent-back file as done).
-  const { docState, docLabel, scheduleDone, scheduleLabel } = useTAOnboarding();
+  const { loading, docState, docLabel, scheduleDone, scheduleLabel } = useTAOnboarding();
 
   const docsStatus: NavStatus | undefined =
     docState === "rejected" || docState === "not_sent" ? "warn"
@@ -69,7 +69,9 @@ export default function TAShell({
 
   const nav = buildNav(
     docsStatus, docLabel,
-    scheduleDone ? undefined : "warn", scheduleLabel,
+    // No warn mark while the hook is still loading — it would flash on every
+    // page load and then vanish for a TA who has a schedule.
+    loading || scheduleDone ? undefined : "warn", scheduleLabel,
   );
 
   return (

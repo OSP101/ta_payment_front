@@ -4,7 +4,8 @@ import useSWR, { mutate } from "swr";
 import { Check, RotateCcw, Lock, AlertTriangle, CheckCircle2, Mail, Circle, Globe2, Copy, X } from "lucide-react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Panel, Button, Chip, TextArea, EmptyState, Spinner, Alert, SearchField, ConfirmDialog } from "./ui";
+import { Panel, Button, Chip, TextArea, EmptyState, Alert, SearchField, ConfirmDialog } from "./ui";
+import { Skel, SkelRegion } from "./Skeletons";
 
 interface CourseRef { code: string; name_th: string; }
 // Per-ROUND physical document progress (migration 0031, fiscal_round since
@@ -66,20 +67,38 @@ export function fmt(iso?: string | null): string {
 // is pixel-identical to before fiscal rounds existed: no tabs, no "รอบ"
 // wording anywhere.
 export function DocumentProgressBoard({
-  termId, canEdit, showFinalStage = true,
+  termId, canEdit, showFinalStage = true, pending = false,
 }: {
   termId: string;
   canEdit: boolean;
   /** Stage 5 ("คณบดีลงนาม") is hidden from TAs — pass false for TA viewers. */
   showFinalStage?: boolean;
+  /**
+   * The caller is still resolving which term to show (its /terms request has
+   * not answered). An empty termId then means "not known yet", not "none
+   * picked" — draw the board's shape instead of the "เลือกภาคเรียน" prompt.
+   */
+  pending?: boolean;
 }) {
   const key = termId ? `/document-progress?term_id=${termId}` : null;
-  const { data, isLoading } = useSWR<TermProgressOverview>(key);
+  const { data } = useSWR<TermProgressOverview>(key);
   const [activeRound, setActiveRound] = useState(1);
+  // Warm the round checklist alongside the overview instead of after it: the
+  // panels that read it (SignatureChecklistPanel / ViewerStageSigners) only
+  // mount once the overview lands, which made the two requests a waterfall.
+  // Same key those panels use, so SWR dedupes it into the one request.
+  useSWR<SignatureItem[]>(termId ? `/document-progress/checklist?term_id=${termId}&round=${activeRound}` : null);
 
-  if (!termId) return <Panel><EmptyState title="เลือกภาคเรียนเพื่อดูความคืบหน้า" /></Panel>;
-  if (isLoading || !data) {
-    return <Panel><div className="flex items-center gap-2 py-8 justify-center text-sm text-muted"><Spinner size="sm" /> กำลังโหลด…</div></Panel>;
+  if (!termId && !pending) return <Panel><EmptyState title="เลือกภาคเรียนเพื่อดูความคืบหน้า" /></Panel>;
+  if (!data) {
+    return (
+      <div className="space-y-3">
+        {/* The share-link panel needs only the term, so it fills in on its own
+            request rather than waiting behind the overview. */}
+        {canEdit && termId && <ShareLinkPanel termId={termId} />}
+        <BoardSkeleton canEdit={canEdit} stages={showFinalStage ? 5 : 4} />
+      </div>
+    );
   }
 
   const rounds = data.rounds;
@@ -215,8 +234,6 @@ function ShareLinkPanel({ termId }: { termId: string }) {
     setTimeout(() => setCopied(false), 1800);
   }
 
-  if (isLoading) return null;
-
   return (
     <Panel>
       <div className="flex flex-wrap items-center gap-3">
@@ -225,7 +242,11 @@ function ShareLinkPanel({ termId }: { termId: string }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">ลิงก์สาธารณะสำหรับเทอมนี้</div>
-          {data ? (
+          {/* The panel's frame is static; only whether a link exists waits on
+              the request. Returning null here made the whole panel pop in. */}
+          {isLoading ? (
+            <Skel className="mt-1 h-3 w-3/4 max-w-80" />
+          ) : data ? (
             <div className="text-xs text-muted truncate">
               ใครก็เปิดดูได้โดยไม่ต้องเข้าสู่ระบบ · สร้างเมื่อ {fmt(data.created_at)}
               {data.created_by_name ? ` โดย ${data.created_by_name}` : ""}
@@ -234,7 +255,9 @@ function ShareLinkPanel({ termId }: { termId: string }) {
             <div className="text-xs text-muted">ยังไม่มีลิงก์ — สร้างแล้วนำไปประกาศให้อาจารย์และผู้ช่วยสอนดูความคืบหน้าได้</div>
           )}
         </div>
-        {data ? (
+        {isLoading ? (
+          <Skel className="h-8 w-36 shrink-0 rounded-lg" />
+        ) : data ? (
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="secondary" size="sm" onClick={copy}>
               {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}
@@ -550,7 +573,7 @@ function SignatureChecklistPanel({
   allExported: boolean;
 }) {
   const key = termId ? `/document-progress/checklist?term_id=${termId}&round=${round}` : null;
-  const { data, isLoading } = useSWR<SignatureItem[]>(key);
+  const { data } = useSWR<SignatureItem[]>(key);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
 
@@ -621,9 +644,8 @@ function SignatureChecklistPanel({
     }
   }
 
-  if (isLoading || !data) {
-    return <Panel><div className="flex items-center gap-2 py-6 justify-center text-sm text-muted"><Spinner size="sm" /> กำลังโหลด…</div></Panel>;
-  }
+  // These two branches depend only on the stage, not on the checklist, so they
+  // are decided before waiting on it.
   if (!allExported) return null;
   if (role === "") {
     // Stages 4 and 5 are things the officer does, not sheets anybody signs.
@@ -640,6 +662,7 @@ function SignatureChecklistPanel({
       </Panel>
     );
   }
+  if (!data) return <ChecklistSkeleton />;
   // Only when the stage genuinely has nobody. A search that matches nothing
   // must keep the panel (and its search box) on screen, or the officer is stuck
   // with no way to clear the term they just typed.
@@ -901,7 +924,7 @@ function ViewerStageSigners({
   role: string;
   done: boolean;
 }) {
-  const { data, isLoading } = useSWR<SignatureItem[]>(checklistKey);
+  const { data } = useSWR<SignatureItem[]>(checklistKey);
   const [q, setQ] = useState("");
 
   const stageInfo = STAGES.find(st => st.n === stage + 1);
@@ -932,9 +955,6 @@ function ViewerStageSigners({
       .map(x => [x[0], x[1]] as [string, { code: string; name_th: string; items: SignatureItem[] }]);
   }, [items, needle]);
 
-  if (isLoading || !data) {
-    return <Panel><div className="flex items-center gap-2 py-6 justify-center text-sm text-muted"><Spinner size="sm" /> กำลังโหลด…</div></Panel>;
-  }
   if (role === "" || done) {
     return (
       <Panel>
@@ -949,6 +969,7 @@ function ViewerStageSigners({
       </Panel>
     );
   }
+  if (!data) return <ChecklistSkeleton />;
   if (items.length === 0) {
     return (
       <Panel>
@@ -1025,6 +1046,89 @@ function ViewerStageSigners({
           );
         })}
       </div>
+    </Panel>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Loading placeholders                                                       */
+/* -------------------------------------------------------------------------- */
+
+// Same outline as the real stepper row (circle, label, who) so the panel keeps
+// its height when the overview lands.
+function StepperSkeleton({ stages }: { stages: number }) {
+  return (
+    <div className="px-4 py-5 overflow-x-auto">
+      <div className="flex items-start min-w-[640px]">
+        {Array.from({ length: stages }, (_, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center gap-2">
+            <Skel className="size-8 rounded-full" />
+            <Skel className="h-3 w-20" />
+            <Skel className="h-2.5 w-16" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// One round's board while the overview is in flight: the officer's gate +
+// stepper + checklist, or the viewer's status card + stepper.
+function BoardSkeleton({ canEdit, stages }: { canEdit: boolean; stages: number }) {
+  if (!canEdit) {
+    return (
+      <SkelRegion className="space-y-3">
+        <Panel padded={false}>
+          <div className="px-4 pt-4 flex flex-col gap-2">
+            <div className="text-xs uppercase tracking-wide text-muted">สถานะตอนนี้</div>
+            <Skel className="h-6 w-56" />
+            <Skel className="h-4 w-72 max-w-full" />
+          </div>
+          <StepperSkeleton stages={stages} />
+        </Panel>
+      </SkelRegion>
+    );
+  }
+  return (
+    <SkelRegion className="space-y-3">
+      <Panel>
+        <Skel className="h-5 w-2/3" />
+      </Panel>
+      <Panel padded={false}>
+        <div className="px-4 py-3 flex items-center gap-3 border-b border-hairline">
+          <div className="font-semibold">การเดินเอกสารของทั้งเทอม</div>
+          <Skel className="ml-auto h-6 w-24 rounded-full" />
+        </div>
+        <StepperSkeleton stages={stages} />
+        <div className="px-4 pb-3">
+          <Skel className="h-16 w-full rounded-xl" />
+        </div>
+      </Panel>
+      <ChecklistSkeleton />
+    </SkelRegion>
+  );
+}
+
+// A checklist panel: header line + two course groups of signer tiles.
+function ChecklistSkeleton() {
+  return (
+    <Panel padded={false}>
+      <SkelRegion>
+        <div className="px-4 py-3 flex flex-col gap-2 border-b border-hairline">
+          <Skel className="h-4 w-48" />
+          <Skel className="h-3 w-64 max-w-full" />
+        </div>
+        <div className="divide-y divide-hairline">
+          {[0, 1].map(i => (
+            <div key={i} className="px-4 py-3">
+              <Skel className="h-4 w-56 mb-2" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {[0, 1, 2].map(j => <Skel key={j} className="h-12 rounded-lg" />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </SkelRegion>
     </Panel>
   );
 }

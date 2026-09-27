@@ -9,10 +9,11 @@ import { HoursSplit, hoursSplitText } from "../../../../lib/trackSplit";
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
-  PageHeader, Panel, Button, EmptyState, TextArea, FieldGroup, Alert, Spinner,
+  PageHeader, Panel, Button, EmptyState, TextArea, FieldGroup, Alert,
   Chip, StatusChip, ConfirmDialog, type ChipTone,
 } from "../../../../components/ui";
 import { WorkloadEditModal } from "../../../../components/WorkloadEditModal";
+import { Skel, SkelRows, SkelValue } from "../../../../components/Skeletons";
 
 /**
  * One row of /reports/pending — an ASSIGNMENT (a TA on one section) that has
@@ -316,6 +317,9 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
   const { data: course } = useSWR<Course>(`/teaching-courses/${tcId}`);
   const { data: all, error, isLoading } = useSWR<PendingRow[]>(PENDING_KEY);
   const historyKey = `/teaching-courses/${tcId}/approval-history`;
+  // MonthlyPayPanel and BudgetNotice both read this; an approval changes what
+  // the course has spent, so both must refresh with the queue.
+  const settlementKey = `/teaching-courses/${tcId}/budget-settlement`;
   const { data: history, isLoading: historyLoading } = useSWR<ApprovalHistoryEntry[]>(historyKey);
   // This page is shared by lecturer/admin/staff (app/lecturer/layout.tsx's
   // requireRole), but the workload-correction feature is staff/admin only on
@@ -362,6 +366,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
         // the card header refreshed while the open table still showed every row
         // as "รอตรวจ". Match the composite keys instead.
         mutate(k => Array.isArray(k) && k[0] === "worklogs"),
+        mutate(settlementKey),
       ]);
     } catch (e) {
       notify.error(e);
@@ -393,6 +398,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
         mutate(PENDING_KEY),
         mutate(historyKey),
         mutate(k => Array.isArray(k) && k[0] === "worklogs"),
+        mutate(settlementKey),
       ]);
     } catch (e) {
       notify.error(e);
@@ -432,12 +438,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
           />
         </Panel>
       ) : isLoading && all === undefined ? (
-        <Panel>
-          <div className="flex flex-col items-center justify-center gap-2 py-14 text-muted">
-            <Spinner />
-            <div className="text-xs">กำลังโหลดข้อมูล…</div>
-          </div>
-        </Panel>
+        <QueueSkeleton />
       ) : groups.length === 0 ? (
         <Panel>
           <EmptyState
@@ -488,6 +489,32 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
           history={history}
           loading={historyLoading && history === undefined}
         />
+      </div>
+    </div>
+  );
+}
+
+/** The pending queue while it loads: the summary line, then collapsed TA cards. */
+function QueueSkeleton() {
+  return (
+    <div role="status" aria-busy="true">
+      <span className="sr-only">กำลังโหลด</span>
+      <div className="mb-3 flex items-center gap-4">
+        <Skel className="h-4 w-24" />
+        <Skel className="h-4 w-32" />
+      </div>
+      <div className="flex flex-col gap-3">
+        {[0, 1].map(i => (
+          <Panel key={i} padded={false}>
+            <div className="flex items-start gap-2 px-4 py-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <Skel className="h-4 w-48" />
+                <Skel className="h-6 w-36 rounded-full" />
+              </div>
+              <Skel className="h-8 w-32 rounded-lg" />
+            </div>
+          </Panel>
+        ))}
       </div>
     </div>
   );
@@ -813,7 +840,16 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
   const [viewMode, setViewMode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  if (!data) return null;
+  // Loading: the panel's own title with placeholder rows, so the queue below
+  // doesn't get pushed down when the figures land. (A course with no one to
+  // pay still ends with no panel — that is decided by the data.)
+  if (!data) {
+    return (
+      <Panel className="mb-3" title="ค่าตอบแทน TA รายเดือน" description={<SkelValue className="h-3 w-56" />}>
+        <SkelRows rows={3} columns={5} />
+      </Panel>
+    );
+  }
 
   const current = data.settlement_mode;
   const other = current === "spread" ? "chronological" : "spread";
@@ -1254,9 +1290,17 @@ function MonthRows({
   }, [perAssignment, secOf]);
 
   if (isLoading && !perAssignment) {
+    // One placeholder per month row, same padding as the real rows.
     return (
-      <div className="flex items-center justify-center gap-2 border-t border-(--hairline) py-6 text-xs text-muted">
-        <Spinner size="sm" /> กำลังโหลดรายการ…
+      <div className="border-t border-(--hairline)" role="status" aria-busy="true">
+        <span className="sr-only">กำลังโหลด</span>
+        {[0, 1].map(i => (
+          <div key={i} className="flex items-center gap-3 border-b border-(--hairline) px-4 py-3 last:border-b-0">
+            <Skel className="h-4 w-24" />
+            <Skel className="h-3 w-40" />
+            <Skel className="ml-auto h-8 w-40 rounded-lg" />
+          </div>
+        ))}
       </div>
     );
   }
@@ -1550,7 +1594,7 @@ function ApprovalHistoryPanel({
           <History size={15} className="text-muted" />
           <span className="text-sm font-medium">ประวัติการอนุมัติ</span>
           <span className="text-xs text-muted">
-            {loading ? "กำลังโหลด…" : count > 0 ? `${count} รายการล่าสุด` : "ยังไม่มี"}
+            {loading ? <SkelValue className="h-3 w-20" /> : count > 0 ? `${count} รายการล่าสุด` : "ยังไม่มี"}
           </span>
         </button>
       </div>

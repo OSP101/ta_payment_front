@@ -11,7 +11,8 @@ import { notify } from "../../lib/notify";
 import {
   PageHeader, Button, IconButton, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
 } from "../../components/ui";
-import { DataTable, type DataColumn } from "../../components/DataTable";
+import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
+import { Skel } from "../../components/Skeletons";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 
 // Both modals are heavy (forms, section-schedule editors, autocompletes) but
@@ -33,6 +34,10 @@ interface TC {
   num_students: number;
   num_students_regular: number;
   num_students_special: number;
+  // false = staff never filled that track in (shown as "-"); true with a 0
+  // count means nobody enrolled, which is a real answer, not a missing one.
+  num_students_regular_entered: boolean;
+  num_students_special_entered: boolean;
   // has_special = the course has ≥1 special-track section (runs a special
   // program). When false, the "นศ. พิเศษ" field is not applicable and is locked.
   has_special: boolean;
@@ -47,9 +52,15 @@ interface TC {
 
 // needsStudentCount reports whether staff still has to fill in a student count
 // for the course: the regular count is always required; the special count is
-// required only when the course runs a special program (has_special).
+// required only when the course runs a special program (has_special). Only a
+// track still at "-" counts: an entered 0 means nobody enrolled.
 function needsStudentCount(c: TC): boolean {
-  return c.num_students_regular === 0 || (c.has_special && c.num_students_special === 0);
+  return !c.num_students_regular_entered || (c.has_special && !c.num_students_special_entered);
+}
+
+// studentCountLabel renders one track's count, "-" while it has not been entered.
+function studentCountLabel(n: number, entered: boolean): string {
+  return entered ? String(n) : "-";
 }
 
 export default function TeachingPage() {
@@ -62,7 +73,10 @@ export default function TeachingPage() {
   // `loaded` distinguishes "still loading" from "confirmed none created yet".
   const noTerms = loaded && (terms?.length ?? 0) === 0;
 
-  const { data: courses } = useSWR<TC[]>(useTermKey("/teaching-courses"));
+  // keepPreviousData: switching term keeps the old table under DataTable's
+  // refetch overlay until the new term's courses arrive.
+  const { data: courses, isLoading: coursesLoading } =
+    useSWR<TC[]>(useTermKey("/teaching-courses"), { keepPreviousData: true });
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
@@ -71,7 +85,7 @@ export default function TeachingPage() {
   // Course whose student counts are being edited in the modal (null = closed).
   const [editStudents, setEditStudents] = useState<TC | null>(null);
 
-  // A course "needs attention" when a required student count is still 0: the
+  // A course "needs attention" when a required student count is still "-": the
   // regular count always, plus the special count when the course runs a special
   // program. Drives the filter chip + count below.
   const missingCourses = (courses ?? []).filter(needsStudentCount);
@@ -163,10 +177,13 @@ export default function TeachingPage() {
             <DataTable
               ariaLabel="วิชาที่เปิดสอน"
               rows={shownCourses}
-              loading={!!termId && !courses}
+              // Also covers the moment before the term itself resolves (key is
+              // still null) — otherwise the table briefly says "ยังไม่มีวิชา".
+              loading={(!courses && !noTerms) || coursesLoading}
               rowKey={c => c.id}
               searchFn={c => `${courseCodeLabel(c)} ${c.name_th}`}
               searchPlaceholder="ค้นหารหัสวิชา / ชื่อวิชา…"
+              filters={makeCourseFilters(courses ?? [])}
               initialSort={{ column: "code", direction: "ascending" }}
               pageSize={10}
               emptyTitle="ยังไม่มีวิชาในภาคเรียนนี้"
@@ -205,6 +222,56 @@ export default function TeachingPage() {
       <StudentCountsModal course={editStudents} onClose={() => setEditStudents(null)} />
     </div>
   );
+}
+
+// lecturerList splits the joined "title first last, ..." string from the API.
+function lecturerList(c: TC): string[] {
+  return (c.lecturer_names ?? "").split(", ").map(n => n.trim()).filter(Boolean);
+}
+
+// Filters beside the search box. The lecturer options come from the courses
+// in this term, so the list never offers a name that matches nothing.
+function makeCourseFilters(courses: TC[]): DataFilter<TC>[] {
+  const lecturers = [...new Set(courses.flatMap(lecturerList))]
+    .sort((a, b) => a.localeCompare(b, "th"));
+  return [
+    {
+      id: "students",
+      placeholder: "จำนวนนักศึกษาทั้งหมด",
+      options: [
+        { id: "", label: "จำนวนนักศึกษาทั้งหมด" },
+        { id: "missing", label: "ยังไม่กรอก (-)" },
+        { id: "zero", label: "ไม่มีนักศึกษา (0 คน)" },
+        { id: "filled", label: "กรอกแล้ว" },
+      ],
+      predicate: (c, v) => {
+        const missing = needsStudentCount(c);
+        if (v === "missing") return missing;
+        if (v === "zero") return !missing && c.num_students === 0;
+        return !missing;
+      },
+    },
+    {
+      id: "schedule",
+      placeholder: "ตารางเรียนทั้งหมด",
+      options: [
+        { id: "", label: "ตารางเรียนทั้งหมด" },
+        { id: "wba", label: "ยังไม่มีตาราง (WBA)" },
+        { id: "ok", label: "มีตารางครบ" },
+      ],
+      predicate: (c, v) => (v === "wba" ? c.has_missing_schedule : !c.has_missing_schedule),
+    },
+    {
+      id: "lecturer",
+      placeholder: "อาจารย์ทุกคน",
+      options: [
+        { id: "", label: "อาจารย์ทุกคน" },
+        ...lecturers.map(n => ({ id: n, label: n })),
+      ],
+      predicate: (c, v) => lecturerList(c).includes(v),
+      className: "min-w-56",
+    },
+  ];
 }
 
 // Column factory — the students column needs the page's "open edit modal"
@@ -272,8 +339,8 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
         return (
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <Users size={13} className="text-muted shrink-0" />
-            <span className="tabular-nums" title={`ภาคปกติ ${c.num_students_regular} คน · ภาคพิเศษ ${c.num_students_special} คน`}>
-              {c.num_students_regular} / {c.num_students_special}
+            <span className="tabular-nums" title={`ภาคปกติ ${c.num_students_regular_entered ? `${c.num_students_regular} คน` : "ยังไม่กรอก"} · ภาคพิเศษ ${c.num_students_special_entered ? `${c.num_students_special} คน` : "ยังไม่กรอก"}`}>
+              {studentCountLabel(c.num_students_regular, c.num_students_regular_entered)} / {studentCountLabel(c.num_students_special, c.num_students_special_entered)}
             </span>
             {missing && <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">ยังไม่กรอก</span>}
             <IconButton
@@ -415,18 +482,23 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (course) {
-      setReg(String(course.num_students_regular));
-      setSpc(String(course.num_students_special));
+      // A track still at "-" opens blank so staff type the real number.
+      setReg(course.num_students_regular_entered ? String(course.num_students_regular) : "");
+      setSpc(course.num_students_special_entered ? String(course.num_students_special) : "");
     }
   }, [course]);
 
   const hasSpecial = !!course?.has_special;
   const regNum = Number(reg);
   const spcNum = Number(spc);
+  // Blank = still "-": it blocks saving but shows no error, since a track that
+  // was never entered opens blank on purpose.
   const regInvalid = reg.trim() === "" || !Number.isInteger(regNum) || regNum < 0;
   const spcInvalid = hasSpecial && (spc.trim() === "" || !Number.isInteger(spcNum) || spcNum < 0);
-  const regDirty = !!course && !regInvalid && regNum !== course.num_students_regular;
-  const spcDirty = !!course && hasSpecial && !spcInvalid && spcNum !== course.num_students_special;
+  // Typing the stored number into a "-" track is still a change: it marks the
+  // track as entered (e.g. 0 = nobody enrolled).
+  const regDirty = !!course && !regInvalid && (!course.num_students_regular_entered || regNum !== course.num_students_regular);
+  const spcDirty = !!course && hasSpecial && !spcInvalid && (!course.num_students_special_entered || spcNum !== course.num_students_special);
   const dirty = regDirty || spcDirty;
   const invalid = regInvalid || spcInvalid;
 
@@ -470,11 +542,12 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
           <div className="grid grid-cols-2 gap-3">
             <FieldGroup
               label="ภาคปกติ"
-              error={regInvalid ? "ต้องเป็นจำนวนเต็ม ≥ 0" : undefined}
+              error={regInvalid && reg.trim() !== "" ? "ต้องเป็นจำนวนเต็ม ≥ 0" : undefined}
             >
               <TextInput
                 type="number" min={0} step={1}
-                aria-invalid={regInvalid || undefined}
+                aria-invalid={(regInvalid && reg.trim() !== "") || undefined}
+                placeholder="-"
                 value={reg} onChange={e => setReg(e.target.value)}
                 className="text-right tabular"
               />
@@ -482,12 +555,13 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
             <FieldGroup
               label="ภาคพิเศษ"
               hint={hasSpecial ? undefined : "วิชานี้ไม่มีโครงการพิเศษ"}
-              error={spcInvalid ? "ต้องเป็นจำนวนเต็ม ≥ 0" : undefined}
+              error={spcInvalid && spc.trim() !== "" ? "ต้องเป็นจำนวนเต็ม ≥ 0" : undefined}
             >
               {hasSpecial ? (
                 <TextInput
                   type="number" min={0} step={1}
-                  aria-invalid={spcInvalid || undefined}
+                  aria-invalid={(spcInvalid && spc.trim() !== "") || undefined}
+                  placeholder="-"
                   value={spc} onChange={e => setSpc(e.target.value)}
                   className="text-right tabular"
                 />
@@ -516,7 +590,16 @@ interface Budget {
 // so staff can see how the course budget divides across the two pools.
 function BudgetBadge({ id }: { id: string }) {
   const { data } = useSWR<Budget>(`/teaching-courses/${id}/budget`);
-  if (!data) return <span className="text-[var(--ink-4)] text-xs">…</span>;
+  // Same two lines as the loaded badge (chip + track split), so the column
+  // doesn't change height when each row's budget lands.
+  if (!data) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <Skel className="h-6 w-28 rounded-full" />
+        <Skel className="h-3 w-32" />
+      </div>
+    );
+  }
   const tone = data.over_budget ? "danger" : data.remaining_baht < data.per_course_max * 0.1 ? "warn" : "success";
   const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
   return (

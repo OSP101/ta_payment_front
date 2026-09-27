@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { PageHeader, Select } from "../components/ui";
 import type { Term } from "../lib/api";
 import TermDashboard from "../staff/insights/TermDashboard";
+import { Skel, SkelRegion } from "../components/Skeletons";
 
 // มุมมองผู้บริหาร — the same TermDashboard the staff dashboard embeds,
 // standing alone. Read-only by construction: the only endpoints this page
@@ -40,7 +41,17 @@ export default function ExecutivePage() {
           </Select>
         )}
       </div>
-      {termId && <TermDashboard termId={termId} />}
+      {termId ? <TermDashboard termId={termId} /> : !terms && (
+        // /terms has not answered yet, so there is no term to hand the
+        // dashboard. Reserve its shape (headline + KPI row) rather than
+        // leaving the page empty under the header.
+        <SkelRegion className="space-y-4">
+          <Skel className="h-44 rounded-2xl" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[0, 1, 2, 3].map(i => <Skel key={i} className="h-24 rounded-xl" />)}
+          </div>
+        </SkelRegion>
+      )}
     </div>
   );
 }

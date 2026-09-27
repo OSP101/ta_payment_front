@@ -33,7 +33,10 @@ export default function DocumentProgressPage() {
           <TermSelect terms={terms} value={termId} onChange={setTermId} />
         }
       />
-      <DocumentProgressBoard termId={termId} canEdit={false} showFinalStage={showFinalStage} />
+      {/* pending: until /terms answers and the effect above picks one, an empty
+          termId means "not decided yet", not "none" — the board draws its shape. */}
+      <DocumentProgressBoard termId={termId} canEdit={false} showFinalStage={showFinalStage}
+        pending={!terms || (terms.length > 0 && !termId)} />
     </div>
   );
 }

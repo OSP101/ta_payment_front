@@ -20,6 +20,7 @@ import {
   PageHeader, Panel, Button, TextInput, FieldGroup, StatusChip, Alert, Chip,
   SelectField,
 } from "../../../components/ui";
+import { Skel, SkelForm, SkelList, SkelRegion, SkelValue } from "../../../components/Skeletons";
 /* -------------------------------------------------------------------------- */
 /* Upload constraints — enforced in the browser so users get instant feedback  */
 /* and again on the server (see maxDocBytes / kind checks) for real safety.    */
@@ -315,6 +316,9 @@ export default function ProfilePage() {
     if (first) setExpanded(new Set([first.id]));
   }, [data, docs, doneMap, needsFixMap]);
 
+  // Profile and documents are separate requests; until both answer, the step
+  // ticks and the n/total count would claim "nothing done" and then jump.
+  const loaded = data !== undefined && docs !== undefined;
   const doneCount = Object.values(doneMap).filter(Boolean).length;
   const total = STEP_META.length;
   const allDone = doneCount === total;
@@ -365,17 +369,17 @@ export default function ProfilePage() {
                 ขั้นตอนการเริ่มต้นสำหรับ TA
               </div>
               <div className="text-sm tabular text-muted">
-                {doneCount}/{total}
+                {loaded ? `${doneCount}/${total}` : <SkelValue className="h-4 w-8" />}
               </div>
             </div>
             <div className="h-2 rounded-full bg-surface-secondary overflow-hidden">
               <div
                 className="h-full bg-accent transition-[width]"
-                style={{ width: `${(doneCount / total) * 100}%` }}
+                style={{ width: `${loaded ? (doneCount / total) * 100 : 0}%` }}
               />
             </div>
             <div className="mt-2 text-xs text-muted">
-              {anyNeedsFix
+              {!loaded ? <SkelValue className="h-3 w-72 max-w-full" /> : anyNeedsFix
                 ? "มีบางขั้นตอนถูกตีกลับให้แก้ไข โปรดตรวจสอบและส่งใหม่"
                 : allDone
                   ? "ครบทุกขั้นตอนแล้ว รอเจ้าหน้าที่ตรวจสอบและอนุมัติ"
@@ -403,6 +407,7 @@ export default function ProfilePage() {
                   subtitle={step.subtitle}
                   done={doneMap[step.id as keyof typeof doneMap]}
                   needsFix={needsFixMap[step.id as keyof typeof needsFixMap]}
+                  loading={!loaded}
                   isNext={!doneMap[step.id as keyof typeof doneMap] && Object.entries(doneMap).every(
                     ([k, v]) => (STEP_META.find(s => s.id === k)!.n < step.n ? v : true)
                   )}
@@ -412,7 +417,14 @@ export default function ProfilePage() {
             </Accordion.Heading>
             <Accordion.Panel>
               <Accordion.Body className="pb-4">
-                {step.id === "profile" ? (
+                {/* The form seeds from /me/profile and the doc steps read
+                    /me/documents — an empty form (or "not uploaded") shown
+                    first and then overwritten reads as a flicker. */}
+                {step.id === "profile" && !data ? (
+                  <SkelForm fields={6} />
+                ) : step.id !== "profile" && !docs ? (
+                  <SkelList items={1} icon bordered />
+                ) : step.id === "profile" ? (
                   <ProfileStep
                     form={form}
                     setForm={setForm}
@@ -472,8 +484,22 @@ export default function ProfilePage() {
 /* -------------------------------------------------------------------------- */
 
 function StepHead({
-  n, title, subtitle, done, needsFix, isNext,
-}: { n: number; title: string; subtitle: string; done: boolean; needsFix: boolean; isNext: boolean }) {
+  n, title, subtitle, done, needsFix, isNext, loading,
+}: { n: number; title: string; subtitle: string; done: boolean; needsFix: boolean; isNext: boolean; loading?: boolean }) {
+  if (loading) {
+    // Title and subtitle are static; only the verdict circle and chip wait.
+    return (
+      <div className="flex items-center gap-3 flex-1 text-start">
+        <Skel className="w-9 h-9 rounded-full shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="font-medium text-sm text-foreground">{title}</div>
+          </div>
+          <div className="text-xs text-muted mt-0.5">{subtitle}</div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center gap-3 flex-1 text-start">
       <div
@@ -869,7 +895,10 @@ function CreditorFormStep({
               title="แบบแจ้งข้อมูลเจ้าหนี้บุคลากร (ล่วงหน้า)"
             />
           ) : (
-            <div className="p-4 text-sm text-muted">กำลังสร้างตัวอย่าง…</div>
+            // Same A4 box PdfFrame will occupy, so the page below doesn't jump.
+            <SkelRegion label="กำลังสร้างตัวอย่าง">
+              <Skel className="aspect-[210/297] w-full rounded-none" />
+            </SkelRegion>
           )}
         </div>
       </div>

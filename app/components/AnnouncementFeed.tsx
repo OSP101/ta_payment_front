@@ -9,6 +9,7 @@ import {
 import { Panel, EmptyState, Chip, type ChipTone } from "./ui";
 import AttachmentGallery, { type Attachment } from "./AttachmentGallery";
 import RichText from "./RichText";
+import { Skel, SkelRegion } from "./Skeletons";
 
 // Feed of published announcements as seen by the audience. The staff
 // composer at /staff/announce owns the create/edit flow; this file is
@@ -55,7 +56,7 @@ export default function AnnouncementFeed({
   return (
     <Panel title={title} description={description} padded={false}>
       {isLoading && !data ? (
-        <div className="p-4 text-sm text-muted">กำลังโหลด…</div>
+        <FeedSkeleton count={Math.min(limit ?? 3, 3)} compact={compact} />
       ) : items.length === 0 ? (
         <EmptyState
           icon={<Megaphone size={26} />}
@@ -70,6 +71,32 @@ export default function AnnouncementFeed({
         </ul>
       )}
     </Panel>
+  );
+}
+
+/** Same rows as AnnouncementItem (chip line, title, a few body lines), so the
+ *  list lands in the space the placeholder already held. */
+function FeedSkeleton({ count, compact }: { count: number; compact: boolean }) {
+  return (
+    <SkelRegion>
+      <ul className="divide-y divide-[var(--hairline)]">
+        {Array.from({ length: count }, (_, i) => (
+          <li key={i} className="p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-1.5">
+              <Skel className="h-5 w-24 rounded-full" />
+              <Skel className="h-3 w-28 ms-auto" />
+            </div>
+            <Skel className="h-5 w-2/3" />
+            {!compact && (
+              <div className="flex flex-col gap-2">
+                <Skel className="h-3.5 w-full" />
+                <Skel className="h-3.5 w-5/6" />
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </SkelRegion>
   );
 }
 

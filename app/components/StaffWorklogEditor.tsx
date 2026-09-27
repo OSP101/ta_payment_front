@@ -6,6 +6,7 @@ import { Accordion } from "@heroui/react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { TextInput, Select, Button, IconButton, Chip, EmptyState, Spinner, DatePicker, TimePicker, StatusChip, Modal, Alert, TextArea } from "./ui";
+import { Skel, SkelRegion } from "./Skeletons";
 
 export interface StaffWorkLog {
   id: string;
@@ -114,11 +115,23 @@ export function StaffWorklogEditor({
     return [...m.values()].sort((a, b) => a.taName.localeCompare(b.taName, "th"));
   }, [logs, assignments]);
 
+  // Each group merges both responses, so the list waits for the pair — as
+  // collapsed accordion headers (name + chips), the shape it lands in.
   if (!logs || !assignments) {
     return (
-      <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted">
-        <Spinner size="sm" /> กำลังโหลดบันทึกเวลา…
-      </div>
+      <SkelRegion label="กำลังโหลดบันทึกเวลา" className="divide-y divide-border">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="flex items-center gap-2 px-4 py-3">
+            <div className="flex flex-col gap-1.5 mr-1">
+              <Skel className="h-4 w-40" />
+              <Skel className="h-3 w-24" />
+            </div>
+            <Skel className="h-6 w-24 rounded-full" />
+            <Skel className="h-6 w-16 rounded-full" />
+            <Skel className="h-6 w-20 rounded-full" />
+          </div>
+        ))}
+      </SkelRegion>
     );
   }
   if (groups.length === 0) {

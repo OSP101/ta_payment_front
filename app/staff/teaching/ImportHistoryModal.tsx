@@ -8,6 +8,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { History, ChevronRight, FileSpreadsheet, TriangleAlert, CircleX, CircleCheck } from "lucide-react";
 import { Modal, Button, Chip, EmptyState, Alert } from "../../components/ui";
+import { Skel, SkelList, SkelRegion } from "../../components/Skeletons";
 
 interface HistoryRow {
   id: string;
@@ -56,7 +57,7 @@ export default function ImportHistoryModal({
     <>
       <Modal open={open && !detailId} onClose={onClose} title="ประวัติการนำเข้าไฟล์ทะเบียน" size="lg" icon={<History size={18} />}>
         {isLoading ? (
-          <div className="py-8 text-center text-sm text-(--ink-3)">กำลังโหลด…</div>
+          <SkelList items={3} icon={false} className="py-3" />
         ) : !rows || rows.length === 0 ? (
           <EmptyState
             icon={<FileSpreadsheet size={28} />}
@@ -99,13 +100,22 @@ export default function ImportHistoryModal({
       <Modal
         open={!!detailId}
         onClose={() => setDetailId(null)}
-        title={detail?.filename ?? "รายละเอียดการนำเข้า"}
+        // The list row already knows the filename — use it so the title doesn't
+        // change when the detail arrives.
+        title={detail?.filename ?? rows?.find(r => r.id === detailId)?.filename ?? "รายละเอียดการนำเข้า"}
         size="lg"
         icon={<FileSpreadsheet size={18} />}
         footer={<Button variant="tertiary" onClick={() => setDetailId(null)}>กลับไปที่ประวัติ</Button>}
       >
         {!detail ? (
-          <div className="py-8 text-center text-sm text-(--ink-3)">กำลังโหลด…</div>
+          <SkelRegion className="space-y-3">
+            <Skel className="h-3 w-48" />
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 3 }, (_, i) => <Skel key={i} className="h-6 w-20 rounded-full" />)}
+            </div>
+            <Skel className="h-3 w-32" />
+            <Skel className="h-3 w-full" />
+          </SkelRegion>
         ) : (
           <div className="space-y-3 text-sm">
             <div className="text-xs text-(--ink-3)">

@@ -9,6 +9,7 @@ import {
 } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { PageHeader, Panel, Button, Alert, Chip, StatusChip, TabLabel, TextArea, Modal } from "../../components/ui";
+import { SkelList } from "../../components/Skeletons";
 
 type Bucket = "pending" | "approved" | "rejected";
 
@@ -111,7 +112,7 @@ function RequestList({
   data, error, onReview,
 }: { data?: DataDeletionRequestForReview[]; error?: unknown; onReview: (r: DataDeletionRequestForReview) => void }) {
   if (error) return <Alert status="danger" title="โหลดข้อมูลไม่สำเร็จ" description={errMessage(error)} />;
-  if (!data) return <div className="text-sm text-muted p-4">กำลังโหลด…</div>;
+  if (!data) return <SkelList items={3} icon={false} className="p-4" />;
   if (data.length === 0) return <div className="text-sm text-muted p-4">ไม่มีคำขอในสถานะนี้</div>;
 
   return (

@@ -28,10 +28,11 @@ import useSWR from "swr";
 import {
   Download, Wallet, Users, BookOpen, Inbox, Sparkles, CircleCheck, TriangleAlert,
   OctagonAlert, Info, ArrowRight, CalendarClock, FileWarning, Undo2, CalendarX2, UserX, ChevronDown,
-  Gauge, Scale, Workflow, Table2, BarChart3, AlignLeft,
+  Gauge, Scale, Workflow, Table2, BarChart3, AlignLeft, FlaskConical,
 } from "lucide-react";
 import { Panel, Button, Select } from "../../components/ui";
 import { api, type Term } from "../../lib/api";
+import useIsDemo from "../../lib/useIsDemo";
 import type { TermAnalytics, StaffingStatus, CourseStaffing } from "../types";
 import { curriculumTH } from "../types";
 import {
@@ -45,6 +46,7 @@ import {
 import MonthlyChart from "./MonthlyChart";
 import CurriculumBars from "./CurriculumBars";
 import CourseExplorer from "./CourseExplorer";
+import { Skel, SkelValue, SkelRegion, SkelBlock, SkelRows } from "../../components/Skeletons";
 
 // Text colours on their tinted backgrounds all pass WCAG AA (≥ 4.5:1).
 const TONE: Record<Tone, { icon: typeof Info; text: string; bg: string; ring: string }> = {
@@ -63,7 +65,10 @@ export default function TermDashboard({
   staffLinks?: boolean;
 }) {
   const key = termId ? `/dashboard/analytics?term_id=${termId}` : "/dashboard/analytics";
-  const { data: a, isLoading } = useSWR<TermAnalytics>(key);
+  // keepPreviousData: switching term in the top bar keeps the current figures
+  // up (dimmed below) until the new term's answer lands, instead of dropping
+  // the whole dashboard back to its skeleton.
+  const { data: a } = useSWR<TermAnalytics>(key, { keepPreviousData: true });
   const { data: terms } = useSWR<Term[]>("/terms");
   const [compareId, setCompareId] = useState("");
   const { data: b } = useSWR<TermAnalytics>(compareId ? `/dashboard/analytics?term_id=${compareId}` : null);
@@ -74,6 +79,7 @@ export default function TermDashboard({
   const [showAllInsights, setShowAllInsights] = useState(false);
   const [flowAsChart, setFlowAsChart] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const demo = useIsDemo();
 
   const view = useMemo(() => {
     if (!a) return null;
@@ -105,16 +111,11 @@ export default function TermDashboard({
     }
   };
 
-  if (!a || !view) {
-    return (
-      <div className="space-y-4" aria-busy={isLoading}>
-        <div className="h-44 rounded-2xl border border-[var(--border)] bg-surface animate-pulse" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[0, 1, 2, 3].map(i => <div key={i} className="h-24 rounded-xl border border-[var(--border)] bg-surface animate-pulse" />)}
-        </div>
-      </div>
-    );
-  }
+  // Every figure comes from the one /dashboard/analytics answer, so there is
+  // nothing to fill in piecemeal — but the page's shape (question titles, KPI
+  // labels, panels) is known up front and is drawn at once.
+  if (!a || !view) return <DashboardSkeleton />;
+  const switching = !!termId && a.term_id !== termId;
 
   const { bv, risk, rows, st, insights } = view;
   const bAns = budgetAnswer(bv, risk);
@@ -145,24 +146,23 @@ export default function TermDashboard({
   };
 
   return (
-    <div className="space-y-6" data-tour="dash-analytics">
+    <div className={`space-y-6 transition-opacity ${switching ? "opacity-60" : ""}`} data-tour="dash-analytics" aria-busy={switching}>
+      {/* In the sandbox every figure below is fictional. Said once, above
+          everything, so a screenshot of the page can never pass for real. */}
+      {demo && (
+        <div role="note" className="flex items-start gap-3 rounded-xl border-2 border-dashed border-amber-400 bg-amber-50 px-4 py-3 text-amber-900">
+          <FlaskConical size={20} className="mt-0.5 shrink-0" aria-hidden />
+          <div>
+            <div className="text-sm font-semibold">ข้อมูลสาธิต ไม่ใช่ข้อมูลจริง</div>
+            <div className="text-xs">ตัวเลข รายวิชา และรายชื่อทั้งหมดในหน้านี้มาจากห้องทดลอง เป็นข้อมูลสมมติเพื่อการนำเสนอเท่านั้น</div>
+          </div>
+        </div>
+      )}
       {/* ------------------------------------------------------------------ */}
       {/* Toolbar                                                            */}
       {/* ------------------------------------------------------------------ */}
       <div className="flex flex-wrap items-center gap-2">
-        <nav aria-label="ไปยังคำถาม" className="flex flex-wrap gap-1.5 me-auto">
-          {[
-            { id: "q-budget", label: "งบพอไหม", icon: Gauge },
-            { id: "q-staffing", label: "ขอ TA เกินไหม", icon: Scale },
-            { id: "q-work", label: "งานค้างที่ไหน", icon: Workflow },
-            { id: "q-courses", label: "รายวิชา", icon: Table2 },
-          ].map(n => (
-            <a key={n.id} href={`#${n.id}`}
-               className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-surface px-3 py-1 text-xs text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--brand)]">
-              <n.icon size={14} />{n.label}
-            </a>
-          ))}
-        </nav>
+        <QuestionNav />
         {compareOptions.length > 0 && (
           <Select aria-label="เทียบกับภาคเรียน" value={compareId} onChange={e => setCompareId(e.target.value)}>
             <option value="">ไม่เปรียบเทียบ</option>
@@ -263,8 +263,8 @@ export default function TermDashboard({
                       sub={bv.runRate ? "ต่ำสุดจากชั่วโมงที่บันทึกแล้ว สูงสุดถ้าใช้ในอัตราเดิม" : "จากชั่วโมงที่บันทึกแล้ว"} />
               <Metric label="งานที่ยังจ่ายไม่ได้" value={money(risk.unfunded)} tone={risk.unfunded > 0 ? "danger" : undefined}
                       sub={risk.unfunded > 0 ? "ชั่วโมงที่เกินเพดานวิชา" : "ไม่มีวิชาใดเกินเพดาน"} />
-              <Metric label="ค่าเฉลี่ยต่อชั่วโมง" value={a.approved_hours > 0 ? `${num1(a.budget_used / a.approved_hours)} บาท` : "–"}
-                      sub={`จาก ${num1(a.approved_hours)} ชม. ที่อนุมัติ`} />
+              <Metric label="ค่าเฉลี่ยต่อชั่วโมง" value={a.approved_hours > 0 ? `${num1((a.budget_used - (a.budget_lump ?? 0)) / a.approved_hours)} บาท` : "–"}
+                      sub={`จาก ${num1(a.approved_hours)} ชม. ที่อนุมัติ (ไม่รวมเหมาจ่ายบัณฑิต)`} />
             </div>
             <div className="rounded-xl border border-[var(--hairline)] p-3">
               <div className="mb-2 text-sm font-medium text-[var(--ink-1)]">วิชาที่ชนหรือใกล้เพดานงบ <span className="font-normal text-xs text-[var(--ink-3)]">(คาดการณ์ถึง {pct0(risk.ratio * 100)} ของเพดานวิชา)</span></div>
@@ -475,6 +475,116 @@ export default function TermDashboard({
 /* -------------------------------------------------------------------------- */
 /* Pieces                                                                     */
 /* -------------------------------------------------------------------------- */
+
+function QuestionNav() {
+  return (
+    <nav aria-label="ไปยังคำถาม" className="flex flex-wrap gap-1.5 me-auto">
+      {[
+        { id: "q-budget", label: "งบพอไหม", icon: Gauge },
+        { id: "q-staffing", label: "ขอ TA เกินไหม", icon: Scale },
+        { id: "q-work", label: "งานค้างที่ไหน", icon: Workflow },
+        { id: "q-courses", label: "รายวิชา", icon: Table2 },
+      ].map(n => (
+        <a key={n.id} href={`#${n.id}`}
+           className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-surface px-3 py-1 text-xs text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--brand)]">
+          <n.icon size={14} />{n.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+/** A question heading whose answer sentence is still loading. */
+function SkelQuestion({ id, n, title, children }: { id: string; n: number; title: string; children: React.ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-20 space-y-3" aria-labelledby={`${id}-h`}>
+      <div className="flex flex-wrap items-start gap-3">
+        <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)] text-sm font-semibold text-white shadow-sm" aria-hidden>{n}</span>
+        <div className="min-w-0 flex-1 basis-64">
+          <h2 id={`${id}-h`} className="text-lg font-semibold text-[var(--ink-1)] leading-snug">{title}</h2>
+          <Skel className="mt-2 h-4 w-2/3" />
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// The dashboard's layout with its labels and titles in place and grey where
+// the numbers go — same sections, same order, roughly the same heights.
+function DashboardSkeleton() {
+  const kpis = [
+    { icon: <BookOpen size={18} />, label: "รายวิชาที่ขอ TA", unit: "วิชา" },
+    { icon: <Users size={18} />, label: "TA ปฏิบัติงานจริง", unit: "คน" },
+    { icon: <Wallet size={18} />, label: "เบิกจ่ายแล้ว", unit: "บาท" },
+    { icon: <Inbox size={18} />, label: "รายการรอดำเนินการ", unit: "รายการ" },
+  ];
+  return (
+    <SkelRegion className="space-y-6" label="กำลังโหลดแดชบอร์ด">
+      <div className="flex flex-wrap items-center gap-2">
+        <QuestionNav />
+        <Skel className="h-8 w-36 rounded-lg" />
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface">
+        <div className="flex items-center gap-4 border-b border-[var(--hairline)] px-5 py-3">
+          <Skel className="h-4 w-28" /><Skel className="h-4 w-40" /><Skel className="h-4 w-32" />
+        </div>
+        <div className="p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]">
+              <Sparkles size={15} />
+            </span>
+            <h2 className="text-base font-semibold text-[var(--ink-1)]">ข้อสังเกตที่ต้องตัดสินใจหรือติดตาม</h2>
+          </div>
+          <div className="grid gap-2 lg:grid-cols-2">
+            {[0, 1, 2, 3].map(i => <Skel key={i} className="h-14 rounded-xl" />)}
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-4 gap-3">
+        {kpis.map(k => (
+          <Kpi key={k.label} icon={k.icon} label={k.label} unit={k.unit} value={<SkelValue className="h-7 w-16" />} />
+        ))}
+      </div>
+
+      <SkelQuestion id="q-budget" n={1} title="งบพอถึงสิ้นเทอมไหม?">
+        <Panel><SkelBlock className="h-72" /></Panel>
+        <div className="grid gap-4 lg:grid-cols-5">
+          <Panel title="การเบิกจ่ายสะสมเทียบเวลา" className="min-w-0 lg:col-span-3"><SkelBlock className="h-64" /></Panel>
+          <Panel title="การใช้งบรายหลักสูตร" className="min-w-0 lg:col-span-2"><SkelBlock className="h-64" /></Panel>
+        </div>
+      </SkelQuestion>
+
+      <SkelQuestion id="q-staffing" n={2} title="แต่ละวิชาขอ TA เกินที่แนะนำหรือเกินจำนวนนักศึกษาไหม?">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,5fr)]">
+          <Panel className="min-w-0"><SkelBlock className="h-80" /></Panel>
+          <div className="space-y-4 min-w-0">
+            <Panel title="สรุปการขอ TA"><SkelBlock className="h-28" /></Panel>
+            <Panel title="วิชาที่ควรทบทวน"><SkelRows rows={3} columns={2} /></Panel>
+          </div>
+        </div>
+      </SkelQuestion>
+
+      <SkelQuestion id="q-work" n={3} title="งานค้างอยู่ขั้นไหน?">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          {[0, 1, 2, 3, 4].map(i => <Skel key={i} className="h-28 rounded-xl" />)}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]">
+          <Panel title="รอบเบิกรายเดือนอยู่ที่ใคร" className="min-w-0"><SkelBlock className="h-48" /></Panel>
+          <Panel title="เอกสาร TA" className="min-w-0"><SkelBlock className="h-32" /></Panel>
+        </div>
+      </SkelQuestion>
+
+      <section id="q-courses" className="scroll-mt-20">
+        <Panel title="รายวิชาทั้งหมดของภาคเรียน">
+          <SkelRows rows={8} columns={6} />
+        </Panel>
+      </section>
+    </SkelRegion>
+  );
+}
 
 function Question({ id, n, title, answer, action, children, tour, onCourse }: {
   id: string; n: number; title: string; answer: AnswerT; action?: React.ReactNode;

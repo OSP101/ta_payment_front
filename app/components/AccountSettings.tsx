@@ -10,6 +10,7 @@ import { formatFullName } from "../lib/prefixes";
 import { Button, Chip, Panel } from "./ui";
 import ProfilePhotoCard from "./ProfilePhotoCard";
 import TwoFactorManageModal from "./TwoFactorManageModal";
+import { Skel, SkelRegion, SkelValue } from "./Skeletons";
 
 /**
  * The account screen's body: picture, identity, security. One implementation
@@ -22,7 +23,7 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
   return (
     <>
       {/* The picture is the one thing here the user owns outright, so it leads. */}
-      {me && <ProfilePhotoCard me={me} />}
+      {me ? <ProfilePhotoCard me={me} /> : <ProfilePhotoSkeleton />}
       {manageOpen && <TwoFactorManageModal onClose={() => setManageOpen(false)} />}
 
       <Panel
@@ -34,9 +35,11 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
           {/* One icon per KIND of fact. อีเมล used to carry the same person
               glyph as the name, and ระดับการศึกษา a shield neither said
               anything about the row it sat on. */}
-          <InfoRow icon={<User size={16} />} label="ชื่อ-นามสกุล" value={formatFullName(me) || "—"} />
-          <InfoRow icon={<Mail size={16} />} label="อีเมล" value={me?.email ?? "—"} />
-          <InfoRow icon={<Phone size={16} />} label="เบอร์โทรศัพท์" value={me?.phone ?? "—"} />
+          {/* Before /me lands the values are placeholders, not "—" — a dash
+              reads as "we have no name for you". */}
+          <InfoRow icon={<User size={16} />} label="ชื่อ-นามสกุล" value={me ? formatFullName(me) || "—" : undefined} />
+          <InfoRow icon={<Mail size={16} />} label="อีเมล" value={me ? me.email ?? "—" : undefined} />
+          <InfoRow icon={<Phone size={16} />} label="เบอร์โทรศัพท์" value={me ? me.phone ?? "—" : undefined} />
           {/* Only students have one; a lecturer's account would otherwise show
               a row that reads "—" forever. */}
           {me?.study_level && (
@@ -69,16 +72,23 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
               </Link>
             }
           />
+          {/* Which button this row carries depends on /me — without the
+              placeholder it showed "เปิดใช้งาน" first and then swapped to
+              "จัดการ" for everyone who already has 2FA on. */}
           <SecurityRow
             icon={<ShieldCheck size={18} />}
             title="Two-Factor Authentication (2FA)"
             description={
-              me?.totp_enabled
+              !me
+                ? <SkelValue className="h-3 w-56 max-w-full" />
+                : me.totp_enabled
                 ? `เปิดใช้งานแล้ว · เหลือรหัสสำรอง ${me.recovery_codes_remaining} ชุด`
                 : "เพิ่มความปลอดภัยด้วยการยืนยันตัวตนสองขั้นตอน"
             }
             action={
-              me?.totp_enabled ? (
+              !me ? (
+                <Skel className="h-8 w-24 rounded-xl" />
+              ) : me.totp_enabled ? (
                 <Button variant="secondary" size="sm" onClick={() => setManageOpen(true)}>
                   <Settings2 size={13} /> จัดการ
                 </Button>
@@ -112,7 +122,7 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
   );
 }
 
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | undefined }) {
   return (
     <div className="flex items-start gap-3">
       <div className="w-8 h-8 rounded-lg bg-surface-secondary text-muted flex items-center justify-center shrink-0">
@@ -120,7 +130,9 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-xs text-muted">{label}</div>
-        <div className="text-sm text-foreground truncate">{value}</div>
+        <div className="text-sm text-foreground truncate">
+          {value ?? <SkelValue className="h-3.5 w-40 max-w-full" />}
+        </div>
       </div>
     </div>
   );
@@ -128,7 +140,7 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 
 function SecurityRow({
   icon, title, description, action,
-}: { icon: React.ReactNode; title: string; description: string; action: React.ReactNode }) {
+}: { icon: React.ReactNode; title: string; description: React.ReactNode; action: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 py-3">
       <div className="w-9 h-9 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
@@ -140,6 +152,23 @@ function SecurityRow({
       </div>
       <div className="shrink-0">{action}</div>
     </div>
+  );
+}
+
+/** ProfilePhotoCard's frame (same Panel title, avatar circle, text + button)
+ *  while /me loads, so the cards below don't jump down when it arrives. */
+function ProfilePhotoSkeleton() {
+  return (
+    <Panel title="รูปโปรไฟล์" description="รูปโปรไฟล์ของคุณในระบบ" className="mb-4">
+      <SkelRegion className="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-dashed border-[var(--hairline)] p-4">
+        <Skel className="size-32 shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1 w-full flex flex-col items-center sm:items-start gap-2">
+          <Skel className="h-4 w-40" />
+          <Skel className="h-3 w-3/4" />
+          <Skel className="h-8 w-28 rounded-xl mt-2" />
+        </div>
+      </SkelRegion>
+    </Panel>
   );
 }
 
@@ -166,7 +195,9 @@ function EducationHistoryPanel({ userId }: { userId: string }) {
       className="mb-4"
     >
       {isLoading ? (
-        <div className="text-sm text-muted">กำลังโหลด…</div>
+        <SkelRegion className="space-y-2">
+          <Skel className="h-[58px] w-full rounded-lg" />
+        </SkelRegion>
       ) : (
         <div className="space-y-2">
           {items.map(e => (

@@ -6,6 +6,7 @@ import { NumberField } from "@heroui/react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Modal, Button, Spinner, FieldGroup, Chip, EmptyState } from "./ui";
+import { Skel, SkelRegion } from "./Skeletons";
 
 /**
  * The correction path that didn't exist before: TARequestService.Cancel
@@ -163,7 +164,23 @@ export function WorkloadEditModal({
           มีผลกับการสร้างบันทึกเวลาและการตรวจสอบโควตาครั้งถัดไปเท่านั้น
         </p>
         {isLoading ? (
-          <div className="flex justify-center py-8"><Spinner /></div>
+          // One AssignmentCard's outline: chip row, a 2-column grid of hour
+          // fields, the save button.
+          <SkelRegion className="rounded-md border border-[var(--hairline)] p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <Skel className="h-6 w-16 rounded-full" />
+              <Skel className="h-6 w-20 rounded-full" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="flex flex-col gap-1.5">
+                  <Skel className="h-3 w-28" />
+                  <Skel className="h-9 w-28 rounded-lg" />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end"><Skel className="h-8 w-28 rounded-lg" /></div>
+          </SkelRegion>
         ) : !data || data.length === 0 ? (
           <EmptyState title="ไม่พบภาระงาน" description="TA คนนี้ไม่มี assignment ในวิชานี้" />
         ) : (

@@ -4,6 +4,7 @@ import { BookOpen, ExternalLink } from "lucide-react";
 import type { Audience } from "../../../content/docs/types";
 import { resolvePageDoc, useDocsPanel } from "./DocsPanel";
 import useIsDemo from "../../lib/useIsDemo";
+import { SkelValue } from "../Skeletons";
 
 /**
  * The "📖 คู่มือ <หัวข้อ>" pill under every page title — the Cloudflare
@@ -27,11 +28,14 @@ import useIsDemo from "../../lib/useIsDemo";
  * pages (/account etc.) always use the drawer.
  *
  * Page titles come from the per-reader `/docs-index`, not a bundled copy of
- * the manual; until it arrives the pill shows the generic label (same size,
- * so nothing shifts) and still opens the manual.
+ * the manual. Until it arrives the pill keeps its frame with a placeholder
+ * where the topic goes — it used to read "คู่มือการใช้งาน" and then change
+ * its own wording a moment later, which read as the header flickering. It
+ * still opens the manual meanwhile. A failed index falls back to the
+ * generic label.
  */
 export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audience: Audience; slug: string }; dataTour?: string }) {
-  const { open, audience, index } = useDocsPanel();
+  const { open, audience, index, indexLoading } = useDocsPanel();
   const pathname = usePathname();
   // The demo sandbox keeps its API prefix in per-tab sessionStorage: a new
   // tab would start as production, its first heartbeat would 401 and bounce
@@ -40,7 +44,9 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
   if (!audience) return null;
 
   const { target, page, bigTopic } = resolvePageDoc(index, audience, pathname ?? "", explicit, dataTour);
-  const label = !page ? "คู่มือการใช้งาน" : bigTopic ? `คู่มือ ${page.section}` : `คู่มือ ${page.title}`;
+  const label = indexLoading
+    ? <SkelValue className="h-3.5 w-28" />
+    : !page ? "คู่มือการใช้งาน" : bigTopic ? `คู่มือ ${page.section}` : `คู่มือ ${page.title}`;
   // The ONLY docs entry on a screen, so it is sized and coloured as a real
   // button (tinted brand fill, not a hairline outline) — the small per-section
   // icons it replaced were easy to miss and cluttered the toolbars.

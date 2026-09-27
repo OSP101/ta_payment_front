@@ -13,12 +13,12 @@ import {
   InputOTP,
   Label,
   REGEXP_ONLY_DIGITS,
-  Spinner,
 } from "@heroui/react";
 import { Check, Copy, Download, LogOut, ShieldAlert, ShieldCheck, Smartphone } from "lucide-react";
 import { api, errMessage, mfaEnable, mfaSetup, type Me, type MFASetupResult } from "../lib/api";
 import { notify } from "../lib/notify";
 import useDocumentTitle from "../lib/useDocumentTitle";
+import { Skel, SkelRegion, SkelValue } from "../components/Skeletons";
 
 /**
  * Also reached voluntarily — AccountSettings links "เปิดใช้งาน [2FA]" straight
@@ -42,8 +42,11 @@ function mfaMandatoryFor(me: Me): boolean {
 export default function Setup2FAPage() {
   const router = useRouter();
   useDocumentTitle("ตั้งค่ายืนยันตัวตนสองขั้นตอน");
-  const { data: me } = useSWR<Me>("/me");
+  const { data: me, error: meError } = useSWR<Me>("/me");
   const voluntary = !!me && !mfaMandatoryFor(me);
+  // The sub-heading says "optional" or "required" depending on /me — hold its
+  // place until it answers rather than showing "required" to everyone first.
+  const meReady = !!me || !!meError;
   const [setup, setSetup] = useState<MFASetupResult | null>(null);
   const [setupErr, setSetupErr] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -128,7 +131,9 @@ export default function Setup2FAPage() {
           <p className="text-sm text-muted mt-1">
             {recoveryCodes
               ? "เก็บรหัสเหล่านี้ไว้ในที่ปลอดภัย ใช้แทนแอปยืนยันตัวตนได้เมื่อทำอุปกรณ์หาย"
-              : voluntary
+              : !meReady
+                ? <SkelValue className="h-3.5 w-64" />
+                : voluntary
                 ? "เพิ่มความปลอดภัยให้บัญชีของคุณด้วยการยืนยันตัวตนสองขั้นตอน"
                 : "บัญชีนี้ต้องเปิดใช้งาน 2FA ก่อนใช้งานระบบต่อ"}
           </p>
@@ -182,9 +187,16 @@ export default function Setup2FAPage() {
                 </Button>
               </div>
             ) : !setup ? (
-              <div className="flex items-center justify-center py-10">
-                <Spinner size="lg" />
-              </div>
+              // The form below, shaped: instructions, app box, QR, secret,
+              // the six OTP slots and the submit button.
+              <SkelRegion className="flex flex-col gap-4 items-center">
+                <Skel className="h-3.5 w-64" />
+                <Skel className="h-[92px] w-full rounded-lg" />
+                <Skel className="size-48 rounded-md" />
+                <Skel className="h-9 w-full rounded-md" />
+                <Skel className="h-10 w-72 rounded-lg" />
+                <Skel className="h-12 w-full rounded-xl" />
+              </SkelRegion>
             ) : (
               <form onSubmit={onVerify} className="flex flex-col gap-4 items-center">
                 <p className="text-sm text-muted text-center">

@@ -17,11 +17,7 @@ function TableRowsSkeleton({ columns }: { columns: number }) {
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="flex items-center gap-4">
           {Array.from({ length: columns }, (_, j) => (
-            <div
-              key={j}
-              className="h-3.5 flex-1 animate-pulse rounded bg-surface-secondary"
-              style={{ animationDelay: `${i * 40}ms` }}
-            />
+            <div key={j} className="skel h-3.5 flex-1 rounded bg-surface-secondary" />
           ))}
         </div>
       ))}
@@ -34,10 +30,10 @@ function CardRowsSkeleton() {
     <ul className="flex flex-col gap-2" aria-hidden>
       {Array.from({ length: 4 }, (_, i) => (
         <li key={i} className="rounded-lg border border-(--hairline) bg-surface p-3">
-          <div className="h-4 w-2/3 animate-pulse rounded bg-surface-secondary" style={{ animationDelay: `${i * 40}ms` }} />
+          <div className="h-4 w-2/3 skel rounded bg-surface-secondary" />
           <div className="mt-2.5 flex flex-col gap-1.5">
-            <div className="h-3 w-full animate-pulse rounded bg-surface-secondary" style={{ animationDelay: `${i * 40}ms` }} />
-            <div className="h-3 w-1/2 animate-pulse rounded bg-surface-secondary" style={{ animationDelay: `${i * 40}ms` }} />
+            <div className="h-3 w-full skel rounded bg-surface-secondary" />
+            <div className="h-3 w-1/2 skel rounded bg-surface-secondary" />
           </div>
         </li>
       ))}
@@ -190,6 +186,10 @@ export function DataTable<T>({
   // JSON null for an empty slice — either way, treat both as an empty list.
   const safeRows = rows ?? [];
   const rowsLoaded = rows !== undefined && rows !== null;
+  // `undefined` means the first response hasn't landed, whether or not the
+  // caller also passed `loading` — so the skeleton shows instead of flashing
+  // "ไม่มีข้อมูล" first. `null` is a loaded empty slice and gets the empty state.
+  const firstLoad = !rowsLoaded && (!!loading || (rows === undefined && !error));
 
   const filtered = useMemo(() => {
     // In server mode `rows` IS the page — already filtered, sorted and sliced
@@ -336,7 +336,7 @@ export function DataTable<T>({
           )}
 
           {pageRows.length === 0 ? (
-            loading && !rowsLoaded ? (
+            firstLoad ? (
               <CardRowsSkeleton />
             ) : (
               <EmptyState
@@ -407,7 +407,7 @@ export function DataTable<T>({
             </Table.Header>
             <Table.Body
               renderEmptyState={() =>
-                loading && !rowsLoaded ? (
+                firstLoad ? (
                   <TableRowsSkeleton columns={columns.length} />
                 ) : (
                   <EmptyState

@@ -8,6 +8,7 @@ import { IconButton } from "../components/ui";
 import { Check, Eye, EyeOff, KeyRound, ShieldAlert, X } from "lucide-react";
 import { api, errMessage, type Me } from "../lib/api";
 import useDocumentTitle from "../lib/useDocumentTitle";
+import { Skel, SkelForm, SkelRegion, SkelValue } from "../components/Skeletons";
 
 const SPECIAL_CHAR_RE = /[!@#$%^&*()\-_=+[\]{};:,.<>/?]/;
 
@@ -27,8 +28,13 @@ export default function ChangePasswordPage() {
   // whether this is the forced first-login change (no current password to
   // confirm) or a voluntary change from Account Settings (backend requires
   // current_password for that one — see AuthHandler.ChangePassword).
-  const { data: me } = useSWR<Me>("/me");
+  const { data: me, error: meError } = useSWR<Me>("/me");
   const voluntary = !!me && !me.must_change_password;
+  // Heading, the current-password field and the cancel button all depend on
+  // which flow this is — until /me answers, hold their place instead of
+  // drawing the forced flow and swapping to the voluntary one a beat later.
+  // A failed /me keeps the old fallback (the forced flow).
+  const meReady = !!me || !!meError;
 
   const [currentPw, setCurrentPw] = useState("");
   const [pw, setPw] = useState("");
@@ -121,10 +127,12 @@ export default function ChangePasswordPage() {
             <KeyRound />
           </div>
           <h1 className="mt-4 text-[22px] font-semibold text-foreground">
-            {voluntary ? "เปลี่ยนรหัสผ่าน" : "ตั้งรหัสผ่านใหม่"}
+            {!meReady ? <SkelValue className="h-7 w-40" /> : voluntary ? "เปลี่ยนรหัสผ่าน" : "ตั้งรหัสผ่านใหม่"}
           </h1>
           <p className="text-sm text-muted mt-1">
-            {voluntary
+            {!meReady
+              ? <SkelValue className="h-3.5 w-64" />
+              : voluntary
               ? "เปลี่ยนรหัสผ่านสำหรับบัญชีของคุณ"
               : "เพื่อความปลอดภัย โปรดตั้งรหัสผ่านใหม่ก่อนใช้งานครั้งแรก"}
           </p>
@@ -132,6 +140,12 @@ export default function ChangePasswordPage() {
 
         <Card>
           <Card.Content>
+            {!meReady ? (
+              <SkelRegion className="flex flex-col gap-4">
+                <SkelForm fields={3} />
+                <Skel className="h-12 w-full rounded-xl" />
+              </SkelRegion>
+            ) : (
             <form onSubmit={onSubmit} className="flex flex-col gap-4">
               {voluntary && (
                 <TextField
@@ -246,6 +260,7 @@ export default function ChangePasswordPage() {
                 </Button>
               )}
             </form>
+            )}
           </Card.Content>
         </Card>
       </div>

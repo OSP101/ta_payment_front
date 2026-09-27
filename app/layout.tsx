@@ -8,6 +8,8 @@ import SessionActivityGuard from "./components/SessionActivityGuard";
 import DemoBanner from "./components/DemoBanner";
 import DemoGuidePanel from "./components/DemoGuidePanel";
 import TopLoadingBar from "./components/TopLoadingBar";
+import StaffWatermark from "./components/StaffWatermark";
+import { getMe } from "./lib/session";
 
 const kanit = Kanit({
   variable: "--font-kanit",
@@ -32,6 +34,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // dynamic). connection() opts the entire tree under this layout out of
   // static rendering, so nonce-carrying pages are what actually get built.
   await connection();
+  // Only an admin/staff session is handed down; everyone else gets no
+  // watermark and no client-side /me fetch. login and logout both
+  // router.refresh(), so this layout re-renders when the account changes.
+  const me = await getMe();
+  const staffMe = me && (me.roles.includes("admin") || me.roles.includes("staff")) ? me : null;
   return (
     <html lang="th" className={`${kanit.variable} h-full antialiased`}>
       {/* paddingRight reserves space for DemoGuidePanel's fixed dock — see
@@ -51,6 +58,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <Suspense fallback={null}>
             <DemoGuidePanel />
           </Suspense>
+          <StaffWatermark initial={staffMe} />
         </SWRProvider>
       </body>
     </html>

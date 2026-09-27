@@ -6,6 +6,7 @@ import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, Boo
 import { api, type Me } from "../../../../lib/api";
 import { PayEstimateCard, type PayEstimate, type PayEstimateMonth } from "../../../../components/PayEstimate";
 import { notify } from "../../../../lib/notify";
+import { localDateISO } from "../../../../lib/dates";
 import {
   readAddForm, readDrafts, clearAddForm, clearDrafts, sweepStale, writeAddForm, writeDrafts,
 } from "../../../../lib/draftStorage";
@@ -15,6 +16,7 @@ import {
   Modal, FieldGroup, Alert, Chip, TimePicker, DatePicker, TipWrap,
 } from "../../../../components/ui";
 import { type DataColumn } from "../../../../components/DataTable";
+import { Skel, SkelRegion, SkelRows, SkelValue } from "../../../../components/Skeletons";
 import { LockedActionButton, useTAApproval } from "../../../TAGate";
 
 // Max billable hours per single work-log entry. Kept in sync with backend.
@@ -199,10 +201,16 @@ interface Assignment {
   // stranded — past the deadline, only staff can move it. Server-derived so the
   // cards for sections NOT on screen are right too; their rows are not loaded.
   submittable_count: number;
+  // The forfeited part of unsent_count (period closed).
+  stranded_count?: number;
   // "YYYY-MM" months that have entered review. Upsert refuses a new row in
   // exactly these, so the "+ เพิ่ม" affordance is hidden there — same predicate,
   // server-derived, so the screen cannot offer what the server refuses.
   months_in_review: string[];
+  // Upsert's exceptions inside a month in review (UAT DEF-004): a day after
+  // the month's last sent day, or one of the section's makeup days.
+  last_sent_by_month?: Record<string, string>;
+  makeup_dates?: string[];
   submitted_count: number;
   approved_count: number;
   hours_logged: number;
@@ -620,8 +628,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // guards against a shared device leaking one TA's drafts to another.
   const { data: me } = useSWR<Me>("/me");
   const userId = me?.id ?? "";
-  const { data: course } = useSWR<TC>(tcId ? `/teaching-courses/${tcId}` : null);
-  const { data: assignments } = useSWR<Assignment[]>(
+  const { data: course, error: courseError } = useSWR<TC>(tcId ? `/teaching-courses/${tcId}` : null);
+  const { data: assignments, error: assignmentsError } = useSWR<Assignment[]>(
     tcId ? `/me/assignments?teaching_course_id=${tcId}` : null,
   );
   // Holiday impacts drive both the AddWorklogModal's inline "you can't log
@@ -730,6 +738,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   }, [assignments, aid]);
 
   const { data: logs } = useSWR<WorkLog[]>(aid ? `/assignments/${aid}/worklog` : null);
+  // Loading until the rows are here — and that includes the beat before `aid`
+  // exists (assignments still in flight), which used to fall through to the
+  // month list's "ยังไม่มีบันทึก" empty state. The month buckets also come
+  // from the course's term dates, so wait for those too or the months grow in.
+  const logsLoading = !logs && (!!aid || (assignments === undefined && !assignmentsError));
+  const monthsLoading = logsLoading || (course === undefined && !courseError);
 
   // Per-row edit drafts, keyed [assignment_id][row_id] → WorkLog. The outer
   // key preserves drafts across section switches (a TA who edits sec 1 then
@@ -1032,6 +1046,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // offering to send ten rows and an error saying it sent none. A TA who missed
   // a deadline was left pressing it.
   const editableRows = (logs ?? []).filter(l => isEditableStatus(l.status));
+  // Future days are sendable too: advance submission is allowed (faculty
+  // decision 27/09/2026) — the lecturer's approval is the gate.
   const submittableRows = editableRows.filter(l => !monthLockFor(l.work_date));
   const submittableCount = submittableRows.length;
   // The remainder is stranded: past the deadline, only staff can move it now.
@@ -1058,6 +1074,17 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       m[r.activity] = (m[r.activity] ?? 0) + (r.hours || 0);
       byMonth.set(ym, m);
     }
+    // The monthly cap covers the whole month, not just this batch: rows already
+    // sent (รออนุมัติ or อนุมัติแล้ว) have used part of it, so this batch is only
+    // worth what is left above them.
+    const sentHours = new Map<string, number>();
+    if (cap > 0) {
+      for (const l of logs ?? []) {
+        if (l.status !== "submitted" && l.status !== "approved") continue;
+        const ym = monthKey(l.work_date);
+        sentHours.set(ym, (sentHours.get(ym) ?? 0) + (l.hours || 0));
+      }
+    }
     const activityKeys = Object.keys(ACTIVITY_LABEL); // fixed display order
     const months: PayEstimateMonth[] = [...byMonth.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
@@ -1067,7 +1094,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         const activities = activityKeys
           .filter(k => (byActivity[k] ?? 0) > 0.001)
           .map(k => ({ label: ACTIVITY_LABEL[k], hours: byActivity[k]! }));
-        return { ym, label: formatMonthTH(ym), activities, hours, baht: cap > 0 ? Math.min(raw, cap) : raw };
+        const sent = (sentHours.get(ym) ?? 0) * rate;
+        const baht = cap > 0 ? Math.min(cap, sent + raw) - Math.min(cap, sent) : raw;
+        return { ym, label: formatMonthTH(ym), activities, hours, baht };
       });
     if (months.length === 0) return null;
     return {
@@ -1076,7 +1105,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       capped: cap > 0,
       footnote: "ยังไม่รวมรายการที่อาจารย์ยังไม่อนุมัติ และอาจลดลงหากงบของวิชานี้ไม่พอ",
     };
-  }, [payRate, submittableRows]);
+  }, [payRate, submittableRows, logs]);
 
   const activeAssignment = assignments?.find(a => a.id === aid);
   // Server-derived, never re-computed here: the rule that decides it lives in
@@ -1085,6 +1114,32 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     () => new Set(activeAssignment?.months_in_review ?? []),
     [activeAssignment],
   );
+  // Mirrors Upsert: inside a month in review, only a day after the month's
+  // last sent day, or a makeup day of this section, can take a new row.
+  const lastSentByMonth = useMemo(
+    () => activeAssignment?.last_sent_by_month ?? {},
+    [activeAssignment],
+  );
+  const makeupDates = useMemo(
+    () => new Set(activeAssignment?.makeup_dates ?? []),
+    [activeAssignment],
+  );
+  const dayBlockedByReview = (iso: string) => {
+    const last = lastSentByMonth[(iso ?? "").slice(0, 7)];
+    return !!last && iso <= last && !makeupDates.has(iso);
+  };
+  // A month with no day left to add: its last sent day is the month's last
+  // day and it holds no makeup day. Everywhere else "+ เพิ่ม" stays.
+  const monthsFull = useMemo(() => {
+    const full = new Set<string>();
+    for (const [m, last] of Object.entries(lastSentByMonth)) {
+      const [y, mm] = m.split("-").map(Number);
+      const lastDay = `${m}-${String(new Date(y, mm, 0).getDate()).padStart(2, "0")}`;
+      const hasMakeup = [...makeupDates].some(d => d.startsWith(m));
+      if (last >= lastDay && !hasMakeup) full.add(m);
+    }
+    return full;
+  }, [lastSentByMonth, makeupDates]);
   // The top-level "+ เพิ่มรายการ" targets any date, so it survives while at
   // least one month can still take a row. A month is out if it has entered
   // review OR its period has closed — checking only the first left the button
@@ -1092,9 +1147,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const openMonths = useMemo(() => {
     const months = new Set((logs ?? []).map(l => monthKey(l.work_date)).filter(Boolean));
     return [...months].filter(
-      m => !monthsInReview.has(m) && !monthLocks.get(m.slice(5, 7)),
+      m => !monthsFull.has(m) && !monthLocks.get(m.slice(5, 7)),
     );
-  }, [logs, monthsInReview, monthLocks]);
+  }, [logs, monthsFull, monthLocks]);
   const canAddRows = (logs ?? []).length === 0 || openMonths.length > 0;
   // "สร้างอัตโนมัติ" wipes and recreates the term, so the server refuses it
   // outright once anything has been submitted or approved (Generate). Same
@@ -1363,11 +1418,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       // Name the section, and — the point of the whole change — say what is
       // still outstanding elsewhere. This is the moment the TA believes they are
       // finished, so it is the only moment where the reminder lands.
-      const others = (assignments ?? []).filter(a => a.id !== aid && a.unsent_count > 0);
+      // Only what can actually be sent now — drafts written ahead and forfeited
+      // rows are not "left to send", and naming them sent the TA to a section
+      // whose submit the server then refused.
+      const others = (assignments ?? []).filter(a => a.id !== aid && a.submittable_count > 0);
       if (showMultiSection && others.length > 0) {
         notify.success(
           `ส่ง sec ${activeAssignment?.sec_no ?? ""} เรียบร้อย ยังเหลือ ` +
-          others.map(a => `sec ${a.sec_no} (${a.unsent_count} รายการ)`).join(", ") +
+          others.map(a => `sec ${a.sec_no} (${a.submittable_count} รายการ)`).join(", ") +
           " ที่ยังไม่ได้ส่ง",
         );
       } else {
@@ -1598,7 +1656,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
 
   // Sections OTHER than the one on screen that still have unsent rows — the
   // thing a TA cannot see from here and therefore forgets.
-  const otherUnsent = (assignments ?? []).filter(a => a.id !== aid && a.unsent_count > 0);
+  const otherUnsent = (assignments ?? []).filter(a => a.id !== aid && a.submittable_count > 0);
 
   // Term-total hour ceiling for the selected assignment (workload × weeks).
   const selectedAssignment = assignments?.find(a => a.id === aid);
@@ -1765,16 +1823,23 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         />
       )}
 
+      {/* The ceiling comes with the assignments, so reserve its strip while
+          they load rather than have it push the month list down on arrival. */}
+      {assignments === undefined && !assignmentsError && (
+        <Skel className="mb-4 h-[38px] w-full rounded-lg" />
+      )}
       {termCeiling > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-(--hairline) bg-surface-secondary px-3 py-2 text-sm">
           <Clock size={14} className="text-muted" />
           <span className="text-muted">ชั่วโมงที่ลงได้ทั้งเทอม (ตามภาระงาน):</span>
           <span className="tabular-nums">
-            ใช้ไป <b>{usedTermHours.toFixed(2)}</b> / {termCeiling.toFixed(1)} ชม.
+            ใช้ไป <b>{logs ? usedTermHours.toFixed(2) : <SkelValue className="h-4 w-10" />}</b> / {termCeiling.toFixed(1)} ชม.
           </span>
-          <span className={"tabular-nums " + (remainingTermHours <= 0 ? "text-danger font-medium" : "text-success")}>
-            · เหลือ {remainingTermHours.toFixed(2)} ชม.
-          </span>
+          {logs ? (
+            <span className={"tabular-nums " + (remainingTermHours <= 0 ? "text-danger font-medium" : "text-success")}>
+              · เหลือ {remainingTermHours.toFixed(2)} ชม.
+            </span>
+          ) : <SkelValue className="h-4 w-20" />}
         </div>
       )}
 
@@ -1819,6 +1884,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             </div>
           )}
 
+          {!aid && logsLoading && (
+            // Reserves the totals row while assignments pick the section.
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Skel className="h-[34px] w-56 rounded-lg" />
+            </div>
+          )}
           {aid && (
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <div data-tour="wl-totals" className="inline-flex items-center gap-2 text-sm text-foreground bg-surface-secondary border border-[var(--hairline)] px-3 py-1.5 rounded-lg">
@@ -1830,7 +1901,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                   </>
                 )}
                 <span>รวมชั่วโมงทั้งหมด</span>
-                <span className="font-semibold tabular">{totalHours.toFixed(1)}</span>
+                <span className="font-semibold tabular">{logs ? totalHours.toFixed(1) : <SkelValue className="h-4 w-8" />}</span>
                 <span className="text-muted">ชม.</span>
               </div>
               <WorklogSaveStatus
@@ -1854,16 +1925,28 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
 
           <MonthlyWorklogView
             rows={logs}
-            loading={!!aid && !logs}
+            loading={monthsLoading}
             columns={columns}
             termStart={course?.starts_on}
             termEnd={course?.ends_on}
             view={view}
-            onQuickAdd={date => { setQuickAddDate(date); setShowAdd(true); }}
+            onQuickAdd={date => {
+              // A partly-sent month opens on the first day that can still take
+              // a row, not on the 1st the server would refuse.
+              const last = lastSentByMonth[date.slice(0, 7)];
+              if (last && dayBlockedByReview(date)) {
+                const d = new Date(`${last}T00:00:00`);
+                d.setDate(d.getDate() + 1);
+                const next = localDateISO(d);
+                if (next.slice(0, 7) === date.slice(0, 7)) date = next;
+              }
+              setQuickAddDate(date);
+              setShowAdd(true);
+            }}
             impacts={impacts?.impacts ?? []}
             monthLocks={monthLocks}
             monthDeadlines={monthDeadlines}
-            monthsInReview={monthsInReview}
+            monthsFull={monthsFull}
             unpaidMonths={unpaidMonths}
             partialMonths={partialMonths}
             zeroedTracks={zeroedTracks}
@@ -1962,7 +2045,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             {otherUnsent.length > 0 && (
               <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
                 กลุ่มอื่นจะไม่ถูกส่งไปด้วย —{" "}
-                {otherUnsent.map(a => `sec ${a.sec_no} (${a.unsent_count} รายการ)`).join(", ")}{" "}
+                {otherUnsent.map(a => `sec ${a.sec_no} (${a.submittable_count} รายการ)`).join(", ")}{" "}
                 ต้องกดส่งแยกอีกครั้ง
               </p>
             )}
@@ -2060,8 +2143,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         blockedMonth={(iso: string) => {
           const lock = monthLockFor(iso);
           if (lock) return monthLockMessage(lock);
-          if (monthsInReview.has((iso ?? "").slice(0, 7))) {
-            return "เดือนนี้ส่งอนุมัติหรืออนุมัติไปแล้ว เพิ่มรายการใหม่ในเดือนนี้ไม่ได้";
+          if (dayBlockedByReview(iso)) {
+            return "วันนี้อยู่ก่อนรายการที่ส่งอนุมัติแล้วในเดือนนี้ เพิ่มย้อนหลังไม่ได้ (ยกเว้นวันชดเชยที่อาจารย์กำหนด)";
           }
           return null;
         }}
@@ -3060,7 +3143,7 @@ function SectionStrip({
                   >
                     <Send size={13} /> ส่งอนุมัติ sec {a.sec_no}
                   </LockedActionButton>
-                ) : a.unsent_count > 0 && a.submittable_count === 0 ? (
+                ) : a.unsent_count > 0 && a.submittable_count === 0 && (a.stranded_count ?? 0) === a.unsent_count ? (
                   // Nothing here can be sent any more, so the card offers the
                   // step that CAN move it instead of a button that cannot.
                   <div className="rounded-md border border-border bg-surface-secondary px-2 py-1.5 text-center text-[11px] leading-tight text-ink-3">
@@ -3087,17 +3170,18 @@ function SectionStrip({
  */
 function SectionStateLine({ a }: { a: Assignment }) {
   if (a.unsent_count > 0) {
-    const stranded = a.unsent_count - a.submittable_count;
+    const stranded = a.stranded_count ?? 0;
     // A single "unsent 10" hid the difference that decides what to do next:
-    // some of those ten may be past their deadline and beyond the TA entirely.
+    // some may be past their deadline and beyond the TA entirely.
+    const parts = [
+      a.submittable_count > 0 ? `ยังไม่ได้ส่ง ${a.submittable_count} รายการ` : "",
+      stranded > 0 ? `ไม่ประสงค์ลงเวลา ${stranded}` : "",
+    ].filter(Boolean);
+    const tone = a.submittable_count > 0 ? "text-amber-700" : "text-red-700";
     return (
-      <span className={"inline-flex items-center gap-1.5 " + (a.submittable_count > 0 ? "text-amber-700" : "text-red-700")}>
+      <span className={"inline-flex items-center gap-1.5 " + tone}>
         <Pencil size={14} className="shrink-0" />
-        {stranded > 0
-          ? a.submittable_count > 0
-            ? `ยังไม่ได้ส่ง ${a.submittable_count} รายการ · ไม่ประสงค์ลงเวลา ${stranded}`
-            : `ไม่ประสงค์ลงเวลา ${stranded} รายการ`
-          : `ยังไม่ได้ส่ง ${a.unsent_count} รายการ`}
+        {parts.join(" · ")}
       </span>
     );
   }
@@ -3151,7 +3235,8 @@ interface MonthlyWorklogViewProps {
   // the header shows a lock chip and hides the quick-add for those months.
   monthLocks?: Map<string, MonthLock>;
   monthDeadlines?: Map<string, { label: string; daysLeft: number }>;
-  monthsInReview?: Set<string>;
+  /** Months in review with no day left to add (see monthsFull). */
+  monthsFull?: Set<string>;
   unpaidMonths?: Set<string>;
   partialMonths?: Set<string>;
   /** month → the budget pools that were paid nothing for it. */
@@ -3162,7 +3247,7 @@ interface MonthlyWorklogViewProps {
 
 function MonthlyWorklogView({
   monthDeadlines,
-  monthsInReview,
+  monthsFull,
   unpaidMonths,
   partialMonths,
   zeroedTracks,
@@ -3210,13 +3295,28 @@ function MonthlyWorklogView({
     setFoldedFor(key);
   }, [rows, monthLocks, sectionId, foldedFor]);
 
-  if (loading && !rows) {
+  if (loading) {
+    // Month panels in the same box model as the real ones below, so the list
+    // lands in place: header strip + a few rows.
     return (
-      <Panel>
-        <div className="flex items-center justify-center py-10 text-sm text-muted">
-          กำลังโหลด…
-        </div>
-      </Panel>
+      <SkelRegion label="กำลังโหลดบันทึกเวลา" className="flex flex-col gap-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <Panel key={i} padded={false}>
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Skel className="size-3 shrink-0" />
+              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                <Skel className="h-4 w-32" />
+                <Skel className="h-3 w-56 max-w-full" />
+              </div>
+            </div>
+            {i === 0 && (
+              <div className="border-t border-[var(--hairline)] px-4">
+                <SkelRows rows={4} columns={Math.min(columns.length, 6) || 5} />
+              </div>
+            )}
+          </Panel>
+        ))}
+      </SkelRegion>
     );
   }
 
@@ -3418,7 +3518,7 @@ function MonthlyWorklogView({
                   )}
                 </div>
               </div>
-              {!monthLock && !monthsInReview?.has(month) && (
+              {!monthLock && !monthsFull?.has(month) && (
                 <span
                   role="button"
                   tabIndex={0}
@@ -3777,7 +3877,7 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
       padded={false}
     >
       {isLoading && !data ? (
-        <div className="p-4 text-sm text-muted text-center">กำลังโหลด…</div>
+        <div className="px-3"><SkelRows rows={2} columns={3} /></div>
       ) : rows.length === 0 ? (
         <div className="p-4 text-sm text-muted">
           ยังไม่ได้ตั้งช่วงเวลา กด "เพิ่มช่วงเวลา" เพื่อกำหนดวันประจำสัปดาห์ที่คุณจะทำงานนี้

@@ -384,6 +384,22 @@ select.field {
 .driver-popover.kku-tour .driver-popover-arrow-side-top { border-top-color: var(--panel-bg); }
 .driver-popover.kku-tour .driver-popover-arrow-side-bottom { border-bottom-color: var(--panel-bg); }
 
+/* ── Loading placeholders (app/components/Skeletons.tsx) ──────────────
+   Invisible for the first 120ms, then fade in and pulse. A response that
+   lands inside that window (cached, or a fast LAN) never shows grey at all —
+   the space is just reserved — so the placeholder itself can't flash. */
+@keyframes skel-appear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes skel-pulse  { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+.skel {
+  opacity: 0;
+  animation:
+    skel-appear 200ms ease-out 120ms forwards,
+    skel-pulse 1.6s ease-in-out 320ms infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel { opacity: 1; animation: none; }
+}
+
 /* ── คู่มือการใช้งาน (docs) motion ─────────────────────────────────────
    One entrance each for the contextual panel (slides in from the end
    edge), the docs mobile menu (from the start edge) and overlays (fade).

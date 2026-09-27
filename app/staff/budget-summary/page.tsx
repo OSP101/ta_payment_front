@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import { Tabs, ScrollShadow } from "@heroui/react";
 import {
@@ -16,6 +16,7 @@ import {
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import UserAvatar from "../../components/UserAvatar";
+import { Skel, SkelRegion, SkelList } from "../../components/Skeletons";
 import {
   MonthChips, monthLabels, monthsQuery, suggestMonths,
   type MonthCoverage, type TermMonth,
@@ -48,9 +49,19 @@ type PreviewTab = "course_summary" | "transfer_cover";
 // strip) and PageHeader's own row has no visibility into which tab is
 // selected below it otherwise.
 export default function BudgetSummaryPage() {
-  const { termId, term } = useTerm();
+  const { termId, term, loaded: termsLoaded } = useTerm();
   const termLabel = term ? `${term.academic_year}/${term.semester}` : "";
-  const [tab, setTab] = useState<PreviewTab>("course_summary");
+  // The tab lives in ?tab= so a reload lands back on it. replace, not push:
+  // switching tabs isn't a new destination for the back button.
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const tab: PreviewTab = params.get("tab") === "transfer_cover" ? "transfer_cover" : "course_summary";
+  const setTab = (key: PreviewTab) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set("tab", key);
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
   // เบิกจ่ายเดือน/คงเหลือ's month selection — lifted here (not local to the
   // preview panel) for the same reason `tab` is: CourseSummaryDownloadButton
   // lives in the page header, outside the preview panel, and must resolve
@@ -72,11 +83,17 @@ export default function BudgetSummaryPage() {
           ) : null
         }
       />
-      {termId && (
+      {termId ? (
         <PreviewSection
           termId={termId} tab={tab} setTab={setTab}
           selectedMonths={selectedMonths} setSelectedMonths={setSelectedMonths}
         />
+      ) : !termsLoaded && (
+        // Terms still loading: hold the tab strip + table area.
+        <div className="space-y-5">
+          <div className="flex gap-4"><Skel className="h-8 w-48" /><Skel className="h-8 w-32" /></div>
+          <PreviewTableSkeleton />
+        </div>
       )}
     </div>
   );
@@ -105,6 +122,14 @@ function PreviewSection({
     `/exports/appointment-order/rounds?term_id=${termId}`
   );
   const noRounds = !roundsLoading && !rounds?.items.length;
+  // Start the active tab's own requests NOW, alongside the rounds check,
+  // rather than only once the panel mounts after it — the keys are the ones
+  // the panels below use, so SWR dedupes and the panel finds them cached.
+  const cs = tab === "course_summary";
+  useSWR(cs ? `/exports/terms/${termId}/course-summary/months` : null);
+  useSWR(cs ? `/exports/terms/${termId}/course-summary/preview${monthsQuery(selectedMonths ?? [])}` : null);
+  useSWR(!cs ? `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("undergrad")}` : null);
+  useSWR(!cs ? `/exports/terms/${termId}/transfer-cover/preview${transferCoverQuery("undergrad")}` : null);
 
   const noRoundsNotice = (
     <EmptyState
@@ -178,22 +203,22 @@ function PreviewSection({
 // bug report: no visual difference between "still fetching" and "empty").
 function PreviewTableSkeleton() {
   return (
-    <div>
-      <div className="pb-3">
-        <div className="h-4 w-56 animate-pulse rounded bg-surface-secondary" />
-        <div className="mt-2 h-3 w-24 animate-pulse rounded bg-surface-secondary" />
+    <SkelRegion>
+      <div className="mb-3">
+        <Skel className="h-4 w-56" />
+        <Skel className="mt-2 h-3 w-24" />
       </div>
       <div className="divide-y divide-hairline">
         {[0, 1, 2, 3].map(i => (
           <div key={i} className="flex items-center gap-4 py-3.5">
-            <div className="h-3 w-14 shrink-0 animate-pulse rounded bg-surface-secondary" />
-            <div className="h-3 flex-1 animate-pulse rounded bg-surface-secondary" />
-            <div className="h-3 w-20 shrink-0 animate-pulse rounded bg-surface-secondary" />
-            <div className="h-3 w-24 shrink-0 animate-pulse rounded bg-surface-secondary" />
+            <Skel className="h-3 w-14 shrink-0" />
+            <Skel className="h-3 flex-1" />
+            <Skel className="h-3 w-20 shrink-0" />
+            <Skel className="h-3 w-24 shrink-0" />
           </div>
         ))}
       </div>
-    </div>
+    </SkelRegion>
   );
 }
 
@@ -432,14 +457,26 @@ function CourseSummaryPreviewPanel({
   const qs = monthsQuery(selectedMonths ?? []);
   const { data, error, isLoading, mutate: retry } = useSWR<{
     sheets: CourseSummaryPreviewSheet[]; warnings: string[]; months: string[]; month_labels: Record<string, string>;
-  }>(`/exports/terms/${termId}/course-summary/preview${qs}`);
+  }>(`/exports/terms/${termId}/course-summary/preview${qs}`, {
+    // Toggling a month chip re-asks for the same term's numbers — keep the
+    // current tables up (DataTable dims them via `loading`) instead of
+    // dropping back to the skeleton on every click.
+    keepPreviousData: true,
+  });
   const sheets = data?.sheets ?? [];
   const monthMeta = (data?.months ?? []).map(ym => ({ year_month: ym, label: data?.month_labels?.[ym] ?? ym }));
   const columns = buildCourseSummaryColumns(monthMeta);
 
   return (
     <div className="space-y-8">
-      {allMonths.length > 0 && (
+      {!monthsData ? (
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium text-ink-2">เลือกเดือนที่จะแสดงเบิกจ่ายเดือน</div>
+          <div className="flex flex-wrap gap-1.5">
+            {[0, 1, 2, 3, 4].map(i => <Skel key={i} className="h-7 w-20 rounded-full" />)}
+          </div>
+        </div>
+      ) : allMonths.length > 0 && (
         <div className="space-y-1.5">
           <div className="text-sm font-medium text-ink-2">เลือกเดือนที่จะแสดงเบิกจ่ายเดือน</div>
           <MonthChips months={monthChipsData} selected={effectiveSelected} onChange={setSelectedMonths} />
@@ -598,7 +635,19 @@ function TransferCoverPreviewSection({ termId }: { termId: string }) {
 // inside TransferCoverPreviewSection's own boxed cluster, alongside the level
 // toggle — not from TransferCoverPreviewPanel below, which stays flat.
 function TransferCoverCoveragePanel({ termId, level }: { termId: string; level: TransferCoverLevel }) {
-  const { data } = useSWR<MonthCoverage>(`/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery(level)}`);
+  const { data, error } = useSWR<MonthCoverage>(
+    `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery(level)}`,
+  );
+  if (!data && !error) {
+    return (
+      <div>
+        <div className="mb-2 text-xs font-medium text-ink-1">สถานะการออกเอกสารรายเดือน</div>
+        <div className="flex flex-wrap gap-1.5">
+          {[0, 1, 2, 3, 4].map(i => <Skel key={i} className="h-6 w-20 rounded-full" />)}
+        </div>
+      </div>
+    );
+  }
   if (!data?.months.length) return null;
   const pending = data.months.filter(m => !m.issued);
   return (
@@ -851,7 +900,9 @@ function CourseSummaryHistoryModal({
       size="xl"
       footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
     >
-      {!history?.length ? (
+      {!history ? (
+        <SkelList items={3} icon={false} />
+      ) : !history.length ? (
         <EmptyState
           icon={<FileText size={26} />}
           title="ยังไม่เคยสร้างเอกสาร"
@@ -1020,10 +1071,10 @@ function TransferCoverMonthModal({
       }
     >
       {isLoading ? (
-        <div className="space-y-2">
-          <div className="h-4 w-64 animate-pulse rounded bg-surface-secondary" />
-          <div className="h-9 w-full animate-pulse rounded bg-surface-secondary" />
-        </div>
+        <SkelRegion className="space-y-2">
+          <Skel className="h-4 w-64" />
+          <Skel className="h-9 w-full" />
+        </SkelRegion>
       ) : all.length > 0 && all.every(m => m.ready === false) ? (
         <EmptyState
           icon={<CalendarRange size={26} />}
@@ -1321,7 +1372,9 @@ function TransferCoverHistoryModal({
           </button>
         ))}
       </div>
-      {!history?.length ? (
+      {!history ? (
+        <SkelList items={3} icon={false} />
+      ) : !history.length ? (
         <EmptyState
           icon={<FileText size={26} />}
           title="ยังไม่เคยสร้างเอกสาร"

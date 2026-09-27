@@ -1,6 +1,7 @@
 "use client";
 import useSWR, { mutate } from "swr";
 import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Tabs, InputGroup, Label, TextField, FieldError } from "@heroui/react";
 import {
   Clock, CheckCircle2, Download, Clock3, Trash2, Eye, EyeOff, Shield, ChevronRight, Lock,
@@ -9,9 +10,10 @@ import {
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Button, IconButton, StatusChip, Spinner, Alert, TabLabel, Modal, Chip, SearchField,
+  PageHeader, Button, IconButton, StatusChip, Alert, TabLabel, Modal, Chip, SearchField,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
+import { Skel, SkelRegion } from "../../components/Skeletons";
 import { ReviewWorkspace } from "./ReviewWorkspace";
 import { fmtDate, daysUntil, type Pending } from "./types";
 
@@ -23,7 +25,17 @@ const BUCKETS: { id: Bucket; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function ReviewPage() {
-  const [bucket, setBucket] = useState<Bucket>("pending");
+  // The tab lives in ?tab= so a reload lands back on it. replace, not push:
+  // switching tabs isn't a new destination for the back button.
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const bucket: Bucket = params.get("tab") === "approved" ? "approved" : "pending";
+  const setBucket = (key: Bucket) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set("tab", key);
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
   const pending  = useSWR<Pending[]>("/ta-review?status=pending");
   const approved = useSWR<Pending[]>("/ta-review?status=approved");
   // TAs who saved the profile form but have not uploaded all three documents.
@@ -32,8 +44,10 @@ export default function ReviewPage() {
   // 3 files is invisible to staff until they happen to finish.
   const incomplete = useSWR<Pending[]>("/ta-review?status=incomplete");
   const counts = {
-    pending:  pending.data?.length ?? 0,
-    approved: approved.data?.length ?? 0,
+    // undefined while loading, so the tab pill stays hidden rather than
+    // showing a count that isn't known yet.
+    pending:  pending.data?.length,
+    approved: approved.data?.length,
   };
 
   // Which submitter the full-screen workspace opened on. null = closed. The
@@ -180,9 +194,8 @@ function PendingList({
     );
   }, [data, q]);
 
-  if (loading) {
-    return <div className="p-6 flex justify-center"><Spinner /></div>;
-  }
+  // Only the error replaces the whole list; while loading the search box is
+  // already there and the rows below fill in as placeholders.
   if (error) {
     return (
       <Alert
@@ -205,7 +218,20 @@ function PendingList({
           placeholder="ค้นหาชื่อ / อีเมล…"
         />
       </div>
-      {filtered.length === 0 ? (
+      {loading || !data ? (
+        <SkelRegion className="divide-y divide-[var(--hairline)] border-t border-[var(--hairline)]">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3">
+              <Skel className="size-8 shrink-0 rounded-full" />
+              <div className="flex-1 flex flex-col gap-1.5">
+                <Skel className="h-4 w-1/3" />
+                <Skel className="h-3 w-1/2" />
+              </div>
+              <Skel className="h-5 w-16 rounded-full" />
+            </div>
+          ))}
+        </SkelRegion>
+      ) : filtered.length === 0 ? (
         <div className="text-sm text-muted py-6 text-center">
           {q ? "ไม่พบผลลัพธ์" : "ไม่มีเอกสารที่รอตรวจ"}
         </div>

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { api, type Me } from "./api";
@@ -37,8 +38,10 @@ async function resolveSession(): Promise<{ apiBase: string; cookieHeader: string
   return { apiBase: `${backend}/api/v1`, cookieHeader: `access_token=${token}` };
 }
 
-// Server-side helper: fetch current user by forwarding cookies.
-export async function getMe(): Promise<Me | null> {
+// Server-side helper: fetch current user by forwarding cookies. Memoized per
+// request because the root layout (for the staff watermark) and the route's
+// own layout both ask for it on the same render.
+export const getMe = cache(async (): Promise<Me | null> => {
   const session = await resolveSession();
   if (!session) return null;
   try {
@@ -51,7 +54,7 @@ export async function getMe(): Promise<Me | null> {
   } catch {
     return null;
   }
-}
+});
 
 /**
  * Mirrors mfaMandatoryFor in internal/handler/middleware.go: an admin/staff
@@ -66,6 +69,11 @@ export async function getMe(): Promise<Me | null> {
  * fetches 403'd and bounced it to /setup-2fa.
  */
 export function mfaSetupRequired(me: Me): boolean {
+  // The backend's own verdict wins when present: it applies the
+  // MFA_MANDATORY_ENFORCED kill switch, which a role check here cannot see —
+  // re-deriving it forced every staff account onto /setup-2fa even while the
+  // API itself had enforcement switched off.
+  if (typeof me.mfa_setup_required === "boolean") return me.mfa_setup_required;
   return !me.totp_enabled && (me.roles.includes("admin") || me.roles.includes("staff") || !!me.is_executive);
 }
 

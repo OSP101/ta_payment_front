@@ -10,6 +10,7 @@ import { PageHeader, Panel, EmptyState, Chip, type ChipTone } from "../../compon
 import ShareButtons from "../../components/ShareButtons";
 import AttachmentGallery, { type Attachment } from "../../components/AttachmentGallery";
 import RichText from "../../components/RichText";
+import { Skel, SkelRegion, SkelText } from "../../components/Skeletons";
 
 type Category = "info" | "news" | "warning" | "urgent" | "event";
 
@@ -47,9 +48,7 @@ export default function AnnouncementDetail() {
           <ArrowLeft size={14} /> ประกาศทั้งหมด
         </Link>
 
-        {isLoading && !data && (
-          <Panel><div className="text-sm text-muted">กำลังโหลด…</div></Panel>
-        )}
+        {isLoading && !data && <BodySkeleton />}
         {error && !data && (
           <Panel>
             <EmptyState
@@ -61,6 +60,25 @@ export default function AnnouncementDetail() {
         )}
         {data && <Body a={data} />}
       </div>
+    </div>
+  );
+}
+
+/** Body's shape — header, chip row, the text panel — so the article lands in
+ *  place instead of pushing a one-line "loading" panel down the page. */
+function BodySkeleton() {
+  return (
+    <div>
+      <SkelRegion className="mb-6 flex flex-col gap-2">
+        <Skel className="h-8 w-3/4" />
+        <Skel className="h-4 w-56" />
+      </SkelRegion>
+      <div className="flex items-center gap-2 mb-4">
+        <Skel className="h-6 w-28 rounded-full" />
+      </div>
+      <Panel>
+        <SkelText lines={5} />
+      </Panel>
     </div>
   );
 }

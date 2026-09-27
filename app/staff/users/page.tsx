@@ -8,8 +8,8 @@ import {
   TextField as HTextField,
   type SortDescriptor,
 } from "@heroui/react";
-import { Camera, Copy, Files, GraduationCap, KeyRound, LockOpen, Pencil, Plus, ShieldAlert, ShieldOff, UserCheck, UserX } from "lucide-react";
-import { api, errMessage, mfaAdminReset, type Enrollment, type Me } from "../../lib/api";
+import { CalendarDays, Camera, Copy, Files, GraduationCap, KeyRound, LockOpen, Pencil, Plus, ShieldAlert, ShieldOff, Trash2, UserCheck, UserX } from "lucide-react";
+import { api, errMessage, mfaAdminReset, type Enrollment, type Me, type Term } from "../../lib/api";
 import { STUDENT_ID_PATTERN, THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
@@ -19,7 +19,9 @@ import {
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import UserAvatar from "../../components/UserAvatar";
+import TermSelect from "../../components/TermSelect";
 import AvatarCropper from "../../components/AvatarCropper";
+import { SkelList } from "../../components/Skeletons";
 
 /** Mirrors ProfilePhotoCard's own picker rules (app/components/ProfilePhotoCard.tsx)
  *  — kept in sync by hand since the two forms upload to different endpoints. */
@@ -265,6 +267,7 @@ export default function UsersPage() {
   const [unlocking, setUnlocking] = useState<User | null>(null);
   const [resetting2FA, setResetting2FA] = useState<User | null>(null);
   const [historyFor, setHistoryFor] = useState<User | null>(null);
+  const [timetableFor, setTimetableFor] = useState<User | null>(null);
 
   // The password-gate unlock is admin-only, and the API additionally refuses an
   // admin unlocking themselves (see service.ClearPasswordGateLockout — otherwise
@@ -282,6 +285,10 @@ export default function UsersPage() {
   // has access must disable their OWN 2FA from /account (password + code),
   // not this weaker admin path (password only).
   const canReset2FA = (u: User) => isAdmin && u.id !== me?.id;
+  // Admin accounts are managed by admins only (UserService.assertMayManage):
+  // staff get no edit / reset / on-off buttons on an admin row, rather than
+  // buttons that fail with a 403.
+  const canManage = (u: User) => isAdmin || !u.roles.includes("admin");
 
   const columns: DataColumn<User>[] = [
     {
@@ -354,15 +361,24 @@ export default function UsersPage() {
       className: "text-right whitespace-nowrap",
       render: u => (
         <div className="flex gap-1 justify-end">
-          <Button variant="ghost" size="sm" onClick={() => setEditing(u)}>
-            <Pencil size={14} /> แก้ไข
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setResetting(u)}>
-            <KeyRound size={14} /> รีเซ็ตรหัส
-          </Button>
+          {canManage(u) && (
+            <Button variant="ghost" size="sm" onClick={() => setEditing(u)}>
+              <Pencil size={14} /> แก้ไข
+            </Button>
+          )}
+          {canManage(u) && (
+            <Button variant="ghost" size="sm" onClick={() => setResetting(u)}>
+              <KeyRound size={14} /> รีเซ็ตรหัส
+            </Button>
+          )}
           {u.roles.includes("ta") && (
             <Button variant="ghost" size="sm" onClick={() => setHistoryFor(u)}>
               <GraduationCap size={14} /> ประวัติการศึกษา
+            </Button>
+          )}
+          {u.roles.includes("ta") && (
+            <Button variant="ghost" size="sm" onClick={() => setTimetableFor(u)}>
+              <CalendarDays size={14} /> ตารางเรียน
             </Button>
           )}
           {canUnlock(u) && (
@@ -375,7 +391,7 @@ export default function UsersPage() {
               <ShieldOff size={14} /> รีเซ็ต 2FA
             </Button>
           )}
-          {u.is_active ? (
+          {canManage(u) && (u.is_active ? (
             <Button variant="danger-soft" size="sm" onClick={() => setDeactivating(u)}>
               <UserX size={14} /> ปิด
             </Button>
@@ -383,7 +399,7 @@ export default function UsersPage() {
             <Button variant="ghost" size="sm" onClick={() => setReactivating(u)}>
               <UserCheck size={14} /> เปิดใช้งาน
             </Button>
-          )}
+          ))}
         </div>
       ),
     },
@@ -465,6 +481,7 @@ export default function UsersPage() {
       {unlocking && <UnlockPasswordGateModal user={unlocking} onClose={() => setUnlocking(null)} />}
       {resetting2FA && <Reset2FAModal user={resetting2FA} onClose={() => setResetting2FA(null)} />}
       {historyFor && <EnrollmentHistoryModal user={historyFor} onClose={() => setHistoryFor(null)} />}
+      {timetableFor && <TimetableCorrectionModal user={timetableFor} onClose={() => setTimetableFor(null)} />}
     </div>
   );
 }
@@ -966,6 +983,120 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
  * active period and opens a new one in the same backend transaction
  * (EnrollmentService.RecordTransition) — there is no separate "close" step.
  */
+interface ClassBlockRow {
+  id?: string;
+  course_code?: string;
+  course_name?: string;
+  course_label?: string;
+  kind?: string;
+  sec_no?: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  note?: string;
+  is_wba?: boolean;
+}
+
+const DAY_TH = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+
+/**
+ * Staff correction of a TA's own timetable. Once a TA has an approved request
+ * in a term, the TA may only ADD classes (removing one would win back periods
+ * the decision trimmed), and the save error tells them to contact staff — this
+ * is where staff do it. The save goes through PUT /users/:id/schedule, audited
+ * under the staff member, and re-runs pending request decisions like a TA save.
+ */
+function TimetableCorrectionModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { data: terms } = useSWR<Term[]>("/terms");
+  const [termId, setTermId] = useState("");
+  useEffect(() => {
+    if (!termId && terms?.length) setTermId((terms.find(t => t.is_active) ?? terms[0]).id);
+  }, [terms, termId]);
+  const key = termId ? `/users/${user.id}/schedule?term_id=${termId}` : null;
+  const { data, isLoading } = useSWR<{ blocks: ClassBlockRow[]; locked: boolean; lock_reason: string }>(key);
+  const [removed, setRemoved] = useState<Set<number>>(new Set());
+  const [pending, setPending] = useState(false);
+  useEffect(() => { setRemoved(new Set()); }, [key]);
+
+  const blocks = data?.blocks ?? [];
+  const hhmm = (t: string) => t.slice(0, 5);
+
+  async function save() {
+    if (!key) return;
+    setPending(true);
+    try {
+      await api.put(key, blocks.filter((_, i) => !removed.has(i)));
+      await mutate(key);
+      notify.success("บันทึกตารางเรียนของผู้ช่วยสอนแล้ว");
+      onClose();
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`ตารางเรียนของ ${formatFullName(user)}`}
+      size="lg"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+          <Button variant="primary" onClick={save} disabled={pending || removed.size === 0 || !!data?.locked}>
+            บันทึกการแก้ไข
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <TermSelect terms={terms} value={termId} onChange={setTermId} className="w-48" />
+        <p className="text-sm text-muted">
+          ใช้เมื่อตารางเรียนของผู้ช่วยสอนเปลี่ยนจริง (เช่น ถอนวิชา) หลังคำขอ TA ได้รับอนุมัติแล้ว
+          ผู้ช่วยสอนเพิ่มคาบเองได้ แต่ลบหรือลดคาบเองไม่ได้ การบันทึกที่นี่จะถูกบันทึกในประวัติการใช้งาน
+        </p>
+        {data?.locked && <Alert status="warning" title="แก้ไขไม่ได้" description={data.lock_reason} />}
+        {isLoading ? (
+          <SkelList />
+        ) : blocks.length === 0 ? (
+          <p className="text-sm text-muted">ยังไม่มีตารางเรียนในภาคเรียนนี้</p>
+        ) : (
+          <ul className="divide-y divide-[var(--hairline)] rounded-lg border border-[var(--hairline)]">
+            {blocks.map((b, i) => {
+              const gone = removed.has(i);
+              return (
+                <li key={i} className={`flex items-center justify-between gap-3 px-3 py-2 text-sm ${gone ? "opacity-50 line-through" : ""}`}>
+                  <span>
+                    {b.is_wba ? "WBA (ไม่มีตารางเรียน)" : (
+                      <>
+                        <b>{b.course_code || b.course_label}</b> {b.course_name} วัน{DAY_TH[b.day_of_week] ?? b.day_of_week} {hhmm(b.start_time)}–{hhmm(b.end_time)} น.
+                      </>
+                    )}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!!data?.locked}
+                    onClick={() => setRemoved(prev => {
+                      const next = new Set(prev);
+                      if (next.has(i)) next.delete(i); else next.add(i);
+                      return next;
+                    })}
+                  >
+                    <Trash2 size={14} /> {gone ? "เลิกลบ" : "ลบคาบนี้"}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => void }) {
   const key = `/users/${user.id}/enrollments`;
   const { data, isLoading, error } = useSWR<{ items: Enrollment[] }>(key);
@@ -1021,7 +1152,7 @@ function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => 
         <div>
           <div className="text-xs text-muted mb-2">ช่วงการศึกษาที่ผ่านมา</div>
           {isLoading ? (
-            <div className="text-sm text-muted">กำลังโหลด…</div>
+            <SkelList items={2} icon={false} bordered />
           ) : error ? (
             <Alert status="danger" title="โหลดประวัติไม่สำเร็จ" description={errMessage(error)} />
           ) : items.length === 0 ? (

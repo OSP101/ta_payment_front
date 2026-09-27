@@ -9,6 +9,7 @@ import {
   PageHeader, Panel, StatCard, EmptyState, Chip, Alert, Button, type ChipTone,
 } from "../../../components/ui";
 import { courseCodeLabel } from "../../../lib/courseCode";
+import { Skel, SkelRegion, SkelValue } from "../../../components/Skeletons";
 
 interface SectionSchedule {
   id: string;
@@ -89,9 +90,9 @@ const STAGE_TONE: Record<TAStatus["stage"], ChipTone> = {
 export default function TACoursePage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
   const courseKey = tcId ? `/teaching-courses/${tcId}` : null;
-  const { data: course, error: courseError, isLoading } = useSWR<TC>(courseKey);
+  const { data: course, error: courseError } = useSWR<TC>(courseKey);
   const { data: status } = useSWR<TAStatus[]>("/dashboard/ta/me");
-  const { data: myAssignments } = useSWR<Assignment[]>(
+  const { data: myAssignments, error: assignmentsError } = useSWR<Assignment[]>(
     tcId ? `/me/assignments?teaching_course_id=${tcId}` : null,
   );
 
@@ -118,6 +119,12 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
   }, [course, mySectionIds]);
 
   const notFound = courseError instanceof ApiError && courseError.status === 404;
+  // The stat cards read /dashboard/ta/me and the section list reads the course
+  // plus my assignments — three independent requests, so each block fills in
+  // on its own. The section list waits for both of its inputs: rendering all
+  // sections first and then narrowing to mine made the list shrink visibly.
+  const statusLoading = status === undefined;
+  const sectionsReady = !!course && (myAssignments !== undefined || !!assignmentsError);
 
   return (
     <div>
@@ -146,20 +153,13 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
             description={(courseError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
           />
         </Panel>
-      ) : isLoading || !course ? (
-        <div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            {[0, 1, 2].map(i => <div key={i} className="h-24 rounded-xl bg-surface-secondary animate-pulse" />)}
-          </div>
-          <div className="h-40 rounded-xl bg-surface-secondary animate-pulse" />
-        </div>
       ) : (
         <>
           {/* Hours + stage summary */}
           <div data-tour="ta-course-stats" className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <StatCard
               label="สถานะ"
-              value={myStatus ? STAGE_LABEL[myStatus.stage] : "—"}
+              value={statusLoading ? <SkelValue className="h-7 w-20" /> : myStatus ? STAGE_LABEL[myStatus.stage] : "—"}
               icon={<CalendarClock size={18} />}
               tone={myStatus?.stage === "approved" ? "success" : myStatus?.stage === "submitted" ? "warn" : "brand"}
             />
@@ -168,21 +168,21 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                 would say nothing about what arrives. */}
             <StatCard
               label="ชม.อนุมัติแล้ว"
-              value={(myStatus?.hours_approved ?? 0).toFixed(1)}
+              value={statusLoading ? <SkelValue className="h-7 w-14" /> : (myStatus?.hours_approved ?? 0).toFixed(1)}
               hint={(myStatus?.hours_approved ?? 0) > 0 ? hoursSplitText(myStatus?.hours_approved_regular ?? 0, myStatus?.hours_approved_special ?? 0) : undefined}
               icon={<Clock size={18} />}
               tone="success"
             />
             <StatCard
               label="ชม.รออนุมัติ"
-              value={(myStatus?.hours_pending ?? 0).toFixed(1)}
+              value={statusLoading ? <SkelValue className="h-7 w-14" /> : (myStatus?.hours_pending ?? 0).toFixed(1)}
               hint={(myStatus?.hours_pending ?? 0) > 0 ? hoursSplitText(myStatus?.hours_pending_regular ?? 0, myStatus?.hours_pending_special ?? 0) : undefined}
               icon={<Clock size={18} />}
               tone="warn"
             />
             <StatCard
               label="ยอดเงินโดยประมาณ"
-              value={`฿${(myStatus?.estimated_baht ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+              value={statusLoading ? <SkelValue className="h-7 w-20" /> : `฿${(myStatus?.estimated_baht ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
               hint={(myStatus?.estimated_baht ?? 0) > 0 ? bahtSplitText(myStatus?.estimated_baht_regular ?? 0, myStatus?.estimated_baht_special ?? 0) : undefined}
               icon={<Wallet size={18} />}
               tone="brand"
@@ -219,7 +219,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                     ))}
                     <div className="text-xs opacity-80 pt-1">
                       คาบที่เหลือยังลงบันทึกเวลาได้ตามปกติ หากตารางเรียนของคุณเปลี่ยน
-                      ให้แก้ที่หน้า “ตารางเรียนของฉัน” แล้วระบบจะคำนวณใหม่ให้
+                      (เช่น ถอนวิชาหรือย้ายกลุ่มเรียน) กรุณาติดต่อเจ้าหน้าที่ให้แก้ไขตารางเรียน
                     </div>
                   </div>
                 }
@@ -232,14 +232,31 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
             title="ตารางสอนของรายวิชา"
             data-tour="ta-course-schedule"
             description={
-              mySections.length > 0 && mySectionIds.size > 0
+              !sectionsReady
+                ? <SkelValue className="h-3 w-56" />
+                : mySections.length > 0 && mySectionIds.size > 0
                 ? `แสดงเฉพาะ section ที่คุณเป็น TA (${mySections.length} section)`
-                : `รายวิชานี้มี ${course.sections?.length ?? 0} section`
+                : `รายวิชานี้มี ${course?.sections?.length ?? 0} section`
             }
             className="mb-4"
             padded={false}
           >
-            {mySections.length === 0 ? (
+            {!sectionsReady ? (
+              <SkelRegion className="divide-y divide-[var(--hairline)]">
+                {Array.from({ length: 2 }, (_, i) => (
+                  <div key={i} className="p-4 flex flex-col md:flex-row md:items-start gap-3">
+                    <div className="flex items-center gap-2 md:w-40 shrink-0">
+                      <Skel className="h-7 w-14 rounded-full" />
+                      <Skel className="h-3 w-12" />
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col gap-2">
+                      <Skel className="h-5 w-64 max-w-full" />
+                      <Skel className="h-5 w-52 max-w-full" />
+                    </div>
+                  </div>
+                ))}
+              </SkelRegion>
+            ) : mySections.length === 0 ? (
               <div className="p-6">
                 <EmptyState
                   icon={<BookOpen size={24} />}

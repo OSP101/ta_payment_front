@@ -16,6 +16,7 @@ import SectionScheduleEditor, {
 } from "../../../components/SectionScheduleEditor";
 import { courseCodeLabel } from "../../../lib/courseCode";
 import { useTitleScope } from "../../../components/Shell";
+import { Skel, SkelRegion } from "../../../components/Skeletons";
 import LecturerPanel from "./LecturerPanel";
 
 interface SectionRow {
@@ -122,8 +123,8 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         // reads as content filling in, not the page changing shape underneath
         // the reader (the flash the settings page was reported for).
         <div className="mb-6" aria-hidden>
-          <div className="h-8 w-80 animate-pulse rounded bg-surface-secondary" />
-          <div className="mt-2 h-4 w-56 animate-pulse rounded bg-surface-secondary" />
+          <Skel className="h-8 w-80 max-w-full" />
+          <Skel className="mt-2 h-4 w-56" />
         </div>
       )}
 
@@ -138,11 +139,11 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         </div>
       )}
 
-      {tc && (
-        <div className="mb-6">
-          <LecturerPanel tcId={tcId} lecturers={tc.lecturers} />
-        </div>
-      )}
+      {/* Always drawn — it sits above the sections, so popping it in once the
+          course loaded pushed the whole section list down. */}
+      <div className="mb-6">
+        <LecturerPanel tcId={tcId} lecturers={tc?.lecturers} loading={!tc} />
+      </div>
 
       <Panel
         title="Section และตารางเวลาเรียน"
@@ -158,14 +159,14 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         padded={false}
       >
         {!tc ? (
-          <div className="divide-y divide-border" aria-hidden>
+          <SkelRegion className="divide-y divide-border">
             {Array.from({ length: 2 }, (_, i) => (
               <div key={i} className="p-4">
-                <div className="h-4 w-40 animate-pulse rounded bg-surface-secondary" />
-                <div className="mt-3 h-10 w-full animate-pulse rounded bg-surface-secondary" />
+                <Skel className="h-4 w-40" />
+                <Skel className="mt-3 h-10 w-full" />
               </div>
             ))}
-          </div>
+          </SkelRegion>
         ) : sortedSecs.length === 0 ? (
           <EmptyState
             icon={<Clock size={28} />}

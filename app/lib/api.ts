@@ -190,7 +190,11 @@ export type SessionReason = (typeof SESSION_REASONS)[number];
 
 function humanMessage(status: number, raw: string): string {
   if (raw && CODE_MESSAGES[raw]) return CODE_MESSAGES[raw];
-  if (raw && raw.trim() !== "") return raw;
+  // Handler messages meant for a person are Thai. A bare Fiber/validation
+  // string ("forbidden", "invalid id", "term_id required") is not, so it falls
+  // through to the status wording below; the raw text stays on ApiError.code
+  // for anything that branches on it.
+  if (raw && raw.trim() !== "" && /[\u0E00-\u0E7F]/.test(raw)) return raw;
   if (status === 0) return "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่";
   if (status === 401) return "กรุณาเข้าสู่ระบบใหม่";
   if (status === 403) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
@@ -459,6 +463,11 @@ export interface DemoProblemEvent {
 export const demoProblemEvents = () => api.get<{ items: DemoProblemEvent[] }>("/scenario/problems");
 export const demoRunProblemEvent = (key: string) => api.post<{ message: string }>(`/scenario/problems/${key}`);
 
+/** "ชุดข้อมูลนำเสนอผู้บริหาร" — see internal/demo/scenario_presentation.go.
+ *  Loads a separate, fully fictional term for presenting the dashboard. */
+export const demoPresentationStatus = () => api.get<{ loaded: boolean; term_label: string }>("/scenario/presentation");
+export const demoLoadPresentation = () => api.post<{ message: string }>("/scenario/presentation");
+
 /** "บันทึกจุดตรวจสอบ" / "ย้อนกลับไปจุดตรวจสอบ" — see internal/demo/checkpoint.go.
  *  One checkpoint per workspace; saving overwrites whatever was there before. */
 export const demoCheckpointStatus = () => api.get<{ saved_at: string | null }>("/scenario/checkpoint");
@@ -668,6 +677,8 @@ export interface Me {
   /** Whether this account has completed 2FA enrolment. Mandatory for
    *  admin/staff/executive — see AccountGuard's mfa_setup_required. */
   totp_enabled: boolean;
+  /** AccountGuard's verdict (honours MFA_MANDATORY_ENFORCED); absent on older APIs. */
+  mfa_setup_required?: boolean;
   /** 0 when totp_enabled is false. Shown on /account so a user notices
    *  before they run out. */
   recovery_codes_remaining: number;

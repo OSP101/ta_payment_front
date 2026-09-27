@@ -7,6 +7,7 @@ import { notify } from "../../lib/notify";
 import { PageHeader, Panel, Button, Chip, Alert, type ChipTone } from "../../components/ui";
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 import { useTerm } from "../TermContext";
+import { Skel, SkelValue } from "../../components/Skeletons";
 
 interface Holiday {
   id: string;
@@ -100,14 +101,19 @@ export default function StaffTDBMPage() {
   const [syncing, setSyncing] = useState(false);
 
   const listKey = term ? `/tdbm/extra-teachings?academic_year=${term.academic_year}&semester=${term.semester}` : null;
-  const { data: rows, isLoading, error } = useSWR<TDBMExtraTeaching[]>(listKey);
+  // keepPreviousData: a term switch keeps the old rows (under DataTable's
+  // refetch overlay) until the new term's land, instead of blanking the table.
+  const { data: rows, isLoading, error } = useSWR<TDBMExtraTeaching[]>(listKey, { keepPreviousData: true });
   const { data: syncLog } = useSWR<TDBMSyncLogEntry[]>("/tdbm/sync-log?limit=10");
   // No year filter — /staff/holidays' own year picker aside, a term can span
   // two calendar years (e.g. Aug–Jan), so filtering by the TERM's date range
   // below is the only scoping that can't miss a holiday at either end.
-  const { data: allHolidays } = useSWR<Holiday[]>("/holidays");
+  const { data: allHolidays, error: holidaysError } = useSWR<Holiday[]>("/holidays");
   const holidays = useMemo(() => {
-    if (!term?.starts_on || !term?.ends_on || !allHolidays) return undefined;
+    if (!term || !allHolidays) return undefined;
+    // A term without dates can't scope anything — an empty list, not a
+    // DataTable that stays on its loading skeleton forever.
+    if (!term.starts_on || !term.ends_on) return [];
     return allHolidays
       .filter(h => h.holiday_date >= term.starts_on! && h.holiday_date <= term.ends_on!)
       .sort((a, b) => a.holiday_date.localeCompare(b.holiday_date));
@@ -252,13 +258,13 @@ export default function StaffTDBMPage() {
         <Panel className="p-4">
           <div className="text-xs text-muted">ภาคเรียนที่ดู</div>
           <div className="mt-1 text-lg font-semibold tabular-nums">
-            {loaded && term ? `${term.academic_year}/${term.semester}` : "—"}
+            {!loaded ? <SkelValue className="h-6 w-16" /> : term ? `${term.academic_year}/${term.semester}` : "—"}
           </div>
         </Panel>
         <Panel className="p-4">
           <div className="text-xs text-muted">รายการวันสอนชดเชยที่ดึงมาได้</div>
           <div className="mt-1 text-lg font-semibold tabular-nums">
-            {rows ? `${rows.length} รายการ` : "—"}
+            {rows ? `${rows.length} รายการ` : (listKey || !loaded) && !error ? <SkelValue className="h-6 w-24" /> : "—"}
             {rows && rows.length > 0 && (
               <span className="ml-2 text-sm font-normal text-muted">จับคู่กลุ่มเรียนได้ {matchedCount} รายการ</span>
             )}
@@ -267,7 +273,9 @@ export default function StaffTDBMPage() {
         <Panel className="p-4">
           <div className="text-xs text-muted">ซิงก์ล่าสุด (วันสอนชดเชย)</div>
           <div className="mt-1 text-sm">
-            {lastExtra ? (
+            {!syncLog ? (
+              <Skel className="h-5 w-3/4" />
+            ) : lastExtra ? (
               <>
                 <span>{formatDateTimeThai(lastExtra.finished_at ?? lastExtra.started_at)}</span>{" "}
                 <span className="text-muted">
@@ -318,6 +326,9 @@ export default function StaffTDBMPage() {
             columns={holidayColumns}
             rows={holidays}
             rowKey={h => h.id}
+            // DataTable only draws its skeleton while `loading` is set; without
+            // it the "ไม่มีวันหยุด" empty state flashed before /holidays landed.
+            loading={(!loaded || !allHolidays) && !holidaysError}
             pageSize={50}
             initialSort={{ column: "date", direction: "ascending" }}
             emptyTitle="ไม่มีวันหยุดในภาคเรียนนี้"
@@ -339,7 +350,7 @@ export default function StaffTDBMPage() {
             filters={filters}
             pageSize={20}
             initialSort={{ column: "class_date", direction: "descending" }}
-            loading={isLoading}
+            loading={isLoading || !loaded}
             error={error}
             emptyTitle="ไม่มีข้อมูล"
             emptyDescription="ยังไม่มีรายการวันสอนชดเชยสำหรับภาคเรียนที่เลือก"

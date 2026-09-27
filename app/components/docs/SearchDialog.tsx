@@ -4,7 +4,8 @@ import Link from "next/link";
 import useSWR from "swr";
 import { usePathname, useRouter } from "next/navigation";
 import { Search, FileQuestion } from "lucide-react";
-import { Modal, SearchField, Chip, Spinner } from "../ui";
+import { Modal, SearchField, Chip } from "../ui";
+import { Skel, SkelRegion } from "../Skeletons";
 import { docHref, type DocPageMeta } from "../../../content/docs/meta";
 import { recordMiss } from "../../lib/docs/searchMiss";
 import { AUDIENCE_LABEL, type Audience } from "../../../content/docs/types";
@@ -109,7 +110,20 @@ export default function SearchDialog({
           <div className="py-8 text-center text-sm text-muted">ค้นหาไม่สำเร็จ ลองใหม่อีกครั้ง</div>
         )}
         {typed && !error && !settled && results.length === 0 && (
-          <div className="flex justify-center py-8"><Spinner size="sm" /></div>
+          // First answer on its way: result rows (chip + section, title,
+          // one-line description) rather than a centred spinner.
+          <SkelRegion label="กำลังค้นหา" className="divide-y divide-border rounded-lg border border-border">
+            {Array.from({ length: 3 }, (_, i) => (
+              <div key={i} className="flex flex-col gap-1.5 px-3.5 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Skel className="h-5 w-16 rounded-full" />
+                  <Skel className="h-3 w-24" />
+                </div>
+                <Skel className="h-4 w-1/2" />
+                <Skel className="h-3 w-3/4" />
+              </div>
+            ))}
+          </SkelRegion>
         )}
         {settled && !error && results.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted">
@@ -119,7 +133,8 @@ export default function SearchDialog({
           </div>
         )}
         {!error && results.length > 0 && (
-          <ul className="max-h-96 overflow-y-auto divide-y divide-border rounded-lg border border-border">
+          // Dimmed while the kept (keepPreviousData) list belongs to an earlier query.
+          <ul className={"max-h-96 overflow-y-auto divide-y divide-border rounded-lg border border-border transition-opacity " + (settled ? "" : "opacity-60")}>
             {results.map((r) => (
               <li key={`${r.page.audience}:${r.page.slug}`}>
                 <button

@@ -4,6 +4,7 @@ import useSWR, { mutate } from "swr";
 import { Plus, Trash2, Pencil, Upload, AlertTriangle, CalendarOff, ChevronDown, Info } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
+import { Skel, SkelRegion } from "../../components/Skeletons";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, Select, Modal, FieldGroup, EmptyState,
   Chip, ConfirmDialog, Alert, type ChipTone,
@@ -173,9 +174,20 @@ export default function StaffHolidaysPage() {
 
       <div className="mt-4">
         {isLoading && !holidays ? (
-          <Panel>
-            <div className="flex justify-center py-10 text-sm text-muted">กำลังโหลด…</div>
-          </Panel>
+          // Collapsed month headers, the shape the list lands in.
+          <SkelRegion className="flex flex-col gap-3">
+            {[0, 1, 2, 3].map(i => (
+              <Panel key={i} padded={false}>
+                <div className="flex items-center gap-3 p-4">
+                  <Skel className="size-[18px] shrink-0 rounded" />
+                  <div className="flex-1 flex flex-col gap-1.5">
+                    <Skel className="h-4 w-32" />
+                    <Skel className="h-3 w-16" />
+                  </div>
+                </div>
+              </Panel>
+            ))}
+          </SkelRegion>
         ) : !holidays || holidays.length === 0 ? (
           <Panel>
             <EmptyState

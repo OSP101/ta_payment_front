@@ -2,7 +2,8 @@
 import { useMemo } from "react";
 import useSWR from "swr";
 import { CalendarDays, Download, Printer } from "lucide-react";
-import { Modal, Button, Spinner, Alert } from "./ui";
+import { Modal, Button, Alert } from "./ui";
+import { Skel, SkelRegion } from "./Skeletons";
 import { packLanes, parseTime } from "./ScheduleGrid";
 
 /**
@@ -103,7 +104,22 @@ export function TimetableModal({
       title={data ? `ตารางเรียนและตารางปฏิบัติงาน ${data.ta_name}` : (taName ?? "ตารางเรียน")}
     >
       {isLoading || !data ? (
-        <div className="flex justify-center py-12"><Spinner /></div>
+        // The PDF/print links depend only on the props, so they are live
+        // already; only the label, legend and grid wait on the form data.
+        <SkelRegion className="space-y-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Skel className="h-3.5 w-56" />
+            <span className="flex-1" />
+            <Button variant="secondary" size="sm" onPress={() => window.open(pdfHref, "_blank", "noopener")}>
+              <Download size={14} /> PDF
+            </Button>
+            <Button variant="secondary" size="sm" onPress={() => window.open(printHref, "_blank", "noopener")}>
+              <Printer size={14} /> พิมพ์ฟอร์ม
+            </Button>
+          </div>
+          <Skel className="h-3 w-80 max-w-full" />
+          <Skel className="h-72 w-full rounded-lg" />
+        </SkelRegion>
       ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

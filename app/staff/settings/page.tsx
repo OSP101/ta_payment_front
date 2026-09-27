@@ -1,7 +1,7 @@
 "use client";
 import useSWR, { mutate } from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, CalendarPlus, Power, PowerOff, Mail, MailX, ChevronDown } from "lucide-react";
 import {
   Tabs, Pagination, toast, Accordion, Switch,
@@ -17,6 +17,7 @@ import {
   PageHeader, Panel, Button, IconButton, TextInput, TextArea, FieldGroup, Chip, Modal, Alert, SearchField, Select, TipWrap,
 } from "../../components/ui";
 import { FormulaHelpModal } from "../../components/formula-help";
+import { Skel, SkelValue, SkelList, SkelRows, SkelForm } from "../../components/Skeletons";
 
 interface Rate {
   id?: string;
@@ -52,15 +53,24 @@ export default function SettingsPage() {
   // land on the merged calendar tab instead of a 404.
   const rawTab = tabParam ?? "";
   const normalised = rawTab === "windows" || rawTab === "periods" ? "calendar" : rawTab;
-  const initialTab = ["rate", "terms", "calendar", "curricula", "admins", "email", "demo-access"].includes(normalised)
+  const activeTab = ["rate", "terms", "calendar", "curricula", "admins", "email", "demo-access"].includes(normalised)
     ? normalised
     : "rate";
+  const router = useRouter();
+  const pathname = usePathname();
+  // Mirror the chosen tab into ?tab= so a reload lands back on it. replace, not
+  // push: switching tabs isn't a new destination for the back button.
+  const selectTab = (key: string) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set("tab", key);
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
   return (
     <div>
       {/* The page-level pill is this screen's one docs entry: it opens the
           whole ตั้งค่า topic (one doc page per tab) in the full manual. */}
       <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน วิชา ภาคเรียน และฝ่ายบริหาร" />
-      <Tabs variant="secondary" defaultSelectedKey={initialTab}>
+      <Tabs variant="secondary" selectedKey={activeTab} onSelectionChange={k => selectTab(String(k))}>
         <Tabs.ListContainer>
           <Tabs.List aria-label="หมวดตั้งค่า" data-tour="settings-tabs">
             <Tabs.Tab id="rate">อัตราค่าตอบแทน<Tabs.Indicator /></Tabs.Tab>
@@ -115,7 +125,7 @@ function todayLocal(): string {
 }
 
 function PayRateSection() {
-  const { data } = useSWR<Rate>("/settings/pay-rate");
+  const { data, error: rateError } = useSWR<Rate>("/settings/pay-rate");
   // Versions saved ahead of time. The backend only starts using one on its own
   // date, so they are listed apart from "in force now" rather than shown as it.
   const { data: scheduled } = useSWR<Rate[]>("/settings/pay-rate/scheduled");
@@ -202,7 +212,7 @@ function PayRateSection() {
       setEditing(false);
       setConfirming(false);
       toast.success("บันทึกเวอร์ชันใหม่เรียบร้อยแล้ว", {
-        description: `เริ่มใช้ ${draft.effective_from}`,
+        description: `เริ่มใช้ ${formatThaiDate(draft.effective_from)}`,
       });
     } catch (e) {
       toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
@@ -218,7 +228,7 @@ function PayRateSection() {
       await api.del(`/settings/pay-rate/${withdrawTarget.id}`);
       await mutate("/settings/pay-rate/scheduled");
       toast.success("ยกเลิกอัตราที่ตั้งล่วงหน้าแล้ว", {
-        description: `เวอร์ชันที่จะเริ่มใช้ ${withdrawTarget.effective_from}`,
+        description: `เวอร์ชันที่จะเริ่มใช้ ${formatThaiDate(withdrawTarget.effective_from)}`,
       });
       setWithdrawTarget(null);
     } catch (e) {
@@ -263,7 +273,7 @@ function PayRateSection() {
           <ul className="mt-3 space-y-2">
             {scheduled!.map(r => (
               <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                <span className="font-medium">เริ่มใช้ {r.effective_from}</span>
+                <span className="font-medium">เริ่มใช้ {formatThaiDate(r.effective_from)}</span>
                 <span className="text-muted">
                   ตรี {r.undergrad_regular}/{r.undergrad_special} · บัณฑิต {r.graduate_regular_hourly} บาท/ชม.
                   · เหมาจ่าย {r.graduate_special_lumpsum.toLocaleString()} บาท/เดือน
@@ -281,7 +291,9 @@ function PayRateSection() {
 
       {/* Current values — read-only */}
       {!editing && (
-        data ? (
+        !data && !rateError ? (
+          <PayRateSkeleton />
+        ) : data ? (
           <div className="space-y-5">
             <ViewGroup title="อัตราค่าจ้าง ปริญญาตรี" hint="อ้างอิงประกาศ 731/2565 + 1080/2565">
               <ViewRow label="ภาคปกติ" value={`${data.undergrad_regular} บาท/ชั่วโมง`} />
@@ -303,7 +315,7 @@ function PayRateSection() {
               <ViewRow label="ไม่เกิน 1 TA ต่อ นศ." value={`${data.plan_min_students_per_ta ?? 15} คน`} />
               <ViewRow label="เพดานจำนวน TA ตามเกณฑ์" value={(data.plan_suggested_ta_cap ?? 3) > 0 ? `${data.plan_suggested_ta_cap ?? 3} คน` : "ไม่จำกัด"} />
             </ViewGroup>
-            <ViewGroup title="ข้อกำหนดทั่วไป" hint={`ใช้ตั้งแต่ ${data.effective_from}`}>
+            <ViewGroup title="ข้อกำหนดทั่วไป" hint={`ใช้ตั้งแต่ ${formatThaiDate(data.effective_from)}`}>
               <ViewRow label="จำนวนวิชา TA สูงสุด/คน" value={`${data.max_courses_per_student ?? 3} วิชา`} />
             </ViewGroup>
             <ViewGroup title="สูตรคำนวณโหลด TA ปริญญาตรี">
@@ -400,7 +412,7 @@ function PayRateSection() {
               status="accent"
               icon={<CalendarDays size={16} />}
               title="ตั้งอัตราล่วงหน้า"
-              description={`เวอร์ชันนี้จะเริ่มมีผลวันที่ ${draft.effective_from} — ก่อนถึงวันนั้นระบบยังคำนวณด้วยอัตราปัจจุบัน`}
+              description={`เวอร์ชันนี้จะเริ่มมีผลวันที่ ${formatThaiDate(draft.effective_from)} — ก่อนถึงวันนั้นระบบยังคำนวณด้วยอัตราปัจจุบัน`}
             />
           )}
           {effectiveFromPast && (
@@ -441,7 +453,7 @@ function PayRateSection() {
         onConfirm={doSave}
         saving={saving}
         title="ยืนยันสร้างเวอร์ชันใหม่?"
-        description={`ระบบจะสร้างอัตราค่าตอบแทนเวอร์ชันใหม่ เริ่มใช้ ${draft.effective_from} เวอร์ชันเก่ายังเก็บไว้เป็นประวัติ`}
+        description={`ระบบจะสร้างอัตราค่าตอบแทนเวอร์ชันใหม่ เริ่มใช้ ${formatThaiDate(draft.effective_from)} เวอร์ชันเก่ายังเก็บไว้เป็นประวัติ`}
       />
 
       <ConfirmSaveModal
@@ -453,7 +465,7 @@ function PayRateSection() {
         confirmLabel="ยกเลิกเวอร์ชันนี้"
         confirmIcon={<Trash2 size={14} />}
         title="ยกเลิกอัตราที่ตั้งล่วงหน้า?"
-        description={`เวอร์ชันที่จะเริ่มใช้ ${withdrawTarget?.effective_from ?? ""} ยังไม่เคยถูกใช้คำนวณ ยกเลิกได้โดยไม่กระทบยอดใด ๆ (บันทึกไว้ในประวัติการใช้งาน)`}
+        description={`เวอร์ชันที่จะเริ่มใช้ ${withdrawTarget ? formatThaiDate(withdrawTarget.effective_from) : ""} ยังไม่เคยถูกใช้คำนวณ ยกเลิกได้โดยไม่กระทบยอดใด ๆ (บันทึกไว้ในประวัติการใช้งาน)`}
       />
 
       <FormulaHelpModal
@@ -613,7 +625,9 @@ function TermsSection() {
   // Null = load everything (no filter).
   const [yearFromLimit, setYearFromLimit] = useState<number | null>(CURRENT_BE - YEAR_PAGE_SIZE + 1);
   const swrKey = yearFromLimit !== null ? `/terms?year_from=${yearFromLimit}` : "/terms";
-  const { data } = useSWR<Term[]>(swrKey);
+  // keepPreviousData: widening the year range is the same list growing, so the
+  // loaded years stay on screen instead of flashing the empty state.
+  const { data } = useSWR<Term[]>(swrKey, { keepPreviousData: true });
   // Cheap separate count so the "X จาก Y ปี" label is honest even before we
   // have loaded every year's rows.
   const { data: yearsCount } = useSWR<{ count: number }>("/terms/years/count");
@@ -732,7 +746,15 @@ function TermsSection() {
         </Button>
       }
     >
-      {grouped.length === 0 ? (
+      {data === undefined && grouped.length === 0 ? (
+        <div className="space-y-3">
+          <div className="flex items-end gap-3">
+            <Skel className="h-10 w-full max-w-xs rounded-xl" />
+            <SkelValue className="ms-auto h-3 w-20" />
+          </div>
+          <SkelList items={3} icon={false} bordered />
+        </div>
+      ) : grouped.length === 0 ? (
         <div className="text-sm text-muted py-4">ยังไม่มีปีการศึกษา กด "เพิ่มปีการศึกษา" เพื่อเริ่ม</div>
       ) : (
         <div className="space-y-3">
@@ -1447,7 +1469,18 @@ function TermDeleteModal({
         </div>
 
         {loadingUsage ? (
-          <div className="text-sm text-muted">กำลังตรวจข้อมูลอ้างอิง…</div>
+          <div className="rounded-lg border border-border p-3" role="status" aria-busy="true">
+            <span className="sr-only">กำลังตรวจข้อมูลอ้างอิง…</span>
+            <Skel className="h-3 w-16 mb-3" />
+            <div className="space-y-2">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className="flex justify-between gap-4">
+                  <Skel className="h-3.5 w-40" />
+                  <Skel className="h-3.5 w-6" />
+                </div>
+              ))}
+            </div>
+          </div>
         ) : usage ? (
           <>
             <div className="rounded-lg border border-border p-3">
@@ -1549,6 +1582,31 @@ function ViewGroup({
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
         {children}
       </dl>
+    </div>
+  );
+}
+
+// Same boxes as the read-only rate view (row counts per ViewGroup, then the
+// formula button), so the values land in place instead of the "ยังไม่มีอัตรา…"
+// empty line flashing first.
+function PayRateSkeleton() {
+  return (
+    <div className="space-y-5" role="status" aria-busy="true">
+      <span className="sr-only">กำลังโหลด</span>
+      {[4, 4, 1, 3, 1, 5].map((n, g) => (
+        <div key={g} className="rounded-lg border border-border border-l-4 bg-default/40 p-4">
+          <Skel className="h-4 w-44 mb-3" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+            {Array.from({ length: n }, (_, i) => (
+              <div key={i} className="flex items-center justify-between py-1.5">
+                <Skel className="h-3.5 w-32" />
+                <Skel className="h-3.5 w-20" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <Skel className="h-[74px] w-full rounded-lg" />
     </div>
   );
 }
@@ -1678,7 +1736,7 @@ function RequestWindowsSection() {
   // disagreement the shared switcher was introduced to remove.
   const { terms, termId } = useTerm();
   const swrKey = useTermKey("/ta-request/windows");
-  const { data: windows } = useSWR<RequestWindow[]>(swrKey);
+  const { data: windows } = useSWR<RequestWindow[]>(swrKey, { keepPreviousData: true });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<RequestWindow | null>(null);
@@ -1755,7 +1813,7 @@ function RequestWindowsSection() {
           description="ต้องสร้างภาคเรียนที่แท็บ 'ภาคเรียน' ก่อน จึงจะกำหนดช่วงเวลารับสมัครได้"
         />
       ) : !windows ? (
-        <div className="py-6 text-sm text-muted">กำลังโหลด…</div>
+        <SkelList items={2} icon={false} bordered />
       ) : list.length === 0 ? (
         <div className="py-8 flex flex-col items-center gap-3 text-center border border-dashed border-hairline rounded-lg">
           <CalendarDays size={28} className="text-muted" />
@@ -1867,10 +1925,25 @@ function RequestWindowsSection() {
 // would leave someone out: courses nobody is attached to (usually a registrar
 // name that did not match an account) and lecturers still without a course.
 function WindowReadinessPanel({ termId }: { termId: string }) {
-  const { data } = useSWR<WindowReadiness>(`/ta-request/windows/readiness?term_id=${termId}`);
+  const { data, error } = useSWR<WindowReadiness>(`/ta-request/windows/readiness?term_id=${termId}`);
   const [showCourses, setShowCourses] = useState(false);
   const [showLecturers, setShowLecturers] = useState(false);
-  if (!data) return null;
+  if (error) return null;
+  // The panel always shows once loaded, so hold its box (title + chip row)
+  // while it loads instead of letting the window list below jump down.
+  if (!data) {
+    return (
+      <div className="mb-3 rounded-lg border border-hairline bg-panel px-4 py-3 space-y-2">
+        <div className="text-sm font-medium flex items-center gap-1.5">
+          <Mail size={14} /> ความพร้อมก่อนแจ้งอาจารย์
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Skel className="h-6 w-56 rounded-full" />
+          <Skel className="h-6 w-44 rounded-full" />
+        </div>
+      </div>
+    );
+  }
 
   const missingCourses = data.courses_without_lecturer;
   const idle = data.lecturers_without_course;
@@ -2226,7 +2299,13 @@ function MailSettingsSection() {
       }
     >
       {!data ? (
-        <div className="py-6 text-sm text-muted">กำลังโหลด…</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkelForm fields={3} />
+          <div>
+            <div className="text-sm font-medium mb-2">ตัวอย่างอีเมล</div>
+            <Skel className="w-full rounded-lg" style={{ height: 760 }} />
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
@@ -2259,6 +2338,10 @@ function MailSettingsSection() {
             <div className="text-sm font-medium mb-2">ตัวอย่างอีเมล</div>
             {previewErr ? (
               <Alert status="warning" title="แสดงตัวอย่างไม่ได้" description={previewErr} />
+            ) : !preview ? (
+              // First render lands 400ms after the form (debounced) — hold the
+              // frame's space rather than show a blank white box.
+              <Skel className="w-full rounded-lg" style={{ height: 760 }} />
             ) : (
               <iframe
                 title="ตัวอย่างอีเมล"
@@ -2344,8 +2427,8 @@ function CurriculaSection() {
         "และปะหน้าจ่ายตรง — แก้ตรงนี้เมื่อคณะเปลี่ยนชื่อหลักสูตร (เช่น IT → ITII) โดยไม่ต้องแก้โค้ด"
       }
     >
-      {rows.length === 0 ? (
-        <div className="text-sm text-muted py-4">กำลังโหลด…</div>
+      {data && rows.length === 0 ? (
+        <div className="text-sm text-muted py-4">ยังไม่มีหลักสูตรในระบบ</div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="data-table w-full">
@@ -2359,6 +2442,16 @@ function CurriculaSection() {
               </tr>
             </thead>
             <tbody>
+              {/* Header stays put; only the rows wait for /curricula. */}
+              {!data && Array.from({ length: 4 }, (_, i) => (
+                <tr key={`skel-${i}`} aria-hidden>
+                  <td><Skel className="h-3.5 w-10" /></td>
+                  <td><Skel className="h-3.5 w-16" /></td>
+                  <td><Skel className="h-3.5 w-64 max-w-full" /></td>
+                  <td><Skel className="h-6 w-20 rounded-full" /></td>
+                  <td className="actions"><Skel className="ms-auto h-7 w-16 rounded-lg" /></td>
+                </tr>
+              ))}
               {rows.map(cur => (
                 <tr key={cur.code}>
                   <td className="tabular text-muted">{cur.code}</td>
@@ -2503,7 +2596,7 @@ function AdminOfficersSection() {
       title="ตำแหน่งฝ่ายบริหาร"
       description="ตำแหน่งเป็นรายการคงที่ (คณบดี / รองคณบดี / หัวหน้าสาขา ฯลฯ) — มอบหมายอาจารย์เข้าดำรงตำแหน่งได้ที่นี่ ผู้ดำรงตำแหน่งที่เปิดใช้งานอยู่จะเห็นแดชบอร์ดผู้บริหารโดยอัตโนมัติ"
     >
-      {rows.length === 0 ? (
+      {data && rows.length === 0 ? (
         <div className="text-sm text-muted py-4">ยังไม่มีข้อมูลตำแหน่งฝ่ายบริหารในระบบ</div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -2517,6 +2610,14 @@ function AdminOfficersSection() {
               </tr>
             </thead>
             <tbody>
+              {!data && Array.from({ length: 4 }, (_, i) => (
+                <tr key={`skel-${i}`} aria-hidden>
+                  <td><Skel className="h-3.5 w-32" /></td>
+                  <td><Skel className="h-3.5 w-44" /></td>
+                  <td><Skel className="h-6 w-20 rounded-full" /></td>
+                  <td className="actions"><Skel className="ms-auto h-7 w-24 rounded-lg" /></td>
+                </tr>
+              ))}
               {rows.map(o => (
                 <tr key={o.id} className={!o.is_active ? "opacity-60" : ""}>
                   <td className="font-medium">{o.title}</td>
@@ -2835,7 +2936,7 @@ function DemoTestersSection() {
         </Button>
       }
     >
-      {rows.length === 0 ? (
+      {(data || error) && rows.length === 0 ? (
         <div className="text-sm text-muted py-4">
           ยังไม่มีใครมีสิทธิ์เข้าห้องทดลอง กด "เพิ่มผู้มีสิทธิ์" เพื่อเริ่ม
         </div>
@@ -2852,6 +2953,15 @@ function DemoTestersSection() {
               </tr>
             </thead>
             <tbody>
+              {!data && !error && Array.from({ length: 3 }, (_, i) => (
+                <tr key={`skel-${i}`} aria-hidden>
+                  <td><Skel className="h-3.5 w-48" /></td>
+                  <td><Skel className="h-6 w-28 rounded-full" /></td>
+                  <td><Skel className="h-3.5 w-24" /></td>
+                  <td><Skel className="h-3.5 w-24" /></td>
+                  <td className="actions"><Skel className="ms-auto h-7 w-20 rounded-lg" /></td>
+                </tr>
+              ))}
               {rows.map(t => (
                 <tr key={t.email}>
                   <td className="font-medium">{t.email}</td>
@@ -3012,9 +3122,10 @@ interface SubmissionPeriod {
 
 function SubmissionPeriodsSection() {
   // Follows the shell's term switcher, like every other term-scoped staff view.
-  const { term, termId } = useTerm();
+  const { term, termId, loaded: termsLoaded } = useTerm();
   const { data: periods, mutate: refresh } = useSWR<SubmissionPeriod[]>(
     useTermKey("/submission-periods"),
+    { keepPreviousData: true },
   );
 
   const [creating, setCreating] = useState(false);
@@ -3080,10 +3191,10 @@ function SubmissionPeriodsSection() {
         </>
       }
     >
-      {!termId ? (
+      {termsLoaded && !termId ? (
         <div className="text-sm text-muted py-4">ยังไม่มีภาคเรียนในระบบ สร้างที่แท็บ "ภาคเรียน" ก่อน</div>
       ) : !periods ? (
-        <div className="text-sm text-muted py-4">กำลังโหลด…</div>
+        <SkelRows rows={5} columns={6} />
       ) : periods.length === 0 ? (
         <div className="text-sm text-muted py-4">ยังไม่มีรอบเบิกจ่าย กด "สร้างอัตโนมัติ 5 เดือน" เพื่อเริ่ม</div>
       ) : (
@@ -3105,7 +3216,7 @@ function SubmissionPeriodsSection() {
                   <td className="px-3 py-2">{p.label}</td>
                   <td className="px-3 py-2 tabular">{p.year_month}</td>
                   <td className="px-3 py-2 tabular whitespace-nowrap">
-                    {p.starts_on} → {p.due_date}
+                    {formatThaiDate(p.starts_on)} → {formatThaiDate(p.due_date)}
                   </td>
                   <td className="px-3 py-2 tabular">{p.remind_days_before}</td>
                   <td className="px-3 py-2">

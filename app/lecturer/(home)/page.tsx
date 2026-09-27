@@ -15,6 +15,7 @@ import {
   type SelectOption, type ChipTone,
 } from "../../components/ui";
 import { CourseCode } from "../../lib/courseCode";
+import { Skel, SkelCards } from "../../components/Skeletons";
 
 interface TC {
   id: string; code: string; alt_codes?: string[]; name_th: string;
@@ -147,10 +148,15 @@ export default function LecturerHome() {
   }, [defaultYear, defaultTerm, terms]);
 
   const coursesKey = defaultTerm ? `/teaching-courses?term_id=${defaultTerm}` : null;
-  const { data: courses, error: coursesError } = useSWR<TC[]>(coursesKey);
+  // keepPreviousData: switching term/year keeps the previous term's cards in
+  // place until the new list lands, instead of collapsing to a skeleton and
+  // back. Same page, same lecturer — only the filter moved.
+  const { data: courses, error: coursesError, isLoading: coursesLoading } =
+    useSWR<TC[]>(coursesKey, { keepPreviousData: true });
 
   const overviewKey = defaultTerm ? `/dashboard/lecturer/me?term_id=${defaultTerm}` : null;
-  const { data: overview } = useSWR<LecturerCourseStatus[]>(overviewKey);
+  const { data: overview, isLoading: overviewLoading } =
+    useSWR<LecturerCourseStatus[]>(overviewKey, { keepPreviousData: true });
   const overviewById = useMemo(() => {
     const m = new Map<string, LecturerCourseStatus>();
     (overview ?? []).forEach(o => m.set(o.teaching_course_id, o));
@@ -200,7 +206,13 @@ export default function LecturerHome() {
   // Splitting by TA needs the overview. Until it lands every course would look
   // like "ยังไม่มี TA" — a wrong claim that then rearranges itself under the
   // reader. One undivided list is the honest intermediate state.
-  const canSplit = overview !== undefined;
+  //
+  // `isLoading` is per key, so on a term switch it is true while the previous
+  // term's data is still shown. The overview only counts as pending when it is
+  // behind the course list — two stale-but-matching lists are still consistent.
+  const ovPending = overview === undefined || (overviewLoading && !coursesLoading);
+  const requestsPending = requests === undefined;
+  const canSplit = !ovPending;
   const withTA = (courses ?? []).filter(c => (overviewById.get(c.id)?.ta_count ?? 0) > 0);
   const withoutTA = (courses ?? []).filter(c => (overviewById.get(c.id)?.ta_count ?? 0) === 0);
 
@@ -229,17 +241,9 @@ export default function LecturerHome() {
     );
   }
 
-  // Terms still loading — skeleton, not an empty state.
-  if (!termsLoaded) {
-    return (
-      <div>
-        <PageHeader title="หน้าหลักของฉัน" description={pageDesc} />
-        <Panel padded={false}>
-          <CardGridSkeleton />
-        </Panel>
-      </div>
-    );
-  }
+  // Terms still loading: no early return. The header, the (disabled) term
+  // pickers and the announcements render straight away; only the course grid
+  // waits, as a skeleton — not the empty states below, which need `terms`.
 
   return (
     <div>
@@ -254,6 +258,7 @@ export default function LecturerHome() {
                 value={defaultYear}
                 onChange={setYear}
                 options={yearOptions}
+                isDisabled={!termsLoaded}
                 className="min-w-[180px]"
               />
               <SelectField
@@ -261,7 +266,7 @@ export default function LecturerHome() {
                 value={defaultTerm}
                 onChange={setTerm}
                 options={termOptions}
-                isDisabled={yearTerms.length === 0}
+                isDisabled={!termsLoaded || yearTerms.length === 0}
                 className="min-w-[180px]"
               />
             </div>
@@ -277,7 +282,7 @@ export default function LecturerHome() {
             description="กรุณาแจ้งเจ้าหน้าที่เพื่อสร้างปีการศึกษาและภาคเรียนก่อน จึงจะแสดงรายวิชาที่คุณรับผิดชอบได้"
           />
         </Panel>
-      ) : yearTerms.length === 0 ? (
+      ) : termsLoaded && yearTerms.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<CalendarClock size={28} />}
@@ -352,6 +357,8 @@ export default function LecturerHome() {
                     courses={courses}
                     overviewById={overviewById}
                     requestByCourse={requestByCourse}
+                    ovPending={ovPending}
+                    requestsPending={requestsPending}
                   />
                 </CollapsibleSection>
               ) : (
@@ -367,6 +374,8 @@ export default function LecturerHome() {
                         courses={withTA}
                         overviewById={overviewById}
                         requestByCourse={requestByCourse}
+                        ovPending={ovPending}
+                        requestsPending={requestsPending}
                       />
                     </CollapsibleSection>
                   )}
@@ -382,6 +391,8 @@ export default function LecturerHome() {
                         courses={withoutTA}
                         overviewById={overviewById}
                         requestByCourse={requestByCourse}
+                        ovPending={ovPending}
+                        requestsPending={requestsPending}
                       />
                     </CollapsibleSection>
                   )}
@@ -518,23 +529,9 @@ function CollapsibleSection({
   );
 }
 
+/** Same grid classes as CourseGrid so the cards land where the placeholders were. */
 function CardGridSkeleton() {
-  return (
-    <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-      {[0, 1, 2].map(i => (
-        <div key={i} className="rounded-xl border border-[var(--hairline)] p-4">
-          <div className="flex items-start gap-3">
-            <div className="size-9 shrink-0 animate-pulse rounded-lg bg-surface-secondary" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-1/2 animate-pulse rounded bg-surface-secondary" />
-              <div className="h-3 w-3/4 animate-pulse rounded bg-surface-secondary" />
-            </div>
-          </div>
-          <div className="mt-4 h-3 w-2/3 animate-pulse rounded bg-surface-secondary" />
-        </div>
-      ))}
-    </div>
-  );
+  return <SkelCards count={3} className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3" />;
 }
 
 /**
@@ -649,9 +646,11 @@ function CourseLinks({ items }: { items: { id: string; href: string; label: stri
 /* -------------------------------------------------------------------------- */
 
 function CourseGrid({
-  courses, overviewById, requestByCourse,
+  courses, overviewById, requestByCourse, ovPending = false, requestsPending = false,
 }: {
   courses: TC[];
+  ovPending?: boolean;
+  requestsPending?: boolean;
   overviewById: Map<string, LecturerCourseStatus>;
   requestByCourse: Map<string, TARequestRow>;
 }) {
@@ -667,6 +666,8 @@ function CourseGrid({
             course={c}
             ov={overviewById.get(c.id)}
             request={requestByCourse.get(c.id)}
+            ovPending={ovPending}
+            requestsPending={requestsPending}
           />
         ))}
       </div>
@@ -689,9 +690,13 @@ function requestBadge(r?: TARequestRow): { label: string; tone: ChipTone } {
 
 /** One course, with its independent facts given room to breathe. */
 function CourseCard({
-  course: c, ov, request,
+  course: c, ov, request, ovPending = false, requestsPending = false,
 }: {
   course: TC;
+  // While the overview / request list is in flight the card must not claim
+  // "ยังไม่มี TA" or "ยังไม่ส่งคำขอ" — those lines show placeholders instead.
+  ovPending?: boolean;
+  requestsPending?: boolean;
   ov?: LecturerCourseStatus;
   request?: TARequestRow;
 }) {
@@ -744,7 +749,9 @@ function CourseCard({
       {/* The TA line is the one this page is grouped by, so it gets its own row
           rather than being appended to the student counts. */}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        {hasTA ? (
+        {ovPending ? (
+          <Skel className="h-3.5 w-40" />
+        ) : hasTA ? (
           <>
             <span className="inline-flex items-center gap-1 font-medium text-foreground">
               <Users size={12} /> TA {ov!.ta_count} คน
@@ -770,7 +777,15 @@ function CourseCard({
           own budget page, and a percentage is what tells the lecturer whether
           there is room left for more hours. */}
       <div className="mt-3">
-        {hasBudget ? (
+        {ovPending ? (
+          <>
+            <div className="mb-1 flex items-center justify-between">
+              <Skel className="h-3 w-24" />
+              <Skel className="h-3 w-8" />
+            </div>
+            <Skel className="h-1.5 w-full rounded-full" />
+          </>
+        ) : hasBudget ? (
           <>
             <div className="mb-1 flex items-center justify-between text-[11px]">
               <span className="inline-flex items-center gap-1 text-muted">
@@ -824,7 +839,9 @@ function CourseCard({
             </span>
           </Chip>
         )}
-        {hasTA ? (
+        {ovPending || (!hasTA && requestsPending) ? (
+          <Skel className="h-6 w-28 rounded-full" />
+        ) : hasTA ? (
           pendingPeople > 0 ? (
             <Chip tone="warn">
               <span className="inline-flex items-center gap-1">

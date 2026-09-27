@@ -14,6 +14,7 @@ import { api, errMessage } from "../../lib/api";
 import ShareButtons from "../../components/ShareButtons";
 import type { Attachment } from "../../components/AttachmentGallery";
 import RichText from "../../components/RichText";
+import { Skel } from "../../components/Skeletons";
 import {
   PageHeader, Panel, Button, TextInput, TextArea, FieldGroup,
   Chip, EmptyState, Modal, Alert, TabLabel,
@@ -401,7 +402,7 @@ export default function AnnouncePage() {
               <Tabs.Indicator />
             </Tabs.Tab>
             <Tabs.Tab id="manage">
-              <TabLabel icon={<Megaphone size={14} />} count={counts.all} active={tab === "manage"}>
+              <TabLabel icon={<Megaphone size={14} />} count={list ? counts.all : undefined} active={tab === "manage"}>
                 จัดการประกาศ
               </TabLabel>
               <Tabs.Indicator />
@@ -450,11 +451,11 @@ export default function AnnouncePage() {
         <Tabs.Panel id="manage">
           <div className="mt-4">
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <FilterChip active={statusFilter === "all"}    onClick={() => setStatusFilter("all")}>ทั้งหมด ({counts.all})</FilterChip>
-              <FilterChip active={statusFilter === "live"}   onClick={() => setStatusFilter("live")}>เผยแพร่แล้ว ({counts.live})</FilterChip>
-              <FilterChip active={statusFilter === "scheduled"} onClick={() => setStatusFilter("scheduled")}>รอเผยแพร่ ({counts.scheduled})</FilterChip>
-              <FilterChip active={statusFilter === "draft"}  onClick={() => setStatusFilter("draft")}>ฉบับร่าง ({counts.draft})</FilterChip>
-              <FilterChip active={statusFilter === "expired"} onClick={() => setStatusFilter("expired")}>หมดอายุ ({counts.expired})</FilterChip>
+              <FilterChip active={statusFilter === "all"}    onClick={() => setStatusFilter("all")}>ทั้งหมด {list ? ` (${counts.all})` : ""}</FilterChip>
+              <FilterChip active={statusFilter === "live"}   onClick={() => setStatusFilter("live")}>เผยแพร่แล้ว {list ? ` (${counts.live})` : ""}</FilterChip>
+              <FilterChip active={statusFilter === "scheduled"} onClick={() => setStatusFilter("scheduled")}>รอเผยแพร่ {list ? ` (${counts.scheduled})` : ""}</FilterChip>
+              <FilterChip active={statusFilter === "draft"}  onClick={() => setStatusFilter("draft")}>ฉบับร่าง {list ? ` (${counts.draft})` : ""}</FilterChip>
+              <FilterChip active={statusFilter === "expired"} onClick={() => setStatusFilter("expired")}>หมดอายุ {list ? ` (${counts.expired})` : ""}</FilterChip>
               <div className="flex-1" />
               <Button variant="secondary" size="sm" onPress={guardedNew}>
                 <Plus size={14} /> ประกาศใหม่
@@ -462,7 +463,22 @@ export default function AnnouncePage() {
             </div>
 
             <Panel padded={false}>
-              {filtered.length === 0 ? (
+              {!list ? (
+                // Same row shape as ManageRow (cover thumb + title/meta lines).
+                <div role="status" aria-busy="true" className="divide-y divide-[var(--hairline)]">
+                  <span className="sr-only">กำลังโหลด</span>
+                  {[0, 1, 2, 3].map(i => (
+                    <div key={i} className="px-4 py-3 flex items-start gap-3">
+                      <Skel className="w-20 h-14 shrink-0 rounded-lg" />
+                      <div className="flex-1 min-w-0 flex flex-col gap-2 pt-0.5">
+                        <Skel className="h-4 w-1/2" />
+                        <Skel className="h-3 w-3/4" />
+                        <Skel className="h-3 w-1/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filtered.length === 0 ? (
                 <EmptyState
                   icon={<Megaphone size={28} />}
                   title="ยังไม่มีประกาศในกลุ่มนี้"
@@ -1198,7 +1214,7 @@ interface AudiencePreview {
 /** The count is the point of the whole targeting UI: confirm, don't trust. */
 function AudienceSummary({ preview, loading }: { preview: AudiencePreview | null; loading: boolean }) {
   if (!preview) {
-    return <div className="h-14 animate-pulse rounded-lg border border-border bg-surface-secondary" />;
+    return <Skel className="h-14 w-full rounded-lg" />;
   }
   const tone = preview.total === 0
     ? "border-amber-300 bg-amber-50/70"

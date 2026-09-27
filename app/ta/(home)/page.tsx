@@ -12,9 +12,10 @@ import type { Term } from "../../lib/api";
 import AnnouncementFeed from "../../components/AnnouncementFeed";
 import OnboardingChecklistCard from "../OnboardingChecklistCard";
 import {
-  PageHeader, Panel, EmptyState, Chip, SelectField, Spinner, Button,
+  PageHeader, Panel, EmptyState, Chip, SelectField, Button,
   Alert, type SelectOption, type ChipTone,
 } from "../../components/ui";
+import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
 import { CourseCode } from "../../lib/courseCode";
 type SubmissionStage =
   | "pending"
@@ -91,6 +92,10 @@ function submissionBadge(r: SubmissionRow, today: string): { label: string; tone
     // "ยังไม่ได้ส่งอนุมัติ" badge here would ask for an action that no longer
     // exists.
     if (periodPastDue(r, today)) {
+      // Rows sent before the deadline are still the lecturer's to approve
+      // after it passes; saying "รอเจ้าหน้าที่ส่งออก" told the TA the month
+      // had reached staff when it had not.
+      if (r.worklog_waiting_lecturer > 0) return { label: "รออาจารย์อนุมัติงาน", tone: "info" };
       return r.worklog_waiting_ta > 0
         ? { label: "หมดเวลาส่ง", tone: "neutral" }
         : { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
@@ -118,6 +123,8 @@ interface TAStatus {
   hours_pending_regular: number;
   hours_pending_special: number;
   estimated_baht: number;
+  /** Graduate-special flat amount for this course; 0 when not applicable. */
+  lumpsum_baht?: number;
   estimated_baht_regular: number;
   estimated_baht_special: number;
 }
@@ -340,7 +347,7 @@ export default function TAHome() {
             description="กรุณาแจ้งเจ้าหน้าที่เพื่อสร้างปีการศึกษาและภาคเรียนก่อน"
           />
         </Panel>
-      ) : yearTerms.length === 0 ? (
+      ) : termsLoaded && yearTerms.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<CalendarClock size={28} />}
@@ -376,9 +383,9 @@ export default function TAHome() {
                 }
               />
             ) : coursesLoading || courses === undefined ? (
-              <div className="flex items-center justify-center gap-3 py-12 text-sm text-muted">
-                <Spinner size="sm" /> กำลังโหลดรายวิชา…
-              </div>
+              <SkelRegion label="กำลังโหลดรายวิชา" className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 3 }, (_, i) => <CourseCardSkeleton key={i} />)}
+              </SkelRegion>
             ) : !courses || courses.length === 0 ? (
               <EmptyState
                 icon={<BookOpen size={28} />}
@@ -396,6 +403,11 @@ export default function TAHome() {
                     course={c}
                     status={statusById.get(c.id)}
                     submission={currentByCourse.get(c.id)}
+                    // Status and submissions are separate requests from the
+                    // course list; until each lands its line shows a
+                    // placeholder instead of "no status" / "ยังไม่เปิดรอบเบิกจ่าย".
+                    statusLoading={status === undefined}
+                    submissionLoading={submissions === undefined}
                     today={today}
                   />
                 ))}
@@ -476,7 +488,9 @@ function AlertsSection({
   // "ยังส่งเอกสารไม่ครบ" with a "ไปส่งเอกสาร" link — so a TA who had sent all
   // three files was told to go send them, every visit, until an officer got
   // round to reviewing. Count what the TA controls: files not yet sent.
-  const notSent = REQUIRED_DOC_COUNT - (docs ?? []).filter(
+  // docs still loading → 0, not 3: otherwise every visit flashes "ขาดอีก 3
+  // รายการ" until /me/documents answers.
+  const notSent = docs === undefined ? 0 : REQUIRED_DOC_COUNT - docs.filter(
     d => d.status !== "rejected" && d.status !== "needs_fix").length;
 
   // Only months whose window has opened can be acted on.
@@ -616,11 +630,13 @@ function AlertsSection({
 
 /** One course, with its independent facts given room to breathe. */
 function CourseCard({
-  course, status, submission, today,
+  course, status, submission, statusLoading, submissionLoading, today,
 }: {
   course: TC;
   status?: TAStatus;
   submission?: SubmissionRow;
+  statusLoading?: boolean;
+  submissionLoading?: boolean;
   today: string;
 }) {
   const badge = submission ? submissionBadge(submission, today) : null;
@@ -648,6 +664,7 @@ function CourseCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         <span>นักศึกษา {course.num_students} คน</span>
+        {statusLoading && <SkelValue className="h-3 w-24" />}
         {status && (
           <>
             <span>· อนุมัติ {hoursSplitText(status.hours_approved_regular, status.hours_approved_special)}</span>
@@ -658,9 +675,21 @@ function CourseCard({
         )}
       </div>
 
+      {statusLoading && (
+        <div className="mt-2 flex h-5 items-center"><SkelValue className="h-4 w-20" /></div>
+      )}
       {status && (
         <div className="mt-2 text-sm font-medium text-success">
+          {/* An ESTIMATE from approved hours × rate. The real payout can be
+              lower (the course budget is shared out when it runs short), so
+              the figure must never read as the amount that will be paid. */}
+          <span className="mr-1 text-xs font-normal text-muted">ประมาณการ</span>
           ฿{status.estimated_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          {(status.lumpsum_baht ?? 0) > 0 && (
+            <span className="ml-1.5 text-xs font-normal text-muted">
+              + เหมาจ่ายภาคพิเศษ ฿{(status.lumpsum_baht ?? 0).toLocaleString()}/ภาค
+            </span>
+          )}
           {status.estimated_baht_special > 0 && status.estimated_baht_regular > 0 && (
             <span className="ml-1.5 text-xs font-normal text-muted">
               {bahtSplitText(status.estimated_baht_regular, status.estimated_baht_special)}
@@ -670,7 +699,9 @@ function CourseCard({
       )}
 
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--hairline)] pt-3">
-        {badge ? <Chip tone={badge.tone}>{badge.label}</Chip> : <Chip tone="neutral">ยังไม่เปิดรอบเบิกจ่าย</Chip>}
+        {submissionLoading ? (
+          <SkelValue className="h-5 w-28 rounded-full" />
+        ) : badge ? <Chip tone={badge.tone}>{badge.label}</Chip> : <Chip tone="neutral">ยังไม่เปิดรอบเบิกจ่าย</Chip>}
         {submission && (
           <span className="min-w-0 truncate text-[11px] text-muted">
             {submission.is_closed ? "ปิดแล้ว" : `ครบกำหนด ${thDueDate(submission.due_date)}`}
@@ -678,5 +709,26 @@ function CourseCard({
         )}
       </div>
     </Link>
+  );
+}
+
+/** Same box model as CourseCard so the grid doesn't jump when courses land. */
+function CourseCardSkeleton() {
+  return (
+    <div className="flex min-w-0 flex-col rounded-xl border border-[var(--hairline)] bg-surface p-4">
+      <div className="flex items-start gap-3">
+        <Skel className="size-9 shrink-0 rounded-lg" />
+        <div className="min-w-0 flex-1 flex flex-col gap-1.5 pt-0.5">
+          <Skel className="h-4 w-24" />
+          <Skel className="h-3 w-3/4" />
+        </div>
+      </div>
+      <Skel className="mt-3 h-3 w-2/3" />
+      <Skel className="mt-2 h-4 w-20" />
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--hairline)] pt-3">
+        <Skel className="h-5 w-28 rounded-full" />
+        <Skel className="h-3 w-20" />
+      </div>
+    </div>
   );
 }

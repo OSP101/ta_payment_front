@@ -36,7 +36,7 @@ import TourLauncher from "./tours/TourLauncher";
 // Badges answer the question the numbered steps could not: the order of work
 // was readable, but nothing said whether any of it was waiting. A queue could
 // sit untouched for a week and the sidebar looked identical to a clear one.
-const buildNav = (s: Executive): NavSection[] => [
+const buildNav = (s: Executive, isAdmin: boolean): NavSection[] => [
   {
     title: "ภาพรวม",
     items: [{ label: "แดชบอร์ด", href: "/staff", icon: LayoutDashboard }],
@@ -46,7 +46,9 @@ const buildNav = (s: Executive): NavSection[] => [
     items: [
       { step: 1, label: "ตรวจคำร้องขอ TA", href: "/staff/approvals",
         badge: s.pending_ta_requests, badgeLabel: "คำร้องรอตรวจ" },
-      { step: 2, label: "ตรวจแบบฟอร์มใบแจ้งหนี้", href: "/staff/review",
+      // "แบบแจ้งเจ้าหนี้" — the KKU creditor-registration form. "ใบแจ้งหนี้" is
+      // an invoice, a different document; the page itself reviews TA documents.
+      { step: 2, label: "ตรวจเอกสาร TA", href: "/staff/review",
         badge: s.pending_reviews, badgeLabel: "แบบฟอร์มรอตรวจ" },
       // Steps 3 and 4 were merged on 31/07/2026. They were one errand split
       // across two menus: an officer who finished a review was left on a screen
@@ -100,12 +102,14 @@ const buildNav = (s: Executive): NavSection[] => [
       // วิชา/กลุ่มเรียน ไม่ใช่หน้าจัดการ (แก้ไข/อนุมัติ ยังทำในระบบ TDBM เอง)
       { label: "ข้อมูลจาก TDBM", href: "/staff/tdbm", icon: Database },
       { label: "ตั้งค่า", href: "/staff/settings", icon: Settings },
-      { label: "Audit Log", href: "/staff/audit", icon: ScrollText },
-      // Admin-only server-side (RequireRole(rbac.RoleAdmin)) — same convention
-      // as Audit Log above, shown to all staff/admin and left to the backend
-      // to 403 a non-admin who follows it, rather than hiding it here (this
-      // shell has no per-item role-visibility mechanism to begin with).
-      { label: "คำขอลบข้อมูล (PDPA)", href: "/staff/data-deletion-requests", icon: ShieldOff },
+      // Both are RequireRole(admin) server-side. Shown to staff they opened on
+      // a raw "forbidden" (Audit Log) — so they are listed for admins only.
+      ...(isAdmin
+        ? [
+            { label: "Audit Log", href: "/staff/audit", icon: ScrollText },
+            { label: "คำขอลบข้อมูล (PDPA)", href: "/staff/data-deletion-requests", icon: ShieldOff },
+          ]
+        : []),
     ],
   },
 ];
@@ -133,8 +137,13 @@ function StaffShellInner({ me, children }: { me: Me; children: React.ReactNode }
   // Badge counts follow the selected term, same as every page below — a badge
   // that counted the active term while the page showed 2568/2 would be worse
   // than no badge at all.
-  const { data } = useSWR<Executive>(termId ? `/dashboard/executive?term_id=${termId}` : null);
-  const nav = buildNav(data ?? emptyExecutive);
+  // keepPreviousData: on a term switch the old badges stay until the new
+  // counts land, instead of every badge vanishing and popping back in.
+  const { data } = useSWR<Executive>(
+    termId ? `/dashboard/executive?term_id=${termId}` : null,
+    { keepPreviousData: true },
+  );
+  const nav = buildNav(data ?? emptyExecutive, me.roles.includes("admin"));
   return (
     <Shell
       me={me}

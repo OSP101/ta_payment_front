@@ -144,18 +144,32 @@ export function search(pages: DocPage[], query: string, opts?: { currentSection?
   if (rawTokens.length === 0) return [];
   const tokens = expandQuery(rawTokens);
 
+  // Whole-phrase bonus. Token hits alone let a long page that mentions each
+  // word somewhere outrank the short page whose error message or keyword IS
+  // the phrase the reader typed (e.g. pasting "ยังไม่ได้ลงทะเบียน" from a
+  // login error). An exact phrase in a title, keyword or error string is the
+  // strongest signal the reader has found their page.
+  const phrase = query.trim().toLowerCase().replace(/\s+/g, " ");
+  const phraseIn = (xs: string[]) => phrase.length >= 2 && xs.some((x) => x.toLowerCase().includes(phrase));
+
   const results: SearchResult[] = [];
   for (const page of pages) {
     const fields = fieldsOf(page);
     let score = 0;
     const matchedIn = new Set<string>();
+    if (phraseIn([page.title])) { score += 40; matchedIn.add("หัวข้อ"); }
+    if (phraseIn(page.errors ?? [])) { score += 35; matchedIn.add("ข้อความในระบบ"); }
+    if (phraseIn(page.keywords)) { score += 25; matchedIn.add("คำสำคัญ"); }
     for (const field of fields) {
       if (field.tokens.length === 0) continue;
       for (const qt of tokens) {
         let hits = 0;
         for (const ft of field.tokens) {
           if (ft === qt) hits += 1;
-          else if (qt.length >= 2 && (ft.includes(qt) || qt.includes(ft))) hits += 0.5;
+          // Partial matches only between tokens of 3+ characters: Thai
+          // segments like "ลง" (from ลงทะเบียน) otherwise half-match every
+          // "ลงเวลา" on a long page and bury the page the reader wanted.
+          else if (qt.length >= 3 && ft.length >= 3 && (ft.includes(qt) || qt.includes(ft))) hits += 0.5;
         }
         if (hits > 0) {
           score += hits * field.weight;
