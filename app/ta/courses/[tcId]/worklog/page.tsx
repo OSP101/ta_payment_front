@@ -1186,10 +1186,18 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // "สร้างอัตโนมัติ" wipes and recreates the term, so the server refuses it
   // outright once anything has been submitted or approved (Generate). Same
   // predicate, so the button is not offered on a section it can never run for.
-  // Rejected rows in an open month count too (the server refuses them, see
-  // Generate); forfeited ones in a closed month do not — nothing can clear
-  // them, and Generate writes nothing into that month anyway.
-  const generateAllowed = monthsInReview.size === 0 && rejectedRows.length === 0;
+  // Generate no longer refuses over reviewed months: it KEEPS them (months with
+  // a submitted/approved row, or a bounced row still fixable) and regenerates
+  // only the rest — the server's own rule, mirrored here for the dialog.
+  const keptMonths = useMemo(() => {
+    const m = new Set(monthsInReview);
+    for (const r of rejectedRows) m.add(monthKey(r.work_date));
+    return [...m].filter(Boolean).sort();
+  }, [monthsInReview, rejectedRows]);
+  // Drafts the run will actually replace: not the ones parked in kept months.
+  const regenDraftCount = (logs ?? []).filter(
+    l => l.status === "draft" && !monthLockFor(l.work_date) && !keptMonths.includes(monthKey(l.work_date)),
+  ).length;
   const activeScope = activeAssignment?.reimburse_scope;
   const canGenerate = !!activeAssignment?.has_schedule;
 
@@ -1747,13 +1755,6 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               content={
                 !aid
                   ? undefined
-                  : !generateAllowed
-                  // Generate wipes and recreates the term; the server refuses
-                  // once anything is submitted or approved, so say that rather
-                  // than let the click fail.
-                  ? (monthsInReview.size === 0
-                      ? "มีรายการที่อาจารย์ส่งกลับให้แก้ไข กรุณาแก้ไขรายการเหล่านั้นแทนการสร้างใหม่ทั้งชุด"
-                      : "มีรายการที่ส่งอนุมัติหรืออนุมัติแล้ว จึงสร้างใหม่ทั้งชุดไม่ได้")
                   : !canGenerate
                   ? "อาจารย์ยังไม่ได้ตั้งตารางสอนของ section นี้ในระบบ จึงยังสร้างอัตโนมัติไม่ได้"
                   : undefined
@@ -1763,7 +1764,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 variant="secondary"
                 onClick={() => setConfirmGenerate(true)}
                 isPending={generating}
-                disabled={generating || !aid || !canGenerate || !generateAllowed || needStudentCount}
+                disabled={generating || !aid || !canGenerate || needStudentCount}
               >
                 <Wand2 size={14} /> สร้างอัตโนมัติ
               </LockedActionButton>
@@ -2171,17 +2172,28 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         onClose={() => setConfirmGenerate(false)}
         onConfirm={generate}
         isPending={generating}
-        danger={draftCount > 0}
+        danger={regenDraftCount > 0}
         size="md"
         title="สร้างตารางบันทึกเวลาอัตโนมัติ"
         confirmLabel="สร้างอัตโนมัติ"
         message={
           <div className="space-y-2">
             <p className="text-sm text-muted">
-              {draftCount > 0
-                ? `ระบบจะสร้างรายการจากตารางสอนของ section นี้ทั้งเทอม โดยจะเขียนทับ draft ที่มีอยู่ ${draftCount} รายการ ต้องการดำเนินการต่อหรือไม่?`
+              {regenDraftCount > 0
+                ? `ระบบจะสร้างรายการจากตารางสอนของ section นี้ทั้งเทอม โดยจะเขียนทับ draft ที่มีอยู่ ${regenDraftCount} รายการ ต้องการดำเนินการต่อหรือไม่?`
                 : "ระบบจะสร้างรายการบันทึกเวลาจากตารางสอนของ section นี้ทั้งเทอมให้อัตโนมัติ ต้องการดำเนินการต่อหรือไม่?"}
             </p>
+            {/* Months in review are left exactly as they are. Said up front so
+                "ทั้งเทอม" above is not read as touching an approved month. */}
+            {keptMonths.length > 0 && (
+              <p className="rounded-lg border border-hairline bg-surface-secondary px-3 py-2 text-xs text-ink-2">
+                เดือนที่ส่งอนุมัติแล้ว อนุมัติแล้ว หรือถูกส่งกลับ จะคงไว้ตามเดิม ไม่ถูกสร้างทับ:{" "}
+                <b>{keptMonths.map(formatMonthTH).join(", ")}</b>
+                {rejectedRows.length > 0 && (
+                  <> หากต้องการสร้างเดือนที่ถูกส่งกลับใหม่ ให้ลบรายการที่ไม่ผ่านของเดือนนั้นก่อน</>
+                )}
+              </p>
+            )}
             {/* Both warnings describe things Generate will silently do or skip
                 — surfaced here so a TA who presses through doesn't only find
                 out afterwards from a row count that looks wrong. Neither
