@@ -36,6 +36,24 @@ const nextConfig: NextConfig = {
         destination: "/p/progress/:linkId",
         permanent: true,
       },
+      // The two URLs filed with KKU SSONext (28/09/2026) follow the sibling
+      // app's naming, not ours: the login callback is registered as
+      // /api/auth/kku/callback and the logout callback as /logout. KKU sends
+      // the browser to exactly those, so both hop onto the real pages here;
+      // the ?code= query rides along (Next carries the query through
+      // redirects). KKU_SSO_REDIRECT_URL must still name the registered
+      // /api/auth/kku/callback byte for byte — it is echoed on the token
+      // exchange. Temporary (307) so a later re-registration can drop these.
+      {
+        source: "/api/auth/kku/callback",
+        destination: "/login/sso",
+        permanent: false,
+      },
+      {
+        source: "/logout",
+        destination: "/login",
+        permanent: false,
+      },
     ];
   },
   async rewrites() {

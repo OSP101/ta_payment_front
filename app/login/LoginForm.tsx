@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import loginPhoto from "../../public/images/image-cp-login.jpg";
 import {
+  Avatar,
   Button,
+  Chip,
   Description,
   Disclosure,
   FieldError,
@@ -18,7 +20,7 @@ import {
   Spinner,
   TextField,
 } from "@heroui/react";
-import { LogIn, Eye, EyeOff, Clock, MonitorSmartphone, LogOut, CheckCircle2, ShieldCheck, Mail, ArrowLeft, ArrowRight } from "lucide-react";
+import { LogIn, Eye, EyeOff, Clock, MonitorSmartphone, LogOut, CheckCircle2, ShieldCheck, ArrowLeft, ArrowRight, BadgeCheck, UserRoundCog } from "lucide-react";
 import { Alert, IconButton } from "../components/ui";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "../components/BetaNotice";
 import {
@@ -96,6 +98,16 @@ function KkuSsoButton({ href, children }: { href: string; children: React.ReactN
       <ArrowRight className="size-4 text-muted transition group-hover:translate-x-0.5 group-hover:text-foreground" />
     </a>
   );
+}
+
+/**
+ * The letter in the confirm card's avatar. Thai leading vowels (เ แ โ ใ ไ)
+ * are written before the consonant they follow in speech, so "เอกชัย" shows
+ * อ rather than a lone เ. Falls back to the email when KKU sent no name.
+ */
+function accountInitial(firstName: string, email: string): string {
+  const src = firstName.trim().replace(/^[เแโใไ]/, "") || email;
+  return Array.from(src)[0]?.toUpperCase() ?? "?";
 }
 
 /**
@@ -461,17 +473,21 @@ export default function LoginForm({
             <h1 className="text-[26px] leading-tight font-semibold text-foreground">
               {challenge
                 ? "ยืนยันตัวตนสองขั้นตอน"
-                : sso
-                  ? "เข้าสู่ระบบด้วย KKU Account"
-                  : "เข้าสู่ระบบ COCO TAS"}
+                : sso?.status === "confirm"
+                  ? "ยืนยันบัญชีของคุณ"
+                  : sso
+                    ? "เข้าสู่ระบบด้วย KKU Account"
+                    : "เข้าสู่ระบบ COCO TAS"}
             </h1>
             <p className="text-sm text-muted mt-1.5">
               {challenge
                 ? (useRecoveryCode
                   ? "กรอกรหัสสำรองหนึ่งชุดที่คุณบันทึกไว้ตอนตั้งค่า 2FA"
                   : "กรอกรหัส 6 หลักจากแอปยืนยันตัวตนของคุณ")
-                : sso
-                  ? "ตรวจสอบบัญชีที่กำลังจะเข้าสู่ระบบก่อนดำเนินการต่อ"
+                : sso?.status === "confirm"
+                  ? "ตรวจสอบชื่อและอีเมลให้ถูกต้องก่อนเข้าสู่ระบบ"
+                  : sso
+                    ? "ตรวจสอบบัญชีที่กำลังจะเข้าสู่ระบบก่อนดำเนินการต่อ"
                   : "ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน วิทยาลัยการคอมพิวเตอร์"}
             </p>
           </div>
@@ -558,8 +574,17 @@ export default function LoginForm({
               ) : sso ? (
               <div className="flex flex-col gap-4">
                 {sso.status === "exchanging" && (
-                  <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted">
-                    <Spinner size="sm" /> กำลังตรวจสอบบัญชี KKU ของคุณ…
+                  // Same footprint as the account card below, so the page
+                  // does not jump when the exchange lands.
+                  <div className="rounded-2xl border border-border bg-surface shadow-sm">
+                    <div className="flex items-center gap-2 px-4 h-12 border-b border-border text-sm text-muted">
+                      <Spinner size="sm" /> กำลังตรวจสอบบัญชี KKU ของคุณ…
+                    </div>
+                    <div className="flex flex-col items-center gap-3 px-5 py-6">
+                      <Skeleton className="size-16 rounded-full" />
+                      <Skeleton className="h-5 w-40 rounded-md" />
+                      <Skeleton className="h-4 w-52 rounded-md" />
+                    </div>
                   </div>
                 )}
                 {sso.status === "error" && (
@@ -570,35 +595,77 @@ export default function LoginForm({
                     )}
                   </>
                 )}
-                {sso.status === "confirm" && (
-                  <>
-                    <div className="rounded-lg border border-border bg-surface px-4 py-3">
-                      <div className="text-xs text-muted mb-1">แอปพลิเคชันที่ขอเข้าถึง</div>
-                      <div className="font-semibold text-foreground">COCO TAS — ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน</div>
-                    </div>
-                    <div className="flex items-start gap-3 px-1">
-                      <Mail className="size-4 mt-0.5 text-muted shrink-0" />
-                      <div className="min-w-0">
-                        <div className="font-medium text-foreground break-all">{sso.pending.email}</div>
-                        <div className="text-sm text-muted">
-                          {sso.pending.first_name} {sso.pending.last_name}
+                {sso.status === "confirm" && (() => {
+                  const { email, first_name, last_name } = sso.pending;
+                  const fullName = `${first_name} ${last_name}`.trim();
+                  return (
+                    <>
+                      {/* The whole point of this pause is a human recognising
+                          their own name and address, so those two lead the
+                          card; everything else is quieter around them. */}
+                      <div className="rounded-2xl border border-border bg-surface shadow-sm overflow-hidden">
+                        <div className="flex items-center gap-2.5 px-4 h-12 border-b border-border">
+                          <Image src="/images/kku-logo-mark.png" alt="" width={108} height={192} unoptimized className="h-7 w-auto" />
+                          <span className="text-sm font-medium text-foreground">KKU Account</span>
+                          <Chip color="success" variant="soft" size="sm" className="ml-auto">
+                            <BadgeCheck className="size-3.5" />
+                            <Chip.Label>ยืนยันตัวตนแล้ว</Chip.Label>
+                          </Chip>
+                        </div>
+                        <div className="flex flex-col items-center text-center px-5 pt-6 pb-5">
+                          <Avatar className="size-16">
+                            <Avatar.Fallback className="bg-accent-soft text-accent text-2xl font-semibold">
+                              {accountInitial(first_name, email)}
+                            </Avatar.Fallback>
+                          </Avatar>
+                          {fullName && (
+                            <div className="mt-3 text-lg font-semibold text-foreground leading-snug">{fullName}</div>
+                          )}
+                          <div className={`${fullName ? "mt-0.5 text-sm text-muted" : "mt-3 font-semibold text-foreground"} break-all`} lang="en">
+                            {email}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 px-4 py-3 border-t border-border bg-default/40 text-xs text-muted">
+                          <ArrowRight className="size-3.5 shrink-0" />
+                          <span>
+                            กำลังเข้าสู่ <span className="font-medium text-foreground">COCO TAS</span> ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน
+                          </span>
                         </div>
                       </div>
+                      <Button size="lg" fullWidth isPending={loading} onPress={onConfirmSSO}>
+                        {loading ? <Spinner color="current" size="sm" /> : <LogIn />}
+                        {loading
+                          ? "กำลังเข้าสู่ระบบ…"
+                          : first_name ? `เข้าสู่ระบบในชื่อ ${first_name}` : "ยืนยันและเข้าสู่ระบบ"}
+                      </Button>
+                    </>
+                  );
+                })()}
+                {sso.status === "confirm" && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <Separator className="flex-1" />
+                      <span className="text-xs text-muted">ไม่ใช่บัญชีของคุณ?</span>
+                      <Separator className="flex-1" />
                     </div>
-                    <p className="text-xs text-muted">
-                      หากนี่ไม่ใช่บัญชีของคุณ อย่ากดดำเนินการต่อ — กด &ldquo;ใช้บัญชี KKU อื่น&rdquo; ระบบจะออกจากบัญชี KKU นี้ให้ก่อน แล้วค่อยเข้าสู่ระบบด้วยบัญชีของคุณเอง
+                    {/* Switching person must end the KKU session (it returns
+                        to /login afterwards); only fall back to /login when
+                        the logout URL is unknown. A plain <a> for the same
+                        reason KkuSsoButton is one. */}
+                    <a
+                      href={ssoLogoutUrl ?? "/login"}
+                      className="flex items-center justify-center gap-2 w-full h-11 rounded-xl border border-border bg-surface text-sm font-medium text-foreground transition hover:bg-default/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      <UserRoundCog className="size-4 text-muted" />
+                      ใช้บัญชี KKU อื่น
+                    </a>
+                    <p className="text-center text-xs text-muted">
+                      ระบบจะออกจากบัญชี KKU นี้ให้ก่อน แล้วค่อยเข้าสู่ระบบใหม่
                     </p>
-                    <Button size="lg" fullWidth isPending={loading} onPress={onConfirmSSO}>
-                      {loading ? <Spinner color="current" size="sm" /> : <ShieldCheck />}
-                      {loading ? "กำลังเข้าสู่ระบบ…" : "อนุญาตและเข้าสู่ระบบ"}
-                    </Button>
-                  </>
+                  </div>
                 )}
-                {sso.status !== "exchanging" && (() => {
-                  // Switching person must end the KKU session (it returns to
-                  // /login afterwards); only fall back to /login when the
-                  // logout URL is unknown.
-                  const switching = sso.status === "confirm" || (sso.status === "error" && sso.wrongAccount);
+                {sso.status === "error" && (() => {
+                  const switching = !!sso.wrongAccount;
                   const href = switching && ssoLogoutUrl ? ssoLogoutUrl : "/login";
                   return (
                     <div className="flex items-center justify-center">
