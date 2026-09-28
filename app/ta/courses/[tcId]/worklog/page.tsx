@@ -889,9 +889,16 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // with rejected rows we open a modal with the reason and two paths —
   // แก้ไข inline, or ลบทั้งหมด and start over. `rejectionSeenAids` tracks
   // per-session dismissals so section-switching back and forth doesn't nag.
+  //
+  // Only rows the TA can still act on. A bounced row whose period has closed
+  // is forfeited: the server refuses both the edit and the delete this modal
+  // offers, so opening it there was a dialog whose every button failed. The
+  // month's own "หมดเวลาส่ง" chip and the stranded-rows notice cover those.
   const rejectedRows = useMemo(
-    () => (logs ?? []).filter(l => l.status === "rejected"),
-    [logs],
+    () => (logs ?? []).filter(
+      l => l.status === "rejected" && !monthLocks.get((l.work_date ?? "").slice(5, 7)),
+    ),
+    [logs, monthLocks],
   );
   const rejectReason = useMemo(
     () => rejectedRows.find(r => r.reject_reason)?.reject_reason ?? null,
@@ -1168,7 +1175,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // "สร้างอัตโนมัติ" wipes and recreates the term, so the server refuses it
   // outright once anything has been submitted or approved (Generate). Same
   // predicate, so the button is not offered on a section it can never run for.
-  const generateAllowed = monthsInReview.size === 0;
+  // Rejected rows in an open month count too (the server refuses them, see
+  // Generate); forfeited ones in a closed month do not — nothing can clear
+  // them, and Generate writes nothing into that month anyway.
+  const generateAllowed = monthsInReview.size === 0 && rejectedRows.length === 0;
   const activeScope = activeAssignment?.reimburse_scope;
   const canGenerate = !!activeAssignment?.has_schedule;
 
@@ -1726,7 +1736,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                   // Generate wipes and recreates the term; the server refuses
                   // once anything is submitted or approved, so say that rather
                   // than let the click fail.
-                  ? "มีรายการที่ส่งอนุมัติหรืออนุมัติแล้ว จึงสร้างใหม่ทั้งชุดไม่ได้"
+                  ? (monthsInReview.size === 0
+                      ? "มีรายการที่อาจารย์ส่งกลับให้แก้ไข กรุณาแก้ไขรายการเหล่านั้นแทนการสร้างใหม่ทั้งชุด"
+                      : "มีรายการที่ส่งอนุมัติหรืออนุมัติแล้ว จึงสร้างใหม่ทั้งชุดไม่ได้")
                   : !canGenerate
                   ? "อาจารย์ยังไม่ได้ตั้งตารางสอนของ section นี้ในระบบ จึงยังสร้างอัตโนมัติไม่ได้"
                   : undefined
