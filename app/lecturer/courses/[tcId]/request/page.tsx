@@ -1389,14 +1389,21 @@ function AssignmentBlock({
     if (a.ta_id) onConflicts(a.ta_id, conflicts);
   }, [a.ta_id, conflicts, onConflicts]);
   const conflictBySection = useMemo(() => {
-    const m = new Map<string, string[]>();
-    for (const c of conflicts) m.set(c.section_id, c.messages);
+    const m = new Map<string, SectionConflict>();
+    for (const c of conflicts) m.set(c.section_id, c);
     return m;
   }, [conflicts]);
+  // Only a clash with ANOTHER course the TA assists blocks the section. A clash
+  // with the TA's own class leaves the section pickable: the kinds it fully
+  // covers have their in-class duty disabled below (e.g. lecture still
+  // requestable while สอนปฏิบัติการ is greyed out), and the server trims any
+  // clashing session on submit (applyClashOutcome).
   const pickedConflicts = a.section_ids
-    .map(sid => ({ sid, msgs: conflictBySection.get(sid) ?? [] }))
-    .filter(x => x.msgs.length > 0);
-  const blocked = pickedConflicts.length > 0;
+    .map(sid => ({ sid, c: conflictBySection.get(sid) }))
+    .filter((x): x is { sid: string; c: SectionConflict } => !!x.c && x.c.messages.length > 0);
+  const pickedHard = pickedConflicts.filter(x => x.c.cross_conflict);
+  const pickedSoft = pickedConflicts.filter(x => !x.c.cross_conflict);
+  const blocked = pickedHard.length > 0;
 
   const ta = tas.find(t => t.id === a.ta_id);
 
@@ -1454,8 +1461,8 @@ function AssignmentBlock({
           conflictBySection={conflictBySection}
         />
 
-        {/* Blocking banner when the TA's currently-picked sections clash with
-            their own class schedule or an approved TA duty elsewhere. */}
+        {/* Blocking banner when a picked section clashes with an approved TA
+            duty in another course — the one clash that still refuses the send. */}
         {blocked && (
           <div className="rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-800 space-y-1.5">
             <div className="flex items-center gap-1.5 font-medium">
@@ -1463,9 +1470,30 @@ function AssignmentBlock({
               TA คนนี้มีตารางทับซ้อน กรุณาเอาชื่อออกหรือเปลี่ยน section
             </div>
             <ul className="pl-5 list-disc space-y-0.5">
-              {pickedConflicts.flatMap(x =>
-                x.msgs.map((m, i) => <li key={`${x.sid}-${i}`}>{m}</li>),
+              {pickedHard.flatMap(x =>
+                x.c.messages.map((m, i) => <li key={`${x.sid}-${i}`}>{m}</li>),
               )}
+            </ul>
+          </div>
+        )}
+
+        {/* Own-class clash: a notice, not a block. The clashing kind's in-class
+            duty is disabled in the workload below; the rest stays requestable. */}
+        {pickedSoft.length > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 space-y-1.5">
+            <div className="flex items-center gap-1.5 font-medium">
+              <AlertCircle size={13} />
+              บางคาบตรงกับตารางเรียนของ TA ส่งคำขอได้เฉพาะส่วนที่ไม่ทับ
+            </div>
+            <ul className="pl-5 list-disc space-y-0.5">
+              {pickedSoft.map(x => {
+                const sec = sections.find(s => s.id === x.sid);
+                const kinds = x.c.blocked_kinds ?? [];
+                const what = kinds.length === 0
+                  ? "ทับบางคาบ คาบที่ทับจะถูกตัดออกเมื่อส่งคำขอ"
+                  : `${kinds.map(k => (k === "lab" ? "ปฏิบัติการ" : "บรรยาย")).join(" และ ")} ทับทุกคาบ งานในคาบส่วนนี้ส่งคำขอไม่ได้`;
+                return <li key={x.sid}>Sec {sec?.sec_no ?? "?"}: {what}</li>;
+              })}
             </ul>
           </div>
         )}
@@ -1847,17 +1875,16 @@ function SectionPicker({
   sections: Section[];
   value: string[];
   onChange: (ids: string[]) => void;
-  // Conflicting sections (by id) with reason strings. Rendered as red chips
-  // with a title tooltip so the lecturer can see the problem before picking.
-  conflictBySection?: Map<string, string[]>;
+  // Per-section clash verdicts for the chosen TA.
+  conflictBySection?: Map<string, SectionConflict>;
 }) {
   const invalid = value.length === 0;
-  // A section that clashes cannot be worked, so it must not be pickable — the
-  // server refuses it anyway (assertNoKnownClash). Disabling here turns a
-  // post-submit rejection into an obvious "you can't choose this, and here's
-  // why" at the moment of choosing.
+  // Only a clash with another course the TA assists makes a section
+  // unpickable — the server refuses that one. A clash with the TA's own class
+  // does not: the section stays pickable and only the clashing kind's in-class
+  // duty is disabled in the workload form.
   const blockedIds = useMemo(
-    () => new Set([...(conflictBySection?.keys() ?? [])]),
+    () => new Set([...(conflictBySection?.values() ?? [])].filter(c => c.cross_conflict).map(c => c.section_id)),
     [conflictBySection],
   );
   return (
@@ -1874,18 +1901,21 @@ function SectionPicker({
       <div className="flex flex-wrap gap-2 mt-1">
         {sections.map(s => {
           const on = value.includes(s.id);
-          const conflictMsgs = conflictBySection?.get(s.id);
-          const bad = !!conflictMsgs?.length;
+          const conflictMsgs = conflictBySection?.get(s.id)?.messages;
+          const bad = blockedIds.has(s.id);
+          const partial = !bad && !!conflictMsgs?.length;
           return (
             <Checkbox
               key={s.id}
               value={s.id}
               isDisabled={blockedIds.has(s.id)}
-              aria-label={bad ? `Sec ${s.sec_no} — ${conflictMsgs?.join("; ")}` : `Sec ${s.sec_no}`}
+              aria-label={bad || partial ? `Sec ${s.sec_no} — ${conflictMsgs?.join("; ")}` : `Sec ${s.sec_no}`}
               className={
                 "border rounded-lg px-3 py-1.5 transition-colors " +
                 (bad
                   ? "border-red-300 bg-red-50/60 cursor-not-allowed opacity-70"
+                  : on && partial
+                  ? "border-amber-300 bg-amber-50 cursor-pointer"
                   : on
                   ? "border-brand/40 bg-brand-soft cursor-pointer"
                   : "border-border hover:bg-slate-50 cursor-pointer")
@@ -1900,7 +1930,8 @@ function SectionPicker({
                   {s.track === "special" ? (
                     <span className="text-xs text-ink-3 ml-1">· ภาคพิเศษ</span>
                   ) : null}
-                  {bad && <span className="text-[10px] text-red-600 ml-1">· เลือกไม่ได้ ตารางเรียนทับ</span>}
+                  {bad && <span className="text-[10px] text-red-600 ml-1">· เลือกไม่ได้ ทับวิชาอื่นที่ช่วยสอน</span>}
+                  {partial && <span className="text-[10px] text-amber-700 ml-1">· ตารางเรียนทับบางส่วน</span>}
                 </span>
               </Checkbox.Content>
             </Checkbox>
@@ -1916,7 +1947,7 @@ function SectionPicker({
             .filter(s => blockedIds.has(s.id))
             .map(s => (
               <div key={s.id} className="text-xs text-red-600">
-                Sec {s.sec_no}: {conflictBySection?.get(s.id)?.join(" · ")}
+                Sec {s.sec_no}: {conflictBySection?.get(s.id)?.messages.join(" · ")}
               </div>
             ))}
         </div>
