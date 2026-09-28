@@ -409,6 +409,14 @@ interface SkipGroup {
 interface GenerateResult {
   entries: WorkLog[];
   skipped_own_class: SkipGroup[] | null;
+  /** Days trimmed to stay within the faculty's per-day pay cap (all courses). */
+  skipped_daily_baht?: DailyCapSkip[] | null;
+  daily_baht_cap?: number;
+}
+interface DailyCapSkip {
+  date: string;          // YYYY-MM-DD
+  hours: number;         // hours cut that day (trimmed sessions + dropped ones)
+  existing_baht: number; // what the day already held before this run
 }
 
 /**
@@ -782,6 +790,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const deletingIdRef = useRef<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmGenerate, setConfirmGenerate] = useState(false);
+  // Days generation trimmed for the daily pay cap. A dialog, not a toast: the
+  // TA has to be able to read which days came out short, and why.
+  const [capReport, setCapReport] = useState<{ cap: number; days: DailyCapSkip[] } | null>(null);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const bulkDeletingRef = useRef(false);
@@ -1360,6 +1371,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         );
       } else {
         notify.success(`สร้างรายการอัตโนมัติเรียบร้อย (${n} รายการ)`);
+      }
+      const capDays = res?.skipped_daily_baht ?? [];
+      if (capDays.length > 0) {
+        setCapReport({ cap: res?.daily_baht_cap ?? 0, days: capDays });
       }
     } catch (e) {
       notify.error(e);
@@ -1982,6 +1997,55 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           />
         </>
       )}
+
+      <Modal
+        open={capReport !== null}
+        onClose={() => setCapReport(null)}
+        title="บางวันเบิกได้ไม่เต็มตามตารางสอน"
+        icon={<AlertTriangle size={18} />}
+        size="md"
+        footer={
+          <div className="flex justify-end w-full">
+            <Button variant="primary" onClick={() => setCapReport(null)}>รับทราบ</Button>
+          </div>
+        }
+      >
+        {capReport && (
+          <div className="flex flex-col gap-3 text-sm">
+            <p>
+              ตามระเบียบของคณะ ค่าตอบแทน TA เบิกได้ไม่เกิน{" "}
+              <b>{capReport.cap.toLocaleString("th-TH")} บาทต่อวัน</b>{" "}
+              โดยนับรวมทุกรายวิชาที่คุณปฏิบัติงานในวันเดียวกัน
+              ระบบจึงลดเวลาของคาบในวันต่อไปนี้ให้พอดีเพดาน (ครั้งละ 30 นาที)
+              และข้ามคาบที่ไม่เหลือยอดให้เบิกเลย
+            </p>
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-secondary text-xs text-muted">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">วันที่</th>
+                    <th className="px-3 py-2 text-right font-medium">มีอยู่แล้ว</th>
+                    <th className="px-3 py-2 text-right font-medium">ตัดออก</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {capReport.days.map(d => (
+                    <tr key={d.date}>
+                      <td className="px-3 py-2 whitespace-nowrap">{formatWorkDate(d.date)}</td>
+                      <td className="px-3 py-2 text-right tabular">{d.existing_baht.toLocaleString("th-TH")} บาท</td>
+                      <td className="px-3 py-2 text-right tabular">{d.hours.toFixed(1)} ชม.</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted">
+              &quot;มีอยู่แล้ว&quot; คือค่าตอบแทนของวันนั้นจากรายวิชาอื่นหรือรายการเดิม ก่อนสร้างรอบนี้
+              ถ้าต้องการลงเวลาวันนั้นในวิชานี้ ต้องลดชั่วโมงของวิชาอื่นในวันเดียวกันก่อน
+            </p>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={showRejection}
