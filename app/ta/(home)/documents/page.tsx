@@ -155,10 +155,11 @@ function validateProfile(p: Profile): string | null {
   if (nid.length !== 13) {
     return "เลขบัตรประชาชนต้องมี 13 หลัก";
   }
-  // Note: `isValidThaiID` (mod-11 check-digit) is used only for the field-level
-  // *warning* (see nidChecksumWarn below). It's advisory, not blocking — some
-  // legitimate old IDs / test data don't satisfy the check, and staff review
-  // the physical card copy anyway.
+  // The backend refuses a check-digit mismatch (validateProfileInput), so the
+  // form must too — a soft warning here promised a save the server rejects.
+  if (!isValidThaiID(nid)) {
+    return "เลขบัตรประชาชนไม่ถูกต้อง (หลักตรวจสอบไม่ตรง) กรุณาตรวจสอบอีกครั้ง";
+  }
   const bank = findBank(p.bank_name);
   if (!bank) {
     return "โปรดเลือกธนาคารจากรายการ";
@@ -563,16 +564,14 @@ function ProfileStep({
     touched.phone && phoneDigits.length > 0 && phoneDigits.length !== 9 && phoneDigits.length !== 10
       ? `กรอก ${phoneDigits.length} หลัก (ต้องมี 9-10 หลัก)`
       : undefined;
-  // Hard error: length only. The mod-11 mismatch is a soft warning (nidChecksumWarn)
-  // shown as amber hint text — it flags likely typos without blocking save.
+  // Both are hard errors: the backend rejects a mod-11 mismatch as well as a
+  // wrong length.
   const nidErr =
     touched.national_id && nidDigits.length > 0 && nidDigits.length !== 13
       ? `กรอก ${nidDigits.length}/13 หลัก`
-      : undefined;
-  const nidChecksumWarn =
-    touched.national_id && nidDigits.length === 13 && !isValidThaiID(nidDigits)
-      ? "หลักตรวจสอบไม่ตรงกับ 12 หลักแรก โปรดตรวจว่าพิมพ์ถูกทุกหลัก (บันทึกได้ปกติหากยืนยันว่าถูกต้อง)"
-      : undefined;
+      : touched.national_id && nidDigits.length === 13 && !isValidThaiID(nidDigits)
+        ? "หลักสุดท้าย (หลักตรวจสอบ) ไม่ตรงกับ 12 หลักแรก โปรดตรวจว่าพิมพ์ถูกทุกหลัก"
+        : undefined;
   const branchCodeErr =
     touched.branch_code && form.branch_code.length > 0 && form.branch_code.length !== 4
       ? `กรอก ${form.branch_code.length}/4 หลัก`
@@ -654,11 +653,9 @@ function ProfileStep({
         <FieldGroup
           label="เลขบัตรประชาชน (13 หลัก)"
           hint={
-            nidChecksumWarn
-              ? <span className="text-warning">{nidChecksumWarn}</span>
-              : nidDigits.length > 0 && !nidErr
-                ? `กรอกครบ ${nidDigits.length}/13`
-                : "ระบบจัดเก็บเลขบัตรนี้แบบเข้ารหัส ใช้เพื่อพิมพ์ลงแบบฟอร์มเจ้าหนี้และยืนยันตัวตนกับธนาคารเท่านั้น"
+            nidDigits.length > 0 && !nidErr
+              ? `กรอกครบ ${nidDigits.length}/13`
+              : "ระบบจัดเก็บเลขบัตรนี้แบบเข้ารหัส ใช้เพื่อพิมพ์ลงแบบฟอร์มเจ้าหนี้และยืนยันตัวตนกับธนาคารเท่านั้น"
           }
           error={nidErr}
         >
