@@ -284,12 +284,21 @@ export default function TASchedulePage() {
     notify.success(`นำเข้าตารางเรียนแล้ว ${result.blocks.length} คาบ`);
   }
 
+  // Turning WBA on wipes every regular block, so it goes through a dialog that
+  // lists exactly which classes the TA is about to lose.
+  const [confirmWba, setConfirmWba] = useState(false);
+
   function toggleWba(on: boolean) {
     if (on) {
-      const hasRegulars = local.some(b => !b.is_wba);
-      if (hasRegulars && !window.confirm("การเปิดโหมด WBA จะลบคาบเรียนทั้งหมดที่กรอกไว้ ยืนยันหรือไม่?")) {
-        return;
-      }
+      if (regularBlocks.length > 0) { setConfirmWba(true); return; }
+      enableWba();
+    } else {
+      markDirty();
+      setLocal(prev => prev.filter(b => !b.is_wba));
+    }
+  }
+
+  function enableWba() {
       markDirty();
       setLocal([{
         id: "wba-" + Date.now(),
@@ -303,10 +312,6 @@ export default function TASchedulePage() {
         note: "ไม่มีตารางเรียนปกติ",
         is_wba: true,
       }]);
-    } else {
-      markDirty();
-      setLocal(prev => prev.filter(b => !b.is_wba));
-    }
   }
 
   // save(silent) — silent=true skips toast, used by the debounced auto-save.
@@ -580,6 +585,36 @@ export default function TASchedulePage() {
         title="ลบคาบเรียน"
         message="ต้องการลบคาบเรียนนี้ออกจากตารางหรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก"
         confirmLabel="ลบ"
+      />
+
+      <ConfirmDialog
+        open={confirmWba}
+        onClose={() => setConfirmWba(false)}
+        onConfirm={() => { setConfirmWba(false); enableWba(); }}
+        danger
+        size="md"
+        icon={<AlertTriangle className="w-5 h-5" />}
+        title="ยืนยันว่าไม่มีตารางเรียนปกติ"
+        message={
+          <div className="space-y-2">
+            <p>
+              การเลือก “{isGrad ? "ไม่มีตารางเรียนปกติ" : "นักศึกษาปี 4 / WBA"}” จะลบคาบเรียนที่กรอกไว้ทั้งหมด{" "}
+              <b>{regularBlocks.length} คาบ</b> ออกจากตารางของภาคการศึกษานี้
+            </p>
+            <ul className="max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border text-xs">
+              {regularBlocks.map(b => (
+                <li key={b.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
+                  <span className="truncate">{blockTitle(b) || "คาบเรียน"}</span>
+                  <span className="shrink-0 text-muted tabular-nums">
+                    {DOW_LABEL[b.day_of_week] ?? ""} {fmtTime(b.start_time)}–{fmtTime(b.end_time)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-muted">หากต้องการกลับมาใช้ตารางเดิม จะต้องกรอกหรือนำเข้าคาบเรียนใหม่อีกครั้ง</p>
+          </div>
+        }
+        confirmLabel="ลบวิชาและยืนยัน"
       />
 
       <IcsImportModal
