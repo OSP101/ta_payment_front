@@ -4,7 +4,7 @@ import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import {
   Plus, Send, Trash2, ClipboardList, Wallet, CheckCircle2, AlertCircle, Info,
-  UserPlus, Copy, CalendarClock, CalendarOff, Clock, ChevronDown,
+  UserPlus, Copy, Files, CalendarClock, CalendarOff, Clock, ChevronDown,
 } from "lucide-react";
 import {
   RadioGroup, Radio, Description, Label,
@@ -2144,7 +2144,11 @@ function CreateTaPanel({
 
       {created ? (
         <div className="space-y-3">
-          <TempPasswordPanel email={created.user.email} password={created.temp_password} />
+          <TempPasswordPanel
+            name={`${created.user.first_name} ${created.user.last_name}`.trim()}
+            email={created.user.email}
+            password={created.temp_password}
+          />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={onClose}>ปิด</Button>
             <Button variant="primary" size="sm" onClick={useAndAdd}>
@@ -2224,13 +2228,28 @@ function VField({
   );
 }
 
-function TempPasswordPanel({ email, password }: { email: string; password: string }) {
+// Same shape as the staff panel (app/staff/users/page.tsx) so the lecturer can
+// paste one block — name, email, role, password — straight to the new TA.
+// Accounts made here are always TA, so the role is fixed.
+const TA_ROLE_LABEL = "ผู้ช่วยสอน";
+
+function TempPasswordPanel({ name, email, password }: { name: string; email: string; password: string }) {
   const [copied, setCopied] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
   async function copy() {
     try {
       await navigator.clipboard.writeText(password);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    } catch { /* noop */ }
+  }
+  async function copyAll() {
+    try {
+      await navigator.clipboard.writeText(
+        `Name: ${name}\nEmail: ${email}\nRole: ${TA_ROLE_LABEL}\nPassword: ${password}`
+      );
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 1500);
     } catch { /* noop */ }
   }
   return (
@@ -2246,6 +2265,10 @@ function TempPasswordPanel({ email, password }: { email: string; password: strin
         <div className="text-sm font-mono">{email}</div>
       </div>
       <div>
+        <div className="text-xs text-muted mb-1">บทบาท</div>
+        <div className="text-sm">{TA_ROLE_LABEL}</div>
+      </div>
+      <div>
         <div className="text-xs text-muted mb-1">รหัสผ่านชั่วคราว</div>
         <div className="flex items-center gap-2">
           <code className="flex-1 px-3 py-2 rounded-md bg-default text-sm font-mono select-all">
@@ -2256,6 +2279,9 @@ function TempPasswordPanel({ email, password }: { email: string; password: strin
           </Button>
         </div>
       </div>
+      <Button variant="primary" size="sm" className="w-full" onClick={copyAll}>
+        <Files size={14} /> {copiedAll ? "คัดลอกแล้ว" : "คัดลอกอีเมลและรหัสผ่าน"}
+      </Button>
     </div>
   );
 }
