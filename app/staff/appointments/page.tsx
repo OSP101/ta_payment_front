@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
   AlertTriangle, CalendarDays, Check, Download, FileSignature,
-  FileText, Hash, PenLine, Users,
+  FileText, Hash, PenLine, Users, BellRing,
 } from "lucide-react";
 import { api, errMessage } from "../../lib/api";
 import { useTerm } from "../TermContext";
@@ -93,7 +93,27 @@ interface AppointmentPreview {
     ta_id: string;
     ta_name: string;
   }[];
-  skipped: { course_code: string; course_name_th: string; reason: string; pending_tas?: string[] }[];
+  skipped: {
+    course_code: string;
+    course_name_th: string;
+    reason: string;
+    pending_tas?: string[];
+    // TAs with no class timetable for the term, the one thing a pending
+    // request waits on; reminded_at is staff's latest reminder to them.
+    waiting?: { ta_id: string; name: string; reminded_at?: string | null }[];
+  }[];
+}
+
+// Mirrors service.RemindTimetableResult.
+interface RemindResult { sent: string[]; skipped: { name: string; reason: string }[] }
+
+// Same 24 h the server enforces (timetableRemindGap); used only to grey the
+// button, the server still decides.
+const REMIND_GAP_MS = 24 * 60 * 60 * 1000;
+
+function shortThaiDateTime(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getDate()} ${THAI_MONTHS[d.getMonth()].slice(0, 3)} ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")} น.`;
 }
 
 interface AppointmentRound {
@@ -130,6 +150,114 @@ function Field({
           neighbour down and make the grid jump while typing. */}
       <div className="mt-1 h-4 text-xs text-brand">{hint}</div>
     </div>
+  );
+}
+
+/**
+ * Courses held out of this round because a TA has not entered a class
+ * timetable, with a reminder button per TA and one for everyone.
+ */
+function HeldBackPanel({
+  termId, skipped, previewKey,
+}: {
+  termId: string;
+  skipped: AppointmentPreview["skipped"];
+  previewKey: string | null;
+}) {
+  const [busy, setBusy] = useState<string | null>(null); // ta_id, or "all"
+  const now = Date.now();
+  const remindedRecently = (at?: string | null) => !!at && now - new Date(at).getTime() < REMIND_GAP_MS;
+
+  // One TA can hold up several courses; count people, not rows.
+  const waiting = new Map<string, { name: string; reminded_at?: string | null }>();
+  for (const c of skipped) for (const w of c.waiting ?? []) waiting.set(w.ta_id, w);
+  const remindable = [...waiting.values()].filter(w => !remindedRecently(w.reminded_at)).length;
+
+  async function remind(taIds: string[] | null, key: string) {
+    setBusy(key);
+    try {
+      const res = await api.post<RemindResult>("/exports/appointment-order/remind-timetable", {
+        term_id: termId,
+        ta_ids: taIds ?? [],
+      });
+      if (res.sent.length) {
+        notify.success(`ส่งแจ้งเตือนถึง ${res.sent.join(", ")} แล้ว`);
+      }
+      if (res.skipped.length) {
+        notify.warning(res.skipped.map(s => `${s.name}: ${s.reason}`).join("\n"));
+      }
+      if (previewKey) await mutate(previewKey);
+    } catch (e) {
+      notify.error(e, "ส่งแจ้งเตือนไม่สำเร็จ");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Panel
+      title={
+        <span className="inline-flex items-center gap-2 text-amber-900">
+          <AlertTriangle size={16} className="text-amber-600" />
+          ยังไม่พร้อมออกคำสั่ง {skipped.length} วิชา
+        </span>
+      }
+      description="วิชาเหล่านี้จะไม่อยู่ในคำสั่งรอบนี้ เมื่อเรียบร้อยแล้วให้กลับมาออกคำสั่งรอบถัดไป (จะนับเป็นรอบล่าช้า) กดเตือนเพื่อส่งอีเมลและแจ้งเตือนในระบบให้ผู้ช่วยสอนบันทึกตารางเรียน"
+      className="border-amber-200 bg-amber-50/40"
+      actions={
+        waiting.size > 0 && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => remind(null, "all")}
+            disabled={busy !== null || remindable === 0}
+            isPending={busy === "all"}
+          >
+            <BellRing size={14} /> เตือนทุกคน ({remindable})
+          </Button>
+        )
+      }
+    >
+      <ul className="divide-y divide-amber-200/60">
+        {skipped.map(s => (
+          <li key={s.course_code} className="py-2.5 text-sm first:pt-0 last:pb-0">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="font-semibold text-ink-1">{s.course_code}</span>
+              <span className="text-ink-3">{s.course_name_th}</span>
+              <span className="ms-auto text-xs text-amber-800">{s.reason}</span>
+            </div>
+            {!!s.waiting?.length && (
+              <div className="mt-1.5 flex flex-wrap justify-end gap-2">
+                {s.waiting.map(w => {
+                  const recent = remindedRecently(w.reminded_at);
+                  return (
+                    <span
+                      key={w.ta_id}
+                      className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-surface py-0.5 ps-3 pe-1 text-xs"
+                    >
+                      <span className="font-medium text-ink-1">{w.name}</span>
+                      {w.reminded_at && (
+                        <span className="text-ink-4">เตือนล่าสุด {shortThaiDateTime(w.reminded_at)}</span>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => remind([w.ta_id], w.ta_id)}
+                        disabled={busy !== null || recent}
+                        isPending={busy === w.ta_id}
+                        aria-label={`เตือน ${w.name} ให้บันทึกตารางเรียน`}
+                      >
+                        <BellRing size={12} /> {recent ? "เตือนแล้ว" : "เตือน"}
+                      </Button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
 
@@ -321,29 +449,7 @@ function AppointmentSection({ termId }: { termId: string }) {
 
       {/* ── Courses held back ──────────────────────────────────────────── */}
       {!!preview?.skipped.length && (
-        <Panel
-          title={
-            <span className="inline-flex items-center gap-2 text-amber-900">
-              <AlertTriangle size={16} className="text-amber-600" />
-              ยังไม่พร้อมออกคำสั่ง {preview.skipped.length} วิชา
-            </span>
-          }
-          description="วิชาเหล่านี้จะไม่อยู่ในคำสั่งรอบนี้ เมื่อเรียบร้อยแล้วให้กลับมาออกคำสั่งรอบถัดไป (จะนับเป็นรอบล่าช้า)"
-          className="border-amber-200 bg-amber-50/40"
-        >
-          <ul className="divide-y divide-amber-200/60">
-            {preview.skipped.map(s => (
-              <li key={s.course_code} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-2 text-sm first:pt-0 last:pb-0">
-                <span className="font-semibold text-ink-1">{s.course_code}</span>
-                <span className="text-ink-3">{s.course_name_th}</span>
-                <span className="ms-auto text-xs text-amber-800">
-                  {s.reason}
-                  {s.pending_tas?.length ? ` (${s.pending_tas.join(", ")})` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
+        <HeldBackPanel termId={termId} skipped={preview.skipped} previewKey={previewKey} />
       )}
 
       {/* ── Form + history ─────────────────────────────────────────────── */}

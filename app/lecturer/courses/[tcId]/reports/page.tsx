@@ -51,6 +51,11 @@ interface PendingRow {
   group_special_hours?: number;
   first_date?: string;
   last_date?: string;
+  /** "YYYY-MM" months holding rows the TA saved but has not sent, period
+   *  still open — the queue hides drafts, so this is the only trace of them. */
+  draft_months?: string[];
+  /** Same, past the period's close: forfeited ("ไม่ประสงค์ลงเวลา"), never coming. */
+  forfeited_months?: string[];
 }
 interface Course { id: string; code: string; name_th: string; }
 
@@ -146,6 +151,11 @@ function hhmm(t?: string): string {
 }
 function monthKey(iso: string): string {
   return (iso ?? "").slice(0, 7);
+}
+function formatMonthShortTH(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  if (!y || !m || m < 1 || m > 12) return key;
+  return `${MONTH_TH_SHORT[m - 1]} ${y + 543}`;
 }
 function formatMonthTH(key: string): string {
   const [y, m] = key.split("-").map(Number);
@@ -260,6 +270,9 @@ interface TAGroup {
   lastDate?: string;
   /** Section numbers that share a sitting, e.g. [["1","2"]]. */
   coTaught: string[][];
+  /** Months with unsent drafts (period open) / forfeited drafts, across sections. */
+  draftMonths: string[];
+  forfeitedMonths: string[];
 }
 
 function groupByTA(rows: PendingRow[]): TAGroup[] {
@@ -290,6 +303,8 @@ function groupByTA(rows: PendingRow[]): TAGroup[] {
       coTaught.set(r.cotaught_group, arr);
     }
     const dates = list.flatMap(r => [r.first_date, r.last_date]).filter(Boolean) as string[];
+    const months = (pick: (r: PendingRow) => string[] | undefined) =>
+      Array.from(new Set(list.flatMap(r => pick(r) ?? []))).sort();
     return {
       taId,
       name: list[0].ta_name,
@@ -303,6 +318,8 @@ function groupByTA(rows: PendingRow[]): TAGroup[] {
       coTaught: Array.from(coTaught.values())
         .filter(secs => secs.length > 1)
         .map(secs => secs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))),
+      draftMonths: months(r => r.draft_months),
+      forfeitedMonths: months(r => r.forfeited_months),
     };
   }).sort((a, b) => a.name.localeCompare(b.name, "th"));
 }
@@ -597,6 +614,22 @@ function TACard({
             <div className="mt-1.5">
               <SectionChips group={group} />
             </div>
+            {/* The queue below never lists drafts, so a month the TA filled in
+                but has not sent would otherwise just be missing. Informational
+                only: there is nothing here to approve until it is sent. */}
+            {group.draftMonths.length > 0 && (
+              <div className="mt-1.5 flex items-start gap-1 text-xs text-warning">
+                <CircleAlert size={13} className="mt-px shrink-0" />
+                <span>
+                  มีฉบับร่างที่ TA ยังไม่ส่ง: {group.draftMonths.map(formatMonthShortTH).join(", ")}
+                </span>
+              </div>
+            )}
+            {group.forfeitedMonths.length > 0 && (
+              <div className="mt-1 text-xs text-muted">
+                ไม่ได้ส่งภายในกำหนด (ไม่ประสงค์ลงเวลา): {group.forfeitedMonths.map(formatMonthShortTH).join(", ")}
+              </div>
+            )}
           </div>
         </button>
 
@@ -656,6 +689,11 @@ function TACard({
               {hoursSplitText(group.pendingRegular, group.pendingSpecial)}
               {group.rows.length > 1 && ` (${group.rows.length} เซคชัน)`}
             </p>
+            {group.draftMonths.length > 0 && (
+              <p className="text-muted">
+                ไม่รวมฉบับร่างที่ TA ยังไม่ส่ง ({group.draftMonths.map(formatMonthShortTH).join(", ")})
+              </p>
+            )}
             <p className="text-muted">
               หลังอนุมัติ TA จะแก้ไขไม่ได้ หากต้องแก้ ให้ส่งกลับเป็นรายเดือน
             </p>
@@ -1256,7 +1294,12 @@ function MonthRows({
   useEffect(() => { onRejectingChange?.(rejectYm !== null); }, [rejectYm, onRejectingChange]);
 
   const months = useMemo(() => {
-    const sittings = mergeSittings((perAssignment ?? []).flat(), secOf);
+    // Drafts are the TA's unsent working copy: they have not been put in front
+    // of anyone yet, and approve/reject never touches them. Shown here, a month
+    // the TA filled in late but never sent read as "ตรวจครบแล้ว · อนุมัติแล้ว"
+    // (it had nothing submitted, so it fell into the done branch).
+    const sent = (perAssignment ?? []).flat().filter(r => r.status !== "draft");
+    const sittings = mergeSittings(sent, secOf);
     const buckets = new Map<string, Sitting[]>();
     for (const r of sittings) {
       const k = monthKey(r.work_date);
@@ -1281,6 +1324,9 @@ function MonthRows({
           submittedRegular: submitted.filter(isRegular).reduce((s, i) => s + (i.hours || 0), 0),
           submittedSpecial: submitted.filter(i => !isRegular(i)).reduce((s, i) => s + (i.hours || 0), 0),
           submittedCount: submitted.length,
+          // Nothing waiting is not the same as all approved: a month sent back
+          // stays "rejected" until the TA resubmits it.
+          rejectedCount: items.filter(i => i.status === "rejected").length,
           // Only the assignments that actually have something waiting this
           // month get a decision call — approving a section with nothing
           // submitted would be a no-op request and a confusing audit entry.
@@ -1341,7 +1387,9 @@ function MonthRows({
                 <span className="whitespace-nowrap text-xs text-muted">
                   {actionable
                     ? <>รอพิจารณา <HoursSplit regular={mo.submittedRegular} special={mo.submittedSpecial} /> · {mo.submittedCount} คาบ</>
-                    : `${mo.count} คาบ · ตรวจครบแล้ว`}
+                    : mo.rejectedCount > 0
+                      ? `${mo.count} คาบ · ส่งกลับให้ TA แก้ไข ${mo.rejectedCount} คาบ`
+                      : `${mo.count} คาบ · ตรวจครบแล้ว`}
                 </span>
               </button>
 
@@ -1369,9 +1417,15 @@ function MonthRows({
                 </div>
               ) : (
                 <span className="ms-auto shrink-0">
-                  <Chip tone="success">
-                    <Check size={12} /> อนุมัติแล้ว
-                  </Chip>
+                  {mo.rejectedCount > 0 ? (
+                    <Chip tone="warn">
+                      <X size={12} /> รอ TA แก้ไข
+                    </Chip>
+                  ) : (
+                    <Chip tone="success">
+                      <Check size={12} /> อนุมัติแล้ว
+                    </Chip>
+                  )}
                 </span>
               )}
             </div>

@@ -147,11 +147,18 @@ interface TA {
   already_in_course?: boolean;
   /** false = no class timetable filed yet for this term. */
   has_schedule?: boolean;
+  /** When already_in_course: the request they are on, and the sections of
+   *  this course they already cover. Picking them then ADDS sections to that
+   *  request instead of filing a second one. */
+  existing_request_id?: string;
+  held_section_ids?: string[];
 }
 
 /** Why a TA cannot be picked, or null when they can. */
 function taBlockedReason(t: TA): string | null {
-  if (t.already_in_course) return "อยู่ในคำขอของวิชานี้แล้ว";
+  // Already on the course: pickable, to add sections to their request. Only
+  // blocked if the server could not name that request.
+  if (t.already_in_course && !t.existing_request_id) return "อยู่ในคำขอของวิชานี้แล้ว";
   if (t.at_quota) return `รับสอนครบ ${MAX_COURSES_PER_TA} วิชาแล้ว`;
   return null;
 }
@@ -815,6 +822,11 @@ function RequestFormSection({
   async function submit() {
     if (!tcId) return;
     setErr(null); setPending(true);
+    // A TA already on this course is not filed again: their new sections are
+    // added to the request they are on. Everyone else goes into a new request.
+    const requestOf = (a: Assignment) => allTas.find(t => t.id === a.ta_id)?.existing_request_id;
+    const extend = assignments.filter(a => requestOf(a));
+    const fresh = assignments.filter(a => !requestOf(a));
     try {
       // Derive per-section counts from the assignment list so the backend
       // still receives the "ta_request_counts" rows it expects. A TA on N
@@ -824,7 +836,7 @@ function RequestFormSection({
       for (const s of course?.sections ?? []) {
         bySection.set(s.id, { undergrad_count: 0, graduate_count: 0 });
       }
-      for (const a of assignments) {
+      for (const a of fresh) {
         for (const sid of a.section_ids) {
           const c = bySection.get(sid) ?? { undergrad_count: 0, graduate_count: 0 };
           if (a.level === "master" || a.level === "phd") c.graduate_count += 1;
@@ -832,15 +844,12 @@ function RequestFormSection({
           bySection.set(sid, c);
         }
       }
-      const res = await api.post<{
-        id: string;
-        status: "approved" | "rejected" | "submitted";
-        reject_reason?: string;
-      }>("/ta-requests", {
+      type SubmitRes = { id: string; status: "approved" | "rejected" | "submitted"; reject_reason?: string };
+      const res: SubmitRes | null = fresh.length === 0 ? null : await api.post<SubmitRes>("/ta-requests", {
         teaching_course_id: tcId,
         reimburse_scope: scope,
         counts: [...bySection.entries()].map(([section_id, c]) => ({ section_id, ...c })),
-        assignments: assignments.map(a => ({
+        assignments: fresh.map(a => ({
           section_ids: a.section_ids,
           ta_id: a.ta_id,
           level: a.level,
@@ -850,7 +859,7 @@ function RequestFormSection({
           })),
         })),
       });
-      if (res.status === "rejected") {
+      if (res?.status === "rejected") {
         // Under the auto-decide model, business-rule failures come back as a
         // 200 with status='rejected'. Show the system-generated reason inline
         // so the lecturer can fix it and resubmit.
@@ -859,6 +868,31 @@ function RequestFormSection({
         notify.error(reason);
         return;
       }
+      // Then the additions, one TA at a time. A refusal stops here with the
+      // new request (if any) already filed, so drop what went through from the
+      // form and leave only the TA that failed for the lecturer to fix.
+      const trimmedNotes: string[] = [];
+      const done = new Set<Assignment>(fresh);
+      for (const a of extend) {
+        try {
+          const r = await api.post<{ checks?: { rule: string; message?: string }[] }>(
+            `/ta-requests/${requestOf(a)}/sections`, {
+              ta_id: a.ta_id,
+              sections: a.section_ids.map(sid => ({ section_id: sid, workload: workloadOf(a, sid) })),
+            });
+          for (const c of r.checks ?? []) {
+            if (c.rule === "clash_trimmed" && c.message) trimmedNotes.push(c.message);
+          }
+          done.add(a);
+        } catch (e) {
+          setAssignments(prev => prev.filter(x => !done.has(x)));
+          if (candidatesKey) mutate(candidatesKey);
+          mutate("/ta-requests");
+          throw e;
+        }
+      }
+      if (extend.length) mutate("/ta-requests");
+      if (trimmedNotes.length) notify.info(trimmedNotes.join("\n"));
       // A successful submit (deferred or decided) books every TA on the form
       // against this course — leaving them in place invited exactly the "ส่ง
       // ซ้ำ" the duplicate guard now exists to catch, and the candidate list
@@ -871,6 +905,11 @@ function RequestFormSection({
       setDraftSavedAt(null);
       if (draftKey) api.del(draftKey).catch(() => {});
       if (candidatesKey) mutate(candidatesKey);
+      if (!res) {
+        notify.success("เพิ่ม section ให้ TA ในคำขอเดิมเรียบร้อยแล้ว");
+        onSubmitted();
+        return;
+      }
       if (res.status === "submitted") {
         // Deferred decision: at least one TA has no timetable yet, so there is
         // nothing to judge. Say so plainly rather than implying approval.
@@ -1170,7 +1209,8 @@ function RequestFormSection({
               const total = sumWorkload(a, secs);
               const secLabels = a.section_ids
                 .map(sid => secs.find(s => s.id === sid)?.sec_no)
-                .filter(Boolean);
+                .filter((x): x is string => !!x)
+                .sort((x, y) => x.localeCompare(y, undefined, { numeric: true }));
               const est = estimate?.people.find(p => p.index === i);
               const cut = est ? est.share < est.owed - 0.5 : false;
               return (
@@ -1406,6 +1446,12 @@ function AssignmentBlock({
   const blocked = pickedHard.length > 0;
 
   const ta = tas.find(t => t.id === a.ta_id);
+  // Already on this course: this block adds sections to their request.
+  const heldIds = ta?.existing_request_id ? (ta.held_section_ids ?? []) : [];
+  const heldLabels = heldIds
+    .map(id => sections.find(s => s.id === id)?.sec_no)
+    .filter((x): x is string => !!x)
+    .sort((x, y) => x.localeCompare(y, undefined, { numeric: true }));
 
   return (
     <div className={
@@ -1454,11 +1500,23 @@ function AssignmentBlock({
             same course; each selected section becomes its own worklog target.
             Conflicting sections are surfaced inline so the lecturer sees the
             problem while picking, not after clicking Send. */}
+        {heldIds.length > 0 && (
+          <div className="rounded-md border border-brand/30 bg-brand-soft p-3 text-xs text-ink-1 space-y-0.5">
+            <div className="flex items-center gap-1.5 font-medium text-brand">
+              <Info size={13} />
+              {ta?.first_name} ดูแล Sec {heldLabels.join(", ")} ของวิชานี้อยู่แล้ว
+            </div>
+            <div>
+              เลือก section ที่จะเพิ่ม ระบบจะเพิ่มเข้าคำขอเดิมโดยไม่ต้องยกเลิก เวลาที่ TA บันทึกไว้แล้วยังอยู่ครบ
+            </div>
+          </div>
+        )}
         <SectionPicker
           sections={sections}
           value={a.section_ids}
-          onChange={v => onUpdate(idx, { section_ids: v })}
+          onChange={v => onUpdate(idx, { section_ids: v.filter(id => !heldIds.includes(id)) })}
           conflictBySection={conflictBySection}
+          heldIds={heldIds}
         />
 
         {/* Blocking banner when a picked section clashes with an approved TA
@@ -1511,7 +1569,12 @@ function AssignmentBlock({
               <div className="text-xs font-medium text-ink-2">
                 ชั่วโมงทำงานต่อสัปดาห์ กำหนดแยกแต่ละกลุ่มเรียน
               </div>
-              {a.section_ids.map(sid => {
+              {/* Course order (Sec 1, 2, 3), not tick order: ticking Sec 2 before
+                  Sec 1 put Sec 2's card first and lecturers filled the wrong one. */}
+              {[...a.section_ids]
+                .sort((x, y) => (sections.find(s => s.id === x)?.sec_no ?? "")
+                  .localeCompare(sections.find(s => s.id === y)?.sec_no ?? "", undefined, { numeric: true }))
+                .map(sid => {
                 const sec = sections.find(s => s.id === sid);
                 const w = workloadOf(a, sid);
                 const group = coGroups.get(sid);
@@ -1522,11 +1585,13 @@ function AssignmentBlock({
                   .map(x => sections.find(s => s.id === x)?.sec_no ?? "?");
                 return (
                   <div key={sid} className="rounded-md border border-hairline overflow-hidden">
-                    <div className="flex items-center gap-2 flex-wrap px-3 py-1.5 bg-slate-50 border-b border-hairline">
-                      <Chip tone="neutral">Sec {sec?.sec_no ?? "—"}</Chip>
-                      {sec?.track === "special" && <span className="text-[11px] text-ink-3">ภาคพิเศษ</span>}
+                    <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-brand-soft border-b border-brand/20">
+                      <span className="text-sm font-semibold text-brand">
+                        กลุ่มเรียน Sec {sec?.sec_no ?? "—"}
+                      </span>
+                      {sec?.track === "special" && <Chip tone="warn">ภาคพิเศษ</Chip>}
                       {mates.length > 0 && (
-                        <span className="text-[11px] text-brand">
+                        <span className="text-xs text-ink-2">
                           สอนพร้อมกับ Sec {mates.join(", ")} เบิกรวมเป็นก้อนเดียว
                         </span>
                       )}
@@ -1870,13 +1935,15 @@ function HrsRow({
 }
 
 function SectionPicker({
-  sections, value, onChange, conflictBySection,
+  sections, value, onChange, conflictBySection, heldIds = [],
 }: {
   sections: Section[];
   value: string[];
   onChange: (ids: string[]) => void;
   // Per-section clash verdicts for the chosen TA.
   conflictBySection?: Map<string, SectionConflict>;
+  /** Sections the TA already covers on an earlier request: shown, not pickable. */
+  heldIds?: string[];
 }) {
   const invalid = value.length === 0;
   // Only a clash with another course the TA assists makes a section
@@ -1902,17 +1969,20 @@ function SectionPicker({
         {sections.map(s => {
           const on = value.includes(s.id);
           const conflictMsgs = conflictBySection?.get(s.id)?.messages;
-          const bad = blockedIds.has(s.id);
+          const held = heldIds.includes(s.id);
+          const bad = !held && blockedIds.has(s.id);
           const partial = !bad && !!conflictMsgs?.length;
           return (
             <Checkbox
               key={s.id}
               value={s.id}
-              isDisabled={blockedIds.has(s.id)}
+              isDisabled={held || blockedIds.has(s.id)}
               aria-label={bad || partial ? `Sec ${s.sec_no} — ${conflictMsgs?.join("; ")}` : `Sec ${s.sec_no}`}
               className={
                 "border rounded-lg px-3 py-1.5 transition-colors " +
-                (bad
+                (held
+                  ? "border-brand/30 bg-slate-100 cursor-not-allowed"
+                  : bad
                   ? "border-red-300 bg-red-50/60 cursor-not-allowed opacity-70"
                   : on && partial
                   ? "border-amber-300 bg-amber-50 cursor-pointer"
@@ -1930,6 +2000,7 @@ function SectionPicker({
                   {s.track === "special" ? (
                     <span className="text-xs text-ink-3 ml-1">· ภาคพิเศษ</span>
                   ) : null}
+                  {held && <span className="text-[10px] text-brand ml-1">· อยู่ในคำขอเดิม</span>}
                   {bad && <span className="text-[10px] text-red-600 ml-1">· เลือกไม่ได้ ทับวิชาอื่นที่ช่วยสอน</span>}
                   {partial && <span className="text-[10px] text-amber-700 ml-1">· ตารางเรียนทับบางส่วน</span>}
                 </span>
@@ -2031,6 +2102,9 @@ function TaAutocomplete({
                         · รับสอน {booked}/{MAX_COURSES_PER_TA} วิชา
                       </span>
                       {blocked && <span className="ml-1 text-red-600">· {blocked}</span>}
+                      {!blocked && t.already_in_course && (
+                        <span className="ml-1 text-brand">· อยู่ในวิชานี้แล้ว เพิ่ม section ได้</span>
+                      )}
                       {!blocked && t.has_schedule === false && (
                         <span className="ml-1 text-amber-600">· ยังไม่ได้สร้างตารางเรียน</span>
                       )}

@@ -717,6 +717,20 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     return m;
   }, [myPeriods, tcId, monthLocks]);
 
+  // Where each month is AFTER the lecturer: submission_period_status moves
+  // pending → staff_reviewed → exported → finance_sent. work_logs stop at
+  // "approved", so without this a lecturer-approved month read as finished
+  // while it was still waiting for staff. Keyed "MM" like the lock map.
+  const monthStages = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of myPeriods ?? []) {
+      if (p.teaching_course_id !== tcId) continue;
+      const mm = (p.year_month ?? "").slice(5, 7);
+      if (mm.length === 2) m.set(mm, p.status);
+    }
+    return m;
+  }, [myPeriods, tcId]);
+
   // Lock info for a work_date's month, or null when the month is writable.
   const monthLockFor = (iso: string): MonthLock | null =>
     monthLocks.get((iso ?? "").slice(5, 7)) ?? null;
@@ -1946,6 +1960,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             impacts={impacts?.impacts ?? []}
             monthLocks={monthLocks}
             monthDeadlines={monthDeadlines}
+            monthStages={monthStages}
             monthsFull={monthsFull}
             unpaidMonths={unpaidMonths}
             partialMonths={partialMonths}
@@ -3235,6 +3250,8 @@ interface MonthlyWorklogViewProps {
   // the header shows a lock chip and hides the quick-add for those months.
   monthLocks?: Map<string, MonthLock>;
   monthDeadlines?: Map<string, { label: string; daysLeft: number }>;
+  /** "MM" → submission_period_status (pending/staff_reviewed/exported/finance_sent). */
+  monthStages?: Map<string, string>;
   /** Months in review with no day left to add (see monthsFull). */
   monthsFull?: Set<string>;
   unpaidMonths?: Set<string>;
@@ -3247,6 +3264,7 @@ interface MonthlyWorklogViewProps {
 
 function MonthlyWorklogView({
   monthDeadlines,
+  monthStages,
   monthsFull,
   unpaidMonths,
   partialMonths,
@@ -3396,6 +3414,7 @@ function MonthlyWorklogView({
         const unresolvedInMonth = unresolvedByMonth.get(month) ?? 0;
         const monthLock = monthLocks?.get(month.slice(5, 7)) ?? null;
         const deadline = monthDeadlines?.get(month.slice(5, 7)) ?? null;
+        const stage = monthStages?.get(month.slice(5, 7)) ?? "pending";
         const unsentInMonth = monthRows.filter(r => r.status === "draft" || r.status === "rejected").length;
 
         return (
@@ -3495,8 +3514,31 @@ function MonthlyWorklogView({
                   )}
                   {approvedInMonth > 0 && (
                     <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 border border-emerald-200">
-                      ✓ อนุมัติแล้ว {approvedInMonth}
+                      ✓ อาจารย์อนุมัติ {approvedInMonth}
                     </span>
+                  )}
+                  {/* The step after the lecturer. "รอเจ้าหน้าที่ตรวจ" only once the
+                      lecturer has nothing left in this month — while rows are
+                      still with them (or still to be sent in an open month) the
+                      month has not reached staff yet. */}
+                  {approvedInMonth > 0 && (
+                    stage === "finance_sent" ? (
+                      <span className="ml-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                        ส่งการเงินแล้ว
+                      </span>
+                    ) : stage === "exported" ? (
+                      <span className="ml-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                        เจ้าหน้าที่ส่งเบิกจ่ายแล้ว
+                      </span>
+                    ) : stage === "staff_reviewed" ? (
+                      <span className="ml-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                        เจ้าหน้าที่ตรวจแล้ว
+                      </span>
+                    ) : stage === "pending" && submittedInMonth === 0 && (unsentInMonth === 0 || monthLock) ? (
+                      <span className="ml-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 font-medium text-blue-700">
+                        รอเจ้าหน้าที่ตรวจ
+                      </span>
+                    ) : null
                   )}
                   {/* Approved and still unpaid: the hours are fine, the money
                       ran out. Kept separate from the approval chip so the two
