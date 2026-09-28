@@ -57,6 +57,113 @@ function validateUploadFile(f: File): string | null {
   return null;
 }
 
+// One PDF picker for every upload on this page: click (or Enter/Space) opens
+// the file dialog, or a file can be dragged onto the box. Validation happens
+// here so both paths reject the same files with the same message.
+function PdfDropZone({
+  file, onPick, disabled, label,
+}: {
+  file: File | null;
+  onPick: (f: File | null) => void;
+  disabled?: boolean;
+  label: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // dragenter/dragleave fire for every child the pointer crosses; a counter
+  // keeps the highlight from flickering off while still over the box.
+  const depth = useRef(0);
+  const [over, setOver] = useState(false);
+
+  function take(f: File | undefined) {
+    if (!f || disabled) return;
+    const err = validateUploadFile(f);
+    if (err) { notify.error(err); return; }
+    onPick(f);
+  }
+
+  return (
+    <div>
+      <div className="label">{label}</div>
+      <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled || undefined}
+        aria-label={`${label}: ลากไฟล์ PDF มาวาง หรือกดเพื่อเลือกไฟล์`}
+        onClick={() => !disabled && inputRef.current?.click()}
+        onKeyDown={e => {
+          if (!disabled && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault(); inputRef.current?.click();
+          }
+        }}
+        onDragEnter={e => { e.preventDefault(); if (disabled) return; depth.current++; setOver(true); }}
+        onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = disabled ? "none" : "copy"; }}
+        onDragLeave={() => { depth.current = Math.max(0, depth.current - 1); if (depth.current === 0) setOver(false); }}
+        onDrop={e => {
+          e.preventDefault();
+          depth.current = 0; setOver(false);
+          if (e.dataTransfer.files.length > 1) notify.error("วางได้ครั้งละ 1 ไฟล์");
+          take(e.dataTransfer.files?.[0]);
+        }}
+        className={
+          "flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-4 transition outline-none " +
+          "focus-visible:ring-2 focus-visible:ring-[var(--brand)] " +
+          (disabled
+            ? "cursor-not-allowed opacity-60 border-[var(--hairline)]"
+            : over
+              ? "cursor-copy border-[var(--brand)] bg-[var(--brand-soft)]"
+              : file
+                ? "cursor-pointer border-[var(--brand)]/40 bg-surface-secondary hover:bg-[var(--brand-soft)]"
+                : "cursor-pointer border-slate-300 hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]")
+        }
+      >
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
+          {file ? <FileText size={20} /> : <Upload size={20} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          {over ? (
+            <div className="text-sm font-medium text-[var(--brand)]">ปล่อยเพื่อเลือกไฟล์นี้</div>
+          ) : file ? (
+            <>
+              <div className="truncate text-sm font-medium">{file.name}</div>
+              <div className="text-xs text-muted">
+                {(file.size / 1024).toFixed(0)} KB · กดหรือลากไฟล์อื่นมาวางเพื่อเปลี่ยน
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-medium">
+                ลากไฟล์ PDF มาวางที่นี่ หรือ <span className="text-[var(--brand)] underline underline-offset-2">คลิกเพื่อเลือกไฟล์</span>
+              </div>
+              <div className="text-xs text-muted">รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน {MAX_UPLOAD_MB} MB</div>
+            </>
+          )}
+        </div>
+        {file && !disabled && (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onPick(null); }}
+            className="shrink-0 rounded-md p-1 text-muted hover:bg-surface-secondary hover:text-foreground"
+            aria-label="เอาไฟล์ที่เลือกออก"
+          >
+            <XCircle size={18} />
+          </button>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPT_ATTR}
+        className="hidden"
+        onChange={e => {
+          take(e.target.files?.[0]);
+          // Reset so picking the same file again still fires onChange.
+          e.target.value = "";
+        }}
+      />
+    </div>
+  );
+}
+
 interface Profile {
   student_id: string;
   prefix: string;
@@ -239,6 +346,21 @@ export default function ProfilePage() {
   const { data: me } = useSWR<Me>("/me");
   const [form, setForm] = useState<Profile>(emptyProfile);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["profile"]));
+
+  // A PDF dropped beside a drop zone would otherwise be opened by the browser
+  // in this tab, discarding everything typed into the form above. Swallow
+  // drops page-wide; the drop zones handle their own.
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", block);
+    window.addEventListener("drop", block);
+    return () => {
+      window.removeEventListener("dragover", block);
+      window.removeEventListener("drop", block);
+    };
+  }, []);
 
   // Merge, never replace. GET /me/profile CANNOT return these fields — they are
   // not stored anywhere (migration 0047), so the server copy is structurally
@@ -820,18 +942,6 @@ function CreditorFormStep({
     }
   }
 
-  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    if (!f) { setFile(null); return; }
-    const err = validateUploadFile(f);
-    if (err) {
-      // Clear the native input so the rejected filename doesn't linger and
-      // re-selecting the same file still re-fires onChange.
-      setFile(null); e.target.value = ""; notify.error(err); return;
-    }
-    setFile(f);
-  }
-
   async function upload() {
     if (!file) return;
     setUploading(true);
@@ -939,16 +1049,12 @@ function CreditorFormStep({
           หากระบบกรอกไม่ตรง คุณกรอกลงในฟอร์มเปล่าเอง แล้วสแกนเป็นไฟล์ PDF มาแนบที่นี่แทนได้
         </div>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-          <FieldGroup
-            label={doc ? "อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)" : "เลือกไฟล์ที่กรอกเอง"}
-            hint={`รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน ${MAX_UPLOAD_MB} MB`}
-          >
-            <input
-              type="file" accept={ACCEPT_ATTR}
-              onChange={pickFile}
-              className="block w-full text-sm text-[var(--ink-2)] file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[var(--brand-soft)] file:text-[var(--brand)] hover:file:brightness-95"
-            />
-          </FieldGroup>
+          <PdfDropZone
+            label={doc ? "อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)" : "ไฟล์ที่กรอกเอง"}
+            file={file}
+            onPick={setFile}
+            disabled={uploading}
+          />
           <Button variant="secondary" onClick={upload} disabled={!file || uploading} isPending={uploading}>
             <Upload size={14} /> {uploading ? "กำลังอัปโหลด…" : "อัปโหลดไฟล์ที่กรอกเอง"}
           </Button>
@@ -984,18 +1090,6 @@ function DocStep({
       return f ? URL.createObjectURL(f) : null;
     });
     setFile(f);
-  }
-
-  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    if (!f) { setChosen(null); return; }
-    const err = validateUploadFile(f);
-    if (err) {
-      // Clear the native input so the rejected filename doesn't linger and
-      // re-selecting the same file still re-fires onChange.
-      setChosen(null); e.target.value = ""; notify.error(err); return;
-    }
-    setChosen(f);
   }
 
   async function upload() {
@@ -1037,16 +1131,12 @@ function DocStep({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-        <FieldGroup
+        <PdfDropZone
           label={doc ? "อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)" : "เลือกไฟล์"}
-          hint={`รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน ${MAX_UPLOAD_MB} MB`}
-        >
-          <input
-            type="file" accept={ACCEPT_ATTR}
-            onChange={pickFile}
-            className="block w-full text-sm text-[var(--ink-2)] file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[var(--brand-soft)] file:text-[var(--brand)] hover:file:brightness-95"
-          />
-        </FieldGroup>
+          file={file}
+          onPick={setChosen}
+          disabled={uploading}
+        />
         <Button variant="primary" onClick={upload} disabled={!file || uploading} isPending={uploading}>
           <Upload size={14} /> {uploading ? "กำลังอัปโหลด…" : "อัปโหลด"}
         </Button>
