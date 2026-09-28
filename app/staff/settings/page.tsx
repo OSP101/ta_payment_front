@@ -2,7 +2,7 @@
 import useSWR, { mutate } from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, CalendarPlus, Power, PowerOff, Mail, MailX, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, CalendarPlus, Power, PowerOff, Mail, MailX, ChevronDown, Server, Send, CircleCheck, CircleX, CircleMinus } from "lucide-react";
 import {
   Tabs, Pagination, toast, Accordion, Switch,
   DatePicker, DateField, Calendar, I18nProvider,
@@ -53,7 +53,7 @@ export default function SettingsPage() {
   // land on the merged calendar tab instead of a 404.
   const rawTab = tabParam ?? "";
   const normalised = rawTab === "windows" || rawTab === "periods" ? "calendar" : rawTab;
-  const activeTab = ["rate", "terms", "calendar", "curricula", "admins", "email", "demo-access"].includes(normalised)
+  const activeTab = ["rate", "terms", "calendar", "curricula", "admins", "email", "mail-test", "demo-access"].includes(normalised)
     ? normalised
     : "rate";
   const router = useRouter();
@@ -79,6 +79,7 @@ export default function SettingsPage() {
             <Tabs.Tab id="curricula">หลักสูตร<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="email">อีเมลแจ้งเตือน<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="mail-test">ทดสอบอีเมล<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="demo-access">สิทธิ์ห้องทดลอง<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
@@ -103,6 +104,9 @@ export default function SettingsPage() {
         </Tabs.Panel>
         <Tabs.Panel id="email" className="pt-6">
           <MailSettingsSection />
+        </Tabs.Panel>
+        <Tabs.Panel id="mail-test" className="pt-6">
+          <MailServerTestSection />
         </Tabs.Panel>
         <Tabs.Panel id="demo-access" className="pt-6">
           <DemoTestersSection />
@@ -2355,6 +2359,184 @@ function MailSettingsSection() {
         </div>
       )}
     </Panel>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* ทดสอบอีเมล: is the KKU mail server reachable, and does a real send arrive   */
+/* -------------------------------------------------------------------------- */
+
+// Mirror mail.Info / mail.CheckResult / service.TestSendResult in ta_payment_back.
+interface MailServerInfo {
+  enabled: boolean;
+  host: string;
+  port: number;
+  encryption: "starttls" | "ssl" | "none" | "auto";
+  from: string;
+  from_header: string;
+  auth_user: string;
+  has_password: boolean;
+  legacy_ciphers: boolean;
+}
+
+const MAIL_ENCRYPTION_LABEL: Record<MailServerInfo["encryption"], string> = {
+  starttls: "STARTTLS (เข้ารหัสหลังเชื่อมต่อ)",
+  ssl: "SSL (เข้ารหัสตั้งแต่เชื่อมต่อ)",
+  none: "ไม่เข้ารหัส",
+  auto: "STARTTLS เมื่อเซิร์ฟเวอร์รองรับ",
+};
+interface MailCheckStep { key: string; label: string; ok: boolean; skipped?: boolean; warning?: boolean; detail?: string; ms: number }
+interface MailCheckResult { ok: boolean; steps: MailCheckStep[]; advice?: string }
+interface MailTestSendResult { to: string; sent: boolean; disabled?: boolean; error?: string; ms: number }
+
+function MailServerTestSection() {
+  const { data: info } = useSWR<MailServerInfo>("/mail-settings/server");
+  const { data: me } = useSWR<Me>("/me");
+  const [checking, setChecking] = useState(false);
+  const [check, setCheck] = useState<MailCheckResult | null>(null);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [to, setTo] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<MailTestSendResult | null>(null);
+  const [sendErr, setSendErr] = useState<string | null>(null);
+
+  // Default the recipient to the signed-in account, the safest place to send
+  // a test; staff can type any other single address.
+  useEffect(() => {
+    if (me?.email && !to) setTo(me.email);
+  }, [me, to]);
+
+  async function runCheck() {
+    setChecking(true);
+    try {
+      setCheck(await api.post<MailCheckResult>("/mail-settings/check"));
+      setCheckedAt(new Date().toISOString());
+    } catch (e) {
+      toast.danger("ทดสอบไม่สำเร็จ", { description: (e as Error).message });
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function sendTest() {
+    setSending(true); setSendErr(null); setSent(null);
+    try {
+      setSent(await api.post<MailTestSendResult>("/mail-settings/test-send", { to: to.trim() }));
+    } catch (e) {
+      setSendErr((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Panel
+        title="เมลเซิร์ฟเวอร์ที่ใช้ส่ง"
+        description="ค่าที่ระบบใช้ส่งอีเมลแจ้งเตือน กำหนดในไฟล์ตั้งค่าของเซิร์ฟเวอร์ (.env) หากต้องการเปลี่ยนกรุณาแจ้งผู้ดูแลระบบ"
+      >
+        {!info ? (
+          <div className="py-4 text-sm text-muted">กำลังโหลด…</div>
+        ) : !info.enabled ? (
+          <Alert
+            status="warning"
+            title="ยังไม่ได้ตั้งค่าเมลเซิร์ฟเวอร์"
+            description="ไม่ได้กำหนด SMTP_HOST ระบบจึงไม่ส่งอีเมลใด ๆ การแจ้งเตือนจะแสดงเฉพาะในระบบ"
+          />
+        ) : (
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+            <dt className="text-muted">เซิร์ฟเวอร์</dt>
+            <dd className="font-medium tabular break-all">{info.host}:{info.port}</dd>
+            <dt className="text-muted">การเข้ารหัส</dt>
+            <dd>
+              {MAIL_ENCRYPTION_LABEL[info.encryption] ?? info.encryption}
+              {info.legacy_ciphers && <span className="text-muted"> รองรับการเข้ารหัสรุ่นเก่า</span>}
+            </dd>
+            <dt className="text-muted">ส่งในนาม</dt>
+            <dd className="break-all">{info.from_header || info.from}</dd>
+            <dt className="text-muted">บัญชีเข้าสู่ระบบ</dt>
+            <dd className="break-all">
+              {info.auth_user
+                ? <>{info.auth_user} {info.has_password ? <span className="text-muted">(กำหนดรหัสผ่านแล้ว)</span> : <span className="text-danger">(ยังไม่กำหนดรหัสผ่าน)</span>}</>
+                : <span className="text-muted">ไม่เข้าสู่ระบบ (อนุญาตตาม IP ของเซิร์ฟเวอร์)</span>}
+            </dd>
+          </dl>
+        )}
+      </Panel>
+
+      <Panel
+        title="ทดสอบการเชื่อมต่อ"
+        description="ตรวจทีละขั้นตอนว่าระบบติดต่อเมลเซิร์ฟเวอร์ได้หรือไม่ โดยไม่ส่งอีเมลจริง"
+        actions={
+          <Button variant="secondary" onClick={runCheck} disabled={checking || !info?.enabled} isPending={checking}>
+            <Server size={14} /> ทดสอบการเชื่อมต่อ
+          </Button>
+        }
+      >
+        {!check ? (
+          <div className="text-sm text-muted">กดปุ่ม “ทดสอบการเชื่อมต่อ” เพื่อเริ่มตรวจ ใช้เวลาไม่เกิน 1 นาที</div>
+        ) : (
+          <div className="space-y-3">
+            <Alert
+              status={check.ok ? "success" : "danger"}
+              title={check.ok ? "เชื่อมต่อเมลเซิร์ฟเวอร์ได้" : "เชื่อมต่อเมลเซิร์ฟเวอร์ไม่สำเร็จ"}
+              description={checkedAt ? `ทดสอบเมื่อ ${formatThaiDateTime(checkedAt)}` : undefined}
+            />
+            {check.advice && <Alert status="warning" title="ข้อแนะนำ" description={check.advice} />}
+            <ol className="divide-y divide-hairline rounded-lg border border-hairline">
+              {check.steps.map(st => (
+                <li key={st.key} className="flex items-start gap-3 px-4 py-3 text-sm">
+                  {st.warning
+                    ? <CircleAlert size={18} className="text-warning shrink-0 mt-0.5" />
+                    : st.skipped
+                    ? <CircleMinus size={18} className="text-muted shrink-0 mt-0.5" />
+                    : st.ok
+                      ? <CircleCheck size={18} className="text-success shrink-0 mt-0.5" />
+                      : <CircleX size={18} className="text-danger shrink-0 mt-0.5" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium break-words">{st.label}</div>
+                    {st.detail && <div className="text-xs text-muted mt-0.5 break-words">{st.detail}</div>}
+                  </div>
+                  {!st.skipped && !st.warning && st.ms > 0 && <span className="text-xs text-muted tabular shrink-0">{st.ms} ms</span>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        title="ส่งอีเมลทดสอบ"
+        description="ส่งอีเมลตัวอย่างจริงหนึ่งฉบับด้วยรูปแบบเดียวกับอีเมลแจ้งเตือน ส่งได้ไม่เกิน 5 ฉบับใน 10 นาที และทุกครั้งจะถูกบันทึกในประวัติการใช้งาน"
+      >
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="flex-1 min-w-0">
+            <FieldGroup label="ส่งถึง" hint="ระบุอีเมลผู้รับหนึ่งที่อยู่">
+              <TextInput type="email" value={to} onChange={e => setTo(e.target.value)} placeholder="name@kku.ac.th" />
+            </FieldGroup>
+          </div>
+          <Button variant="primary" onClick={sendTest} disabled={sending || !to.trim() || !info?.enabled} isPending={sending}>
+            <Send size={14} /> ส่งอีเมลทดสอบ
+          </Button>
+        </div>
+        <div className="mt-4 space-y-2">
+          {sendErr && <Alert status="danger" title="ส่งไม่สำเร็จ" description={sendErr} />}
+          {sent && (sent.sent ? (
+            <Alert
+              status="success"
+              title={`ส่งถึง ${sent.to} แล้ว`}
+              description={`เมลเซิร์ฟเวอร์รับอีเมลแล้ว (${sent.ms} ms) หากไม่พบในกล่องจดหมาย กรุณาตรวจสอบโฟลเดอร์จดหมายขยะ`}
+            />
+          ) : (
+            <Alert
+              status={sent.disabled ? "warning" : "danger"}
+              title={sent.disabled ? "ระบบปิดการส่งอีเมลอยู่" : `ส่งถึง ${sent.to} ไม่สำเร็จ`}
+              description={sent.error}
+            />
+          ))}
+        </div>
+      </Panel>
+    </div>
   );
 }
 
