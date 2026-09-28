@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp, Lock } from "lucide-react";
+import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp, Lock, Printer } from "lucide-react";
+import useIsDemo from "../../../lib/useIsDemo";
 import { api, type Term, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import { icsToBlocks, applyClassKinds, type IcsImportResult, type ClassKindRow } from "../../../lib/ics";
@@ -129,6 +130,7 @@ export default function TASchedulePage() {
   const canWba = isGrad || (me?.study_level === "undergrad" && (me?.study_year ?? 0) >= 4);
   const { data: terms } = useSWR<Term[]>("/terms");
   const [termId, setTermId] = useState<string>("");
+  const demo = useIsDemo();
   useEffect(() => {
     if (!termId && terms && terms.length) {
       setTermId(terms.find(t => t.is_active)?.id ?? terms[0].id);
@@ -432,6 +434,25 @@ export default function TASchedulePage() {
               />
             )}
             <TermSelect terms={terms} value={termId} onChange={requestTermChange} />
+            {/* The college's printable timetable form (the page staff and
+                lecturers already open from the payout grid). A TA may print
+                their own; without this button the only way in was typing
+                /timetable-form?term_id=… by hand. New tab, except in the demo
+                sandbox, whose per-tab API prefix a new tab would lose. */}
+            <Button
+              variant="secondary"
+              isDisabled={!termId}
+              render={props => (
+                <a
+                  {...(props as unknown as React.ComponentProps<"a">)}
+                  href={termId ? `/timetable-form?term_id=${termId}` : undefined}
+                  target={demo ? undefined : "_blank"}
+                  rel={demo ? undefined : "noopener"}
+                />
+              )}
+            >
+              <Printer size={14} /> พิมพ์ตาราง
+            </Button>
             <span data-tour="sch-ics">
               <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={frozen}>
                 <FileUp size={14} /> อัปโหลด .ics

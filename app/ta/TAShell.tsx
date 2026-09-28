@@ -1,6 +1,6 @@
 "use client";
 import {
-  LayoutDashboard, IdCard, CalendarDays, FileText, Route, Megaphone,
+  LayoutDashboard, IdCard, CalendarDays, FileText, Route, Megaphone, CalendarClock,
 } from "lucide-react";
 import type { Me } from "../lib/api";
 import Shell, { type NavSection, type NavStatus, type UserMenuItem } from "../components/Shell";
@@ -41,6 +41,10 @@ const buildNav = (docsStatus?: NavStatus, docsLabel?: string,
   {
     title: "ติดตาม",
     items: [
+      // The per-month payout tracker. It used to be reachable only from the
+      // avatar dropdown inside a course, so a TA on the home screen had no
+      // way in at all.
+      { label: "สถานะการเบิกจ่าย", href: "/ta/reminders", icon: CalendarClock },
       { label: "ความคืบหน้าเอกสาร", href: "/document-progress", icon: Route },
       { label: "ประกาศ", href: "/announcements", icon: Megaphone },
     ],

@@ -79,7 +79,7 @@ export default function TACourseShell({
     { id: "profile",   label: "โปรไฟล์และบัญชี",     href: "/account",          icon: IdCard },
     { id: "schedule",  label: "ตารางเรียนของฉัน",   href: "/ta/schedule",      icon: CalendarDays },
     { id: "docs",      label: "เอกสารของฉัน",       href: "/ta/documents",     icon: FileText },
-    { id: "reminders", label: "แจ้งเตือนรายเดือน",   href: "/ta/reminders",     icon: CalendarClock },
+    { id: "reminders", label: "สถานะการเบิกจ่าย",   href: "/ta/reminders",     icon: CalendarClock },
     { id: "announce",  label: "ประกาศ",              href: "/announcements",    icon: Megaphone },
     { id: "notif",     label: "การเตือน",           href: "/ta/notifications", icon: Bell },
   ];
