@@ -8,7 +8,7 @@ import {
 import { Accordion } from "@heroui/react";
 import { useTerm } from "../TermContext";
 import {
-  PageHeader, Panel, Chip, SearchField, SelectField,
+  PageHeader, Panel, Chip, SearchField, SelectField, Tip,
 } from "../../components/ui";
 import { ChecksBlock } from "./ChecksBlock";
 import { TAListBlock } from "./TAListBlock";
@@ -270,8 +270,12 @@ function RequestHeader({ req }: { req: RequestSummary }) {
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 pr-2 text-left">
       <Chip tone={meta.tone}>{meta.label}</Chip>
       <span className="font-semibold tabular-nums">{req.course_code}</span>
-      <span className="min-w-0 max-w-full truncate text-(--ink-2) sm:max-w-[24rem]">{req.course_name}</span>
-      <span className="min-w-0 max-w-full truncate text-xs text-(--ink-3)">อ. {req.lecturer_name}</span>
+      <Tip content={`${req.course_code} ${req.course_name}\nอ. ${req.lecturer_name}`}>
+        <span tabIndex={-1} className="min-w-0 max-w-full truncate text-(--ink-2) sm:max-w-[24rem]">{req.course_name}</span>
+      </Tip>
+      <Tip content={`${req.course_code} ${req.course_name}\nอ. ${req.lecturer_name}`}>
+        <span tabIndex={-1} className="min-w-0 max-w-full truncate text-xs text-(--ink-3)">อ. {req.lecturer_name}</span>
+      </Tip>
     </div>
   );
 }
@@ -313,12 +317,14 @@ function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) 
           <Accordion.Heading>
             <Accordion.Trigger className="flex items-center gap-1.5 w-full px-3 py-2 text-xs font-semibold text-(--ink-2)">
               <ClipboardList size={13} /> การตรวจสอบของระบบ
-              <span className={
-                "ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium " +
-                (allPass ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")
-              }>
-                {passCount}/{checks.length}
-              </span>
+              <Tip content={`ผ่านการตรวจสอบ ${passCount} จาก ${checks.length} ข้อ`}>
+                <span tabIndex={-1} className={
+                  "ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium " +
+                  (allPass ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")
+                }>
+                  {passCount}/{checks.length}
+                </span>
+              </Tip>
               <Accordion.Indicator className="ml-auto" />
             </Accordion.Trigger>
           </Accordion.Heading>

@@ -13,10 +13,10 @@ import AnnouncementFeed from "../../components/AnnouncementFeed";
 import OnboardingChecklistCard from "../OnboardingChecklistCard";
 import {
   PageHeader, Panel, EmptyState, Chip, SelectField, Button,
-  Alert, type SelectOption, type ChipTone,
+  Alert, type SelectOption, type ChipTone, Tip,
 } from "../../components/ui";
 import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
-import { CourseCode } from "../../lib/courseCode";
+import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 type SubmissionStage =
   | "pending"
   | "exported"
@@ -652,10 +652,12 @@ function CourseCard({
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
           <BookOpen size={17} />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold tabular"><CourseCode c={course} /></div>
-          <div className="truncate text-xs text-muted">{course.name_th}</div>
-        </div>
+        <Tip content={`${courseCodeLabel(course)} ${course.name_th}`}>
+          <div className="min-w-0 flex-1" tabIndex={-1}>
+            <div className="truncate font-semibold tabular"><CourseCode c={course} /></div>
+            <div className="truncate text-xs text-muted">{course.name_th}</div>
+          </div>
+        </Tip>
         <ArrowRight
           size={15}
           className="mt-1 shrink-0 text-muted transition-colors group-hover:text-accent"

@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { Eye } from "lucide-react";
-import { Chip, Modal } from "../../components/ui";
+import { Chip, Modal, Tip } from "../../components/ui";
 import { type TermAnalytics, type CourseSpendStat, curriculumTH } from "../types";
 import { CAP_META, capState, money, num1, nearCapRatio, pct0 } from "./analysis";
 import { MiniBar } from "./charts";
@@ -37,16 +37,18 @@ export default function CurriculumBars({ a }: { a: TermAnalytics }) {
                 <b className="text-sm">{money(r.spent_baht)}</b>
                 {r.cap_baht > 0 && <div className="text-[var(--ink-3)]">งบ {money(r.cap_baht)}</div>}
               </div>
-              <button type="button" onClick={() => setDetail(r.curriculum || "unknown")}
-                      aria-label={`ดูรายวิชาของ${curriculumTH(r.curriculum)}`} title="ดูรายละเอียดรายวิชา"
+              <Tip content="ดูรายละเอียดรายวิชา"><button type="button" onClick={() => setDetail(r.curriculum || "unknown")}
+                      aria-label={`ดูรายวิชาของ${curriculumTH(r.curriculum)}`}
                       className="rounded-md p-1.5 text-[var(--ink-3)] hover:bg-slate-100 hover:text-[var(--ink-1)]">
                 <Eye size={16} />
-              </button>
+              </button></Tip>
             </div>
           </div>
-          <div className="mt-1.5 h-2.5 rounded bg-[var(--hairline,#eef0f3)] overflow-hidden">
-            <div className="h-full rounded bg-[var(--brand)]" style={{ width: `${(r.spent_baht / maxSpend) * 100}%` }} />
-          </div>
+          <Tip content={`ใช้ไป ${money(r.spent_baht)}\nความยาวแท่งเทียบกับหลักสูตรที่ใช้มากที่สุด`}>
+            <div className="mt-1.5 h-2.5 rounded bg-[var(--hairline,#eef0f3)] overflow-hidden">
+              <div className="h-full rounded bg-[var(--brand)]" style={{ width: `${(r.spent_baht / maxSpend) * 100}%` }} />
+            </div>
+          </Tip>
         </div>
       ))}
 

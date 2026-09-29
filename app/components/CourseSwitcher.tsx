@@ -7,6 +7,7 @@ import {
 } from "@heroui/react";
 import { BookOpen, ChevronsUpDown } from "lucide-react";
 import { courseCodeLabel } from "../lib/courseCode";
+import { Tip } from "./ui";
 
 interface TC { id: string; code: string; alt_codes?: string[]; name_th: string; term_id?: string; }
 
@@ -46,7 +47,7 @@ export default function CourseSwitcher({
         <BookOpen size={15} className="shrink-0 text-muted" />
         {/* min-w-0: without it the flex item keeps its min-content width — and a
             long Thai name has no break opportunities — so truncate never kicks in. */}
-        <span className="min-w-0 truncate" title={label}>{label}</span>
+        <Tip content={label}><span className="min-w-0 truncate">{label}</span></Tip>
       </div>
     );
   }
@@ -68,7 +69,8 @@ export default function CourseSwitcher({
     >
       {/* Flat by default (blends into the bar); border + bg appear on hover. */}
       <Autocomplete.Trigger className="min-w-0 overflow-hidden items-center! gap-1! shadow-none! border! border-transparent! bg-transparent! rounded-md px-2! py-1.5! text-foreground hover:border-border! hover:bg-surface-secondary!">
-        <span className="inline-flex items-center gap-2 min-w-0 flex-1" title={label}>
+        {/* tabIndex -1: the Autocomplete trigger around it is already the tab stop. */}
+        <Tip content={label}><span className="inline-flex items-center gap-2 min-w-0 flex-1" tabIndex={-1}>
           <BookOpen size={15} className="shrink-0 text-muted" />
           {/* truncate has to sit on the Value itself (a flex item, so it is
               blockified) together with min-w-0 — on the inline span inside it
@@ -76,7 +78,7 @@ export default function CourseSwitcher({
           <Autocomplete.Value className="min-w-0 truncate font-medium">
             {() => label}
           </Autocomplete.Value>
-        </span>
+        </span></Tip>
         <ChevronsUpDown size={14} className="shrink-0 text-muted" />
       </Autocomplete.Trigger>
       <Autocomplete.Popover placement="bottom start" className="w-[calc(100vw-1.5rem)] max-w-[480px] sm:w-auto sm:min-w-[340px]">

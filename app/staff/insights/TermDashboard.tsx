@@ -30,7 +30,7 @@ import {
   OctagonAlert, Info, ArrowRight, CalendarClock, FileWarning, Undo2, CalendarX2, UserX, ChevronDown,
   Gauge, Scale, Workflow, Table2, BarChart3, AlignLeft, FlaskConical,
 } from "lucide-react";
-import { Panel, Button, Select } from "../../components/ui";
+import { Panel, Button, Select, Tip } from "../../components/ui";
 import { api, type Term } from "../../lib/api";
 import useIsDemo from "../../lib/useIsDemo";
 import type { TermAnalytics, StaffingStatus, CourseStaffing } from "../types";
@@ -352,12 +352,20 @@ export default function TermDashboard({
             </Panel>
             <Panel title="วิชาที่ควรทบทวน" description="ขอ TA มากกว่าที่แนะนำ เรียงจากเกินมากที่สุด">
               <CourseList rows={st.review.slice(0, 6)} empty="ไม่มีวิชาที่ขอเกินที่แนะนำ" onPick={jumpTo}
-                          right={r => <span className="text-red-700">+{r.requested - r.recommended}</span>} />
+                          right={r => (
+                            <Tip content={`ขอ TA เกินจำนวนที่แนะนำ ${r.requested - r.recommended} คน`}>
+                              <span tabIndex={-1} className="text-red-700">+{r.requested - r.recommended}</span>
+                            </Tip>
+                          )} />
             </Panel>
             {st.under.length > 0 && (
               <Panel title="วิชาที่ TA อาจไม่พอ" description="ขอน้อยกว่าที่แนะนำ">
                 <CourseList rows={st.under.slice(0, 4)} empty="" onPick={jumpTo}
-                            right={r => <span className="text-sky-800">{r.requested - r.recommended}</span>} />
+                            right={r => (
+                              <Tip content={`ขอ TA น้อยกว่าจำนวนที่แนะนำ ${r.recommended - r.requested} คน`}>
+                                <span tabIndex={-1} className="text-sky-800">{r.requested - r.recommended}</span>
+                              </Tip>
+                            )} />
               </Panel>
             )}
           </div>
@@ -374,7 +382,8 @@ export default function TermDashboard({
               const m = PIPELINE_META[s.key];
               const old = s.count > 0 && (s.oldest_days ?? 0) >= RULES.staleDays;
               const card = (
-                <div className={`relative h-full rounded-xl border p-3 transition ${old ? "border-amber-300 bg-amber-50" : "border-[var(--border)] bg-surface"} ${staffLinks ? "hover:shadow-md" : ""}`}>
+                <Tip content={old ? `มีรายการรอนานตั้งแต่ ${RULES.staleDays} วันขึ้นไป` : undefined}>
+                <div {...(staffLinks ? { tabIndex: -1 } : {})} className={`relative h-full rounded-xl border p-3 transition ${old ? "border-amber-300 bg-amber-50" : "border-[var(--border)] bg-surface"} ${staffLinks ? "hover:shadow-md" : ""}`}>
                   <div className="flex items-center gap-2 text-xs text-[var(--ink-3)]">
                     <span className={`inline-flex size-5 items-center justify-center rounded-full text-xs font-bold ${s.count > 0 ? "bg-[var(--brand)] text-white" : "bg-slate-200 text-slate-700"}`}>{i + 1}</span>
                     ขั้นที่ {i + 1}
@@ -385,6 +394,7 @@ export default function TermDashboard({
                     {s.oldest_days != null && s.count > 0 ? `รอนานสุด ${s.oldest_days} วัน` : m.who}
                   </div>
                 </div>
+                </Tip>
               );
               return staffLinks ? <Link key={s.key} href={m.href} className="block">{card}</Link> : <div key={s.key}>{card}</div>;
             })}
@@ -652,7 +662,7 @@ function Kpi({ icon, label, value, unit, sub, delta, tone, title }: {
 }) {
   const iconCls = tone === "warn" ? "bg-amber-100 text-amber-800" : "bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]";
   return (
-    <div className="relative flex flex-col rounded-xl border border-[var(--border)] bg-surface p-4" title={title}>
+    <Tip content={title}><div className="relative flex flex-col rounded-xl border border-[var(--border)] bg-surface p-4">
       <div className="flex items-start gap-3">
         <span className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg ${iconCls}`} aria-hidden>{icon}</span>
         <div className="min-w-0 flex-1">
@@ -664,7 +674,7 @@ function Kpi({ icon, label, value, unit, sub, delta, tone, title }: {
       </div>
       {sub && <div className="mt-2 text-xs text-[var(--ink-3)]">{sub}</div>}
       {delta && <div className="mt-1 text-xs text-[var(--ink-3)]">{delta}</div>}
-    </div>
+    </div></Tip>
   );
 }
 
@@ -702,7 +712,9 @@ function CourseList({ rows, empty, onPick, right }: {
           <li key={r.teaching_course_id}>
             <button type="button" onClick={() => onPick(r.teaching_course_id)}
                     className="flex w-full items-center gap-3 py-2 text-start hover:bg-slate-50 -mx-2 px-2 rounded-lg">
-              <i className="size-2.5 shrink-0 rounded-full" style={{ background: m.color }} aria-hidden />
+              <Tip content={m.label}>
+                <span tabIndex={-1} className="size-2.5 shrink-0 rounded-full" style={{ background: m.color }} />
+              </Tip>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-[var(--ink-1)]">{r.code} <span className="font-normal text-[var(--ink-3)] text-xs">{curriculumTH(r.curriculum)}</span></div>
                 <div className="text-xs text-[var(--ink-3)] tabular-nums">

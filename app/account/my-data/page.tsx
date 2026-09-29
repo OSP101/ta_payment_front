@@ -9,7 +9,7 @@ import {
   type MyDataExport, type DataDeletionRequest,
 } from "../../lib/api";
 import { notify } from "../../lib/notify";
-import { PageHeader, Panel, Button, IconButton, TextArea, Alert, Chip, StatusChip } from "../../components/ui";
+import { PageHeader, Panel, Button, IconButton, TextArea, Alert, Chip, StatusChip, Tip } from "../../components/ui";
 import { Skel, SkelList, SkelRegion, SkelRows, SkelValue } from "../../components/Skeletons";
 
 /**
@@ -227,7 +227,7 @@ function SecuritySection({ exp }: { exp: MyDataExport | undefined }) {
               <tr key={s.id} className="border-t border-[var(--hairline)]">
                 <td className="py-1.5 pr-3 whitespace-nowrap">{new Date(s.created_at).toLocaleString("th-TH")}</td>
                 <td className="py-1.5 pr-3 font-mono">{s.ip ?? "—"}</td>
-                <td className="py-1.5 pr-3 truncate max-w-[240px]" title={s.user_agent}>{s.user_agent ?? "—"}</td>
+                <Tip content={s.user_agent}><td className="py-1.5 pr-3 truncate max-w-[240px]">{s.user_agent ?? "—"}</td></Tip>
                 <td className="py-1.5">
                   {s.revoked_at ? <Chip tone="neutral">สิ้นสุดแล้ว</Chip> : <Chip tone="success">ใช้งานอยู่</Chip>}
                 </td>

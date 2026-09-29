@@ -12,7 +12,7 @@ import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
 import { courseCodeLabel, courseCodes, pickPrimaryCode } from "../../lib/courseCode";
 import {
-  Modal, Button, FieldGroup, TextInput, Alert, Chip, Select,
+  Modal, Button, FieldGroup, TextInput, Alert, Chip, Select, Tip,
 } from "../../components/ui";
 
 // Clamp a typed section count to a whole number in [0, 99] — blocks decimals,
@@ -757,14 +757,14 @@ function LecturerPicker({
             return (
               <Chip key={id} tone="brand">
                 {u ? lecturerName(u) : id}
-                <button
+                <Tip content="เอาออก"><button
                   type="button"
                   onClick={() => onChange(selected.filter(x => x !== id))}
                   className="ms-1 inline-flex hover:text-danger"
                   aria-label="เอาออก"
                 >
                   <X size={11} />
-                </button>
+                </button></Tip>
               </Chip>
             );
           })}
@@ -812,10 +812,12 @@ export function LecturerAutocomplete({
           >
             {items.map(u => (
               <ListBox.Item key={u.id} id={u.id} textValue={`${lecturerName(u)} ${u.email}`}>
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{lecturerName(u)}</div>
-                  <div className="text-xs text-muted truncate">{u.email}</div>
-                </div>
+                <Tip content={`${lecturerName(u)}\n${u.email}`}>
+                  <div tabIndex={-1} className="min-w-0">
+                    <div className="font-medium truncate">{lecturerName(u)}</div>
+                    <div className="text-xs text-muted truncate">{u.email}</div>
+                  </div>
+                </Tip>
                 <ListBox.ItemIndicator />
               </ListBox.Item>
             ))}

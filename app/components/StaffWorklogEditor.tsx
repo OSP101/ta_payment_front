@@ -5,7 +5,7 @@ import { Save, Trash2, Plus, Lock, X, Pencil, ShieldCheck } from "lucide-react";
 import { Accordion } from "@heroui/react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { TextInput, Select, Button, IconButton, Chip, EmptyState, Spinner, DatePicker, TimePicker, StatusChip, Modal, Alert, TextArea } from "./ui";
+import { TextInput, Select, Button, IconButton, Chip, EmptyState, Spinner, DatePicker, TimePicker, StatusChip, Modal, Alert, TextArea, Tip } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
 
 export interface StaffWorkLog {
@@ -153,7 +153,9 @@ export function StaffWorklogEditor({
             <Accordion.Heading>
               <Accordion.Trigger className="flex items-center gap-2 w-full px-4 flex-wrap">
                 <div className="flex flex-col items-start min-w-0 mr-1">
-                  <span className="font-medium text-ink-1 truncate">{g.taName}</span>
+                  <Tip content={g.taName}>
+                    <span tabIndex={-1} className="font-medium text-ink-1 truncate">{g.taName}</span>
+                  </Tip>
                   {meta?.student_id && (
                     <span className="text-[11px] text-ink-3">รหัส {meta.student_id}</span>
                   )}
@@ -164,9 +166,13 @@ export function StaffWorklogEditor({
                   </Chip>
                 )}
                 {meta && (
-                  <Chip tone={meta.is_returning ? "info" : "neutral"}>
-                    {meta.is_returning ? "TA เก่า" : "TA ใหม่"}
-                  </Chip>
+                  <Tip content={meta.is_returning ? "เคยเป็น TA ในภาคเรียนก่อนหน้า" : "เป็น TA ครั้งแรก"}>
+                    <span tabIndex={-1}>
+                      <Chip tone={meta.is_returning ? "info" : "neutral"}>
+                        {meta.is_returning ? "TA เก่า" : "TA ใหม่"}
+                      </Chip>
+                    </span>
+                  </Tip>
                 )}
                 <Chip tone="neutral">{g.rows.length} รายการ</Chip>
                 <Chip tone="success">{approvedHrs.toFixed(1)} ชม.</Chip>
@@ -393,9 +399,9 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
         <td className="px-3 py-2 align-middle"><StatusChip status={row.status} /></td>
         <td className="px-3 py-2 align-middle text-right whitespace-nowrap pr-4">
           {row.locked ? (
-            <span title="งวดของเดือนนี้ปิดแล้ว หรือส่งออก/ส่งการเงินไปแล้ว แก้ไขย้อนหลังไม่ได้">
+            <Tip content="งวดของเดือนนี้ปิดแล้ว หรือส่งออก/ส่งการเงินไปแล้ว แก้ไขย้อนหลังไม่ได้"><span>
               <Chip tone="warn"><Lock size={11} /> ล็อก</Chip>
-            </span>
+            </span></Tip>
           ) : (
             <div className="inline-flex items-center gap-1">
               <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => setEditing(true)}>

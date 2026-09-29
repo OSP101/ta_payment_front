@@ -21,7 +21,7 @@ import {
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal,
+  PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal, Tip, TipWrap,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 import { TaPlanner, planHandoffKey, type PlanItem, type DraftEstimate } from "../../../../components/TaPlanner";
@@ -659,6 +659,14 @@ function RequestFormSection({
   });
 
   const canSubmit = taChosen && workloadOk && sectionChosen && !anyScheduleConflict;
+  // Why ส่งคำขอ is greyed out, in the same order as step 2's status line.
+  const submitBlockReason =
+    canSubmit ? undefined
+    : assignments.length === 0 ? "ยังไม่ได้เพิ่ม TA"
+    : !taChosen ? "ยังไม่ได้เลือก TA ให้ครบทุกแถว"
+    : !sectionChosen ? "ยังไม่ได้เลือก section ให้ครบทุกคน"
+    : anyScheduleConflict ? "มี TA ที่ตารางทับซ้อนกับรายวิชาอื่น กรุณาเอาชื่อออกก่อน"
+    : "ภาระงานยังไม่ครบตามระเบียบ";
 
   // TAs on this form who have not filed a timetable yet. Submitting is still
   // allowed — that is the point of the change — but the request will rest
@@ -948,9 +956,9 @@ function RequestFormSection({
           <div className="text-xs text-muted">ทำทีละขั้นตามหมายเลข แล้วกด “ส่งคำขอ” ด้านล่าง</div>
         </div>
         {draftSavedAt && assignments.length > 0 && (
-          <div className="ml-auto text-xs text-muted flex items-center gap-1 shrink-0" title="ระบบเก็บสิ่งที่กรอกไว้ให้อัตโนมัติ เปิดจากเครื่องไหนก็ได้ค่าเดิม">
+          <Tip content="ระบบเก็บสิ่งที่กรอกไว้ให้อัตโนมัติ เปิดจากเครื่องไหนก็ได้ค่าเดิม"><div className="ml-auto text-xs text-muted flex items-center gap-1 shrink-0">
             <CheckCircle2 size={12} /> บันทึกร่างแล้ว {draftSavedAt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
-          </div>
+          </div></Tip>
         )}
       </div>
 
@@ -1163,6 +1171,10 @@ function RequestFormSection({
           >
             ล้างฟอร์ม
           </Button>
+          <TipWrap
+            className="inline-flex"
+            content={pending || canSend === false ? undefined : submitBlockReason}
+          >
           <Button
             variant="primary"
             // Always confirm before sending, with a real summary of who is
@@ -1178,6 +1190,7 @@ function RequestFormSection({
             <Send size={16} />
             {pending ? "กำลังส่ง…" : `ส่งคำขอ (${assignments.length} คน)`}
           </Button>
+          </TipWrap>
         </div>
       </div>
 
@@ -1229,7 +1242,11 @@ function RequestFormSection({
                     <div className="shrink-0 text-right tabular-nums">
                       <div className="text-xs text-ink-3">จะได้ประมาณ</div>
                       <div className={"font-semibold " + (cut ? "text-danger" : "text-ink-1")}>
-                        {cut && <s className="font-normal text-ink-3 mr-1">{fmtBahtEst(est.owed)}</s>}
+                        {cut && (
+                          <Tip content="ค่าตอบแทนเต็มตามภาระงานที่ระบุ งบไม่พอจึงได้รับตามยอดด้านขวา">
+                            <s className="font-normal text-ink-3 mr-1">{fmtBahtEst(est.owed)}</s>
+                          </Tip>
+                        )}
                         {fmtBahtEst(est.share)}
                       </div>
                       <div className="text-xs text-ink-3">≈ {fmtBahtEst(est.perMonth)}/เดือน · {est.hours.toLocaleString("th-TH", { maximumFractionDigits: 1 })} ชม./เทอม</div>
@@ -1467,8 +1484,12 @@ function AssignmentBlock({
           <Chip tone={blocked ? "danger" : "brand"}>คนที่ {n}</Chip>
           {ta ? (
             <>
-              <span className="font-medium text-sm truncate">{ta.first_name} {ta.last_name}</span>
-              <span className="text-xs text-ink-3 truncate">{ta.email}</span>
+              <Tip content={`${ta.first_name} ${ta.last_name}`}>
+                <span className="font-medium text-sm truncate">{ta.first_name} {ta.last_name}</span>
+              </Tip>
+              <Tip content={ta.email}>
+                <span className="text-xs text-ink-3 truncate">{ta.email}</span>
+              </Tip>
             </>
           ) : (
             <span className="text-xs text-ink-3">ยังไม่ได้เลือก TA</span>

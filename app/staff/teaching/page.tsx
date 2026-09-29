@@ -9,7 +9,7 @@ import { api } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Button, IconButton, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup,
+  PageHeader, Button, IconButton, TextInput, Chip, EmptyState, ConfirmDialog, Modal, FieldGroup, Tip,
 } from "../../components/ui";
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 import { Skel } from "../../components/Skeletons";
@@ -315,9 +315,9 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
     {
       id: "lecturers", label: "อาจารย์ผู้สอน",
       render: c => c.lecturer_names ? (
-        <span className="block max-w-[180px] truncate" title={c.lecturer_names}>
+        <Tip content={c.lecturer_names}><span className="block max-w-[180px] truncate">
           {c.lecturer_names}
-        </span>
+        </span></Tip>
       ) : (
         <span className="text-warning text-xs">ยังไม่ผูกอาจารย์</span>
       ),
@@ -327,9 +327,9 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
       className: "tabular-nums whitespace-nowrap",
       // แสดง "x / y" เสมอ แม้ฝั่งใดเป็น 0 — ทุกแถวอ่านด้วยรูปแบบเดียวกัน
       render: c => (
-        <span title={`ภาคปกติ ${c.num_sections_regular} sec · ภาคพิเศษ ${c.num_sections_special} sec`}>
+        <Tip content={`ภาคปกติ ${c.num_sections_regular} sec · ภาคพิเศษ ${c.num_sections_special} sec`}><span>
           {c.num_sections_regular} / {c.num_sections_special}
-        </span>
+        </span></Tip>
       ),
     },
     {
@@ -339,9 +339,9 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
         return (
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <Users size={13} className="text-muted shrink-0" />
-            <span className="tabular-nums" title={`ภาคปกติ ${c.num_students_regular_entered ? `${c.num_students_regular} คน` : "ยังไม่กรอก"} · ภาคพิเศษ ${c.num_students_special_entered ? `${c.num_students_special} คน` : "ยังไม่กรอก"}`}>
+            <Tip content={`ภาคปกติ ${c.num_students_regular_entered ? `${c.num_students_regular} คน` : "ยังไม่กรอก"} · ภาคพิเศษ ${c.num_students_special_entered ? `${c.num_students_special} คน` : "ยังไม่กรอก"}`}><span className="tabular-nums">
               {studentCountLabel(c.num_students_regular, c.num_students_regular_entered)} / {studentCountLabel(c.num_students_special, c.num_students_special_entered)}
-            </span>
+            </span></Tip>
             {missing && <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">ยังไม่กรอก</span>}
             <IconButton
               label={`แก้ไขจำนวนนักศึกษา ${courseCodeLabel(c)}`}
@@ -604,13 +604,19 @@ function BudgetBadge({ id }: { id: string }) {
   const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
   return (
     <div className="flex flex-col items-start gap-1 whitespace-nowrap">
-      <Chip tone={tone}>
-        {fmt(data.used_baht)}/{fmt(data.per_course_max)} บ.
-      </Chip>
+      <Tip content={`งบที่ใช้ไปแล้ว ${fmt(data.used_baht)} บาท จากเพดานงบของวิชา ${fmt(data.per_course_max)} บาท`}>
+        <span className="inline-flex">
+          <Chip tone={tone}>
+            {fmt(data.used_baht)}/{fmt(data.per_course_max)} บ.
+          </Chip>
+        </span>
+      </Tip>
       {/* บรรทัดล่าง = แบ่งเพดานงบตามภาค (รวมกันได้เท่ากับตัวหลังของ chip) */}
-      <span className="text-[11px] text-muted tabular-nums">
-        ปกติ {fmt(data.term_pay_regular)} · พิเศษ {fmt(data.term_pay_special)} บ.
-      </span>
+      <Tip content="เพดานงบของวิชาแยกตามภาคปกติและภาคพิเศษ รวมกันเท่ากับเพดานงบทั้งหมด">
+        <span className="text-[11px] text-muted tabular-nums">
+          ปกติ {fmt(data.term_pay_regular)} · พิเศษ {fmt(data.term_pay_special)} บ.
+        </span>
+      </Tip>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { DOC_ANCHORS } from "../../../content/docs/anchors";
 import { resolveDocForRoute } from "../../lib/docs/routeMap";
 import useIsDemo from "../../lib/useIsDemo";
 import { Skel, SkelRegion } from "../Skeletons";
+import { Tip } from "../ui";
 
 /**
  * Cloudflare-dashboard-style contextual help: the manual opens in a panel
@@ -218,9 +219,9 @@ export function DocsDock() {
           >
             เปิดคู่มือฉบับเต็ม {!demo && <ExternalLink size={12} />}
           </Link>
-          <button type="button" onClick={close} aria-label="ปิดคู่มือ" className="ms-1 rounded-md p-1.5 hover:bg-slate-100">
+          <Tip content="ปิดคู่มือ"><button type="button" onClick={close} aria-label="ปิดคู่มือ" className="ms-1 rounded-md p-1.5 hover:bg-slate-100">
             <X size={18} />
-          </button>
+          </button></Tip>
         </header>
         <div className="relative min-h-0 flex-1">
           {loadedSrc !== embedHref(target) && (

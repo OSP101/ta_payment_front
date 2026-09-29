@@ -8,6 +8,7 @@ import SearchDialog from "./SearchDialog";
 import type { Audience } from "../../../content/docs/types";
 import { docHref, type DocPageMeta } from "../../../content/docs/meta";
 import { APP_VERSION } from "../../lib/docs/version";
+import { Tip } from "../ui";
 
 // Metadata only — the server layout maps pages through `toMeta`, so no page
 // text rides along in this client component's props.
@@ -134,14 +135,14 @@ export default function DocsShell({
       <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
           <div className="flex items-center gap-3 py-2.5">
-            <button
+            <Tip content="เปิดเมนู"><button
               type="button"
               className="lg:hidden -ms-1 rounded-md p-1.5 hover:bg-slate-100"
               onClick={() => setMobileOpen(true)}
               aria-label="เปิดเมนู"
             >
               <Menu size={20} />
-            </button>
+            </button></Tip>
             <Link href={homeHref} className="flex items-center gap-2 shrink-0">
               <span className="flex h-7 w-7 items-center justify-center rounded-md bg-(--brand) text-white">
                 <BookOpen size={15} />
@@ -196,9 +197,9 @@ export default function DocsShell({
             <div className="docs-anim-slide-start absolute inset-y-0 start-0 w-72 max-w-[85vw] overflow-y-auto bg-white p-4 shadow-xl">
               <div className="mb-4 flex items-center justify-between">
                 <span className="text-sm font-semibold">เมนูคู่มือ</span>
-                <button type="button" onClick={() => setMobileOpen(false)} aria-label="ปิดเมนู">
+                <Tip content="ปิดเมนู"><button type="button" onClick={() => setMobileOpen(false)} aria-label="ปิดเมนู">
                   <X size={18} />
-                </button>
+                </button></Tip>
               </div>
               <NavList sections={sections} audience={audience} pathname={pathname} collapsedSections={collapsedSections} onToggle={toggleSection} />
             </div>

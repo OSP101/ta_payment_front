@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { Download, Lock, CheckCircle2, AlertTriangle, CalendarRange } from "lucide-react";
 import { errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Button, Chip, Spinner } from "./ui";
+import { Button, Chip, Spinner, Tip } from "./ui";
 import { Skel, SkelRows, SkelRegion, SkelValue } from "./Skeletons";
 import {
   MonthChips, monthLabels, monthsQuery, suggestMonths,
@@ -302,8 +302,12 @@ export function ExportPreviewBody({
               <th className="text-left px-3 py-2">ชื่อ TA</th>
               <th className="text-left px-3 py-2">ระดับ</th>
               <th className="text-right px-3 py-2">ชม.อนุมัติ</th>
-              <th className="text-right px-3 py-2">เป็นเงิน</th>
-              <th className="text-right px-3 py-2">จ่ายจริง</th>
+              <Tip content="ค่าตอบแทนตามชั่วโมงที่อนุมัติ ก่อนปรับตามงบ">
+                <th className="text-right px-3 py-2">เป็นเงิน</th>
+              </Tip>
+              <Tip content="ยอดที่จ่ายจริงหลังปรับตามงบ หากงบไม่พอระบบแบ่งตามสัดส่วน">
+                <th className="text-right px-3 py-2">จ่ายจริง</th>
+              </Tip>
               <th className="text-left px-3 py-2">ข้อมูล</th>
             </tr>
           </thead>
@@ -315,7 +319,9 @@ export function ExportPreviewBody({
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{r.full_name}</span>
-                    <Chip tone={r.is_returning ? "info" : "neutral"}>{r.is_returning ? "เก่า" : "ใหม่"}</Chip>
+                    <Tip content={r.is_returning ? "เคยเป็น TA ในภาคเรียนก่อนหน้า" : "เป็น TA ครั้งแรก"}>
+                      <span><Chip tone={r.is_returning ? "info" : "neutral"}>{r.is_returning ? "เก่า" : "ใหม่"}</Chip></span>
+                    </Tip>
                   </div>
                   <div className="text-xs text-ink-3">{r.email}</div>
                 </td>
@@ -324,7 +330,9 @@ export function ExportPreviewBody({
                 <td className="px-3 py-2 text-right tabular">{fmtBaht(r.pay_baht)}</td>
                 <td className="px-3 py-2 text-right tabular">
                   {r.actual_paid !== r.pay_baht ? (
-                    <span className="text-amber-700 dark:text-amber-300 font-medium">{fmtBaht(r.actual_paid)}</span>
+                    <Tip content={`งบไม่พอ ยอดถูกปรับตามสัดส่วนจาก ${fmtBaht(r.pay_baht)}`}>
+                      <span className="text-amber-700 dark:text-amber-300 font-medium">{fmtBaht(r.actual_paid)}</span>
+                    </Tip>
                   ) : (
                     fmtBaht(r.actual_paid)
                   )}

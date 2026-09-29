@@ -2,7 +2,7 @@
 import useSWR from "swr";
 import { useMemo, useState } from "react";
 import { Search, X, Link2, KeyRound, Copy, User, ShieldAlert, Eye, AlertTriangle } from "lucide-react";
-import { PageHeader, Chip, TipWrap, Panel, Button, Modal } from "../../components/ui";
+import { PageHeader, Chip, TipWrap, Panel, Button, Modal, Tip } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { Skel, SkelValue } from "../../components/Skeletons";
 import { actionLabel, severityOf, SUMMARY_GROUPS, type Severity } from "./vocabulary";
@@ -343,9 +343,21 @@ function buildColumns(
         const label = actionLabel(r.action);
         return (
           <div className="flex items-center gap-1.5">
-            {sev === "danger" && <ShieldAlert size={14} className="shrink-0 text-danger" />}
-            {sev === "warn" && <AlertTriangle size={14} className="shrink-0 text-warning" />}
-            {sev === "quiet" && <Eye size={14} className="shrink-0 text-(--ink-4)" />}
+            {sev === "danger" && (
+              <Tip content="มีการปฏิเสธการเข้าถึง ล็อกบัญชี หรือลบข้อมูล">
+                <span className="inline-flex shrink-0"><ShieldAlert size={14} className="text-danger" /></span>
+              </Tip>
+            )}
+            {sev === "warn" && (
+              <Tip content="ย้อนกลับหรือแก้ไขสิ่งที่ตัดสินใจไปแล้ว ควรตรวจสอบอีกครั้ง">
+                <span className="inline-flex shrink-0"><AlertTriangle size={14} className="text-warning" /></span>
+              </Tip>
+            )}
+            {sev === "quiet" && (
+              <Tip content="การเปิดดู ค้นหา หรือดาวน์โหลดข้อมูล">
+                <span className="inline-flex shrink-0"><Eye size={14} className="text-(--ink-4)" /></span>
+              </Tip>
+            )}
             <TipWrap content={r.action}>
               <span className={sev === "quiet" ? "text-(--ink-3)" : "font-medium"}>{label}</span>
             </TipWrap>
@@ -367,14 +379,13 @@ function buildColumns(
             <Chip tone="neutral">ระบบ</Chip>
           )}
           {r.actor_id && (
-            <button
+            <Tip content="ดูทุกอย่างที่คนนี้ทำ"><button
               type="button"
               className="ml-2 text-(--brand) underline decoration-dotted"
-              title="ดูทุกอย่างที่คนนี้ทำ"
               onClick={() => onActorHistory(r.actor_id!)}
             >
               {r.actor_name || short(r.actor_id)}
-            </button>
+            </button></Tip>
           )}
         </span>
       ),
@@ -600,14 +611,13 @@ function Mono({ value }: { value?: string | null }) {
   return (
     <span className="flex items-center gap-1.5">
       <code className="break-all font-mono text-xs">{value}</code>
-      <button
+      <Tip content="คัดลอก"><button
         type="button"
-        title="คัดลอก"
         className="shrink-0 text-(--ink-4) hover:text-(--brand)"
         onClick={() => navigator.clipboard?.writeText(value)}
       >
         <Copy size={12} />
-      </button>
+      </button></Tip>
     </span>
   );
 }

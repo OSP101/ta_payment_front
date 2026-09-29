@@ -1,6 +1,7 @@
 "use client";
 import { Check, Clock } from "lucide-react";
 import type { ReactNode } from "react";
+import { Tip } from "./ui";
 
 // Timeline shape returned by GET /submission-periods/:id/courses/:tcId/tas/:taId/timeline
 // (kept lax on unused fields so callers can hand in any superset).
@@ -124,8 +125,10 @@ export function SubmissionTimeline({
                   }
                 />
               )}
+              <Tip content={done ? "เสร็จแล้ว" : active ? "รอดำเนินการ" : "ยังไม่ถึงขั้นนี้"}>
               <span
-                aria-hidden
+                role="img"
+                aria-label={done ? "เสร็จแล้ว" : active ? "รอดำเนินการ" : "ยังไม่ถึงขั้นนี้"}
                 className={
                   "absolute left-0 top-0 grid place-items-center w-6 h-6 rounded-full " +
                   (done
@@ -143,6 +146,7 @@ export function SubmissionTimeline({
                   <span className="w-1.5 h-1.5 rounded-full bg-current" />
                 )}
               </span>
+              </Tip>
               <div className={upcoming ? "opacity-60" : ""}>
                 <div className="text-sm text-ink-1">{step.label}</div>
                 {done && step.signer && (

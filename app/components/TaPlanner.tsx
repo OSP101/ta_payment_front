@@ -4,7 +4,7 @@ import useSWR from "swr";
 import {
   Calculator, ChevronDown, CircleCheck, TriangleAlert, Sparkles, Users, Wallet, Plus, Info,
 } from "lucide-react";
-import { Panel, Chip, Button } from "./ui";
+import { Panel, Chip, Button, Tip } from "./ui";
 import { Skel, SkelValue } from "./Skeletons";
 
 /* -------------------------------------------------------------------------- */
@@ -1097,12 +1097,10 @@ function PoolCard({ label, tone, pool, weeks }: { label: string; tone: "brand" |
           is still answered below (เหลือ turns red), just not by this bar. */}
       <div className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
         {pool.existingUndergrad > 0.5 && (
-          <div className={LEVEL_BAR_COLOR.undergrad} style={{ width: `${pctOf(pool.existingUndergrad)}%` }}
-               title={`ป.ตรี ${baht(pool.existingUndergrad)}`} />
+          <Tip content={`ป.ตรี ${baht(pool.existingUndergrad)}`}><div className={LEVEL_BAR_COLOR.undergrad} style={{ width: `${pctOf(pool.existingUndergrad)}%` }} /></Tip>
         )}
         {pool.existingGrad > 0.5 && (
-          <div className={LEVEL_BAR_COLOR.grad} style={{ width: `${pctOf(pool.existingGrad)}%` }}
-               title={`บัณฑิต ${baht(pool.existingGrad)}`} />
+          <Tip content={`บัณฑิต ${baht(pool.existingGrad)}`}><div className={LEVEL_BAR_COLOR.grad} style={{ width: `${pctOf(pool.existingGrad)}%` }} /></Tip>
         )}
       </div>
       <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[11px]">
@@ -1441,21 +1439,29 @@ function DraftCard({ ev, regular, special, hasSpecial, months }: { ev: DraftEval
         <div className="flex items-center gap-1.5 text-xs font-semibold">
           <Users size={14} /> TA ที่กำลังจะขอ ({ev.people.length} คน) — ประมาณการ
         </div>
-        <Chip tone={tone === "danger" ? "danger" : tone === "warn" ? "warn" : "success"}>
-          {ev.verdict === "over" ? <><TriangleAlert size={12} /> เกินงบ</> : ev.verdict === "tight" ? "งบตึง" : <><CircleCheck size={12} /> พอดีงบ</>}
-        </Chip>
+        <Tip content={ev.verdict === "tight" ? "งบภาคปกติ (รวม TA เดิม) เหลือไม่ถึง 5% ของเพดาน" : undefined}>
+          <span>
+            <Chip tone={tone === "danger" ? "danger" : tone === "warn" ? "warn" : "success"}>
+              {ev.verdict === "over" ? <><TriangleAlert size={12} /> เกินงบ</> : ev.verdict === "tight" ? "งบตึง" : <><CircleCheck size={12} /> พอดีงบ</>}
+            </Chip>
+          </span>
+        </Tip>
       </div>
       <ul className="mt-2 divide-y divide-hairline text-xs">
         {ev.people.map((p, i) => {
           const owed = p.cost.regular + p.cost.special + p.cost.lump;
           return (
             <li key={i} className="flex items-baseline justify-between gap-2 py-1">
-              <span className="min-w-0 truncate">
-                {p.name} <span className="text-muted">· {isGradLevel(p.level) ? "บัณฑิต" : "ป.ตรี"} · {hrs1(p.cost.hoursRegular + p.cost.hoursSpecial)} ชม./เทอม</span>
-              </span>
+              <Tip content={`${p.name}\n${isGradLevel(p.level) ? "บัณฑิต" : "ป.ตรี"} ${hrs1(p.cost.hoursRegular + p.cost.hoursSpecial)} ชม./เทอม`}>
+                <span className="min-w-0 truncate">
+                  {p.name} <span className="text-muted">· {isGradLevel(p.level) ? "บัณฑิต" : "ป.ตรี"} · {hrs1(p.cost.hoursRegular + p.cost.hoursSpecial)} ชม./เทอม</span>
+                </span>
+              </Tip>
               <span className="shrink-0 tabular-nums">
                 {p.share < owed - 0.5
-                  ? <><s className="text-muted">{baht(owed)}</s> → <b>{baht(p.share)}</b></>
+                  ? <Tip content={"ตัวเลขที่ขีดฆ่าคือค่าตอบแทนตามชั่วโมงงาน\nตัวเลขหลังลูกศรคือยอดประมาณการที่จะได้รับจริง เมื่องบไม่พอระบบแบ่งตามสัดส่วน"}>
+                      <span><s className="text-muted">{baht(owed)}</s> → <b>{baht(p.share)}</b></span>
+                    </Tip>
                   : <b>{baht(owed)}</b>}
                 <span className="text-muted"> (≈ {baht(p.share / months)}/เดือน)</span>
               </span>
@@ -1505,6 +1511,7 @@ function ExistingCard({ f }: { f: PlanFacts }) {
           const cut = paid < owed - 0.5;
           return (
             <li key={p.ta_id} className="flex items-baseline justify-between gap-2 py-1">
+              <Tip content={`${p.name}\n${isGradLevel(p.level) ? "บัณฑิต" : "ป.ตรี"} ${p.tracks.map(t => t === "special" ? "ภาคพิเศษ" : "ภาคปกติ").join(" และ ")}${p.lump_baht > 0 ? " เหมาจ่าย" : ""}`}>
               <span className="min-w-0 truncate">
                 {p.name}
                 <span className="text-muted">
@@ -1513,8 +1520,13 @@ function ExistingCard({ f }: { f: PlanFacts }) {
                   {p.lump_baht > 0 && " · เหมาจ่าย"}
                 </span>
               </span>
+              </Tip>
               <span className="shrink-0 tabular-nums">
-                {cut ? <><s className="text-muted">{baht(owed)}</s> → <b>{baht(paid)}</b></> : <b>{baht(owed)}</b>}
+                {cut
+                  ? <Tip content={"ตัวเลขที่ขีดฆ่าคือค่าตอบแทนตามงานที่ลงเวลา\nตัวเลขหลังลูกศรคือยอดที่จะได้รับจริง เมื่องบไม่พอระบบแบ่งตามสัดส่วน"}>
+                      <span><s className="text-muted">{baht(owed)}</s> → <b>{baht(paid)}</b></span>
+                    </Tip>
+                  : <b>{baht(owed)}</b>}
               </span>
             </li>
           );
@@ -1523,7 +1535,11 @@ function ExistingCard({ f }: { f: PlanFacts }) {
       <div className="mt-2 flex items-baseline justify-between border-t border-hairline pt-2 text-xs font-semibold">
         <span>รวม</span>
         <span className="tabular-nums">
-          {short ? <><s className="font-normal text-muted">{baht(totalOwed)}</s> → {baht(totalPaid)}</> : baht(totalOwed)}
+          {short
+            ? <Tip content={"ตัวเลขที่ขีดฆ่าคือค่าตอบแทนรวมตามงานที่ลงเวลา\nตัวเลขหลังลูกศรคือยอดรวมที่จ่ายได้จริงภายในงบ"}>
+                <span><s className="font-normal text-muted">{baht(totalOwed)}</s> → {baht(totalPaid)}</span>
+              </Tip>
+            : baht(totalOwed)}
         </span>
       </div>
       {short && (

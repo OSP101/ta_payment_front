@@ -3,7 +3,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import useSWR from "swr";
 import { Printer, FileDown } from "lucide-react";
-import { Button, Alert } from "../components/ui";
+import { Button, Alert, Tip } from "../components/ui";
 import { Skel, SkelValue } from "../components/Skeletons";
 import useDocumentTitle from "../lib/useDocumentTitle";
 import { thaiDate } from "../lib/dates";
@@ -341,17 +341,15 @@ function BlockLane({ blocks, seed = 0 }: { blocks: Block[] | undefined; seed?: n
         if (!sp) return null;
         const st = STYLE[b.kind];
         return (
-          <div
-            key={i}
+          <Tip key={i} content={`${b.course_code} ${b.course_name ?? ""}`}><div
             className="z-10 self-center overflow-hidden px-1 py-0.5 text-[9px] leading-tight"
             style={{ gridColumn: `${sp.start} / ${sp.end}`, background: st.bg, color: st.fg }}
-            title={`${b.course_code} ${b.course_name ?? ""}`}
           >
             <span className="font-medium">{b.course_code}</span>
             {b.sec_no ? ` Sec.${b.sec_no}` : ""} {st.tag}
             {b.track ? ` (${b.track === "special" ? "พิเศษ" : "ปกติ"})` : ""}
             {b.expected ? <span className="ml-1 font-medium">· {b.logged ?? 0}/{b.expected}</span> : null}
-          </div>
+          </div></Tip>
         );
       })}
     </>

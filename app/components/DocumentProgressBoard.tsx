@@ -4,7 +4,7 @@ import useSWR, { mutate } from "swr";
 import { Check, RotateCcw, Lock, AlertTriangle, CheckCircle2, Mail, Circle, Globe2, Copy, X } from "lucide-react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Panel, Button, Chip, TextArea, EmptyState, Alert, SearchField, ConfirmDialog } from "./ui";
+import { Panel, Button, Chip, TextArea, EmptyState, Alert, SearchField, ConfirmDialog, Tip } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
 
 interface CourseRef { code: string; name_th: string; }
@@ -273,9 +273,11 @@ function ShareLinkPanel({ termId }: { termId: string }) {
         )}
       </div>
       {data && (
-        <div className="mt-2 truncate rounded-md bg-panel border border-hairline px-2.5 py-1.5 text-xs text-ink-2 tabular">
-          {url}
-        </div>
+        <Tip content={url}>
+          <div className="mt-2 truncate rounded-md bg-panel border border-hairline px-2.5 py-1.5 text-xs text-ink-2 tabular">
+            {url}
+          </div>
+        </Tip>
       )}
       <ConfirmDialog
         open={confirmRevoke}
@@ -411,7 +413,7 @@ function RoundBoard({
                   {i > 0 && (
                     <span aria-hidden className={"absolute top-4 right-1/2 left-[-50%] h-0.5 " + (p.stage >= st.n ? "bg-emerald-500" : "bg-hairline")} />
                   )}
-                  <button
+                  <Tip content={title}><button
                     type="button"
                     disabled={!canClick}
                     onClick={() => {
@@ -422,7 +424,6 @@ function RoundBoard({
                       if (isCurrent) setConfirmBack(st.n - 1);
                       else setStage(st.n);
                     }}
-                    title={title}
                     className={
                       "relative z-10 grid place-items-center w-8 h-8 rounded-full transition-colors " +
                       (reached
@@ -437,7 +438,7 @@ function RoundBoard({
                     }
                   >
                     {reached ? <Check size={16} strokeWidth={3} /> : <span className="text-xs font-semibold">{st.n}</span>}
-                  </button>
+                  </button></Tip>
                   <div className={"mt-2 text-center text-xs px-1 " + (reached ? "text-ink-1 font-medium" : isNext ? "text-ink-1 font-medium" : "text-ink-3")}>{st.label}</div>
                   <div className="text-[10px] text-muted text-center px-1">{st.who}</div>
                   {reached && at && <div className="text-[10px] text-muted tabular mt-0.5">{fmt(at)}</div>}
@@ -723,12 +724,10 @@ function SignatureChecklistPanel({
                 {g.items.map(it => {
                   const signed = !!it.signed_at;
                   return (
-                    <button
-                      key={signatureItemKey(it)}
+                    <Tip key={signatureItemKey(it)} content={[it.responsible, canEdit ? (signed ? "คลิกเพื่อยกเลิกการเซ็น" : "คลิกเพื่อทำเครื่องหมายว่าเซ็นแล้ว") : ""].filter(Boolean).join("\n")}><button
                       type="button"
                       disabled={!canEdit || busy}
                       onClick={() => canEdit && toggle(it, !signed)}
-                      title={canEdit ? (signed ? "คลิกเพื่อยกเลิกการเซ็น" : "คลิกเพื่อทำเครื่องหมายว่าเซ็นแล้ว") : undefined}
                       className={
                         "flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition " +
                         (signed
@@ -746,7 +745,7 @@ function SignatureChecklistPanel({
                           {signed ? `เซ็นแล้ว · ${fmt(it.signed_at)}` : "ยังไม่เซ็น"}
                         </div>
                       </div>
-                    </button>
+                    </button></Tip>
                   );
                 })}
               </div>
@@ -1020,7 +1019,9 @@ function ViewerStageSigners({
             >
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="tabular text-sm font-medium">{g.code}</span>
-                <span className="text-sm text-ink-2 min-w-0 truncate">{g.name_th}</span>
+                <Tip content={`${g.code} ${g.name_th}`}>
+                  <span className="text-sm text-ink-2 min-w-0 truncate">{g.name_th}</span>
+                </Tip>
                 {/* The whole point of this list is "which course is stuck" —
                     a TA should see that at a glance, not by counting ticks. */}
                 {incomplete

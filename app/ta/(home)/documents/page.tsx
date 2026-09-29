@@ -18,7 +18,7 @@ import UploadProgressModal from "../../../components/UploadProgressModal";
 import PdpaConsentModal from "../../../components/PdpaConsentModal";
 import {
   PageHeader, Panel, Button, TextInput, FieldGroup, StatusChip, Alert, Chip,
-  SelectField,
+  SelectField, Tip,
 } from "../../../components/ui";
 import { Skel, SkelForm, SkelList, SkelRegion, SkelValue } from "../../../components/Skeletons";
 /* -------------------------------------------------------------------------- */
@@ -139,14 +139,14 @@ function PdfDropZone({
           )}
         </div>
         {file && !disabled && (
-          <button
+          <Tip content="เอาไฟล์ที่เลือกออก"><button
             type="button"
             onClick={e => { e.stopPropagation(); onPick(null); }}
             className="shrink-0 rounded-md p-1 text-muted hover:bg-surface-secondary hover:text-foreground"
             aria-label="เอาไฟล์ที่เลือกออก"
           >
             <XCircle size={18} />
-          </button>
+          </button></Tip>
         )}
       </div>
       <input

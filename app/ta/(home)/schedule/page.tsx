@@ -12,7 +12,7 @@ import ScheduleGrid, {
   KIND_LABEL, blockTitle, fmtTime,
 } from "../../../components/ScheduleGrid";
 import {
-  PageHeader, Panel, Select, Modal, Button, IconButton, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog, TipWrap,
+  PageHeader, Panel, Select, Modal, Button, IconButton, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog, TipWrap, Tip,
   TimePicker, Chip,
 } from "../../../components/ui";
 import { SkelValue } from "../../../components/Skeletons";
@@ -471,9 +471,15 @@ export default function TASchedulePage() {
               </Button>
             </span>
             <span data-tour="sch-add">
+              <TipWrap
+                inline
+                className="inline-flex"
+                content={isWba && !frozen ? "อยู่ในโหมดไม่มีตารางเรียนปกติ ปิดตัวเลือกในส่วน “กรณีพิเศษ” ด้านล่างก่อน จึงจะเพิ่มคาบเรียนได้" : undefined}
+              >
               <Button variant="secondary" onClick={() => openCreate()} disabled={isWba || frozen}>
                 <Plus size={14} /> เพิ่มคาบเรียน
               </Button>
+              </TipWrap>
             </span>
             <Button variant="primary" onClick={() => save(false)} disabled={saving || !dirty || frozen}>
               <Save size={14} /> บันทึกทันที
@@ -540,7 +546,11 @@ export default function TASchedulePage() {
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted">
                         {b.sec_no && <span>sec {b.sec_no}</span>}
                         {b.kind && <span>{KIND_LABEL[b.kind]}</span>}
-                        {b.note && <span className="truncate">{b.note}</span>}
+                        {b.note && (
+                          <Tip content={b.note}>
+                            <span className="truncate">{b.note}</span>
+                          </Tip>
+                        )}
                       </div>
                     </div>
                     {stacked && (
@@ -1144,7 +1154,9 @@ function IcsPreview({ result, guessed, duplicateIds, onKindChange }: IcsPreviewP
                       {guessed.has(b.id) && <Chip tone="warn">โปรดตรวจ</Chip>}
                     </div>
                   </td>
-                  <td className="px-3 py-1.5 text-muted truncate max-w-[16rem]">{b.note}</td>
+                  <Tip content={b.note}>
+                    <td className="px-3 py-1.5 text-muted truncate max-w-[16rem]">{b.note}</td>
+                  </Tip>
                 </tr>
               ))}
             </tbody>

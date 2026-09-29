@@ -6,7 +6,7 @@ import { Camera, ImageUp, Trash2, UploadCloud } from "lucide-react";
 import type { Me } from "../lib/api";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Button, ConfirmDialog, Panel } from "./ui";
+import { Button, ConfirmDialog, Panel, Tip } from "./ui";
 import UserAvatar from "./UserAvatar";
 import AvatarCropper from "./AvatarCropper";
 
@@ -106,14 +106,14 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
             src={me.avatar_url}
             className="size-32 text-3xl"
           />
-          <button
+          <Tip content={hasPhoto ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}><button
             type="button"
             onClick={() => inputRef.current?.click()}
             aria-label={hasPhoto ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
             className="absolute bottom-0 -end-0.5 size-9 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <Camera size={16} />
-          </button>
+          </button></Tip>
         </div>
 
         <div className="min-w-0 flex-1 text-center sm:text-start">

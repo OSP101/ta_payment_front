@@ -30,6 +30,7 @@ import useDocumentTitle from "../lib/useDocumentTitle";
 import useUnreadCount from "../lib/useUnreadCount";
 import { DocsPanelProvider, DocsDock } from "./docs/DocsPanel";
 import { defaultAudience } from "../lib/docs/audience";
+import { Tip } from "./ui";
 
 const SIDEBAR_KEY = "ta-payment:sidebar-collapsed";
 /** Expanded panel, 256px. Down from w-68/w-72 (272/288). Measured, not
@@ -320,12 +321,11 @@ export default function Shell({
             ))}
           </nav>
           <div className="border-t border-border p-2">
-            <button
+            <Tip content={collapsed ? "ขยายเมนู" : "ย่อเมนู"}><button
               type="button"
               onClick={() => setCollapsedPersistent(!collapsed)}
               aria-label={collapsed ? "ขยายเมนู" : "ย่อเมนู"}
               aria-expanded={!collapsed}
-              title={collapsed ? "ขยายเมนู" : "ย่อเมนู"}
               className={
                 "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground/70 " +
                 "hover:bg-surface-secondary hover:text-foreground w-full " +
@@ -334,7 +334,7 @@ export default function Shell({
             >
               {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
               {sidebarOpen && <span className="truncate">ย่อเมนู</span>}
-            </button>
+            </button></Tip>
           </div>
         </aside>
       </div>
@@ -351,9 +351,11 @@ export default function Shell({
                  onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-3 border-b border-border">
               <BrandMark brandTitle={brandTitle} onBetaClick={() => setBetaOpen(true)} />
-              <Button variant="ghost" isIconOnly size="sm" onPress={() => setMobileOpen(false)} aria-label="ปิดเมนู">
-                <X size={18} />
-              </Button>
+              <Tip content="ปิดเมนู">
+                <Button variant="ghost" isIconOnly size="sm" onPress={() => setMobileOpen(false)} aria-label="ปิดเมนู">
+                  <X size={18} />
+                </Button>
+              </Tip>
             </div>
             <nav className="flex-1 overflow-y-auto py-2">
               {nav.map((section, i) => (
@@ -524,8 +526,8 @@ function NavRow({
 
   if (item.external) {
     return (
-      <a href={item.href} target="_blank" rel="noopener noreferrer" className={cls}
-         onClick={onClick} title={rail ? item.label : undefined}>
+      <Tip placement="right" content={rail ? item.label : undefined}><a href={item.href} target="_blank" rel="noopener noreferrer" className={cls}
+         onClick={onClick}>
         {leading}
         {!rail && (
           <>
@@ -533,15 +535,16 @@ function NavRow({
             <ExternalLink size={13} className="opacity-60" />
           </>
         )}
-      </a>
+      </a></Tip>
     );
   }
+  const badgeTitle = hasBadge ? `${item.badgeLabel ?? "ค้างอยู่"} ${item.badge} รายการ` : undefined;
   return (
+    // Tooltip in rail mode: the label is the only thing that says what the
+    // icon does, and hiding it entirely would make the rail a guessing game
+    // for anyone who has not memorised the order.
+    <Tip dom placement="right" content={rail ? [item.label, badgeTitle ?? statusTitle].filter(Boolean).join("\n") : undefined}>
     <Link href={item.href} className={cls} onClick={onClick}
-          // Native tooltip in rail mode: the label is the only thing that says
-          // what the icon does, and hiding it entirely would make the rail a
-          // guessing game for anyone who has not memorised the order.
-          title={rail ? [item.label, statusTitle].filter(Boolean).join(" — ") : undefined}
           aria-label={rail ? item.label : undefined}>
       {rail ? (
         <span className="relative inline-flex">
@@ -551,9 +554,7 @@ function NavRow({
               "your turn" separate from "waiting on staff". */}
           {(hasBadge || status) && (
             <span
-              aria-label={hasBadge
-                ? `${item.badgeLabel ?? "ค้างอยู่"} ${item.badge} รายการ`
-                : statusTitle}
+              aria-label={badgeTitle ?? statusTitle}
               className={
                 "absolute -top-1 -right-1 size-2 rounded-full ring-2 ring-surface " +
                 (hasBadge ? "bg-danger" : status === "warn" ? "bg-warning" : "bg-foreground/40")
@@ -566,21 +567,23 @@ function NavRow({
           {leading}
           <span className="flex-1 truncate">{item.label}</span>
           {hasBadge && (
-            <span
+            <Tip content={badgeTitle}><span
               className="inline-flex min-w-5 items-center justify-center rounded-full bg-danger px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white"
-              aria-label={`${item.badgeLabel ?? "ค้างอยู่"} ${item.badge} รายการ`}
+              aria-label={badgeTitle}
+              tabIndex={-1}
             >
               {item.badge}
-            </span>
+            </span></Tip>
           )}
           {statusIcon && (
-            <span className="shrink-0" title={statusTitle} aria-label={statusTitle}>
+            <Tip content={statusTitle}><span className="shrink-0" aria-label={statusTitle} tabIndex={-1}>
               {statusIcon}
-            </span>
+            </span></Tip>
           )}
         </>
       )}
     </Link>
+    </Tip>
   );
 }
 
@@ -638,10 +641,12 @@ function TopBar({
   return (
     <header className={`h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 sticky ${DEMO_CHROME_OFFSET} z-30`}>
       {showMobileMenu && (
+        <Tip content="เปิดเมนู">
         <Button variant="ghost" isIconOnly size="sm" onPress={onOpenMobile}
                 aria-label="เปิดเมนู" className="md:hidden shrink-0 size-9!">
           <Menu size={20} />
         </Button>
+        </Tip>
       )}
       {showBrandInHeader ? (
         <div className="flex-1 min-w-0 flex items-center gap-2">

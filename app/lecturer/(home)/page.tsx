@@ -12,9 +12,9 @@ import { hoursSplitText } from "../../lib/trackSplit";
 import AnnouncementFeed from "../../components/AnnouncementFeed";
 import {
   PageHeader, Panel, EmptyState, Chip, Button, SelectField, Alert,
-  type SelectOption, type ChipTone,
+  type SelectOption, type ChipTone, Tip,
 } from "../../components/ui";
-import { CourseCode } from "../../lib/courseCode";
+import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 import { Skel, SkelCards } from "../../components/Skeletons";
 
 interface TC {
@@ -723,12 +723,14 @@ function CourseCard({
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
           <BookOpen size={17} />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold tabular group-hover:underline group-hover:underline-offset-2">
-            <CourseCode c={c} />
+        <Tip content={`${courseCodeLabel(c)} ${c.name_th}`}>
+          <div className="min-w-0 flex-1" tabIndex={-1}>
+            <div className="truncate font-semibold tabular group-hover:underline group-hover:underline-offset-2">
+              <CourseCode c={c} />
+            </div>
+            <div className="truncate text-xs text-muted">{c.name_th}</div>
           </div>
-          <div className="truncate text-xs text-muted">{c.name_th}</div>
-        </div>
+        </Tip>
         <ArrowRight
           size={15}
           className="mt-1 shrink-0 text-muted transition-colors group-hover:text-accent"
@@ -740,9 +742,9 @@ function CourseCard({
         {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
         {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
         {(ov?.recommended_tas ?? 0) > 0 && (
-          <span title={`ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน ไม่ควรเกิน ${ov!.ceiling_tas} คน`}>
+          <Tip content={`ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน ไม่ควรเกิน ${ov!.ceiling_tas} คน`}><span>
             · แนะนำ TA {ov!.recommended_tas} คน
-          </span>
+          </span></Tip>
         )}
       </div>
 
@@ -800,18 +802,16 @@ function CourseCard({
                 bar itself now also answers "okay using which pool's money?" */}
             <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
               {ov!.budget_used_regular > 0.5 && (
-                <div
+                <Tip content={`ภาคปกติ ${Math.round(ov!.budget_used_regular).toLocaleString("th-TH")} บ.`}><div
                   className={TRACK_BAR_COLOR.regular}
                   style={{ width: `${Math.min(100, (ov!.budget_used_regular / ov!.budget_max) * 100)}%` }}
-                  title={`ภาคปกติ ${Math.round(ov!.budget_used_regular).toLocaleString("th-TH")} บ.`}
-                />
+                /></Tip>
               )}
               {ov!.budget_used_special > 0.5 && (
-                <div
+                <Tip content={`ภาคพิเศษ ${Math.round(ov!.budget_used_special).toLocaleString("th-TH")} บ.`}><div
                   className={TRACK_BAR_COLOR.special}
                   style={{ width: `${Math.min(100, (ov!.budget_used_special / ov!.budget_max) * 100)}%` }}
-                  title={`ภาคพิเศษ ${Math.round(ov!.budget_used_special).toLocaleString("th-TH")} บ.`}
-                />
+                /></Tip>
               )}
             </div>
           </>

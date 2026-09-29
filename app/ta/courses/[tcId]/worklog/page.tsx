@@ -13,7 +13,7 @@ import {
 import { useUnsavedChanges } from "../../../../lib/useUnsavedChanges";
 import {
   PageHeader, Panel, Select, TextInput, StatusChip, ConfirmDialog, Button, EmptyState,
-  Modal, FieldGroup, Alert, Chip, TimePicker, DatePicker, TipWrap,
+  Modal, FieldGroup, Alert, Chip, TimePicker, DatePicker, TipWrap, Tip,
 } from "../../../../components/ui";
 import { type DataColumn } from "../../../../components/DataTable";
 import { Skel, SkelRegion, SkelRows, SkelValue } from "../../../../components/Skeletons";
@@ -1718,7 +1718,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               <LockedActionButton
                 variant={aidDrafts[l.id] ? "primary" : "ghost"} size="sm"
                 onClick={() => saveRow(l)} disabled={savingId === l.id}
-                isIconOnly aria-label="บันทึกแถวนี้" title="บันทึกแถวนี้"
+                isIconOnly aria-label="บันทึกแถวนี้"
               >
                 <Save size={13} />
               </LockedActionButton>
@@ -1728,7 +1728,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 variant="ghost" size="sm"
                 onClick={() => setConfirmDeleteId(l.id)}
                 disabled={deletingId === l.id}
-                isIconOnly aria-label="ลบแถวนี้" title="ลบแถวนี้"
+                isIconOnly aria-label="ลบแถวนี้"
               >
                 <Trash2 size={13} />
               </LockedActionButton>
@@ -1818,6 +1818,11 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 is what let a TA send one section and believe they were done. */}
             {!showMultiSection && (
               <span data-tour="wl-submit">
+                <TipWrap
+                  inline
+                  className="inline-flex"
+                  content={approved && aid && !submitting && !canSubmit ? "ไม่มีรายการที่พร้อมส่ง" : undefined}
+                >
                 <LockedActionButton
                   variant="primary"
                   onClick={() => setConfirmSubmit(true)}
@@ -1826,6 +1831,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 >
                   <Send size={14} /> ส่งอนุมัติ
                 </LockedActionButton>
+                </TipWrap>
               </span>
             )}
           </>
@@ -2371,13 +2377,12 @@ function WorklogSaveStatus({
 }) {
   if (error && !pending && !busy) {
     return (
-      <span
+      <Tip content={error}><span
         className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft border border-danger-soft-border rounded-md px-2 py-1"
-        title={error}
       >
         <CloudOff size={13} />
         <span className="truncate max-w-[16rem]">บันทึกอัตโนมัติไม่สำเร็จ แก้ไขอีกครั้งเพื่อลองใหม่</span>
-      </span>
+      </span></Tip>
     );
   }
   if (busy) {
@@ -2390,13 +2395,12 @@ function WorklogSaveStatus({
   }
   if (pending) {
     return (
-      <span
+      <Tip content="ระบบจะบันทึกอัตโนมัติเมื่อไม่มีการแก้ไขต่อเนื่อง 30 วินาที (ระหว่างนี้ร่างถูกเก็บในเครื่องแล้ว)"><span
         className="inline-flex items-center gap-1.5 text-xs text-muted"
-        title="ระบบจะบันทึกอัตโนมัติเมื่อไม่มีการแก้ไขต่อเนื่อง 30 วินาที (ระหว่างนี้ร่างถูกเก็บในเครื่องแล้ว)"
       >
         <Cloud size={13} />
         <span>กำลังจะบันทึกอัตโนมัติ…</span>
-      </span>
+      </span></Tip>
     );
   }
   if (savedAgo) {
@@ -3248,12 +3252,10 @@ function SectionStrip({
                       {Object.keys(ACTIVITY_LABEL)
                         .filter(k => (a.hours_by_activity?.[k] ?? 0) > 0.001)
                         .map(k => (
-                          <div
-                            key={k}
+                          <Tip key={k} content={`${ACTIVITY_LABEL[k]} ${(a.hours_by_activity?.[k] ?? 0).toFixed(1)} ชม.`}><div
                             className={ACTIVITY_BAR_COLOR[k]}
                             style={{ width: `${Math.min(100, ((a.hours_by_activity?.[k] ?? 0) / ceiling) * 100)}%` }}
-                            title={`${ACTIVITY_LABEL[k]} ${(a.hours_by_activity?.[k] ?? 0).toFixed(1)} ชม.`}
-                          />
+                          /></Tip>
                         ))}
                     </div>
                     {/* Legend — only activities this TA actually has hours in,
@@ -4018,6 +4020,9 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
   const declaredHrs = data?.declared_hours_per_week?.[kind] ?? 0;
   const usedHrs = data?.used_hours_per_week?.[kind] ?? 0;
   const isFull = declaredHrs > 0 && usedHrs >= declaredHrs;
+  // LockedActionButton explains its own lock; only add the "full" reason when
+  // that lock is not the one in force.
+  const { approved } = useTAApproval();
 
   return (
     <Panel
@@ -4040,6 +4045,10 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
         </>
       }
       actions={
+        <TipWrap
+          className="inline-flex"
+          content={approved && isFull ? `ครบชั่วโมงที่อาจารย์ระบุแล้ว (${declaredHrs.toFixed(1)} ชม./สัปดาห์)` : undefined}
+        >
         <LockedActionButton
           variant="secondary"
           size="sm"
@@ -4048,6 +4057,7 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
         >
           <Plus size={13} /> เพิ่มช่วงเวลา
         </LockedActionButton>
+        </TipWrap>
       }
       padded={false}
     >
@@ -4066,15 +4076,19 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
                 {r.start_time}–{r.end_time}
               </div>
               {r.room && <div className="text-xs text-muted">· {r.room}</div>}
-              {r.note && <div className="text-xs text-muted truncate flex-1">— {r.note}</div>}
+              {r.note && (
+                <Tip content={r.note}>
+                  <div className="text-xs text-muted truncate flex-1">— {r.note}</div>
+                </Tip>
+              )}
               <div className="ml-auto flex items-center gap-1">
-                <LockedActionButton variant="ghost" size="sm" onClick={() => setEditing(r)} isIconOnly aria-label="แก้ไข" title="แก้ไข">
+                <LockedActionButton variant="ghost" size="sm" onClick={() => setEditing(r)} isIconOnly aria-label="แก้ไข">
                   <Pencil size={13} />
                 </LockedActionButton>
                 <LockedActionButton
                   variant="ghost" size="sm"
                   onClick={() => setConfirmDeleteId(r.id)}
-                  isIconOnly aria-label="ลบ" title="ลบ"
+                  isIconOnly aria-label="ลบ"
                 >
                   <Trash2 size={13} />
                 </LockedActionButton>

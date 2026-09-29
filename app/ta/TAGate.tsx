@@ -3,7 +3,7 @@ import { createContext, useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AlertTriangle, ArrowRight } from "lucide-react";
-import { Alert, Button, TipWrap } from "../components/ui";
+import { Alert, Button, Tip, TipWrap } from "../components/ui";
 
 // TAApprovalContext lets any TA-scoped component (pages, sidebar bell, etc.)
 // know whether the current user's profile has been approved. It is provided
@@ -53,6 +53,8 @@ export function LockedActionButton({
       </TipWrap>
     );
   }
+  // Icon-only: the aria-label is the only name the button has, so show it.
+  if (rest.isIconOnly) return <Tip content={rest["aria-label"]} delay={400}>{button}</Tip>;
   return button;
 }
 

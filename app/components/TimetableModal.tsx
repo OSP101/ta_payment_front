@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 import useSWR from "swr";
 import { CalendarDays, Download, Printer } from "lucide-react";
-import { Modal, Button, Alert } from "./ui";
+import { Modal, Button, Alert, Tip } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
 import { packLanes, parseTime } from "./ScheduleGrid";
 
@@ -248,8 +248,7 @@ function Timeline({ blocks }: { blocks: Block[] }) {
                     (b.track === "special" ? " (พิเศษ)" : b.track === "regular" ? " (ปกติ)" : "");
                   const counts = b.expected ? ` · ${b.logged ?? 0}/${b.expected}` : "";
                   return (
-                    <div
-                      key={i}
+                    <Tip key={i} content={`${b.course_code} ${b.course_name ?? ""} · ${st.tag} · ${b.start_time.slice(0, 5)}–${b.end_time.slice(0, 5)}${counts}`}><div
                       className="absolute overflow-hidden rounded-md px-1.5 text-[11px] leading-[18px] whitespace-nowrap"
                       style={{
                         left: pct(s / TOTAL_MIN),
@@ -259,10 +258,9 @@ function Timeline({ blocks }: { blocks: Block[] }) {
                         background: st.bg,
                         color: st.fg,
                       }}
-                      title={`${b.course_code} ${b.course_name ?? ""} · ${st.tag} · ${b.start_time.slice(0, 5)}–${b.end_time.slice(0, 5)}${counts}`}
                     >
                       {label}{counts}
-                    </div>
+                    </div></Tip>
                   );
                 })}
               </div>

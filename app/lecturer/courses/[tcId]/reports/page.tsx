@@ -10,7 +10,7 @@ import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
   PageHeader, Panel, Button, EmptyState, TextArea, FieldGroup, Alert,
-  Chip, StatusChip, ConfirmDialog, type ChipTone,
+  Chip, StatusChip, ConfirmDialog, type ChipTone, Tip,
 } from "../../../../components/ui";
 import { WorkloadEditModal } from "../../../../components/WorkloadEditModal";
 import { Skel, SkelRows, SkelValue } from "../../../../components/Skeletons";
@@ -532,14 +532,12 @@ function SectionChips({ group }: { group: TAGroup }) {
         </Chip>
       ))}
       {group.coTaught.map(secs => (
-        <span
-          key={secs.join("-")}
+        <Tip key={secs.join("-")} content="คาบเดียวกันบันทึกไว้ทุกเซคชันที่สอนพร้อมกัน ระบบนับและจ่ายครั้งเดียว"><span
           className="inline-flex items-center gap-1 text-xs text-muted"
-          title="คาบเดียวกันบันทึกไว้ทุกเซคชันที่สอนพร้อมกัน ระบบนับและจ่ายครั้งเดียว"
         >
           <Link2 size={12} />
           sec {secs.join(", ")} สอนพร้อมกัน นับชั่วโมงครั้งเดียว
-        </span>
+        </span></Tip>
       ))}
     </div>
   );
@@ -1022,9 +1020,15 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
               <thead>
                 <tr className="text-xs text-muted">
                   <th className="py-1 pr-3 text-left font-medium">งบ</th>
-                  <th className="py-1 pr-3 text-right font-medium">ควรได้</th>
-                  <th className="py-1 pr-3 text-right font-medium">เบิกได้</th>
-                  <th className="py-1 text-right font-medium">ขาด</th>
+                  <Tip content="ค่าตอบแทนเต็มตามชั่วโมงที่ลงเวลา รวมรายการที่รอพิจารณาและค่าเหมาจ่าย">
+                    <th className="py-1 pr-3 text-right font-medium">ควรได้</th>
+                  </Tip>
+                  <Tip content="ยอดที่จ่ายได้จริงภายในงบของรายวิชา">
+                    <th className="py-1 pr-3 text-right font-medium">เบิกได้</th>
+                  </Tip>
+                  <Tip content="ส่วนที่งบไม่พอจ่าย (ควรได้ ลบ เบิกได้)">
+                    <th className="py-1 text-right font-medium">ขาด</th>
+                  </Tip>
                 </tr>
               </thead>
               <tbody>
@@ -1488,9 +1492,9 @@ function ApprovalHistoryPanel({
                       </div>
                     )}
                   </div>
-                  <div className="shrink-0 text-xs text-muted" title={new Date(h.at).toLocaleString("th-TH")}>
+                  <Tip content={new Date(h.at).toLocaleString("th-TH")}><div className="shrink-0 text-xs text-muted">
                     {formatHistoryAt(h.at)}
-                  </div>
+                  </div></Tip>
                 </div>
                 {/* The frozen snapshot from the moment of the action — not a
                     live re-query, so it stays correct even if these work_log

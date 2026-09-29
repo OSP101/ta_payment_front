@@ -15,7 +15,7 @@ import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
 import {
   Alert, Button, Chip, FieldGroup, Modal,
-  PageHeader, Select, TextArea,
+  PageHeader, Select, TextArea, Tip,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import UserAvatar from "../../components/UserAvatar";
@@ -326,9 +326,13 @@ export default function UsersPage() {
             {u.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
             {u.is_executive && <Chip tone="info">ผู้บริหาร</Chip>}
             {u.totp_enabled ? (
-              <Chip tone="success">2FA</Chip>
+              <Tip content="เปิดใช้การยืนยันตัวตนสองขั้นตอนแล้ว">
+                <span className="inline-flex"><Chip tone="success">2FA</Chip></span>
+              </Tip>
             ) : mandatory ? (
-              <Chip tone="danger"><ShieldAlert size={11} className="me-1" /> ยังไม่ตั้ง 2FA</Chip>
+              <Tip content="บัญชีนี้ต้องเปิดใช้การยืนยันตัวตนสองขั้นตอน แต่ยังไม่ได้ตั้งค่า">
+                <span className="inline-flex"><Chip tone="danger"><ShieldAlert size={11} className="me-1" /> ยังไม่ตั้ง 2FA</Chip></span>
+              </Tip>
             ) : null}
           </div>
         );
@@ -636,14 +640,14 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
                 src={photoPreview}
                 className="size-16 text-lg"
               />
-              <button
+              <Tip content={photoBlob ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}><button
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
                 aria-label={photoBlob ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
                 className="absolute bottom-0 -end-0.5 size-6 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <Camera size={12} />
-              </button>
+              </button></Tip>
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm text-foreground">รูปโปรไฟล์ (ไม่บังคับ)</div>
@@ -852,14 +856,14 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                   src={avatarUrl}
                   className="size-16 text-lg"
                 />
-                <button
+                <Tip content={avatarUrl ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}><button
                   type="button"
                   onClick={() => photoInputRef.current?.click()}
                   aria-label={avatarUrl ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
                   className="absolute bottom-0 -end-0.5 size-6 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <Camera size={12} />
-                </button>
+                </button></Tip>
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-sm text-foreground">รูปโปรไฟล์</div>

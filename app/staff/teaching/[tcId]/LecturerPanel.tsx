@@ -11,7 +11,7 @@ import useSWR, { mutate } from "swr";
 import { Star, Pencil, X, Check } from "lucide-react";
 import { api } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
-import { Panel, Button, Chip, EmptyState } from "../../../components/ui";
+import { Panel, Button, Chip, EmptyState, Tip } from "../../../components/ui";
 import { Skel, SkelRegion } from "../../../components/Skeletons";
 import {
   LecturerAutocomplete, lecturerName, type LecturerUser,
@@ -128,7 +128,11 @@ export default function LecturerPanel({
               .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
               .map(l => (
                 <Chip key={l.id} tone={l.is_primary ? "brand" : "neutral"}>
-                  {l.is_primary && <Star size={11} className="me-1 inline -mt-0.5" />}
+                  {l.is_primary && (
+                    <Tip content="อาจารย์ผู้รับผิดชอบหลัก">
+                      <span className="me-1 inline-flex -mt-0.5 align-middle"><Star size={11} /></span>
+                    </Tip>
+                  )}
                   {`${l.first_name} ${l.last_name}`.trim()}
                 </Chip>
               ))}
@@ -141,27 +145,30 @@ export default function LecturerPanel({
             <div className="flex flex-wrap gap-1.5 mt-2">
               {ids.map((id, i) => (
                 <Chip key={id} tone={i === 0 ? "brand" : "neutral"}>
-                  {i === 0 && <Star size={11} className="me-1 inline -mt-0.5" />}
+                  {i === 0 && (
+                    <Tip content="อาจารย์ผู้รับผิดชอบหลัก">
+                      <span className="me-1 inline-flex -mt-0.5 align-middle"><Star size={11} /></span>
+                    </Tip>
+                  )}
                   {nameFor(id)}
                   {i !== 0 && (
-                    <button
+                    <Tip content="ตั้งเป็นอาจารย์ผู้รับผิดชอบหลัก"><button
                       type="button"
                       onClick={() => makePrimary(id)}
                       className="ms-1 inline-flex hover:text-[var(--brand)]"
-                      title="ตั้งเป็นอาจารย์ผู้รับผิดชอบหลัก"
                       aria-label={`ตั้ง ${nameFor(id)} เป็นอาจารย์ผู้รับผิดชอบหลัก`}
                     >
                       <Star size={11} />
-                    </button>
+                    </button></Tip>
                   )}
-                  <button
+                  <Tip content={`เอา ${nameFor(id)} ออก`}><button
                     type="button"
                     onClick={() => remove(id)}
                     className="ms-1 inline-flex hover:text-danger"
                     aria-label={`เอา ${nameFor(id)} ออก`}
                   >
                     <X size={11} />
-                  </button>
+                  </button></Tip>
                 </Chip>
               ))}
             </div>

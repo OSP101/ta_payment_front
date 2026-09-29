@@ -2,6 +2,7 @@ import { ImageOff } from "lucide-react";
 import { MEDIA } from "../../../content/docs/registry";
 import type { Hotspot } from "../../../content/docs/types";
 import { mediaExists } from "./mediaExists";
+import { Tip } from "../ui";
 
 /**
  * Renders one screenshot by its registry ID (`content/docs/media.json`).
@@ -67,14 +68,12 @@ export default function Screenshot({
         {/* eslint-disable-next-line @next/next/no-img-element -- doc screenshots are static files under public/, arbitrary aspect ratio, no benefit from next/image here */}
         <img src={src} alt={meta.desc} className="w-full h-auto block" />
         {hotspots?.map((h, i) => (
-          <span
-            key={i}
-            title={h.label}
+          <Tip key={i} content={h.label}><span
             className="absolute flex items-center justify-center w-6 h-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-danger text-white text-xs font-bold ring-2 ring-white shadow"
             style={{ left: `${h.x}%`, top: `${h.y}%` }}
           >
             {i + 1}
-          </span>
+          </span></Tip>
         ))}
         <span className="absolute bottom-1 right-1.5 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white">
           v{meta.since}

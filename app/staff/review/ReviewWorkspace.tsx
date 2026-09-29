@@ -12,7 +12,7 @@ import { notify } from "../../lib/notify";
 import PdfFrame from "../../components/PdfFrame";
 import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
 import {
-  Button, Chip, Select, TextArea, FieldGroup, Modal, TipWrap,
+  Button, Chip, Select, TextArea, FieldGroup, Modal, TipWrap, Tip,
 } from "../../components/ui";
 import {
   DOC_KIND_LABEL, DOC_KIND_PRINT_ORDER, byPrintOrder, REJECT_PRESETS, OTHER_PRESET,
@@ -251,14 +251,14 @@ function WorkspaceHeader({
       {current && <Chip tone="neutral">{current.full_name}</Chip>}
       <div className="ml-auto flex items-center gap-2">
         <DownloadAllButton approvedHere={approvedHere} />
-        <button
+        <Tip content="ปิด"><button
           type="button"
           onClick={onClose}
           aria-label="ปิด"
           className="rounded-lg p-1.5 text-muted hover:bg-surface-secondary hover:text-foreground"
         >
           <X size={18} />
-        </button>
+        </button></Tip>
       </div>
     </div>
   );
@@ -332,7 +332,8 @@ function SubmitterRail({
                 <span className="grid size-7 shrink-0 place-items-center rounded-full bg-foreground/10 text-[11px] font-semibold">
                   {p.full_name.trim().charAt(0)}
                 </span>
-                <span className="min-w-0 flex-1">
+                <Tip content={`${p.full_name}\n${p.email}`}>
+                <span tabIndex={-1} className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-sm">{p.full_name}</span>
                     {arrivedIds.includes(p.user_id) && (
@@ -341,6 +342,7 @@ function SubmitterRail({
                   </span>
                   <span className="block truncate text-[11px] text-muted">{p.email}</span>
                 </span>
+                </Tip>
               </button>
             </div>
           );
@@ -501,7 +503,9 @@ function DocPanel({
         <span className="text-sm font-medium">
           {DOC_KIND_LABEL[doc.kind] ?? doc.kind}
         </span>
-        <span className="truncate text-xs text-muted">{doc.filename}</span>
+        <Tip content={doc.filename}>
+          <span className="truncate text-xs text-muted">{doc.filename}</span>
+        </Tip>
         {doc.status === "approved" && <Chip tone="success">อนุมัติแล้ว</Chip>}
         {doc.status === "rejected" && <Chip tone="danger">ตีกลับแล้ว</Chip>}
 

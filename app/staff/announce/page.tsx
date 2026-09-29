@@ -17,7 +17,7 @@ import RichText from "../../components/RichText";
 import { Skel } from "../../components/Skeletons";
 import {
   PageHeader, Panel, Button, TextInput, TextArea, FieldGroup,
-  Chip, EmptyState, Modal, Alert, TabLabel,
+  Chip, EmptyState, Modal, Alert, TabLabel, Tip,
 } from "../../components/ui";
 
 // ============================================================================
@@ -901,9 +901,9 @@ function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) 
    * is still where the officer left it after a button press.
    */
   const Tool = ({ title, onPress, children }: { title: string; onPress: () => void; children: React.ReactNode }) => (
-    <button type="button" className={btn} title={title} onMouseDown={e => e.preventDefault()} onClick={onPress}>
+    <Tip content={title}><button type="button" className={btn} onMouseDown={e => e.preventDefault()} onClick={onPress}>
       {children}
-    </button>
+    </button></Tip>
   );
 
   return (
@@ -1028,11 +1028,11 @@ function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: SetDraf
                   className="px-1 text-ink-3 hover:text-brand disabled:opacity-30" disabled={i === 0}>↑</button>
                 <button type="button" aria-label="เลื่อนลง" onClick={() => move(i, 1)}
                   className="px-1 text-ink-3 hover:text-brand disabled:opacity-30" disabled={i === draft.attachments.length - 1}>↓</button>
-                <button type="button" aria-label={`เอา ${a.filename} ออก`}
+                <Tip content={`เอา ${a.filename} ออก`}><button type="button" aria-label={`เอา ${a.filename} ออก`}
                   onClick={() => setDraft({ ...draft, attachments: draft.attachments.filter(x => x.storage_key !== a.storage_key) })}
                   className="px-1 text-ink-3 hover:text-danger">
                   <X size={13} />
-                </button>
+                </button></Tip>
               </li>
             ))}
           </ul>
@@ -1233,10 +1233,15 @@ function AudienceSummary({ preview, loading }: { preview: AudiencePreview | null
         )}
       </div>
       {preview.total > 0 && (
-        <div className="mt-1 line-clamp-2 text-xs text-muted">
-          {preview.names.map(n => n.name).join(" · ")}
-          {preview.total > preview.names.length && ` และอีก ${preview.total - preview.names.length} คน`}
-        </div>
+        <Tip content={
+          preview.names.map(n => n.name).join(", ") +
+          (preview.total > preview.names.length ? ` และอีก ${preview.total - preview.names.length} คน` : "")
+        }>
+          <div className="mt-1 line-clamp-2 text-xs text-muted">
+            {preview.names.map(n => n.name).join(" · ")}
+            {preview.total > preview.names.length && ` และอีก ${preview.total - preview.names.length} คน`}
+          </div>
+        </Tip>
       )}
       {preview.total === 0 && (
         <div className="mt-0.5 text-xs text-amber-800">
@@ -1287,11 +1292,11 @@ function CoursePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft })
           {draft.targetCourses.map(c => (
             <span key={c.id} className="chip chip-brand inline-flex items-center gap-1">
               {c.label}
-              <button type="button" aria-label={`เอา ${c.label} ออก`}
+              <Tip content={`เอา ${c.label} ออก`}><button type="button" aria-label={`เอา ${c.label} ออก`}
                 onClick={() => setDraft({ ...draft, targetCourses: draft.targetCourses.filter(x => x.id !== c.id) })}
                 className="text-brand/70 hover:text-brand">
                 <X size={11} />
-              </button>
+              </button></Tip>
             </span>
           ))}
         </div>
@@ -1338,11 +1343,11 @@ function PeoplePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft })
           {draft.targetUsers.map(u => (
             <span key={u.id} className="chip chip-brand inline-flex items-center gap-1">
               {u.name}
-              <button type="button" aria-label={`เอา ${u.name} ออก`}
+              <Tip content={`เอา ${u.name} ออก`}><button type="button" aria-label={`เอา ${u.name} ออก`}
                 onClick={() => setDraft({ ...draft, targetUsers: draft.targetUsers.filter(x => x.id !== u.id) })}
                 className="text-brand/70 hover:text-brand">
                 <X size={11} />
-              </button>
+              </button></Tip>
             </span>
           ))}
         </div>
@@ -1579,7 +1584,9 @@ function ManageRow({
             {a.pinned && <Chip tone="brand"><span className="inline-flex items-center gap-1"><Pin size={11}/>ปักหมุด</span></Chip>}
             {a.is_public && <Chip tone="info"><span className="inline-flex items-center gap-1"><Globe size={11}/>สาธารณะ</span></Chip>}
           </div>
-          <div className="font-medium text-sm mt-1 truncate">{a.title}</div>
+          <Tip content={a.title}>
+            <div className="font-medium text-sm mt-1 truncate">{a.title}</div>
+          </Tip>
           <div className="text-xs text-muted mt-0.5 line-clamp-2">{a.body}</div>
           <div className="flex flex-wrap gap-1.5 mt-1.5 text-[11px] text-muted">
             <span className="inline-flex items-center gap-1">

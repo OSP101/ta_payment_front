@@ -12,7 +12,7 @@ import { api } from "../../lib/api";
 import { useTerm } from "../TermContext";
 import {
   PageHeader, Button, IconButton, Chip, EmptyState, Modal, Select, TabLabel,
-  ConfirmDialog, Avatar, TipWrap, Alert,
+  ConfirmDialog, Avatar, Tip, TipWrap, Alert,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import UserAvatar from "../../components/UserAvatar";
@@ -565,7 +565,11 @@ const transferCoverColumns: DataColumn<TransferCoverPreviewRow>[] = [
   { id: "courses", label: "รายวิชา", render: r => r.courses },
   {
     id: "seniority", label: "หมายเหตุ", className: "whitespace-nowrap",
-    render: r => <Chip tone={r.seniority === "ใหม่" ? "info" : "neutral"}>{r.seniority}</Chip>,
+    render: r => (
+      <Tip content={r.seniority === "ใหม่" ? "เป็น TA ครั้งแรกในภาคเรียนนี้" : r.seniority === "เก่า" ? "เคยเป็น TA ในภาคเรียนก่อนหน้า" : undefined}>
+        <span className="inline-flex"><Chip tone={r.seniority === "ใหม่" ? "info" : "neutral"}>{r.seniority}</Chip></span>
+      </Tip>
+    ),
   },
   {
     id: "baht", label: "จำนวนเงิน (บาท)", className: "text-right whitespace-nowrap", sortable: true,
@@ -660,18 +664,19 @@ function TransferCoverCoveragePanel({ termId, level }: { termId: string; level: 
       </div>
       <div className="flex flex-wrap gap-1.5">
         {data.months.map(m => (
-          <span
-            key={m.year_month}
-            className={
-              "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs " +
-              (m.issued
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-border text-ink-3")
-            }
-          >
-            {m.issued && <Check size={12} />}
-            {m.label}
-          </span>
+          <Tip key={m.year_month} content={m.issued ? "ออกเอกสารเดือนนี้แล้ว" : "ยังไม่ได้ออกเอกสารเดือนนี้"}>
+            <span
+              className={
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs " +
+                (m.issued
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-border text-ink-3")
+              }
+            >
+              {m.issued && <Check size={12} />}
+              {m.label}
+            </span>
+          </Tip>
         ))}
       </div>
       {pending.length > 0 && (
@@ -988,23 +993,43 @@ interface TransferCoverExportSummary {
 // ledger are shown here rather than left to memory.
 // mergeCoverage combines both levels' coverage into one for the bundle
 // button's month picker: the month LIST is structurally identical between
-// levels (same term, same TermMonths call underneath) — only "issued" can
-// differ, so a month reads issued here if EITHER level has already produced
-// a file for it, which is the useful warning ("you're about to re-issue
-// something") regardless of which level that something was.
+// levels (same term, same TermMonths call underneath) — only "issued" and
+// "ready" can differ. A month reads issued here if EITHER level has already
+// produced a file for it, which is the useful warning ("you're about to
+// re-issue something") regardless of which level that something was.
+//
+// "ready" is also an EITHER: the bundle issues whichever level passes its own
+// gate and skips the other with a toast (see checkThenDownload). Taking it
+// from the undergrad side alone locked the whole picker whenever ป.ตรี was
+// still moving, even with the บัณฑิต file ready to go.
 function mergeCoverage(a?: MonthCoverage, b?: MonthCoverage): MonthCoverage | undefined {
   const base = a ?? b;
   if (!base) return undefined;
   return {
     ...base,
-    months: base.months.map(m => ({
-      ...m,
-      issued: !!(
-        a?.months.find(x => x.year_month === m.year_month)?.issued ||
-        b?.months.find(x => x.year_month === m.year_month)?.issued
-      ),
-    })),
+    months: base.months.map(m => {
+      const x = a?.months.find(v => v.year_month === m.year_month);
+      const y = b?.months.find(v => v.year_month === m.year_month);
+      return {
+        ...m,
+        issued: !!(x?.issued || y?.issued),
+        ready: x?.ready !== false || y?.ready !== false,
+      };
+    }),
   };
+}
+
+// blockerLine is one pending item as staff read it — shared by the picker's
+// "nothing ready" state and the both-levels-blocked modal.
+function blockerLine(b: TransferCoverBlocker): string {
+  const who = b.course_code ? `[${b.course_code}] ${b.ta_name}` : b.ta_name;
+  const months = b.months.join(", ");
+  switch (b.kind) {
+    case "waiting_ta": return `${who} ยังไม่ส่งบันทึกเวลา (${months})`;
+    case "waiting_lecturer": return `${who} รออาจารย์อนุมัติ (${months})`;
+    case "not_exported": return `${who} ตรวจสอบแล้วแต่ยังไม่ได้ส่งออกใบเบิกจ่าย (${months})`;
+    default: return `${who} (${months})`;
+  }
 }
 
 function TransferCoverMonthModal({
@@ -1076,11 +1101,14 @@ function TransferCoverMonthModal({
           <Skel className="h-9 w-full" />
         </SkelRegion>
       ) : all.length > 0 && all.every(m => m.ready === false) ? (
-        <EmptyState
-          icon={<CalendarRange size={26} />}
-          title="ยังออกเอกสารไม่ได้"
-          description="ยังไม่มีเดือนใดที่ส่งออกใบเบิกจ่ายครบ ตรวจและส่งออกเอกสารของเดือนนั้นให้ครบอย่างน้อยหนึ่งเดือนก่อน แล้วจึงกลับมาออกเอกสาร"
-        />
+        <div className="space-y-4 text-sm">
+          <EmptyState
+            icon={<CalendarRange size={26} />}
+            title="ยังออกเอกสารไม่ได้"
+            description="ยังไม่มีเดือนใดที่ส่งออกใบเบิกจ่ายครบ ทั้ง ป.ตรี และบัณฑิตศึกษา ตรวจและส่งออกเอกสารของเดือนนั้นให้ครบอย่างน้อยหนึ่งเดือนก่อน แล้วจึงกลับมาออกเอกสาร"
+          />
+          <PendingBlockers termId={termId} />
+        </div>
       ) : all.length === 0 ? (
         <EmptyState
           icon={<CalendarRange size={26} />}
@@ -1164,6 +1192,36 @@ function TransferCoverMonthModal({
 }
 
 
+// PendingBlockers spells out what is holding every month back, so a locked
+// picker names the course and TA to chase instead of leaving staff to guess
+// (the bare message read as though the fiscal-year split were the cause).
+function PendingBlockers({ termId }: { termId: string }) {
+  const { data: ug } = useSWR<{ blockers: TransferCoverBlocker[] }>(
+    `/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("undergrad")}`
+  );
+  const { data: grad } = useSWR<{ blockers: TransferCoverBlocker[] }>(
+    `/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("graduate")}`
+  );
+  if (!ug || !grad) return <SkelRegion><Skel className="h-16 w-full" /></SkelRegion>;
+  const groups = ([["ป.ตรี", ug.blockers], ["บัณฑิตศึกษา", grad.blockers]] as const)
+    .filter(([, list]) => list.length > 0);
+  if (groups.length === 0) return null;
+  return (
+    <div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+      <div className="font-medium">รายการที่ยังค้าง</div>
+      {groups.map(([label, list]) => (
+        <div key={label}>
+          <div className="mb-1 font-medium">{label}</div>
+          <ul className="list-disc space-y-1 pl-5">
+            {list.map((b, i) => <li key={i}>{blockerLine(b)}</li>)}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
 // TransferCoverDownloadButton — "ปะหน้าจ่ายตรง" (แจ้งโอนจ่ายตรงเข้าบัญชีบุคลากร).
 // One button, one zip download — bundling both level files (ป.ตรี, บัณฑิต)
 // so the header does not carry two near-identical buttons + two history icons
@@ -1237,17 +1295,6 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
       toast.danger("ตรวจสอบไม่สำเร็จ", { description: (e as Error).message });
     } finally {
       setChecking(false);
-    }
-  }
-
-  function blockerLine(b: TransferCoverBlocker): string {
-    const who = b.course_code ? `[${b.course_code}] ${b.ta_name}` : b.ta_name;
-    const months = b.months.join(", ");
-    switch (b.kind) {
-      case "waiting_ta": return `${who} ยังไม่ส่งบันทึกเวลา (${months})`;
-      case "waiting_lecturer": return `${who} รออาจารย์อนุมัติ (${months})`;
-      case "not_exported": return `${who} ตรวจสอบแล้วแต่ยังไม่ได้ส่งออกใบเบิกจ่าย (${months})`;
-      default: return `${who} (${months})`;
     }
   }
 

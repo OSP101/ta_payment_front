@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { ApiError } from "../../../lib/api";
 import {
-  PageHeader, Panel, Button, Chip, EmptyState, Alert,
+  PageHeader, Panel, Button, Chip, EmptyState, Alert, Tip,
 } from "../../../components/ui";
 import { CourseSubmissionPanel } from "../../../components/CourseSubmissionPanel";
 import { type TARequestRow } from "../../RequestsTable";
@@ -418,18 +418,16 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
           which pool. */}
       <div className="flex h-2 w-full overflow-hidden rounded-full bg-surface-secondary">
         {budget.used_baht_regular > 0.5 && (
-          <div
+          <Tip content={`ภาคปกติ ~${baht(budget.used_baht_regular)} บ.`}><div
             className={TRACK_BAR_COLOR.regular}
             style={{ width: `${Math.min(100, (budget.used_baht_regular / budget.per_course_max) * 100)}%` }}
-            title={`ภาคปกติ ~${baht(budget.used_baht_regular)} บ.`}
-          />
+          /></Tip>
         )}
         {budget.used_baht_special > 0.5 && (
-          <div
+          <Tip content={`ภาคพิเศษ ~${baht(budget.used_baht_special)} บ.`}><div
             className={TRACK_BAR_COLOR.special}
             style={{ width: `${Math.min(100, (budget.used_baht_special / budget.per_course_max) * 100)}%` }}
-            title={`ภาคพิเศษ ~${baht(budget.used_baht_special)} บ.`}
-          />
+          /></Tip>
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted">

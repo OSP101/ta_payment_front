@@ -1,4 +1,5 @@
 "use client";
+import { Tip } from "./ui";
 /**
  * Shared vocabulary for the fiscal-year month split (10/08/2026).
  *
@@ -108,11 +109,9 @@ export function MonthChips({
         // it would only be refused on press, which is a worse way to find out.
         const blocked = m.ready === false;
         return (
-          <button
-            key={m.year_month}
+          <Tip key={m.year_month} content={blocked ? "ยังอนุมัติ/ส่งออกใบเบิกจ่ายไม่ครบ จึงยังออกเอกสารเดือนนี้ไม่ได้" : undefined}><button
             type="button"
             disabled={blocked}
-            title={blocked ? "ยังอนุมัติ/ส่งออกใบเบิกจ่ายไม่ครบ จึงยังออกเอกสารเดือนนี้ไม่ได้" : undefined}
             onClick={() => toggle(m.year_month)}
             aria-pressed={on}
             className={
@@ -129,7 +128,7 @@ export function MonthChips({
             {/* An already-issued month is not forbidden — reissuing to correct a
                 file is normal — but it must never be picked by accident. */}
             {m.issued && <span className="text-[10px] text-ink-4">ออกแล้ว</span>}
-          </button>
+          </button></Tip>
         );
       })}
     </div>

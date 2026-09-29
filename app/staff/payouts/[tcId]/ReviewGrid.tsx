@@ -8,7 +8,7 @@ import { notify } from "../../../lib/notify";
 import { HoursSplit } from "../../../lib/trackSplit";
 import { compareYearMonth } from "../../../lib/dates";
 import {
-  Button, Spinner, ConfirmDialog, TextArea,
+  Button, Spinner, ConfirmDialog, TextArea, Tip,
 } from "../../../components/ui";
 import { TimetableModal } from "../../../components/TimetableModal";
 import { Skel, SkelRegion } from "../../../components/Skeletons";
@@ -563,29 +563,27 @@ function Cell({
           )}
           {!reviewed && !blocked && !settled && (
             <>
-              <button
+              <Tip content="ผ่าน"><button
                 type="button"
                 disabled={disabled}
                 onClick={onApprove}
-                title="ผ่าน"
                 aria-label="ผ่าน"
                 className="rounded-md border border-[var(--hairline)] bg-surface px-1.5 py-0.5 hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-40"
               >
                 <Check size={12} />
-              </button>
+              </button></Tip>
               {/* A closed month is final: rows sent back there could never be
                   resent, so the TA would lose the month. Fixes go through ดู. */}
               {r.period_open && (
-              <button
+              <Tip content="ตีกลับ"><button
                 type="button"
                 disabled={disabled}
                 onClick={onSendBack}
-                title="ตีกลับ"
                 aria-label="ตีกลับ"
                 className="rounded-md border border-[var(--hairline)] bg-surface px-1.5 py-0.5 hover:border-red-400 hover:text-red-700 disabled:opacity-40"
               >
                 <Undo2 size={12} />
-              </button>
+              </button></Tip>
               )}
             </>
           )}

@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight, Send, Undo2 } from "lucide-react";
 import { Accordion } from "@heroui/react";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Panel, Button, Chip, TextArea } from "./ui";
+import { Panel, Button, Chip, TextArea, Tip } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
 import {
   SubmissionTimeline,
@@ -189,7 +189,9 @@ export function CourseSubmissionPanel({
             <Accordion.Item key={g.taId} id={g.taId}>
               <Accordion.Heading>
                 <Accordion.Trigger className="flex items-center gap-2 w-full px-4">
-                  <span className="font-medium text-ink-1 truncate">{g.taName}</span>
+                  <Tip content={g.taName}>
+                    <span tabIndex={-1} className="font-medium text-ink-1 truncate">{g.taName}</span>
+                  </Tip>
                   <Chip tone="neutral">{g.rows.length} งวด</Chip>
                   {actionable > 0 && <Chip tone="warn">{actionable} รอดำเนินการ</Chip>}
                   <Accordion.Indicator className="ml-auto" />

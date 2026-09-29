@@ -7,7 +7,7 @@ import {
   ChevronRight, Loader2, GitMerge,
 } from "lucide-react";
 import { api } from "../../lib/api";
-import { Modal, Button, Chip, FieldGroup, Alert } from "../../components/ui";
+import { Modal, Button, Chip, FieldGroup, Alert, Tip } from "../../components/ui";
 import { pickPrimaryCode } from "../../lib/courseCode";
 
 interface PreviewCourse {
@@ -497,14 +497,13 @@ function MergeGroups({
                   return (
                     <tr key={m.code} className={on ? "" : "text-(--ink-3)"}>
                       <td className="px-2 py-1.5 w-8">
-                        <input
+                        <Tip content={blocked ? "รวมวิชาที่เปิดอยู่แล้วสองวิชาเข้าด้วยกันไม่ได้จากหน้านี้" : undefined}><input
                           type="checkbox"
                           aria-label={`รวม ${m.code}`}
                           checked={on}
                           disabled={blocked}
-                          title={blocked ? "รวมวิชาที่เปิดอยู่แล้วสองวิชาเข้าด้วยกันไม่ได้จากหน้านี้" : undefined}
                           onChange={() => toggle(g, m.code)}
-                        />
+                        /></Tip>
                       </td>
                       <td className="px-2 py-1.5 font-medium tabular-nums whitespace-nowrap">
                         {m.code}
@@ -549,7 +548,7 @@ function OfficerCell({ c }: { c: PreviewCourse }) {
   // Each auto-matched lecturer becomes a co-owner of the course, so name them:
   // a wrong match hidden behind "2 คน" is one nobody would catch.
   return (
-    <div className="flex flex-wrap gap-1" title={c.officer_raw ? `ในไฟล์: ${c.officer_raw}` : undefined}>
+    <Tip content={c.officer_raw ? `ในไฟล์: ${c.officer_raw}` : undefined}><div className="flex flex-wrap gap-1">
       {matchedNames.length > 0
         ? matchedNames.map((n, i) => (
             <Chip key={matched[i] ?? n} tone="success">
@@ -566,7 +565,7 @@ function OfficerCell({ c }: { c: PreviewCourse }) {
           <span className="inline-flex items-center gap-1"><AlertTriangle size={10} /> {n}</span>
         </Chip>
       ))}
-    </div>
+    </div></Tip>
   );
 }
 

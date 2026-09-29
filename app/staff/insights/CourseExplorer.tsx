@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, AlertTriangle, CalendarX2 } from "lucide-react";
-import { SearchField, Select } from "../../components/ui";
+import { SearchField, Select, Tip } from "../../components/ui";
 import type { CourseStaffing, StaffingStatus } from "../types";
 import { curriculumTH } from "../types";
 import { STAFFING_META, CAP_META, capState, baht, money, num1, pct0, type CapState } from "./analysis";
@@ -152,9 +152,13 @@ export default function CourseExplorer({
                         : <span className="font-semibold tabular-nums">{r.code}</span>}
                       {r.pending_request && <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">รออนุมัติ</span>}
                     </div>
-                    <div className="text-xs text-[var(--ink-2)] line-clamp-1">{r.name_th}</div>
+                    <Tip content={r.name_th}>
+                      <div className="text-xs text-[var(--ink-2)] line-clamp-1">{r.name_th}</div>
+                    </Tip>
                     {r.lecturers.length > 0 && (
-                      <div className="text-xs text-[var(--ink-3)] line-clamp-1">{r.lecturers.join(", ")}</div>
+                      <Tip content={r.lecturers.join("\n")}>
+                        <div className="text-xs text-[var(--ink-3)] line-clamp-1">{r.lecturers.join(", ")}</div>
+                      </Tip>
                     )}
                   </td>
                   <td className="py-2.5 pe-3 text-xs text-[var(--ink-2)] whitespace-nowrap">{curriculumTH(r.curriculum)}</td>
@@ -171,18 +175,20 @@ export default function CourseExplorer({
                   <td className="py-2.5 pe-3 text-end tabular-nums">
                     <b>{r.requested || "–"}</b>
                     {r.requested > 0 && diff !== 0 && (
-                      <div className={`text-xs ${diff > 0 ? "text-red-700" : "text-sky-700"}`}>
-                        {diff > 0 ? `+${diff}` : diff}
-                      </div>
+                      <Tip content={diff > 0 ? `ขอ TA เกินจำนวนที่แนะนำ ${diff} คน` : `ขอ TA น้อยกว่าจำนวนที่แนะนำ ${-diff} คน`}>
+                        <div className={`text-xs ${diff > 0 ? "text-red-700" : "text-sky-700"}`}>
+                          {diff > 0 ? `+${diff}` : diff}
+                        </div>
+                      </Tip>
                     )}
                   </td>
                   <td className="py-2.5 pe-3 text-end tabular-nums">{r.students_per_ta ? num1(r.students_per_ta) : "–"}</td>
                   <td className="py-2.5 pe-3 text-end tabular-nums">
                     {r.spent_baht > 0 ? baht(r.spent_baht) : "–"}
                     {r.unfunded_baht > 0 && (
-                      <div className="text-xs text-red-700" title="งานที่บันทึกแล้วแต่เพดานวิชาจ่ายไม่ได้">
+                      <Tip content="งานที่บันทึกแล้วแต่เพดานวิชาจ่ายไม่ได้"><div className="text-xs text-red-700">
                         จ่ายไม่ได้ {money(r.unfunded_baht)}
-                      </div>
+                      </div></Tip>
                     )}
                   </td>
                   <td className="py-2.5 pe-3">
@@ -196,14 +202,16 @@ export default function CourseExplorer({
                     ) : <span className="text-xs text-[var(--ink-3)]">–</span>}
                   </td>
                   <td className="py-2.5">
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
-                          style={{ background: `${m.color}1a`, color: m.ink }}>
-                      <i className="size-1.5 rounded-full" style={{ background: m.color }} />{m.short}
-                    </span>
+                    <Tip content={m.label !== m.short ? m.label : undefined}>
+                      <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+                            style={{ background: `${m.color}1a`, color: m.ink }}>
+                        <i className="size-1.5 rounded-full" style={{ background: m.color }} />{m.short}
+                      </span>
+                    </Tip>
                     {r.unresolved_makeups > 0 && (
-                      <div className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--ink-3)]" title="คาบตรงวันหยุดที่ยังไม่กำหนดวันชดเชย">
+                      <Tip content="คาบตรงวันหยุดที่ยังไม่กำหนดวันชดเชย"><div className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--ink-3)]">
                         <CalendarX2 size={11} /> ชดเชย {r.unresolved_makeups} คาบ
-                      </div>
+                      </div></Tip>
                     )}
                   </td>
                 </tr>

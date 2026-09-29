@@ -14,7 +14,7 @@ import { parseDate, parseDateTime, type DateValue } from "@internationalized/dat
 import { api, ApiError, demoTesters, demoAddTester, demoRemoveTester, type DemoTester, type Me } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import {
-  PageHeader, Panel, Button, IconButton, TextInput, TextArea, FieldGroup, Chip, Modal, Alert, SearchField, Select, TipWrap,
+  PageHeader, Panel, Button, IconButton, TextInput, TextArea, FieldGroup, Chip, Modal, Alert, SearchField, Select, Tip, TipWrap,
 } from "../../components/ui";
 import { FormulaHelpModal } from "../../components/formula-help";
 import { Skel, SkelValue, SkelList, SkelRows, SkelForm } from "../../components/Skeletons";
@@ -278,10 +278,12 @@ function PayRateSection() {
             {scheduled!.map(r => (
               <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="font-medium">เริ่มใช้ {formatThaiDate(r.effective_from)}</span>
-                <span className="text-muted">
-                  ตรี {r.undergrad_regular}/{r.undergrad_special} · บัณฑิต {r.graduate_regular_hourly} บาท/ชม.
-                  · เหมาจ่าย {r.graduate_special_lumpsum.toLocaleString()} บาท/เดือน
-                </span>
+                <Tip content={`ปริญญาตรี ภาคปกติ ${r.undergrad_regular} บาท/ชั่วโมง\nปริญญาตรี ภาคพิเศษ ${r.undergrad_special} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคปกติ ${r.graduate_regular_hourly} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคพิเศษ เหมาจ่าย ${r.graduate_special_lumpsum.toLocaleString()} บาท/เดือน`}>
+                  <span className="text-muted">
+                    ตรี {r.undergrad_regular}/{r.undergrad_special} · บัณฑิต {r.graduate_regular_hourly} บาท/ชม.
+                    · เหมาจ่าย {r.graduate_special_lumpsum.toLocaleString()} บาท/เดือน
+                  </span>
+                </Tip>
                 {isAdmin && (
                   <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setWithdrawTarget(r)}>
                     <Trash2 size={14} />ยกเลิกเวอร์ชันนี้
@@ -1860,7 +1862,11 @@ function RequestWindowsSection() {
                   <div className="text-sm font-medium tabular">
                     {formatThaiDateTime(w.opens_at)} → {formatThaiDateTime(w.closes_at)}
                   </div>
-                  {w.note && <div className="text-xs text-muted truncate">{w.note}</div>}
+                  {w.note && (
+                    <Tip content={w.note}>
+                      <div className="text-xs text-muted truncate">{w.note}</div>
+                    </Tip>
+                  )}
                   <div className="text-xs text-muted flex items-center gap-1 mt-0.5">
                     {w.notify_lecturers ? (
                       <>
@@ -2486,13 +2492,17 @@ function MailServerTestSection() {
             <ol className="divide-y divide-hairline rounded-lg border border-hairline">
               {check.steps.map(st => (
                 <li key={st.key} className="flex items-start gap-3 px-4 py-3 text-sm">
-                  {st.warning
-                    ? <CircleAlert size={18} className="text-warning shrink-0 mt-0.5" />
-                    : st.skipped
-                    ? <CircleMinus size={18} className="text-muted shrink-0 mt-0.5" />
-                    : st.ok
-                      ? <CircleCheck size={18} className="text-success shrink-0 mt-0.5" />
-                      : <CircleX size={18} className="text-danger shrink-0 mt-0.5" />}
+                  <Tip content={st.warning ? "มีข้อควรระวัง แต่ยังส่งอีเมลได้" : st.skipped ? "ข้ามขั้นตอนนี้" : st.ok ? "ผ่าน" : "ไม่ผ่าน"}>
+                    <span className="inline-flex shrink-0 mt-0.5">
+                      {st.warning
+                        ? <CircleAlert size={18} className="text-warning" />
+                        : st.skipped
+                        ? <CircleMinus size={18} className="text-muted" />
+                        : st.ok
+                          ? <CircleCheck size={18} className="text-success" />
+                          : <CircleX size={18} className="text-danger" />}
+                    </span>
+                  </Tip>
                   <div className="min-w-0 flex-1">
                     <div className="font-medium break-words">{st.label}</div>
                     {st.detail && <div className="text-xs text-muted mt-0.5 break-words">{st.detail}</div>}

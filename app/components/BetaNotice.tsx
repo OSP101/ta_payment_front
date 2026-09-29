@@ -1,7 +1,7 @@
 "use client";
 import { FlaskConical, Lock, ClipboardList } from "lucide-react";
 import { Button } from "@heroui/react";
-import { Modal } from "./ui";
+import { Modal, Tip } from "./ui";
 
 // Bumped if the notice content changes materially and testers should see it
 // again even though they already dismissed an earlier version.
@@ -27,14 +27,15 @@ export function markBetaNoticeSeen() {
 // notice can still find it again — it isn't only a one-time interruption.
 export function BetaBadge({ onClick }: { onClick: () => void }) {
   return (
+    <Tip content="ระบบอยู่ระหว่างช่วงทดสอบ (Beta) คลิกเพื่อดูรายละเอียด" delay={300}>
     <button
       type="button"
       onClick={e => { e.preventDefault(); e.stopPropagation(); onClick(); }}
-      title="ระบบอยู่ระหว่างช่วงทดสอบ (Beta) — คลิกเพื่อดูรายละเอียด"
       className="inline-flex items-center rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide leading-none text-warning-soft-foreground hover:brightness-95"
     >
       Beta
     </button>
+    </Tip>
   );
 }
 

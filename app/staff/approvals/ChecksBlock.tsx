@@ -1,5 +1,6 @@
 "use client";
 import { Check, X, AlertTriangle } from "lucide-react";
+import { Tip } from "../../components/ui";
 
 interface DecisionCheck {
   rule: string;
@@ -75,9 +76,11 @@ export function ChecksBlock({ checks }: { checks: DecisionCheck[] }) {
                 : "bg-red-100 text-red-700";
               return (
                 <li key={i} className={"flex items-start gap-2 px-3 py-1.5 text-xs " + rowCls}>
-                  <span className={"mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full " + iconCls}>
-                    {c.passed ? <Check size={10} /> : warn ? <AlertTriangle size={10} /> : <X size={10} />}
-                  </span>
+                  <Tip content={c.passed ? "ผ่าน" : warn ? "ไม่ผ่าน แต่ไม่ขัดขวางคำขอ ควรติดตามต่อ" : "ไม่ผ่าน"}>
+                    <span className={"mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full " + iconCls}>
+                      {c.passed ? <Check size={10} /> : warn ? <AlertTriangle size={10} /> : <X size={10} />}
+                    </span>
+                  </Tip>
                   <span>
                     {c.message}
                     {warn && <span className="ml-1 text-[10px] uppercase tracking-wide">· ต้องติดตาม</span>}

@@ -11,7 +11,7 @@ import { HoursSplit } from "../../../lib/trackSplit";
 import { localDateISO } from "../../../lib/dates";
 import {
   Modal, Button, Spinner, Chip, TextArea, TextInput, Alert, IconButton,
-  ConfirmDialog,
+  ConfirmDialog, Tip,
 } from "../../../components/ui";
 import { packLanes, parseTime } from "../../../components/ScheduleGrid";
 import { readAddForm, writeAddForm, clearAddForm } from "../../../lib/draftStorage";
@@ -600,8 +600,13 @@ function WeekGrid({
                   const key = linkKey(dow, b.start_time, b.end_time, b.sec_no ?? "");
                   const on = mine && activeKey === key;
                   return (
-                    <button
-                      key={i}
+                    <Tip key={i} content={
+                        `${b.course_code}${b.sec_no ? ` sec ${b.sec_no}` : ""}` +
+                        (TRACK_TH[b.track ?? ""] ? ` · ภาค${TRACK_TH[b.track ?? ""]}` : "") +
+                        ` · ${KIND_LABEL[b.kind] ?? ""}` +
+                        ` · ${b.start_time.slice(0, 5)}–${b.end_time.slice(0, 5)}` +
+                        (mine ? "" : " (วิชาอื่น)")
+                      }><button
                       type="button"
                       disabled={!mine}
                       onClick={() => mine && onPick(key)}
@@ -620,16 +625,9 @@ function WeekGrid({
                         outlineOffset: on ? "-2px" : undefined,
                         opacity: mine ? 1 : 0.7,
                       }}
-                      title={
-                        `${b.course_code}${b.sec_no ? ` sec ${b.sec_no}` : ""}` +
-                        (TRACK_TH[b.track ?? ""] ? ` · ภาค${TRACK_TH[b.track ?? ""]}` : "") +
-                        ` · ${KIND_LABEL[b.kind] ?? ""}` +
-                        ` · ${b.start_time.slice(0, 5)}–${b.end_time.slice(0, 5)}` +
-                        (mine ? "" : " (วิชาอื่น)")
-                      }
                     >
                       {b.course_code}{b.sec_no ? ` s${b.sec_no}` : ""}
-                    </button>
+                    </button></Tip>
                   );
                 })}
               </div>
@@ -838,9 +836,13 @@ function WeekTable({
                       </td>
                       <td className="px-1 py-1">
                         {d.source === "manual" ? (
-                          <Chip tone="warn">TA เพิ่มเอง</Chip>
+                          <Tip content="TA กรอกรายการนี้เอง ไม่ได้สร้างจากตารางสอน">
+                            <span className="inline-flex"><Chip tone="warn">TA เพิ่มเอง</Chip></span>
+                          </Tip>
                         ) : (
-                          <span className="text-[11px] text-muted">ระบบ</span>
+                          <Tip content="ระบบสร้างรายการนี้จากตารางสอนของ section">
+                            <span className="text-[11px] text-muted">ระบบ</span>
+                          </Tip>
                         )}
                       </td>
                       <td className="whitespace-nowrap px-1 py-1 text-right">
@@ -1005,10 +1007,10 @@ function CommitDialog({
           <div className="flex flex-wrap items-center gap-2">
             {files.map((f, i) => (
               <span key={i} className="inline-flex items-center gap-1 rounded border border-[var(--hairline)] px-2 py-0.5 text-xs">
-                {f.name.slice(0, 18)}
-                <button type="button" className="cursor-pointer" onClick={() => setFiles(v => v.filter((_, j) => j !== i))}>
+                <Tip content={f.name.length > 18 ? f.name : undefined}><span tabIndex={-1}>{f.name.slice(0, 18)}</span></Tip>
+                <Tip content="เอารูปนี้ออก"><button type="button" className="cursor-pointer" aria-label={`เอา ${f.name} ออก`} onClick={() => setFiles(v => v.filter((_, j) => j !== i))}>
                   <X size={11} />
-                </button>
+                </button></Tip>
               </span>
             ))}
             {files.length < 3 && (

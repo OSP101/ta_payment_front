@@ -8,7 +8,7 @@ import { HoursSplit } from "../../../../lib/trackSplit";
 import { api } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
-  Button, TextArea, FieldGroup, Chip, StatusChip, Modal, TimePicker, Alert,
+  Button, IconButton, TextArea, FieldGroup, Chip, StatusChip, Modal, TimePicker, Alert, Tip,
 } from "../../../../components/ui";
 import { Skel } from "../../../../components/Skeletons";
 
@@ -403,10 +403,9 @@ function BlockView({
           </Chip>
         ))}
         {block.coTaught && (
-          <span className="inline-flex items-center gap-1 text-xs text-muted"
-                title="คาบเดียวกันบันทึกไว้ทุกเซคชันที่สอนพร้อมกัน ระบบนับและจ่ายครั้งเดียว อนุมัติ/แก้ไขพร้อมกันทุกเซคชัน">
+          <Tip content="คาบเดียวกันบันทึกไว้ทุกเซคชันที่สอนพร้อมกัน ระบบนับและจ่ายครั้งเดียว อนุมัติ/แก้ไขพร้อมกันทุกเซคชัน"><span className="inline-flex items-center gap-1 text-xs text-muted">
             <Link2 size={12} /> สอนพร้อมกัน นับชั่วโมงครั้งเดียว
-          </span>
+          </span></Tip>
         )}
         <span className="ms-auto text-xs text-muted">
           {pendingTotal > 0 ? `รอพิจารณา ${pendingTotal} คาบ` : "ไม่มีรายการรอพิจารณา"}
@@ -600,12 +599,12 @@ function SittingTable({
                 <td className="whitespace-nowrap px-4 py-1.5 text-right">
                   {canTouch && (
                     <div className="inline-flex gap-1">
-                      <Button variant="ghost" size="sm" isIconOnly aria-label="แก้ไขเวลา" onClick={() => onEdit(s)}>
+                      <IconButton variant="ghost" size="sm" label="แก้ไขเวลา" onClick={() => onEdit(s)}>
                         <Pencil size={14} />
-                      </Button>
-                      <Button variant="ghost" size="sm" isIconOnly aria-label="ตัดรายการนี้ออก" onClick={() => onCut(s)}>
+                      </IconButton>
+                      <IconButton variant="ghost" size="sm" label="ตัดรายการนี้ออก" onClick={() => onCut(s)}>
                         <Scissors size={14} />
-                      </Button>
+                      </IconButton>
                     </div>
                   )}
                 </td>

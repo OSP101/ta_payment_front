@@ -4,7 +4,7 @@ import {
   Pagination, Table, type SortDescriptor,
 } from "@heroui/react";
 import { ArrowDownAZ, ArrowUpAZ } from "lucide-react";
-import { EmptyState, SearchField, SelectField, Spinner, Alert, Button, type SelectOption } from "./ui";
+import { EmptyState, SearchField, SelectField, Spinner, Alert, Button, IconButton, type SelectOption } from "./ui";
 
 // Skeleton placeholders shown while the first page of data is still in
 // flight (rows === undefined). Replaces a bare spinner: a spinner-then-pop-in
@@ -318,20 +318,19 @@ export function DataTable<T>({
                 options={mobileSortOptions}
                 className="flex-1 min-w-0"
               />
-              <Button
+              <IconButton
                 variant="secondary"
                 size="sm"
-                isIconOnly
                 // The label names what pressing does, not what the list is doing
                 // now — it matches the icon, which points at the next state.
-                aria-label={sort?.direction === "descending" ? "เรียงจากน้อยไปมาก" : "เรียงจากมากไปน้อย"}
+                label={sort?.direction === "descending" ? "เรียงจากน้อยไปมาก" : "เรียงจากมากไปน้อย"}
                 onPress={() => setSort({
                   column: sort?.column ?? mobileSortOptions[0].id,
                   direction: sort?.direction === "descending" ? "ascending" : "descending",
                 })}
               >
                 {sort?.direction === "descending" ? <ArrowUpAZ size={16} /> : <ArrowDownAZ size={16} />}
-              </Button>
+              </IconButton>
             </div>
           )}
 

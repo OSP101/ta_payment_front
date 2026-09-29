@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { GraduationCap } from "lucide-react";
 import { startTour, type TourStep } from "./engine";
+import { Tip } from "../../components/ui";
 
 export type TourDef = {
   /** Unique key — also used for the "seen" flag in localStorage. */
@@ -74,11 +75,10 @@ export default function TourLauncher({
   if (!tour) return null;
 
   return (
-    <button
+    <Tip content="ดูคำแนะนำการใช้งานของหน้านี้"><button
       type="button"
       data-tour="tour-button"
       onClick={launch}
-      title="ดูคำแนะนำการใช้งานของหน้านี้"
       // A phone's top bar has no room to spare, and the tour it opens is
       // built around anchoring to desktop panel layouts anyway — hidden below
       // sm rather than shrunk to icon-only like the other controls here.
@@ -92,6 +92,6 @@ export default function TourLauncher({
           <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-(--brand)" />
         </span>
       )}
-    </button>
+    </button></Tip>
   );
 }

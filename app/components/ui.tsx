@@ -35,7 +35,7 @@ import PageDocsPill from "./docs/PageDocsPill";
 import type { Audience } from "../../content/docs/types";
 import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
 import type React from "react";
-import { Children, isValidElement, useEffect, useState } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useState } from "react";
 
 /* -------------------------------------------------------------------------- */
 /* Tooltip helpers                                                            */
@@ -46,27 +46,91 @@ import { Children, isValidElement, useEffect, useState } from "react";
 // rendered inside `<HTooltip.Content>` with a max width and pre-line spacing
 // so multi-line hints look reasonable.
 //
-// `Tip` expects a focusable trigger child (button, a, input). For plain
-// spans/divs/table cells use `TipWrap`, which wraps the child in
-// `<HTooltip.Trigger>` (a focusable role="button" div) so hover + long-press
-// still register.
+// `Tip` takes a single child. A HeroUI component child (Button, Link, …) hooks
+// into the tooltip on its own. A plain DOM element child (<button>, <a>,
+// <span>, <div>, <td>…) is turned into the trigger in place via
+// `HTooltip.Trigger`'s `render` — no wrapper element, so layout, table
+// structure and inline flow stay exactly as they were. Non-interactive
+// elements become keyboard-focusable so the hint is reachable without a mouse.
+//
+// A DISABLED DOM child fires no pointer events, so Tip moves the trigger onto
+// a wrapping <span> (via TipWrap) for as long as it stays disabled. HeroUI
+// Buttons with isDisabled need the same — wrap those in `TipWrap` yourself.
+// Pass tabIndex={-1} on a span/div that sits inside a link or button, so it
+// doesn't become a second tab stop.
+const INTERACTIVE_TAGS = new Set(["button", "a", "input", "select", "textarea", "summary"]);
+
+// Merge the trigger's props onto the child's own: event handlers run both
+// (child first), classNames join, everything else the child already set wins.
+function mergeTriggerProps(trigger: Record<string, unknown>, own: Record<string, unknown>) {
+  const out: Record<string, unknown> = { ...trigger };
+  for (const [k, v] of Object.entries(own)) {
+    const t = out[k];
+    if (/^on[A-Z]/.test(k) && typeof t === "function" && typeof v === "function") {
+      out[k] = (...args: unknown[]) => { (v as (...a: unknown[]) => void)(...args); (t as (...a: unknown[]) => void)(...args); };
+    } else if (k === "className" && typeof t === "string" && typeof v === "string") {
+      out[k] = `${t} ${v}`;
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function DomTrigger({ child }: { child: React.ReactElement<Record<string, unknown>> }) {
+  const tag = child.type as string;
+  const ownRef = child.props.ref as React.Ref<Element> | undefined;
+  return (
+    <HTooltip.Trigger
+      render={(p) => {
+        // Drop the trigger's own slot class (inline-block) and, on elements
+        // that already carry a role, its role="button".
+        const { children: _c, className: _cls, role, ref, ...rest } = p as Record<string, unknown> & { ref?: React.Ref<Element> };
+        const merged = mergeTriggerProps(
+          INTERACTIVE_TAGS.has(tag) ? rest : { ...rest, role: undefined, tabIndex: 0 },
+          child.props,
+        );
+        merged.ref = (el: Element | null) => {
+          for (const r of [ref, ownRef]) {
+            if (typeof r === "function") r(el);
+            else if (r && typeof r === "object") (r as React.RefObject<Element | null>).current = el;
+          }
+        };
+        void _c; void _cls; void role;
+        return cloneElement(child, merged);
+      }}
+    />
+  );
+}
+
 export function Tip({
   content,
   children,
   delay = 0,
   placement,
+  dom,
 }: {
   content?: React.ReactNode;
   children: React.ReactNode;
   delay?: number;
   placement?: "top" | "bottom" | "left" | "right" | "start" | "end";
+  // The child is a non-HeroUI component that renders a single DOM element and
+  // passes props + ref through (next/link's <Link>) — treat it like a DOM child.
+  dom?: boolean;
 }) {
   if (content === null || content === undefined || content === false || content === "") {
     return <>{children}</>;
   }
+  const domChild = isValidElement(children) && (typeof children.type === "string" || dom)
+    ? (children as React.ReactElement<Record<string, unknown>>)
+    : null;
+  if (domChild?.props.disabled) {
+    return <TipWrap content={content} delay={delay} placement={placement} inline>{children}</TipWrap>;
+  }
+  const trigger = domChild ? <DomTrigger child={domChild} /> : children;
   return (
     <HTooltip delay={delay}>
-      {children}
+      {trigger}
       <HTooltip.Content placement={placement}>
         <div className="max-w-xs text-xs leading-relaxed whitespace-pre-line">{content}</div>
       </HTooltip.Content>
@@ -80,19 +144,28 @@ export function TipWrap({
   delay = 0,
   placement,
   className,
+  inline,
 }: {
   content?: React.ReactNode;
   children: React.ReactNode;
   delay?: number;
   placement?: "top" | "bottom" | "left" | "right" | "start" | "end";
   className?: string;
+  // Render the wrapper as a <span> — for inline flow, or inside <p>/<button>
+  // where a <div> is invalid HTML.
+  inline?: boolean;
 }) {
   if (content === null || content === undefined || content === false || content === "") {
     return <>{children}</>;
   }
   return (
     <HTooltip delay={delay}>
-      <HTooltip.Trigger className={className}>{children}</HTooltip.Trigger>
+      <HTooltip.Trigger
+        className={className}
+        render={inline ? (p) => <span {...(p as React.HTMLAttributes<HTMLSpanElement>)} /> : undefined}
+      >
+        {children}
+      </HTooltip.Trigger>
       <HTooltip.Content placement={placement}>
         <div className="max-w-xs text-xs leading-relaxed whitespace-pre-line">{content}</div>
       </HTooltip.Content>

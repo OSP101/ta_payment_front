@@ -13,16 +13,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CourseStaffing, MonthFlow, PlanRatios, StaffingStatus } from "../types";
 import { STAFFING_META, FLOW_BUCKETS, money, num1, thMonth, type BudgetView } from "./analysis";
 import { compareYearMonth } from "../../lib/dates";
+import { Tip } from "../../components/ui";
 
 /* -------------------------------------------------------------------------- */
 /* Shared helpers                                                             */
 /* -------------------------------------------------------------------------- */
 
-interface Tip { x: number; y: number; content: React.ReactNode }
+interface TipState { x: number; y: number; content: React.ReactNode }
 
 export function useTip() {
   const ref = useRef<HTMLDivElement>(null);
-  const [tip, setTip] = useState<Tip | null>(null);
+  const [tip, setTip] = useState<TipState | null>(null);
   const show = (e: React.MouseEvent, content: React.ReactNode) => {
     const box = ref.current?.getBoundingClientRect();
     if (!box) return;
@@ -111,12 +112,10 @@ export function BudgetStack({ b }: { b: BudgetView }) {
           ))}
         </div>
         {timeX != null && (
-          <div className="absolute -top-2 -bottom-2 w-0.5 rounded bg-[var(--ink-1,#0f172a)]" style={{ left: `${timeX}%` }}
-               title={`เวลาผ่านไป ${Math.round(b.elapsedPct!)}% ของเทอม`} />
+          <Tip content={`เวลาผ่านไป ${Math.round(b.elapsedPct!)}% ของเทอม`}><div className="absolute -top-2 -bottom-2 w-0.5 rounded bg-[var(--ink-1,#0f172a)]" style={{ left: `${timeX}%` }} /></Tip>
         )}
         {scale > b.base && (
-          <div className="absolute -top-3 -bottom-3 w-0 border-s-2 border-dashed border-red-600" style={{ left: `${baseX}%` }}
-               title="งบรวม" />
+          <Tip content="งบรวม"><div className="absolute -top-3 -bottom-3 w-0 border-s-2 border-dashed border-red-600" style={{ left: `${baseX}%` }} /></Tip>
         )}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-[var(--ink-2)]">
@@ -310,7 +309,10 @@ export function StaffingRows({ rows, selected, onSelect }: {
                     className={`grid w-full grid-cols-1 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] items-center gap-x-4 gap-y-1.5 rounded-lg px-2 py-2.5 text-start hover:bg-slate-50 ${on ? "bg-[var(--brand-soft,#e7f3fb)]" : ""}`}>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-[var(--ink-1)]">
-                  {r.code} <span className="ms-1 rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: `${m.color}1a`, color: m.ink }}>{m.short}</span>
+                  {r.code}{" "}
+                  <Tip content={m.label !== m.short ? m.label : undefined}>
+                    <span tabIndex={-1} className="ms-1 rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: `${m.color}1a`, color: m.ink }}>{m.short}</span>
+                  </Tip>
                 </div>
                 <div className="text-xs text-[var(--ink-3)] tabular-nums">
                   นศ. {r.students} คน · ขอ {r.requested} · แนะนำ {r.recommended} · เพดาน {r.ceiling}
@@ -345,11 +347,13 @@ export function StatusLegend({ counts, onPick, picked }: {
         const m = STAFFING_META[k];
         const on = picked === k;
         return (
-          <button key={k} type="button" onClick={() => onPick?.(on ? "" : k)} aria-pressed={on}
+          <Tip key={k} content={m.label !== m.short ? m.label : undefined}>
+          <button type="button" onClick={() => onPick?.(on ? "" : k)} aria-pressed={on}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${on ? "border-[var(--ink-2)] bg-[var(--ink-1)] text-white" : "border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--ink-2)]"}`}>
             <svg width="12" height="12" viewBox="-7 -7 14 14" aria-hidden><Mark shape={SHAPES[k]} x={0} y={0} r={4.5} color={m.color} /></svg>
             {m.short} <b className="tabular-nums">{counts[k]}</b>
           </button>
+          </Tip>
         );
       })}
     </div>
@@ -365,9 +369,9 @@ export function VerdictBar({ counts }: { counts: Record<StaffingStatus, number> 
     <div className="flex h-3 w-full overflow-hidden rounded-full bg-[var(--hairline,#eef0f3)]" role="img"
          aria-label={order.map(k => `${STAFFING_META[k].short} ${counts[k]}`).join(", ")}>
       {order.filter(k => counts[k] > 0).map(k => (
-        <div key={k} title={`${STAFFING_META[k].label} ${counts[k]} วิชา`}
+        <Tip key={k} content={`${STAFFING_META[k].label} ${counts[k]} วิชา`}><div
              className="h-full border-e-2 border-white/80 last:border-e-0"
-             style={{ width: `${(counts[k] / total) * 100}%`, background: STAFFING_META[k].color }} />
+             style={{ width: `${(counts[k] / total) * 100}%`, background: STAFFING_META[k].color }} /></Tip>
       ))}
     </div>
   );

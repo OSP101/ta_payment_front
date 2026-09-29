@@ -10,7 +10,7 @@ import {
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Button, IconButton, StatusChip, Alert, TabLabel, Modal, Chip, SearchField,
+  PageHeader, Button, IconButton, StatusChip, Alert, TabLabel, Modal, Chip, SearchField, Tip,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { Skel, SkelRegion } from "../../components/Skeletons";
@@ -251,10 +251,12 @@ function PendingList({
                 <span className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground/10 text-xs font-semibold">
                   {u.full_name.trim().charAt(0)}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{u.full_name}</span>
-                  <span className="block truncate text-xs text-muted">{u.email}</span>
-                </span>
+                <Tip content={`${u.full_name}\n${u.email}`}>
+                  <span tabIndex={-1} className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{u.full_name}</span>
+                    <span className="block truncate text-xs text-muted">{u.email}</span>
+                  </span>
+                </Tip>
                 {/* The queue mixes two states — never looked at yet, and sent
                     back and waiting on the TA. Without the chip they were
                     indistinguishable until the officer opened the row. */}
@@ -319,10 +321,12 @@ function IncompleteList({ people }: { people?: Pending[] }) {
             const n = u.docs_in ?? 0;
             return (
               <li key={u.user_id} className="flex items-center gap-3 px-4 py-2.5">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">{u.full_name}</span>
-                  <span className="block truncate text-xs text-muted">{u.email}</span>
-                </span>
+                <Tip content={`${u.full_name}\n${u.email}`}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm">{u.full_name}</span>
+                    <span className="block truncate text-xs text-muted">{u.email}</span>
+                  </span>
+                </Tip>
                 {/* "0/3" reads as progress on something started. For a TA who has
                     not opened the form at all, say so — it is a different
                     conversation from one who is a file short. */}

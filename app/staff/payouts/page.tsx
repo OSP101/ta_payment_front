@@ -7,7 +7,7 @@ import {
   Check, CircleDashed, Minus, CalendarClock,
 } from "lucide-react";
 import { useTerm, useTermKey } from "../TermContext";
-import { PageHeader, Panel, EmptyState, Chip, type ChipTone } from "../../components/ui";
+import { PageHeader, Panel, EmptyState, Chip, Tip, type ChipTone } from "../../components/ui";
 import { Skel, SkelRegion } from "../../components/Skeletons";
 import { roundRangeLabel, type FiscalSplitInfo } from "../../components/monthScope";
 import { CertifierPicker } from "./CertifierPicker";
@@ -514,21 +514,30 @@ function CourseRow({ card, split, onOpen, muted }: {
           {/* Code and title are ONE underline target — two spans with a flex gap
               between them would draw two stubs with a break in the middle, which
               reads as a rendering fault rather than a link. */}
-          <span
-            className={
-              "min-w-0 truncate text-sm font-medium underline-offset-4 group-hover:underline " +
-              (muted ? "text-muted" : "")
-            }
-          >
-            {card.code} <span className="text-xs font-normal text-muted">{card.nameTH}</span>
-          </span>
+          <Tip content={`${card.code} ${card.nameTH}`}>
+            <span
+              tabIndex={-1}
+              className={
+                "min-w-0 truncate text-sm font-medium underline-offset-4 group-hover:underline " +
+                (muted ? "text-muted" : "")
+              }
+            >
+              {card.code} <span className="text-xs font-normal text-muted">{card.nameTH}</span>
+            </span>
+          </Tip>
           <Chip tone={st.tone}>{st.label}</Chip>
         </div>
         <RoundBar rounds={card.rounds} split={split} />
-        <div className="mt-0.5 truncate text-xs text-muted">
-          {card.lecturers || "ยังไม่มีอาจารย์ผู้สอนในระบบ"}
-        </div>
-        {hint && <div className="mt-0.5 truncate text-xs text-amber-700">{hint}</div>}
+        <Tip content={card.lecturers || undefined}>
+          <div tabIndex={-1} className="mt-0.5 truncate text-xs text-muted">
+            {card.lecturers || "ยังไม่มีอาจารย์ผู้สอนในระบบ"}
+          </div>
+        </Tip>
+        {hint && (
+          <Tip content={hint}>
+            <div tabIndex={-1} className="mt-0.5 truncate text-xs text-amber-700">{hint}</div>
+          </Tip>
+        )}
       </div>
 
       {/* Money, right-aligned and tabular so a column of courses can be scanned
@@ -541,12 +550,14 @@ function CourseRow({ card, split, onOpen, muted }: {
             <AlertTriangle size={11} /> เกินงบ
           </div>
         ) : card.maxBaht > 0 ? (
-          <div className="mt-1 h-1 overflow-hidden rounded-full bg-[var(--hairline)]">
-            <div
-              className="h-full rounded-full bg-[var(--brand)]"
-              style={{ width: `${Math.min(100, Math.round(pct))}%` }}
-            />
-          </div>
+          <Tip content={`ใช้งบไปแล้ว ${Math.round(pct)}% (${baht(card.usedBaht)} จาก ${baht(card.maxBaht)})`}>
+            <div tabIndex={-1} className="mt-1 h-1 overflow-hidden rounded-full bg-[var(--hairline)]">
+              <div
+                className="h-full rounded-full bg-[var(--brand)]"
+                style={{ width: `${Math.min(100, Math.round(pct))}%` }}
+              />
+            </div>
+          </Tip>
         ) : null}
       </div>
 

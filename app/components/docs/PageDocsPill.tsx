@@ -5,6 +5,7 @@ import type { Audience } from "../../../content/docs/types";
 import { resolvePageDoc, useDocsPanel } from "./DocsPanel";
 import useIsDemo from "../../lib/useIsDemo";
 import { SkelValue } from "../Skeletons";
+import { Tip } from "../ui";
 
 /**
  * The "📖 คู่มือ <หัวข้อ>" pill under every page title — the Cloudflare
@@ -68,21 +69,20 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
 
   if (bigTopic && target.slug) {
     return (
-      <a
+      <Tip content="เปิดคู่มือฉบับเต็มในแท็บใหม่"><a
         href={`/docs/${target.audience}/${target.slug}`}
         target={demo ? "_self" : "_blank"}
         rel={demo ? undefined : "noopener"}
         className={btnClass}
-        title="เปิดคู่มือฉบับเต็มในแท็บใหม่"
       >
         {inner}
         {!demo && <ExternalLink size={13} className="shrink-0 opacity-70" />}
-      </a>
+      </a></Tip>
     );
   }
   return (
-    <button type="button" onClick={() => open(target)} className={btnClass} title="เปิดคู่มือด้านข้าง">
+    <Tip content="เปิดคู่มือด้านข้าง"><button type="button" onClick={() => open(target)} className={btnClass}>
       {inner}
-    </button>
+    </button></Tip>
   );
 }

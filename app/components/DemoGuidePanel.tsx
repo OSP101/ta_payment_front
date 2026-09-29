@@ -28,7 +28,7 @@ import {
 import { isDemoMode, type DemoScenarioEvent, type DemoProblemEvent, type DemoActorRole, type DemoSubStep } from "../lib/api";
 import { useScenarioEngine, type RunState } from "../lib/useScenarioEngine";
 import { STEP_GUIDES, DEMO_ACCOUNT_LABELS } from "../lib/demoStepGuides";
-import { ConfirmDialog } from "./ui";
+import { ConfirmDialog, Tip } from "./ui";
 import DemoPresentationButton from "./DemoPresentationButton";
 import { Skel, SkelRegion, SkelValue } from "./Skeletons";
 
@@ -560,14 +560,14 @@ export default function DemoGuidePanel() {
             <div className="flex items-center gap-2 border-b border-border px-4 h-14 shrink-0">
               <FlaskConical size={17} className="text-accent shrink-0" />
               <div className="font-semibold text-sm text-foreground truncate">เครื่องจำลองเหตุการณ์</div>
-              <button
+              <Tip content="ย่อแผงเครื่องจำลองเหตุการณ์"><button
                 type="button"
                 onClick={() => setCollapsedPersistent(true)}
                 className="ml-auto shrink-0 text-muted hover:text-foreground"
                 aria-label="ย่อแผงเครื่องจำลองเหตุการณ์"
               >
                 <PanelRightClose size={18} />
-              </button>
+              </button></Tip>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">

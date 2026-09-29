@@ -5,6 +5,7 @@ import { Modal as HModal, Checkbox, Button as HButton } from "@heroui/react";
 import { ChevronDown, ShieldCheck } from "lucide-react";
 import { errMessage, pdpaConsent } from "../lib/api";
 import { notify } from "../lib/notify";
+import { Tip } from "./ui";
 
 /**
  * Shown in place of the TA profile form (Step 1 of "เอกสารของฉัน") the first
@@ -148,14 +149,14 @@ export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => voi
                 </div>
               </div>
               {!hasReadToEnd && (
-                <button
+                <Tip content="เลื่อนลงเพื่ออ่านต่อ"><button
                   type="button"
                   onClick={scrollToBottom}
                   aria-label="เลื่อนลงเพื่ออ่านต่อ"
                   className="absolute bottom-2 left-1/2 -translate-x-1/2 flex size-8 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-md"
                 >
                   <ChevronDown className="size-4" />
-                </button>
+                </button></Tip>
               )}
               </div>
             </HModal.Body>
