@@ -5,7 +5,7 @@ import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Clo
 import useIsDemo from "../../../lib/useIsDemo";
 import { api, type Term, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
-import { icsToBlocks, applyClassKinds, type IcsImportResult, type ClassKindRow } from "../../../lib/ics";
+import { icsToBlocks, applyClassKinds, suggestKinds, type IcsImportResult, type ClassKindRow } from "../../../lib/ics";
 import TermSelect from "../../../components/TermSelect";
 import ScheduleGrid, {
   type Block, type BlockKind, type DraftRange,
@@ -66,6 +66,20 @@ function sanitize(v: string, re: RegExp, max: number): string {
 // Overlap between two [a,b) intervals
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   return parseHM(aStart) < parseHM(bEnd) && parseHM(bStart) < parseHM(aEnd);
+}
+
+// A course has at most one lecture period and one lab period, so a second
+// block with the same code + kind is a duplicate entry. A blank kind is not a
+// kind, though — the KKU REG .ics has no lecture/lab marker, so a course taken
+// outside this faculty imports as two blank-kind blocks (e.g. 13–15 and 15–17)
+// that are two real periods. Those only count as duplicates when they are the
+// very same slot.
+function isDuplicateBlock(a: Block, b: Block): boolean {
+  if (a.course_code !== b.course_code || a.kind !== b.kind) return false;
+  if (a.kind) return true;
+  return a.day_of_week === b.day_of_week &&
+    parseHM(a.start_time) === parseHM(b.start_time) &&
+    parseHM(a.end_time) === parseHM(b.end_time);
 }
 
 function emptyBlockFields(): Pick<Block, "course_code" | "course_name" | "kind" | "sec_no" | "note"> {
@@ -337,14 +351,12 @@ export default function TASchedulePage() {
       }
     }
     // Overlapping time slots are allowed (two sections co-taught can share a
-    // room/time), but the same course can only have one lecture period and
-    // one lab period — a course code repeated under the same kind is always
-    // a duplicate entry, not a legitimate second occurrence.
-    const seenByCourseKind = new Map<string, Block>();
+    // room/time); what is refused is the same course entered twice — see
+    // isDuplicateBlock for how a blank ประเภท is treated.
+    const seen: Block[] = [];
     for (const b of local) {
       if (b.is_wba || !b.course_code) continue;
-      const key = `${b.course_code}|${b.kind}`;
-      const dup = seenByCourseKind.get(key);
+      const dup = seen.find(x => isDuplicateBlock(x, b));
       if (dup) {
         const kindLabel = b.kind ? KIND_LABEL[b.kind] : "คาบเรียน";
         const msg = `วิชา ${b.course_code} ลง${kindLabel}ซ้ำกัน 2 คาบ กรุณาลบคาบที่ซ้ำออกก่อนบันทึก`;
@@ -352,7 +364,7 @@ export default function TASchedulePage() {
         if (!silent) notify.error(msg);
         return false;
       }
-      seenByCourseKind.set(key, b);
+      seen.push(b);
     }
     setSaving(true);
     setSaveError(null);
@@ -593,8 +605,7 @@ export default function TASchedulePage() {
         }}
         checkDuplicateCourseKind={(candidate) => {
           return local.find(x =>
-            !x.is_wba && x.id !== candidate.id &&
-            x.course_code === candidate.course_code && x.kind === candidate.kind) ?? null;
+            !x.is_wba && x.id !== candidate.id && isDuplicateBlock(x, candidate)) ?? null;
         }}
       />
 
@@ -945,6 +956,9 @@ interface IcsImportModalProps {
 function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps) {
   const [fileName, setFileName] = useState<string>("");
   const [result, setResult] = useState<IcsImportResult | null>(null);
+  // Blocks whose ประเภท came from suggestKinds (a guess, not the timetable) —
+  // flagged in the preview until the TA confirms or changes them.
+  const [guessed, setGuessed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -955,6 +969,7 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
     if (!open) return;
     setFileName("");
     setResult(null);
+    setGuessed(new Set());
     setError(null);
     setParsing(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -976,6 +991,9 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
       } catch {
         // ดึงตารางไม่ได้ก็ยังนำเข้าได้ตามปกติ แค่ต้องเลือกประเภทเอง
       }
+      const suggested = suggestKinds(parsed);
+      parsed = suggested.result;
+      setGuessed(suggested.guessed);
       if (parsed.eventsTotal === 0) {
         setError("ไม่พบเหตุการณ์ในไฟล์ (VEVENT) โปรดตรวจว่าไฟล์เป็น .ics ที่ถูกต้อง");
       } else if (parsed.blocks.length === 0) {
@@ -994,7 +1012,23 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
     if (file) handleFile(file);
   }
 
-  const canImport = !!result && result.blocks.length > 0 && !parsing && !!termId;
+  function setKind(id: string, kind: BlockKind) {
+    setResult(r => r && { ...r, blocks: r.blocks.map(b => b.id === id ? { ...b, kind } : b) });
+    setGuessed(g => { const n = new Set(g); n.delete(id); return n; });
+  }
+
+  // Same rule the page's save() enforces — refuse here so the TA fixes the
+  // ประเภท in the preview instead of importing a timetable that can't be saved.
+  const duplicateIds = useMemo(() => {
+    const ids = new Set<string>();
+    const blocks = result?.blocks ?? [];
+    blocks.forEach((a, i) => blocks.slice(i + 1).forEach(b => {
+      if (isDuplicateBlock(a, b)) { ids.add(a.id); ids.add(b.id); }
+    }));
+    return ids;
+  }, [result]);
+
+  const canImport = !!result && result.blocks.length > 0 && duplicateIds.size === 0 && !parsing && !!termId;
 
   return (
     <Modal
@@ -1049,14 +1083,21 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
         )}
 
         {result && (
-          <IcsPreview result={result} />
+          <IcsPreview result={result} guessed={guessed} duplicateIds={duplicateIds} onKindChange={setKind} />
         )}
       </div>
     </Modal>
   );
 }
 
-function IcsPreview({ result }: { result: IcsImportResult }) {
+interface IcsPreviewProps {
+  result: IcsImportResult;
+  guessed: Set<string>;
+  duplicateIds: Set<string>;
+  onKindChange: (id: string, kind: BlockKind) => void;
+}
+
+function IcsPreview({ result, guessed, duplicateIds, onKindChange }: IcsPreviewProps) {
   const summaryBits: string[] = [];
   if (result.blocks.length) summaryBits.push(`คาบเรียนรายสัปดาห์ ${result.blocks.length} คาบ`);
   if (result.duplicatesCollapsed) summaryBits.push(`รวมเหตุการณ์ซ้ำ ${result.duplicatesCollapsed} รายการ`);
@@ -1084,15 +1125,24 @@ function IcsPreview({ result }: { result: IcsImportResult }) {
             </thead>
             <tbody className="divide-y divide-[var(--hairline)]">
               {result.blocks.map(b => (
-                <tr key={b.id}>
+                <tr key={b.id} className={duplicateIds.has(b.id) ? "bg-red-50" : undefined}>
                   <td className="px-3 py-1.5">{DOW_LABEL[b.day_of_week]}</td>
                   <td className="px-3 py-1.5 tabular-nums">{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</td>
                   <td className="px-3 py-1.5 font-medium">{b.course_code}</td>
                   <td className="px-3 py-1.5 tabular-nums">{b.sec_no}</td>
                   <td className="px-3 py-1.5">
-                    {b.kind
-                      ? <Chip tone={b.kind === "lab" ? "warn" : "brand"}>{KIND_LABEL[b.kind]}</Chip>
-                      : <span className="text-xs text-muted">— เลือกเอง</span>}
+                    <div className="flex items-center gap-2">
+                      <Select
+                        aria-label={`ประเภทคาบ ${b.course_code} ${DOW_LABEL[b.day_of_week]} ${fmtTime(b.start_time)}`}
+                        value={b.kind}
+                        onChange={e => onKindChange(b.id, e.target.value as BlockKind)}
+                      >
+                        <option value="">ไม่ระบุ</option>
+                        <option value="lecture">บรรยาย</option>
+                        <option value="lab">ปฏิบัติการ</option>
+                      </Select>
+                      {guessed.has(b.id) && <Chip tone="warn">โปรดตรวจ</Chip>}
+                    </div>
                   </td>
                   <td className="px-3 py-1.5 text-muted truncate max-w-[16rem]">{b.note}</td>
                 </tr>
@@ -1101,10 +1151,22 @@ function IcsPreview({ result }: { result: IcsImportResult }) {
           </table>
         </div>
       )}
+      {duplicateIds.size > 0 && (
+        <Alert
+          status="danger"
+          icon={<AlertTriangle size={14} />}
+          title="มีวิชาที่ลงประเภทเดียวกันซ้ำ (แถวสีแดง) วิชาหนึ่งมีคาบบรรยายและคาบปฏิบัติการได้อย่างละ 1 คาบ กรุณาแก้ประเภทก่อนนำเข้า"
+        />
+      )}
+      {guessed.size > 0 && (
+        <p className="text-xs text-muted">
+          คาบที่ติดป้าย &ldquo;โปรดตรวจ&rdquo; ระบบเดาจากลำดับเวลา (วิชาเดียวกันเรียนสองคาบในวันเดียว คาบแรกเป็นบรรยาย คาบหลังเป็นปฏิบัติการ) กรุณาตรวจก่อนนำเข้า
+        </p>
+      )}
       <p className="text-xs text-muted">
         {unresolved === 0
-          ? "ระบุประเภท (บรรยาย/ปฏิบัติการ) ให้ครบทุกคาบแล้วจากตารางสอนในระบบ แก้ไขภายหลังได้"
-          : `ไฟล์ .ics ของระบบทะเบียนไม่ได้ระบุประเภทคาบ ระบบจึงเทียบกับตารางสอนในระบบให้ ยังเหลือ ${unresolved} คาบที่ต้องเลือกประเภทเอง`}
+          ? "ระบุประเภท (บรรยาย/ปฏิบัติการ) ครบทุกคาบแล้ว แก้ไขภายหลังได้"
+          : `ไฟล์ .ics ของระบบทะเบียนไม่ได้ระบุประเภทคาบ ระบบจึงเทียบกับตารางสอนในระบบให้ ยังเหลือ ${unresolved} คาบที่ไม่ระบุประเภท เลือกได้ในตารางด้านบน หรือเว้นไว้ก็บันทึกได้`}
       </p>
     </div>
   );

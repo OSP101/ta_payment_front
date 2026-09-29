@@ -87,6 +87,32 @@ export function applyClassKinds(result: IcsImportResult, table: ClassKindRow[]):
   return { ...result, blocks, kindResolved };
 }
 
+/**
+ * Suggest a ประเภท for the one pattern that is almost always lecture + lab: a
+ * section left unresolved by the timetable that meets exactly twice, both on
+ * the same day (e.g. 13–15 then 15–17) — the earlier period becomes บรรยาย and
+ * the later one ปฏิบัติการ. Two periods on different days are just as often two
+ * lectures, so those stay blank. Returns the ids it guessed so the import
+ * preview can flag them for the TA to check before importing.
+ */
+export function suggestKinds(result: IcsImportResult): { result: IcsImportResult; guessed: Set<string> } {
+  const groups = new Map<string, Block[]>();
+  for (const b of result.blocks) {
+    const key = `${b.course_code.toUpperCase()}|${b.sec_no}`;
+    groups.set(key, [...(groups.get(key) ?? []), b]);
+  }
+  const suggestion = new Map<string, BlockKind>();
+  for (const g of groups.values()) {
+    if (g.length !== 2 || g.some(b => b.kind) || g[0].day_of_week !== g[1].day_of_week) continue;
+    const [first, second] = [...g].sort((a, b) => parseHM(a.start_time) - parseHM(b.start_time));
+    if (parseHM(first.start_time) === parseHM(second.start_time)) continue;
+    suggestion.set(first.id, "lecture");
+    suggestion.set(second.id, "lab");
+  }
+  const blocks = result.blocks.map(b => suggestion.has(b.id) ? { ...b, kind: suggestion.get(b.id)! } : b);
+  return { result: { ...result, blocks }, guessed: new Set(suggestion.keys()) };
+}
+
 // The schedule grid clamps to 08:00–20:00 Bangkok time; anything outside is
 // silently dropped rather than saved as invalid. KKU classes are always inside
 // this window, so a hit here almost always means a genuinely-wrong record.
