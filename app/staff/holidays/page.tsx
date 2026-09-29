@@ -64,9 +64,9 @@ const SOURCE_TONE: Record<Holiday["source"], ChipTone> = {
   tdbm: "info",
 };
 // ตัวเลือกประเภทวันหยุด — ใช้ร่วมกันทั้งฟอร์มเพิ่มและนำเข้าหลายรายการ
+// วันหยุดราชการ/มหาวิทยาลัยมาจาก TDBM เท่านั้น (backend validHolidaySource)
+// กรอกเองได้แค่ คณะ/อื่นๆ; ราชการ/มหาวิทยาลัยเหลือใน SOURCE_LABEL ไว้แสดงแถวเก่า
 const SOURCE_OPTIONS: { value: Holiday["source"]; label: string }[] = [
-  { value: "national", label: "ราชการ" },
-  { value: "university", label: "มหาวิทยาลัย" },
   { value: "faculty", label: "คณะ" },
   { value: "custom", label: "อื่นๆ" },
 ];
@@ -437,6 +437,10 @@ function HolidayFormModal({
             : undefined}
         >
           <Select value={source} onChange={e => setSource(e.target.value as Holiday["source"])} disabled={isEdit}>
+            {/* แถวเก่าประเภทราชการ/มหาวิทยาลัยแก้ชื่อได้ แต่ต้องยังแสดงประเภทเดิมในช่องที่ล็อกไว้ */}
+            {isEdit && !SOURCE_OPTIONS.some(o => o.value === source) && (
+              <option value={source}>{SOURCE_LABEL[source]}</option>
+            )}
             {SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
         </FieldGroup>
@@ -496,7 +500,7 @@ function BulkImportModal({
   onSaved: (inserted: number) => void | Promise<void>;
 }) {
   const [text, setText] = useState("");
-  const [source, setSource] = useState<Holiday["source"]>("national");
+  const [source, setSource] = useState<Holiday["source"]>("faculty");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

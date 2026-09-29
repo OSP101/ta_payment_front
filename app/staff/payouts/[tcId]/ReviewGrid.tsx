@@ -52,6 +52,9 @@ interface ReviewRow {
   row_count: number;
   needs_staff: boolean;
   manual_count: number;
+  /** The month still takes submissions. ตีกลับ on an unsigned month hands its
+   *  rows back to the TA, which is only worth anything while they can resend. */
+  period_open: boolean;
 }
 
 /** What the monthly tracker knows about a (TA, month) the review queue dropped. */
@@ -570,6 +573,9 @@ function Cell({
               >
                 <Check size={12} />
               </button>
+              {/* A closed month is final: rows sent back there could never be
+                  resent, so the TA would lose the month. Fixes go through ดู. */}
+              {r.period_open && (
               <button
                 type="button"
                 disabled={disabled}
@@ -580,6 +586,7 @@ function Cell({
               >
                 <Undo2 size={12} />
               </button>
+              )}
             </>
           )}
         </div>
@@ -602,5 +609,6 @@ function toTarget(r: ReviewRow): ReviewTarget {
     taName: r.ta_name,
     status: r.status,
     openRows: r.open_rows,
+    periodOpen: r.period_open,
   };
 }

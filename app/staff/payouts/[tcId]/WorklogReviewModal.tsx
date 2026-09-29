@@ -76,6 +76,7 @@ export interface ReviewTarget {
   taName: string;
   status: string;
   openRows: number;
+  periodOpen: boolean;
 }
 
 const ACTIVITY_LABEL: Record<string, string> = {
@@ -339,9 +340,13 @@ export function WorklogReviewModal({
             )}
             {pendingCount === 0 && (
               <>
-                <Button variant="secondary" size="sm" isDisabled={busy} onPress={() => setRejectOpen(true)}>
-                  <Undo2 size={14} /> ตีกลับ
-                </Button>
+                {/* Unsigned + closed: sending back would forfeit the rows
+                    (see the grid cell), so only the edits above are offered. */}
+                {(target.status !== "pending" || target.periodOpen) && (
+                  <Button variant="secondary" size="sm" isDisabled={busy} onPress={() => setRejectOpen(true)}>
+                    <Undo2 size={14} /> ตีกลับ
+                  </Button>
+                )}
                 {target.status === "pending" && target.openRows === 0 && (
                   <Button size="sm" isDisabled={busy} onPress={approve}>
                     <CheckCircle2 size={14} /> ผ่านเดือนนี้
