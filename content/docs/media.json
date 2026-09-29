@@ -1,17 +1,5 @@
 [
   {
-    "id": "C-01",
-    "kind": "svg",
-    "audience": "common",
-    "route": "-",
-    "desc": "ไดอะแกรมเส้นทางเงิน 5 ขั้น + 3 บทบาท (วาดเองไม่ต้องแคป)",
-    "account": "-",
-    "priority": "P1",
-    "since": "1.0",
-    "captured": false,
-    "file": "common/C-01.svg"
-  },
-  {
     "id": "C-02",
     "kind": "png",
     "audience": "common",
@@ -145,7 +133,7 @@
   },
   {
     "id": "C-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "common",
     "route": "/lecturer",
     "desc": "กดปุ่ม \"สอนการใช้งาน\" → ทัวร์เด้ง → ถัดไป 2 ครั้ง → ✕",
@@ -153,14 +141,16 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "common/C-G1.gif"
+    "file": "common/C-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "C-13",
     "kind": "png",
     "audience": "common",
     "route": "/account",
-    "desc": "หน้าตั้งค่าบัญชี annotate ส่วนข้อมูลส่วนตัว/รูป/รหัสผ่าน/2FA",
+    "desc": "หน้าตั้งค่าบัญชี annotate รูป (แก้ได้) / ข้อมูลส่วนตัว (ดูอย่างเดียว) / รหัสผ่าน / 2FA",
     "account": "demo:lecturer",
     "priority": "P1",
     "since": "1.0",
@@ -181,7 +171,7 @@
   },
   {
     "id": "C-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "common",
     "route": "/account",
     "desc": "อัปโหลดรูปโปรไฟล์ → crop → บันทึก",
@@ -189,7 +179,7 @@
     "priority": "P2",
     "since": "1.0",
     "captured": false,
-    "file": "common/C-G2.gif"
+    "file": "common/C-G2.mp4"
   },
   {
     "id": "C-15",
@@ -385,7 +375,7 @@
   },
   {
     "id": "T-DC-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "ขั้น 1",
     "desc": "วาดลายเซ็นในกรอบ → ล้าง → วาดใหม่ → บันทึก",
@@ -393,7 +383,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-DC-G1.gif"
+    "file": "ta/T-DC-G1.mp4",
+    "w": 1600,
+    "h": 1072
   },
   {
     "id": "T-DC-05",
@@ -445,7 +437,7 @@
   },
   {
     "id": "T-DC-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "ขั้น 4",
     "desc": "เลือกไฟล์ → ตัวอย่าง → อัปโหลด → โมดัลความคืบหน้า → สแกนไวรัส → สำเร็จ",
@@ -453,7 +445,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-DC-G2.gif"
+    "file": "ta/T-DC-G2.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "T-DC-09",
@@ -493,7 +487,7 @@
   },
   {
     "id": "T-SC-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "/ta/schedule",
     "desc": "อัปโหลด .ics → ตัวอย่างก่อนนำเข้า → ยืนยัน → ตารางเต็ม",
@@ -501,11 +495,13 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-SC-G1.gif"
+    "file": "ta/T-SC-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "T-SC-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "/ta/schedule",
     "desc": "ลากสร้างคาบ → ลากย้าย → จับขอบขยาย → คลิกแก้รหัสวิชา → เห็น \"บันทึกแล้ว\"",
@@ -513,7 +509,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-SC-G2.gif"
+    "file": "ta/T-SC-G2.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "T-SC-03",
@@ -625,7 +623,7 @@
   },
   {
     "id": "T-WL-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "worklog",
     "desc": "กดสร้างอัตโนมัติ → รายการทั้งเทอมโผล่ → เลื่อนดู 2 เดือน",
@@ -633,7 +631,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-WL-G1.gif"
+    "file": "ta/T-WL-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "T-WL-04",
@@ -661,7 +661,7 @@
   },
   {
     "id": "T-WL-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "worklog",
     "desc": "แก้เวลาในตารางแถวร่าง → ชั่วโมงคำนวณใหม่ → \"บันทึกแล้ว\" → ลบ 1 แถว",
@@ -669,7 +669,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-WL-G2.gif"
+    "file": "ta/T-WL-G2.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "T-WL-06",
@@ -697,7 +699,7 @@
   },
   {
     "id": "T-WL-G3",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "worklog",
     "desc": "ตั้งช่วงงานประจำ → กดสร้างอัตโนมัติ → เห็นแถวตรวจงานเพิ่มทุกสัปดาห์",
@@ -705,7 +707,7 @@
     "priority": "P2",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-WL-G3.gif"
+    "file": "ta/T-WL-G3.mp4"
   },
   {
     "id": "T-WL-08",
@@ -745,7 +747,7 @@
   },
   {
     "id": "T-WL-G4",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "worklog",
     "desc": "ลงครบ → กดส่งอนุมัติ → ยืนยัน → toast สำเร็จ → หัวกล่องเดือนเปลี่ยน",
@@ -753,7 +755,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-WL-G4.gif"
+    "file": "ta/T-WL-G4.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "T-WL-11",
@@ -793,7 +797,7 @@
   },
   {
     "id": "T-HL-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "ta",
     "route": "holidays",
     "desc": "กำหนดวันชดเชยเอง → เลือกวัน/เวลา → บันทึก → เห็นในรายการ",
@@ -801,7 +805,7 @@
     "priority": "P2",
     "since": "1.0",
     "captured": false,
-    "file": "ta/T-HL-G1.gif"
+    "file": "ta/T-HL-G1.mp4"
   },
   {
     "id": "T-RM-01",
@@ -820,7 +824,7 @@
     "kind": "png",
     "audience": "ta",
     "route": "/ta/reminders",
-    "desc": "กางไทม์ไลน์การอนุมัติ 5 ขั้น ของ 1 วิชา",
+    "desc": "กางไทม์ไลน์การอนุมัติ 3 ขั้น ของ 1 วิชา",
     "account": "demo:ta",
     "priority": "P1",
     "since": "1.0",
@@ -973,7 +977,7 @@
   },
   {
     "id": "L-ST-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "lecturer",
     "route": "settings",
     "desc": "กำหนดตารางเวลา → เพิ่มคาบบรรยาย + ปฏิบัติการ → บันทึก → แถวเปลี่ยนสถานะ",
@@ -981,7 +985,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-ST-G1.gif"
+    "file": "lecturer/L-ST-G1.mp4",
+    "w": 1600,
+    "h": 810
   },
   {
     "id": "L-RQ-01",
@@ -996,20 +1002,32 @@
     "file": "lecturer/L-RQ-01.png"
   },
   {
-    "id": "L-RQ-02",
+    "id": "L-RQ-02-1",
     "kind": "png",
     "audience": "lecturer",
     "route": "request",
-    "desc": "แถบกำหนดส่ง 2 แบบ: ทันกำหนด / เลยกำหนด \"ส่งช้า\"",
+    "desc": "แถบกำหนดส่งเมื่อยังทันกำหนด",
     "account": "demo:lecturer",
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-RQ-02.png"
+    "file": "lecturer/L-RQ-02-1.png"
+  },
+  {
+    "id": "L-RQ-02-2",
+    "kind": "png",
+    "audience": "lecturer",
+    "route": "request",
+    "desc": "แถบกำหนดส่งเมื่อเลยกำหนด ป้าย \"ส่งช้า\"",
+    "account": "demo:lecturer",
+    "priority": "P1",
+    "since": "1.0",
+    "captured": false,
+    "file": "lecturer/L-RQ-02-2.png"
   },
   {
     "id": "L-RQ-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "lecturer",
     "route": "request",
     "desc": "ปรับจำนวน นศ./TA ในเครื่องคิดเลข → ตัวเลขงบเปลี่ยนสด",
@@ -1017,7 +1035,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-RQ-G1.gif"
+    "file": "lecturer/L-RQ-G1.mp4",
+    "w": 1600,
+    "h": 810
   },
   {
     "id": "L-RQ-03",
@@ -1045,7 +1065,7 @@
   },
   {
     "id": "L-RQ-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "lecturer",
     "route": "request",
     "desc": "กดเพิ่ม TA → การ์ด → พิมพ์ชื่อ → เห็นรายชื่อ (ระดับ, n/3, ป้ายส้ม, กดไม่ได้) → เลือก → ระดับขึ้นเอง",
@@ -1053,7 +1073,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-RQ-G2.gif"
+    "file": "lecturer/L-RQ-G2.mp4",
+    "w": 1600,
+    "h": 526
   },
   {
     "id": "L-RQ-05",
@@ -1105,7 +1127,7 @@
   },
   {
     "id": "L-RQ-G3",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "lecturer",
     "route": "request",
     "desc": "กรอกชั่วโมง → แถบสรุปเหลือง → เพิ่มจนฟ้า → ป้ายหัวขั้น 2 เปลี่ยน \"พร้อมส่ง\"",
@@ -1113,7 +1135,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-RQ-G3.gif"
+    "file": "lecturer/L-RQ-G3.mp4",
+    "w": 1600,
+    "h": 880
   },
   {
     "id": "L-RQ-09",
@@ -1141,7 +1165,7 @@
   },
   {
     "id": "L-RQ-G4",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "lecturer",
     "route": "request",
     "desc": "สร้างบัญชี → คัดลอกรหัส → เพิ่มเข้าวิชา → ชื่อลงการ์ด",
@@ -1149,7 +1173,7 @@
     "priority": "P2",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-RQ-G4.gif"
+    "file": "lecturer/L-RQ-G4.mp4"
   },
   {
     "id": "L-RQ-11",
@@ -1168,7 +1192,7 @@
     "kind": "png",
     "audience": "lecturer",
     "route": "request",
-    "desc": "ผลตัดสิน 3 แบบ (toast/แถว): อนุมัติ / ปฏิเสธ+เหตุผล / รอตัดสิน",
+    "desc": "ผลตัดสิน 3 แบบ (toast/แถว): อนุมัติแล้ว / ปฏิเสธ+เหตุผล / ส่งแล้ว · รออนุมัติ",
     "account": "demo:lecturer",
     "priority": "P1",
     "since": "1.0",
@@ -1237,7 +1261,7 @@
   },
   {
     "id": "L-RP-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "lecturer",
     "route": "reports",
     "desc": "กางการ์ด → กางเดือน → ดูรายคาบ → อนุมัติ → การ์ดอัปเดต",
@@ -1245,11 +1269,13 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-RP-G1.gif"
+    "file": "lecturer/L-RP-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "L-RP-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "lecturer",
     "route": "reports",
     "desc": "กดส่งกลับ → พิมพ์เหตุผล → ยืนยัน → สถานะเปลี่ยน",
@@ -1257,7 +1283,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-RP-G2.gif"
+    "file": "lecturer/L-RP-G2.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "L-HL-01",
@@ -1297,7 +1325,7 @@
   },
   {
     "id": "L-HL-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "lecturer",
     "route": "holidays",
     "desc": "กำหนดวันชดเชย → บันทึก → แก้ไข → ลบ (เห็นกล่องเตือนลบร่าง TA)",
@@ -1305,7 +1333,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "lecturer/L-HL-G1.gif"
+    "file": "lecturer/L-HL-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "L-BG-01",
@@ -1477,7 +1507,7 @@
   },
   {
     "id": "S-SE-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "อัตรา",
     "desc": "เพิ่มเวอร์ชันใหม่ → กรอก 4 อัตรา + วันเริ่มใช้ → บันทึก → ประวัติเพิ่ม",
@@ -1485,7 +1515,7 @@
     "priority": "P2",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-SE-G1.gif"
+    "file": "staff/S-SE-G1.mp4"
   },
   {
     "id": "S-SE-03",
@@ -1513,7 +1543,7 @@
   },
   {
     "id": "S-SE-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "ภาคเรียน",
     "desc": "สร้างปีการศึกษา → เพิ่มภาคต้น → กรอก → ตั้งเป็นปัจจุบัน → ตัวเลือกเทอมบน header เปลี่ยน",
@@ -1521,7 +1551,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-SE-G2.gif"
+    "file": "staff/S-SE-G2.mp4",
+    "w": 1600,
+    "h": 808
   },
   {
     "id": "S-SE-05",
@@ -1549,7 +1581,7 @@
   },
   {
     "id": "S-SE-G3",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "ปฏิทินเทอม",
     "desc": "กด \"สร้างอัตโนมัติ 5 เดือน\" → รอบโผล่ → แก้วันปิด 1 รอบ → บันทึก",
@@ -1557,14 +1589,16 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-SE-G3.gif"
+    "file": "staff/S-SE-G3.mp4",
+    "w": 1600,
+    "h": 808
   },
   {
     "id": "S-SE-07",
     "kind": "png",
     "audience": "staff",
     "route": "แท็บฝ่ายบริหาร",
-    "desc": "รายชื่อผู้บริหาร + สถานะเปิด/ปิดใช้งาน",
+    "desc": "ตารางตำแหน่งฝ่ายบริหาร (คงที่) + ผู้ดำรงตำแหน่ง + สถานะเปิด/ปิดใช้งาน",
     "account": "demo:staff",
     "priority": "P1",
     "since": "1.0",
@@ -1576,7 +1610,7 @@
     "kind": "png",
     "audience": "staff",
     "route": "ฝ่ายบริหาร",
-    "desc": "ฟอร์มเพิ่ม annotate ช่องตำแหน่ง + หมายเหตุ \"รักษาการแทน\"",
+    "desc": "โมดัลเปลี่ยนตัวผู้ดำรงตำแหน่ง: เลือกบัญชี + สวิตช์สถานะ + ตัวอย่างในเอกสาร",
     "account": "demo:staff",
     "priority": "P1",
     "since": "1.0",
@@ -1621,7 +1655,7 @@
   },
   {
     "id": "S-TC-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "teaching",
     "desc": "เลือกไฟล์ .xlsx → ตัวอย่าง → ยืนยันนำเข้า → ตารางเพิ่มวิชา",
@@ -1629,7 +1663,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-TC-G1.gif"
+    "file": "staff/S-TC-G1.mp4",
+    "w": 1600,
+    "h": 808
   },
   {
     "id": "S-TC-04",
@@ -1645,7 +1681,7 @@
   },
   {
     "id": "S-TC-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "teaching",
     "desc": "เปิดรายวิชาเองจนบันทึก",
@@ -1653,7 +1689,7 @@
     "priority": "P2",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-TC-G2.gif"
+    "file": "staff/S-TC-G2.mp4"
   },
   {
     "id": "S-TC-05",
@@ -1681,7 +1717,7 @@
   },
   {
     "id": "S-TC-G3",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "teaching",
     "desc": "กดดินสอ → กรอก นศ. ปกติ/พิเศษ → บันทึก → งบคำนวณขึ้น",
@@ -1689,7 +1725,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-TC-G3.gif"
+    "file": "staff/S-TC-G3.mp4",
+    "w": 1600,
+    "h": 648
   },
   {
     "id": "S-TC-07",
@@ -1729,7 +1767,7 @@
   },
   {
     "id": "S-TC-G4",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "teaching detail",
     "desc": "แก้รายชื่ออาจารย์ผู้สอน (A1) → บันทึก",
@@ -1737,7 +1775,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-TC-G4.gif"
+    "file": "staff/S-TC-G4.mp4",
+    "w": 1600,
+    "h": 648
   },
   {
     "id": "S-US-01",
@@ -1756,7 +1796,7 @@
     "kind": "png",
     "audience": "staff",
     "route": "users",
-    "desc": "ฟอร์มสร้างผู้ใช้ (สิทธิ์หลายอย่าง, ระดับ TA + ชั้นปี)",
+    "desc": "ฟอร์มสร้างผู้ใช้ (สิทธิ์การใช้งานเลือกได้ 1 อย่าง, ระดับ TA + ชั้นปี)",
     "account": "demo:staff",
     "priority": "P1",
     "since": "1.0",
@@ -1813,7 +1853,7 @@
   },
   {
     "id": "S-US-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "users",
     "desc": "สร้าง TA ใหม่ → รหัสชั่วคราว → คัดลอก → ค้นชื่อในตาราง",
@@ -1821,7 +1861,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-US-G1.gif"
+    "file": "staff/S-US-G1.mp4",
+    "w": 1600,
+    "h": 808
   },
   {
     "id": "S-AN-01",
@@ -1873,7 +1915,7 @@
   },
   {
     "id": "S-AN-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "announce",
     "desc": "พิมพ์หัวข้อ/เนื้อหา → เลือกกลุ่ม → แนบปก → ตั้งเวลา → บันทึก → ดูในแท็บจัดการ",
@@ -1881,7 +1923,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-AN-G1.gif"
+    "file": "staff/S-AN-G1.mp4",
+    "w": 1600,
+    "h": 810
   },
   {
     "id": "S-AP-01",
@@ -1921,7 +1965,7 @@
   },
   {
     "id": "S-AP-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "approvals",
     "desc": "กรองปี/เทอม → ค้นรหัสวิชา → กางแถว",
@@ -1929,7 +1973,7 @@
     "priority": "P2",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-AP-G1.gif"
+    "file": "staff/S-AP-G1.mp4"
   },
   {
     "id": "S-RV-01",
@@ -1993,7 +2037,7 @@
   },
   {
     "id": "S-RV-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "review",
     "desc": "กดชื่อ TA → ดูไฟล์ 1 → อนุมัติ → ไฟล์ 2 ตีกลับ+เหตุผล → กลับคิว",
@@ -2001,7 +2045,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-RV-G1.gif"
+    "file": "staff/S-RV-G1.mp4",
+    "w": 1600,
+    "h": 810
   },
   {
     "id": "S-AO-01",
@@ -2053,7 +2099,7 @@
   },
   {
     "id": "S-AO-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "appointments",
     "desc": "กรอก 4 ช่อง → สร้าง PDF+DOCX → ZIP ดาวน์โหลด → รายชื่อเปลี่ยนสถานะ",
@@ -2061,7 +2107,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-AO-G1.gif"
+    "file": "staff/S-AO-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "S-PO-01",
@@ -2080,7 +2128,7 @@
     "kind": "png",
     "audience": "staff",
     "route": "payouts",
-    "desc": "ป้าย 3 แบบ: รอตรวจ N / พร้อมส่งออก / ส่งออกได้บางส่วน + แถบงบ",
+    "desc": "ป้ายสถานะท้ายชื่อวิชา เช่น รอตรวจ N / ยังต้องส่งอีก N รอบ / ส่งครบทุกรอบ / พร้อมส่งออก",
     "account": "demo:staff",
     "priority": "P1",
     "since": "1.0",
@@ -2104,7 +2152,7 @@
     "kind": "png",
     "audience": "staff",
     "route": "/staff/payouts/[id]",
-    "desc": "กริด TA×เดือน สีเขียว/เหลือง + ปุ่ม ดู/✓/↩",
+    "desc": "กริด TA×เดือน สีเขียว/เหลือง/เทา/แดง + ปุ่ม ดู/✓/↩",
     "account": "demo:staff",
     "priority": "P1",
     "since": "1.0",
@@ -2137,7 +2185,7 @@
   },
   {
     "id": "S-PO-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "payout detail",
     "desc": "กดดู → hover แถวเห็นคาบสว่าง → ปิด → กด ✓ → ช่องเขียว",
@@ -2145,11 +2193,13 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-PO-G1.gif"
+    "file": "staff/S-PO-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "S-PO-G2",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "payout detail",
     "desc": "กด ↩ → เหตุผล → ยืนยัน → ช่องเปลี่ยน + toast แจ้ง TA",
@@ -2157,7 +2207,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-PO-G2.gif"
+    "file": "staff/S-PO-G2.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "S-PO-07",
@@ -2197,7 +2249,7 @@
   },
   {
     "id": "S-PO-G3",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "payout detail",
     "desc": "ติ๊กยืนยัน → ดาวน์โหลด ZIP → เดือนขึ้น 🔒 → กลับหน้ารายการเห็น \"ส่งออกแล้ว\"",
@@ -2205,7 +2257,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-PO-G3.gif"
+    "file": "staff/S-PO-G3.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "S-WL-01",
@@ -2236,7 +2290,7 @@
     "kind": "png",
     "audience": "staff",
     "route": "budget-summary",
-    "desc": "ตารางสรุปรายวิชา เห็นคู่คอลัมน์ เบิกจ่ายเดือน/คงเหลือ ต่อเดือนที่เลือก",
+    "desc": "ตารางสรุปรายวิชา คอลัมน์เบิกจ่ายเดือนละ 1 คอลัมน์ + คงเหลือคอลัมน์เดียวท้ายตาราง",
     "account": "demo:staff",
     "priority": "P1",
     "since": "1.0",
@@ -2293,7 +2347,7 @@
   },
   {
     "id": "S-BS-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "budget-summary",
     "desc": "เลือกเดือน 2 เดือน → ตารางเปลี่ยน → ดาวน์โหลดสรุป → ดาวน์โหลดปะหน้า",
@@ -2301,7 +2355,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-BS-G1.gif"
+    "file": "staff/S-BS-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "S-PG-01",
@@ -2340,20 +2396,32 @@
     "file": "staff/S-PG-03.png"
   },
   {
-    "id": "S-PG-04",
+    "id": "S-PG-04-1",
     "kind": "png",
     "audience": "staff",
     "route": "progress",
-    "desc": "เช็กลิสต์เซ็นรายวิชา + ปุ่มส่งอีเมลเตือนอาจารย์",
+    "desc": "เช็กลิสต์การลงนามขั้นที่ 1 ผู้ช่วยสอนลงนาม แยกตามรายวิชา",
     "account": "demo:staff",
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-PG-04.png"
+    "file": "staff/S-PG-04-1.png"
+  },
+  {
+    "id": "S-PG-04-2",
+    "kind": "png",
+    "audience": "staff",
+    "route": "progress",
+    "desc": "เช็กลิสต์การลงนามขั้นที่ 2 อาจารย์ลงนาม และปุ่มส่งอีเมลเตือนอาจารย์",
+    "account": "demo:staff",
+    "priority": "P1",
+    "since": "1.0",
+    "captured": false,
+    "file": "staff/S-PG-04-2.png"
   },
   {
     "id": "S-PG-G1",
-    "kind": "gif",
+    "kind": "mp4",
     "audience": "staff",
     "route": "progress",
     "desc": "กดวงกลมขั้น 2 → หมายเหตุ → บันทึก → ติ๊กการ์ดเซ็น → ส่งอีเมลเตือน",
@@ -2361,7 +2429,9 @@
     "priority": "P1",
     "since": "1.0",
     "captured": false,
-    "file": "staff/S-PG-G1.gif"
+    "file": "staff/S-PG-G1.mp4",
+    "w": 1600,
+    "h": 806
   },
   {
     "id": "S-HD-01",

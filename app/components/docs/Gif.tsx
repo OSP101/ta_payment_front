@@ -1,6 +1,7 @@
 import { Clapperboard } from "lucide-react";
 import { MEDIA } from "../../../content/docs/registry";
 import { mediaExists } from "./mediaExists";
+import DocVideo from "./DocVideo";
 
 /** Same "check disk, show placeholder if missing" contract as `Screenshot`,
  *  for the short looping GIFs (see PLAN §6 for the capture spec: ≤10s, 12fps,
@@ -40,6 +41,17 @@ export default function Gif({ id, caption }: { id: string; caption?: string }) {
           </div>
         </div>
         {caption && <figcaption className="mt-1.5 text-xs text-muted text-center">{caption}</figcaption>}
+      </figure>
+    );
+  }
+
+  if (meta.kind === "mp4") {
+    return (
+      <figure className="my-3">
+        <div className="overflow-hidden rounded-lg border border-border">
+          <DocVideo src={src} poster={src.replace(/\.mp4$/, ".jpg")} label={meta.desc} width={meta.w} height={meta.h} />
+        </div>
+        {caption && <figcaption className="mt-1.5 text-xs text-muted">{caption}</figcaption>}
       </figure>
     );
   }

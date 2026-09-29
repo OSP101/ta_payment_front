@@ -2,10 +2,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR, { mutate } from "swr";
-import { Tabs, ScrollShadow } from "@heroui/react";
+import { Tabs, ScrollShadow, InputGroup, Label, TextField } from "@heroui/react";
 import {
   FileDown, History, Merge, Download, FileText, Users, GraduationCap, Banknote, FileSignature,
-  CalendarRange, Check, ChevronDown, AlertTriangle,
+  CalendarRange, Check, ChevronDown, AlertTriangle, Eye, EyeOff, ShieldCheck,
 } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api } from "../../lib/api";
@@ -1033,13 +1033,15 @@ function blockerLine(b: TransferCoverBlocker): string {
 }
 
 function TransferCoverMonthModal({
-  termId, onClose, onConfirm, isPending,
+  termId, onClose, onConfirm, isPending, error,
 }: {
   termId: string;
   onClose: () => void;
-  onConfirm: (months: string[]) => void;
+  onConfirm: (months: string[], password: string) => void;
   isPending: boolean;
+  error?: string | null;
 }) {
+  const [password, setPassword] = useState("");
   const { data: ugData, isLoading: ugLoading } = useSWR<MonthCoverage>(
     `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("undergrad")}`
   );
@@ -1087,8 +1089,8 @@ function TransferCoverMonthModal({
           <Button
             variant="primary"
             isPending={isPending}
-            disabled={months.length === 0 || straddles}
-            onClick={() => onConfirm(months)}
+            disabled={months.length === 0 || straddles || password === ""}
+            onClick={() => onConfirm(months, password)}
           >
             <Banknote size={14} /> ตรวจสอบและดาวน์โหลด
           </Button>
@@ -1185,12 +1187,66 @@ function TransferCoverMonthModal({
               ยังไม่ได้ออกเอกสารของเดือน {notCovered.map(m => m.label).join(", ")} — อย่าลืมกลับมาออกให้ครบ
             </p>
           )}
+
+          <StepUpPasswordField
+            value={password}
+            onChange={setPassword}
+            error={error}
+            onEnter={() => {
+              if (months.length > 0 && !straddles && password !== "" && !isPending) onConfirm(months, password);
+            }}
+          />
         </div>
       )}
     </Modal>
   );
 }
 
+
+// StepUpPasswordField — the officer's own password, asked for again right
+// before a ปะหน้าจ่ายตรง file is handed over. The file lists every TA's full
+// citizen ID, so an unlocked session alone must not be enough to download it
+// (the server refuses without it — see transferCoverStepUp).
+function StepUpPasswordField({
+  value, onChange, error, onEnter,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  error?: string | null;
+  onEnter?: () => void;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="rounded-lg border border-border bg-surface px-3 py-3">
+      <div className="mb-2 flex items-start gap-2 text-xs text-ink-2">
+        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-brand" />
+        <span>ไฟล์นี้มีเลขบัตรประชาชนของผู้รับเงิน กรอกรหัสผ่านของคุณอีกครั้งเพื่อยืนยันก่อนดาวน์โหลด การดาวน์โหลดทุกครั้งถูกบันทึกไว้</span>
+      </div>
+      <TextField name="stepup-password" value={value} onChange={onChange}>
+        <Label className="text-xs">รหัสผ่านของคุณ</Label>
+        <InputGroup>
+          <InputGroup.Input
+            type={show ? "text" : "password"}
+            autoComplete="current-password"
+            lang="en"
+            onKeyDown={e => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
+          />
+          <InputGroup.Suffix className="pr-0">
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+              onPress={() => setShow(!show)}
+            >
+              {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </IconButton>
+          </InputGroup.Suffix>
+        </InputGroup>
+      </TextField>
+      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
 
 // PendingBlockers spells out what is holding every month back, so a locked
 // picker names the course and TA to chase instead of leaving staff to guess
@@ -1238,12 +1294,16 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
   const [blockers, setBlockers] = useState<{ undergrad: TransferCoverBlocker[]; graduate: TransferCoverBlocker[] } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const groupGate = useCourseGroupGate(termId);
 
-  async function downloadNow(months: string[], skippedLevel: TransferCoverLevel | null) {
+  // Throws on failure so checkThenDownload can keep the picker open with the
+  // reason under the password field — a mistyped password is the common case.
+  async function downloadNow(months: string[], skippedLevel: TransferCoverLevel | null, password: string) {
     setDownloading(true);
     try {
-      const blob = await api.get<Blob>(`/exports/terms/${termId}/transfer-cover-bundle.zip${monthsQuery(months)}`);
+      const blob = await api.post<Blob>(
+        `/exports/terms/${termId}/transfer-cover-bundle.zip${monthsQuery(months)}`, { password });
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
       el.href = url;
@@ -1263,8 +1323,6 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
           description: `ไฟล์${transferCoverLevelLabel[skippedLevel]}ยังไม่พร้อม กดปุ่มนี้อีกครั้งเพื่อดูรายการค้าง`,
         });
       }
-    } catch (e) {
-      toast.danger("ดาวน์โหลดไม่สำเร็จ", { description: (e as Error).message });
     } finally {
       setDownloading(false);
     }
@@ -1274,9 +1332,10 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
   // point of the split is that a graduate course mid-review must not hold up
   // the undergrad file (or the reverse), so one blocked level never blocks
   // the other's download; it only blocks the WHOLE bundle once both are.
-  async function checkThenDownload(months: string[]) {
+  async function checkThenDownload(months: string[], password: string) {
     if (!termId) return;
     setChecking(true);
+    setPickerError(null);
     try {
       const [ug, grad] = await Promise.all([
         api.get<{ blockers: TransferCoverBlocker[] }>(`/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("undergrad", months)}`),
@@ -1289,10 +1348,10 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
         setPickerOpen(false);
         return;
       }
+      await downloadNow(months, ugBlocked ? "undergrad" : gradBlocked ? "graduate" : null, password);
       setPickerOpen(false);
-      await downloadNow(months, ugBlocked ? "undergrad" : gradBlocked ? "graduate" : null);
     } catch (e) {
-      toast.danger("ตรวจสอบไม่สำเร็จ", { description: (e as Error).message });
+      setPickerError((e as Error).message);
     } finally {
       setChecking(false);
     }
@@ -1304,7 +1363,7 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
         variant="secondary"
         disabled={!termId}
         isPending={groupGate.checking}
-        onClick={() => void groupGate.guard(() => setPickerOpen(true))}
+        onClick={() => void groupGate.guard(() => { setPickerError(null); setPickerOpen(true); })}
       >
         <Banknote size={16} /> ปะหน้าจ่ายตรง
       </Button>
@@ -1346,8 +1405,9 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
         <TransferCoverMonthModal
           termId={termId}
           isPending={checking || downloading}
+          error={pickerError}
           onClose={() => setPickerOpen(false)}
-          onConfirm={months => void checkThenDownload(months)}
+          onConfirm={(months, password) => void checkThenDownload(months, password)}
         />
       )}
 
@@ -1377,19 +1437,35 @@ function TransferCoverHistoryModal({
     `/exports/terms/${termId}/transfer-cover/history${transferCoverQuery(level)}`
   );
   const [reprinting, setReprinting] = useState<string | null>(null);
+  // A reprint hands over the same citizen IDs as a fresh file, so it asks
+  // for the password the same way.
+  const [confirming, setConfirming] = useState<TransferCoverExportSummary | null>(null);
+  const [password, setPassword] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
 
-  async function reprint(h: TransferCoverExportSummary) {
+  function askReprint(h: TransferCoverExportSummary) {
+    setPassword("");
+    setPwError(null);
+    setConfirming(h);
+  }
+
+  async function reprint() {
+    const h = confirming;
+    if (!h || !password) return;
     setReprinting(h.id);
+    setPwError(null);
     try {
-      const blob = await api.get<Blob>(`/exports/transfer-cover/${h.id}/reprint`);
+      const blob = await api.post<Blob>(`/exports/transfer-cover/${h.id}/reprint`, { password });
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
       el.href = url;
       el.download = "transfer-cover.xlsx";
       el.click();
       URL.revokeObjectURL(url);
+      setConfirming(null);
+      setPassword("");
     } catch (e) {
-      toast.danger("ดาวน์โหลดไม่สำเร็จ", { description: (e as Error).message });
+      setPwError((e as Error).message);
     } finally {
       setReprinting(null);
     }
@@ -1457,7 +1533,7 @@ function TransferCoverHistoryModal({
               </div>
               <button
                 type="button"
-                onClick={() => void reprint(h)}
+                onClick={() => askReprint(h)}
                 disabled={reprinting !== null}
                 className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
               >
@@ -1467,6 +1543,35 @@ function TransferCoverHistoryModal({
             </li>
           ))}
         </ul>
+      )}
+      {confirming && (
+        <Modal
+          open
+          onClose={() => setConfirming(null)}
+          title="ยืนยันตัวตนก่อนดาวน์โหลด"
+          icon={<ShieldCheck size={20} />}
+          size="md"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setConfirming(null)}>ยกเลิก</Button>
+              <Button
+                variant="primary"
+                isPending={reprinting !== null}
+                disabled={password === ""}
+                onClick={() => void reprint()}
+              >
+                <Download size={14} /> ดาวน์โหลดฉบับเดิม
+              </Button>
+            </>
+          }
+        >
+          <StepUpPasswordField
+            value={password}
+            onChange={setPassword}
+            error={pwError}
+            onEnter={() => { if (password && reprinting === null) void reprint(); }}
+          />
+        </Modal>
       )}
     </Modal>
   );

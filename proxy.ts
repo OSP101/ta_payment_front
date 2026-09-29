@@ -52,6 +52,11 @@ export function proxy(req: NextRequest) {
 
   const headers = new Headers(req.headers);
   headers.set("x-nonce", nonce);
+  // The requested path, for server layouts that must send a signed-out
+  // reader to /login?next=<this exact page> (a layout's params stop at its
+  // own segment, so /docs/lecturer/start would otherwise come back as
+  // /docs/lecturer). Always overwritten here, so a client can't inject it.
+  headers.set("x-pathname", req.nextUrl.pathname);
   const res = NextResponse.next({ request: { headers } });
   res.headers.set("Content-Security-Policy", csp);
   return res;

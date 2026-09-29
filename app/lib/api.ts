@@ -246,8 +246,11 @@ function isReauthPath(path: string): boolean {
   // shape again, with the target user's id in the middle the same way
   // zip-token's is — a staff member mistyping their OWN confirming password
   // must not be logged out of /staff/users over it.
+  // The ปะหน้าจ่ายตรง downloads re-ask the officer's password too (the file
+  // carries full citizen IDs) — a typo there must stay in the picker.
   return REAUTH_PATHS.some(p => path.startsWith(p) || path.includes(p))
-    || path.endsWith("/zip-token") || path.endsWith("/2fa/reset");
+    || path.endsWith("/zip-token") || path.endsWith("/2fa/reset")
+    || /\/transfer-cover(-bundle\.zip|\.xlsx|\/[^/?]+\/reprint)(\?|$)/.test(path);
 }
 
 /** Handle auth-related statuses with a client-side redirect where appropriate. */

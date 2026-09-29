@@ -2,7 +2,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { BookOpen, ExternalLink, X } from "lucide-react";
+import Image from "next/image";
+import { ExternalLink, X } from "lucide-react";
 import type { Audience } from "../../../content/docs/types";
 import type { DocPageMeta, DocsIndex } from "../../../content/docs/meta";
 import { DOC_ANCHORS } from "../../../content/docs/anchors";
@@ -203,10 +204,9 @@ export function DocsDock() {
                    lg:sticky lg:top-[var(--demo-banner-h,0px)] lg:bottom-auto lg:z-10 lg:h-[calc(100vh_-_var(--demo-banner-h,0px))] lg:w-[440px] lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-[480px]"
       >
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-(--brand) text-white">
-            <BookOpen size={15} />
-          </span>
-          <span className="text-sm font-semibold text-foreground">คู่มือการใช้งาน</span>
+          <Image src="/images/logo-cp-1.png" alt="" width={26} height={26} className="h-6.5 w-6.5 shrink-0 object-contain" />
+          <span className="text-sm font-bold tracking-[0.02em] text-foreground">COCO TAS</span>
+          <span className="rounded border border-slate-300 px-1 text-[10px] font-semibold tracking-[0.12em] text-slate-600">DOCS</span>
           {/* New tab, and the panel stays open — the reader asked for the
               full manual (sidebar, search, all topics) *in addition to* the
               screen they're on, not instead of it. Same as Cloudflare's

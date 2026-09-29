@@ -394,6 +394,9 @@ export default function Shell({
         <div className={`flex-1 p-4 md:p-8 w-full mx-auto ${isWide ? "max-w-[2000px]" : "max-w-[1400px]"}`}>
           {children}
         </div>
+        <footer className={`w-full mx-auto px-4 md:px-8 pb-4 text-right text-xs text-muted ${isWide ? "max-w-[2000px]" : "max-w-[1400px]"}`}>
+          © {new Date().getFullYear()} College of Computing, Khon Kaen University
+        </footer>
       </main>
       {/* Contextual manual — docks as a column beside <main> on wide screens
           (the page narrows to make room), overlays on small ones. */}

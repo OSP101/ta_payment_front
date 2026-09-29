@@ -12,3 +12,12 @@ export function minorVersion(v: string = APP_VERSION): string {
   const [maj, min] = v.split(".");
   return `${maj}.${min}`;
 }
+
+/** Last date the manual's content was revised (ISO). Shown in the manual's
+ *  footer; bump it with any content change that readers should notice. */
+export const DOCS_UPDATED = "2026-09-30";
+
+/** `"2026-09-30"` → `"30 กันยายน 2569"`. */
+export function thaiDate(iso: string): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+}

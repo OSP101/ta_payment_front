@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { ChevronRight, Info, Lightbulb, AlertTriangle, OctagonAlert, ExternalLink, PlayCircle } from "lucide-react";
-import type { Block, CalloutTone } from "../../../content/docs/types";
+import type { Audience, Block, CalloutTone } from "../../../content/docs/types";
 import DocRichText, { DocInline } from "./DocRichText";
 import Screenshot from "./Screenshot";
 import Gif from "./Gif";
+import MoneyFlow from "./MoneyFlow";
+import SystemMap from "./SystemMap";
+import Journey, { stageId } from "./Journey";
+import ShareLink from "./ShareLink";
 import { Chip, type ChipTone } from "../ui";
 
 const CALLOUT_STYLE: Record<CalloutTone, { cls: string; icon: React.ReactNode }> = {
@@ -20,10 +24,16 @@ const TONE_MAP: Record<string, ChipTone> = {
 /** Renders one page's `Block[]` — the entire docs content-rendering surface.
  *  Adding a block type means adding one case here and one helper in
  *  `content/docs/types.ts`; page data never imports React. */
-export default function DocBlocks({ blocks }: { blocks: Block[] }) {
+interface LinkCtx { audience: Audience; linkBase: "/docs" | "/docs-embed" }
+
+export default function DocBlocks({
+  blocks,
+  audience = "common",
+  linkBase = "/docs",
+}: { blocks: Block[] } & Partial<LinkCtx>) {
   return (
     <div className="space-y-6">
-      {blocks.map((b, i) => <BlockView key={i} block={b} blockIndex={i} />)}
+      {blocks.map((b, i) => <BlockView key={i} block={b} blockIndex={i} ctx={{ audience, linkBase }} />)}
     </div>
   );
 }
@@ -38,11 +48,12 @@ export function stepEntries(blocks: Block[]): { id: string; title: string }[] {
   const out: { id: string; title: string }[] = [];
   blocks.forEach((b, bi) => {
     if (b.type === "steps") b.items.forEach((s, si) => out.push({ id: stepId(bi, si), title: s.title }));
+    if (b.type === "journey") b.stages.forEach((s, si) => out.push({ id: stageId(bi, si), title: s.title }));
   });
   return out;
 }
 
-function BlockView({ block, blockIndex = 0 }: { block: Block; blockIndex?: number }) {
+function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: number; ctx: LinkCtx }) {
   switch (block.type) {
     case "text":
       return <DocRichText body={block.body} />;
@@ -87,7 +98,7 @@ function BlockView({ block, blockIndex = 0 }: { block: Block; blockIndex?: numbe
                 {s.gif && <Gif id={s.gif} />}
                 {s.callout && (
                   <div className="mt-2">
-                    <BlockView block={{ type: "callout", tone: s.callout.tone, body: s.callout.body }} />
+                    <BlockView block={{ type: "callout", tone: s.callout.tone, body: s.callout.body }} ctx={ctx} />
                   </div>
                 )}
               </div>
@@ -194,6 +205,15 @@ function BlockView({ block, blockIndex = 0 }: { block: Block; blockIndex?: numbe
           {block.label}
         </Link>
       );
+
+    case "journey":
+      return <Journey stages={block.stages} blockIndex={blockIndex} audience={ctx.audience} linkBase={ctx.linkBase} />;
+
+    case "shareLink":
+      return <ShareLink label={block.label} path={block.path} message={block.message} />;
+
+    case "diagram":
+      return block.name === "money-flow" ? <MoneyFlow /> : block.name === "system-map" ? <SystemMap /> : null;
 
     default:
       return null;

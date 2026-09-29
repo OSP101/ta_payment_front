@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { getMe } from "../../lib/session";
 import { allowedAudiences, canViewAudience, defaultHomeRoute } from "../../lib/docs/audience";
@@ -29,7 +30,13 @@ export default async function AudienceLayout({
   const audience = raw as Audience;
 
   const me = await getMe();
-  if (!me) redirect(`/login?next=/docs/${audience}`);
+  if (!me) {
+    // Come back to the exact page that was linked (a manual link sent to a
+    // newcomer), not just this manual's landing page.
+    const asked = (await headers()).get("x-pathname") ?? "";
+    const back = /^\/docs\/[a-z]+(\/[\w\-/]*)?$/.test(asked) && asked.startsWith(`/docs/${audience}`) ? asked : `/docs/${audience}`;
+    redirect(`/login?next=${encodeURIComponent(back)}`);
+  }
   if (!canViewAudience(me, audience)) redirect("/403");
 
   return (

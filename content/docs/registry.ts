@@ -13,7 +13,9 @@ import { staffPages } from "./pages/staff";
 
 export interface MediaEntry {
   id: string;
-  kind: "png" | "gif" | "svg";
+  /** "mp4" is a screen recording shown as a looping muted clip (DocVideo);
+   *  the page blocks still call it `gif()` since it reads like one. */
+  kind: "png" | "gif" | "mp4" | "svg";
   audience: Audience | "common";
   route: string;
   desc: string;
@@ -22,6 +24,10 @@ export interface MediaEntry {
   since: string;
   captured: boolean;
   file: string; // relative to public/docs/v1/
+  /** Clip frame size after encoding, so the player reserves its box before
+   *  any video data loads (it starts with preload="none"). */
+  w?: number;
+  h?: number;
 }
 
 export const MEDIA: Record<string, MediaEntry> = Object.fromEntries(
@@ -112,7 +118,7 @@ export function mediaForPage(page: DocPage): MediaEntry[] {
   const ids: string[] = [];
   for (const b of page.blocks) {
     if (b.type === "screenshot" || b.type === "gif") ids.push(b.id);
-    if (b.type === "steps") for (const s of b.items) {
+    if (b.type === "steps" || b.type === "journey") for (const s of b.type === "steps" ? b.items : b.stages) {
       if (s.screenshot) ids.push(s.screenshot);
       if (s.gif) ids.push(s.gif);
     }

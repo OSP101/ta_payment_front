@@ -117,8 +117,11 @@ interface IndexedField { tokens: string[]; weight: number; label: string }
 
 function fieldsOf(page: DocPage): IndexedField[] {
   const stepText = page.blocks
-    .filter((b) => b.type === "steps")
-    .flatMap((b) => (b.type === "steps" ? b.items.map((s) => `${s.title} ${s.body ?? ""}`) : []))
+    .filter((b) => b.type === "steps" || b.type === "journey")
+    .flatMap((b) =>
+      b.type === "steps" ? b.items.map((s) => `${s.title} ${s.body ?? ""}`)
+      : b.type === "journey" ? b.stages.map((s) => `${s.title} ${s.body ?? ""} ${s.notice ?? ""} ${s.warn ?? ""}`)
+      : [])
     .join(" ");
   const textBlocks = page.blocks.filter((b) => b.type === "text" || b.type === "callout")
     .map((b) => (b.type === "text" || b.type === "callout" ? b.body : ""))

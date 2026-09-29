@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, ChevronRight, ExternalLink } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
 import { effectiveAudience, findPage, pagesForAudience } from "../../../content/docs/registry";
 import { AUDIENCE_LABEL, type Audience, type DocPage } from "../../../content/docs/types";
 import type { Me } from "../../lib/api";
@@ -71,15 +71,12 @@ export default function DocArticle({
         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] text-slate-500">
           ตรงกับระบบเวอร์ชัน {page.since}
         </span>
-        {page.routes?.map((r) => (
-          <span key={r} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] text-slate-500">
-            <ExternalLink size={10} /> {r}
-          </span>
-        ))}
+        {/* page.routes are for the in-app docs button, not for readers: a
+            path like /lecturer/courses/[tcId]/reports means nothing to them */}
       </div>
 
       <div className="mt-8">
-        <DocBlocks blocks={page.blocks} />
+        <DocBlocks blocks={page.blocks} audience={audience} linkBase={linkBase} />
       </div>
 
       {relatedPages.length > 0 && (
@@ -93,6 +90,8 @@ export default function DocArticle({
                   className="inline-block rounded-full border border-border px-3 py-1 text-xs text-foreground/80 hover:border-(--brand) hover:text-(--brand) transition-colors"
                 >
                   {p.title}
+                  {/* another role's page: say whose, or two "เริ่มใช้งานครั้งแรก" chips look identical */}
+                  {p.audience !== "common" && p.audience !== audience && ` (${AUDIENCE_LABEL[p.audience]})`}
                 </Link>
               </li>
             ))}

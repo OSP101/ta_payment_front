@@ -117,6 +117,9 @@ function accountInitial(firstName: string, email: string): string {
  */
 export type SSOConfig = { url: string; logoutUrl: string | null };
 
+
+/** sessionStorage key holding the ?next= target across SSO and first-login detours. */
+const LOGIN_NEXT_KEY = "login-next";
 export default function LoginForm({
   initialSso,
   emailFormOpen = true,
@@ -203,6 +206,16 @@ export default function LoginForm({
 
   useEffect(() => {
     setReason(new URLSearchParams(window.location.search).get("reason"));
+  }, []);
+
+  // Keep ?next= across the round trips that drop it: the KKU SSO callback
+  // comes back to /login/sso with only its own code, and a first password
+  // login detours through /change-password and a fresh /login. Without this,
+  // a manual link sent to a new lecturer lands them on the home page instead.
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (!next) return;
+    try { sessionStorage.setItem(LOGIN_NEXT_KEY, next); } catch { /* storage blocked: plain ?next= still works */ }
   }, []);
 
   useEffect(() => {
@@ -302,7 +315,11 @@ export default function LoginForm({
       // Honour a ?next= redirect target set when the session expired mid-use.
       // It is attacker-controllable via a crafted /login?next=... link, so it is
       // resolved and origin-checked rather than prefix-matched.
-      const next = new URLSearchParams(window.location.search).get("next");
+      let next = new URLSearchParams(window.location.search).get("next");
+      try {
+        next = next ?? sessionStorage.getItem(LOGIN_NEXT_KEY);
+        sessionStorage.removeItem(LOGIN_NEXT_KEY);
+      } catch { /* storage blocked */ }
       router.push(sameOriginPath(next));
     }
     router.refresh();

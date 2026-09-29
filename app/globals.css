@@ -415,3 +415,32 @@ select.field {
 @media (prefers-reduced-motion: reduce) {
   .docs-anim-slide-end, .docs-anim-slide-start, .docs-anim-fade { animation: none; }
 }
+
+/* ── คู่มือ: แผนภาพเส้นทางเงิน (MoneyFlow.tsx) ─────────────────────────
+   Circuit-style runs between the steps with a soft pulse travelling along
+   them, echoing a chip-and-traces diagram. Pure CSS; everything stops and
+   stays fully drawn under prefers-reduced-motion. */
+.docs-flow-link{position:absolute;top:50%;left:calc(100% - 12px);width:24px;height:2px;margin-top:-1px;background:#cbd5e1;overflow:hidden;z-index:1}
+.docs-flow-link::after{content:"";position:absolute;right:-1px;top:-3px;border-left:6px solid #94a3b8;border-top:4px solid transparent;border-bottom:4px solid transparent}
+.docs-flow-link>span{position:absolute;inset:0;width:60%;background:linear-gradient(90deg,transparent,#0776bc,transparent);animation:docs-flow-run 2.4s linear infinite;animation-delay:var(--d,0s)}
+@keyframes docs-flow-run{from{transform:translateX(-100%)}to{transform:translateX(180%)}}
+
+.docs-flow-drop{stroke-dasharray:6 30;animation:docs-flow-dash 2.2s linear infinite}
+@keyframes docs-flow-dash{from{stroke-dashoffset:36}to{stroke-dashoffset:0}}
+.docs-flow-back{animation:docs-flow-march 1.6s linear infinite}
+@keyframes docs-flow-march{to{stroke-dashoffset:18}}
+
+.docs-flow-pins{position:absolute;inset:-5px 14px;pointer-events:none;
+  background:
+    repeating-linear-gradient(90deg,#cbd5e1 0 6px,transparent 6px 16px) top/100% 3px no-repeat,
+    repeating-linear-gradient(90deg,#cbd5e1 0 6px,transparent 6px 16px) bottom/100% 3px no-repeat}
+
+.docs-flow-spine{position:absolute;top:1.75rem;bottom:1.5rem;left:.55rem;width:2px;background:#dbe3ea;overflow:hidden}
+.docs-flow-spine>span{position:absolute;left:0;right:0;height:30%;background:linear-gradient(180deg,transparent,#0776bc,transparent);animation:docs-flow-fall 3.2s linear infinite}
+@keyframes docs-flow-fall{from{transform:translateY(-100%)}to{transform:translateY(340%)}}
+
+@media (prefers-reduced-motion: reduce){
+  .docs-flow-link>span,.docs-flow-spine>span{display:none}
+  .docs-flow-drop,.docs-flow-back{animation:none}
+  .docs-flow-drop{stroke-dasharray:none;opacity:.35}
+}

@@ -55,7 +55,18 @@ export type Block =
   | { type: "uiPath"; path: string[] }
   | { type: "since"; version: string; note?: string }
   | { type: "goToApp"; label: string; route: string }
-  | { type: "tryInDemo"; label: string; tourKey?: string; role: "staff" | "lecturer" | "ta" };
+  | { type: "tryInDemo"; label: string; tourKey?: string; role: "staff" | "lecturer" | "ta" }
+  /** A diagram drawn in the page itself (HTML/CSS), not an image file:
+   *  crisp at any width, set in the site's own font, reflows on a phone. */
+  | { type: "diagram"; name: DiagramName }
+  /** The first-use walkthrough: numbered "your turn" stages interleaved with
+   *  "waiting on someone else" stages, in the order the real work happens.
+   *  Built for a link sent to a newcomer, so the whole path reads on one page. */
+  | { type: "journey"; stages: JourneyStage[] }
+  /** A manual link with a copy button, for staff to paste into a message. */
+  | { type: "shareLink"; label: string; path: string; message?: string };
+
+export type DiagramName = "system-map" | "money-flow";
 
 export interface StepBlock {
   title: string;
@@ -63,6 +74,24 @@ export interface StepBlock {
   screenshot?: string;
   gif?: string;
   callout?: { tone: CalloutTone; body: string };
+}
+
+export interface JourneyStage {
+  /** "do" is the reader's own step (numbered); "wait" is someone else's turn. */
+  kind: "do" | "wait";
+  title: string;
+  /** When this happens in the term, e.g. "ต้นภาคเรียน", "ทุกเดือน". */
+  when?: string;
+  body?: string;
+  /** What arrives when the reader's turn comes (email/in-app notice). */
+  notice?: string;
+  warn?: string;
+  screenshot?: string;
+  gif?: string;
+  /** Button into the app: the page where this stage is done. */
+  go?: { label: string; route: string };
+  /** Detail page, same audience unless written "audience:slug". */
+  more?: string;
 }
 
 export interface Hotspot {
@@ -110,4 +139,8 @@ export const table = (headers: string[], rows: string[][]): Block => ({ type: "t
 export const uiPath = (...path: string[]): Block => ({ type: "uiPath", path });
 export const since = (version: string, note?: string): Block => ({ type: "since", version, note });
 export const goToApp = (label: string, route: string): Block => ({ type: "goToApp", label, route });
+export const diagram = (name: DiagramName): Block => ({ type: "diagram", name });
+export const journey = (stages: JourneyStage[]): Block => ({ type: "journey", stages });
+/** `message` is copied with the link appended, ready to paste into LINE or email. */
+export const shareLink = (label: string, path: string, message?: string): Block => ({ type: "shareLink", label, path, message });
 export const tryInDemo = (label: string, role: "staff" | "lecturer" | "ta", tourKey?: string): Block => ({ type: "tryInDemo", label, role, tourKey });
