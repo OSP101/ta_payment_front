@@ -1,6 +1,6 @@
 "use client";
 import useSWR, { mutate } from "swr";
-import { useEffect, Fragment, use, useMemo, useState } from "react";
+import { Fragment, use, useMemo, useState } from "react";
 import {
   Check, X, CircleAlert, ChevronDown, History, Link2, Users, CalendarCheck,
   AlertTriangle, ArrowUp, ArrowDown, Settings2,
@@ -14,6 +14,7 @@ import {
 } from "../../../../components/ui";
 import { WorkloadEditModal } from "../../../../components/WorkloadEditModal";
 import { Skel, SkelRows, SkelValue } from "../../../../components/Skeletons";
+import { SectionReview } from "./SectionReview";
 
 /**
  * One row of /reports/pending — an ASSIGNMENT (a TA on one section) that has
@@ -193,41 +194,6 @@ interface Sitting extends WorkLog {
   assignmentIds: string[];   // every assignment the approve/reject must reach
 }
 
-function sittingKey(r: WorkLog, group: number | null | undefined): string {
-  // Only rows in the same co-taught group may merge. Two sections that merely
-  // happen to meet at the same hour are two sittings and two payments.
-  return group == null
-    ? `solo:${r.id}`
-    : `g${group}|${r.work_date}|${r.start_time}|${r.end_time}`;
-}
-
-function mergeSittings(rows: WorkLog[], secOf: Map<string, PendingRow>): Sitting[] {
-  const out = new Map<string, Sitting>();
-  for (const r of rows) {
-    const meta = secOf.get(r.assignment_id);
-    const k = sittingKey(r, meta?.cotaught_group);
-    const found = out.get(k);
-    if (found) {
-      if (meta?.sec_no && !found.sections.includes(meta.sec_no)) found.sections.push(meta.sec_no);
-      if (!found.assignmentIds.includes(r.assignment_id)) found.assignmentIds.push(r.assignment_id);
-      // A merged sitting counts as awaiting review while ANY of its copies is.
-      // Approving one section and not the other leaves the day half-decided,
-      // and the reviewer must still see it.
-      if (r.status === "submitted") found.status = "submitted";
-      continue;
-    }
-    out.set(k, {
-      ...r,
-      sections: meta?.sec_no ? [meta.sec_no] : [],
-      assignmentIds: [r.assignment_id],
-    });
-  }
-  return Array.from(out.values()).sort((a, b) =>
-    a.work_date !== b.work_date
-      ? a.work_date.localeCompare(b.work_date)
-      : (a.start_time ?? "").localeCompare(b.start_time ?? ""));
-}
-
 interface WeekGroup { key: string; label: string; hours: number; items: Sitting[] }
 
 /** จัดรายการในเดือนหนึ่งเป็นสัปดาห์ — ใช้เป็นตัวคั่นสายตาเบา ๆ ในตาราง */
@@ -362,12 +328,17 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
   ) {
     setPendingKey(`${g.taId}|${ym}`);
     try {
-      // One call per assignment: the endpoint is per-assignment, and a co-taught
-      // month lives on two of them. Sequential rather than parallel so a refusal
-      // on the second does not race the first's cache invalidation.
-      for (const id of assignmentIds) {
-        await api.post(`/assignments/${id}/worklog/${kind}`,
-          kind === "approve" ? { year_month: ym } : { reason, year_month: ym });
+      // Approval of a section block (a co-taught set is several assignments)
+      // goes through approve-batch: one transaction, so a refusal on one
+      // section cannot leave the sitting approved on the other. Send-back has
+      // no batch endpoint; sequential so a refusal does not race the first's
+      // cache invalidation.
+      if (kind === "approve") {
+        await api.post("/worklog/approve-batch", { assignment_ids: assignmentIds, year_month: ym });
+      } else {
+        for (const id of assignmentIds) {
+          await api.post(`/assignments/${id}/worklog/reject`, { reason, year_month: ym });
+        }
       }
       notify.success(
         kind === "approve"
@@ -377,7 +348,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
       await Promise.all([
         mutate(PENDING_KEY),
         mutate(historyKey),
-        // MonthRows fans out over its sections behind ONE composite key
+        // SectionReview fans out over its sections behind ONE composite key
         // (["worklogs", ...paths]), so invalidating the individual
         // /assignments/:id/worklog paths reaches nothing: the queue total and
         // the card header refreshed while the open table still showed every row
@@ -390,6 +361,16 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
     } finally {
       setPendingKey(null);
     }
+  }
+
+  // After a lecturer correction (edit/cut): the queue totals, what each TA is
+  // paid and the budget all move.
+  async function refreshAfterCorrection() {
+    await Promise.all([
+      mutate(PENDING_KEY),
+      mutate(k => Array.isArray(k) && (k[0] === "worklogs" || k[0] === "worklog-changes")),
+      mutate(settlementKey),
+    ]);
   }
 
   /**
@@ -495,6 +476,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
                 pendingKey={pendingKey}
                 onDecide={(ym, ids, kind, reason) => decideMonth(g, ym, ids, kind, reason)}
                 onApproveAll={() => approveAll(g)}
+                onChanged={refreshAfterCorrection}
               />
             ))}
           </div>
@@ -564,18 +546,18 @@ function SectionChips({ group }: { group: TAGroup }) {
 }
 
 function TACard({
-  group, tcId, canEditWorkload, defaultOpen, pendingKey, onDecide, onApproveAll,
+  group, tcId, canEditWorkload, defaultOpen, pendingKey, onDecide, onApproveAll, onChanged,
 }: {
   group: TAGroup;
   tcId: string;
   canEditWorkload: boolean;
   defaultOpen: boolean;
   pendingKey: string | null;
-  onDecide: (ym: string, assignmentIds: string[], kind: "approve" | "reject", reason?: string) => void;
+  onDecide: (ym: string, assignmentIds: string[], kind: "approve" | "reject", reason?: string) => Promise<void>;
   onApproveAll: () => void;
+  onChanged: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [openMonth, setOpenMonth] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   // True while one of this person's months has its send-back reason box open.
   const [rejecting, setRejecting] = useState(false);
@@ -705,12 +687,13 @@ function TACard({
           either — five collapsed TAs fetch nothing until one is opened. */}
       {open && (
         <div id={bodyId}>
-          <MonthRows
-            group={group}
-            openMonth={openMonth}
-            onToggleMonth={k => setOpenMonth(openMonth === k ? null : k)}
-            pendingKey={pendingKey}
+          <SectionReview
+            taId={group.taId}
+            taName={group.name}
+            sections={group.rows}
+            tcId={tcId}
             onDecide={onDecide}
+            onChanged={onChanged}
             onRejectingChange={setRejecting}
           />
         </div>
@@ -1256,215 +1239,6 @@ function BudgetNotice({ tcId }: { tcId: string }) {
   );
 }
 
-/**
- * The months of one TA, each its own decision.
- *
- * Every section's work-log is fetched (a TA on two sections has two), then the
- * co-taught copies are merged back into single sittings — see mergeSittings.
- */
-function MonthRows({
-  group, openMonth, onToggleMonth, pendingKey, onDecide, onRejectingChange,
-}: {
-  group: TAGroup;
-  openMonth: string | null;
-  onToggleMonth: (key: string) => void;
-  pendingKey: string | null;
-  onDecide: (ym: string, assignmentIds: string[], kind: "approve" | "reject", reason?: string) => void;
-  // Raised while a send-back reason is being written, so the card above can
-  // quiet its own "อนุมัติทุกเดือน" — that one would approve the very month
-  // being rejected, which is the worst thing a stray click here could do.
-  onRejectingChange?: (rejecting: boolean) => void;
-}) {
-  // One SWR key per assignment. Hooks cannot be called in a loop, so the keys
-  // are joined into one request through a fetcher that fans out.
-  const keys = group.rows.map(r => `/assignments/${r.id}/worklog`);
-  const { data: perAssignment, isLoading } = useSWR<WorkLog[][]>(
-    keys.length ? ["worklogs", ...keys] : null,
-    async ([, ...ks]: string[]) => Promise.all(ks.map(k => api.get<WorkLog[]>(k))),
-  );
-
-  const secOf = useMemo(() => {
-    const m = new Map<string, PendingRow>();
-    group.rows.forEach(r => m.set(r.id, r));
-    return m;
-  }, [group.rows]);
-
-  const [rejectYm, setRejectYm] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
-  useEffect(() => { onRejectingChange?.(rejectYm !== null); }, [rejectYm, onRejectingChange]);
-
-  const months = useMemo(() => {
-    // Drafts are the TA's unsent working copy: they have not been put in front
-    // of anyone yet, and approve/reject never touches them. Shown here, a month
-    // the TA filled in late but never sent read as "ตรวจครบแล้ว · อนุมัติแล้ว"
-    // (it had nothing submitted, so it fell into the done branch).
-    const sent = (perAssignment ?? []).flat().filter(r => r.status !== "draft");
-    const sittings = mergeSittings(sent, secOf);
-    const buckets = new Map<string, Sitting[]>();
-    for (const r of sittings) {
-      const k = monthKey(r.work_date);
-      if (!k) continue;
-      const arr = buckets.get(k);
-      if (arr) arr.push(r);
-      else buckets.set(k, [r]);
-    }
-    return Array.from(buckets.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([key, items]) => {
-        const submitted = items.filter(i => i.status === "submitted");
-        // A sitting any regular section shares is regular work (rule B2 bills
-        // it once, on the regular side); special is what the special section
-        // had on its own.
-        const isRegular = (i: Sitting) =>
-          i.assignmentIds.some(id => secOf.get(id)?.track === "regular");
-        return {
-          key,
-          weeks: groupByWeek(items),
-          count: items.length,
-          submittedRegular: submitted.filter(isRegular).reduce((s, i) => s + (i.hours || 0), 0),
-          submittedSpecial: submitted.filter(i => !isRegular(i)).reduce((s, i) => s + (i.hours || 0), 0),
-          submittedCount: submitted.length,
-          // Nothing waiting is not the same as all approved: a month sent back
-          // stays "rejected" until the TA resubmits it.
-          rejectedCount: items.filter(i => i.status === "rejected").length,
-          // Only the assignments that actually have something waiting this
-          // month get a decision call — approving a section with nothing
-          // submitted would be a no-op request and a confusing audit entry.
-          assignmentIds: Array.from(new Set(submitted.flatMap(i => i.assignmentIds))),
-        };
-      });
-  }, [perAssignment, secOf]);
-
-  if (isLoading && !perAssignment) {
-    // One placeholder per month row, same padding as the real rows.
-    return (
-      <div className="border-t border-(--hairline)" role="status" aria-busy="true">
-        <span className="sr-only">กำลังโหลด</span>
-        {[0, 1].map(i => (
-          <div key={i} className="flex items-center gap-3 border-b border-(--hairline) px-4 py-3 last:border-b-0">
-            <Skel className="h-4 w-24" />
-            <Skel className="h-3 w-40" />
-            <Skel className="ml-auto h-8 w-40 rounded-lg" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (months.length === 0) {
-    return (
-      <div className="border-t border-(--hairline) px-4 py-6 text-center text-xs text-muted">
-        ยังไม่มีบันทึกเวลาของ TA คนนี้
-      </div>
-    );
-  }
-
-  return (
-    <div className="border-t border-(--hairline)">
-      {months.map(mo => {
-        const busy = pendingKey === `${group.taId}|${mo.key}`;
-        const actionable = mo.submittedCount > 0;
-        const open = openMonth === mo.key;
-        const rejectingThis = rejectYm === mo.key;
-        return (
-          <div key={mo.key} className="border-b border-(--hairline) last:border-b-0">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
-              {/* The month name is the disclosure; the buttons sit beside it so
-                  a decision never needs the detail to be opened first.
-                  basis-full below `sm`: squeezed onto one line on a phone the
-                  label shrank under the buttons instead of wrapping, and the
-                  hours ended up printed underneath "ส่งกลับ". */}
-              <button
-                type="button"
-                onClick={() => onToggleMonth(mo.key)}
-                aria-expanded={open}
-                className="-mx-1 flex min-w-0 basis-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-1 py-0.5 text-left hover:bg-surface-secondary sm:flex-1 sm:basis-auto sm:flex-nowrap"
-              >
-                <ChevronDown
-                  size={14}
-                  className={`shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`}
-                />
-                <span className="text-sm font-medium">{formatMonthTH(mo.key)}</span>
-                <span className="whitespace-nowrap text-xs text-muted">
-                  {actionable
-                    ? <>รอพิจารณา <HoursSplit regular={mo.submittedRegular} special={mo.submittedSpecial} /> · {mo.submittedCount} คาบ</>
-                    : mo.rejectedCount > 0
-                      ? `${mo.count} คาบ · ส่งกลับให้ TA แก้ไข ${mo.rejectedCount} คาบ`
-                      : `${mo.count} คาบ · ตรวจครบแล้ว`}
-                </span>
-              </button>
-
-              {actionable ? (
-                /* While a reason is being written, the two buttons sitting
-                   directly above the textarea go quiet. The lecturer has
-                   already decided to bounce this month; the only choices that
-                   belong to them now are ยกเลิก and ส่งกลับให้แก้ไข, and
-                   "อนุมัติ" is one stray click from approving the very month
-                   they are rejecting. */
-                <div className={"ms-auto flex shrink-0 items-center gap-2 transition-opacity " +
-                  (rejectingThis ? "pointer-events-none opacity-40" : "")}>
-                  <Button
-                    variant="danger-soft" size="sm" disabled={busy || rejectingThis}
-                    onClick={() => { setRejectYm(rejectYm === mo.key ? null : mo.key); setReason(""); }}
-                  >
-                    <X size={14} /> ส่งกลับ
-                  </Button>
-                  <Button
-                    variant="primary" size="sm" disabled={busy || rejectingThis} isPending={busy}
-                    onClick={() => onDecide(mo.key, mo.assignmentIds, "approve")}
-                  >
-                    <Check size={14} /> อนุมัติ
-                  </Button>
-                </div>
-              ) : (
-                <span className="ms-auto shrink-0">
-                  {mo.rejectedCount > 0 ? (
-                    <Chip tone="warn">
-                      <X size={12} /> รอ TA แก้ไข
-                    </Chip>
-                  ) : (
-                    <Chip tone="success">
-                      <Check size={12} /> อนุมัติแล้ว
-                    </Chip>
-                  )}
-                </span>
-              )}
-            </div>
-
-            {rejectYm === mo.key && (
-              <div className="border-t border-(--hairline) bg-surface-secondary px-4 py-3">
-                <FieldGroup label={`เหตุผลที่ส่งกลับ ${formatMonthTH(mo.key)}`}>
-                  <TextArea
-                    rows={2}
-                    value={reason}
-                    onChange={e => setReason(e.target.value)}
-                    placeholder="เช่น ชั่วโมงวันที่ 5 ไม่ตรงกับตารางสอน"
-                  />
-                </FieldGroup>
-                <div className="mt-2 flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setRejectYm(null)}>ยกเลิก</Button>
-                  <Button
-                    variant="danger" size="sm"
-                    disabled={!reason.trim() || busy}
-                    isPending={busy}
-                    onClick={() => {
-                      onDecide(mo.key, mo.assignmentIds, "reject", reason.trim());
-                      setRejectYm(null);
-                    }}
-                  >
-                    ส่งกลับให้แก้ไข
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {open && <MonthTable weeks={mo.weeks} showSections={group.coTaught.length > 0 || group.rows.length > 1} />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function MonthTable({ weeks, showSections }: { weeks: WeekGroup[]; showSections: boolean }) {
   const cols = showSections ? 7 : 6;
   return (
@@ -1580,7 +1354,7 @@ function HistoryRowDetail({
   // One "อนุมัติทุกเดือน" batch spans however many months the TA had waiting
   // — for CP410872 that was June through October in one entry. Dropping all
   // of it straight into week groups left the reader with no month anchor at
-  // all, just an unbroken run of weeks. Same two-level split MonthRows uses
+  // all, just an unbroken run of weeks. Same two-level split the review table uses
   // for the pending queue: month first, then MonthTable's own week grouping
   // inside each one.
   const byMonth = new Map<string, Sitting[]>();

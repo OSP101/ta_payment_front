@@ -415,6 +415,9 @@ interface WorkLog {
   // TA-facing UI can surface a "why" modal on entry. All rejected rows in
   // the same assignment carry the same string — Reject() stamps them all.
   reject_reason?: string | null;
+  /** Who sent it back. Absent on rows rejected before this was recorded —
+   *  those were the lecturer's. */
+  rejected_by_role?: "lecturer" | "staff" | null;
 }
 
 /** One reason auto-generation refused a set of sessions, with how many. */
@@ -948,6 +951,13 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     () => rejectedRows.find(r => r.reject_reason)?.reject_reason ?? null,
     [rejectedRows],
   );
+  // Named from the same row the reason is read from, so the two always agree.
+  // A staff officer can send a month back from the payout review too, and the
+  // modal used to credit every send-back to the lecturer.
+  const rejectedBy = useMemo(() => {
+    const r = rejectedRows.find(x => x.reject_reason) ?? rejectedRows[0];
+    return r?.rejected_by_role === "staff" ? "เจ้าหน้าที่" : "อาจารย์";
+  }, [rejectedRows]);
   const [rejectionSeenAids, setRejectionSeenAids] = useState<Set<string>>(new Set());
   const [showRejection, setShowRejection] = useState(false);
   const [deletingRejected, setDeletingRejected] = useState(false);
@@ -1992,11 +2002,16 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                   className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft border border-danger-soft-border rounded-md px-2 py-1 hover:opacity-90"
                 >
                   <AlertTriangle size={13} />
-                  <span>อาจารย์ส่งกลับ {rejectedRows.length} รายการ · ดูเหตุผล</span>
+                  <span>{rejectedBy}ส่งกลับ {rejectedRows.length} รายการ · ดูเหตุผล</span>
                 </button>
               )}
             </div>
           )}
+
+          {/* What the lecturer corrected or cut while reviewing, and why —
+              the row itself has changed or gone, so this is where the TA
+              learns it happened. */}
+          {aid && <LecturerChangesNotice aid={aid} />}
 
           <MonthlyWorklogView
             rows={logs}
@@ -2084,7 +2099,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       <Modal
         open={showRejection}
         onClose={dismissRejection}
-        title="อาจารย์ส่งบันทึกเวลากลับให้แก้ไข"
+        title={`${rejectedBy}ส่งบันทึกเวลากลับให้แก้ไข`}
         icon={<AlertTriangle size={18} />}
         size="md"
         footer={
@@ -2108,10 +2123,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       >
         <div className="flex flex-col gap-3">
           <div className="text-sm">
-            อาจารย์ส่งบันทึกเวลา <span className="font-semibold">{rejectedRows.length}</span> รายการกลับให้แก้ไข พร้อมกับเหตุผลด้านล่าง
+            {rejectedBy}ส่งบันทึกเวลา <span className="font-semibold">{rejectedRows.length}</span> รายการกลับให้แก้ไข พร้อมกับเหตุผลด้านล่าง
           </div>
           <div className="rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-sm text-warning-soft-foreground whitespace-pre-wrap">
-            {rejectReason || "(อาจารย์ไม่ได้ระบุเหตุผล)"}
+            {rejectReason || `(${rejectedBy}ไม่ได้ระบุเหตุผล)`}
           </div>
           <div className="text-xs text-muted">
             คุณสามารถ:
@@ -3595,6 +3610,12 @@ function MonthlyWorklogView({
                         {ACTIVITY_LABEL[k]} {hoursByActivity[k].toFixed(1)}
                       </span>
                     ))}
+                  {/* Chip convention: a chip that counts ROWS carries the count
+                      (ต้องแก้ไข / ฉบับร่าง / รออาจารย์ / อาจารย์อนุมัติ /
+                      หมดเวลาส่ง); a chip naming the MONTH's stage carries none
+                      (รอเจ้าหน้าที่ตรวจ / เจ้าหน้าที่ตรวจแล้ว / …) because staff act on
+                      the month as one unit. No icons — the tone already says it,
+                      and only two chips ever had one. */}
                   {/* In a closed month a bounced row is as lost as an unsent
                       one — the TA cannot fix and resend it either — so the two
                       collapse into one grey "หมดเวลาส่ง" rather than a red
@@ -3609,7 +3630,7 @@ function MonthlyWorklogView({
                     <>
                       {rejectedInMonth > 0 && (
                         <span className="ml-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700">
-                          ✏️ ต้องแก้ไข {rejectedInMonth}
+                          ต้องแก้ไข {rejectedInMonth}
                         </span>
                       )}
                       {draftInMonth > 0 && (
@@ -3626,7 +3647,7 @@ function MonthlyWorklogView({
                   )}
                   {approvedInMonth > 0 && (
                     <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 border border-emerald-200">
-                      ✓ อาจารย์อนุมัติ {approvedInMonth}
+                      อาจารย์อนุมัติ {approvedInMonth}
                     </span>
                   )}
                   {/* The step after the lecturer. "รอเจ้าหน้าที่ตรวจ" only once the
@@ -4236,5 +4257,55 @@ function ReviewScheduleModal({
         )}
       </div>
     </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Lecturer corrections — edits and cuts made during review                    */
+/* -------------------------------------------------------------------------- */
+
+interface LecturerChange {
+  id: number;
+  work_log_id: string;
+  action: "edit" | "cut";
+  work_date: string;
+  before: { start_time: string; end_time: string; hours: number; activity: string };
+  after?: { start_time: string; end_time: string; hours: number };
+  reason: string;
+  actor_name: string;
+  actor_role: string;
+  at: string;
+}
+
+/** Lists what the lecturer (or staff) changed on this section's rows during
+ *  review. One entry per change; the server writes one per co-taught copy, but
+ *  a TA's assignment only holds its own copy, so nothing repeats here. */
+function LecturerChangesNotice({ aid }: { aid: string }) {
+  const { data } = useSWR<LecturerChange[]>(`/assignments/${aid}/worklog/changes`);
+  const [showAll, setShowAll] = useState(false);
+  if (!data || data.length === 0) return null;
+  const list = showAll ? data : data.slice(0, 3);
+  return (
+    <div className="mb-3 rounded-lg border border-hairline bg-surface-secondary px-3 py-2 text-sm">
+      <div className="mb-1 flex items-center gap-1.5 font-medium">
+        <Pencil size={13} /> อาจารย์ปรับแก้บันทึกเวลาของคุณ {data.length} รายการ
+      </div>
+      <ul className="space-y-1">
+        {list.map(c => (
+          <li key={c.id} className="text-xs text-ink-2">
+            <b>{formatWorkDate(c.work_date)}</b>{" "}
+            {c.action === "cut"
+              ? <>ตัดออก {c.before.start_time}–{c.before.end_time} ({c.before.hours} ชม.)</>
+              : <>แก้จาก {c.before.start_time}–{c.before.end_time} ({c.before.hours} ชม.) เป็น {c.after?.start_time}–{c.after?.end_time} ({c.after?.hours} ชม.)</>}
+            {" "}· โดย {c.actor_name || (c.actor_role === "staff" ? "เจ้าหน้าที่" : "อาจารย์")} · เหตุผล: {c.reason}
+          </li>
+        ))}
+      </ul>
+      {data.length > 3 && (
+        <button type="button" onClick={() => setShowAll(!showAll)} className="mt-1 text-xs text-accent hover:underline">
+          {showAll ? "ย่อ" : `ดูทั้งหมด ${data.length} รายการ`}
+        </button>
+      )}
+    </div>
   );
 }

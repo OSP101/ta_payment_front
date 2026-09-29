@@ -36,6 +36,12 @@ export function proxy(req: NextRequest) {
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: blob:`,
     `font-src 'self'`,
+    // blob: because PdfFrame shows PDFs the page fetched itself (the TA's
+    // creditor-form preview, the check-before-upload preview) through object
+    // URLs. Without it frames fall back to default-src 'self', which a blob:
+    // URL never matches, and the browser draws an empty white box. Only this
+    // origin's own script can mint a blob: URL, so this admits nothing new.
+    `frame-src 'self' blob:`,
     `connect-src ${connectSrc.join(" ")}`,
     `object-src 'none'`,
     `base-uri 'self'`,
