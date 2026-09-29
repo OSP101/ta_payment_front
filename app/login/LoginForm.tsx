@@ -176,8 +176,10 @@ export default function LoginForm({
     | { status: "exchanging" }
     | { status: "confirm"; pending: SSOPending }
     // wrongAccount: KKU signed in someone this system has no account for —
-    // retrying with KKU would just return the same person, so the way out
-    // is switching KKU account, not "try again".
+    // retrying with KKU would just return the same person, so no "try
+    // again" button. The way out is back to /login, not KKU's logout: that
+    // logout is global (e-learning, REG, mail) and the user chose not to
+    // send people through it from here.
     | { status: "error"; message: string; wrongAccount?: boolean };
   const [sso, setSso] = useState<SSOState | null>(null);
 
@@ -681,18 +683,14 @@ export default function LoginForm({
                     </p>
                   </div>
                 )}
-                {sso.status === "error" && (() => {
-                  const switching = !!sso.wrongAccount;
-                  const href = switching && ssoLogoutUrl ? ssoLogoutUrl : "/login";
-                  return (
-                    <div className="flex items-center justify-center">
-                      <Link className="text-sm cursor-pointer text-muted" href={href}>
-                        <ArrowLeft className="size-3.5 inline mr-1" />
-                        {switching ? "ใช้บัญชี KKU อื่น" : "กลับไปหน้าเข้าสู่ระบบ"}
-                      </Link>
-                    </div>
-                  );
-                })()}
+                {sso.status === "error" && (
+                  <div className="flex items-center justify-center">
+                    <Link className="text-sm cursor-pointer text-muted" href="/login">
+                      <ArrowLeft className="size-3.5 inline mr-1" />
+                      กลับไปหน้าเข้าสู่ระบบ
+                    </Link>
+                  </div>
+                )}
               </div>
               ) : (
               <>
