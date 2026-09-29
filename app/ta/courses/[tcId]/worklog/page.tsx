@@ -101,6 +101,27 @@ function parseHM(t: string): number {
   return h * 60 + m;
 }
 
+// Times and hours are one fact written twice — the server refuses a row whose
+// hours differ from its span by more than 0.01 — so each edit carries the other
+// with it: a new start/end recomputes the hours, new hours move the end time.
+// Rounded to 0.01 h, the server's own tolerance, so a 50-minute span reads
+// 0.83 rather than 0.8333333333.
+function spanHours(start: string, end: string): number | null {
+  const s = parseHM(start);
+  const e = parseHM(end);
+  if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return null;
+  return Math.round(((e - s) / 60) * 100) / 100;
+}
+// start + hours as "HH:MM"; null when it would run past midnight (no row
+// crosses a day) or the start is unreadable.
+function endAfter(start: string, hours: number): string | null {
+  const s = parseHM(start);
+  if (Number.isNaN(s) || !(hours > 0)) return null;
+  const e = s + Math.round(hours * 60);
+  if (e >= 24 * 60) return null;
+  return `${String(Math.floor(e / 60)).padStart(2, "0")}:${String(e % 60).padStart(2, "0")}`;
+}
+
 // Returns null when the row is savable, otherwise a Thai reason. Enforced
 // client-side so the user gets instant feedback before hitting the server.
 function validateRow(w: WorkLog): string | null {
@@ -808,6 +829,18 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       const slice = prev[aid] ?? {};
       return { ...prev, [aid]: { ...slice, [l.id]: { ...(slice[l.id] ?? l), ...p } } };
     });
+  // Time/hours edits keep each other in step (see spanHours / endAfter), so the
+  // TA never has to fix the other field by hand before the row will save.
+  const patchTime = (l: WorkLog, p: Pick<Partial<WorkLog>, "start_time" | "end_time">) => {
+    const cur = aidDrafts[l.id] ?? l;
+    const h = spanHours(p.start_time ?? cur.start_time, p.end_time ?? cur.end_time);
+    patch(l, h === null ? p : { ...p, hours: h });
+  };
+  const patchHours = (l: WorkLog, hours: number) => {
+    const cur = aidDrafts[l.id] ?? l;
+    const end = endAfter(cur.start_time, hours);
+    patch(l, end === null ? { hours } : { hours, end_time: end });
+  };
   // Remove a single row from the current assignment's draft slice. When the
   // slice ends up empty we drop the aid key too so `drafts` stays small.
   const dropDraft = (rowId: string) =>
@@ -1576,11 +1609,11 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         return rowEditable(w) ? (
           <div className="flex items-center gap-1">
             <TimePicker value={w.start_time}
-                        onChange={v => patch(l, { start_time: v })}
+                        onChange={v => patchTime(l, { start_time: v })}
                         label="เวลาเริ่ม" />
             –
             <TimePicker value={w.end_time}
-                        onChange={v => patch(l, { end_time: v })}
+                        onChange={v => patchTime(l, { end_time: v })}
                         label="เวลาสิ้นสุด" />
           </div>
         ) : `${w.start_time}–${w.end_time}`;
@@ -1597,7 +1630,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       render: l => {
         const w = view(l);
         return rowEditable(w) ? (
-          <HoursStepper value={w.hours} onChange={v => patch(l, { hours: v })} max={rowEffectiveMax(w)} />
+          <HoursStepper value={w.hours} onChange={v => patchHours(l, v)} max={rowEffectiveMax(w)} />
         ) : <span className="tabular">{w.hours.toFixed(1)}</span>;
       },
     },
@@ -2459,17 +2492,17 @@ interface AddWorklogModalProps {
   aid?: string;
 }
 
-// StoredAddFormData mirrors NewWorkLog + hoursTouched so the auto-derive
-// behavior is preserved on restore (a TA who hand-set 4.5 shouldn't have it
-// recomputed from time span the moment they hit "ใช้ต่อ"). Kept as a
-// dedicated shape so a future NewWorkLog rename doesn't silently break the
-// stored payload.
+// StoredAddFormData mirrors NewWorkLog. Kept as a dedicated shape so a future
+// NewWorkLog rename doesn't silently break the stored payload. hoursTouched is
+// a leftover of the old one-way sync (hours stopped following the times once
+// edited); times and hours now always move together, so it is ignored on read
+// and only kept optional so older saved forms still parse.
 interface StoredAddFormData {
   workDate: string;
   start: string;
   end: string;
   hours: number;
-  hoursTouched: boolean;
+  hoursTouched?: boolean;
   activity: string;
   parentKind: "lecture" | "lab";
   note: string;
@@ -2484,12 +2517,6 @@ function todayISO(): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-// Round a raw hour count to the nearest 0.5 so the auto-derived value matches
-// what the number input's step allows the user to enter.
-function roundHalf(n: number): number {
-  return Math.round(n * 2) / 2;
 }
 
 // defaultTimesForActivity picks a sensible start/end pair based on the
@@ -2588,9 +2615,6 @@ function AddWorklogModal({
   const [workDate, setWorkDate] = useState(todayISO());
   const [start, setStart] = useState("09:00");
   const [end, setEnd] = useState("10:00");
-  // hoursTouched: once the user manually edits the hours field, we stop
-  // auto-syncing it from the start/end span so a deliberate override sticks.
-  const [hoursTouched, setHoursTouched] = useState(false);
   const [hours, setHours] = useState(1);
   const [activity, setActivity] = useState<string>(defaultActivity);
   const [parentKind, setParentKind] = useState<"lecture" | "lab">(defaultParentKind);
@@ -2654,7 +2678,6 @@ function AddWorklogModal({
     setWorkDate(defaultDate ?? todayISO());
     setStart("09:00");
     setEnd("10:00");
-    setHoursTouched(false);
     setHours(1);
     setActivity(defaultActivity);
     setParentKind(defaultParentKind);
@@ -2681,12 +2704,12 @@ function AddWorklogModal({
     if (!open || !dirty || !userId || !aid) return;
     const t = window.setTimeout(() => {
       const payload: StoredAddFormData = {
-        workDate, start, end, hours, hoursTouched, activity, parentKind, note,
+        workDate, start, end, hours, activity, parentKind, note,
       };
       writeAddForm<StoredAddFormData>(userId, aid, payload);
     }, 400);
     return () => window.clearTimeout(t);
-  }, [open, dirty, userId, aid, workDate, start, end, hours, hoursTouched, activity, parentKind, note]);
+  }, [open, dirty, userId, aid, workDate, start, end, hours, activity, parentKind, note]);
 
   function markDirty() { if (!dirty) setDirty(true); }
   function applyRecovered() {
@@ -2695,7 +2718,6 @@ function AddWorklogModal({
     setStart(recovered.start);
     setEnd(recovered.end);
     setHours(recovered.hours);
-    setHoursTouched(recovered.hoursTouched);
     setActivity(recovered.activity);
     setParentKind(recovered.parentKind);
     setNote(recovered.note);
@@ -2707,40 +2729,42 @@ function AddWorklogModal({
     setRecovered(null);
   }
 
-  // Auto-derive hours from the time span while the user hasn't manually
-  // overridden it — matches the "generate" flow's behavior and avoids the
-  // "hours doesn't match span" server error for the common case. Clamp to
-  // effectiveMax so an auto-derived value never exceeds the weekly quota.
+  // Hours always follow the time span, and the hours stepper moves the end
+  // time (onHours below) — the server refuses a row whose two disagree. The
+  // old one-way sync stopped following the times once hours were touched, and
+  // a later time edit then produced exactly that refusal.
   useEffect(() => {
-    if (hoursTouched) return;
-    const s = parseHM(start);
-    const e = parseHM(end);
-    if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return;
-    const raw = (e - s) / 60;
-    const rounded = Math.max(0, Math.min(effectiveMax, roundHalf(raw)));
-    setHours(rounded);
-  }, [start, end, hoursTouched, effectiveMax]);
+    const h = spanHours(start, end);
+    if (h !== null) setHours(h);
+  }, [start, end]);
+  function onHours(v: number) {
+    setHours(v);
+    const e = endAfter(start, v);
+    if (e) setEnd(e);
+  }
 
   // Prefill start/end from the section's weekly schedule whenever the TA
   // picks a lecture/lab activity (or opens the modal on such an activity).
   // The user's message: "each activity has its own class period — just make
-  // that the default, TA will edit if wrong." We reset hoursTouched too so
-  // the hours auto-derive from the new span.
+  // that the default, TA will edit if wrong." The hours follow the new span.
   useEffect(() => {
     if (!open) return;
     const times = defaultTimesForActivity(activity, sectionSchedules, workDate);
     if (!times) return;
     setStart(times.start);
     setEnd(times.end);
-    setHoursTouched(false);
   }, [open, activity, workDate, sectionSchedules]);
 
   // If the user picks a new activity whose remaining quota is smaller than
-  // the current hours, pull the value down so the stepper's displayed number
-  // matches what the +/− buttons will actually allow.
+  // the current hours, pull the value down — and the end time with it, so the
+  // pair still agrees.
   useEffect(() => {
-    if (hours > effectiveMax) setHours(effectiveMax);
-  }, [effectiveMax, hours]);
+    if (hours > effectiveMax) {
+      setHours(effectiveMax);
+      const e = endAfter(start, effectiveMax);
+      if (e) setEnd(e);
+    }
+  }, [effectiveMax, hours, start]);
 
   function handleSave() {
     const form: NewWorkLog = {
@@ -2972,7 +2996,7 @@ function AddWorklogModal({
           >
             <HoursStepper
               value={hours}
-              onChange={v => { markDirty(); setHoursTouched(true); setHours(v); }}
+              onChange={v => { markDirty(); onHours(v); }}
               max={effectiveMax}
               fullWidth
             />

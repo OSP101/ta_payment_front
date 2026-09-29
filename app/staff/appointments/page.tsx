@@ -540,8 +540,8 @@ function AppointmentSection({ termId }: { termId: string }) {
           {officers && deans.length === 0 && (
             <p className="mt-1 text-xs text-amber-700">
               ยังไม่มีรายชื่อผู้ลงนามในระบบ เพิ่มได้ที่{" "}
-              <a href="/staff/settings" className="underline underline-offset-2">
-                ตั้งค่า › ผู้บริหารที่ลงนาม
+              <a href="/staff/settings?tab=admins" className="underline underline-offset-2">
+                ตั้งค่า › ฝ่ายบริหาร
               </a>
             </p>
           )}
