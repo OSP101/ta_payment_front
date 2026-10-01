@@ -138,12 +138,14 @@ interface TA {
   id: string; first_name: string; last_name: string; email: string; study_level?: string;
   // From /ta-requests/candidates — how many courses this TA is already booked
   // for this term (a submitted request books the slot, not just an approved
-  // one), whether that hits the 3-course cap, and whether they are already on
+  // one), whether that hits the per-term course cap, and whether they are already on
   // this course. The first two make them unselectable but still VISIBLE: a TA
   // filtered out of the list reads as "no account", and lecturers were trying
   // to create duplicates.
   approved_course_count?: number;
   at_quota?: boolean;
+  /** The per-term cap at_quota was judged against — staff set it in ตั้งค่า. */
+  course_cap?: number;
   already_in_course?: boolean;
   /** false = no class timetable filed yet for this term. */
   has_schedule?: boolean;
@@ -159,12 +161,13 @@ function taBlockedReason(t: TA): string | null {
   // Already on the course: pickable, to add sections to their request. Only
   // blocked if the server could not name that request.
   if (t.already_in_course && !t.existing_request_id) return "อยู่ในคำขอของวิชานี้แล้ว";
-  if (t.at_quota) return `รับสอนครบ ${MAX_COURSES_PER_TA} วิชาแล้ว`;
+  if (t.at_quota) return `รับสอนครบ ${t.course_cap ?? DEFAULT_COURSE_CAP} วิชาแล้ว`;
   return null;
 }
 
-/** Per-term ceiling on how many courses one TA may assist. */
-const MAX_COURSES_PER_TA = 3;
+/** Fallback only, for a response from a server older than course_cap. The
+ *  real per-term cap is staff's setting, sent with every candidate. */
+const DEFAULT_COURSE_CAP = 3;
 interface SectionConflict {
   section_id: string;
   messages: string[];
@@ -1306,7 +1309,7 @@ function RequestFormSection({
           )}
 
           <p className="text-xs text-ink-3">
-            ที่นั่งของ TA ทุกคนในคำขอถูกจองไว้ตั้งแต่ตอนกดส่ง (นับเข้าโควตา {MAX_COURSES_PER_TA} วิชา) แม้ยังไม่ได้ตัดสิน
+            ที่นั่งของ TA ทุกคนในคำขอถูกจองไว้ตั้งแต่ตอนกดส่ง (นับเข้าโควตา {allTas[0]?.course_cap ?? DEFAULT_COURSE_CAP} วิชา) แม้ยังไม่ได้ตัดสิน
           </p>
         </div>
       </Modal>
@@ -2119,12 +2122,22 @@ function TaAutocomplete({
                       {/* The count is the whole point of keeping blocked TAs
                           visible — the lecturer can see WHY, not just that the
                           name is missing. */}
-                      <span className={"ml-1 font-medium " + (blocked ? "text-red-600" : "text-ink-2")}>
-                        · รับสอน {booked}/{MAX_COURSES_PER_TA} วิชา
-                      </span>
+                      {/* approved_course_count leaves THIS course out (it is
+                          the quota check for adding one more), so a TA already
+                          here read "รับสอน 0/3" while teaching it. Count this
+                          course back in and say so instead. */}
+                      {t.already_in_course ? (
+                        <span className={"ml-1 font-medium " + (blocked ? "text-red-600" : "text-brand")}>
+                          · อยู่ในวิชานี้แล้ว · รวม {booked + 1}/{t.course_cap ?? DEFAULT_COURSE_CAP} วิชา
+                        </span>
+                      ) : (
+                        <span className={"ml-1 font-medium " + (blocked ? "text-red-600" : "text-ink-2")}>
+                          · รับสอน {booked}/{t.course_cap ?? DEFAULT_COURSE_CAP} วิชา
+                        </span>
+                      )}
                       {blocked && <span className="ml-1 text-red-600">· {blocked}</span>}
                       {!blocked && t.already_in_course && (
-                        <span className="ml-1 text-brand">· อยู่ในวิชานี้แล้ว เพิ่ม section ได้</span>
+                        <span className="ml-1 text-brand">· เพิ่ม section ได้</span>
                       )}
                       {!blocked && t.has_schedule === false && (
                         <span className="ml-1 text-amber-600">· ยังไม่ได้สร้างตารางเรียน</span>

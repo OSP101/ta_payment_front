@@ -327,7 +327,7 @@ function StepBody({
           <span>{state.message}</span>
         </div>
       )}
-      {done && relatedPath && canAct && (
+      {done && relatedPath && isStaffViewer && (
         <Link
           href={relatedPath}
           className="inline-flex w-fit items-center gap-1 text-sm font-medium text-accent hover:underline"

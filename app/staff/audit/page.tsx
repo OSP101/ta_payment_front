@@ -1,119 +1,166 @@
 "use client";
 import useSWR from "swr";
-import { useMemo, useState } from "react";
-import { Search, X, Link2, KeyRound, Copy, User, ShieldAlert, Eye, AlertTriangle } from "lucide-react";
-import { PageHeader, Chip, TipWrap, Panel, Button, Modal, Tip } from "../../components/ui";
-import { DataTable, type DataColumn } from "../../components/DataTable";
-import { Skel, SkelValue } from "../../components/Skeletons";
-import { actionLabel, severityOf, SUMMARY_GROUPS, type Severity } from "./vocabulary";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Download, KeyRound, Layers, Link2, ListChecks, Search, User, X } from "lucide-react";
+import {
+  Alert, Button, DatePicker, PageHeader, Panel, SearchField, SelectField, Tip,
+} from "../../components/ui";
+import { api } from "../../lib/api";
+import { localDateISO } from "../../lib/dates";
+import { notify } from "../../lib/notify";
+import { DetailModal } from "./DetailModal";
+import { InvestigateTable, type ExpertFilters } from "./InvestigateTable";
+import { Overview } from "./Overview";
+import { Timeline, categoryIcon } from "./Timeline";
+import type { Attention, Catalog, Row, Session, Summary, Trace } from "./types";
 
 /* -------------------------------------------------------------------------- *
- * The audit trail, as something you can actually investigate with.
+ * The audit trail, read two ways.
  *
- * This page used to fetch the newest 200 rows and filter them in the browser.
- * That is a peek at the top of the table, not a search: a question like "what
- * did this account do on 3 September" could not be asked at all once 200 newer
- * rows existed, and no amount of client-side filtering could reach a row the
- * server never sent. Everything below is now answered in SQL.
+ * "ดูง่าย" is for the person whose job is the money, not the server: is
+ * anything wrong, who is in the system, and what happened — as sentences, a day
+ * at a time, with bursts folded and the reason on the line below.
  *
- * The two controls that make it a trail rather than a list are the per-row
- * "ตาม request" and "ตาม session" jumps: one click re-asks the server for every
- * other action the same HTTP request, or the same login session, performed.
+ * "สืบสวน" is for the administrator: every stored row, unfolded, with its
+ * reference, raw action, address, and the request / session jumps.
+ *
+ * Both ask the same API the same question; the only difference is `fold` and
+ * how the answer is drawn. Every word about an action comes from the server's
+ * catalog, so a row reads the same here, in the export, and in a search.
  * -------------------------------------------------------------------------- */
 
-interface Row {
-  id: number;
-  at: string;
-  actor_id?: string | null;
-  actor_name?: string;
-  actor_role?: string | null;
-  action: string;
-  entity: string;
-  entity_id?: string | null;
-  ip?: string | null;
-  user_agent?: string | null;
-  method?: string | null;
-  path?: string | null;
-  request_id?: string | null;
-  session_id?: string | null;
-  note?: string | null;
-  before?: unknown;
-  after?: unknown;
-  /** Who or what entity_id refers to, resolved by the API. */
-  subject_name?: string;
-}
-
-interface ActionCount {
-  action: string;
-  count: number;
-  distinct_ips: number;
-  distinct_actors: number;
-}
-
-interface Actor {
-  id: string;
-  name: string;
-  role?: string;
-  count: number;
-}
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: "ผู้บริหาร",
-  staff: "เจ้าหน้าที่",
-  lecturer: "อาจารย์",
-  ta: "ผู้ช่วยสอน",
-};
+type Mode = "simple" | "expert";
 
 const PAGE_SIZE = 50;
+const MODE_KEY = "audit.mode";
 
 /** Time windows, as an investigation thinks about them. */
-const RANGES: { id: string; label: string; hours: number | null }[] = [
-  { id: "24h", label: "24 ชั่วโมง", hours: 24 },
-  { id: "7d", label: "7 วัน", hours: 24 * 7 },
-  { id: "30d", label: "30 วัน", hours: 24 * 30 },
-  { id: "90d", label: "90 วัน", hours: 24 * 90 },
-  { id: "all", label: "ทั้งหมด", hours: null },
+const RANGES: { id: string; label: string; phrase: string; hours: number | null }[] = [
+  { id: "24h", label: "24 ชั่วโมงล่าสุด", phrase: " 24 ชั่วโมงที่ผ่านมา", hours: 24 },
+  { id: "7d", label: "7 วันล่าสุด", phrase: " 7 วันที่ผ่านมา", hours: 24 * 7 },
+  { id: "30d", label: "30 วันล่าสุด", phrase: " 30 วันที่ผ่านมา", hours: 24 * 30 },
+  { id: "90d", label: "90 วันล่าสุด", phrase: " 90 วันที่ผ่านมา", hours: 24 * 90 },
+  { id: "all", label: "ทั้งหมดที่เก็บไว้", phrase: "เวลาทั้งหมดที่เก็บไว้", hours: null },
+  { id: "custom", label: "กำหนดวันเอง", phrase: "วันที่เลือก", hours: null },
 ];
 
 /** "ทั้งหมด" is bounded rather than truly unbounded: the page count behind an
  *  unbounded query is a count over a table that only grows. Ten years is past
- *  the life of any record this system keeps. */
+ *  the life of any record this system keeps (retention is five). */
 const ALL_HOURS = 24 * 365 * 10;
 
-export default function AuditPage() {
-  const [range, setRange] = useState("7d");
-  const [query, setQuery] = useState("");
-  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
-  /** Whose history we are reading. The API always supported this; the screen
-   *  never sent it, so "show me this person" meant pasting a uuid into search. */
-  const [actorId, setActorId] = useState("");
-  const [page, setPage] = useState(1);
-  /** A pinned trace: every row from one request, or one session. */
-  const [trace, setTrace] = useState<{ kind: "request" | "session"; id: string } | null>(null);
-  const [detail, setDetail] = useState<Row | null>(null);
+/** The quick filters of the simple view. */
+const ONLY: { id: string; label: string; tip: string; params: Record<string, string> }[] = [
+  { id: "check", label: "ควรตรวจ", tip: "การย้อนหรือแก้สิ่งที่อนุมัติแล้ว การเปลี่ยนสิทธิ์ และความล้มเหลว",
+    params: { severity: "warn,danger" } },
+  { id: "failed", label: "ไม่สำเร็จ", tip: "เข้าระบบไม่ผ่าน ถูกล็อก หรือถูกปฏิเสธสิทธิ์",
+    params: { outcome: "failed,denied" } },
+  { id: "sensitive", label: "ข้อมูลอ่อนไหว", tip: "การเปิดดูหรือดาวน์โหลดข้อมูลส่วนบุคคล",
+    params: { severity: "notice" } },
+];
 
-  const from = useMemo(() => {
+const NO_EXPERT_FILTERS: ExpertFilters = { role: "", category: "", outcome: "", action: "", actor: "" };
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(value), ms);
+    return () => window.clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
+
+export default function AuditPage() {
+  const [mode, setModeState] = useState<Mode>("simple");
+  const [range, setRange] = useState("7d");
+  const [fromDate, setFromDate] = useState(() => localDateISO(new Date(Date.now() - 6 * 86400_000)));
+  const [toDate, setToDate] = useState(() => localDateISO());
+  const [typed, setTyped] = useState("");
+  // Simple view filters.
+  const [category, setCategory] = useState("");
+  const [only, setOnly] = useState("");
+  // Shared: one action (set by opening an overview item) and one person.
+  const [expert, setExpert] = useState<ExpertFilters>(NO_EXPERT_FILTERS);
+  const [page, setPage] = useState(1);
+  /** A pinned trace: every row from one request, one session, or one burst. */
+  const [trace, setTrace] = useState<Trace | null>(null);
+  const [detail, setDetail] = useState<Row | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  // The choice of view is the reader's own and should survive a reload. Read
+  // after mount, so the first paint matches what the server rendered.
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(MODE_KEY) === "expert") setModeState("expert");
+    } catch { /* storage unavailable: stay on the default view */ }
+  }, []);
+  const setMode = (m: Mode) => {
+    setModeState(m);
+    setPage(1);
+    try { window.localStorage.setItem(MODE_KEY, m); } catch { /* not remembered, still works */ }
+  };
+
+  // A search is an audited act (audit_log.search). Sent per keystroke it filed
+  // one entry per letter typed; wait for the typing to stop.
+  const query = useDebounced(typed.trim(), 450);
+
+  /** Any change to the question starts at page 1 — otherwise a narrower filter
+   *  lands on page 7 of a 2-page result and the screen reads as empty. */
+  const ask = useCallback(<T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); }, []);
+
+  const window_ = useMemo(() => {
+    if (range === "custom") {
+      // Whole local days, inclusive at both ends.
+      const from = new Date(`${fromDate}T00:00:00`);
+      const to = new Date(`${toDate}T23:59:59.999`);
+      if (isNaN(from.getTime()) || isNaN(to.getTime()) || to < from) return null;
+      return { from: from.toISOString(), to: to.toISOString() };
+    }
     const hours = RANGES.find(r => r.id === range)?.hours ?? ALL_HOURS;
-    return new Date(Date.now() - hours * 3600_000).toISOString();
-  }, [range]);
+    return { from: new Date(Date.now() - hours * 3600_000).toISOString(), to: "" };
+  }, [range, fromDate, toDate]);
+
+  /** The question, as query parameters — shared by the list and the export so
+   *  "export what I am looking at" exports exactly that. */
+  const questionParams = useMemo(() => {
+    if (!window_) return null;
+    const p = new URLSearchParams();
+    if (trace) {
+      // A trace is a different question: it replaces the filters (leaving them
+      // applied would quietly hide part of the answer) and it is not bounded
+      // by the window, because a login session can start before it.
+      p.set("from", new Date(Date.now() - ALL_HOURS * 3600_000).toISOString());
+      p.set(trace.kind === "request" ? "request_id" : "session_id", trace.id);
+      if (trace.kind === "request" && trace.action) p.set("action", trace.action);
+      return p;
+    }
+    p.set("from", window_.from);
+    if (window_.to) p.set("to", window_.to);
+    if (query) p.set("q", query);
+    if (expert.action) p.set("action", expert.action);
+    if (expert.actor) p.set("actor_id", expert.actor);
+    if (mode === "simple") {
+      if (category) p.set("category", category);
+      for (const [k, v] of Object.entries(ONLY.find(o => o.id === only)?.params ?? {})) p.set(k, v);
+    } else {
+      if (expert.category) p.set("category", expert.category);
+      if (expert.outcome) p.set("outcome", expert.outcome);
+      if (expert.role) p.set("role", expert.role);
+    }
+    return p;
+  }, [window_, trace, query, expert, mode, category, only]);
 
   const listKey = useMemo(() => {
-    const p = new URLSearchParams({
-      from,
-      limit: String(PAGE_SIZE),
-      offset: String((page - 1) * PAGE_SIZE),
-    });
-    if (query.trim()) p.set("q", query.trim());
-    if (filterValues.role) p.set("role", filterValues.role);
-    if (filterValues.action) p.set("action", filterValues.action);
-    if (actorId) p.set("actor_id", actorId);
-    // A trace overrides the filters: it is a different question, and leaving
-    // the old ones applied would quietly hide part of the answer.
-    if (trace) p.set(trace.kind === "request" ? "request_id" : "session_id", trace.id);
+    if (!questionParams) return null;
+    const p = new URLSearchParams(questionParams);
+    p.set("limit", String(PAGE_SIZE));
+    p.set("offset", String((page - 1) * PAGE_SIZE));
+    // Folding belongs to the simple view; a trace always shows every row.
+    if (mode === "simple" && !trace) p.set("fold", "1");
     return `/audit-logs?${p.toString()}`;
-  }, [from, page, query, filterValues, trace, actorId]);
+  }, [questionParams, page, mode, trace]);
 
-  const { data, isLoading, error, mutate: revalidate } =
+  const { data, isLoading, isValidating, error, mutate: revalidate } =
     useSWR<{ items: Row[]; total: number }>(listKey, {
       // SWR revalidates on window focus by default. Here that is not free: a
       // targeted search WRITES an audit_log.search row, so alt-tabbing away and
@@ -121,524 +168,347 @@ export default function AuditPage() {
       // time and bury the real searches. The trail is history — it does not
       // change while you are reading it — so refresh is the explicit ลองใหม่.
       revalidateOnFocus: false,
-      // Every filter / page step is a new key; hold the old rows under the
-      // table's refetch overlay instead of blanking back to a skeleton.
+      // Every filter / page step is a new key; hold the old rows on screen
+      // instead of blanking back to a skeleton.
       keepPreviousData: true,
     });
-  const { data: actions } = useSWR<{ items: string[] }>("/audit-logs/actions");
-  // The overview strip. Same window as the table, so the numbers above and the
-  // rows below always describe the same stretch of time.
-  const { data: summary } = useSWR<{ actions: ActionCount[]; actors: Actor[] }>(
-    `/audit-logs/summary?from=${encodeURIComponent(from)}`,
-    { revalidateOnFocus: false, keepPreviousData: true },
+
+  const summaryKey = window_
+    ? `/audit-logs/summary?from=${encodeURIComponent(window_.from)}${window_.to ? `&to=${encodeURIComponent(window_.to)}` : ""}`
+    : null;
+  const { data: summary } = useSWR<Summary>(summaryKey, { revalidateOnFocus: false, keepPreviousData: true });
+  const { data: catalog } = useSWR<Catalog>("/audit-logs/catalog", { revalidateOnFocus: false });
+  // Who is signed in changes by the minute, and reading it writes nothing.
+  const { data: sessions } = useSWR<{ items: Session[]; current: string }>(
+    mode === "simple" ? "/audit-logs/sessions" : null,
+    { refreshInterval: 60_000 },
   );
 
-  const actionOptions = useMemo(() => [
-    { id: "", label: "ทุกเหตุการณ์" },
-    // The families first — these are what someone reaches for. The names were
-    // already grouped by their dots; the server matches by prefix.
-    ...[...new Set((actions?.items ?? []).map(a => a.split(".")[0]))]
-      .sort()
-      .map(f => ({ id: `${f}.`, label: `${actionLabel(`${f}.`)} (ทั้งกลุ่ม)` }))
-      // Two prefixes can share a label (ta_doc / ta_docs both read "เอกสาร
-      // ผู้ช่วยสอน"), and the dropdown then offers the same words twice with no
-      // way to tell which is which. Keep the first.
-      .filter((o, i, all) => all.findIndex(x => x.label === o.label) === i),
-    ...(actions?.items ?? []).map(a => ({ id: a, label: actionLabel(a) })),
-  ], [actions]);
+  const actionLabel = useMemo(() => {
+    const m = new Map((catalog?.actions ?? []).map(a => [a.action, a.label]));
+    return (a: string) => m.get(a) ?? a;
+  }, [catalog]);
+  const actorName = useMemo(() => {
+    const hit = (summary?.actors ?? []).find(a => a.id === expert.actor);
+    return hit?.name || data?.items.find(r => r.actor_id === expert.actor)?.actor_name || "ผู้ใช้ที่เลือก";
+  }, [summary, data, expert.actor]);
 
-  const columns = useMemo(
-    () => buildColumns(setTrace, setDetail, id => { setActorId(id); setTrace(null); setPage(1); }),
-    [],
-  );
+  const rangeDef = RANGES.find(r => r.id === range)!;
 
-  const actorName = useMemo(
-    () => (summary?.actors ?? []).find(a => a.id === actorId)?.name ?? actorId,
-    [summary, actorId],
-  );
+  // A new question, or a new page of the same one, is read from its top. Left
+  // where it was, the view sat halfway down a list that had just been replaced.
+  const listTop = useRef<HTMLDivElement>(null);
+  const toListTop = useCallback(() => {
+    window.requestAnimationFrame(() => listTop.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  }, []);
+  const goToPage = useCallback((p: number) => { setPage(p); toListTop(); }, [toListTop]);
 
-  /** Any change to the question starts at page 1 — otherwise a narrower filter
-   *  lands on page 7 of a 2-page result and the screen reads as empty. */
-  const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
+  const pickActor = useCallback((id: string) => {
+    setTrace(null);
+    setExpert(f => ({ ...f, actor: id }));
+    setPage(1);
+    toListTop();
+  }, [toListTop]);
+  const pickTrace = useCallback((t: Trace) => { setTrace(t); setPage(1); toListTop(); }, [toListTop]);
+  const openRow = useCallback((r: Row) => setDetail(r), []);
+
+  const pickAttention = (a: Attention) => {
+    // One click from "something looks wrong" to the rows behind it. The other
+    // filters are cleared: the item was counted over the whole window, and a
+    // leftover category or search would show fewer rows than it promised.
+    setTrace(null);
+    setCategory("");
+    setOnly("");
+    setTyped("");
+    setExpert({ ...NO_EXPERT_FILTERS, action: a.action, actor: a.actor_id ?? "" });
+    setPage(1);
+    toListTop();
+  };
+
+  const exportCsv = async () => {
+    if (!questionParams) return;
+    setExporting(true);
+    try {
+      const blob = await api.get<Blob>(`/audit-logs/export?${questionParams.toString()}`);
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = `audit-log-${localDateISO()}.csv`;
+      el.click();
+      URL.revokeObjectURL(url);
+      notify.success("ส่งออกไฟล์แล้ว การส่งออกครั้งนี้ถูกบันทึกไว้ในบันทึกการใช้งานด้วย");
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // This screen needs the API that ships with it (migration 0130). Against a
+  // backend still running the previous build, the summary has no event counts
+  // and the rows have no wording — say so, rather than crash on the first
+  // missing field.
+  const staleApi =
+    (summary !== undefined && (summary as Partial<Summary>).events === undefined) ||
+    (data?.items?.[0] !== undefined && (data.items[0] as Partial<Row>).ref === undefined);
+
+  const hasPinned = !!trace || !!expert.actor || !!expert.action;
+  // The numbers on the chips count the whole window. Beside a search or a
+  // pinned person they would promise more rows than the list below can show.
+  const showCounts = !query && !only && !expert.actor && !expert.action;
+  const loading = isLoading || (isValidating && !!data);
+
+  if (staleApi) {
+    return (
+      <div>
+        <PageHeader title="บันทึกการใช้งานระบบ" />
+        <Alert
+          status="warning"
+          title="เซิร์ฟเวอร์หลังบ้านยังเป็นรุ่นเก่า"
+          description="หน้านี้ต้องใช้ backend รุ่นใหม่ กรุณา restart backend (ระบบจะรัน migration 0130 ให้เอง) แล้วโหลดหน้านี้อีกครั้ง"
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
       <PageHeader
         title="บันทึกการใช้งานระบบ"
-        description="ใครทำอะไร เมื่อไหร่ จากเครื่องไหน — ย้อนหลังได้ทั้งหมด เก็บไว้ 5 ปี"
+        description="ใครทำอะไร กับอะไร เมื่อไร จากเครื่องไหน ย้อนดูได้ทั้งหมด เก็บไว้ 5 ปี และแก้ไขย้อนหลังไม่ได้"
+        actions={
+          <div role="group" aria-label="รูปแบบการแสดงผล" className="flex gap-1 rounded-full border border-(--border) p-1">
+            <Tip content="อ่านเป็นประโยค เรียงตามวัน เหมาะกับการดูภาพรวม">
+              <button type="button" aria-pressed={mode === "simple"} onClick={() => setMode("simple")}
+                className={modeClass(mode === "simple")}>
+                <ListChecks size={14} /> ดูง่าย
+              </button>
+            </Tip>
+            <Tip content="ทุกแถวที่เก็บไว้ พร้อมข้อมูลทางเทคนิค สำหรับผู้ดูแลระบบ">
+              <button type="button" aria-pressed={mode === "expert"} onClick={() => setMode("expert")}
+                className={modeClass(mode === "expert")}>
+                <Search size={14} /> สืบสวน
+              </button>
+            </Tip>
+          </div>
+        }
       />
 
-      <SummaryStrip
-        summary={summary}
-        activeGroup={filterValues.action ?? ""}
-        onPick={(actionsOfGroup) => {
-          // One click from "something looks wrong" to the rows behind it.
-          setFilterValues(v => ({ ...v, action: actionsOfGroup }));
-          setActorId("");
-          setTrace(null);
-          setPage(1);
-        }}
-      />
-
-      {actorId && (
-        <Panel className="mb-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <User size={16} />
-            <span className="font-medium">กำลังดูประวัติของ {actorName}</span>
-            <Button variant="ghost" size="sm" onPress={() => { setActorId(""); setPage(1); }}>
-              <X size={14} /> ดูทุกคน
+      {/* One bar for both views: when, and what to look for. */}
+      <Panel className="mb-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <SelectField
+            label="ช่วงเวลา"
+            className="w-44"
+            value={range}
+            onChange={ask(setRange)}
+            options={RANGES.map(r => ({ id: r.id, label: r.label }))}
+          />
+          {range === "custom" && (
+            <>
+              {/* The shared DatePicker's label is for screen readers only; two
+                  unlabelled date boxes side by side do not say which is which. */}
+              <div>
+                <div className="mb-1 text-sm font-medium" aria-hidden>ตั้งแต่วันที่</div>
+                <DatePicker label="ตั้งแต่วันที่" value={fromDate} onChange={ask(setFromDate)} maxValue={toDate} />
+              </div>
+              <div>
+                <div className="mb-1 text-sm font-medium" aria-hidden>ถึงวันที่</div>
+                <DatePicker label="ถึงวันที่" value={toDate} onChange={ask(setToDate)}
+                  minValue={fromDate} maxValue={localDateISO()} />
+              </div>
+            </>
+          )}
+          <SearchField
+            value={typed}
+            onChange={v => { setTyped(v); setPage(1); }}
+            ariaLabel="ค้นหาในบันทึกการใช้งาน"
+            placeholder="ชื่อคน รหัสวิชา คำที่เห็นในรายการ IP หรือเลขอ้างอิง AL-…"
+            className="min-w-56 flex-1"
+          />
+          <Tip content="ดาวน์โหลดรายการตามตัวกรองนี้เป็นไฟล์ CSV เปิดด้วย Excel ได้ (สูงสุด 10,000 แถวต่อไฟล์)">
+            <Button variant="outline" size="md" isPending={exporting} isDisabled={!questionParams}
+              onPress={exportCsv}>
+              <Download size={14} /> ส่งออก
             </Button>
-          </div>
-        </Panel>
-      )}
-
-      {trace && (
-        <Panel className="mb-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            {trace.kind === "request" ? <Link2 size={16} /> : <KeyRound size={16} />}
-            <span className="font-medium">
-              {trace.kind === "request"
-                ? "กำลังดูทุกอย่างที่ request นี้ทำ"
-                : "กำลังดูทุกอย่างที่ session นี้ทำ"}
-            </span>
-            <code className="rounded bg-(--surface-2) px-1.5 py-0.5 font-mono text-xs">
-              {trace.id}
-            </code>
-            <span className="text-xs text-(--ink-3)">
-              · ตัวกรองอื่นถูกพักไว้ชั่วคราว
-            </span>
-            <Button variant="ghost" size="sm" onPress={() => { setTrace(null); setPage(1); }}>
-              <X size={14} /> เลิกตาม
-            </Button>
-          </div>
-        </Panel>
-      )}
-
-      <div data-tour="audit-table">
-        <DataTable
-          ariaLabel="Audit log"
-          rows={data?.items}
-          loading={isLoading}
-          error={error}
-          onRetry={() => revalidate()}
-          rowKey={r => r.id}
-          minWidth="1100px"
-          // In server mode DataTable never calls searchFn — the API answers the
-          // search — but its presence is what renders the search box at all.
-          searchFn={r => r.action}
-          searchPlaceholder="ค้นหาชื่อคน / เลขที่อยู่ IP / ข้อความในบันทึก…"
-          filters={[
-            {
-              id: "range",
-              placeholder: "ช่วงเวลา",
-              options: RANGES.map(r => ({ id: r.id, label: r.label })),
-              // Server-mode filters are answered by the query above; the
-              // predicate is never called, but the prop is required.
-              predicate: () => true,
-            },
-            {
-              id: "role",
-              placeholder: "ทุกบทบาท",
-              options: [
-                { id: "", label: "ทุกบทบาท" },
-                ...Object.entries(ROLE_LABEL).map(([id, label]) => ({ id, label })),
-              ],
-              predicate: () => true,
-            },
-            {
-              id: "action",
-              placeholder: "ทุกเหตุการณ์",
-              options: actionOptions,
-              predicate: () => true,
-            },
-            {
-              id: "actor",
-              placeholder: "ทุกคน",
-              // Built from who was ACTIVE in this window, not from the account
-              // roster: a shorter list, ordered by who was busiest, and it
-              // avoids the audit screen itself filing a "read everyone's
-              // details" entry just by opening.
-              options: [
-                { id: "", label: "ทุกคน" },
-                ...(summary?.actors ?? []).map(a => ({
-                  id: a.id,
-                  label: `${a.name || a.id.slice(0, 8)} (${a.count})`,
-                })),
-              ],
-              predicate: () => true,
-            },
-          ]}
-          pageSize={PAGE_SIZE}
-          emptyTitle="ไม่พบรายการ"
-          emptyDescription="ลองขยายช่วงเวลา หรือลดตัวกรองลง"
-          columns={columns}
-          server={{
-            total: data?.total ?? 0,
-            page,
-            onPageChange: setPage,
-            query,
-            onQueryChange: reset(setQuery),
-            // `range` lives alongside role/action in the same filter bar but is
-            // read separately above, so it is merged in and out here.
-            filterValues: { ...filterValues, range, actor: actorId },
-            onFilterChange: reset((v: Record<string, string>) => {
-              const { range: r, actor, ...rest } = v;
-              setRange(r || "7d");
-              setActorId(actor || "");
-              setFilterValues(rest);
-            }),
-            sort: { column: "at", direction: "descending" },
-            // The trail is always newest-first. Re-sorting a paged audit log by
-            // another column would order only the rows on screen, which reads
-            // as an answer and is not one.
-            onSortChange: () => {},
-          }}
-        />
-      </div>
-
-      {detail && <DetailModal row={detail} onClose={() => setDetail(null)} onTrace={setTrace} />}
-    </div>
-  );
-}
-
-function short(id?: string | null) {
-  return id ? id.slice(0, 8) : "";
-}
-
-/** Chip tone per severity, so the same colour always means the same thing on
- *  this screen. */
-const TONE: Record<Severity, "danger" | "warning" | "neutral"> = {
-  danger: "danger",
-  warn: "warning",
-  normal: "neutral",
-  quiet: "neutral",
-};
-
-function buildColumns(
-  onTrace: (t: { kind: "request" | "session"; id: string }) => void,
-  onOpen: (r: Row) => void,
-  onActorHistory: (id: string) => void,
-): DataColumn<Row>[] {
-  return [
-    {
-      id: "at", label: "เวลา", isRowHeader: true,
-      className: "whitespace-nowrap text-xs",
-      render: r => {
-        const d = new Date(r.at);
-        return (
-          <div className="leading-tight">
-            <div>{d.toLocaleDateString("th-TH", { day: "numeric", month: "short" })}</div>
-            <div className="text-(--ink-3)">{d.toLocaleTimeString("th-TH")}</div>
-          </div>
-        );
-      },
-    },
-    {
-      // The headline of the row, and the thing the eye should land on. It used
-      // to print the raw action name in monospace, which is an identifier for
-      // the code that raises it and not a sentence anybody can read.
-      id: "what", label: "เกิดอะไรขึ้น",
-      render: r => {
-        const sev = severityOf(r.action);
-        const label = actionLabel(r.action);
-        return (
-          <div className="flex items-center gap-1.5">
-            {sev === "danger" && (
-              <Tip content="มีการปฏิเสธการเข้าถึง ล็อกบัญชี หรือลบข้อมูล">
-                <span className="inline-flex shrink-0"><ShieldAlert size={14} className="text-danger" /></span>
-              </Tip>
-            )}
-            {sev === "warn" && (
-              <Tip content="ย้อนกลับหรือแก้ไขสิ่งที่ตัดสินใจไปแล้ว ควรตรวจสอบอีกครั้ง">
-                <span className="inline-flex shrink-0"><AlertTriangle size={14} className="text-warning" /></span>
-              </Tip>
-            )}
-            {sev === "quiet" && (
-              <Tip content="การเปิดดู ค้นหา หรือดาวน์โหลดข้อมูล">
-                <span className="inline-flex shrink-0"><Eye size={14} className="text-(--ink-4)" /></span>
-              </Tip>
-            )}
-            <TipWrap content={r.action}>
-              <span className={sev === "quiet" ? "text-(--ink-3)" : "font-medium"}>{label}</span>
-            </TipWrap>
-          </div>
-        );
-      },
-    },
-    {
-      id: "actor", label: "ใครทำ",
-      render: r => (
-        <span className="text-xs">
-          {r.actor_role ? (
-            <Chip tone="neutral">{ROLE_LABEL[r.actor_role] ?? r.actor_role}</Chip>
-          ) : r.actor_id ? (
-            <TipWrap content="รายการนี้บันทึกก่อนที่ระบบจะเก็บบทบาท">
-              <span className="text-(--ink-3)">ไม่ระบุบทบาท</span>
-            </TipWrap>
-          ) : (
-            <Chip tone="neutral">ระบบ</Chip>
-          )}
-          {r.actor_id && (
-            <Tip content="ดูทุกอย่างที่คนนี้ทำ"><button
-              type="button"
-              className="ml-2 text-(--brand) underline decoration-dotted"
-              onClick={() => onActorHistory(r.actor_id!)}
-            >
-              {r.actor_name || short(r.actor_id)}
-            </button></Tip>
-          )}
-        </span>
-      ),
-    },
-    {
-      // Was a uuid fragment while the actor two columns left showed a real
-      // name, which made "who looked at whose record" unreadable.
-      id: "subject", label: "กับใคร / อะไร",
-      className: "text-xs",
-      render: r => {
-        if (r.subject_name) return <span>{r.subject_name}</span>;
-        if (!r.entity_id) return <span className="text-(--ink-4)">—</span>;
-        return (
-          <TipWrap content={r.entity_id}>
-            <span className="text-(--ink-3)">{short(r.entity_id)}</span>
-          </TipWrap>
-        );
-      },
-    },
-    {
-      // Address only. The endpoint URL moved into the detail modal: it was the
-      // largest block on every row, wrapped over three lines, and was the least
-      // useful thing on the screen to the person reading it.
-      id: "where", label: "จากเครื่อง",
-      className: "whitespace-nowrap text-xs text-(--ink-3)",
-      hideOnMobile: true,
-      render: r => (r.ip ? <span>{r.ip}</span> : <span className="text-(--ink-4)">—</span>),
-    },
-    {
-      id: "detail", label: "",
-      className: "whitespace-nowrap text-right",
-      render: r => (
-        <div className="flex items-center justify-end gap-2">
-          {r.request_id && (
-            <TipWrap content="ดูทุกอย่างที่การกระทำครั้งนี้ทำ">
-              <button type="button" className="text-(--ink-3) hover:text-(--brand)"
-                onClick={() => onTrace({ kind: "request", id: r.request_id! })}>
-                <Link2 size={14} />
-              </button>
-            </TipWrap>
-          )}
-          {r.session_id && (
-            <TipWrap content="ดูทุกอย่างในการเข้าระบบครั้งนั้น">
-              <button type="button" className="text-(--ink-3) hover:text-(--brand)"
-                onClick={() => onTrace({ kind: "session", id: r.session_id! })}>
-                <KeyRound size={14} />
-              </button>
-            </TipWrap>
-          )}
-          <button type="button" className="text-xs text-(--brand) underline decoration-dotted"
-            onClick={() => onOpen(r)}>
-            <Search size={12} className="inline" /> รายละเอียด
-          </button>
+          </Tip>
         </div>
-      ),
-    },
-  ];
-}
-
-/* -------------------------------------------------------------------------- *
- * The overview strip — the answer to "is anything wrong?" before a single row
- * is read. Without it the only way to notice eight failed logins was to
- * recognise them while scrolling past, which nobody does.
- * -------------------------------------------------------------------------- */
-
-function SummaryStrip({
-  summary, activeGroup, onPick,
-}: {
-  summary?: { actions: ActionCount[]; actors: Actor[] };
-  activeGroup: string;
-  onPick: (actionFilter: string) => void;
-}) {
-  const byAction = useMemo(() => {
-    const m = new Map<string, ActionCount>();
-    for (const a of summary?.actions ?? []) m.set(a.action, a);
-    return m;
-  }, [summary]);
-
-  const groups = SUMMARY_GROUPS.map(g => {
-    let count = 0;
-    let ips = 0;
-    for (const a of g.actions) {
-      const hit = byAction.get(a);
-      if (hit) {
-        count += hit.count;
-        ips = Math.max(ips, hit.distinct_ips);
-      }
-    }
-    return { ...g, count, ips };
-  });
-
-  const alarming = groups.some(g => g.count > 0 && (g.severity === "danger" || g.severity === "warn"));
-
-  return (
-    <Panel className="mb-3">
-      {/* The headline verdict, in one sentence, before any number. */}
-      <div className="mb-2 flex items-center gap-2 text-sm">
-        {/* No verdict until the counts are in — "ไม่พบเหตุการณ์ผิดปกติ" on
-            an empty summary would be a false all-clear. */}
-        {!summary ? (
-          <Skel className="h-5 w-56" />
-        ) : alarming ? (
-          <>
-            <ShieldAlert size={16} className="text-danger" />
-            <span className="font-medium">มีเหตุการณ์ที่ควรตรวจสอบในช่วงนี้</span>
-          </>
-        ) : (
-          <>
-            <ShieldAlert size={16} className="text-success" />
-            <span className="font-medium">ช่วงนี้ไม่พบเหตุการณ์ผิดปกติ</span>
-          </>
+        {!window_ && (
+          <p className="mt-2 text-xs text-danger">วันสิ้นสุดอยู่ก่อนวันเริ่ม กรุณาเลือกช่วงวันใหม่</p>
         )}
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        {groups.map(g => {
-          const on = g.count > 0;
-          const selected = activeGroup === g.actions.join(",");
-          return (
-            <button
-              key={g.id}
-              type="button"
-              disabled={!on}
-              onClick={() => onPick(g.actions.join(","))}
-              className={[
-                "rounded-lg border p-2.5 text-left transition-colors",
-                selected ? "border-(--brand) bg-(--surface-2)" : "border-(--border)",
-                on ? "hover:bg-(--surface-2)" : "opacity-70",
-              ].join(" ")}
-            >
-              <div className="text-xs text-(--ink-3)">{g.label}</div>
-              <div
-                className={[
-                  "text-2xl font-semibold tabular-nums",
-                  !on ? "text-(--ink-3)"
-                    : g.severity === "danger" ? "text-danger"
-                    : g.severity === "warn" ? "text-warning"
-                    : "text-(--ink-1)",
-                ].join(" ")}
-              >
-                {summary ? g.count : <SkelValue className="h-7 w-10" />}
+
+        {hasPinned && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-(--border) pt-3 text-sm">
+            <span className="text-xs text-(--ink-3)">กำลังดูเฉพาะ</span>
+            {trace && (
+              <Pinned onClear={() => { setTrace(null); setPage(1); }}>
+                {trace.kind === "session" ? <KeyRound size={14} /> : trace.action ? <Layers size={14} /> : <Link2 size={14} />}
+                {trace.kind === "session"
+                  ? "ทุกอย่างในการเข้าระบบครั้งเดียวกัน"
+                  : trace.action
+                    ? `ทุกรายการของ “${actionLabel(trace.action)}” ที่เกิดในคราวเดียว`
+                    : "ทุกอย่างที่เกิดพร้อมกันในครั้งเดียว"}
+                {mode === "expert" && <code className="font-mono text-xs text-(--ink-3)">{trace.id.slice(0, 8)}</code>}
+              </Pinned>
+            )}
+            {!trace && expert.actor && (
+              <Pinned onClear={() => { setExpert(f => ({ ...f, actor: "" })); setPage(1); }}>
+                <User size={14} /> ทุกอย่างที่ {actorName} ทำ
+              </Pinned>
+            )}
+            {!trace && expert.action && (
+              <Pinned onClear={() => { setExpert(f => ({ ...f, action: "" })); setPage(1); }}>
+                {actionLabel(expert.action)}
+              </Pinned>
+            )}
+            {trace && (
+              <span className="text-xs text-(--ink-3)">ตัวกรองและช่วงเวลาถูกพักไว้ชั่วคราว</span>
+            )}
+          </div>
+        )}
+      </Panel>
+
+      {mode === "simple" ? (
+        <>
+          <Overview
+            summary={summary}
+            sessions={sessions?.items}
+            currentSession={sessions?.current}
+            rangeLabel={rangeDef.phrase}
+            onPick={pickAttention}
+          />
+
+          <div ref={listTop} className="scroll-mt-20" />
+          <Panel data-tour="audit-table">
+            {!trace && (
+              <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                <CategoryChip active={category === ""} onPress={() => ask(setCategory)("")}
+                  label="ทุกหมวด" count={showCounts ? summary?.events : undefined} />
+                {(summary?.categories ?? [])
+                  .filter(c => c.events > 0 || c.id === category)
+                  .map(c => {
+                    const Icon = categoryIcon(c.id);
+                    return (
+                      <CategoryChip key={c.id} active={category === c.id}
+                        onPress={() => ask(setCategory)(category === c.id ? "" : c.id)}
+                        label={c.label} count={showCounts ? c.events : undefined} icon={<Icon size={13} />} />
+                    );
+                  })}
+                <span className="mx-1 hidden h-5 w-px bg-(--border) sm:block" aria-hidden />
+                {ONLY.map(o => (
+                  <Tip key={o.id} content={o.tip}>
+                    <button
+                      type="button"
+                      aria-pressed={only === o.id}
+                      onClick={() => ask(setOnly)(only === o.id ? "" : o.id)}
+                      className={chipClass(only === o.id)}
+                    >
+                      เฉพาะ{o.label}
+                    </button>
+                  </Tip>
+                ))}
               </div>
-              <div className="text-xs text-(--ink-3)">
-                {!summary ? <SkelValue className="h-3 w-24" /> : on ? g.detail(g.count, g.ips) : "ไม่มี"}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </Panel>
-  );
-}
-
-/* -------------------------------------------------------------------------- *
- * Detail — the whole row, including the before/after that used to be squeezed
- * into a hover tooltip capped at 1,500 characters. A diff you cannot scroll or
- * copy is not evidence.
- * -------------------------------------------------------------------------- */
-
-function DetailModal({
-  row, onClose, onTrace,
-}: {
-  row: Row;
-  onClose: () => void;
-  onTrace: (t: { kind: "request" | "session"; id: string }) => void;
-}) {
-  const facts: [string, React.ReactNode][] = [
-    ["เวลา", new Date(row.at).toLocaleString("th-TH")],
-    // The sentence first, the identifier under it. The table shows only the
-    // sentence; this is where someone who needs the raw name comes to find it.
-    ["เกิดอะไรขึ้น", <span key="w" className="font-medium">{actionLabel(row.action)}</span>],
-    ["ชื่อทางเทคนิค", <code key="a" className="font-mono text-xs">{row.action}</code>],
-    ["กับใคร / อะไร", row.subject_name
-      ? <span key="s">{row.subject_name} <code className="ml-1 font-mono text-xs text-(--ink-3)">{row.entity}</code></span>
-      : <code key="e" className="font-mono text-xs">{row.entity} {row.entity_id ?? ""}</code>],
-    ["ผู้กระทำ", row.actor_id
-      ? `${row.actor_name || "-"} (${ROLE_LABEL[row.actor_role ?? ""] ?? row.actor_role ?? "ไม่ระบุบทบาท"})`
-      : "ไม่มีผู้ใช้ — งานของระบบ"],
-    ["Actor ID", <Mono key="ai" value={row.actor_id} />],
-    ["IP", <Mono key="ip" value={row.ip} />],
-    ["User agent", <span key="ua" className="break-all text-xs">{row.user_agent ?? "-"}</span>],
-    ["Request", <Mono key="rq" value={row.request_id} />],
-    ["Session", <Mono key="se" value={row.session_id} />],
-    ["Endpoint", <Mono key="ep" value={row.method && row.path ? `${row.method} ${row.path}` : null} />],
-    ["Note", <span key="n" className="break-all text-xs">{row.note ?? "-"}</span>],
-  ];
-
-  return (
-    <Modal open onClose={onClose} size="2xl" title="รายละเอียดรายการ">
-      <div className="space-y-4">
-        <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5 text-sm">
-          {facts.map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="text-(--ink-3)">{k}</dt>
-              <dd className="min-w-0">{v}</dd>
-            </div>
-          ))}
-        </dl>
-
-        <div className="flex flex-wrap gap-2">
-          {row.request_id && (
-            <Button variant="secondary" size="sm"
-              onPress={() => { onTrace({ kind: "request", id: row.request_id! }); onClose(); }}>
-              <Link2 size={14} /> ทุกอย่างที่ request นี้ทำ
-            </Button>
-          )}
-          {row.session_id && (
-            <Button variant="secondary" size="sm"
-              onPress={() => { onTrace({ kind: "session", id: row.session_id! }); onClose(); }}>
-              <KeyRound size={14} /> ทุกอย่างที่ session นี้ทำ
-            </Button>
-          )}
-        </div>
-
-        <DiffPane label="ก่อน" value={row.before} />
-        <DiffPane label="หลัง" value={row.after} />
-      </div>
-    </Modal>
-  );
-}
-
-function Mono({ value }: { value?: string | null }) {
-  if (!value) return <span className="text-(--ink-4)">-</span>;
-  return (
-    <span className="flex items-center gap-1.5">
-      <code className="break-all font-mono text-xs">{value}</code>
-      <Tip content="คัดลอก"><button
-        type="button"
-        className="shrink-0 text-(--ink-4) hover:text-(--brand)"
-        onClick={() => navigator.clipboard?.writeText(value)}
-      >
-        <Copy size={12} />
-      </button></Tip>
-    </span>
-  );
-}
-
-/** Shown even when empty, and says WHY it is empty — "before" is null on almost
- *  every row today because most writers never recorded one, and a pane that
- *  simply vanished made that look like "nothing changed". */
-function DiffPane({ label, value }: { label: string; value: unknown }) {
-  const empty = value == null;
-  return (
-    <div>
-      <div className="mb-1 text-xs font-medium text-(--ink-3)">{label}</div>
-      {empty ? (
-        <div className="rounded border border-dashed border-(--border) px-3 py-2 text-xs text-(--ink-3)">
-          ไม่มีข้อมูล — รายการประเภทนี้ยังไม่ได้บันทึกค่า{label}
-        </div>
+            )}
+            <Timeline
+              rows={data?.items}
+              total={data?.total ?? 0}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onPage={goToPage}
+              loading={loading}
+              error={error}
+              onRetry={() => revalidate()}
+              onOpen={openRow}
+              onOpenBurst={r => (r.request_id
+                ? pickTrace({ kind: "request", id: r.request_id, action: r.action })
+                : openRow(r))}
+            />
+          </Panel>
+        </>
       ) : (
-        <pre className="max-h-64 overflow-auto rounded bg-(--surface-2) p-3 font-mono text-xs">
-          {JSON.stringify(value, null, 2)}
-        </pre>
+        <div data-tour="audit-table" ref={listTop} className="scroll-mt-20">
+          <InvestigateTable
+            rows={data?.items}
+            total={data?.total ?? 0}
+            page={page}
+            pageSize={PAGE_SIZE}
+            loading={isLoading}
+            error={error}
+            onRetry={() => revalidate()}
+            filters={expert}
+            onFilters={f => { setTrace(null); setExpert(f); setPage(1); }}
+            onPage={goToPage}
+            catalog={catalog}
+            actors={summary?.actors ?? []}
+            onOpen={openRow}
+            onTrace={pickTrace}
+            onActor={pickActor}
+          />
+        </div>
+      )}
+
+      {detail && (
+        <DetailModal
+          row={detail}
+          onClose={() => setDetail(null)}
+          onTrace={pickTrace}
+          onActor={pickActor}
+          technicalOpen={mode === "expert"}
+        />
       )}
     </div>
+  );
+}
+
+function modeClass(active: boolean) {
+  return [
+    "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
+    "outline-offset-2 focus-visible:outline-2 focus-visible:outline-(--brand)",
+    active ? "bg-(--brand) text-(--brand-fg)" : "text-(--ink-2) hover:bg-(--surface-2)",
+  ].join(" ");
+}
+
+function chipClass(active: boolean) {
+  return [
+    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
+    "outline-offset-2 focus-visible:outline-2 focus-visible:outline-(--brand)",
+    active
+      ? "border-(--brand) bg-(--brand) text-(--brand-fg)"
+      : "border-(--border) text-(--ink-2) hover:border-(--brand) hover:text-(--brand)",
+  ].join(" ");
+}
+
+function CategoryChip({
+  active, onPress, label, count, icon,
+}: {
+  active: boolean;
+  onPress: () => void;
+  label: string;
+  count?: number;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <button type="button" aria-pressed={active} onClick={onPress} className={chipClass(active)}>
+      {icon}
+      {label}
+      {count !== undefined && (
+        <span className={`tabular-nums ${active ? "opacity-90" : "text-(--ink-3)"}`}>
+          {count.toLocaleString("th-TH")}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** A question pinned over the filters, with the way back out next to it. */
+function Pinned({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-(--brand-soft) py-1 pl-3 pr-1 text-xs font-medium text-(--brand)">
+      {children}
+      <button type="button" aria-label="เลิกดูเฉพาะรายการนี้" onClick={onClear}
+        className="rounded-full p-0.5 hover:bg-(--brand) hover:text-(--brand-fg)">
+        <X size={12} />
+      </button>
+    </span>
   );
 }

@@ -182,7 +182,8 @@ function PayRateSection() {
     undergrad_special: vPositive(draft.undergrad_special),
     graduate_regular: vPositive(draft.graduate_regular),
     graduate_special_lumpsum: vPositive(draft.graduate_special_lumpsum),
-    max_courses_per_student: vPositiveInt(draft.max_courses_per_student),
+    max_courses_per_student: vPositiveInt(draft.max_courses_per_student)
+      ?? (draft.max_courses_per_student > 10 ? "ต้องไม่เกิน 10 วิชา" : null),
     ug_lecture_hours_per_credit: vPositive(draft.ug_lecture_hours_per_credit),
     ug_lab_hours_per_credit: vPositive(draft.ug_lab_hours_per_credit),
     baseline_students_lecture: vPositive(draft.baseline_students_lecture),
@@ -278,10 +279,10 @@ function PayRateSection() {
             {scheduled!.map(r => (
               <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="font-medium">เริ่มใช้ {formatThaiDate(r.effective_from)}</span>
-                <Tip content={`ปริญญาตรี ภาคปกติ ${r.undergrad_regular} บาท/ชั่วโมง\nปริญญาตรี ภาคพิเศษ ${r.undergrad_special} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคปกติ ${r.graduate_regular_hourly} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคพิเศษ เหมาจ่าย ${r.graduate_special_lumpsum.toLocaleString()} บาท/เดือน`}>
+                <Tip content={`ปริญญาตรี ภาคปกติ ${r.undergrad_regular} บาท/ชั่วโมง\nปริญญาตรี ภาคพิเศษ ${r.undergrad_special} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคปกติ ${r.graduate_regular_hourly} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคพิเศษ เหมาจ่าย ${r.graduate_special_lumpsum.toLocaleString()} บาท/คน/วิชา/ภาค`}>
                   <span className="text-muted">
                     ตรี {r.undergrad_regular}/{r.undergrad_special} · บัณฑิต {r.graduate_regular_hourly} บาท/ชม.
-                    · เหมาจ่าย {r.graduate_special_lumpsum.toLocaleString()} บาท/เดือน
+                    · เหมาจ่าย {r.graduate_special_lumpsum.toLocaleString()} บาท/ภาค
                   </span>
                 </Tip>
                 {isAdmin && (
@@ -310,7 +311,7 @@ function PayRateSection() {
             <ViewGroup title="อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)">
               <ViewRow label="ภาคปกติ (คิดชั่วโมง)" value={`${data.graduate_regular_hourly ?? 50} บาท/ชั่วโมง`} />
               <ViewRow label="ชั่วโมงสูงสุด/วัน (บัณฑิต ปกติ)" value={`${data.grad_regular_daily_hour_cap ?? 6} ชั่วโมง`} />
-              <ViewRow label="ภาคพิเศษ (เหมาจ่าย)" value={`${data.graduate_special_lumpsum.toLocaleString()} บาท/เดือน`} />
+              <ViewRow label="ภาคพิเศษ (เหมาจ่าย)" value={`${data.graduate_special_lumpsum.toLocaleString()} บาท/คน/วิชา/ภาค`} />
               <ViewRow label="เพดานพิเศษ/เทอม (ต่อ TA × วิชา)" value={`${(data.grad_special_term_cap ?? 12000).toLocaleString()} บาท`} />
             </ViewGroup>
             <ViewGroup title="เพดานรายวัน (ทุกคนคิดชั่วโมง)">
@@ -372,14 +373,14 @@ function PayRateSection() {
                onChange={v => setDraft({ ...draft, ug_special_daily_hour_cap: Number(v) })} />
           </EditGroup>
 
-          <EditGroup title="อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)" description="ประกาศ 1080/2565: ปกติ 50 บาท/ชม., พิเศษ 4,000 บาท/เดือน (cap 12,000/เทอม)">
+          <EditGroup title="อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)" description="ประกาศ 1080/2565: ปกติ 50 บาท/ชม., พิเศษเหมาจ่าย 4,000 บาท/คน/วิชา/ภาค (ไม่เกินเพดานต่อเทอมด้านล่าง)">
             <F label="ภาคปกติ (บาท/ชั่วโมง)" type="number" min={0} value={draft.graduate_regular_hourly}
                error={rateErrors.graduate_regular_hourly}
                onChange={v => setDraft({ ...draft, graduate_regular_hourly: Number(v) })} />
             <F label="ชม. สูงสุด/วัน (บัณฑิต ปกติ)" type="number" min={0} value={draft.grad_regular_daily_hour_cap}
                error={rateErrors.grad_regular_daily_hour_cap}
                onChange={v => setDraft({ ...draft, grad_regular_daily_hour_cap: Number(v) })} />
-            <F label="ภาคพิเศษ (เหมาจ่าย/เดือน)" type="number" min={0} value={draft.graduate_special_lumpsum}
+            <F label="ภาคพิเศษ (เหมาจ่าย/คน/วิชา/ภาค)" type="number" min={0} value={draft.graduate_special_lumpsum}
                error={rateErrors.graduate_special_lumpsum}
                onChange={v => setDraft({ ...draft, graduate_special_lumpsum: Number(v) })} />
             <F label="เพดานพิเศษ/เทอม (ต่อ TA × วิชา)" type="number" min={0} value={draft.grad_special_term_cap}
@@ -408,7 +409,7 @@ function PayRateSection() {
             <F label="เริ่มใช้" type="date" value={draft.effective_from}
                error={effectiveFromError}
                onChange={v => setDraft({ ...draft, effective_from: v })} />
-            <F label="จำนวนวิชา TA สูงสุด/คน" type="number" min={0} value={draft.max_courses_per_student}
+            <F label="จำนวนวิชา TA สูงสุด/คน/ภาค (1–10, ระบบใช้ตัดสินคำขอ TA ทันที)" type="number" min={1} value={draft.max_courses_per_student}
                error={rateErrors.max_courses_per_student}
                onChange={v => setDraft({ ...draft, max_courses_per_student: Number(v) })} />
           </EditGroup>
@@ -1031,6 +1032,16 @@ function monthsBetween(start?: string, end?: string): number | null {
   return Math.round((days / 30.4375) * 10) / 10;
 }
 
+// Calendar months the term's dates touch (Jun 1–Sep 30 → 4), mirroring
+// service.TermMonthSpan. Null while either date is missing or reversed.
+function calendarMonthSpan(start?: string, end?: string): number | null {
+  if (!start || !end || start > end) return null;
+  const [sy, sm] = start.split("-").map(Number);
+  const [ey, em] = end.split("-").map(Number);
+  if (!sy || !sm || !ey || !em) return null;
+  return (ey - sy) * 12 + (em - sm) + 1;
+}
+
 function TermFormModal({
   open, onClose, editing, lockedYear, existing, activeCount, onSaved,
 }: {
@@ -1097,9 +1108,17 @@ function TermFormModal({
     null;
   const semesterError =
     ![1, 2, 3].includes(draft.semester) ? "ภาคเรียนต้องเป็น 1, 2 หรือ 3 (ฤดูร้อน)" : null;
+  // Same bound the server enforces (UpsertTerm): months multiplies every
+  // course budget, so it may not exceed the calendar months the dates touch —
+  // a Jun 1–Sep 30 term saved with 12 tripled every budget.
+  const calSpan = calendarMonthSpan(draft.starts_on, draft.ends_on);
+  const maxMonths = calSpan ?? 12;
   const monthsError =
-    !Number.isFinite(draft.months) || draft.months < 1 || draft.months > 12
-      ? "จำนวนเดือนต้องอยู่ระหว่าง 1–12" : null;
+    !Number.isFinite(draft.months) || draft.months < 1 || draft.months > maxMonths
+      ? (calSpan !== null
+          ? `จำนวนเดือนต้องอยู่ระหว่าง 1–${calSpan} ตามช่วงวันเริ่ม–สิ้นสุด (ครอบคลุม ${calSpan} เดือน)`
+          : "จำนวนเดือนต้องอยู่ระหว่าง 1–12")
+      : null;
   const startsError =
     !draft.starts_on ? "กรุณาระบุวันเริ่มสอน" : null;
   const endsError =
@@ -1259,7 +1278,7 @@ function TermFormModal({
               error={monthsError ?? undefined}
             >
               <TextInput
-                type="number" min={1} max={12} step={1}
+                type="number" min={1} max={maxMonths} step={1}
                 value={draft.months}
                 onChange={e => setDraft({ ...draft, months: Number(e.target.value) })}
               />

@@ -21,7 +21,10 @@ type SubmissionStage =
   | "pending"
   | "exported"
   | "finance_sent"
-  | "skipped";
+  | "skipped"
+  // Staff have checked the month's approved hours; export is next. Sent by
+  // the backend all along but missing here, so the chip rendered empty.
+  | "staff_reviewed";
 
 interface SubmissionRow {
   period_id: string;
@@ -50,16 +53,20 @@ interface SubmissionRow {
 
 const SUBMISSION_LABEL: Record<SubmissionStage, string> = {
   pending:      "รอดำเนินการ",
-  exported:     "ส่งออกแล้ว รอส่งการเงิน",
+  // Final from the TA's side: ส่งการเงิน has no staff button by design, so
+  // "รอส่งการเงิน" read as a wait that never ends.
+  exported:     "เจ้าหน้าที่ส่งเอกสารเบิกจ่ายแล้ว",
   finance_sent: "ส่งการเงินแล้ว",
   skipped:      "ข้ามรอบนี้",
+  staff_reviewed: "เจ้าหน้าที่ตรวจแล้ว",
 };
 
 const SUBMISSION_TONE: Record<SubmissionStage, ChipTone> = {
   pending:      "warn",
-  exported:     "brand",
+  exported:     "success",
   finance_sent: "success",
   skipped:      "neutral",
+  staff_reviewed: "info",
 };
 
 // submissionBadge derives the label+tone actually shown for a period. There is
@@ -103,7 +110,7 @@ function submissionBadge(r: SubmissionRow, today: string): { label: string; tone
     // Bounced work first: it is the only state where somebody has already
     // looked at the hours and said no, and it was reading as a plain "not sent
     // yet" — indistinguishable from a TA who simply had not got round to it.
-    if (r.worklog_rejected > 0)          return { label: "อาจารย์ตีกลับ", tone: "danger" };
+    if (r.worklog_rejected > 0)          return { label: "อาจารย์ตีกลับ ต้องแก้ไข", tone: "danger" };
     // The TA's own move outranks the lecturer's: it is the only one they can
     // act on, and it was the one being hidden behind the lecturer's name.
     if (r.worklog_waiting_ta > 0)        return { label: "ยังไม่ได้ส่งอนุมัติ", tone: "warn" };
@@ -115,7 +122,8 @@ function submissionBadge(r: SubmissionRow, today: string): { label: string; tone
 
 interface TAStatus {
   teaching_course_id: string;
-  stage: "draft" | "submitted" | "approved" | "exported";
+  /** rejected = bounced rows the TA can still fix (outranks every other stage). */
+  stage: "draft" | "submitted" | "approved" | "exported" | "rejected";
   hours_approved: number;
   hours_approved_regular: number;
   hours_approved_special: number;

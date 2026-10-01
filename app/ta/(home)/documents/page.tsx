@@ -6,7 +6,7 @@ import {
   AlertTriangle, Save, Upload, Download, CheckCircle2, Circle, XCircle,
   IdCard, Wallet, FileSignature, CreditCard, BookOpen, FileText,
 } from "lucide-react";
-import { api, type Me, type UploadProgress } from "../../../lib/api";
+import { api, apiUrl, type Me, type UploadProgress } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import {
   THAI_BANKS, findBank, normalizeAccountNo, normalizeNationalID, STUDENT_ID_PATTERN,
@@ -1034,7 +1034,7 @@ function CreditorFormStep({
           render={props => (
             <a
               {...(props as unknown as React.ComponentProps<"a">)}
-              href="/api/v1/creditor-form/blank.pdf"
+              href={apiUrl("/creditor-form/blank.pdf")}
               target="_blank"
               rel="noopener noreferrer"
             />

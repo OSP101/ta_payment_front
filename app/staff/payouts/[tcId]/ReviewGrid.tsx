@@ -12,7 +12,7 @@ import {
 } from "../../../components/ui";
 import { TimetableModal } from "../../../components/TimetableModal";
 import { Skel, SkelRegion } from "../../../components/Skeletons";
-import { WorklogReviewModal, type ReviewTarget } from "./WorklogReviewModal";
+import { SendBackEffect, WorklogReviewModal, type ReviewTarget } from "./WorklogReviewModal";
 
 /**
  * TA × month review grid for one course.
@@ -300,8 +300,10 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
       {(readyRows.length > 0 || waitingLecturer > 0) && (
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-[var(--hairline)] pt-3">
           <p className="flex-1 text-xs text-muted">
+            {/* Shown while months are still WAITING for sign-off, so it must
+                not claim they are done. */}
             {readyRows.length > 0
-              ? "ตรวจครบทุกเดือนแล้ว แถบส่งออกด้านล่างจะเปิดให้ดาวน์โหลดทันที"
+              ? `มี ${readyRows.length} เดือนพร้อมให้ตรวจ เมื่อตรวจผ่านครบทุกเดือนแล้ว แถบส่งออกด้านล่างจึงจะเปิดให้ดาวน์โหลด`
               : `มี ${waitingLecturer} รายการรออาจารย์อนุมัติ ตรวจต่อไม่ได้จนกว่าจะอนุมัติครบ`}
           </p>
           {waitingLecturer > 0 && (
@@ -371,9 +373,9 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
         message={
           <div className="space-y-2">
             <p className="text-sm text-muted">
-              {sendBack?.ta_name} · {sendBack?.period_label} รายการจะกลับไปให้แก้ไข
-              และจะส่งออกเอกสารไม่ได้จนกว่าจะตรวจผ่านอีกครั้ง
+              {sendBack?.ta_name} · {sendBack?.period_label}
             </p>
+            <SendBackEffect status={sendBack?.status ?? "pending"} />
             <TextArea
               value={reason}
               onChange={e => setReason(e.target.value)}

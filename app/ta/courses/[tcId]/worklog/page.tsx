@@ -6,7 +6,7 @@ import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, Boo
 import { api, type Me } from "../../../../lib/api";
 import { PayEstimateCard, type PayEstimate, type PayEstimateMonth } from "../../../../components/PayEstimate";
 import { notify } from "../../../../lib/notify";
-import { localDateISO } from "../../../../lib/dates";
+import { localDateISO, fmtHours } from "../../../../lib/dates";
 import {
   readAddForm, readDrafts, clearAddForm, clearDrafts, sweepStale, writeAddForm, writeDrafts,
 } from "../../../../lib/draftStorage";
@@ -21,6 +21,10 @@ import { LockedActionButton, useTAApproval } from "../../../TAGate";
 
 // Max billable hours per single work-log entry. Kept in sync with backend.
 const MAX_ROW_HOURS = 7;
+// The server caps work-log and duty-slot notes at 500 characters (validate
+// max=500, counted in runes — Thai is one UTF-16 unit each, so .length agrees).
+// Without the limit here a long note only ever came back as "รหัส 400".
+const NOTE_MAX = 500;
 
 // Earliest date the TA may log — the 1st of the current month. Back-dating into
 // a month that has already passed is blocked (mirrors the backend rule); future
@@ -77,7 +81,9 @@ function HoursStepper({
         step={step}
         min={min}
         max={max}
-        value={value}
+        // Stored hours are exact minutes/60 (migration 0133), so 23:00–23:59
+        // arrives as 0.983333; show it the way every other figure is shown.
+        value={Math.round(value * 100) / 100}
         onChange={e => onChange(clamp(Number(e.target.value)))}
         className={`${fullWidth ? "flex-1 min-w-0" : "w-14"} text-center tabular bg-transparent border-x border-(--hairline) px-1 py-1.5 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
         aria-label="จำนวนชั่วโมง"
@@ -424,6 +430,8 @@ interface WorkLog {
 interface SkipGroup {
   reason: string;
   count: number;
+  /** YYYY-MM-DD — sent only for the cross-course overlap skip. */
+  dates?: string[];
 }
 
 /**
@@ -436,6 +444,14 @@ interface GenerateResult {
   /** Days trimmed to stay within the faculty's per-day pay cap (all courses). */
   skipped_daily_baht?: DailyCapSkip[] | null;
   daily_baht_cap?: number;
+  /**
+   * Sessions left out because the TA already has a row at that hour in
+   * another course — two courses may not pay the same clock hours twice.
+   * reason = "<course code> HH:MM–HH:MM" of the row that holds the time.
+   */
+  skipped_overlap?: SkipGroup[] | null;
+  /** Set only when nothing was created: the server's real reason. */
+  empty_reason?: string;
 }
 interface DailyCapSkip {
   date: string;          // YYYY-MM-DD
@@ -1414,11 +1430,30 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         );
       }
 
-      if (n === 0) {
+      // Sessions another course already holds at that hour. Listed with the
+      // dates, because the fix (if any) is in the other course on those days.
+      const overlap = res?.skipped_overlap ?? [];
+      const overlapTotal = overlap.reduce((sum, s) => sum + s.count, 0);
+      if (overlapTotal > 0) {
         notify.info(
-          skippedTotal > 0
-            ? "ไม่ได้สร้างรายการใดเลย เพราะทุกคาบตรงกับตารางเรียนของคุณ หากตารางเรียนไม่ถูกต้อง ให้แก้ที่หน้า 'ตารางเรียนของฉัน'"
-            : "ยังไม่ได้สร้างรายการใด อาจเป็นเพราะ section นี้ยังไม่มีตารางสอนในระบบ หรือทุกคาบตกวันหยุด/สอบ/สุดสัปดาห์ ลองตรวจในหน้า 'วันหยุดและวันชดเชย' หรือให้อาจารย์เพิ่มตารางสอนของ section",
+          `ข้ามไป ${overlapTotal} คาบ เพราะเวลาซ้อนกับรายการของวิชาอื่นที่คุณลงไว้แล้ว (รับค่าตอบแทนช่วงเวลาเดียวกันสองวิชาไม่ได้) ` +
+            overlap.map(s => {
+              const ds = (s.dates ?? []).map(formatWorkDate);
+              const shown = ds.length > 4 ? `${ds.slice(0, 4).join(", ")} และอีก ${ds.length - 4} วัน` : ds.join(", ");
+              return `${s.reason} (${s.count} คาบ${shown ? `: ${shown}` : ""})`;
+            }).join("; "),
+        );
+      }
+
+      if (n === 0) {
+        // The server knows why (months already submitted or closed, no
+        // timetable, every session skipped); the old client-side guess sent
+        // TAs looking for a missing timetable that was never the problem.
+        notify.info(
+          res?.empty_reason
+            ?? (skippedTotal > 0
+              ? "ไม่ได้สร้างรายการใดเลย เพราะทุกคาบตรงกับตารางเรียนของคุณ หากตารางเรียนไม่ถูกต้อง ให้แก้ที่หน้า 'ตารางเรียนของฉัน'"
+              : "ไม่ได้สร้างรายการใด"),
         );
       } else {
         notify.success(`สร้างรายการอัตโนมัติเรียบร้อย (${n} รายการ)`);
@@ -1697,7 +1732,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       render: l => {
         const w = view(l);
         return rowEditable(w) ? (
-          <TextInput value={w.note ?? ""}
+          <TextInput value={w.note ?? ""} maxLength={NOTE_MAX}
                      onChange={e => patch(l, { note: e.target.value })} />
         ) : (w.note ?? "");
       },
@@ -1924,7 +1959,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           <Clock size={14} className="text-muted" />
           <span className="text-muted">ชั่วโมงที่ลงได้ทั้งเทอม (ตามภาระงาน):</span>
           <span className="tabular-nums">
-            ใช้ไป <b>{logs ? usedTermHours.toFixed(2) : <SkelValue className="h-4 w-10" />}</b> / {termCeiling.toFixed(1)} ชม.
+            ใช้ไป <b>{logs ? usedTermHours.toFixed(2) : <SkelValue className="h-4 w-10" />}</b> / {termCeiling.toFixed(2)} ชม.
           </span>
           {logs ? (
             <span className={"tabular-nums " + (remainingTermHours <= 0 ? "text-danger font-medium" : "text-success")}>
@@ -2786,6 +2821,16 @@ function AddWorklogModal({
   }, [effectiveMax, hours, start]);
 
   function handleSave() {
+    // Quota already used up: the stepper was clamped to 0 by the effect above,
+    // and the generic validator then said "จำนวนชั่วโมงต้องมากกว่า 0" — true,
+    // but it hid the actual reason. Say the week is full, with the figures.
+    if (weeklyInfo && weeklyInfo.remaining <= 0.001) {
+      setError(
+        `โควตา${weeklyInfo.labelTH}ของสัปดาห์นี้เต็มแล้ว (ใช้ไป ${weeklyInfo.used.toFixed(2)} / ${weeklyInfo.cap.toFixed(2)} ชม./สัปดาห์) ` +
+          "เลือกวันในสัปดาห์อื่น หรือลดชั่วโมงของรายการเดิมในสัปดาห์นี้ก่อน",
+      );
+      return;
+    }
     const form: NewWorkLog = {
       work_date: workDate,
       start_time: start,
@@ -3022,8 +3067,8 @@ function AddWorklogModal({
           </FieldGroup>
         </div>
 
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
-          <TextInput value={note} onChange={e => { markDirty(); setNote(e.target.value); }} placeholder="รายละเอียดเพิ่มเติม" />
+        <FieldGroup label="หมายเหตุ (ระบุก็ได้)" hint={`${note.length}/${NOTE_MAX} ตัวอักษร`}>
+          <TextInput value={note} maxLength={NOTE_MAX} onChange={e => { markDirty(); setNote(e.target.value); }} placeholder="รายละเอียดเพิ่มเติม" />
         </FieldGroup>
 
         {error && (
@@ -4140,8 +4185,16 @@ function ReviewScheduleModal({
 }) {
   const meta = DUTY_META[kind];
   const [dow, setDow] = useState<number>(initial?.day_of_week ?? 1);
+  // A new slot defaults to 14:00 plus whatever is LEFT of the weekly quota
+  // (at most two hours, in 30-minute steps). The fixed 14:00–16:00 default
+  // opened already over the cap for a TA declared one hour a week.
   const [start, setStart] = useState(initial?.start_time ?? "14:00");
-  const [end, setEnd] = useState(initial?.end_time ?? "16:00");
+  const [end, setEnd] = useState(() => {
+    if (initial?.end_time) return initial.end_time;
+    const left = lectureHrs > 0 ? lectureHrs - reviewHrs : 2;
+    const hrs = Math.max(0.5, Math.min(2, Math.floor(left * 2 + 1e-6) / 2));
+    return endAfter("14:00", hrs) ?? "15:00";
+  });
   const [room, setRoom] = useState(initial?.room ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
   const [saving, setSaving] = useState(false);
@@ -4242,8 +4295,8 @@ function ReviewScheduleModal({
         <FieldGroup label="ห้อง (ระบุก็ได้)">
           <TextInput value={room} onChange={e => setRoom(e.target.value)} placeholder="เช่น SC5.5 หรือ ที่บ้าน" />
         </FieldGroup>
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
-          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น ตรวจการบ้านสัปดาห์ที่ 1–3" />
+        <FieldGroup label="หมายเหตุ (ระบุก็ได้)" hint={`${note.length}/${NOTE_MAX} ตัวอักษร`}>
+          <TextInput value={note} maxLength={NOTE_MAX} onChange={e => setNote(e.target.value)} placeholder="เช่น ตรวจการบ้านสัปดาห์ที่ 1–3" />
         </FieldGroup>
 
         {conflict && (
@@ -4309,8 +4362,8 @@ function LecturerChangesNotice({ aid }: { aid: string }) {
           <li key={c.id} className="text-xs text-ink-2">
             <b>{formatWorkDate(c.work_date)}</b>{" "}
             {c.action === "cut"
-              ? <>ตัดออก {c.before.start_time}–{c.before.end_time} ({c.before.hours} ชม.)</>
-              : <>แก้จาก {c.before.start_time}–{c.before.end_time} ({c.before.hours} ชม.) เป็น {c.after?.start_time}–{c.after?.end_time} ({c.after?.hours} ชม.)</>}
+              ? <>ตัดออก {c.before.start_time}–{c.before.end_time} ({fmtHours(c.before.hours)} ชม.)</>
+              : <>แก้จาก {c.before.start_time}–{c.before.end_time} ({fmtHours(c.before.hours)} ชม.) เป็น {c.after?.start_time}–{c.after?.end_time} ({fmtHours(c.after?.hours)} ชม.)</>}
             {" "}· โดย {c.actor_name || (c.actor_role === "staff" ? "เจ้าหน้าที่" : "อาจารย์")} · เหตุผล: {c.reason}
           </li>
         ))}

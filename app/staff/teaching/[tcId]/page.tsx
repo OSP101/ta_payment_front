@@ -18,6 +18,7 @@ import { courseCodeLabel } from "../../../lib/courseCode";
 import { useTitleScope } from "../../../components/Shell";
 import { Skel, SkelRegion } from "../../../components/Skeletons";
 import LecturerPanel from "./LecturerPanel";
+import { budgetConfirmMessage } from "../budgetConfirm";
 
 interface SectionRow {
   id: string;
@@ -385,9 +386,12 @@ function SectionFormModal({
   const [curriculum, setCurriculum] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Budget preview from a 409 — see budgetConfirm.ts.
+  const [budgetPrompt, setBudgetPrompt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    setBudgetPrompt(null);
     setSecNo(section?.sec_no ?? "");
     setTrack(section?.track === "special" ? "special" : "regular");
     setStudents(String(section?.num_students ?? 0));
@@ -398,7 +402,7 @@ function SectionFormModal({
   const duplicate = secNo.trim() !== "" && existingSecNos.includes(secNo.trim());
   const canSave = secNo.trim() !== "" && !duplicate && !saving;
 
-  async function save() {
+  async function save(confirm = false) {
     if (!canSave) return;
     setSaving(true);
     setErr(null);
@@ -408,6 +412,7 @@ function SectionFormModal({
         await api.patch(`/teaching-courses/${tcId}/sections/${section!.id}`, {
           sec_no: secNo.trim(),
           num_students: num,
+          ...(confirm ? { confirm: true } : {}),
           // Send only when changed: "" clears back to ยังไม่ระบุ on purpose,
           // but an untouched field must not rewrite what the import derived.
           ...(curriculum !== (section?.curriculum ?? "") ? { curriculum } : {}),
@@ -421,9 +426,12 @@ function SectionFormModal({
       }
       await mutate(`/teaching-courses/${tcId}`);
       toast.success(`${editing ? "แก้ไข" : "เพิ่ม"} Sec ${secNo.trim()} เรียบร้อยแล้ว`);
+      setBudgetPrompt(null);
       onClose();
     } catch (e) {
-      setErr((e as Error).message || "บันทึกไม่สำเร็จ");
+      const preview = budgetConfirmMessage(e);
+      if (preview) setBudgetPrompt(preview);
+      else setErr((e as Error).message || "บันทึกไม่สำเร็จ");
     } finally {
       setSaving(false);
     }
@@ -443,12 +451,18 @@ function SectionFormModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="primary" onClick={save} disabled={!canSave} isPending={saving}>
+          <Button variant="primary" onClick={() => save()} disabled={!canSave} isPending={saving}>
             <Save size={14} />บันทึก
           </Button>
         </>
       }
     >
+      <BudgetChangeConfirm
+        message={budgetPrompt}
+        pending={saving}
+        onCancel={() => setBudgetPrompt(null)}
+        onConfirm={() => save(true)}
+      />
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup
@@ -605,10 +619,13 @@ function CourseInfoModal({
   const [curriculum, setCurriculum] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  // Budget preview from a 409 — see budgetConfirm.ts.
+  const [budgetPrompt, setBudgetPrompt] = useState<string | null>(null);
 
   // Re-seed whenever the dialog opens, so a cancelled edit does not linger.
   useEffect(() => {
     if (!open) return;
+    setBudgetPrompt(null);
     setCode(tc.code);
     setNameTH(tc.name_th);
     setNameEN(tc.name_en ?? "");
@@ -625,13 +642,17 @@ function CourseInfoModal({
   const nameBad = nameTH.trim() === "";
   const canSave = !codeBad && !nameBad && codeUpper !== "" && !saving;
 
-  const num = (v: string) => Math.min(30, Math.max(0, Math.floor(Number(v) || 0)));
+  // Clamped only below; the server owns the ceilings (credits 30, hours 60 —
+  // teaching_rules.go) and answers in Thai. Clamping hours at 30 here used to
+  // silently rewrite a real "9 (0-36-18)" course to 30 lab hours.
+  const num = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
 
-  async function save() {
+  async function save(confirm = false) {
     setSaving(true);
     setErr("");
     try {
       await api.patch(`/teaching-courses/${tcId}/info`, {
+        ...(confirm ? { confirm: true } : {}),
         code: codeUpper,
         name_th: nameTH.trim(),
         name_en: nameEN.trim(),
@@ -646,9 +667,12 @@ function CourseInfoModal({
       await mutate(`/teaching-courses/${tcId}`);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
       toast.success("บันทึกข้อมูลรายวิชาแล้ว");
+      setBudgetPrompt(null);
       onClose();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      const preview = budgetConfirmMessage(e);
+      if (preview) setBudgetPrompt(preview);
+      else setErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
     } finally {
       setSaving(false);
     }
@@ -663,12 +687,18 @@ function CourseInfoModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="primary" onClick={save} disabled={!canSave} isPending={saving}>
+          <Button variant="primary" onClick={() => save()} disabled={!canSave} isPending={saving}>
             <Save size={14} />บันทึก
           </Button>
         </>
       }
     >
+      <BudgetChangeConfirm
+        message={budgetPrompt}
+        pending={saving}
+        onCancel={() => setBudgetPrompt(null)}
+        onConfirm={() => save(true)}
+      />
       <div className="space-y-4">
         {err && <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={err} />}
 
@@ -736,5 +766,30 @@ function CourseInfoModal({
         </p>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Second step of an edit that moves the budget of a course whose TAs or hours
+ * are already approved: the server refused it with a preview (old → new budget,
+ * who is affected) and saves only when the same edit is sent again with
+ * confirm=true. Without this the edit used to save silently — a stray 0 in the
+ * lecture hours zeroed the ceiling every approval had been made against.
+ */
+function BudgetChangeConfirm({
+  message, pending, onCancel, onConfirm,
+}: { message: string | null; pending: boolean; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <ConfirmDialog
+      open={message !== null}
+      onClose={onCancel}
+      onConfirm={onConfirm}
+      title="ยืนยันการเปลี่ยนงบประมาณรายวิชา"
+      message={<span className="whitespace-pre-line">{message}</span>}
+      confirmLabel="ยืนยันการเปลี่ยนงบ"
+      danger
+      isPending={pending}
+      size="md"
+    />
   );
 }

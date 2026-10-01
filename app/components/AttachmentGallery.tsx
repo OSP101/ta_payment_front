@@ -1,5 +1,6 @@
 "use client";
 import { FileText, Play } from "lucide-react";
+import { apiUrl } from "../lib/api";
 
 /**
  * How an announcement's files are shown to a reader.
@@ -23,9 +24,12 @@ export interface Attachment {
 }
 
 export function attachmentSrc(a: Attachment, publicMode: boolean): string {
+  // Public stays on production's /api/v1 on purpose: only /p/* uses it, and
+  // that page fetched the announcement server-side from production. In-app,
+  // the stored url is "/api/v1/..." and must follow the demo prefix.
   return publicMode
     ? `/api/v1/public/announcements/media/${a.storage_key}`
-    : a.url;
+    : apiUrl(a.url);
 }
 
 function humanSize(bytes: number): string {

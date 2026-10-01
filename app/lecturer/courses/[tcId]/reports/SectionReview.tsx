@@ -1,4 +1,5 @@
 "use client";
+import { fmtHours } from "@/app/lib/dates";
 import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -589,7 +590,7 @@ function SittingTable({
                     <div className="mt-0.5 flex items-start gap-1 text-xs text-muted">
                       <History size={12} className="mt-0.5 shrink-0" />
                       <span>
-                        แก้จาก {edit.before.start_time}–{edit.before.end_time} ({edit.before.hours} ชม.)
+                        แก้จาก {edit.before.start_time}–{edit.before.end_time} ({fmtHours(edit.before.hours)} ชม.)
                         {" "}โดย {edit.actor_name || "อาจารย์"} · {edit.reason}
                       </span>
                     </div>
@@ -631,7 +632,7 @@ function SittingTable({
 function SittingSummary({ s }: { s: Sitting }) {
   return (
     <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm">
-      <b>{dateTH(s.work_date)}</b> · {s.start_time}–{s.end_time} · {s.hours} ชม. · {activityText(s)}
+      <b>{dateTH(s.work_date)}</b> · {s.start_time}–{s.end_time} · {fmtHours(s.hours)} ชม. · {activityText(s)}
       {s.assignmentIds.length > 1 && (
         <div className="mt-1 text-xs text-muted">คาบนี้สอนพร้อมกันหลายเซคชัน จะแก้ทุกเซคชันพร้อมกัน</div>
       )}
@@ -692,7 +693,7 @@ function EditSittingModal({
             <FieldGroup label="เวลาสิ้นสุด"><TimePicker value={end} onChange={setEnd} label="เวลาสิ้นสุด" /></FieldGroup>
             <FieldGroup label="จำนวนชั่วโมง">
               <div className="flex h-9 items-center rounded-lg border border-border bg-surface-secondary px-3 tabular">
-                {hours === null ? "—" : hours}
+                {fmtHours(hours)}
               </div>
             </FieldGroup>
           </div>

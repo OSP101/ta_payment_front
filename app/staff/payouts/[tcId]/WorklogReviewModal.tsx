@@ -340,9 +340,10 @@ export function WorklogReviewModal({
             )}
             {pendingCount === 0 && (
               <>
-                {/* Unsigned + closed: sending back would forfeit the rows
-                    (see the grid cell), so only the edits above are offered. */}
-                {(target.status !== "pending" || target.periodOpen) && (
+                {/* Closed: sending back would forfeit the rows, at any stage —
+                    the server refuses it and asks for the due date to be
+                    extended first — so the button is not offered. */}
+                {target.periodOpen && (
                   <Button variant="secondary" size="sm" isDisabled={busy} onPress={() => setRejectOpen(true)}>
                     <Undo2 size={14} /> ตีกลับ
                   </Button>
@@ -464,9 +465,9 @@ export function WorklogReviewModal({
         message={
           <div className="space-y-2">
             <p className="text-sm text-muted">
-              {target?.taName} · {target?.periodLabel} เดือนนี้จะกลับไปให้แก้ไข
-              และส่งออกเอกสารไม่ได้จนกว่าจะตรวจผ่านอีกครั้ง
+              {target?.taName} · {target?.periodLabel}
             </p>
+            <SendBackEffect status={target?.status ?? "pending"} />
             <TextArea
               className="w-full"
               value={rejectReason}
@@ -1060,3 +1061,20 @@ function CommitDialog({
 
 /* Re-exported so the grid can build a target without importing the type twice. */
 export { linkKey };
+
+/** Exactly what ตีกลับ does (SubmissionPeriodService.MarkSentBack), worded for
+ *  the officer about to press it. One behaviour at every stage before ส่งการเงิน:
+ *  the month's approved and pending rows go back to the TA as ถูกส่งกลับ, the
+ *  lecturer must approve them again, and staff must check the month again. */
+export function SendBackEffect({ status }: { status: string }) {
+  return (
+    <ul className="list-disc space-y-0.5 pl-4 text-xs text-ink-2">
+      <li>รายการที่อนุมัติแล้วและที่รออนุมัติของเดือนนี้ทั้งหมดจะกลับไปเป็น “ถูกส่งกลับ” พร้อมเหตุผลด้านล่าง ให้ TA แก้ไขและส่งใหม่</li>
+      <li>อาจารย์ต้องอนุมัติรายการที่ส่งใหม่อีกครั้ง แล้วเจ้าหน้าที่จึงตรวจเดือนนี้ได้อีกครั้ง</li>
+      {status === "staff_reviewed" && <li>ผลการตรวจของเจ้าหน้าที่สำหรับเดือนนี้จะถูกยกเลิก</li>}
+      {status === "exported" && (
+        <li>เดือนนี้ส่งออกเอกสารแล้ว ล็อกจะถูกปลด และเมื่อส่งออกใหม่จะได้เอกสาร “ฉบับแก้ไข” แทนฉบับเดิม (ฉบับเดิมยังอยู่ในประวัติการส่งออก)</li>
+      )}
+    </ul>
+  );
+}

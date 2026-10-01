@@ -14,6 +14,7 @@ import {
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 import { Skel } from "../../components/Skeletons";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
+import { budgetConfirmMessage } from "./budgetConfirm";
 
 // Both modals are heavy (forms, section-schedule editors, autocompletes) but
 // only one person in ten ever opens them in a given visit — code-split them
@@ -480,7 +481,10 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
   const [reg, setReg] = useState("");
   const [spc, setSpc] = useState("");
   const [saving, setSaving] = useState(false);
+  // Budget preview from a 409 — see budgetConfirm.ts.
+  const [budgetPrompt, setBudgetPrompt] = useState<string | null>(null);
   useEffect(() => {
+    setBudgetPrompt(null);
     if (course) {
       // A track still at "-" opens blank so staff type the real number.
       setReg(course.num_students_regular_entered ? String(course.num_students_regular) : "");
@@ -502,19 +506,25 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
   const dirty = regDirty || spcDirty;
   const invalid = regInvalid || spcInvalid;
 
-  async function save() {
+  async function save(confirm = false) {
     if (!course || invalid || !dirty) return;
     setSaving(true);
     try {
-      const body: Record<string, number> = {};
+      const body: Record<string, number | boolean> = {};
       if (regDirty) body.num_students_regular = regNum;
       if (spcDirty) body.num_students_special = spcNum;
+      if (confirm) body.confirm = true;
       await api.patch(`/teaching-courses/${course.id}/num-students`, body);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
       toast.success("บันทึกจำนวนนักศึกษาแล้ว", { description: course.code });
+      setBudgetPrompt(null);
       onClose();
     } catch (e) {
-      toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
+      // The course already has approved TAs/hours: show what the change does
+      // to its budget and save only on an explicit yes.
+      const preview = budgetConfirmMessage(e);
+      if (preview) setBudgetPrompt(preview);
+      else toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
     } finally {
       setSaving(false);
     }
@@ -530,12 +540,23 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="primary" onClick={save} disabled={!dirty || invalid || saving} isPending={saving}>
+          <Button variant="primary" onClick={() => save()} disabled={!dirty || invalid || saving} isPending={saving}>
             <Save size={14} />บันทึก
           </Button>
         </>
       }
     >
+      <ConfirmDialog
+        open={budgetPrompt !== null}
+        onClose={() => setBudgetPrompt(null)}
+        onConfirm={() => save(true)}
+        title="ยืนยันการเปลี่ยนงบประมาณรายวิชา"
+        message={<span className="whitespace-pre-line">{budgetPrompt}</span>}
+        confirmLabel="ยืนยันการเปลี่ยนงบ"
+        danger
+        isPending={saving}
+        size="md"
+      />
       {course && (
         <div className="space-y-3">
           <div className="text-xs text-muted">{course.name_th}</div>

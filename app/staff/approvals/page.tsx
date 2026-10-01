@@ -32,6 +32,7 @@ interface AssignmentDetail {
   profile_status: string;
   has_schedule: boolean;
   approved_course_count: number;
+  course_cap?: number;
   warnings: string[];
 }
 

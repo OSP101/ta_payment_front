@@ -7,6 +7,7 @@ import { Button, Alert, Tip } from "../components/ui";
 import { Skel, SkelValue } from "../components/Skeletons";
 import useDocumentTitle from "../lib/useDocumentTitle";
 import { thaiDate } from "../lib/dates";
+import { apiUrl } from "../lib/api";
 
 /**
  * The faculty's signed form — "ตารางเรียนและตารางปฏิบัติงาน (TA)".
@@ -185,7 +186,7 @@ function FormView({ data, formKey: key, yearMonth }: {
           {/* Two ways out on purpose. Browser print is instant and lays the grid
               out exactly as seen; the server PDF is the one that can be filed,
               emailed, or pulled from the payout zip without a browser. */}
-          <Button variant="outline" disabled={!key} onClick={() => window.open(`/api/v1${key}`.replace("/timetable-form?", "/timetable-form.pdf?"), "_blank", "noopener")}>
+          <Button variant="outline" disabled={!key} onClick={() => window.open(apiUrl(`${key}`).replace("/timetable-form?", "/timetable-form.pdf?"), "_blank", "noopener")}>
             <FileDown size={14} /> ดาวน์โหลด PDF
           </Button>
           <Button disabled={!data} onClick={() => window.print()}>

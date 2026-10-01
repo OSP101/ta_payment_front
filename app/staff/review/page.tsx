@@ -7,7 +7,7 @@ import {
   Clock, CheckCircle2, Download, Clock3, Trash2, Eye, EyeOff, Shield, ChevronRight, Lock,
   AlertTriangle,
 } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, apiUrl } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
   PageHeader, Button, IconButton, StatusChip, Alert, TabLabel, Modal, Chip, SearchField, Tip,
@@ -551,7 +551,7 @@ function RedownloadModal({
         { password },
       );
       window.location.assign(
-        `/api/v1/ta-review/${target.user_id}/download.zip?token=${encodeURIComponent(res.zip_token)}`,
+        apiUrl(`/ta-review/${target.user_id}/download.zip?token=${encodeURIComponent(res.zip_token)}`),
       );
       notify.success("กำลังดาวน์โหลด…");
       onClose();

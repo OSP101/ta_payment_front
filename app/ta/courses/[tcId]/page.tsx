@@ -40,7 +40,7 @@ interface TC {
 
 interface TAStatus {
   teaching_course_id: string;
-  stage: "draft" | "submitted" | "approved" | "exported";
+  stage: "draft" | "submitted" | "approved" | "exported" | "rejected";
   hours_approved: number;
   hours_approved_regular: number;
   hours_approved_special: number;
@@ -79,12 +79,15 @@ const STAGE_LABEL: Record<TAStatus["stage"], string> = {
   submitted: "รออนุมัติ",
   approved: "อนุมัติแล้ว",
   exported: "ส่งออกแล้ว",
+  // Bounced rows the TA can still fix; outranks approved (dashboard.go).
+  rejected: "อาจารย์ตีกลับ ต้องแก้ไข",
 };
 const STAGE_TONE: Record<TAStatus["stage"], ChipTone> = {
   draft: "neutral",
   submitted: "warn",
   approved: "success",
   exported: "brand",
+  rejected: "danger",
 };
 
 export default function TACoursePage({ params }: { params: Promise<{ tcId: string }> }) {
@@ -161,7 +164,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
               label="สถานะ"
               value={statusLoading ? <SkelValue className="h-7 w-20" /> : myStatus ? STAGE_LABEL[myStatus.stage] : "—"}
               icon={<CalendarClock size={18} />}
-              tone={myStatus?.stage === "approved" ? "success" : myStatus?.stage === "submitted" ? "warn" : "brand"}
+              tone={myStatus?.stage === "rejected" ? "danger" : myStatus?.stage === "approved" ? "success" : myStatus?.stage === "submitted" ? "warn" : "brand"}
             />
             {/* Hours and money are named by track: ภาคปกติ and ภาคพิเศษ are
                 paid at different rates from different budgets, so one total

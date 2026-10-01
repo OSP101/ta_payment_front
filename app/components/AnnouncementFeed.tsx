@@ -1,7 +1,8 @@
 "use client";
 import useSWR from "swr";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "../lib/api";
 import {
   Megaphone, Pin, CalendarClock, ChevronDown, ChevronUp,
   Info, Newspaper, PartyPopper, AlertTriangle, Radio,
@@ -100,14 +101,37 @@ function FeedSkeleton({ count, compact }: { count: number; compact: boolean }) {
   );
 }
 
+/** Announcements this tab has already reported as read. */
+const reported = new Set<string>();
+
 function AnnouncementItem({ a, compact }: { a: Ann; compact: boolean }) {
   const [open, setOpen] = useState(false);
   const meta = CAT_META[a.category] ?? CAT_META.info;
   const bodyLong = a.body.length > 280;
   const preview = open || !bodyLong ? a.body : a.body.slice(0, 280) + "…";
 
+  // The feed can show a whole announcement without the detail page ever being
+  // opened, so it reports the read itself: once the full body has been on
+  // screen. A card still cut at "อ่านต่อ" has not been read.
+  const ref = useRef<HTMLLIElement | null>(null);
+  const fullyShown = !compact && (open || !bodyLong);
+  useEffect(() => {
+    const el = ref.current;
+    if (!fullyShown || !el || reported.has(a.id)) return;
+    const io = new IntersectionObserver(entries => {
+      if (!entries.some(e => e.isIntersecting)) return;
+      io.disconnect();
+      if (reported.has(a.id)) return;
+      reported.add(a.id);
+      // Best effort: a missed report only leaves "ยังไม่เปิด" on the staff side.
+      api.post(`/announcements/${a.id}/read`).catch(() => reported.delete(a.id));
+    }, { threshold: 0.5 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [fullyShown, a.id]);
+
   return (
-    <li className="p-4">
+    <li className="p-4" ref={ref}>
       <article className="flex flex-col gap-3">
         {a.cover_image_url && (
           // eslint-disable-next-line @next/next/no-img-element

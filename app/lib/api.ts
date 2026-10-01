@@ -101,6 +101,26 @@ export function getDemoBasePath(): string | null {
 }
 
 /**
+ * The URL for an API path that the browser fetches/opens on its own — a
+ * download link, an <iframe>/<img> src, a raw fetch() for a blob — instead of
+ * going through req(). Those used to hard-code "/api/v1", so inside /demo they
+ * hit production with no production session and came back 401 "missing token"
+ * (the course ZIP export, the timetable PDF, the review previews).
+ *
+ * Accepts either a path relative to the API root ("/exports/course/1.zip") or
+ * one the backend already built absolute ("/api/v1/announcements/media/k" —
+ * see service.announce_media.go), which is re-pointed at the current prefix.
+ *
+ * Anonymous /p/* share pages must NOT use this: they are server-rendered
+ * against production and a tab that once visited /demo still carries the
+ * demo prefix in sessionStorage.
+ */
+export function apiUrl(path: string): string {
+  const rel = path.startsWith("/api/v1/") ? path.slice("/api/v1".length) : path;
+  return `${apiPrefix}${rel}`;
+}
+
+/**
  * Same sessionStorage-persistence pattern as apiPrefix above, for the one
  * other thing a demo session needs to survive a client-side navigation:
  * DemoEnterResult.demo_password — a shared, intentionally-published
@@ -196,7 +216,9 @@ function humanMessage(status: number, raw: string): string {
   // for anything that branches on it.
   if (raw && raw.trim() !== "" && /[\u0E00-\u0E7F]/.test(raw)) return raw;
   if (status === 0) return "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่";
-  if (status === 401) return "กรุณาเข้าสู่ระบบใหม่";
+  // The bare middleware strings ("missing token", "invalid token") land here:
+  // the session cookie is gone or expired, so say that rather than the raw text.
+  if (status === 401) return "เซสชันหมดอายุหรือยังไม่ได้เข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่";
   if (status === 403) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
   if (status === 404) return "ไม่พบข้อมูลที่ต้องการ";
   if (status === 408 || status === 504) return "การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่";

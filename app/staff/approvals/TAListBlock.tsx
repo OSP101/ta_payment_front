@@ -13,6 +13,8 @@ interface AssignmentDetail {
   profile_status: string;
   has_schedule: boolean;
   approved_course_count: number;
+  /** Per-term course cap from ตั้งค่า (pay_rates.max_courses_per_student). */
+  course_cap?: number;
   warnings: string[];
   /** 'active' | 'trimmed' | 'dropped' — outcome of the deferred decision. */
   state?: string;
@@ -42,7 +44,8 @@ export function TAListBlock({ detail }: { detail: RequestDetail }) {
 
 function TaCard({ a }: { a: AssignmentDetail }) {
   const blocked = a.warnings.length > 0;
-  const overLimit = a.approved_course_count >= 3;
+  const cap = a.course_cap ?? 3;
+  const overLimit = a.approved_course_count >= cap;
   return (
     <div className={
       "rounded-lg border px-3 py-2.5 " +
@@ -82,7 +85,7 @@ function TaCard({ a }: { a: AssignmentDetail }) {
             ? "bg-red-50 text-red-700 border-red-200 font-medium"
             : "bg-slate-50 text-slate-600 border-slate-200")
         }>
-          <BookOpenCheck size={10} /> เป็น TA แล้ว {a.approved_course_count}/3 วิชา
+          <BookOpenCheck size={10} /> เป็น TA แล้ว {a.approved_course_count}/{cap} วิชา
         </span>
       </div>
 

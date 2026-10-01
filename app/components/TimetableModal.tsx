@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import { CalendarDays, Download, Printer } from "lucide-react";
 import { Modal, Button, Alert, Tip } from "./ui";
+import { apiUrl } from "../lib/api";
 import { Skel, SkelRegion } from "./Skeletons";
 import { packLanes, parseTime } from "./ScheduleGrid";
 
@@ -92,7 +93,7 @@ export function TimetableModal({
     ? `/timetable-form?term_id=${termId}&user_id=${taId}`
     : "#";
   const pdfHref = termId && taId
-    ? `/api/v1/timetable-form.pdf?term_id=${termId}&user_id=${taId}`
+    ? apiUrl(`/timetable-form.pdf?term_id=${termId}&user_id=${taId}`)
     : "#";
 
   return (

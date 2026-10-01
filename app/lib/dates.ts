@@ -35,3 +35,11 @@ export function thaiDate(iso?: string | null): string {
   if (m < 1 || m > 12) return iso;
   return `${d} ${THAI_MONTHS_ABBR[m - 1]} ${y + 543}`;
 }
+
+/** Hours for display. work_logs.hours is stored exact (minutes/60, e.g.
+ *  0.983333), so printing it raw shows six decimals; two is what every
+ *  money figure is rounded to. Trailing zeros are dropped ("3", "0.98"). */
+export function fmtHours(h: number | null | undefined): string {
+  if (h === null || h === undefined || !Number.isFinite(h)) return "—";
+  return String(Number(h.toFixed(2)));
+}

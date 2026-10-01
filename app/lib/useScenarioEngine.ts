@@ -182,9 +182,22 @@ export function useScenarioEngine() {
   // only wires this button up when !hasPerSubActor), but using the same
   // correct check here too rather than relying on that staying true forever.
   function goToStep(item: DemoScenarioEvent) {
-    if (item.related_path && canViewRelatedPath && item.related_path !== currentUrl) {
-      router.push(item.related_path);
-    }
+    const target = selfServePath(item);
+    if (target && target !== currentUrl) router.push(target);
+  }
+
+  // Where "ไปทำเอง" should land for the CURRENT login. Staff go to the staff
+  // screen (related_path). A lecturer/TA acting on their own step goes to
+  // their OWN page instead — the event's actor_path, else the first unfinished
+  // record that is theirs. Never related_path for them: every related_path is
+  // staff-only, and that was the 403 a lecturer hit from this button.
+  function selfServePath(item: DemoScenarioEvent): string | undefined {
+    if (canViewRelatedPath) return item.related_path;
+    if (!canActOn(item)) return undefined;
+    if (item.actor_path) return item.actor_path;
+    const subs = item.sub_steps ?? [];
+    const mine = subs.filter(s => s.actor_path && (!s.actor || s.actor === me?.email));
+    return (mine.find(s => !s.done) ?? mine[0])?.actor_path;
   }
 
   async function resetWorkspace() {

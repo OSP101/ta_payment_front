@@ -7,7 +7,7 @@ import {
 import {
   Users, Check, X, Download, AlertTriangle, FileText,
 } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, apiUrl } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import PdfFrame from "../../components/PdfFrame";
 import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
@@ -458,7 +458,7 @@ function DocPanel({
   const reason = preset === OTHER_PRESET ? other.trim() : preset;
   const decided = doc.status === "approved" || doc.status === "rejected";
   const deleted = !!doc.file_deleted_at;
-  const url = `/api/v1/ta-review/${userId}/docs/${doc.id}/preview`;
+  const url = apiUrl(`/ta-review/${userId}/docs/${doc.id}/preview`);
   const ext = (doc.filename.split(".").pop() ?? "").toLowerCase();
   const isImage = ext === "jpg" || ext === "jpeg" || ext === "png";
 
@@ -630,7 +630,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
         { password, user_ids: approvedHere.map(p => p.user_id) },
       );
       window.location.assign(
-        `/api/v1/ta-review/download-all.zip?token=${encodeURIComponent(res.zip_token)}`,
+        apiUrl(`/ta-review/download-all.zip?token=${encodeURIComponent(res.zip_token)}`),
       );
       notify.success(`กำลังดาวน์โหลดเอกสารของ ${res.ta_count} คน…`);
       setConfirming(false);

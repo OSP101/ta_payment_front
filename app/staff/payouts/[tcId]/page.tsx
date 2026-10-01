@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ClipboardEdit, Download, History } from "lucide-react";
 import { api } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
-import { PageHeader, Panel, Button, Modal } from "../../../components/ui";
+import { PageHeader, Panel, Button, Modal, Chip, Tip } from "../../../components/ui";
 import { StaffWorklogEditor } from "../../../components/StaffWorklogEditor";
 import { ExportPreviewBody } from "../../../components/ExportPreviewBody";
 import { SkelRows, SkelValue } from "../../../components/Skeletons";
@@ -39,6 +39,13 @@ interface ExportBatch {
   // whose file failed to persist at generation time (or predates file
   // retention) — see ExportHandler.BatchDownload's "no file" response.
   file_name?: string;
+  /** 1 = first document of these months; n+1 = a corrected document issued
+   *  after a send-back or unlock ("ฉบับแก้ไข ครั้งที่ n"). */
+  version?: number;
+  months?: string[];
+  previous_batch_id?: string | null;
+  /** A later corrected document replaced this one. Kept in the history. */
+  superseded_by?: string | null;
 }
 
 export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tcId: string }> }) {
@@ -158,6 +165,7 @@ function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void })
               <tr>
                 <th className="px-3 py-2 text-left">เวลา</th>
                 <th className="px-3 py-2 text-left">ผู้ส่งออก</th>
+                <th className="px-3 py-2 text-left">ฉบับ</th>
                 <th className="px-3 py-2 text-right">จำนวน TA</th>
                 <th className="px-3 py-2 text-right">ยอดรวม</th>
                 <th className="px-3 py-2" />
@@ -168,6 +176,20 @@ function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void })
                 <tr key={b.id} className="border-t border-hairline">
                   <td className="px-3 py-2 tabular">{b.generated_at.slice(0, 16).replace("T", " ")}</td>
                   <td className="px-3 py-2">{b.generated_by_name}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-1">
+                      {(b.version ?? 1) > 1 ? (
+                        <Chip tone="info">ฉบับแก้ไข ครั้งที่ {(b.version ?? 1) - 1}</Chip>
+                      ) : (
+                        <Chip tone="neutral">ฉบับแรก</Chip>
+                      )}
+                      {b.superseded_by && (
+                        <Tip content="เดือนในเอกสารนี้ถูกส่งกลับแก้ไขและออกฉบับใหม่แทนแล้ว ใช้ฉบับใหม่ในการเบิกจ่าย">
+                          <span><Chip tone="warn">ถูกแทนที่แล้ว</Chip></span>
+                        </Tip>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-right tabular">{b.ta_count}</td>
                   <td className="px-3 py-2 text-right tabular">{b.total_baht.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right">

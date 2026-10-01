@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp, Lock, Printer } from "lucide-react";
 import useIsDemo from "../../../lib/useIsDemo";
-import { api, type Term, type Me } from "../../../lib/api";
+import { api, ApiError, type Term, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import { icsToBlocks, applyClassKinds, suggestKinds, type IcsImportResult, type ClassKindRow } from "../../../lib/ics";
 import TermSelect from "../../../components/TermSelect";
@@ -303,6 +303,8 @@ export default function TASchedulePage() {
   // Turning WBA on wipes every regular block, so it goes through a dialog that
   // lists exactly which classes the TA is about to lose.
   const [confirmWba, setConfirmWba] = useState(false);
+  // Thai impact list from a 428 save; non-null opens the confirm dialog.
+  const [impact, setImpact] = useState<string | null>(null);
 
   function toggleWba(on: boolean) {
     if (on) {
@@ -333,7 +335,7 @@ export default function TASchedulePage() {
   // save(silent) — silent=true skips toast, used by the debounced auto-save.
   // Invalid rows are surfaced via the header's saveError instead so the user
   // sees them without an intrusive toast on every keystroke.
-  async function save(silent = false): Promise<boolean> {
+  async function save(silent = false, confirmed = false): Promise<boolean> {
     if (!termId) return false;
     for (const b of local) {
       if (b.is_wba) continue;
@@ -350,9 +352,10 @@ export default function TASchedulePage() {
         return false;
       }
     }
-    // Overlapping time slots are allowed (two sections co-taught can share a
-    // room/time); what is refused is the same course entered twice — see
-    // isDuplicateBlock for how a blank ประเภท is treated.
+    // Overlap between blocks of the SAME course is allowed (sections meeting
+    // together); two DIFFERENT courses at once is refused by the server
+    // (assertNoOverlappingOwnClasses) with a message naming both. What is
+    // refused here is the same course entered twice — see isDuplicateBlock.
     const seen: Block[] = [];
     for (const b of local) {
       if (b.is_wba || !b.course_code) continue;
@@ -369,7 +372,8 @@ export default function TASchedulePage() {
     setSaving(true);
     setSaveError(null);
     try {
-      await api.put(`/me/schedule?term_id=${termId}`, local);
+      await api.put(`/me/schedule?term_id=${termId}${confirmed ? "&confirm=1" : ""}`, local);
+      setImpact(null);
       clearDirty();
       setSavedAt(Date.now());
       if (!silent) notify.success("บันทึกตารางเรียนเรียบร้อย");
@@ -377,6 +381,14 @@ export default function TASchedulePage() {
       return true;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+      // 428: the new timetable clashes with sessions of an APPROVED request.
+      // The server lists what would be lost; nothing was written. Ask, even on
+      // an autosave — saving silently is exactly what used to cost TAs hours.
+      if (e instanceof ApiError && e.status === 428) {
+        setImpact(msg);
+        setSaveError("รอยืนยันการบันทึก ตารางเรียนใหม่ตรงกับคาบสอนที่อนุมัติแล้ว");
+        return false;
+      }
       setSaveError(msg);
       if (!silent) notify.error(e);
       return false;
@@ -657,6 +669,25 @@ export default function TASchedulePage() {
           </div>
         }
         confirmLabel="ลบวิชาและยืนยัน"
+      />
+
+      <ConfirmDialog
+        open={impact !== null}
+        onClose={() => setImpact(null)}
+        onConfirm={() => { void save(false, true); }}
+        danger
+        size="md"
+        icon={<AlertTriangle className="w-5 h-5" />}
+        title="ตารางเรียนนี้ทำให้เสียคาบสอนที่อนุมัติแล้ว"
+        message={
+          <div className="space-y-2">
+            <p className="whitespace-pre-line text-sm">{impact}</p>
+            <p className="text-muted text-xs">
+              หากไม่ต้องการบันทึก ให้กดยกเลิก แล้วแก้หรือลบคาบที่เพิ่ม
+            </p>
+          </div>
+        }
+        confirmLabel="ยืนยันบันทึก"
       />
 
       <IcsImportModal

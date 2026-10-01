@@ -13,7 +13,11 @@ import { pickPrimaryCode } from "../../lib/courseCode";
 interface PreviewCourse {
   code: string;
   name: string;
-  status: "new" | "existing" | "unmatched_officer";
+  // "invalid": the row cannot be imported as written (unreadable credits,
+  // out-of-range hours or headcount) — `problems` says why. The commit uses
+  // the same decision, so what this table shows is what the import does.
+  status: "new" | "existing" | "unmatched_officer" | "invalid";
+  problems?: string[] | null;
   section_count: number;
   schedule_count: number;
   officer_raw: string;
@@ -50,6 +54,11 @@ interface Preview {
   new_count: number;
   existing_count: number;
   blocked_count: number;
+  invalid_count?: number;
+  // Per-row parse messages, shown BEFORE committing (they used to appear only
+  // in the result screen, after the courses were already written).
+  warnings?: string[] | null;
+  errors?: string[] | null;
   merge_groups: MergeGroup[] | null;
 }
 
@@ -191,10 +200,16 @@ export default function ImportModal({
       const skipCodes = Object.entries(decisions)
         .filter(([, v]) => v === "skip")
         .map(([code]) => code);
+      // The server creates an unmatched-officer course only when it is listed
+      // here — no decision is not a yes (matches the "ต้องตัดสินใจ" chip).
+      const proceedCodes = Object.entries(decisions)
+        .filter(([, v]) => v === "proceed")
+        .map(([code]) => code);
       const form = new FormData();
       form.append("term_id", termId);
       form.append("file", file);
       if (skipCodes.length > 0) form.append("skip_codes", skipCodes.join(","));
+      if (proceedCodes.length > 0) form.append("proceed_codes", proceedCodes.join(","));
       const payload = mergePayload(merges);
       if (payload.length > 0) form.append("merges", JSON.stringify(payload));
       const res = await api.upload<CommitResult>("/teaching-courses/import", form);
@@ -342,11 +357,23 @@ function PreviewTable({
   const targets = mergeTargets(merges);
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <SummaryChip tone="success" label="ใหม่ (จะสร้าง)" count={p.new_count} icon={<CheckCircle2 size={12} />} />
         <SummaryChip tone="neutral" label="มีแล้ว ข้าม" count={p.existing_count} />
         <SummaryChip tone="warn" label="ต้องตัดสินใจ" count={p.blocked_count} icon={<AlertTriangle size={12} />} />
+        <SummaryChip tone={(p.invalid_count ?? 0) > 0 ? "danger" : "neutral"} label="ข้อมูลผิด ไม่นำเข้า" count={p.invalid_count ?? 0} />
       </div>
+
+      <MessageList
+        tone="danger"
+        title="แถวที่อ่านไม่ได้ (จะถูกข้าม ตรวจไฟล์ก่อนยืนยัน)"
+        items={p.errors ?? []}
+      />
+      <MessageList
+        tone="neutral"
+        title="ข้อสังเกต (ส่วนใหญ่เป็นวิชาโครงงาน/สหกิจ/วิทยานิพนธ์ที่ไม่มีตารางเรียน)"
+        items={p.warnings ?? []}
+      />
 
       {groups.length > 0 && (
         <MergeGroups groups={groups} merges={merges} setMerges={setMerges} />
@@ -393,6 +420,7 @@ function PreviewRow({
 }) {
   const isSkipped =
     c.status === "existing"
+    || c.status === "invalid"
     || (c.status === "unmatched_officer" && decision === "skip");
   return (
     <tr className={isSkipped ? "bg-slate-50/40 text-(--ink-3)" : ""}>
@@ -413,6 +441,14 @@ function PreviewRow({
             : <span className="text-emerald-700">จะสร้าง</span>
         )}
         {c.status === "existing" && <span>ข้าม (มีอยู่แล้ว)</span>}
+        {c.status === "invalid" && (
+          <div className="text-red-700">
+            <div>ไม่นำเข้า</div>
+            <ul className="mt-0.5 space-y-0.5">
+              {(c.problems ?? []).map((m, i) => <li key={i}>{m}</li>)}
+            </ul>
+          </div>
+        )}
         {c.status === "unmatched_officer" && (
           <div className="inline-flex flex-col gap-0.5">
             <label className="inline-flex items-center gap-1">
@@ -574,7 +610,24 @@ function StatusChip({ status }: { status: PreviewCourse["status"] }) {
     case "new": return <Chip tone="success">ใหม่</Chip>;
     case "existing": return <Chip tone="neutral">มีแล้ว</Chip>;
     case "unmatched_officer": return <Chip tone="warn">ต้องตัดสินใจ</Chip>;
+    case "invalid": return <Chip tone="danger">ข้อมูลผิด</Chip>;
   }
+}
+
+function MessageList({ tone, title, items }: { tone: "danger" | "neutral"; title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <details className="rounded-md border border-(--hairline) px-2 py-1.5 text-xs" open={tone === "danger"}>
+      <summary className="cursor-pointer font-medium text-(--ink-2)">
+        {title} · {items.length} รายการ
+      </summary>
+      <ul className="mt-1 space-y-0.5 max-h-40 overflow-y-auto">
+        {items.map((m, i) => (
+          <li key={i} className={tone === "danger" ? "text-red-700" : "text-(--ink-3)"}>{m}</li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 function SummaryChip({

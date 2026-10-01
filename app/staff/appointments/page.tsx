@@ -102,6 +102,9 @@ interface AppointmentPreview {
     // request waits on; reminded_at is staff's latest reminder to them.
     waiting?: { ta_id: string; name: string; reminded_at?: string | null }[];
   }[];
+  /** TAs left off this round for a reason about the person (e.g. account
+   *  deactivated). Optional: older servers do not send it. */
+  skipped_tas?: { teaching_course_id: string; course_code: string; ta_id: string; ta_name: string; reason: string }[];
 }
 
 // Mirrors service.RemindTimetableResult.
@@ -439,6 +442,19 @@ function AppointmentSection({ termId }: { termId: string }) {
               ))}
             </ul>
           </div>
+        )}
+        {/* Named, not silently dropped: a TA missing from the list should
+            read as a decision with a reason, not as a bug. */}
+        {!!preview?.skipped_tas?.length && (
+          <ul className="space-y-1 border-t border-hairline px-5 py-3 text-sm">
+            {preview.skipped_tas.map(s => (
+              <li key={`${s.teaching_course_id}-${s.ta_id}`} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-semibold text-ink-1">{s.course_code}</span>
+                <span className="text-ink-2">{s.ta_name}</span>
+                <span className="ms-auto text-xs text-amber-800">{s.reason}</span>
+              </li>
+            ))}
+          </ul>
         )}
         {preview && pending === 0 && (
           <div className="px-5 py-3 text-sm text-ink-3">

@@ -106,7 +106,7 @@ const buildNav = (s: Executive, isAdmin: boolean): NavSection[] => [
       // a raw "forbidden" (Audit Log) — so they are listed for admins only.
       ...(isAdmin
         ? [
-            { label: "Audit Log", href: "/staff/audit", icon: ScrollText },
+            { label: "บันทึกการใช้งาน", href: "/staff/audit", icon: ScrollText },
             { label: "คำขอลบข้อมูล (PDPA)", href: "/staff/data-deletion-requests", icon: ShieldOff },
           ]
         : []),

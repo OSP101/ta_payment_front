@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { Download, Lock, CheckCircle2, AlertTriangle, CalendarRange } from "lucide-react";
-import { errMessage } from "../lib/api";
+import { apiUrl, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Button, Chip, Spinner, Tip } from "./ui";
 import { Skel, SkelRows, SkelRegion, SkelValue } from "./Skeletons";
@@ -58,12 +58,28 @@ export interface ExportPreview {
   /** Server's answer to "may this be downloaded". Never re-derive it here. */
   can_export: boolean;
   rows: PreviewRow[];
+  /** The document already issued for exactly these months, when every month
+   *  in them is locked. A download then hands back that file unchanged. */
+  archived?: ArchivedExport | null;
+}
+export interface ArchivedExport {
+  batch_id: string;
+  file_name: string;
+  total_baht: number;
+  generated_at: string;
+  version: number;
+  file_available: boolean;
+  /** Exported before per-TA figures were recorded: the archived total is the
+   *  authoritative one, not the recomputation in the table. */
+  legacy: boolean;
 }
 export interface ExportBlocker {
-  kind: "waiting_ta" | "waiting_lecturer" | "class_clash" | "not_appointed" | "unreviewed";
+  kind: "waiting_ta" | "waiting_lecturer" | "class_clash" | "not_appointed" | "profile" | "unreviewed";
   ta_name: string;
   months: string[];
   rows?: number;
+  /** What is wrong with the TA's documents, for kind "profile". */
+  issue?: string;
 }
 
 export const fmtBaht = (n: number) =>
@@ -74,10 +90,10 @@ export const fmtBaht = (n: number) =>
 // can be embedded inline (per-course workspace) or inside a modal.
 export function ExportPreviewBody({
   tcId,
-  exportedAt,
   onExported,
 }: {
   tcId: string;
+  /** Kept for callers; no longer read — see alreadyExported below. */
   exportedAt?: string | null;
   onExported?: () => void;
 }) {
@@ -119,7 +135,11 @@ export function ExportPreviewBody({
   const [ack, setAck] = useState(false);
   const [downloading, setDownloading] = useState(false);
   // Per-row reveal state for the masked national-ID / bank-account column.
-  const alreadyExported = !!exportedAt;
+  // A re-download is decided by the MONTHS, not the course-wide exportedAt
+  // flag: the flag stays set after a month is sent back, and such a month is
+  // a new locking export (a corrected version), not a reprint.
+  const archived = data?.archived ?? null;
+  const alreadyExported = !!archived;
   const notReady = (data?.rows ?? []).filter(r => !r.profile_ready);
   const blockers = data?.blockers ?? [];
 
@@ -132,7 +152,7 @@ export function ExportPreviewBody({
     try {
       // POST, not GET: the download locks the months, and a GET could be
       // triggered by a link on another site.
-      const res = await fetch(`/api/v1/exports/course/${tcId}.zip${monthsQuery(scope)}`, {
+      const res = await fetch(apiUrl(`/exports/course/${tcId}.zip${monthsQuery(scope)}`), {
         method: "POST",
         credentials: "include",
       });
@@ -252,7 +272,8 @@ export function ExportPreviewBody({
               twice by accident is not. */}
           {months.some(ym => allMonths.find(m => m.year_month === ym)?.issued) && (
             <p className="mt-2 text-xs text-amber-900 dark:text-amber-200">
-              เดือนที่เลือกบางเดือนเคยออกเอกสารไปแล้ว การออกซ้ำจะได้ยอดเดิมอีกฉบับ
+              เดือนที่เลือกบางเดือนเคยออกเอกสารไปแล้ว เดือนที่ยังล็อกอยู่ใช้ยอดตามเอกสารเดิมเสมอ
+              หากเลือกเฉพาะเดือนเดิมทั้งชุด ระบบจะส่งไฟล์เดิมฉบับเดียวกันกลับมา
             </p>
           )}
         </div>
@@ -282,13 +303,29 @@ export function ExportPreviewBody({
         </div>
       )}
 
+      {archived && (
+        <div className="rounded-lg border border-hairline bg-slate-50/60 dark:bg-slate-900/30 px-3 py-2 text-xs text-ink-2">
+          เดือนที่เลือกส่งออกแล้ว{archived.version > 1 ? ` (ฉบับแก้ไข ครั้งที่ ${archived.version - 1})` : ""}{" "}
+          ยอดตามเอกสาร <b className="tabular">{fmtBaht(archived.total_baht)}</b>
+          {archived.file_available
+            ? " การดาวน์โหลดจะได้ไฟล์เดิมที่ส่งออกไว้ ไม่มีการคำนวณใหม่"
+            : " ไม่พบไฟล์เดิมในระบบจัดเก็บ การดาวน์โหลดจะสร้างเอกสารใหม่จากยอดที่บันทึกไว้ตอนส่งออก"}
+          {archived.legacy && (
+            <span className="block mt-1 text-amber-800 dark:text-amber-200">
+              เดือนนี้ส่งออกก่อนที่ระบบจะบันทึกยอดรายคน ตัวเลขในตารางเป็นการคำนวณใหม่และอาจไม่ตรงกับเอกสาร
+              ยอดที่ถูกต้องคือยอดตามเอกสารด้านบน
+            </span>
+          )}
+        </div>
+      )}
+
       {blockers.length > 0 && (
         <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
           <b>ยังดาวน์โหลดไม่ได้</b> ต้องผ่านครบทุกขั้นก่อน เพราะการดาวน์โหลดจะล็อกตัวเลขทันที
           <ul className="mt-1 list-disc pl-4 space-y-0.5">
             {blockers.map((b, i) => (
               <li key={i}>
-                {b.ta_name} — {blockerText(b)} ({b.months.join(", ")})
+                {b.ta_name} — {blockerText(b)}{b.months.length > 0 ? ` (${b.months.join(", ")})` : ""}
               </li>
             ))}
           </ul>
@@ -375,7 +412,7 @@ export function ExportPreviewBody({
         <p className="text-xs text-ink-3">
           {outstandingAfterSplit.length > 0
             ? <>วิชานี้ส่งออก (ล็อก) งบปีเก่าแล้ว ดาวน์โหลดซ้ำได้ทันที — <b>ยังเหลือ {outstandingAfterSplit.join(", ")}</b> ที่ยังไม่ได้ทำเบิก (งบปีใหม่)</>
-            : "วิชานี้เคยส่งออก (ล็อก) แล้ว ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม"}
+            : "เดือนที่เลือกส่งออก (ล็อก) แล้ว ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม"}
         </p>
       )}
 
@@ -406,6 +443,8 @@ function blockerText(b: ExportBlocker) {
   // Not a review the officer can do: the review queue does not list this TA
   // until an appointment order names them.
   if (b.kind === "not_appointed") return "ยังไม่อยู่ในคำสั่งแต่งตั้ง — ออกคำสั่งรอบถัดไปก่อน";
+  // The TA's own documents: staff approve them on the TA documents screen.
+  if (b.kind === "profile") return `เอกสาร TA ยังไม่พร้อม: ${b.issue ?? ""}`;
   return "ยังไม่ได้ตรวจสอบเบิกจ่าย";
 }
 

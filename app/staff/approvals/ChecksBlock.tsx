@@ -16,7 +16,7 @@ interface DecisionCheck {
 const RULE_LABEL: Record<string, string> = {
   docs:           "เอกสาร TA",
   schedule:       "ตารางเรียน",
-  cap:            "ไม่เกิน 3 วิชา/ภาค",
+  cap:            "ไม่เกินจำนวนวิชาต่อภาคที่กำหนด",
   duplicate:      "ไม่ซ้ำในวิชานี้",
   own_conflict:   "ไม่ทับตารางเรียนของ TA",
   clash_trimmed:  "คาบที่ถูกตัดออก",

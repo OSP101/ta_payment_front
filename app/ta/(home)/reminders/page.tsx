@@ -28,12 +28,18 @@ interface PendingRow {
   teaching_course_id: string;
   course_code: string;
   course_name_th: string;
-  status: "pending" | "exported" | "finance_sent" | "skipped";
+  status: "pending" | "staff_reviewed" | "exported" | "finance_sent" | "skipped";
   // Worklog readiness for the month. Once the lecturer has approved every daily
   // row the month is "รอเจ้าหน้าที่ส่งออก" — no TA action is required.
   worklog_total: number;
   worklog_unapproved: number;
   worklog_approved_hrs: number;
+  // Who the unapproved rows are with — see SubmissionPeriodStatus. Without the
+  // split every unapproved row read "รออาจารย์อนุมัติ", including rows the
+  // lecturer had already sent BACK and drafts the TA never sent.
+  worklog_waiting_ta?: number;
+  worklog_waiting_lecturer?: number;
+  worklog_rejected?: number;
 }
 
 // Group rows by submission period so a TA sees "one card per month" with
@@ -45,13 +51,25 @@ type Group = { period_id: string; label: string; starts_on: string; due_date: st
 // step: after the lecturer approves every row, staff export (lock) then send to
 // finance.
 function statusBadge(r: PendingRow, today: string): { label: string; tone: ChipTone } {
-  if (r.status === "exported")     return { label: "ส่งออกแล้ว รอส่งการเงิน", tone: "brand" };
+  // Final from the TA's side — ส่งการเงิน has no staff step by design, so
+  // "รอส่งการเงิน" was a wait that never ended.
+  if (r.status === "exported")     return { label: "เจ้าหน้าที่ส่งเอกสารเบิกจ่ายแล้ว", tone: "success" };
   if (r.status === "finance_sent") return { label: "ส่งการเงินแล้ว", tone: "success" };
   if (r.status === "skipped")      return { label: "ข้ามรอบนี้", tone: "neutral" };
+  if (r.status === "staff_reviewed") return { label: "เจ้าหน้าที่ตรวจแล้ว", tone: "info" };
   // pending — derive from worklog readiness
   if (!r.is_closed && r.starts_on > today) return { label: "ยังไม่ถึงรอบ", tone: "neutral" };
   if (r.worklog_total === 0)               return { label: "ไม่มีรายการเดือนนี้", tone: "neutral" };
-  if (r.worklog_unapproved > 0)            return { label: `รออาจารย์อนุมัติงาน ${r.worklog_unapproved} รายการ`, tone: "warn" };
+  // Worst actionable state first: a bounced row is the TA's to fix, then rows
+  // the TA never sent, and only then what is genuinely with the lecturer.
+  if ((r.worklog_rejected ?? 0) > 0)
+    return { label: `อาจารย์ตีกลับ ต้องแก้ไข ${r.worklog_rejected} รายการ`, tone: "danger" };
+  if ((r.worklog_waiting_ta ?? 0) > 0 && !r.is_closed)
+    return { label: `ยังไม่ได้ส่งอนุมัติ ${r.worklog_waiting_ta} รายการ`, tone: "warn" };
+  if ((r.worklog_waiting_lecturer ?? 0) > 0)
+    return { label: `รออาจารย์อนุมัติงาน ${r.worklog_waiting_lecturer} รายการ`, tone: "info" };
+  if (r.worklog_unapproved > 0 && r.worklog_waiting_lecturer === undefined)
+    return { label: `รออาจารย์อนุมัติงาน ${r.worklog_unapproved} รายการ`, tone: "warn" };
   return { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
 }
 
