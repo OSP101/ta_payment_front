@@ -313,7 +313,7 @@ export default function Composer({
           <Section
             icon={<ImageIcon size={15} />}
             title="รูปภาพและไฟล์แนบ"
-            hint="ไม่ใส่ก็ได้"
+            hint="ไม่ใส่ก็ได้ · พิมพ์ข้อความลงรูปจากแม่แบบเป็นรูปหน้าปกได้"
             collapsible
             defaultOpen={mediaCount > 0}
             summary={mediaCount > 0 ? `${mediaCount} ไฟล์` : "ยังไม่มีไฟล์"}

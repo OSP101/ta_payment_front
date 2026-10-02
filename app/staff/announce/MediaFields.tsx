@@ -1,12 +1,13 @@
 "use client";
 import { useRef, useState } from "react";
 import {
-  Image as ImageIcon, X, Trash2, AlertTriangle, Plus, Paperclip, Play, FileText,
+  Image as ImageIcon, X, Trash2, AlertTriangle, Plus, Paperclip, Play, FileText, Wand2,
 } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api, errMessage } from "../../lib/api";
 import type { Attachment } from "../../components/AttachmentGallery";
 import { Button, FieldGroup, Alert, Tip } from "../../components/ui";
+import CoverMaker, { defaultCoverText, type CoverText } from "./CoverMaker";
 import { IMG, type Draft, type SetDraft } from "./shared";
 
 // ============================================================================
@@ -118,12 +119,22 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [makerOpen, setMakerOpen] = useState(false);
+  // Kept while the composer is open, so reopening the maker carries on from
+  // the words already typed instead of starting over.
+  const [coverText, setCoverText] = useState<CoverText | null>(null);
 
-  async function upload(file: File) {
+  function openMaker() {
+    setCoverText(t => t ?? defaultCoverText(draft.title.trim()));
+    setMakerOpen(true);
+  }
+
+  /** True when the cover was stored. */
+  async function upload(file: File): Promise<boolean> {
     setError(null);
     if (!IMG.accept.split(",").includes(file.type)) {
       setError(`รองรับเฉพาะไฟล์ ${IMG.acceptLabel}`);
-      return;
+      return false;
     }
     if (file.size > IMG.maxBytes) {
       setError("ไฟล์ใหญ่เกิน 5MB ระบบจะพยายามย่อขนาดให้อัตโนมัติ");
@@ -137,9 +148,11 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
       // Functional update: the upload takes seconds, and writing back the
       // `draft` captured when it started erased whatever was typed meanwhile.
       setDraft(d => ({ ...d, cover_image_key: res.key, cover_image_url: res.url }));
-      toast.success("อัปโหลดรูปสำเร็จ");
+      toast.success("ใส่รูปหน้าปกแล้ว");
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "อัปโหลดไม่สำเร็จ");
+      return false;
     } finally {
       setUploading(false);
     }
@@ -163,7 +176,10 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
             alt="cover preview"
             className="w-full aspect-video object-cover bg-surface-secondary"
           />
-          <div className="absolute top-2 right-2 flex gap-1.5">
+          <div className="absolute top-2 right-2 flex flex-wrap justify-end gap-1.5">
+            <Button variant="secondary" size="sm" onPress={openMaker}>
+              <Wand2 size={13} /> สร้างจากแม่แบบ
+            </Button>
             <Button variant="secondary" size="sm" onPress={() => fileRef.current?.click()}>
               <ImageIcon size={13} /> เปลี่ยนรูป
             </Button>
@@ -202,6 +218,22 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
             {IMG.acceptLabel} • ≤ 5MB • {IMG.maxWidth}×{IMG.maxHeight}px
           </div>
         </div>
+      )}
+      {!draft.cover_image_url && (
+        <Button variant="secondary" size="sm" onPress={openMaker} className="self-start">
+          <Wand2 size={13} /> หรือพิมพ์ข้อความลงรูปจากแม่แบบ
+        </Button>
+      )}
+      {coverText && (
+        <CoverMaker
+          open={makerOpen}
+          onClose={() => setMakerOpen(false)}
+          value={coverText}
+          onChange={setCoverText}
+          onUse={async file => {
+            if (!(await upload(file))) throw new Error("ใส่รูปหน้าปกไม่สำเร็จ");
+          }}
+        />
       )}
       <input
         ref={fileRef}
