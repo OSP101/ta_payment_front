@@ -26,6 +26,8 @@ export interface TARequestRow {
   dropped_count?: number;
   /** Server's own verdict on whether Cancel would currently succeed. */
   can_cancel?: boolean;
+  /** The officer who filed it for the lecturer; absent when the lecturer did. */
+  submitted_by_name?: string;
 }
 
 /** One row of /ta-requests/:id — who was actually sent in this round. */
@@ -74,7 +76,14 @@ function buildColumns(
     id: "submitted_at", width: 150, label: "วันที่ยื่นคำขอ", sortable: true, isRowHeader: true,
     sortValue: r => r.submitted_at ?? "",
     className: "whitespace-nowrap",
-    render: r => thDate(r.submitted_at),
+    render: r => (
+      <span className="inline-flex flex-col">
+        <span>{thDate(r.submitted_at)}</span>
+        {r.submitted_by_name && (
+          <span className="text-xs text-muted">ส่งแทนโดย {r.submitted_by_name}</span>
+        )}
+      </span>
+    ),
   },
   {
     id: "ta_count", width: 110, label: "จำนวน TA",

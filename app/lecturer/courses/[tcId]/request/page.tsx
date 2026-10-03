@@ -4,7 +4,7 @@ import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import {
   Plus, Send, Trash2, ClipboardList, Wallet, CheckCircle2, AlertCircle, Info,
-  UserPlus, Copy, Files, CalendarClock, CalendarOff, Clock, ChevronDown,
+  UserPlus, Copy, Files, CalendarClock, CalendarOff, Clock, ChevronDown, UserCog,
 } from "lucide-react";
 import {
   RadioGroup, Radio, Description, Label,
@@ -18,10 +18,10 @@ import {
   FieldError as HFieldError,
   type Key,
 } from "@heroui/react";
-import { api } from "../../../../lib/api";
+import { api, type Me } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import {
-  PageHeader, Panel, Button, IconButton, TextInput, Select, FieldGroup, Chip, EmptyState, Alert, Modal, Tip, TipWrap,
+  PageHeader, Panel, Button, IconButton, TextInput, Select, SelectField, FieldGroup, Chip, EmptyState, Alert, Modal, Tip, TipWrap,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 import { TaPlanner, planHandoffKey, type PlanItem, type DraftEstimate } from "../../../../components/TaPlanner";
@@ -319,9 +319,23 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
     // requests for the course until the schedule is filled in.
     has_missing_schedule?: boolean;
     sections?: Section[];
+    lecturers?: { id: string; first_name: string; last_name: string; is_primary: boolean }[];
   }>(
     tcId ? `/teaching-courses/${tcId}` : null,
   );
+  // Staff (or an admin) who do not teach this course file the request FOR one
+  // of its lecturers — the backend records them as the sender and tells the
+  // lecturer. A staff member who also teaches it sends as themselves.
+  const { data: me } = useSWR<Me>("/me");
+  const lecturers = course?.lecturers ?? [];
+  const onBehalf = !!me && (me.roles.includes("admin") || me.roles.includes("staff"))
+    && !lecturers.some(l => l.id === me.id);
+  const [pickedLecturer, setPickedLecturer] = useState("");
+  const forLecturer = onBehalf
+    ? (pickedLecturer && lecturers.some(l => l.id === pickedLecturer)
+        ? pickedLecturer
+        : (lecturers.find(l => l.is_primary) ?? lecturers[0])?.id ?? "")
+    : "";
   const { data: allReqs } = useSWR<TARequestRow[]>("/ta-requests");
   const { data: windows } = useSWR<RequestWindow[]>(
     course?.term_id ? `/ta-request/windows?term_id=${course.term_id}` : null,
@@ -345,7 +359,8 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
   // เปิดช่วงรับคำขอ (ยังไม่กำหนด หรือยังไม่ถึงวันเปิด) ส่งไม่ได้ เช่นเดียวกับ
   // WBA (ยังไม่มีตารางเรียน)
   const windowBlocked = !windowLoading && (windowState.phase === "none" || windowState.phase === "notyet");
-  const canSend = !wbaBlocked && !windowBlocked;
+  const noLecturer = onBehalf && lecturers.length === 0;
+  const canSend = !wbaBlocked && !windowBlocked && !noLecturer;
 
   return (
     <div>
@@ -357,6 +372,33 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
       />
 
       <WindowStatusBanner state={windowState} loading={windowLoading} />
+
+      {onBehalf && (
+        <div className="mb-4">
+          <Alert
+            status={noLecturer ? "danger" : "accent"}
+            icon={<UserCog size={16} />}
+            title={noLecturer ? "วิชานี้ยังไม่มีอาจารย์ผู้สอน จึงส่งคำขอแทนไม่ได้" : "คุณกำลังส่งคำขอแทนอาจารย์"}
+            description={noLecturer
+              ? "กำหนดอาจารย์ผู้สอนของวิชาที่หน้าวิชาที่เปิดสอนก่อน แล้วจึงกลับมาส่งคำขอ"
+              : "คำขอจะเป็นของอาจารย์ที่เลือก ระบบบันทึกว่าคุณเป็นผู้ส่งแทน และแจ้งอาจารย์ให้ทราบ"}
+          />
+          {!noLecturer && (
+            <div className="mt-3 max-w-md">
+              <SelectField
+                label="ส่งในนามอาจารย์"
+                value={forLecturer}
+                onChange={setPickedLecturer}
+                options={lecturers.map(l => ({
+                  id: l.id,
+                  label: `${l.first_name} ${l.last_name}${l.is_primary ? " (ผู้รับผิดชอบหลัก)" : ""}`,
+                  textValue: `${l.first_name} ${l.last_name}`,
+                }))}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* WBA block: registrar file had no timetable for this course — filling
           the section schedules (ตั้งค่ารายวิชา) unblocks TA requests. */}
@@ -384,6 +426,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
           course={course}
           budget={budget}
           canSend={canSend}
+          lecturerId={forLecturer || undefined}
           late={windowState.phase === "late"}
           onSubmitted={() => {
             // The form already toasts the actual verdict (approved / waiting on
@@ -476,7 +519,7 @@ function GradSpecialAlert({ g }: { g: GradSpecialFacts }) {
 /* -------------------------------------------------------------------------- */
 
 function RequestFormSection({
-  tcId, course, budget, canSend, late, onSubmitted,
+  tcId, course, budget, canSend, lecturerId, late, onSubmitted,
 }: {
   tcId: string;
   course?: {
@@ -487,6 +530,8 @@ function RequestFormSection({
   budget?: CourseBudget;
   /** false = นอกช่วงเปิดรับคำขอ — ฟอร์มยังกรอก/คำนวณได้ แต่ส่งไม่ได้ */
   canSend?: boolean;
+  /** Set when staff file on a lecturer's behalf — the lecturer the request is for. */
+  lecturerId?: string;
   late?: boolean;
   onSubmitted: () => void;
 }) {
@@ -862,6 +907,7 @@ function RequestFormSection({
       type SubmitRes = { id: string; status: "approved" | "rejected" | "submitted"; reject_reason?: string };
       const res: SubmitRes | null = fresh.length === 0 ? null : await api.post<SubmitRes>("/ta-requests", {
         teaching_course_id: tcId,
+        ...(lecturerId ? { lecturer_id: lecturerId } : {}),
         reimburse_scope: scope,
         counts: [...bySection.entries()].map(([section_id, c]) => ({ section_id, ...c })),
         assignments: fresh.map(a => ({

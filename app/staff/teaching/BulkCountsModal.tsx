@@ -157,7 +157,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
     <Modal
       open={open}
       onClose={() => { if (!pending) onClose(); }}
-      size="lg"
+      size="2xl"
       icon={<ClipboardPaste size={18} />}
       title={`อัปเดตจำนวนนักศึกษาจริง${termLabel ? ` · ภาค ${termLabel}` : ""}`}
       footer={footer}

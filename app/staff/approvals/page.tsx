@@ -3,7 +3,7 @@ import useSWR from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2, XCircle, ChevronDown, Users, BookOpenCheck, FileCheck2, CalendarCheck2,
-  ShieldCheck, ShieldAlert, ClipboardList,
+  ShieldCheck, ShieldAlert, ClipboardList, UserCog,
 } from "lucide-react";
 import { Accordion } from "@heroui/react";
 import { useTerm } from "../TermContext";
@@ -47,6 +47,8 @@ interface RequestSummary {
   reject_reason?: string;
   teaching_course_id: string;
   lecturer_name: string;
+  /** The officer who filed it for the lecturer; absent when the lecturer did. */
+  submitted_by_name?: string;
   ta_count: number;
   term_id: string;
   academic_year: number;
@@ -277,6 +279,11 @@ function RequestHeader({ req }: { req: RequestSummary }) {
       <Tip content={`${req.course_code} ${req.course_name}\nอ. ${req.lecturer_name}`}>
         <span tabIndex={-1} className="min-w-0 max-w-full truncate text-xs text-(--ink-3)">อ. {req.lecturer_name}</span>
       </Tip>
+      {req.submitted_by_name && (
+        <Chip tone="info">
+          <UserCog size={11} /> เจ้าหน้าที่ {req.submitted_by_name} ส่งแทน
+        </Chip>
+      )}
     </div>
   );
 }
@@ -376,6 +383,7 @@ function MetaFooter({ d }: { d: RequestDetail }) {
       {d.submitted_at && (
         <span className="inline-flex items-center gap-1">
           <FileCheck2 size={11} /> ส่ง {new Date(d.submitted_at).toLocaleString("th-TH")}
+          {d.submitted_by_name && ` โดยเจ้าหน้าที่ ${d.submitted_by_name} แทน อ. ${d.lecturer_name}`}
         </span>
       )}
       {d.decided_at && (
