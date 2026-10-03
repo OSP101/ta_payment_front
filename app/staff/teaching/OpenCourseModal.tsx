@@ -432,7 +432,8 @@ export default function OpenCourseModal({
                         <b>ใช่ รวมเป็นวิชาเดียว</b>
                         <span className="block text-xs text-muted">
                           เพิ่ม {draft.code} เป็นอีกรหัสของวิชานี้ นับนักศึกษารวมกัน คิดงบก้อนเดียว ใช้ระดับ หน่วยกิต และอาจารย์ตามวิชาเดิม
-                          · เอกสารจะใช้รหัส {pickPrimaryCode([...courseCodes(sameNameCourse), draft.code])}
+                          section ที่เลขและประเภทตรงกันจะรวมเป็น section เดียว (บวกจำนวนนักศึกษา ใช้ตารางเรียนของวิชาเดิม)
+                          · เอกสารจะพิมพ์รหัส {mergedCodesLabel([...courseCodes(sameNameCourse), draft.code])}
                         </span>
                       </span>
                     </label>
@@ -828,4 +829,9 @@ export function LecturerAutocomplete({
   );
 }
 
-
+/** How the documents print a merged course's codes: primary first, then the
+ *  rest, joined with "/" — mirrors CourseCodesSQL on the server. */
+function mergedCodesLabel(codes: string[]): string {
+  const primary = pickPrimaryCode(codes);
+  return [primary, ...codes.filter(c => c !== primary)].join("/");
+}

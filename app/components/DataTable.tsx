@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   Pagination, Table, type SortDescriptor,
 } from "@heroui/react";
@@ -7,24 +8,9 @@ import { ArrowDownAZ, ArrowUpAZ } from "lucide-react";
 import { EmptyState, SearchField, SelectField, Spinner, Alert, Button, IconButton, type SelectOption } from "./ui";
 
 // Skeleton placeholders shown while the first page of data is still in
-// flight (rows === undefined). Replaces a bare spinner: a spinner-then-pop-in
-// reads as a flash/flicker (กระพริบ/วูบวาป — the reported symptom), while a
-// skeleton shaped like the eventual rows makes the transition read as content
-// filling in rather than the page changing shape.
-function TableRowsSkeleton({ columns }: { columns: number }) {
-  return (
-    <div className="flex flex-col gap-3 py-2" aria-hidden>
-      {Array.from({ length: 6 }, (_, i) => (
-        <div key={i} className="flex items-center gap-4">
-          {Array.from({ length: columns }, (_, j) => (
-            <div key={j} className="skel h-3.5 flex-1 rounded bg-surface-secondary" />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
+// flight (rows === undefined): a spinner-then-pop-in reads as a flash
+// (กระพริบ/วูบวาป — the reported symptom). The table draws its placeholder
+// rows in the real columns (see Table.Body below); cards use this.
 function CardRowsSkeleton() {
   return (
     <ul className="flex flex-col gap-2" aria-hidden>
@@ -38,6 +24,25 @@ function CardRowsSkeleton() {
         </li>
       ))}
     </ul>
+  );
+}
+
+// React Aria's column width: px, "120" or a share like "1fr".
+type ColumnSize = number | `${number}` | `${number}%` | `${number}fr`;
+
+/** The table's scrolling box: HeroUI's resizable container when columns can
+ *  be dragged (it scrolls too), the plain scroll container otherwise. */
+function TableFrame({ resizable, onResize, onResizeEnd, children }: {
+  resizable: boolean;
+  onResize: (w: Map<React.Key, number | string>) => void;
+  onResizeEnd: (w: Map<React.Key, number | string>) => void;
+  children: React.ReactNode;
+}) {
+  if (!resizable) return <Table.ScrollContainer>{children}</Table.ScrollContainer>;
+  return (
+    <Table.ResizableContainer onResize={onResize} onResizeEnd={onResizeEnd}>
+      {children}
+    </Table.ResizableContainer>
   );
 }
 
@@ -65,6 +70,12 @@ export interface DataColumn<T> {
   hideOnMobile?: boolean;
   /** Shorter label for the card, when the table heading is a sentence. */
   mobileLabel?: React.ReactNode;
+  /** Relative starting width (≈px at a 1,100px table) when `resizable`:
+   *  columns share the table's width in these proportions and grow with the
+   *  screen. Default 120. */
+  width?: number;
+  /** Narrowest the column may be dragged, in px (resizable tables). */
+  minWidth?: number;
 }
 
 export interface DataFilter<T> {
@@ -132,6 +143,14 @@ interface DataTableProps<T> {
   minWidth?: string;
   /** Set to page/filter/sort on the server instead of in the browser. */
   server?: DataTableServer;
+  /**
+   * Columns get a drag handle on their right edge (HeroUI column resizing).
+   * Widths start from each column's `width` — fixed, so the layout no longer
+   * jumps when the rows arrive — and what the user drags is remembered in
+   * this browser, per table (keyed by ariaLabel). On by default for every
+   * table (03/10/2026); pass false to opt out.
+   */
+  resizable?: boolean;
 }
 
 // React Aria selection keys must be non-empty; callers use "" for the
@@ -157,8 +176,23 @@ export function DataTable<T>({
   searchFn, searchPlaceholder = "ค้นหา…",
   filters, initialFilterValues, pageSize = 10, initialSort,
   emptyTitle = "ไม่มีข้อมูล", emptyDescription,
-  loading, error, onRetry, toolbarExtra, minWidth, server,
+  loading, error, onRetry, toolbarExtra, minWidth, server, resizable = true,
 }: DataTableProps<T>) {
+  // v2: widths became proportional (03/10/2026); v1 saved fixed px for every
+  // column, which no longer filled a wide screen.
+  const widthsKey = `datatable-widths:v2:${ariaLabel}`;
+  const [widths, setWidths] = useState<Record<string, number | string>>({});
+  // Saved widths are read after mount: the server render has no localStorage,
+  // and reading it during render would make the first client render differ.
+  useEffect(() => {
+    if (!resizable) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(widthsKey) ?? "null");
+      if (saved && typeof saved === "object") setWidths(saved);
+    } catch { /* private window / blocked storage: defaults it is */ }
+  }, [resizable, widthsKey]);
+  const toRecord = (m: Map<React.Key, number | string>) =>
+    Object.fromEntries([...m].map(([k, v]) => [String(k), v]));
   const [localQuery, setLocalQuery] = useState("");
   const [localFilterValues, setLocalFilterValues] = useState<Record<string, string>>(initialFilterValues ?? {});
   // If the caller resolves initial values asynchronously (e.g. after an SWR
@@ -260,6 +294,91 @@ export function DataTable<T>({
   // a translucent overlay instead of wiping the table — keeps context so the
   // user doesn't lose their scroll / selection while data refreshes.
   const showRefetchOverlay = !!loading && rowsLoaded && safeRows.length > 0;
+
+  // Columns fit their content (office, 03/10/2026): nothing wraps and
+  // nothing is cut with "…". Each column's natural width — its widest cell
+  // or its heading, on one line — is measured before the browser paints, and
+  // becomes both the column's minimum and its share of the table. A wide
+  // screen spreads the spare room in those proportions; a narrow one scrolls
+  // sideways. A dragged column keeps its px but cannot go below its content;
+  // the last column (no handle) keeps its share, so the table still fills.
+  //
+  // React Aria puts the rows into the DOM a commit after this component
+  // renders, so measuring in a layout effect saw only the headers. A
+  // MutationObserver measures when the rows actually land; its callback runs
+  // before the browser paints, and flushSync applies the widths right there
+  // (twice: React Aria also takes changed column widths a render late), so
+  // the first painted frame already has them — no jump.
+  const tableRef = useRef<HTMLDivElement>(null);
+  const columnSet = columns.map(c => c.id).join("|");
+  const [fit, setFit] = useState<Record<string, number>>({});
+  const [, bump] = useState(0);
+  useLayoutEffect(() => {
+    if (!resizable) return;
+    const root = tableRef.current;
+    if (!root) return;
+    const measure = () => {
+      const td = root.querySelector("tbody td");
+      const th = root.querySelector("thead th");
+      const pad = (el: Element | null) => {
+        if (!el) return 24;
+        const cs = getComputedStyle(el);
+        return parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      };
+      const cellPad = pad(td), headPad = pad(th) + 28; // + sort arrow and drag handle
+      const next: Record<string, number> = {};
+      root.querySelectorAll<HTMLElement>("[data-dt-col]").forEach(el => {
+        const id = el.dataset.dtCol!;
+        next[id] = Math.max(next[id] ?? 0, Math.ceil(el.getBoundingClientRect().width + cellPad));
+      });
+      root.querySelectorAll<HTMLElement>("[data-dt-head]").forEach(el => {
+        const id = el.dataset.dtHead!;
+        next[id] = Math.max(next[id] ?? 0, Math.ceil(el.getBoundingClientRect().width + headPad));
+      });
+      return next;
+    };
+    // Only ever widen: paging to rows with shorter text must not make the
+    // columns jump narrower under the reader.
+    const grow = (prev: Record<string, number>, next: Record<string, number>) => {
+      let grew = false;
+      const out = { ...prev };
+      for (const [k, v] of Object.entries(next)) {
+        if (v > (out[k] ?? 0)) { out[k] = v; grew = true; }
+      }
+      return grew ? out : prev;
+    };
+    // A new set of columns (e.g. the users table hiding the TA-only ones
+    // under a role filter) starts over: measure afresh instead of widening,
+    // and scroll back to the left edge. Inside this layout effect a plain
+    // update already lands before paint.
+    setFit(measure());
+    const scroller = root.querySelector(".table__resizable-container");
+    if (scroller) scroller.scrollLeft = 0;
+    const mo = new MutationObserver(() => {
+      const next = measure();
+      flushSync(() => setFit(prev => grow(prev, next)));
+    });
+    mo.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => mo.disconnect();
+  }, [resizable, columnSet]);
+  // React Aria takes changed column widths one render late; one more render
+  // whenever the measured widths change applies them before the paint.
+  const fitSig = Object.entries(fit).map(([k, v]) => `${k}:${v}`).join(",");
+  useLayoutEffect(() => {
+    if (resizable) bump(n => n + 1);
+  }, [resizable, fitSig]);
+  const sizeProps = (c: DataColumn<T>) => {
+    if (!resizable) return {};
+    const natural = fit[c.id] ?? c.width ?? 120;
+    return {
+      width: (widths[c.id] ?? `${natural}fr`) as ColumnSize,
+      minWidth: Math.max(c.minWidth ?? 0, fit[c.id] ?? 60),
+    };
+  };
+  // Every column but the last: dragging the last edge would only widen the
+  // table past its container.
+  const resizer = (c: DataColumn<T>) =>
+    resizable && c !== columns[columns.length - 1] ? <Table.ColumnResizer /> : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -372,9 +491,15 @@ export function DataTable<T>({
           )}
         </div>
 
-        <div className="hidden sm:block">
+        <div className="hidden sm:block" ref={tableRef}>
       <Table>
-        <Table.ScrollContainer>
+        <TableFrame
+          resizable={!!resizable}
+          onResize={m => setWidths(toRecord(m))}
+          onResizeEnd={m => {
+            try { localStorage.setItem(widthsKey, JSON.stringify(toRecord(m))); } catch { /* not saved */ }
+          }}
+        >
           <Table.Content
             aria-label={ariaLabel}
             sortDescriptor={sort}
@@ -386,29 +511,33 @@ export function DataTable<T>({
                 c.sortable ? (
                   <Table.Column
                     key={c.id} id={c.id} isRowHeader={c.isRowHeader}
-                    className={c.headerClassName} allowsSorting
+                    className={`whitespace-nowrap ${c.headerClassName ?? ""}`} allowsSorting
+                    {...sizeProps(c)}
                   >
                     {({ sortDirection }) => (
-                      <Table.SortableColumnHeader sortDirection={sortDirection}>
-                        {c.label}
-                      </Table.SortableColumnHeader>
+                      <>
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          <span data-dt-head={c.id}>{c.label}</span>
+                        </Table.SortableColumnHeader>
+                        {resizer(c)}
+                      </>
                     )}
                   </Table.Column>
                 ) : (
                   <Table.Column
                     key={c.id} id={c.id} isRowHeader={c.isRowHeader}
-                    className={c.headerClassName}
+                    className={`whitespace-nowrap ${c.headerClassName ?? ""}`}
+                    {...sizeProps(c)}
                   >
-                    {c.label}
+                    <span data-dt-head={c.id}>{c.label}</span>
+                    {resizer(c)}
                   </Table.Column>
                 ),
               )}
             </Table.Header>
             <Table.Body
               renderEmptyState={() =>
-                firstLoad ? (
-                  <TableRowsSkeleton columns={columns.length} />
-                ) : (
+                firstLoad ? null : (
                   <EmptyState
                     title={hasQuery ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}
                     description={hasQuery ? "ลองปรับคำค้นหาหรือตัวกรอง" : emptyDescription}
@@ -416,18 +545,31 @@ export function DataTable<T>({
                 )
               }
             >
+              {firstLoad && pageRows.length === 0 && Array.from({ length: Math.min(pageSize, 8) }, (_, i) => (
+                // Placeholder rows in the real columns: the table keeps its
+                // shape while the first page loads instead of popping from a
+                // blank box into rows (กระพริบ).
+                <Table.Row key={`skel-${i}`} id={`skel-${i}`} aria-hidden>
+                  {columns.map((c, j) => (
+                    <Table.Cell key={c.id}>
+                      <div className="skel h-3.5 rounded bg-surface-secondary" style={{ width: `${55 + ((i * 7 + j * 13) % 40)}%` }} />
+                    </Table.Cell>
+                  ))}
+                </Table.Row>
+              ))}
               {pageRows.map(row => (
                 <Table.Row key={rowKey(row)} id={rowKey(row)}>
                   {columns.map(c => (
-                    <Table.Cell key={c.id} className={c.className}>
-                      {c.render(row)}
+                    <Table.Cell key={c.id} className={`whitespace-nowrap ${c.className ?? ""}`}>
+                      {/* Measured for the column's natural width (see `fit`). */}
+                      <span data-dt-col={c.id} className="inline-block whitespace-nowrap align-middle">{c.render(row)}</span>
                     </Table.Cell>
                   ))}
                 </Table.Row>
               ))}
             </Table.Body>
           </Table.Content>
-        </Table.ScrollContainer>
+        </TableFrame>
       </Table>
         </div>
 

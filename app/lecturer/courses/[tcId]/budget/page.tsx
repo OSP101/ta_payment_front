@@ -1,4 +1,5 @@
 "use client";
+import BudgetCapNotice from "../../../../components/BudgetCapNotice";
 import { use, useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
@@ -16,6 +17,7 @@ interface Budget {
   credits: number; lecture_credits: number; lab_credits: number;
   lecture_hrs: number; lab_hrs: number;
   per_course_max: number; used_baht: number; remaining_baht: number; over_budget: boolean;
+  budget_cap_baht: number | null; formula_baht: number; cap_applied: boolean;
   weekly_workload_hours: number; monthly_pay_baht: number; term_pay_baht: number;
   weekly_workload_regular: number; monthly_pay_regular: number; term_pay_regular: number;
   weekly_workload_special: number; monthly_pay_special: number; term_pay_special: number;
@@ -123,6 +125,11 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
                 v={!b ? <SkelValue className="h-6 w-32" /> : course ? `${b.credits} (Lec ${course.lecture_hrs} / Lab ${course.lab_hrs})` : `${b.credits}`}
               />
               <Info k="เพดานงบ/วิชา" v={b ? `${b.per_course_max.toLocaleString()} บ.` : <SkelValue className="h-6 w-24" />} />
+              {b && b.budget_cap_baht != null && (
+                <div className="col-span-2">
+                  <BudgetCapNotice cap={b.budget_cap_baht} formula={b.formula_baht} applied={b.cap_applied} />
+                </div>
+              )}
               {/* จำนวน TA ที่ควรมี ตอบโดยตัววางแผนด้านบนที่เดียว — ตัวเลขแนะนำ
                   แบบเก่า (นศ./25 ไม่เกิน 3) ไม่ได้ดูงบและขัดกับแผน จึงเอาออก (12/09/2026) */}
             </div>

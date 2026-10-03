@@ -1,4 +1,5 @@
 "use client";
+import BudgetCapNotice from "../../../components/BudgetCapNotice";
 import { use } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
@@ -32,6 +33,10 @@ interface TC {
 }
 interface Budget {
   per_course_max: number;
+  /** เพดานงบรายวิชาของภาค (null = ไม่กำหนด) — see BudgetCapNotice. */
+  budget_cap_baht: number | null;
+  formula_baht: number;
+  cap_applied: boolean;
   used_baht: number;
   /** used_baht split by pool — used_baht_regular + used_baht_special == used_baht.
    *  Drives the usage bar's two coloured segments below. */
@@ -396,6 +401,10 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
         <span className="text-xl font-semibold tabular-nums">
           ~{baht(budget.per_course_max)} <span className="text-sm font-normal text-muted">บ.</span>
         </span>
+      </div>
+
+      <div className="mb-2">
+        <BudgetCapNotice cap={budget.budget_cap_baht} formula={budget.formula_baht} applied={budget.cap_applied} compact />
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-3">

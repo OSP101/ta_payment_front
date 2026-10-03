@@ -50,6 +50,8 @@ interface ReviewDay {
   track: string;
   source: "auto" | "manual";
   on_timetable: boolean;
+  /** work_logs.status — only draft/rejected rows can be deleted (StaffDelete). */
+  status?: string;
 }
 interface ReviewSlot {
   sec_no: string; kind: string; day_of_week: number;
@@ -343,7 +345,9 @@ export function WorklogReviewModal({
                 {/* Closed: sending back would forfeit the rows, at any stage —
                     the server refuses it and asks for the due date to be
                     extended first — so the button is not offered. */}
-                {target.periodOpen && (
+                {/* finance_sent: only an admin can take a month back from
+                    finance (finance-revert), so ตีกลับ is not offered. */}
+                {target.periodOpen && target.status !== "finance_sent" && (
                   <Button variant="secondary" size="sm" isDisabled={busy} onPress={() => setRejectOpen(true)}>
                     <Undo2 size={14} /> ตีกลับ
                   </Button>
@@ -436,6 +440,10 @@ export function WorklogReviewModal({
                 <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--hairline)]">
                   <WeekTable
                     days={shown}
+                    // Row edits are refused once the month is exported or sent
+                    // to finance, and once the period has closed
+                    // (assertWorklogWritable) — ตีกลับ is the way back in.
+                    canEdit={target.periodOpen && target.status !== "exported" && target.status !== "finance_sent"}
                     pending={pending}
                     activeKey={activeKey}
                     onHover={setHoverKey}
@@ -660,9 +668,10 @@ const fullDate = (iso: string) => {
 };
 
 function WeekTable({
-  days, pending, activeKey, onHover, onStage, onUndo,
+  days, canEdit, pending, activeKey, onHover, onStage, onUndo,
 }: {
   days: ReviewDay[];
+  canEdit: boolean;
   pending: Record<string, Pending>;
   activeKey: string | null;
   onHover: (k: string | null) => void;
@@ -851,21 +860,25 @@ function WeekTable({
                           <IconButton label="ยกเลิกการแก้" variant="ghost" size="sm" onClick={() => onUndo(d.id)}>
                             <RotateCcw size={12} />
                           </IconButton>
-                        ) : (
+                        ) : canEdit ? (
                           <>
                             <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => beginEdit(d)}>
                               <Pencil size={12} />
                             </IconButton>
-                            <IconButton
-                              label="ลบ"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onStage(d.id, { action: "delete" })}
-                            >
-                              <Trash2 size={12} />
-                            </IconButton>
+                            {/* StaffDelete removes draft/rejected rows only; an
+                                approved or submitted row is corrected, not deleted. */}
+                            {(d.status === "draft" || d.status === "rejected") && (
+                              <IconButton
+                                label="ลบ"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onStage(d.id, { action: "delete" })}
+                              >
+                                <Trash2 size={12} />
+                              </IconButton>
+                            )}
                           </>
-                        )}
+                        ) : null}
                       </td>
                     </>
                   )}

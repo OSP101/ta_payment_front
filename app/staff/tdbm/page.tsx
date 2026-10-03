@@ -4,7 +4,7 @@ import useSWR, { mutate } from "swr";
 import { RefreshCw, Database, CheckCircle2, XCircle } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
-import { PageHeader, Panel, Button, Chip, Alert, type ChipTone } from "../../components/ui";
+import { PageHeader, Panel, Button, Chip, Alert, Tip, type ChipTone } from "../../components/ui";
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 import { useTerm } from "../TermContext";
 import { Skel, SkelValue } from "../../components/Skeletons";
@@ -148,7 +148,7 @@ export default function StaffTDBMPage() {
 
   const columns: DataColumn<TDBMExtraTeaching>[] = [
     {
-      id: "class_date", label: "วันที่สอนชดเชย", sortable: true, isRowHeader: true,
+      id: "class_date", width: 150, label: "วันที่สอนชดเชย", sortable: true, isRowHeader: true,
       sortValue: r => r.class_date,
       render: r => (
         <span className="whitespace-nowrap">
@@ -160,7 +160,7 @@ export default function StaffTDBMPage() {
       ),
     },
     {
-      id: "original_holiday", label: "ตรงกับวันหยุด", sortable: true,
+      id: "original_holiday", width: 160, label: "ตรงกับวันหยุด", sortable: true,
       sortValue: r => r.original_holiday_date ?? "",
       render: r =>
         r.original_holiday_date ? (
@@ -173,35 +173,34 @@ export default function StaffTDBMPage() {
         ),
     },
     {
-      id: "course", label: "วิชา / กลุ่ม", sortable: true,
+      id: "course", width: 260, label: "วิชา / กลุ่ม", sortable: true,
       sortValue: r => r.course_code ?? "",
+      // One line: our match, then its name. TDBM's own raw text — the proof
+      // the sync fetched real data, whether or not we could match it — is in
+      // the tooltip.
       render: r => (
-        <div className="flex flex-col">
-          <span className="font-medium">
-            {r.matched_course_code ?? r.course_code ?? <span className="text-muted">—</span>}
-            {r.matched_sec_no && <span className="text-muted"> · กลุ่ม {r.matched_sec_no}</span>}
+        <Tip content={`TDBM: ${r.course_code ?? "—"}${r.section_label ? ` ${r.section_label}` : ""}${r.semester_type ? ` (${r.semester_type})` : ""}`}>
+          <span>
+            <span className="font-medium">
+              {r.matched_course_code ?? r.course_code ?? <span className="text-muted">—</span>}
+            </span>
+            {r.matched_sec_no && <span className="text-muted"> กลุ่ม {r.matched_sec_no}</span>}
+            {r.matched_course_name && <span className="ms-2 text-xs text-muted">{r.matched_course_name}</span>}
           </span>
-          {r.matched_course_name && <span className="text-xs text-muted">{r.matched_course_name}</span>}
-          {/* TDBM's own raw text, always shown alongside our match (or lack of
-             one) — this line is the proof that the sync fetched real data,
-             independent of whether we could resolve it against our schema. */}
-          <span className="text-xs text-muted">
-            TDBM: {r.course_code ?? "—"} {r.section_label ? `· ${r.section_label}` : ""} {r.semester_type ? `(${r.semester_type})` : ""}
-          </span>
-        </div>
+        </Tip>
       ),
     },
     {
-      id: "teacher", label: "อาจารย์ (เจ้าของวิชา)",
+      id: "teacher", width: 200, label: "อาจารย์ (เจ้าของวิชา)",
       render: r => r.owner_teacher_name ?? <span className="text-muted">—</span>,
     },
     {
-      id: "duration", label: "ชั่วโมง", sortable: true, className: "text-right", hideOnMobile: true,
+      id: "duration", width: 100, label: "ชั่วโมง", sortable: true, className: "text-right", hideOnMobile: true,
       sortValue: r => r.duration_minutes,
       render: r => <span className="tabular-nums">{(r.duration_minutes / 60).toFixed(1)}</span>,
     },
     {
-      id: "match", label: "สถานะจับคู่", sortable: true,
+      id: "match", width: 150, label: "สถานะจับคู่", sortable: true,
       sortValue: r => (isMatched(r) ? 1 : 0),
       render: r =>
         isMatched(r) ? (
@@ -230,16 +229,16 @@ export default function StaffTDBMPage() {
 
   const holidayColumns: DataColumn<Holiday>[] = [
     {
-      id: "date", label: "วันที่", sortable: true, isRowHeader: true,
+      id: "date", width: 150, label: "วันที่", sortable: true, isRowHeader: true,
       sortValue: h => h.holiday_date,
       render: h => <span className="whitespace-nowrap">{formatDateShort(h.holiday_date)}</span>,
     },
-    { id: "name", label: "ชื่อวันหยุด", sortable: true, sortValue: h => h.name_th, render: h => h.name_th },
+    { id: "name", width: 260, label: "ชื่อวันหยุด", sortable: true, sortValue: h => h.name_th, render: h => h.name_th },
     {
-      id: "source", label: "ประเภท", hideOnMobile: true,
+      id: "source", width: 140, label: "ประเภท", hideOnMobile: true,
       render: h => <Chip tone={HOLIDAY_SOURCE_TONE[h.source]}>{HOLIDAY_SOURCE_LABEL[h.source]}</Chip>,
     },
-    { id: "window", label: "ช่วงเวลา", hideOnMobile: true, render: h => holidayWindowLabel(h) },
+    { id: "window", width: 180, label: "ช่วงเวลา", hideOnMobile: true, render: h => holidayWindowLabel(h) },
   ];
 
   return (

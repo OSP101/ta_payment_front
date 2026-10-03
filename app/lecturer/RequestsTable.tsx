@@ -71,17 +71,17 @@ function buildColumns(
   onCancel: (id: string) => void,
 ): DataColumn<TARequestRow>[] { return [
   {
-    id: "submitted_at", label: "วันที่ยื่นคำขอ", sortable: true, isRowHeader: true,
+    id: "submitted_at", width: 150, label: "วันที่ยื่นคำขอ", sortable: true, isRowHeader: true,
     sortValue: r => r.submitted_at ?? "",
     className: "whitespace-nowrap",
     render: r => thDate(r.submitted_at),
   },
   {
-    id: "ta_count", label: "จำนวน TA",
+    id: "ta_count", width: 110, label: "จำนวน TA",
     render: r => <Chip tone="brand">{r.ta_count ?? 0} คน</Chip>,
   },
   {
-    id: "status", label: "สถานะ", sortable: true,
+    id: "status", width: 150, label: "สถานะ", sortable: true,
     sortValue: r => STATUS_LABEL[r.status] ?? r.status,
     render: r => (
       <div className="flex flex-wrap items-center gap-1.5">
@@ -102,12 +102,12 @@ function buildColumns(
     ),
   },
   {
-    id: "decided_at", label: "วันที่พิจารณา",
+    id: "decided_at", width: 150, label: "วันที่พิจารณา",
     className: "whitespace-nowrap text-muted",
     render: r => thDate(r.decided_at),
   },
   {
-    id: "reason", label: "หมายเหตุ",
+    id: "reason", width: 260, label: "หมายเหตุ",
     className: "w-16 text-center",
     render: r => r.reject_reason
       ? (
@@ -129,7 +129,7 @@ function buildColumns(
       : <span className="text-xs text-muted">-</span>,
   },
   {
-    id: "actions", label: "", className: "w-20 text-center",
+    id: "actions", width: 90, label: "", className: "w-20 text-center",
     render: r => (
       <div className="flex items-center justify-center gap-1">
         <Tooltip delay={0}>

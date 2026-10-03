@@ -4,7 +4,7 @@ import useSWR, { mutate } from "swr";
 import { Accordion } from "@heroui/react";
 import {
   AlertTriangle, Save, Upload, Download, CheckCircle2, Circle, XCircle,
-  IdCard, Wallet, FileSignature, CreditCard, BookOpen, FileText,
+  IdCard, Wallet, FileSignature, CreditCard, BookOpen, FileText, Eye, EyeOff,
 } from "lucide-react";
 import { api, apiUrl, type Me, type UploadProgress } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
@@ -173,7 +173,10 @@ interface Profile {
   signature_svg: string; signature_png_b64: string;
   status: string; reject_reason?: string;
 }
-interface Doc { id: string; kind: string; filename: string; status: string; reject_reason?: string; }
+interface Doc {
+  id: string; kind: string; filename: string; status: string; reject_reason?: string;
+  uploaded_at?: string; expires_at?: string; file_deleted_at?: string;
+}
 
 const emptyProfile: Profile = {
   student_id: "", prefix: "", phone: "",
@@ -1010,17 +1013,7 @@ function CreditorFormStep({
         </div>
       </div>
 
-      {doc && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--hairline)] mb-3 bg-surface-secondary">
-          <div className="min-w-0">
-            <div className="text-sm font-medium truncate">{doc.filename}</div>
-            {doc.reject_reason && (
-              <div className="text-xs text-danger mt-0.5">เหตุผล: {doc.reject_reason}</div>
-            )}
-          </div>
-          <StatusChip status={doc.status} />
-        </div>
-      )}
+      {doc && <SubmittedDoc doc={doc} />}
 
       <div className="flex flex-wrap gap-2 items-center">
         <Button variant="primary" onClick={confirm} disabled={confirming}>
@@ -1115,15 +1108,7 @@ function DocStep({
   return (
     <div>
       {doc ? (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--hairline)] mb-3 bg-surface-secondary">
-          <div className="min-w-0">
-            <div className="text-sm font-medium truncate">{doc.filename}</div>
-            {doc.reject_reason && (
-              <div className="text-xs text-danger mt-0.5">เหตุผล: {doc.reject_reason}</div>
-            )}
-          </div>
-          <StatusChip status={doc.status} />
-        </div>
+        <SubmittedDoc doc={doc} />
       ) : (
         <div className="flex items-center gap-2 mb-3 text-sm text-muted">
           <Circle size={14} /> ยังไม่ได้อัปโหลด
@@ -1174,6 +1159,85 @@ function DocStep({
       )}
 
       <UploadProgressModal progress={uploadProgress} filename={file?.name} />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The file already sent, with a way to look at it again                      */
+/* -------------------------------------------------------------------------- */
+
+const thaiDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+
+/**
+ * The current file of one step, and "ดูไฟล์ที่ส่ง" to open it again.
+ *
+ * A TA who wonders whether they sent the right scan can check it themselves
+ * instead of waiting days for an officer to send it back (office, 03/10/2026).
+ * The file is there until the retention job removes it, 7 days after the
+ * officer approves it; after that only the verdict is left to show.
+ *
+ * Fetched as a blob, not linked: a removed file answers 410 with a Thai
+ * message, which an <iframe src> would show as raw JSON. The blob URL is
+ * revoked on close and unmount so the ID card does not stay in memory.
+ */
+function SubmittedDoc({ doc }: { doc: Doc }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const removed = !!doc.file_deleted_at;
+
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  // A replacement upload is a different file: close the old one.
+  useEffect(() => { setUrl(null); }, [doc.id]);
+
+  async function toggle() {
+    if (url) { setUrl(null); return; }
+    setLoading(true);
+    try {
+      const blob = await api.get<Blob>(`/documents/${doc.id}/download`);
+      setUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-[var(--hairline)] overflow-hidden">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-surface-secondary">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium truncate">{doc.filename}</div>
+          {doc.uploaded_at && (
+            <div className="text-xs text-muted mt-0.5">ส่งเมื่อ {thaiDate(doc.uploaded_at)}</div>
+          )}
+          {doc.reject_reason && (
+            <div className="text-xs text-danger mt-0.5">เหตุผล: {doc.reject_reason}</div>
+          )}
+          {removed && (
+            <div className="text-xs text-muted mt-0.5">
+              ไฟล์ถูกลบตามนโยบายเก็บรักษา 7 วันหลังอนุมัติแล้ว
+            </div>
+          )}
+        </div>
+        {!removed && (
+          <Button variant="secondary" size="sm" onClick={toggle} disabled={loading} isPending={loading}>
+            {url ? <EyeOff size={14} /> : <Eye size={14} />} {url ? "ปิดไฟล์" : "ดูไฟล์ที่ส่ง"}
+          </Button>
+        )}
+        <StatusChip status={doc.status} />
+      </div>
+      {url && (
+        <div className="border-t border-[var(--hairline)]">
+          <PdfFrame src={url} title={`ไฟล์ที่ส่ง ${doc.filename}`} />
+          <p className="border-t border-[var(--hairline)] px-3 py-2 text-xs text-muted">
+            {doc.status === "approved"
+              ? "ไฟล์นี้ผ่านการตรวจสอบแล้ว"
+              : "ถ้าพบว่าส่งผิดไฟล์หรืออ่านไม่ชัด อัปโหลดไฟล์ใหม่ด้านล่างแทนได้เลย ไม่ต้องรอเจ้าหน้าที่ตีกลับ"}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

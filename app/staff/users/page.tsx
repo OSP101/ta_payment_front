@@ -8,13 +8,14 @@ import {
   TextField as HTextField,
   type SortDescriptor,
 } from "@heroui/react";
-import { CalendarDays, Camera, Copy, Files, GraduationCap, KeyRound, LockOpen, Pencil, Plus, ShieldAlert, ShieldOff, Trash2, UserCheck, UserX } from "lucide-react";
+import { CalendarDays, Camera, Copy, Files, GraduationCap, KeyRound, LockOpen, MoreHorizontal, Pencil, Plus, ShieldAlert, ShieldOff, Trash2, UserCheck, UserX } from "lucide-react";
+import { Button as HButton, Dropdown, Label } from "@heroui/react";
 import { api, errMessage, mfaAdminReset, type Enrollment, type Me, type Term } from "../../lib/api";
 import { STUDENT_ID_PATTERN, THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
 import {
-  Alert, Button, Chip, FieldGroup, Modal,
+  Alert, Button, Chip, FieldGroup, IconButton, Modal,
   PageHeader, Select, TextArea, Tip,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
@@ -72,13 +73,23 @@ function userHaystack(u: User): string {
 }
 
 // ตำแหน่งทางวิชาการนำหน้าคุณวุฒิเสมอ (เช่น "รศ. ดร." ไม่ใช่ "ดร. รศ.")
-const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว", "อาจารย์", "อ. ดร.", "ผศ.", "ผศ. ดร.", "รศ. ดร.", "ศ. ดร."];
+// รศ. / ศ. without ดร. and plain ดร. were missing: a rank outside this list
+// could not be picked at all, and the officer seat printed no rank for it.
+const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว", "อาจารย์", "อ. ดร.", "ดร.", "ผศ.", "ผศ. ดร.", "รศ.", "รศ. ดร.", "ศ.", "ศ. ดร."];
 const STUDY_LEVELS: { value: string; label: string }[] = [
   { value: "undergrad", label: "ปริญญาตรี" },
   { value: "master", label: "ปริญญาโท" },
   { value: "phd", label: "ปริญญาเอก" },
 ];
 const ROLE_OPTIONS = ["staff", "lecturer", "ta"] as const;
+
+/** "ปริญญาตรี ปี 3" — the year is the server's derivation from the student id
+ *  (UserService.applyDerivedStudyYear), never something staff type in. */
+function levelLabel(u: Pick<User, "study_level" | "study_year">): string {
+  if (!u.study_level) return "-";
+  const label = STUDY_LEVELS.find(l => l.value === u.study_level)?.label ?? u.study_level;
+  return u.study_level === "undergrad" && u.study_year ? `${label} ปี ${u.study_year}` : label;
+}
 
 // "ผู้บริหาร" now names the executive FLAG (read-only budget analytics), so
 // admin reverts to the name the backend's own messages use — ผู้ดูแลระบบ.
@@ -206,6 +217,17 @@ function VSelect({
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Revalidates every cached `/users…` page. The `typeof` guard is load-bearing:
+ * SWR hands the filter EVERY key in the cache, and the help panel caches under
+ * an array key (["docs-index"]). Calling `.startsWith` on that threw inside
+ * SWR's mutate, so after any create/edit/deactivate the table never refetched
+ * and staff had to reload the page to see their own change.
+ */
+function refreshUsers() {
+  return mutate((k: unknown) => typeof k === "string" && k.startsWith("/users"));
+}
+
 const PAGE_SIZE = 15;
 
 /** Maps a sortable column to the key the API understands. */
@@ -277,14 +299,14 @@ export default function UsersPage() {
   const { data: me } = useSWR<Me>("/me");
   const isAdmin = (me?.roles ?? []).includes("admin");
   const canUnlock = (u: User) => isAdmin && u.id !== me?.id;
-  // 2FA reset is admin-only, NOT adminOrStaff — see router.go's
-  // RequireRole(rbac.RoleAdmin) on this route and MFAService.AdminReset's own
-  // doc comment: staff already hold unrestricted password reset, so letting
-  // staff also reset 2FA would chain into a one-click admin takeover. Also
-  // refused on self, mirroring AdminReset's own refusal — an admin who still
-  // has access must disable their OWN 2FA from /account (password + code),
-  // not this weaker admin path (password only).
-  const canReset2FA = (u: User) => isAdmin && u.id !== me?.id;
+  // 2FA reset: admin for anyone; staff only for accounts whose 2FA is
+  // optional (TA, lecturer) — the same reach staff have for password reset,
+  // enforced again in MFAHandler.AdminReset. A privileged target stays with
+  // admin so password reset + 2FA reset never chain into a takeover. Also
+  // refused on self: an account that still has access disables its OWN 2FA
+  // from /account (password + code), not this weaker path (password only).
+  const privileged = (u: User) => u.roles.includes("admin") || u.roles.includes("staff") || !!u.is_executive;
+  const canReset2FA = (u: User) => u.id !== me?.id && (isAdmin || !privileged(u));
   // Admin accounts are managed by admins only (UserService.assertMayManage):
   // staff get no edit / reset / on-off buttons on an admin row, rather than
   // buttons that fail with a 403.
@@ -292,28 +314,33 @@ export default function UsersPage() {
 
   const columns: DataColumn<User>[] = [
     {
-      id: "name", label: "ชื่อ", sortable: true, isRowHeader: true,
+      id: "name", width: 200, minWidth: 140, label: "ชื่อ", sortable: true, isRowHeader: true,
       sortValue: u => `${u.first_name} ${u.last_name}`,
       className: "font-medium",
       render: u => (
-        <div>
-          <div>{formatFullName(u)}</div>
-          {/* ป้ายแสดงผลเฉยๆ ต่อจากชื่อ — ตำแหน่งบริหารไม่ใช่บทบาท จึงไม่ใช่ Chip */}
-          {u.admin_position && (
-            <div className="text-xs font-normal text-muted mt-0.5">{u.admin_position}</div>
-          )}
-        </div>
+        // Picture, name, and the admin position as a quieter second line —
+        // the one deliberate two-line cell (user's choice, 03/10/2026). The
+        // position is display only, not a role, so it is not a Chip.
+        <span className="inline-flex items-center gap-3">
+          <UserAvatar firstName={u.first_name} lastName={u.last_name} src={u.avatar_url} size="sm" />
+          <span className="inline-flex flex-col leading-tight">
+            <span>{formatFullName(u)}</span>
+            {u.admin_position && (
+              <span className="text-xs font-normal text-muted mt-0.5">{u.admin_position}</span>
+            )}
+          </span>
+        </span>
       ),
     },
     {
-      id: "email", label: "อีเมล", sortable: true,
+      id: "email", width: 230, minWidth: 140, label: "อีเมล", sortable: true,
       sortValue: u => u.email,
       className: "text-(--ink-3) whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
       render: u => u.email,
     },
     {
-      id: "roles", label: "บทบาท",
+      id: "roles", width: 170, minWidth: 110, label: "บทบาท",
       headerClassName: "whitespace-nowrap",
       render: u => {
         // 2FA is mandatory for admin/staff/ผู้บริหาร (see AccountGuard's
@@ -322,9 +349,12 @@ export default function UsersPage() {
         // policy violation worth an admin's attention.
         const mandatory = u.roles.includes("admin") || u.roles.includes("staff") || u.is_executive;
         return (
-          <div className="flex gap-1 flex-wrap">
-            {u.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
-            {u.is_executive && <Chip tone="info">ผู้บริหาร</Chip>}
+          // Roles as plain text: a grey chip per role added boxes without
+          // telling them apart. The 2FA chip stays — its colour is the point.
+          <div className="inline-flex items-center gap-2">
+            <span className="text-sm">
+              {[...u.roles.map(r => ROLE_LABEL[r] ?? r), ...(u.is_executive ? ["ผู้บริหาร"] : [])].join(", ") || "-"}
+            </span>
             {u.totp_enabled ? (
               <Tip content="เปิดใช้การยืนยันตัวตนสองขั้นตอนแล้ว">
                 <span className="inline-flex"><Chip tone="success">2FA</Chip></span>
@@ -339,21 +369,19 @@ export default function UsersPage() {
       },
     },
     {
-      id: "level", label: "ระดับ",
+      id: "level", width: 140, minWidth: 100, label: "ระดับ",
       className: "text-(--ink-3) whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
-      render: u => u.study_level
-        ? (STUDY_LEVELS.find(l => l.value === u.study_level)?.label ?? u.study_level)
-        : "-",
+      render: u => levelLabel(u),
     },
     {
-      id: "student_id", label: "รหัสนักศึกษา",
+      id: "student_id", width: 140, minWidth: 110, label: "รหัสนักศึกษา",
       className: "text-(--ink-3) whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
       render: u => u.student_id ?? "-",
     },
     {
-      id: "status", label: "สถานะ",
+      id: "status", width: 100, minWidth: 80, label: "สถานะ",
       className: "whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
       render: u => u.is_active
@@ -361,51 +389,52 @@ export default function UsersPage() {
         : <Chip tone="danger">ปิด</Chip>,
     },
     {
-      id: "actions", label: <span className="sr-only">การจัดการ</span>,
+      id: "actions", width: 120, minWidth: 120, label: <span className="sr-only">การจัดการ</span>,
       className: "text-right whitespace-nowrap",
-      render: u => (
-        <div className="flex gap-1 justify-end">
-          {canManage(u) && (
-            <Button variant="ghost" size="sm" onClick={() => setEditing(u)}>
-              <Pencil size={14} /> แก้ไข
-            </Button>
-          )}
-          {canManage(u) && (
-            <Button variant="ghost" size="sm" onClick={() => setResetting(u)}>
-              <KeyRound size={14} /> รีเซ็ตรหัส
-            </Button>
-          )}
-          {u.roles.includes("ta") && (
-            <Button variant="ghost" size="sm" onClick={() => setHistoryFor(u)}>
-              <GraduationCap size={14} /> ประวัติการศึกษา
-            </Button>
-          )}
-          {u.roles.includes("ta") && (
-            <Button variant="ghost" size="sm" onClick={() => setTimetableFor(u)}>
-              <CalendarDays size={14} /> ตารางเรียน
-            </Button>
-          )}
-          {canUnlock(u) && (
-            <Button variant="ghost" size="sm" onClick={() => setUnlocking(u)}>
-              <LockOpen size={14} /> ปลดล็อก
-            </Button>
-          )}
-          {canReset2FA(u) && u.totp_enabled && (
-            <Button variant="ghost" size="sm" onClick={() => setResetting2FA(u)}>
-              <ShieldOff size={14} /> รีเซ็ต 2FA
-            </Button>
-          )}
-          {canManage(u) && (u.is_active ? (
-            <Button variant="danger-soft" size="sm" onClick={() => setDeactivating(u)}>
-              <UserX size={14} /> ปิด
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={() => setReactivating(u)}>
-              <UserCheck size={14} /> เปิดใช้งาน
-            </Button>
-          ))}
-        </div>
-      ),
+      // The two everyday actions stay as icons (label in the tooltip); the
+      // rarely used ones fold into a "⋯" menu. Each keeps its slot — an
+      // empty one where it does not apply — so the icons line up row to row.
+      render: u => {
+        const spacer = <span className="inline-block w-8" aria-hidden />;
+        const ta = u.roles.includes("ta");
+        const more: Array<{ id: string; label: string; icon: React.ReactNode; run: () => void; danger?: boolean }> = [];
+        if (ta) {
+          more.push({ id: "history", label: "ประวัติการศึกษา", icon: <GraduationCap className="size-4" />, run: () => setHistoryFor(u) });
+          more.push({ id: "timetable", label: "ตารางเรียน", icon: <CalendarDays className="size-4" />, run: () => setTimetableFor(u) });
+        }
+        if (canUnlock(u)) more.push({ id: "unlock", label: "ปลดล็อกการยืนยันรหัสผ่าน", icon: <LockOpen className="size-4" />, run: () => setUnlocking(u) });
+        if (canReset2FA(u) && u.totp_enabled) more.push({ id: "2fa", label: "รีเซ็ต 2FA", icon: <ShieldOff className="size-4" />, run: () => setResetting2FA(u) });
+        if (canManage(u)) more.push(u.is_active
+          ? { id: "deactivate", label: "ปิดใช้งานบัญชี", icon: <UserX className="size-4 text-danger" />, run: () => setDeactivating(u), danger: true }
+          : { id: "activate", label: "เปิดใช้งานบัญชี", icon: <UserCheck className="size-4" />, run: () => setReactivating(u) });
+        return (
+          <div className="flex gap-1 justify-end">
+            {canManage(u)
+              ? <IconButton variant="ghost" size="sm" label="แก้ไขข้อมูล" onClick={() => setEditing(u)}><Pencil size={15} /></IconButton>
+              : spacer}
+            {canManage(u)
+              ? <IconButton variant="ghost" size="sm" label="รีเซ็ตรหัสผ่าน" onClick={() => setResetting(u)}><KeyRound size={15} /></IconButton>
+              : spacer}
+            {more.length === 0 ? spacer : (
+              <Dropdown>
+                <HButton variant="ghost" size="sm" isIconOnly aria-label={`การจัดการเพิ่มเติมของ ${formatFullName(u)}`}>
+                  <MoreHorizontal size={16} />
+                </HButton>
+                <Dropdown.Popover placement="bottom end">
+                  <Dropdown.Menu onAction={(key: React.Key) => more.find(m => m.id === String(key))?.run()}>
+                    {more.map(m => (
+                      <Dropdown.Item key={m.id} id={m.id} textValue={m.label} variant={m.danger ? "danger" : undefined}>
+                        {m.icon}
+                        <Label>{m.label}</Label>
+                      </Dropdown.Item>
+                    ))}
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -426,8 +455,10 @@ export default function UsersPage() {
       <div data-tour="users-table">
         <DataTable
           ariaLabel="ผู้ใช้ทั้งหมดในระบบ"
-          rows={data?.items}
-          loading={isLoading}
+          rows={me ? data?.items : undefined}
+          // Rows wait for /me too: which action icons a row gets depends on
+          // who is looking, and drawing them a moment later made them pop in.
+          loading={isLoading || !me}
           error={error}
           onRetry={() => mutate(listKey)}
           rowKey={u => u.id}
@@ -462,7 +493,11 @@ export default function UsersPage() {
           pageSize={PAGE_SIZE}
           emptyTitle="ไม่พบผู้ใช้"
           emptyDescription="ลองปรับเงื่อนไขการค้นหา"
-          columns={columns}
+          // Level and student id belong to TAs only: filtered to staff, admin
+          // or lecturers the two columns would be nothing but dashes.
+          columns={roleFilter && roleFilter !== "ta"
+            ? columns.filter(c => c.id !== "level" && c.id !== "student_id")
+            : columns}
           server={{
             total: data?.total ?? 0,
             page,
@@ -495,7 +530,7 @@ export default function UsersPage() {
 function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [form, setForm] = useState({
     email: "", title: "นาย", first_name: "", last_name: "", phone: "",
-    role: "ta", study_level: "undergrad", study_year: "",
+    role: "ta", study_level: "undergrad",
   });
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -512,7 +547,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
 
   useEffect(() => {
     if (open) {
-      setForm({ email: "", title: "นาย", first_name: "", last_name: "", phone: "", role: "ta", study_level: "undergrad", study_year: "" });
+      setForm({ email: "", title: "นาย", first_name: "", last_name: "", phone: "", role: "ta", study_level: "undergrad" });
       setErr(null); setTempPassword(null); setShowErrors(false);
       setPickedPhoto(null); setPhotoBlob(null); setPhotoPreview(null);
     }
@@ -542,8 +577,6 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
     setPickedPhoto(null);
   }
 
-  const showYear = form.role === "ta" && form.study_level === "undergrad";
-
   // The duplicate-email warning used to compare against the loaded user list.
   // That list is now ONE PAGE, so it would have quietly stopped warning about
   // everyone not on screen — the account you would most want flagged is the one
@@ -555,18 +588,26 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
     debouncedEmail ? `/users?q=${encodeURIComponent(debouncedEmail)}&limit=5` : null,
   );
   // `q` is a substring match, so narrow it back down to an exact address.
-  const emailTaken = !!emailMatches?.items?.some(u => u.email.toLowerCase() === debouncedEmail);
+  // Only an ACTIVE account blocks the address (migration 0143): a closed one —
+  // typically the account that was created wrong — keeps its history and lets
+  // a fresh account take the same e-mail.
+  const sameEmail = (emailMatches?.items ?? []).filter(u => u.email.toLowerCase() === debouncedEmail);
+  const activeHolder = sameEmail.find(u => u.is_active);
+  const emailTaken = !!activeHolder;
+  const closedHolders = debouncedEmail === typedEmail ? sameEmail.filter(u => !u.is_active) : [];
 
   const errors = useMemo(() => ({
     email: vEmail(form.email) ??
-      (emailTaken && debouncedEmail === typedEmail ? "อีเมลนี้มีผู้ใช้อยู่แล้ว" : null),
+      (emailTaken && debouncedEmail === typedEmail
+        ? `อีเมลนี้ผูกกับบัญชีที่เปิดใช้งานอยู่ (${activeHolder ? formatFullName(activeHolder) : ""}) ต้องปิดบัญชีนั้นก่อน`
+        : null),
     title: vSelect(form.title, TITLE_OPTIONS),
     first_name: vName(form.first_name, "ชื่อ"),
     last_name: vName(form.last_name, "นามสกุล"),
     role: vSelect(form.role, ROLE_OPTIONS),
     study_level: form.role === "ta" ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
     phone: vPhone(form.phone),
-  }), [form, emailTaken, debouncedEmail, typedEmail]);
+  }), [form, emailTaken, activeHolder, debouncedEmail, typedEmail]);
   const hasErrors = Object.values(errors).some(Boolean);
 
   async function submit() {
@@ -582,10 +623,9 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
         phone: form.phone.trim() || undefined,
         roles: [form.role],
         study_level: form.role === "ta" ? form.study_level : undefined,
-        study_year: showYear && form.study_year ? Number(form.study_year) : undefined,
       };
       const res = await api.post<{ user: User; temp_password: string }>("/users", body);
-      mutate((k: string) => k.startsWith("/users"));
+      refreshUsers();
       // The account exists now, so the staged picture can finally go somewhere.
       // A failure here must not hide the temp password the user still needs —
       // it's reported alongside success, not in place of it.
@@ -668,6 +708,13 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
             value={form.email} onChange={v => setForm({ ...form, email: v })}
             error={errors.email} show={showErrors}
           />
+          {!emailTaken && closedHolders.length > 0 && (
+            <Alert
+              status="accent"
+              title="อีเมลนี้เคยใช้กับบัญชีที่ปิดไปแล้ว"
+              description={`${closedHolders.map(u => formatFullName(u)).join(", ")} (ปิดใช้งาน) บัญชีใหม่จะแยกจากบัญชีเดิม ข้อมูลเดิมยังอยู่ครบ และจะเปิดบัญชีเดิมกลับมาไม่ได้ตราบที่บัญชีใหม่ยังเปิดใช้งาน`}
+            />
+          )}
           <div className="grid grid-cols-[140px_1fr_1fr] gap-3">
             <VSelect label="คำนำหน้า" value={form.title}
               onChange={v => setForm({ ...form, title: v })}
@@ -706,18 +753,11 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
               </VSelect>
             )}
           </div>
-          {showYear && (
-            <VSelect label="ชั้นปี (สำหรับ TA ปริญญาตรี จำเป็นสำหรับการใช้โหมด WBA ปี 4)"
-              value={form.study_year}
-              onChange={v => setForm({ ...form, study_year: v })}
-              error={null} show={showErrors}
-            >
-              <option value="">ไม่ระบุ</option>
-              <option value="1">ปี 1</option>
-              <option value="2">ปี 2</option>
-              <option value="3">ปี 3</option>
-              <option value="4">ปี 4</option>
-            </VSelect>
+          {form.role === "ta" && form.study_level === "undergrad" && (
+            <p className="text-xs text-muted">
+              ไม่ต้องกรอกชั้นปี ระบบคำนวณจากรหัสนักศึกษาที่ผู้ช่วยสอนกรอกในแบบฟอร์มข้อมูลส่วนตัว
+              (2 หลักแรกเทียบกับปีการศึกษาปัจจุบัน) และเลื่อนชั้นให้เองทุกปี
+            </p>
           )}
           {err && <Alert status="danger" title="ไม่สามารถสร้างผู้ใช้ได้" description={err} />}
         </div>
@@ -741,7 +781,6 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     first_name: user.first_name,
     last_name: user.last_name,
     phone: user.phone ?? "",
-    study_year: user.study_year != null ? String(user.study_year) : "",
   });
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -788,7 +827,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
       photoForm.append("file", blob, "avatar.jpg");
       const res = await api.upload<{ avatar_url: string }>(`/users/${user.id}/avatar`, photoForm);
       setAvatarUrl(res.avatar_url);
-      mutate((k: string) => k.startsWith("/users"));
+      refreshUsers();
       setPickedPhoto(null);
       notify.success("บันทึกรูปโปรไฟล์แล้ว");
     } catch (e) {
@@ -815,14 +854,11 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         // through the "ประวัติการศึกษา" action (EnrollmentHistoryModal) only,
         // so every level change is captured in ta_enrollments. See that
         // modal's comment for why this form no longer edits it at all.
-        // null clears study_year server-side; the request-validation layer
-        // rejects a literal 0 (gte=1) before Update's own clear-sentinel
-        // logic ever runs, so non-applicable saves must send null, not 0.
-        study_year: isTa && user.study_level === "undergrad"
-          ? (form.study_year ? Number(form.study_year) : null)
-          : null,
+        // study_year is not sent either: it is derived from the student id
+        // on every read (UserService.applyDerivedStudyYear), so a typed value
+        // would only go stale when the TA moves up a year.
       });
-      mutate((k: string) => k.startsWith("/users"));
+      refreshUsers();
       onClose();
     } catch (e) {
       setErr((e as Error).message);
@@ -933,28 +969,13 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
             {isTa && (
               <div className="text-sm rounded-lg border border-border bg-surface px-3 py-2.5">
                 <span className="text-muted">ระดับการศึกษาปัจจุบัน: </span>
-                <span className="font-medium">
-                  {user.study_level
-                    ? (STUDY_LEVELS.find(l => l.value === user.study_level)?.label ?? user.study_level)
-                    : "-"}
-                </span>
+                <span className="font-medium">{levelLabel(user)}</span>
                 <span className="block text-xs text-muted mt-0.5">
-                  เปลี่ยนระดับ/รหัสนักศึกษาผ่านปุ่ม &quot;ประวัติการศึกษา&quot; ในตารางแทน — เพื่อให้ประวัติการเปลี่ยนระดับถูกบันทึกไว้ครบ
+                  เลื่อนระดับ (ตรี → โท → เอก) ใช้ปุ่ม &quot;ประวัติการศึกษา&quot; ในตาราง ส่วนรหัสที่กรอกผิด แก้ได้ในหัวข้อด้านล่าง
                 </span>
               </div>
             )}
-            {isTa && user.study_level === "undergrad" && (
-              <VSelect label="ชั้นปี (ระบบคำนวณอัตโนมัติจากรหัส นศ. เมื่อมี)" value={form.study_year}
-                onChange={v => setForm({ ...form, study_year: v })}
-                error={null} show={showErrors}
-              >
-                <option value="">ไม่ระบุ</option>
-                <option value="1">ปี 1</option>
-                <option value="2">ปี 2</option>
-                <option value="3">ปี 3</option>
-                <option value="4">ปี 4</option>
-              </VSelect>
-            )}
+            {isTa && <TAIdentityFix userId={user.id} />}
           </div>
         </div>
 
@@ -972,6 +993,191 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         onConfirm={confirmPhoto}
       />
     </Modal>
+  );
+}
+
+/**
+ * Staff fix of what a TA typed wrong on their own profile form: the TA comes to
+ * the office with their card, staff correct it here. Not a level change — that
+ * opens a new period through "ประวัติการศึกษา". The citizen ID is never shown
+ * back in full; the last 4 digits are enough to compare against the card.
+ */
+function TAIdentityFix({ userId }: { userId: string }) {
+  const key = `/users/${userId}/ta-identity`;
+  const { data } = useSWR<{
+    student_id: string | null; prefix: string | null; citizen_id_last4: string | null; has_profile: boolean;
+  }>(key);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ student_id: "", national_id: "", prefix: "", reason: "", password: "" });
+  const [showErrors, setShowErrors] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const nidDigits = form.national_id.replace(/\D/g, "");
+  // The creditor form prints the prefix and the citizen ID, so correcting
+  // either rebuilds it — and the rebuilt file carries the full ID and bank
+  // details, hence the officer's own password, like every such download.
+  const rebuildsForm = !!data?.has_profile && (nidDigits !== "" || form.prefix !== "");
+  const errors = {
+    student_id: form.student_id.trim() === "" ? null : vStudentID(form.student_id),
+    national_id: nidDigits === "" ? null : nidDigits.length === 13 ? null : "เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก",
+    reason: vRequired(form.reason, "กรุณาระบุเหตุผล เช่น ผู้ช่วยสอนแสดงบัตรนักศึกษาที่ห้องธุรการ"),
+    nothing: form.student_id.trim() === "" && nidDigits === "" && form.prefix === "" ? "กรอกอย่างน้อย 1 ช่องที่ต้องการแก้" : null,
+    password: rebuildsForm && form.password === "" ? "กรอกรหัสผ่านของคุณเพื่อดาวน์โหลดแบบฟอร์มเจ้าหนี้ฉบับใหม่" : null,
+  };
+  const hasErrors = Object.values(errors).some(Boolean);
+
+  async function rebuildCreditorForm(password: string) {
+    const pdf = await api.post<Blob>(`/users/${userId}/creditor-form/regenerate`, { password });
+    const url = URL.createObjectURL(pdf);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `แบบแจ้งเจ้าหนี้-${data?.student_id ?? userId}.pdf`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    notify.success("สร้างแบบฟอร์มเจ้าหนี้ฉบับใหม่และดาวน์โหลดแล้ว");
+  }
+
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenPw, setRegenPw] = useState("");
+  const [regenErr, setRegenErr] = useState<string | null>(null);
+  const [regenPending, setRegenPending] = useState(false);
+  async function regenOnly() {
+    if (!regenPw) { setRegenErr("กรอกรหัสผ่านของคุณ"); return; }
+    setRegenPending(true); setRegenErr(null);
+    try {
+      await rebuildCreditorForm(regenPw);
+      setRegenOpen(false); setRegenPw("");
+    } catch (e) {
+      setRegenErr(errMessage(e));
+    } finally {
+      setRegenPending(false);
+    }
+  }
+
+  async function save() {
+    setShowErrors(true);
+    if (hasErrors) return;
+    setPending(true); setErr(null);
+    try {
+      await api.post(key, {
+        student_id: form.student_id.trim() || undefined,
+        national_id: nidDigits || undefined,
+        prefix: form.prefix || undefined,
+        reason: form.reason.trim(),
+      });
+      await mutate(key);
+      refreshUsers();
+      notify.success("แก้ไขข้อมูลผู้ช่วยสอนแล้ว และแจ้งผู้ช่วยสอนแล้ว");
+      if (rebuildsForm) {
+        try {
+          await rebuildCreditorForm(form.password);
+        } catch (e) {
+          // The correction itself is saved; only the rebuild failed — the
+          // separate "สร้างแบบฟอร์มเจ้าหนี้ใหม่" button retries it.
+          notify.error(`บันทึกการแก้ไขแล้ว แต่สร้างแบบฟอร์มเจ้าหนี้ใหม่ไม่สำเร็จ: ${errMessage(e)}`);
+        }
+      }
+      setForm({ student_id: "", national_id: "", prefix: "", reason: "", password: "" });
+      setShowErrors(false);
+      setOpen(false);
+    } catch (e) {
+      setErr(errMessage(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border px-3 py-2.5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-sm">
+          <div className="font-medium">ข้อมูลที่ผู้ช่วยสอนกรอก</div>
+          <div className="text-xs text-muted mt-0.5">
+            รหัสนักศึกษา {data?.student_id ?? "-"} · คำนำหน้า {data?.prefix ?? "-"} · เลขบัตรประชาชน{" "}
+            {data?.citizen_id_last4 ? `ลงท้าย ${data.citizen_id_last4}` : "-"}
+          </div>
+        </div>
+        {!open && (
+          <div className="flex flex-wrap gap-1 justify-end">
+            <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+              <Pencil size={14} /> แก้ข้อมูลที่กรอกผิด
+            </Button>
+            {data?.has_profile && !regenOpen && (
+              <Button variant="ghost" size="sm" onClick={() => setRegenOpen(true)}>
+                <Files size={14} /> สร้างแบบฟอร์มเจ้าหนี้ใหม่
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      {!open && regenOpen && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted">
+            สร้างแบบฟอร์มเจ้าหนี้ใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้ โดยใช้คำนำหน้า ชื่อ-นามสกุล และเลขบัตรปัจจุบันในระบบ
+            (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่า แล้วดาวน์โหลดทันที
+          </p>
+          <VField label="รหัสผ่านของคุณ (ยืนยันก่อนดาวน์โหลด)" type="password" required
+            value={regenPw} onChange={setRegenPw} error={regenErr} show={!!regenErr}
+          />
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" size="sm" onClick={() => { setRegenOpen(false); setRegenPw(""); setRegenErr(null); }}>ยกเลิก</Button>
+            <Button variant="primary" size="sm" onClick={regenOnly} disabled={regenPending} isPending={regenPending}>สร้างและดาวน์โหลด</Button>
+          </div>
+        </div>
+      )}
+      {open && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            เว้นว่างช่องที่ไม่ต้องแก้ ใช้เมื่อผู้ช่วยสอนกรอกผิดและมาแสดงหลักฐานที่ห้องธุรการ
+            การแก้รหัสนักศึกษาจะแก้ในทุกคำขอ TA ของช่วงการศึกษาปัจจุบันด้วย
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_140px] gap-3">
+            <VField label="รหัสนักศึกษาที่ถูกต้อง" placeholder="XXXXXXXXX-X"
+              value={form.student_id} onChange={v => setForm({ ...form, student_id: formatStudentID(v) })}
+              error={errors.student_id} show={showErrors}
+            />
+            <VField label="เลขบัตรประชาชนที่ถูกต้อง" placeholder="13 หลัก"
+              value={form.national_id} onChange={v => setForm({ ...form, national_id: v.replace(/[^\d-]/g, "").slice(0, 17) })}
+              error={errors.national_id} show={showErrors}
+            />
+            <VSelect label="คำนำหน้า" value={form.prefix}
+              onChange={v => setForm({ ...form, prefix: v })} error={null} show={false}
+            >
+              <option value="">ไม่แก้</option>
+              <option value="นาย">นาย</option>
+              <option value="นาง">นาง</option>
+              <option value="นางสาว">นางสาว</option>
+            </VSelect>
+          </div>
+          {data && !data.has_profile && (form.national_id || form.prefix) && (
+            <Alert status="warning" title="ยังไม่มีแบบฟอร์มข้อมูลส่วนตัว"
+              description="ผู้ช่วยสอนยังไม่เคยส่งแบบฟอร์ม จึงแก้เลขบัตรหรือคำนำหน้าไม่ได้ (แก้รหัสนักศึกษาได้)" />
+          )}
+          <VField label="เหตุผล (บันทึกในประวัติการใช้งานและแจ้งผู้ช่วยสอน)" required
+            value={form.reason} onChange={v => setForm({ ...form, reason: v })}
+            error={errors.reason ?? errors.nothing} show={showErrors}
+          />
+          {rebuildsForm && (
+            <>
+              <p className="text-xs text-muted">
+                เลขบัตรและคำนำหน้าอยู่ในแบบฟอร์มเจ้าหนี้ ระบบจะสร้างแบบฟอร์มฉบับใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้
+                (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่าในระบบ และดาวน์โหลดให้ทันที
+              </p>
+              <VField label="รหัสผ่านของคุณ (ยืนยันก่อนดาวน์โหลด)" type="password" required
+                value={form.password} onChange={v => setForm({ ...form, password: v })}
+                error={errors.password} show={showErrors}
+              />
+            </>
+          )}
+          {err && <Alert status="danger" title="แก้ไขไม่สำเร็จ" description={err} />}
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); setErr(null); setShowErrors(false); setForm(f => ({ ...f, password: "" })); }}>ยกเลิก</Button>
+            <Button variant="primary" size="sm" onClick={save} disabled={pending} isPending={pending}>บันทึกการแก้ไข</Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1130,7 +1336,7 @@ function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => 
       mutate(key);
       // The table's "ระดับ"/"รหัสนักศึกษา" columns read users.student_id/
       // study_level, which RecordTransition just kept in sync — refresh them.
-      mutate((k: string) => k.startsWith("/users"));
+      refreshUsers();
       setForm({ student_id: "", study_level: "undergrad", note: "" });
       setShowErrors(false);
       setAdding(false);
@@ -1293,7 +1499,7 @@ function DeactivateModal({ user, onClose }: { user: User; onClose: () => void })
     setPending(true); setErr(null);
     try {
       await api.post(`/users/${user.id}/deactivate`, { confirm_email: confirmEmail });
-      mutate((k: string) => k.startsWith("/users"));
+      refreshUsers();
       notify.success("ปิดใช้งานบัญชีเรียบร้อยแล้ว");
       onClose();
     } catch (e) {
@@ -1340,12 +1546,20 @@ function DeactivateModal({ user, onClose }: { user: User; onClose: () => void })
 function ReactivateModal({ user, onClose }: { user: User; onClose: () => void }) {
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // One address, one ACTIVE account (migration 0143). Say so before the click
+  // instead of letting the request bounce; the server refuses it either way.
+  const { data: sameEmail } = useSWR<{ items: User[] }>(
+    `/users?q=${encodeURIComponent(user.email)}&status=active&limit=5`,
+  );
+  const otherActive = sameEmail?.items?.find(
+    u => u.id !== user.id && u.is_active && u.email.toLowerCase() === user.email.toLowerCase(),
+  );
 
   async function submit() {
     setPending(true); setErr(null);
     try {
       await api.post(`/users/${user.id}/activate`);
-      mutate((k: string) => k.startsWith("/users"));
+      refreshUsers();
       notify.success("เปิดใช้งานบัญชีเรียบร้อยแล้ว");
       onClose();
     } catch (e) {
@@ -1364,7 +1578,7 @@ function ReactivateModal({ user, onClose }: { user: User; onClose: () => void })
       size="md"
       footer={<>
         <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
-        <Button variant="primary" onClick={submit} disabled={pending} isPending={pending}>
+        <Button variant="primary" onClick={submit} disabled={pending || !!otherActive} isPending={pending}>
           <UserCheck size={14} /> เปิดใช้งาน
         </Button>
       </>}
@@ -1374,6 +1588,13 @@ function ReactivateModal({ user, onClose }: { user: User; onClose: () => void })
           เปิดใช้งานบัญชีของ <span className="font-medium">{user.first_name} {user.last_name}</span> ({user.email})
           อีกครั้ง ผู้ใช้จะสามารถเข้าสู่ระบบได้ตามปกติ
         </p>
+        {otherActive && (
+          <Alert
+            status="warning"
+            title="ต้องปิดอีกบัญชีก่อน"
+            description={`อีเมลนี้ผูกกับบัญชีที่เปิดใช้งานอยู่แล้ว (${formatFullName(otherActive)}) อีเมลหนึ่งเปิดใช้งานได้ครั้งละ 1 บัญชี กรุณาปิดบัญชีนั้นก่อนจึงจะเปิดบัญชีนี้ได้`}
+          />
+        )}
         {err && <Alert status="danger" title="เปิดใช้งานไม่สำเร็จ" description={err} />}
       </div>
     </Modal>
@@ -1449,8 +1670,8 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
 
 /* -------------------------------------------------------------------------- */
 
-// Admin-only (see canReset2FA above and router.go's RequireRole(rbac.RoleAdmin)
-// on this route). Requires the ACTING admin's own password, unlike
+// Admin, or staff for TA/lecturer accounts (see canReset2FA above). Requires
+// the ACTING officer's own password, unlike
 // UnlockPasswordGateModal above — resetting 2FA removes a security control
 // entirely, not just a temporary rate-limit, so it gets the stronger gate.
 function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
@@ -1468,7 +1689,7 @@ function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
     try {
       await mfaAdminReset(user.id, password);
       notify.success(`รีเซ็ต 2FA ของ ${user.first_name} ${user.last_name} แล้ว`);
-      mutate((k: string) => k.startsWith("/users"));
+      refreshUsers();
       onClose();
     } catch (e) {
       setErr(errMessage(e));

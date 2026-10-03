@@ -17,6 +17,7 @@ import {
   PageHeader, Panel, Button, IconButton, TextInput, TextArea, FieldGroup, Chip, Modal, Alert, SearchField, Select, Tip, TipWrap,
 } from "../../components/ui";
 import { FormulaHelpModal } from "../../components/formula-help";
+import { budgetConfirmMessage } from "../teaching/budgetConfirm";
 import { Skel, SkelValue, SkelList, SkelRows, SkelForm } from "../../components/Skeletons";
 
 interface Rate {
@@ -510,6 +511,8 @@ interface Term {
   final_starts_on?: string; final_ends_on?: string;
   months: number;
   is_active: boolean;
+  /** เพดานงบรายวิชาที่ทุกวิชาในภาคใช้ร่วมกัน — null = ไม่กำหนด (migration 0144). */
+  course_budget_cap_baht?: number | null;
 }
 
 interface TermUsage {
@@ -628,6 +631,7 @@ function mutateAllTerms() {
 }
 
 function TermsSection() {
+  const router = useRouter();
   // Progressive load: start with the last N years, widen when the user asks.
   // Null = load everything (no filter).
   const [yearFromLimit, setYearFromLimit] = useState<number | null>(CURRENT_BE - YEAR_PAGE_SIZE + 1);
@@ -645,6 +649,7 @@ function TermsSection() {
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
   const [prefillYear, setPrefillYear] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Term | null>(null);
+  const [capTarget, setCapTarget] = useState<Term | null>(null);
   const [yearFilter, setYearFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Track whether we've done the initial auto-expand so subsequent data
@@ -699,8 +704,12 @@ function TermsSection() {
   useEffect(() => {
     if (initialisedRef.current || grouped.length === 0) return;
     initialisedRef.current = true;
-    setExpanded(new Set([String(grouped[0][0])]));
-  }, [grouped]);
+    // Open the year of the ACTIVE term — that is the one staff come here to
+    // change (its เพดานงบรายวิชา, dates). The newest year used to open instead,
+    // which put a far-future test year in front and folded the real one away.
+    const active = terms.find(t => t.is_active);
+    setExpanded(new Set([String(active ? active.academic_year : grouped[0][0])]));
+  }, [grouped, terms]);
 
   // When searching, expand every match — helps when the user is hunting for a
   // specific term rather than browsing.
@@ -738,9 +747,19 @@ function TermsSection() {
     if (prefillYear !== null) {
       setPendingYears(ys => ys.filter(y => y !== prefillYear));
     }
-    toast.success(mode === "edit" ? `แก้ไข${label} เรียบร้อยแล้ว` : `เพิ่ม${label} เรียบร้อยแล้ว`);
     // Holidays for the term's years now sync automatically from TDBM (see
     // /staff/holidays) — no BOT prompt needed here any more.
+    if (mode === "edit" || !saved.id) {
+      toast.success(mode === "edit" ? `แก้ไข${label} เรียบร้อยแล้ว` : `เพิ่ม${label} เรียบร้อยแล้ว`);
+      return;
+    }
+    // A new term takes no TA request and no work log until staff set its
+    // ช่วงรับคำขอ and รอบเบิกจ่าย (both enforced by the backend), so the next
+    // step is the calendar tab, on the term just created.
+    toast.success(`เพิ่ม${label} เรียบร้อยแล้ว`, {
+      description: "ขั้นต่อไป กำหนดช่วงรับคำขอ TA และรอบเบิกจ่ายรายเดือนของภาคเรียนนี้",
+    });
+    router.push(`/staff/settings?tab=calendar&term=${saved.id}`);
   }
 
   return (
@@ -861,6 +880,7 @@ function TermsSection() {
                                   <th>ภาคเรียน</th>
                                   <th>ช่วงวันสอน</th>
                                   <th className="num">จำนวนเดือน</th>
+                                  <th>เพดานงบรายวิชา</th>
                                   <th>สถานะ</th>
                                   <th className="actions" />
                                 </tr>
@@ -873,6 +893,21 @@ function TermsSection() {
                                       {formatThaiDate(t.starts_on)} → {formatThaiDate(t.ends_on)}
                                     </td>
                                     <td className="num tabular">{t.months ?? 4}</td>
+                                    <td>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCapTarget(t)}
+                                        // A real button, not muted text with a tiny pencil:
+                                        // staff could not find where the cap is set.
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-sm hover:bg-surface-secondary"
+                                      >
+                                        {t.course_budget_cap_baht != null
+                                          ? <span className="tabular-nums">ไม่เกิน {t.course_budget_cap_baht.toLocaleString()} บ.</span>
+                                          : <span className="text-muted">ไม่กำหนด</span>}
+                                        <Pencil size={13} className="text-[var(--brand)]" />
+                                        <span className="text-[var(--brand)]">{t.course_budget_cap_baht != null ? "แก้ไข" : "กำหนดเพดาน"}</span>
+                                      </button>
+                                    </td>
                                     <td>
                                       {t.is_active
                                         ? <Chip tone="success">active</Chip>
@@ -945,7 +980,137 @@ function TermsSection() {
         onClose={() => setDeleteTarget(null)}
         onDone={label => { setDeleteTarget(null); toast.success(`ลบ${label} เรียบร้อยแล้ว`); }}
       />
+      {capTarget && <TermBudgetCapModal term={capTarget} onClose={() => setCapTarget(null)} />}
     </Panel>
+  );
+}
+
+/**
+ * เพดานงบรายวิชา — ONE figure every course of the term shares (migration 0144):
+ * "ไม่กำหนด" = each course's budget is its workload formula; a figure = the
+ * smaller of the formula and the figure. A new term starts from the latest
+ * term's value, so this is set once and touched only when the faculty rule
+ * changes. Same guards as a headcount edit, course by course: a course with an
+ * exported month refuses the change, and courses with approved TAs or hours
+ * need an explicit confirm after seeing which ones.
+ */
+function TermBudgetCapModal({ term, onClose }: { term: Term; onClose: () => void }) {
+  const [mode, setMode] = useState<"none" | "cap">(term.course_budget_cap_baht == null ? "none" : "cap");
+  const [amount, setAmount] = useState(term.course_budget_cap_baht == null ? "" : String(term.course_budget_cap_baht));
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
+  const num = Number(amount.replace(/,/g, ""));
+  const invalid = mode === "cap" && (amount.trim() === "" || !Number.isFinite(num) || num < 0);
+
+  async function save(confirm = false) {
+    if (invalid || !term.id) return;
+    setSaving(true); setErr(null);
+    try {
+      await api.patch(`/terms/${term.id}/budget-cap`, {
+        budget_cap_baht: mode === "cap" ? num : null,
+        confirm: confirm || undefined,
+      });
+      await mutate((k: unknown) => typeof k === "string" && (k.startsWith("/terms") || k.startsWith("/teaching-courses")));
+      toast.success("บันทึกเพดานงบรายวิชาแล้ว");
+      onClose();
+    } catch (e) {
+      const preview = budgetConfirmMessage(e);
+      if (preview) setConfirmMsg(preview);
+      else setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={() => { if (!saving) onClose(); }}
+      size="sm"
+      title={`เพดานงบรายวิชา · ${semesterLabel(term.semester)} ${term.academic_year}`}
+      footer={
+        confirmMsg ? (
+          <>
+            <Button variant="ghost" onClick={() => setConfirmMsg(null)} disabled={saving}>ย้อนกลับ</Button>
+            <Button variant="danger" onClick={() => save(true)} disabled={saving} isPending={saving}>ยืนยันการเปลี่ยนงบ</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+            <Button variant="primary" onClick={() => save()} disabled={invalid || saving} isPending={saving}>
+              <Save size={14} />บันทึก
+            </Button>
+          </>
+        )
+      }
+    >
+      {confirmMsg ? (
+        <Alert status="warning" title="ยืนยันการเปลี่ยนงบประมาณรายวิชา" description={confirmMsg} />
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            ใช้ร่วมกันทุกวิชาในภาคเรียนนี้ ภาคเรียนที่สร้างใหม่จะใช้ค่าเดียวกับภาคล่าสุดให้เอง
+          </p>
+          <div role="radiogroup" aria-label="เพดานงบรายวิชา" className="space-y-2">
+            {([
+              { id: "none", title: "ไม่กำหนดเพดาน", note: "งบของแต่ละวิชาเป็นไปตามสูตรคำนวณ" },
+              { id: "cap", title: "กำหนดเพดาน", note: "งบของแต่ละวิชาไม่เกินจำนวนที่กำหนด (ใช้ค่าที่น้อยกว่าระหว่างงบตามสูตรกับเพดาน)" },
+            ] as const).map(o => {
+              const on = mode === o.id;
+              return (
+                <div
+                  key={o.id}
+                  role="radio"
+                  aria-checked={on}
+                  tabIndex={0}
+                  onClick={() => setMode(o.id)}
+                  onKeyDown={e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setMode(o.id); } }}
+                  className={
+                    "cursor-pointer rounded-xl border p-3 transition outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] " +
+                    (on ? "border-[var(--brand)] bg-[var(--brand-soft)] ring-1 ring-[var(--brand)]" : "border-border hover:bg-surface-secondary")
+                  }
+                >
+                  <div className="flex items-start gap-3">
+                    <span className={
+                      "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 " +
+                      (on ? "border-[var(--brand)]" : "border-slate-400")
+                    }>
+                      {on && <span className="h-2 w-2 rounded-full bg-[var(--brand)]" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium">{o.title}</div>
+                      <div className="mt-0.5 text-xs text-muted">{o.note}</div>
+                      {o.id === "cap" && on && (
+                        <div className="mt-3" onClick={e => e.stopPropagation()}>
+                          <label className="mb-1 block text-xs font-medium" htmlFor="cap-amount">ไม่เกินวิชาละ</label>
+                          <div className="flex items-center gap-2">
+                            <TextInput
+                              id="cap-amount"
+                              inputMode="numeric"
+                              placeholder="เช่น 20,000"
+                              value={amount === "" ? "" : Number(amount.replace(/,/g, "")).toLocaleString("en-US")}
+                              onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
+                              className="text-right tabular"
+                              autoFocus
+                            />
+                            <span className="text-sm text-muted">บาท</span>
+                          </div>
+                          {invalid && amount.trim() !== "" && (
+                            <div className="mt-1 text-xs text-danger">ต้องเป็นจำนวนเงินตั้งแต่ 0 บาทขึ้นไป</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -1183,9 +1348,9 @@ function TermFormModal({
         ...draft,
         ...(isEdit && editing ? { id: editing.id } : {}),
       };
-      await api.post("/terms", payload);
+      const saved = await api.post<Term>("/terms", payload);
       await mutateAllTerms();
-      onSaved(termLabel(draft), isEdit ? "edit" : "add", payload);
+      onSaved(termLabel(draft), isEdit ? "edit" : "add", { ...payload, ...(saved ?? {}) });
       setConfirming(false);
     } catch (e) {
       setError((e as Error).message || "บันทึกไม่สำเร็จ");
@@ -1817,7 +1982,7 @@ function RequestWindowsSection() {
   return (
     <Panel
       title="ระยะเวลารับสมัคร TA"
-      description="กำหนดวันส่งคำขอ TA ของแต่ละภาคเรียน ไม่มีการปิดรับ เลยกำหนดแล้วอาจารย์ยังส่งได้ แต่คำขอจะถูกทำเครื่องหมายว่า “ส่งช้า” และการเบิกจ่ายจะล่าช้าตาม"
+      description="อาจารย์ส่งคำขอ TA ได้ตั้งแต่วันเปิดรับของภาคเรียน เลยกำหนดส่งแล้วยังส่งได้ แต่คำขอจะถูกทำเครื่องหมายว่า “ส่งช้า” และการเบิกจ่ายจะล่าช้าตาม"
       actions={
         !noTerms && (
           <Button
@@ -1847,7 +2012,7 @@ function RequestWindowsSection() {
               ยังไม่ได้กำหนดวันส่งคำขอ TA สำหรับ {term?.academic_year}/{term?.semester}
             </div>
             <div className="text-xs text-muted mt-1">
-              อาจารย์ยังส่งคำขอได้ตามปกติ และจะนับเป็น “ทันเวลา” ทั้งหมดจนกว่าจะกำหนดวันส่ง
+              อาจารย์จะส่งคำขอ TA ของภาคเรียนนี้ไม่ได้ จนกว่าจะกำหนดช่วงรับคำขอ
             </div>
           </div>
           <div className="flex gap-2">
@@ -2607,9 +2772,12 @@ interface LinkableUser {
 const USER_TITLE_TO_PREFIX: Record<string, string> = {
   "อาจารย์": "อาจารย์",
   "อ. ดร.": "ดร.",
+  "ดร.": "ดร.",
   "ผศ.": "ผู้ช่วยศาสตราจารย์",
   "ผศ. ดร.": "ผู้ช่วยศาสตราจารย์ ดร.",
+  "รศ.": "รองศาสตราจารย์",
   "รศ. ดร.": "รองศาสตราจารย์ ดร.",
+  "ศ.": "ศาสตราจารย์",
   "ศ. ดร.": "ศาสตราจารย์ ดร.",
 };
 
@@ -2934,7 +3102,7 @@ function AdminOfficerFormModal({
       full_name: `${u.first_name} ${u.last_name}`.trim(),
       // Always tracks the account — never a staff-chosen override, see the
       // note on USER_TITLE_TO_PREFIX above.
-      academic_prefix: USER_TITLE_TO_PREFIX[u.title ?? ""] ?? "",
+      academic_prefix: USER_TITLE_TO_PREFIX[(u.title ?? "").trim()] ?? (u.title ?? "").trim(),
     }));
   }
 
@@ -3354,10 +3522,9 @@ function SubmissionPeriodsSection() {
     seedSemester === 1 ? [6, 7, 8, 9, 10] : [11, 12, 1, 2, 3];
   const seedYearBase = selectedTerm?.academic_year ?? 0;
   const seedWillCreate = seedTemplateMonths.filter(m => {
-    const y = seedSemester === 2 && (m === 1 || m === 2 || m === 3)
-      ? seedYearBase + 1
-      : seedYearBase;
-    const ym = `${y}-${String(m).padStart(2, "0")}`;
+    // year_month is keyed by the ACADEMIC year for every month, ม.ค.–มี.ค.
+    // of ภาคปลาย included (BulkCreateForTerm) — not the calendar year.
+    const ym = `${seedYearBase}-${String(m).padStart(2, "0")}`;
     return !existingMonths.has(ym);
   }).length;
 
@@ -3407,7 +3574,11 @@ function SubmissionPeriodsSection() {
       ) : !periods ? (
         <SkelRows rows={5} columns={6} />
       ) : periods.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีรอบเบิกจ่าย กด "สร้างอัตโนมัติ 5 เดือน" เพื่อเริ่ม</div>
+        <Alert
+          status="warning"
+          title={`ยังไม่มีรอบเบิกจ่ายของภาคเรียน ${selectedTerm?.academic_year ?? ""}/${selectedTerm?.semester ?? ""}`}
+          description="TA จะลงเวลาและส่งอนุมัติไม่ได้ และวิชาจะไม่ขึ้นในหน้าตรวจและส่งออกเอกสาร จนกว่าจะสร้างรอบ กด “สร้างอัตโนมัติ 5 เดือน” เพื่อสร้างตามวันเปิดและปิดภาค"
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

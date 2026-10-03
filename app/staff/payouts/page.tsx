@@ -4,10 +4,10 @@ import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import {
   ClipboardCheck, Lock, ChevronRight, AlertTriangle,
-  Check, CircleDashed, Minus, CalendarClock,
+  Check, CircleDashed, Minus, CalendarClock, CalendarX,
 } from "lucide-react";
 import { useTerm, useTermKey } from "../TermContext";
-import { PageHeader, Panel, EmptyState, Chip, Tip, type ChipTone } from "../../components/ui";
+import { PageHeader, Panel, EmptyState, Chip, Tip, Button, type ChipTone } from "../../components/ui";
 import { Skel, SkelRegion } from "../../components/Skeletons";
 import { roundRangeLabel, type FiscalSplitInfo } from "../../components/monthScope";
 import { CertifierPicker } from "./CertifierPicker";
@@ -158,6 +158,11 @@ export default function PayoutsPage() {
   const { data: queue } =
     useSWR<{ items: ReviewRow[]; awaiting_appointment?: number }>(queueKey, { keepPreviousData: true });
   const { data: summary } = useSWR<PayoutDashboard>(summaryKey, { keepPreviousData: true });
+  // The queue is built from the term's submission periods: with none, every
+  // approved hour is invisible here, which read as "nothing to do" (2569/2,
+  // 03/10/2026). Asked only to tell that case apart in the empty state.
+  const { data: periods } = useSWR<{ id: string }[]>(useTermKey("/submission-periods"));
+  const noPeriods = periods !== undefined && periods.length === 0;
 
   const split = summary?.fiscal_split;
   const crosses = !!split?.crosses && split.after.length > 0;
@@ -216,6 +221,19 @@ export default function PayoutsPage() {
             <CourseRowsSkeleton count={2} />
           </Section>
         </div>
+      ) : act.length === 0 && round2.length === 0 && done.length === 0 && noPeriods ? (
+        <Panel>
+          <EmptyState
+            icon={<CalendarX size={24} />}
+            title="ยังไม่ได้สร้างรอบเบิกจ่ายของภาคเรียนนี้"
+            description="วิชาจะขึ้นที่นี่ได้ต่อเมื่อมีรอบเบิกจ่ายรายเดือน สร้างรอบได้ที่ ตั้งค่า → ปฏิทินเทอม"
+            action={
+              <Button variant="primary" onClick={() => router.push(`/staff/settings?tab=calendar${termId ? `&term=${termId}` : ""}`)}>
+                <CalendarClock size={14} />ไปสร้างรอบเบิกจ่าย
+              </Button>
+            }
+          />
+        </Panel>
       ) : act.length === 0 && round2.length === 0 && done.length === 0 ? (
         <Panel>
           <EmptyState

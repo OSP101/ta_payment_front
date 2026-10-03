@@ -159,7 +159,7 @@ function buildColumns(
 ): DataColumn<Row>[] {
   return [
     {
-      id: "ref", label: "อ้างอิง", isRowHeader: true,
+      id: "ref", width: 110, label: "อ้างอิง", isRowHeader: true,
       className: "whitespace-nowrap font-mono text-xs",
       render: r => (
         <button type="button" className="text-(--brand) underline decoration-dotted" onClick={() => onOpen(r)}>
@@ -168,7 +168,7 @@ function buildColumns(
       ),
     },
     {
-      id: "at", label: "เวลา",
+      id: "at", width: 150, label: "เวลา",
       className: "whitespace-nowrap text-xs",
       render: r => (
         <div className="leading-tight tabular-nums">
@@ -178,7 +178,7 @@ function buildColumns(
       ),
     },
     {
-      id: "what", label: "เหตุการณ์",
+      id: "what", width: 260, label: "เหตุการณ์",
       className: "min-w-64",
       render: r => (
         <div className="min-w-0">
@@ -191,7 +191,7 @@ function buildColumns(
       ),
     },
     {
-      id: "actor", label: "ผู้กระทำ",
+      id: "actor", width: 180, label: "ผู้กระทำ",
       className: "whitespace-nowrap",
       render: r => (
         <span className="text-xs">
@@ -218,7 +218,7 @@ function buildColumns(
       ),
     },
     {
-      id: "subject", label: "เกี่ยวกับ",
+      id: "subject", width: 200, label: "เกี่ยวกับ",
       className: "min-w-52 text-xs",
       render: r => {
         const s = subjectText(r);
@@ -237,7 +237,7 @@ function buildColumns(
       },
     },
     {
-      id: "where", label: "จากที่ไหน",
+      id: "where", width: 140, label: "จากที่ไหน",
       className: "whitespace-nowrap text-xs",
       hideOnMobile: true,
       render: r => (
@@ -252,7 +252,7 @@ function buildColumns(
       ),
     },
     {
-      id: "detail", label: "",
+      id: "detail", width: 80, label: "",
       className: "whitespace-nowrap text-right",
       render: r => (
         <div className="flex items-center justify-end gap-2.5">

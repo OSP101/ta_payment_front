@@ -364,35 +364,35 @@ function DecidedTable({
 
   const columns: DataColumn<Pending>[] = [
     {
-      id: "name", label: "ชื่อ - นามสกุล", sortable: true, isRowHeader: true,
+      id: "name", width: 220, label: "ชื่อ - นามสกุล", sortable: true, isRowHeader: true,
       sortValue: u => u.full_name,
       className: "font-medium",
       render: u => u.full_name,
     },
     {
-      id: "email", label: "อีเมล", sortable: true,
+      id: "email", width: 240, label: "อีเมล", sortable: true,
       sortValue: u => u.email,
       className: "text-muted",
       render: u => u.email,
     },
     {
-      id: "status", label: "สถานะ",
+      id: "status", width: 130, label: "สถานะ",
       render: u => <StatusChip status={u.status} />,
     },
     {
-      id: "verified_at", label: "วันที่ตรวจ",
+      id: "verified_at", width: 140, label: "วันที่ตรวจ",
       className: "text-muted",
       render: u => fmtDate(u.verified_at),
     },
     ...(bucket === "approved"
       ? [{
-          id: "expires_at", label: "อายุไฟล์",
+          id: "expires_at", width: 120, label: "อายุไฟล์",
           render: (u: Pending) => <RetentionChip user={u} />,
         } satisfies DataColumn<Pending>]
       : []),
     ...(onRedownload
       ? [{
-          id: "actions", label: <span className="sr-only">การจัดการ</span>,
+          id: "actions", width: 150, label: <span className="sr-only">การจัดการ</span>,
           className: "text-right" as const,
           render: (u: Pending) => (
             <DownloadCell person={u} onRedownload={onRedownload} />

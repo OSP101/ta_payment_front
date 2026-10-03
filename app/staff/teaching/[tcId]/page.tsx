@@ -4,12 +4,12 @@ import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "@heroui/react";
-import { Save, Lock, Clock, CircleAlert, ArrowLeft, Trash2, Plus, Pencil } from "lucide-react";
+import { Save, Lock, Clock, CircleAlert, ArrowLeft, Trash2, Plus, Pencil, GitMerge } from "lucide-react";
 import { api } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
 import {
   PageHeader, Panel, Button, IconButton, Chip, Alert, EmptyState, ConfirmDialog,
-  Modal, FieldGroup, TextInput, SelectField,
+  Modal, FieldGroup, TextInput, SelectField, Select, Tip,
 } from "../../../components/ui";
 import SectionScheduleEditor, {
   type SectionScheduleRow, validateRows, toApiPayload, ScheduleSummary,
@@ -28,6 +28,9 @@ interface SectionRow {
   /** หลักสูตรของกลุ่มเรียน (CS/IT/GIS/AI/CY/OTHER) — มาจาก ReservedFor ตอนนำเข้า;
    *  ไม่มีค่า = ยังไม่ระบุ. เจ้าหน้าที่แก้ทับได้ และค่าที่แก้จะไม่ถูกนำเข้าทับ */
   curriculum?: string | null;
+  /** Set only on a merged code's section that found no partner (same number and
+   *  track) — every other one was folded into the course's own section. */
+  course_code?: string | null;
   schedules?: SectionScheduleRow[];
 }
 
@@ -73,6 +76,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
   const [infoOpen, setInfoOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SectionRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SectionRow | null>(null);
+  const [foldTarget, setFoldTarget] = useState<SectionRow | null>(null);
 
   async function deleteCourse() {
     setDeleting(true);
@@ -184,6 +188,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
                 locked={locked}
                 onEdit={() => setEditTarget(sec)}
                 onDelete={() => setDeleteTarget(sec)}
+                onFold={sec.course_code ? () => setFoldTarget(sec) : undefined}
               />
             ))}
           </div>
@@ -210,6 +215,15 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         tcId={tcId}
         onClose={() => setDeleteTarget(null)}
       />
+
+      {foldTarget && (
+        <FoldSectionModal
+          tcId={tcId}
+          section={foldTarget}
+          candidates={sortedSecs.filter(s => s.id !== foldTarget.id && !s.course_code && s.track === foldTarget.track)}
+          onClose={() => setFoldTarget(null)}
+        />
+      )}
 
       {/* Danger zone — remove a course opened by mistake. The server refuses if
           the course has any TA / worklog / export data. */}
@@ -266,13 +280,15 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
 }
 
 function SectionScheduleBlock({
-  tcId, section, locked, onEdit, onDelete,
+  tcId, section, locked, onEdit, onDelete, onFold,
 }: {
   tcId: string;
   section: SectionRow;
   locked: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  /** Present only for a merged code's section still on its own. */
+  onFold?: () => void;
 }) {
   const initial = section.schedules ?? [];
   const [rows, setRows] = useState<SectionScheduleRow[]>(initial);
@@ -334,6 +350,11 @@ function SectionScheduleBlock({
           </Chip>
         )}
         <span className="text-xs text-muted">{section.num_students} คน</span>
+        {section.course_code && (
+          <Tip content={`section ของรหัส ${section.course_code} ที่ระบบหา section คู่ (เลขและประเภทเดียวกัน) ไม่เจอ ถ้าเรียนด้วยกัน ให้กดรวมเข้ากับ section นั้น`}>
+            <span className="inline-flex"><Chip tone="warn">ยังไม่รวม</Chip></span>
+          </Tip>
+        )}
         {!dirty && rows.length > 0 && (
           <div className="ms-auto"><ScheduleSummary rows={rows} /></div>
         )}
@@ -350,6 +371,11 @@ function SectionScheduleBlock({
             <IconButton label={`แก้ไข Sec ${section.sec_no}`} variant="ghost" size="sm" onClick={onEdit}>
               <Pencil size={13} />
             </IconButton>
+            {onFold && (
+              <Button variant="secondary" size="sm" onClick={onFold}>
+                <GitMerge size={13} />รวมเข้ากับ sec…
+              </Button>
+            )}
             <IconButton label={`ลบ Sec ${section.sec_no}`} variant="danger-soft" size="sm" onClick={onDelete}>
               <Trash2 size={13} />
             </IconButton>
@@ -519,6 +545,72 @@ function SectionFormModal({
 
         {err && <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={err} />}
       </div>
+    </Modal>
+  );
+}
+
+/**
+ * Fold a merged code's leftover section into the section it is taught with:
+ * one class, one section (office, 02/10/2026). The class keeps the chosen
+ * section's timetable; students, TA requests, hours and makeups move into it
+ * (POST …/sections/:id/fold → fold_section_into, migration 0145).
+ */
+function FoldSectionModal({
+  tcId, section, candidates, onClose,
+}: {
+  tcId: string;
+  section: SectionRow;
+  candidates: SectionRow[];
+  onClose: () => void;
+}) {
+  const [into, setInto] = useState(candidates[0]?.id ?? "");
+  const [pending, setPending] = useState(false);
+
+  async function fold() {
+    if (!into) return;
+    setPending(true);
+    try {
+      await api.post(`/teaching-courses/${tcId}/sections/${section.id}/fold`, { into_section_id: into });
+      await mutate((k: unknown) => typeof k === "string" && k.startsWith("/teaching-courses"));
+      toast.success(`รวม Sec ${section.sec_no} แล้ว`);
+      onClose();
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={() => { if (!pending) onClose(); }}
+      size="sm"
+      icon={<GitMerge size={18} />}
+      title={`รวม Sec ${section.sec_no}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
+          <Button variant="primary" onClick={fold} disabled={!into || pending} isPending={pending}>รวม section</Button>
+        </>
+      }
+    >
+      {candidates.length === 0 ? (
+        <Alert status="warning" title="ไม่มี section ให้รวม"
+          description={`วิชานี้ไม่มี section ${section.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"} ของรหัสหลัก รวมได้เฉพาะ section ประเภทเดียวกัน`} />
+      ) : (
+        <div className="space-y-3">
+          <FieldGroup label="เรียนด้วยกันกับ">
+            <Select value={into} onChange={e => setInto(e.target.value)}>
+              {candidates.map(c => <option key={c.id} value={c.id}>Sec {c.sec_no} ({c.num_students} คน)</option>)}
+            </Select>
+          </FieldGroup>
+          <p className="text-xs text-muted">
+            นักศึกษา {section.num_students} คนจะรวมเข้า section ที่เลือก และใช้ตารางเรียนของ section นั้น
+            คำขอ TA บันทึกเวลา และวันชดเชยของ Sec {section.sec_no} จะย้ายตามไปด้วย ย้อนกลับไม่ได้
+          </p>
+        </div>
+      )}
     </Modal>
   );
 }

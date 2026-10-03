@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import useSWR, { mutate } from "swr";
-import { Save, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users, SquareArrowOutUpRight, History } from "lucide-react";
+import { Save, ClipboardPaste, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users, SquareArrowOutUpRight, History } from "lucide-react";
 import { toast } from "@heroui/react";
 import { api } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
@@ -15,6 +15,7 @@ import { DataTable, type DataColumn, type DataFilter } from "../../components/Da
 import { Skel } from "../../components/Skeletons";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 import { budgetConfirmMessage } from "./budgetConfirm";
+import BudgetCapNotice from "../../components/BudgetCapNotice";
 
 // Both modals are heavy (forms, section-schedule editors, autocompletes) but
 // only one person in ten ever opens them in a given visit — code-split them
@@ -28,6 +29,7 @@ import { budgetConfirmMessage } from "./budgetConfirm";
 const OpenCourseModal = dynamic(() => import("./OpenCourseModal"), { ssr: false });
 const ImportModal = dynamic(() => import("./ImportModal"), { ssr: false });
 const ImportHistoryModal = dynamic(() => import("./ImportHistoryModal"), { ssr: false });
+const BulkCountsModal = dynamic(() => import("./BulkCountsModal"), { ssr: false });
 
 interface TC {
   id: string; code: string; alt_codes?: string[]; name_th: string; term_id: string;
@@ -49,6 +51,8 @@ interface TC {
   num_sections_special: number;
   lecturer_names?: string;
   exported_at?: string | null;
+  /** Where the course stands on asking for a TA (TeachingService.List). */
+  ta_request_state?: "approved" | "submitted" | "draft" | "none";
 }
 
 // needsStudentCount reports whether staff still has to fill in a student count
@@ -81,6 +85,7 @@ export default function TeachingPage() {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
+  const [bulkCountsOpen, setBulkCountsOpen] = useState(false);
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [onlyWba, setOnlyWba] = useState(false);
   // Course whose student counts are being edited in the modal (null = closed).
@@ -110,6 +115,9 @@ export default function TeachingPage() {
                   <FileSpreadsheet size={16} /> นำเข้า Excel
                 </Button>
               </span>
+              <Button variant="secondary" disabled={!termId} onClick={() => setBulkCountsOpen(true)}>
+                <ClipboardPaste size={16} /> อัปเดตจำนวนนักศึกษา
+              </Button>
               <Button variant="tertiary" disabled={!termId} onClick={() => setImportHistoryOpen(true)}>
                 <History size={16} /> ประวัติการนำเข้า
               </Button>
@@ -138,6 +146,11 @@ export default function TeachingPage() {
         />
       ) : (
         <div>
+          {term?.course_budget_cap_baht != null && (
+            <div className="mb-3">
+              <BudgetCapNotice cap={term.course_budget_cap_baht} />
+            </div>
+          )}
           {/* Missing-count reminder: staff often forget to fill the enrolled
               student count (the budget depends on it, and export is blocked
               without it). One click filters the list down to the offenders. */}
@@ -192,7 +205,7 @@ export default function TeachingPage() {
               // 8 คอลัมน์ — ถ้าไม่กันความกว้างขั้นต่ำไว้ ชื่อวิชาจะถูกบีบจนตัดเป็น
               // 3 บรรทัด อ่านยาก สู้ให้เลื่อนตารางแนวนอนแทน
               minWidth="1080px"
-              columns={makeCourseColumns(setEditStudents)}
+              columns={makeCourseColumns(setEditStudents, term ? { year: term.academic_year, semester: term.semester } : undefined)}
             />
           </div>
         </div>
@@ -212,6 +225,18 @@ export default function TeachingPage() {
         onClose={() => setImporting(false)}
         termId={termId}
         termLabel={termLabel}
+      />
+
+      <BulkCountsModal
+        open={bulkCountsOpen}
+        onClose={() => setBulkCountsOpen(false)}
+        termId={termId}
+        termLabel={termLabel}
+        scopeCounts={{
+          requested: (courses ?? []).filter(c => !c.exported_at &&
+            (c.ta_request_state === "approved" || c.ta_request_state === "submitted")).length,
+          all: (courses ?? []).filter(c => !c.exported_at).length,
+        }}
       />
 
       <ImportHistoryModal
@@ -263,6 +288,26 @@ function makeCourseFilters(courses: TC[]): DataFilter<TC>[] {
       predicate: (c, v) => (v === "wba" ? c.has_missing_schedule : !c.has_missing_schedule),
     },
     {
+      // "Requested" = an alive request (submitted or approved) — the same rule
+      // the dashboard's งบรวม counts. A draft the lecturer never sent is not a
+      // request yet, so it gets its own option instead of hiding under either.
+      id: "ta_request",
+      placeholder: "คำขอ TA ทั้งหมด",
+      options: [
+        { id: "", label: "คำขอ TA ทั้งหมด" },
+        { id: "requested", label: "ขอ TA แล้ว" },
+        { id: "approved", label: "อนุมัติแล้ว" },
+        { id: "submitted", label: "รออนุมัติ" },
+        { id: "draft", label: "ร่างไว้ ยังไม่ส่ง" },
+        { id: "none", label: "ยังไม่ขอ TA" },
+      ],
+      predicate: (c, v) => {
+        const st = c.ta_request_state ?? "none";
+        if (v === "requested") return st === "approved" || st === "submitted";
+        return st === v;
+      },
+    },
+    {
       id: "lecturer",
       placeholder: "อาจารย์ทุกคน",
       options: [
@@ -277,16 +322,18 @@ function makeCourseFilters(courses: TC[]): DataFilter<TC>[] {
 
 // Column factory — the students column needs the page's "open edit modal"
 // callback, so the columns are built per render instead of as a module const.
-function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
+function makeCourseColumns(
+  onEditStudents: (c: TC) => void, reg?: { year: number; semester: number },
+): DataColumn<TC>[] {
   return [
     {
-      id: "code", label: "รหัสวิชา", sortable: true, isRowHeader: true,
+      id: "code", width: 160, label: "รหัสวิชา", sortable: true, isRowHeader: true,
       sortValue: c => c.code,
       className: "font-medium tabular-nums whitespace-nowrap",
-      render: c => <CourseCode c={c} />,
+      render: c => <CourseCode c={c} reg={reg} copyable />,
     },
     {
-      id: "name", label: "ชื่อวิชา", sortable: true,
+      id: "name", width: 320, label: "ชื่อวิชา", sortable: true,
       sortValue: c => c.name_th,
       // ชื่อวิชาเป็นคอลัมน์ยืดหยุ่นตัวเดียว ถ้าปล่อยให้ตัดบรรทัดจะโดนบีบเหลือ
       // 3-4 บรรทัดจนอ่านยาก — ให้เลื่อนตารางแนวนอนแทนการตัดคำ
@@ -304,17 +351,25 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
               <span className="inline-flex items-center gap-1"><CalendarOff size={11} /> ยังไม่ระบุเวลาเรียน</span>
             </Chip>
           )}
+          {/* คำขอ TA ของวิชา — same states as the "คำขอ TA" filter. */}
+          {c.ta_request_state === "approved" && <Chip tone="info">ขอ TA แล้ว · อนุมัติ</Chip>}
+          {c.ta_request_state === "submitted" && <Chip tone="warn">ขอ TA แล้ว · รออนุมัติ</Chip>}
+          {c.ta_request_state === "draft" && (
+            <Tip content="อาจารย์บันทึกร่างคำขอไว้ แต่ยังไม่ได้ส่ง">
+              <span className="inline-flex"><Chip tone="neutral">ร่างคำขอ TA</Chip></span>
+            </Tip>
+          )}
         </span>
       ),
     },
     {
-      id: "credits", label: "หน่วยกิต", sortable: true,
+      id: "credits", width: 100, label: "หน่วยกิต", sortable: true,
       sortValue: c => c.credits,
       className: "tabular-nums whitespace-nowrap",
       render: c => `${c.credits} (${c.lecture_hrs}-${c.lab_hrs}-${c.self_hrs})`,
     },
     {
-      id: "lecturers", label: "อาจารย์ผู้สอน",
+      id: "lecturers", width: 200, label: "อาจารย์ผู้สอน",
       render: c => c.lecturer_names ? (
         <Tip content={c.lecturer_names}><span className="block max-w-[180px] truncate">
           {c.lecturer_names}
@@ -324,7 +379,7 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
       ),
     },
     {
-      id: "sections", label: "Sec (ปกติ / พิเศษ)",
+      id: "sections", width: 130, label: "Sec (ปกติ / พิเศษ)",
       className: "tabular-nums whitespace-nowrap",
       // แสดง "x / y" เสมอ แม้ฝั่งใดเป็น 0 — ทุกแถวอ่านด้วยรูปแบบเดียวกัน
       render: c => (
@@ -334,7 +389,7 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
       ),
     },
     {
-      id: "students", label: "นักศึกษา (ปกติ / พิเศษ)",
+      id: "students", width: 170, label: "นักศึกษา (ปกติ / พิเศษ)",
       render: c => {
         const missing = needsStudentCount(c);
         return (
@@ -356,11 +411,11 @@ function makeCourseColumns(onEditStudents: (c: TC) => void): DataColumn<TC>[] {
       },
     },
     {
-      id: "budget", label: "งบประมาณ (ใช้ไป / ทั้งหมด)",
-      render: c => <BudgetBadge id={c.id} />,
+      id: "budget", width: 210, label: "งบประมาณ (ใช้ไป / ทั้งหมด)",
+      render: c => <BudgetBadge course={c} />,
     },
     {
-      id: "actions", label: <span className="sr-only">การจัดการ</span>,
+      id: "actions", width: 120, label: <span className="sr-only">การจัดการ</span>,
       className: "text-right",
       render: c => (
         <div className="inline-flex items-center gap-1 whitespace-nowrap">
@@ -606,39 +661,44 @@ interface Budget {
   per_course_max: number; used_baht: number; remaining_baht: number;
   over_budget: boolean;
   term_pay_regular: number; term_pay_special: number;
+  /** เพดานงบรายวิชาของภาค (ตั้งที่ ตั้งค่า > ภาคเรียน) — null = ไม่กำหนด */
+  budget_cap_baht: number | null;
+  /** งบตามสูตรล้วน ๆ ก่อนกดด้วยเพดาน */
+  formula_baht: number;
+  /** true = เพดานต่ำกว่าสูตร งบจริงจึงเท่ากับเพดาน */
+  cap_applied: boolean;
 }
 // BudgetBadge — used/ceiling chip plus the ceiling split by track (ปกติ/พิเศษ),
 // so staff can see how the course budget divides across the two pools.
-function BudgetBadge({ id }: { id: string }) {
+function BudgetBadge({ course }: { course: TC }) {
+  const id = course.id;
   const { data } = useSWR<Budget>(`/teaching-courses/${id}/budget`);
-  // Same two lines as the loaded badge (chip + track split), so the column
-  // doesn't change height when each row's budget lands.
-  if (!data) {
-    return (
-      <div className="flex flex-col items-start gap-1">
-        <Skel className="h-6 w-28 rounded-full" />
-        <Skel className="h-3 w-32" />
-      </div>
-    );
-  }
+  // Same size as the loaded chip, so the row doesn't move when it lands.
+  if (!data) return <Skel className="h-6 w-28 rounded-full" />;
   const tone = data.over_budget ? "danger" : data.remaining_baht < data.per_course_max * 0.1 ? "warn" : "success";
   const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const capLabel = data.budget_cap_baht == null
+    ? ""
+    : data.cap_applied
+      ? `งบตามสูตร ${fmt(data.formula_baht)} บาท เกินเพดานงบรายวิชาของคณะ ${fmt(data.budget_cap_baht)} บาท จึงใช้เพดาน`
+      : `งบตามสูตร ${fmt(data.formula_baht)} บาท ไม่เกินเพดานงบรายวิชาของคณะ ${fmt(data.budget_cap_baht)} บาท`;
   return (
-    <div className="flex flex-col items-start gap-1 whitespace-nowrap">
-      <Tip content={`งบที่ใช้ไปแล้ว ${fmt(data.used_baht)} บาท จากเพดานงบของวิชา ${fmt(data.per_course_max)} บาท`}>
-        <span className="inline-flex">
-          <Chip tone={tone}>
-            {fmt(data.used_baht)}/{fmt(data.per_course_max)} บ.
-          </Chip>
-        </span>
-      </Tip>
-      {/* บรรทัดล่าง = แบ่งเพดานงบตามภาค (รวมกันได้เท่ากับตัวหลังของ chip) */}
-      <Tip content="เพดานงบของวิชาแยกตามภาคปกติและภาคพิเศษ รวมกันเท่ากับเพดานงบทั้งหมด">
-        <span className="text-[11px] text-muted tabular-nums">
-          ปกติ {fmt(data.term_pay_regular)} · พิเศษ {fmt(data.term_pay_special)} บ.
-        </span>
-      </Tip>
-    </div>
+    // One line (tables keep every row to one line): the regular / special
+    // split that used to sit underneath now lives in the chip's tooltip.
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <Tip content={`งบที่ใช้ไปแล้ว ${fmt(data.used_baht)} บาท จากงบของวิชา ${fmt(data.per_course_max)} บาท\nแบ่งตามภาค: ปกติ ${fmt(data.term_pay_regular)} บาท พิเศษ ${fmt(data.term_pay_special)} บาท`}>
+          <span className="inline-flex">
+            <Chip tone={tone}>
+              {fmt(data.used_baht)}/{fmt(data.per_course_max)} บ.
+            </Chip>
+          </span>
+        </Tip>
+        {data.cap_applied && (
+          <Tip content={capLabel}>
+            <span className="inline-flex"><Chip tone="info">เพดาน</Chip></span>
+          </Tip>
+        )}
+    </span>
   );
 }
 

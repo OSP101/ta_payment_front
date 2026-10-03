@@ -212,7 +212,9 @@ interface RequestWindow {
 // กำหนดเวลาเป็นแค่ข้อมูล ไม่ได้ใช้บล็อกการส่ง: เลยกำหนดแล้วก็ยังส่งได้
 // แต่คำขอจะถูกทำเครื่องหมาย "ล่าช้า" และการเบิกจ่ายจะช้าตามไปด้วย
 type WindowState =
-  | { phase: "ontime"; window?: RequestWindow; remainingMs?: number }
+  | { phase: "none" }
+  | { phase: "notyet"; opensAt: number }
+  | { phase: "ontime"; window: RequestWindow; remainingMs: number }
   | { phase: "late"; window: RequestWindow; closedAt: number };
 
 const GRAD_MIN_HRS = 10;
@@ -339,9 +341,11 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
   // WBA gate mirrors the backend: no TA request until every section has a
   // timetable — worklog validation and budget math both read it.
   const wbaBlocked = !!course?.has_missing_schedule;
-  // ไม่มีการปิดรับคำขอ — กำหนดเวลาแค่ตัดสินว่า "ทันเวลา" หรือ "ส่งช้า"
-  // สิ่งเดียวที่บล็อกการส่งคือ WBA (ยังไม่มีตารางเรียน)
-  const canSend = !wbaBlocked;
+  // ไม่มีการปิดรับคำขอ — เลยกำหนดแล้วแค่นับเป็น "ส่งช้า" แต่ก่อนเจ้าหน้าที่
+  // เปิดช่วงรับคำขอ (ยังไม่กำหนด หรือยังไม่ถึงวันเปิด) ส่งไม่ได้ เช่นเดียวกับ
+  // WBA (ยังไม่มีตารางเรียน)
+  const windowBlocked = !windowLoading && (windowState.phase === "none" || windowState.phase === "notyet");
+  const canSend = !wbaBlocked && !windowBlocked;
 
   return (
     <div>
@@ -374,7 +378,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
 
       {/* Inline request form (no modal, always visible — the professor asked for
           the form to be right there, not behind a button). */}
-      {!wbaBlocked && (
+      {!wbaBlocked && !windowBlocked && (
         <RequestFormSection
           tcId={tcId}
           course={course}
@@ -2407,8 +2411,11 @@ function useWindowState(windows: RequestWindow[] | undefined): WindowState {
   }, []);
 
   return useMemo<WindowState>(() => {
-    // ไม่มีการกำหนดช่วงเวลา = ไม่มีกำหนดส่งให้เลย → ถือว่าทันเวลาเสมอ
-    if (!windows || windows.length === 0) return { phase: "ontime" };
+    // ยังไม่มีช่วงรับคำขอ หรือยังไม่ถึงวันเปิดรับ = ส่งไม่ได้ (ตรงกับ backend
+    // assertRequestWindowOpened)
+    if (!windows || windows.length === 0) return { phase: "none" };
+    const opensAt = Math.min(...windows.map(w => new Date(w.opens_at).getTime()));
+    if (now < opensAt) return { phase: "notyet", opensAt };
 
     // ยึดกำหนดปิดรับที่ช้าที่สุดของเทอมเป็นเส้นตาย (ตรงกับ backend)
     const deadline = windows
@@ -2458,6 +2465,22 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
     );
   }
 
+  // ยังไม่เปิดรับ — ส่งไม่ได้จนกว่าเจ้าหน้าที่จะเปิด
+  if (state.phase === "none" || state.phase === "notyet") {
+    return (
+      <div data-tour="req-window" className="mb-3">
+        <Alert
+          status="danger"
+          icon={<CalendarOff size={16} />}
+          title="ยังส่งคำขอ TA ไม่ได้"
+          description={state.phase === "none"
+            ? "เจ้าหน้าที่ยังไม่ได้กำหนดช่วงรับคำขอของภาคเรียนนี้ เมื่อเปิดรับแล้วจะส่งคำขอได้ที่หน้านี้"
+            : `ช่วงรับคำขอของภาคเรียนนี้เริ่ม ${formatThaiDateTime(new Date(state.opensAt).toISOString())}`}
+        />
+      </div>
+    );
+  }
+
   // ส่งช้า — ยังส่งได้ตามปกติ แต่ต้องรู้ว่าเงินจะออกช้า
   if (state.phase === "late") {
     return (
@@ -2476,8 +2499,8 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
     );
   }
 
-  // ส่งทันเวลา — ถ้าไม่มีกำหนดเลย ก็ทันเวลาเสมอ
-  const urgent = state.remainingMs !== undefined && state.remainingMs < 24 * 60 * 60 * 1000;
+  // ส่งทันเวลา
+  const urgent = state.remainingMs < 24 * 60 * 60 * 1000;
   return (
     <div data-tour="req-window" className={
       "mb-3 rounded-lg border px-4 py-3 flex flex-wrap items-center gap-3 " +
@@ -2489,16 +2512,12 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
       <div className="flex flex-col min-w-0">
         <div className={"text-sm font-medium " + (urgent ? "text-amber-900" : "text-emerald-900")}>
           <Clock size={14} className="inline -mt-0.5 mr-1" />
-          {state.window && state.remainingMs !== undefined
-            ? `เหลืออีก ${formatRemaining(state.remainingMs)} ถึงกำหนดส่ง`
-            : "ไม่มีกำหนดส่ง ส่งคำขอได้ตลอด"}
+          {`เหลืออีก ${formatRemaining(state.remainingMs)} ถึงกำหนดส่ง`}
         </div>
         <div className={"text-xs " + (urgent ? "text-amber-800" : "text-emerald-800")}>
-          {state.window
-            ? <>กำหนดส่ง: {formatThaiDateTime(state.window.closes_at)}
-                {state.window.note ? ` · ${state.window.note}` : ""}
-                {" · หลังกำหนดยังส่งได้ แต่จะนับเป็น“ส่งช้า”"}</>
-            : "เจ้าหน้าที่ยังไม่ได้กำหนดวันส่งสำหรับภาคเรียนนี้"}
+          กำหนดส่ง: {formatThaiDateTime(state.window.closes_at)}
+          {state.window.note ? ` · ${state.window.note}` : ""}
+          {" · หลังกำหนดยังส่งได้ แต่จะนับเป็น“ส่งช้า”"}
         </div>
       </div>
     </div>

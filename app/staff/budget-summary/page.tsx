@@ -311,6 +311,21 @@ function groupCourseSummaryRows(rows: CourseSummaryPreviewRow[]): CourseSummaryD
 // the row height for everyone else's.
 const TA_STACK_VISIBLE = 4;
 
+/** "ปกติ / พิเศษ" on one line (tables keep rows to one line); the tooltip
+ *  spells both out. A negative amount (overspent) is red. */
+function MoneyPair({ regular, special }: { regular: number; special: number }) {
+  const cls = (n: number) => (n < 0 ? "font-medium text-danger" : "");
+  return (
+    <Tip content={`ภาคปกติ ${fmtBaht(regular)} บาท\nภาคพิเศษ ${fmtBaht(special)} บาท`}>
+      <span className="tabular-nums">
+        <span className={cls(regular)}>{fmtBaht(regular)}</span>
+        <span className="text-ink-4"> / </span>
+        <span className={special < 0 ? cls(special) : "text-ink-4"}>{fmtBaht(special)}</span>
+      </span>
+    </Tip>
+  );
+}
+
 function TAAvatarStack({ tas }: { tas: TAInfo[] }) {
   if (tas.length === 0) {
     return <span className="text-xs text-ink-4">ยังไม่มี TA ที่อนุมัติ</span>;
@@ -353,7 +368,8 @@ function buildCourseSummaryColumns(
 ): DataColumn<CourseSummaryDisplayRow>[] {
   const monthCols: DataColumn<CourseSummaryDisplayRow>[] = monthMeta.map(m => ({
     id: `paid_${m.year_month}`,
-    label: `เบิกจ่ายเดือน ${m.label} (บาท)`,
+    width: 160,
+    label: `เบิกจ่ายเดือน ${m.label} ปกติ / พิเศษ (บาท)`,
     className: "text-right whitespace-nowrap",
     hideOnMobile: true,
     sortable: true,
@@ -363,53 +379,43 @@ function buildCourseSummaryColumns(
     },
     render: r => {
       const p = r.paid_by_month.find(x => x.year_month === m.year_month);
-      return (
-        <div className="text-right tabular-nums">
-          <div>ปกติ {fmtBaht(p?.regular ?? 0)}</div>
-          <div className="text-xs text-ink-4">พิเศษ {fmtBaht(p?.special ?? 0)}</div>
-        </div>
-      );
+      return <MoneyPair regular={p?.regular ?? 0} special={p?.special ?? 0} />;
     },
   }));
 
   return [
     {
-      id: "course_code", label: "รหัสวิชา", isRowHeader: true, sortable: true,
+      id: "course_code", width: 130, label: "รหัสวิชา", isRowHeader: true, sortable: true,
       sortValue: r => r.course_code, render: r => <span className="font-medium tabular-nums">{r.course_code}</span>,
     },
     {
-      id: "course_name_th", label: "ชื่อวิชา", sortable: true,
+      id: "course_name_th", width: 260, label: "ชื่อวิชา", sortable: true,
       sortValue: r => r.course_name_th, render: r => r.course_name_th,
     },
-    { id: "credit_text", label: "หน่วยกิต", className: "whitespace-nowrap", hideOnMobile: true, render: r => r.credit_text },
+    { id: "credit_text", width: 100, label: "หน่วยกิต", className: "whitespace-nowrap", hideOnMobile: true, render: r => r.credit_text },
     {
-      id: "lecturer", label: "อาจารย์ผู้สอน", sortable: true,
+      id: "lecturer", width: 200, label: "อาจารย์ผู้สอน", sortable: true,
       sortValue: r => r.lecturer, render: r => r.lecturer,
     },
     {
-      id: "claim_kind", label: "ประเภทเบิก", hideOnMobile: true,
+      id: "claim_kind", width: 120, label: "ประเภทเบิก", hideOnMobile: true,
       render: r => r.claim_kind ? <Chip tone="info">{r.claim_kind}</Chip> : null,
     },
     {
-      id: "ta", label: "TA", sortable: true,
+      id: "ta", width: 170, label: "TA", sortable: true,
       sortValue: r => r.tas.length ? r.tas.map(t => t.name).join(", ") : "~",
       render: r => <TAAvatarStack tas={r.tas} />,
     },
     {
-      id: "num", label: "จำนวนนักศึกษา (ปกติ/พิเศษ)", className: "text-right whitespace-nowrap", hideOnMobile: true,
+      id: "num", width: 150, label: "จำนวนนักศึกษา (ปกติ/พิเศษ)", className: "text-right whitespace-nowrap", hideOnMobile: true,
       render: r => `${r.num_regular} / ${r.num_special}`,
     },
     // The budget the course is allotted, per track — what L:M reports in the
     // .xlsx.
     {
-      id: "apply", label: "ขออนุมัติเบิกจ่าย (บาท)", className: "text-right whitespace-nowrap", sortable: true,
+      id: "apply", width: 170, label: "ขออนุมัติเบิกจ่าย ปกติ / พิเศษ (บาท)", className: "text-right whitespace-nowrap", sortable: true,
       sortValue: r => r.apply_regular + r.apply_special,
-      render: r => (
-        <div className="text-right tabular-nums">
-          <div>ปกติ {fmtBaht(r.apply_regular)}</div>
-          <div className="text-xs text-ink-4">พิเศษ {fmtBaht(r.apply_special)}</div>
-        </div>
-      ),
+      render: r => <MoneyPair regular={r.apply_regular} special={r.apply_special} />,
     },
     ...monthCols,
     // คงเหลือ — added back 11/09/2026 per staff request, reversing the
@@ -417,7 +423,7 @@ function buildCourseSummaryColumns(
     // every visible month column, same arithmetic the .xlsx formula uses, so
     // the screen and the file can never disagree.
     {
-      id: "remaining", label: "คงเหลือ (บาท)", className: "text-right whitespace-nowrap", sortable: true,
+      id: "remaining", width: 140, label: "คงเหลือ ปกติ / พิเศษ (บาท)", className: "text-right whitespace-nowrap", sortable: true,
       sortValue: r => {
         const paidReg = r.paid_by_month.reduce((s, p) => s + p.regular, 0);
         const paidSpec = r.paid_by_month.reduce((s, p) => s + p.special, 0);
@@ -428,14 +434,7 @@ function buildCourseSummaryColumns(
         const paidSpec = r.paid_by_month.reduce((s, p) => s + p.special, 0);
         const remainRegular = r.apply_regular - paidReg;
         const remainSpecial = r.apply_special - paidSpec;
-        return (
-          <div className="text-right tabular-nums">
-            <div className={remainRegular < 0 ? "font-medium text-danger" : ""}>{fmtBaht(remainRegular)}</div>
-            <div className={"text-xs " + (remainSpecial < 0 ? "font-medium text-danger" : "text-ink-4")}>
-              {fmtBaht(remainSpecial)}
-            </div>
-          </div>
-        );
+        return <MoneyPair regular={remainRegular} special={remainSpecial} />;
       },
     },
   ];
@@ -559,12 +558,12 @@ interface TransferCoverPreviewSheet {
 
 const transferCoverColumns: DataColumn<TransferCoverPreviewRow>[] = [
   {
-    id: "name", label: "ชื่อ-สกุล", isRowHeader: true, sortable: true,
+    id: "name", width: 240, label: "ชื่อ-สกุล", isRowHeader: true, sortable: true,
     sortValue: r => r.name, render: r => r.name,
   },
-  { id: "courses", label: "รายวิชา", render: r => r.courses },
+  { id: "courses", width: 260, label: "รายวิชา", render: r => r.courses },
   {
-    id: "seniority", label: "หมายเหตุ", className: "whitespace-nowrap",
+    id: "seniority", width: 160, label: "หมายเหตุ", className: "whitespace-nowrap",
     render: r => (
       <Tip content={r.seniority === "ใหม่" ? "เป็น TA ครั้งแรกในภาคเรียนนี้" : r.seniority === "เก่า" ? "เคยเป็น TA ในภาคเรียนก่อนหน้า" : undefined}>
         <span className="inline-flex"><Chip tone={r.seniority === "ใหม่" ? "info" : "neutral"}>{r.seniority}</Chip></span>
@@ -572,7 +571,7 @@ const transferCoverColumns: DataColumn<TransferCoverPreviewRow>[] = [
     ),
   },
   {
-    id: "baht", label: "จำนวนเงิน (บาท)", className: "text-right whitespace-nowrap", sortable: true,
+    id: "baht", width: 160, label: "จำนวนเงิน (บาท)", className: "text-right whitespace-nowrap", sortable: true,
     sortValue: r => r.baht, render: r => <span className="tabular-nums">{fmtBaht(r.baht)}</span>,
   },
 ];

@@ -272,6 +272,9 @@ function isReauthPath(path: string): boolean {
   // carries full citizen IDs) — a typo there must stay in the picker.
   return REAUTH_PATHS.some(p => path.startsWith(p) || path.includes(p))
     || path.endsWith("/zip-token") || path.endsWith("/2fa/reset")
+    // Staff rebuilding a TA's creditor form re-type their own password: a typo
+    // must stay in the users screen, not log them out.
+    || path.endsWith("/creditor-form/regenerate")
     || /\/transfer-cover(-bundle\.zip|\.xlsx|\/[^/?]+\/reprint)(\?|$)/.test(path);
 }
 
@@ -853,4 +856,6 @@ export interface Term {
   starts_on?: string;
   ends_on?: string;
   is_active: boolean;
+  /** เพดานงบรายวิชาที่ทุกวิชาในภาคใช้ร่วมกัน (null = ไม่กำหนด) — migration 0144. */
+  course_budget_cap_baht?: number | null;
 }
