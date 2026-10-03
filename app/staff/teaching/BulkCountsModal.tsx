@@ -91,6 +91,9 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
   // Each tab keeps its own data: switching to Excel never shows (or sends)
   // what REG returned, and the other way round.
   const [regText, setRegText] = useState("");
+  // Per-section enrolment from REG, keyed by code — sent with the save so each
+  // section takes its real number, not just the course total.
+  const [regSections, setRegSections] = useState<Record<string, SectionCount[]>>({});
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<Result[] | null>(null);
   const [applied, setApplied] = useState<Result[] | null>(null);
@@ -99,7 +102,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (open) { setText(""); setRegText(""); setPreview(null); setApplied(null); setConfirmBudget(false); setAllowZero(false); }
+    if (open) { setText(""); setRegText(""); setRegSections({}); setPreview(null); setApplied(null); setConfirmBudget(false); setAllowZero(false); }
   }, [open]);
 
   const parsed = useMemo(() => parsePasted(tab === "reg" ? regText : text), [tab, regText, text]);
@@ -112,8 +115,11 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
     if (!termId || parsed.rows.length === 0) return;
     setPending(true);
     try {
+      const rows = tab === "reg"
+        ? parsed.rows.map(row => ({ ...row, sections: regSections[row.code.toUpperCase()] }))
+        : parsed.rows;
       const res = await api.post<{ items: Result[] }>(`/terms/${termId}/num-students/bulk`, {
-        rows: parsed.rows, dry_run: dryRun, confirm: !dryRun && confirmBudget, allow_zero: !dryRun && allowZero,
+        rows, dry_run: dryRun, confirm: !dryRun && confirmBudget, allow_zero: !dryRun && allowZero,
       });
       if (dryRun) {
         setPreview(res.items);
@@ -180,7 +186,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
 
             <Tabs.Panel id="reg">
               <div className="space-y-3 pt-4">
-                {termId && <RegFetch termId={termId} open={open} counts={scopeCounts} onRows={setRegText} />}
+                {termId && <RegFetch termId={termId} open={open} counts={scopeCounts} onRows={setRegText} onSections={setRegSections} />}
                 {regText && <ParsedRows parsed={parsed} source="reg" />}
               </div>
             </Tabs.Panel>
@@ -385,7 +391,11 @@ function ExampleSheet() {
   );
 }
 
-interface RegRow { code: string; regular: number; special: number; sections?: string; error?: string }
+interface SectionCount { sec_no: string; special: boolean; count: number }
+interface RegRow {
+  code: string; regular: number; special: number; sections?: string;
+  section_counts?: SectionCount[]; error?: string;
+}
 interface RegJob {
   scope: RegScope;
   status: "running" | "done" | "stopped" | "failed";
@@ -409,8 +419,9 @@ const hhmm = (iso: string) =>
  * through the same ตรวจสอบ → บันทึก steps as a paste; nothing is saved until
  * staff confirm.
  */
-function RegFetch({ termId, open, counts, onRows }: {
+function RegFetch({ termId, open, counts, onRows, onSections }: {
   termId: string; open: boolean; counts?: ScopeCounts; onRows: (text: string) => void;
+  onSections: (m: Record<string, SectionCount[]>) => void;
 }) {
   const [scope, setScope] = useState<RegScope>("requested");
   const [job, setJob] = useState<RegJob | null>(null);
@@ -446,8 +457,10 @@ function RegFetch({ termId, open, counts, onRows }: {
   useEffect(() => {
     if ((job?.status !== "done" && job?.status !== "stopped") || applied.current === job.finished_at) return;
     applied.current = job.finished_at ?? "";
-    onRows(job.rows.filter(r => !r.error).map(r => `${r.code}\t${r.regular}\t${r.special}`).join("\n"));
-  }, [job, onRows]);
+    const ok = job.rows.filter(r => !r.error);
+    onRows(ok.map(r => `${r.code}\t${r.regular}\t${r.special}`).join("\n"));
+    onSections(Object.fromEntries(ok.map(r => [r.code.toUpperCase(), r.section_counts ?? []])));
+  }, [job, onRows, onSections]);
 
   async function start() {
     setStarting(true);

@@ -82,11 +82,10 @@ interface SectionSchedule { kind: string; day_of_week: number; start_time: strin
  * The SUM of one side's declared hours may reach this multiple of the group's
  * real teaching time. Mirrors sectionTotalMultiplier on the server.
  *
- * Two, not one: attendance happens inside the session while grading and other
- * work happen after it, so the total legitimately exceeds the class hours — but
- * three fields each at the per-field ceiling would be three times over.
+ * Three, not one: attendance happens inside the session while grading and other
+ * work happen after it, so the total legitimately exceeds the class hours.
  */
-const SECTION_TOTAL_MULTIPLIER = 2;
+const SECTION_TOTAL_MULTIPLIER = 3;
 
 /** Weekly contact hours of one section, split by kind — the real ceiling. */
 function sectionWeeklyHours(s: Section | undefined): { lecture: number; lab: number } {
