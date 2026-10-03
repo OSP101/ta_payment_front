@@ -903,7 +903,13 @@ function RequestFormSection({
           bySection.set(sid, c);
         }
       }
-      type SubmitRes = { id: string; status: "approved" | "rejected" | "submitted"; reject_reason?: string };
+      // Each TA is filed and judged as their own request, so one TA failing
+      // never holds back the others. `requests` carries every TA's verdict.
+      type OneRes = {
+        id: string; status: "approved" | "rejected" | "submitted";
+        reject_reason?: string; ta_id?: string; ta_name?: string;
+      };
+      type SubmitRes = OneRes & { requests?: OneRes[] };
       const res: SubmitRes | null = fresh.length === 0 ? null : await api.post<SubmitRes>("/ta-requests", {
         teaching_course_id: tcId,
         ...(lecturerId ? { lecturer_id: lecturerId } : {}),
@@ -919,20 +925,20 @@ function RequestFormSection({
           })),
         })),
       });
-      if (res?.status === "rejected") {
-        // Under the auto-decide model, business-rule failures come back as a
-        // 200 with status='rejected'. Show the system-generated reason inline
-        // so the lecturer can fix it and resubmit.
-        const reason = res.reject_reason || "ระบบตัดสินว่าคำขอไม่ผ่านเกณฑ์";
-        setErr(reason);
-        notify.error(reason);
-        return;
-      }
+      const results: OneRes[] = res ? (res.requests?.length ? res.requests : [res]) : [];
+      const rejected = results.filter(r => r.status === "rejected");
+      // A result without ta_id (single-TA reply) stands for the whole form.
+      const rejectedTa = new Set(
+        rejected.map(r => r.ta_id ?? "").concat(rejected.some(r => !r.ta_id) ? fresh.map(a => a.ta_id) : []),
+      );
+      const approvedN = results.filter(r => r.status === "approved").length;
+      const waitingN = results.filter(r => r.status === "submitted").length;
+
       // Then the additions, one TA at a time. A refusal stops here with the
-      // new request (if any) already filed, so drop what went through from the
-      // form and leave only the TA that failed for the lecturer to fix.
+      // new requests already filed, so drop what went through from the form
+      // and leave only the TAs still to fix.
       const trimmedNotes: string[] = [];
-      const done = new Set<Assignment>(fresh);
+      const done = new Set<Assignment>(fresh.filter(a => !rejectedTa.has(a.ta_id)));
       for (const a of extend) {
         try {
           const r = await api.post<{ checks?: { rule: string; message?: string }[] }>(
@@ -951,8 +957,33 @@ function RequestFormSection({
           throw e;
         }
       }
-      if (extend.length) mutate("/ta-requests");
       if (trimmedNotes.length) notify.info(trimmedNotes.join("\n"));
+      if (candidatesKey) mutate(candidatesKey);
+
+      if (rejected.length) {
+        // Under the auto-decide model, business-rule failures come back as a
+        // 200 with status='rejected'. The TAs who passed are filed and leave
+        // the form; the rejected ones stay, with the system's reason each, so
+        // the lecturer can fix them and send again.
+        setAssignments(prev => prev.filter(a => rejectedTa.has(a.ta_id)));
+        const reason = rejected
+          .map(r => `${r.ta_name ? r.ta_name + ": " : ""}${r.reject_reason || "ระบบตัดสินว่าไม่ผ่านเกณฑ์"}`)
+          .join("\n");
+        setErr(reason);
+        const passed = [
+          approvedN ? `อนุมัติ ${approvedN} คน` : "",
+          waitingN ? `รอตารางเรียน ${waitingN} คน` : "",
+          extend.length ? `เพิ่ม section ${extend.length} คน` : "",
+        ].filter(Boolean);
+        if (passed.length) {
+          notify.success(`ส่งคำขอแล้ว: ${passed.join(" · ")} ส่วนที่เหลือไม่ผ่านเกณฑ์ ดูเหตุผลด้านล่าง`);
+        } else {
+          notify.error(reason);
+        }
+        onSubmitted();
+        return;
+      }
+
       // A successful submit (deferred or decided) books every TA on the form
       // against this course — leaving them in place invited exactly the "ส่ง
       // ซ้ำ" the duplicate guard now exists to catch, and the candidate list
@@ -964,16 +995,18 @@ function RequestFormSection({
       lastSavedJson.current = JSON.stringify({ v: 1, scope, assignments: [] });
       setDraftSavedAt(null);
       if (draftKey) api.del(draftKey).catch(() => {});
-      if (candidatesKey) mutate(candidatesKey);
       if (!res) {
         notify.success("เพิ่ม section ให้ TA ในคำขอเดิมเรียบร้อยแล้ว");
         onSubmitted();
         return;
       }
-      if (res.status === "submitted") {
-        // Deferred decision: at least one TA has no timetable yet, so there is
-        // nothing to judge. Say so plainly rather than implying approval.
-        notify.success("ส่งคำขอแล้ว ระบบจะตัดสินให้อัตโนมัติเมื่อ TA สร้างตารางเรียนครบทุกคน");
+      if (waitingN) {
+        // Deferred decision: these TAs have no timetable yet, so there is
+        // nothing to judge. Say so plainly rather than implying approval —
+        // and that each one is decided on their own, not when all are in.
+        notify.success(approvedN
+          ? `อนุมัติ ${approvedN} คน · รอตารางเรียน ${waitingN} คน ระบบจะตัดสินให้แต่ละคนอัตโนมัติเมื่อบันทึกตารางเรียน`
+          : "ส่งคำขอแล้ว ระบบจะตัดสินให้ TA แต่ละคนอัตโนมัติเมื่อบันทึกตารางเรียน");
         onSubmitted();
         return;
       }

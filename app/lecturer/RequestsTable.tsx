@@ -19,6 +19,9 @@ export interface TARequestRow {
   submitted_at?: string;
   decided_at?: string;
   ta_count?: number;
+  /** Who the request is for — one TA per request since each TA is decided on
+   * their own; several names only on older rows. */
+  ta_names?: string;
   is_late?: boolean;
   /** Sections whose sessions partly clash with the TA's own timetable. */
   trimmed_count?: number;
@@ -47,7 +50,7 @@ interface RequestDetail extends TARequestRow {
 
 const STATUS_MAP: Record<string, { tone: "success" | "warn" | "danger" | "info" | "neutral"; label: string }> = {
   approved:  { tone: "success", label: "อนุมัติแล้ว" },
-  submitted: { tone: "info",    label: "ส่งแล้ว · รออนุมัติ" },
+  submitted: { tone: "info",    label: "รอ TA บันทึกตารางเรียน" },
   pending:   { tone: "warn",    label: "รอดำเนินการ" },
   draft:     { tone: "neutral", label: "ฉบับร่าง" },
   rejected:  { tone: "danger",  label: "ปฏิเสธ" },
@@ -86,8 +89,12 @@ function buildColumns(
     ),
   },
   {
-    id: "ta_count", width: 110, label: "จำนวน TA",
-    render: r => <Chip tone="brand">{r.ta_count ?? 0} คน</Chip>,
+    // Each row is one TA's own verdict, so the name is what tells rows apart.
+    id: "ta_names", width: 200, label: "ผู้ช่วยสอน", sortable: true,
+    sortValue: r => r.ta_names ?? "",
+    render: r => r.ta_names
+      ? <span className="text-ink-1">{r.ta_names}</span>
+      : <Chip tone="brand">{r.ta_count ?? 0} คน</Chip>,
   },
   {
     id: "status", width: 150, label: "สถานะ", sortable: true,
@@ -304,8 +311,8 @@ export function RequestsTable({
         rows={rows}
         loading={loading}
         rowKey={r => r.id}
-        searchFn={r => `${STATUS_LABEL[r.status] ?? r.status} ${r.reject_reason ?? ""}`}
-        searchPlaceholder="ค้นหาสถานะ / เหตุผล…"
+        searchFn={r => `${r.ta_names ?? ""} ${STATUS_LABEL[r.status] ?? r.status} ${r.reject_reason ?? ""}`}
+        searchPlaceholder="ค้นหาชื่อ TA / สถานะ / เหตุผล…"
         filters={[{
           id: "status",
           placeholder: "ทุกสถานะ",
@@ -329,7 +336,7 @@ export function RequestsTable({
         onClose={() => { if (!cancelling) setCancelId(null); }}
         onConfirm={doCancel}
         title="ยกเลิกคำขอ TA นี้?"
-        message="โควตาของ TA ในคำขอนี้จะถูกคืน และคำขอนี้จะยกเลิกถาวร หากต้องการ TA คนเดิมอีกครั้ง ต้องส่งคำขอใหม่"
+        message="โควตาของ TA ในคำขอนี้จะถูกคืน และคำขอนี้จะยกเลิกถาวร (TA คนอื่นที่ส่งพร้อมกันไม่ถูกยกเลิกด้วย) หากต้องการ TA คนเดิมอีกครั้ง ต้องส่งคำขอใหม่"
         confirmLabel="ยืนยันยกเลิก"
         danger
         isPending={cancelling}

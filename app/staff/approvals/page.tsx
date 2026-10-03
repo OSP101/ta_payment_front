@@ -3,7 +3,7 @@ import useSWR from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2, XCircle, ChevronDown, Users, BookOpenCheck, FileCheck2, CalendarCheck2,
-  ShieldCheck, ShieldAlert, ClipboardList, UserCog,
+  ShieldCheck, ShieldAlert, ClipboardList, UserCog, Clock, GraduationCap,
 } from "lucide-react";
 import { Accordion } from "@heroui/react";
 import { useTerm } from "../TermContext";
@@ -50,6 +50,11 @@ interface RequestSummary {
   /** The officer who filed it for the lecturer; absent when the lecturer did. */
   submitted_by_name?: string;
   ta_count: number;
+  /** Who the request is for — one TA per request since submissions are
+   * judged person by person; several names only on older rows. */
+  ta_names: string;
+  /** Shared by the requests of one submission; absent on older rows. */
+  batch_id?: string;
   term_id: string;
   academic_year: number;
   semester: number;
@@ -64,12 +69,12 @@ interface RequestDetail extends RequestSummary {
 
 const SEMESTER_LABEL: Record<number, string> = { 1: "ภาคต้น", 2: "ภาคปลาย", 3: "ภาคฤดูร้อน" };
 
-// Only two decision surfaces exist under the auto-decide model. The chip
-// tone/label reads directly from these.
-const STATUS_META: Record<string, { tone: "success" | "danger" | "neutral"; label: string }> = {
+// Every request is one TA, decided on its own. 'submitted' is that TA still
+// owing a timetable — the system decides the moment it arrives.
+const STATUS_META: Record<string, { tone: "success" | "danger" | "warn" | "neutral"; label: string }> = {
   approved:  { tone: "success", label: "อนุมัติ" },
   rejected:  { tone: "danger",  label: "ปฏิเสธ" },
-  submitted: { tone: "neutral", label: "รอตัดสิน" }, // legacy — sweep clears these at boot
+  submitted: { tone: "warn",    label: "รอตารางเรียน" },
   cancelled: { tone: "neutral", label: "ยกเลิก" },
   draft:     { tone: "neutral", label: "ฉบับร่าง" },
 };
@@ -129,13 +134,15 @@ export default function TARequestsPage() {
       return (
         r.course_code.toLowerCase().includes(needle) ||
         r.course_name.toLowerCase().includes(needle) ||
-        r.lecturer_name.toLowerCase().includes(needle)
+        r.lecturer_name.toLowerCase().includes(needle) ||
+        (r.ta_names ?? "").toLowerCase().includes(needle)
       );
     });
   }, [rows, year, sem, q]);
 
   const approvedCount = filtered.filter(r => r.status === "approved").length;
   const rejectedCount = filtered.filter(r => r.status === "rejected").length;
+  const waitingCount = filtered.filter(r => r.status === "submitted").length;
 
   return (
     <div>
@@ -143,8 +150,8 @@ export default function TARequestsPage() {
         title="รายการคำขอ TA"
         description={(() => {
           // The fixed half of the line stands on its own while the count loads.
-          if (!listReady || !data) return "ระบบตัดสินอัตโนมัติ";
-          return `ระบบตัดสินอัตโนมัติ · แสดง ${filtered.length}/${data.length} รายการ`;
+          if (!listReady || !data) return "ระบบตัดสินอัตโนมัติเป็นรายบุคคล";
+          return `ระบบตัดสินอัตโนมัติเป็นรายบุคคล · แสดง ${filtered.length}/${data.length} รายการ`;
         })()}
       />
 
@@ -195,12 +202,15 @@ export default function TARequestsPage() {
           <SearchField
             value={q}
             onChange={setQ}
-            placeholder="ค้นหารหัส/ชื่อวิชา/อาจารย์…"
+            placeholder="ค้นหารหัส/ชื่อวิชา/อาจารย์/TA…"
           />
 
           <div className="ml-auto flex gap-2 text-xs">
             <Chip tone="success"><CheckCircle2 size={12} /> อนุมัติ {listReady ? approvedCount : <SkelValue className="h-3 w-4" />}</Chip>
             <Chip tone="danger"><XCircle size={12} /> ปฏิเสธ {listReady ? rejectedCount : <SkelValue className="h-3 w-4" />}</Chip>
+            {listReady && waitingCount > 0 && (
+              <Chip tone="warn"><Clock size={12} /> รอตารางเรียน {waitingCount}</Chip>
+            )}
           </div>
         </div>
 
@@ -272,6 +282,14 @@ function RequestHeader({ req }: { req: RequestSummary }) {
     // past the edge of a phone screen instead of truncating.
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 pr-2 text-left">
       <Chip tone={meta.tone}>{meta.label}</Chip>
+      {/* The TA leads: each row is one person's verdict, so who it is for
+          matters more than which course — that repeats down the list. */}
+      {req.ta_names && (
+        <span className="inline-flex min-w-0 max-w-full items-center gap-1 font-medium">
+          <GraduationCap size={13} className="shrink-0 text-(--ink-3)" />
+          <span className="truncate">{req.ta_names}</span>
+        </span>
+      )}
       <span className="font-semibold tabular-nums">{req.course_code}</span>
       <Tip content={`${req.course_code} ${req.course_name}\nอ. ${req.lecturer_name}`}>
         <span tabIndex={-1} className="min-w-0 max-w-full truncate text-(--ink-2) sm:max-w-[24rem]">{req.course_name}</span>
@@ -293,18 +311,25 @@ function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) 
   const checks = d?.decision_checks ?? summary.decision_checks;
   const allPass = checks.every(c => c.passed);
   const passCount = checks.filter(c => c.passed).length;
+  // Not judged yet: the only "check" is the note that the TA owes a timetable,
+  // and a red "ผ่าน 0/1" would read as a failure that has not happened.
+  const waiting = summary.status === "submitted";
 
   return (
     <div className="space-y-3">
       <div className={
         "rounded-md border px-3 py-2 text-xs flex items-center gap-2 " +
-        (allPass
+        (waiting
+          ? "bg-amber-50/50 border-amber-200 text-amber-800"
+          : allPass
           ? "bg-emerald-50/50 border-emerald-200 text-emerald-800"
           : "bg-red-50/50 border-red-200 text-red-800")
       }>
-        {allPass ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
+        {waiting ? <Clock size={14} /> : allPass ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
         <span>
-          {allPass
+          {waiting
+            ? "รอ TA บันทึกตารางเรียน ระบบจะตัดสินให้อัตโนมัติทันทีที่บันทึก โดยไม่ต้องรอ TA คนอื่น"
+            : allPass
             ? `ระบบตรวจสอบผ่านทุกข้อ (${checks.length} รายการ)`
             : `ผ่าน ${passCount}/${checks.length} รายการ`}
         </span>
