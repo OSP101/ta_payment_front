@@ -102,7 +102,9 @@ function seedMergeChoices(groups: MergeGroup[]): MergeChoices {
 
 function defaultPrimary(g: MergeGroup, codes: string[]): string {
   const existing = g.members.find(m => m.status === "existing" && codes.includes(m.code));
-  return existing?.code ?? codes[0] ?? "";
+  // The newest-curriculum code (the one labelled รหัสหลัก) is the base whose
+  // sections and timetable the merged course keeps — not the file's first row.
+  return existing?.code ?? pickPrimaryCode(codes);
 }
 
 // code → primary it folds into, for every group with two or more ticked codes.
