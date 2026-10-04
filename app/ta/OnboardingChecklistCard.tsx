@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Circle, ArrowRight, ShieldAlert, PartyPopper } from "lucide-react";
+import { CheckCircle2, Circle, ArrowRight, ShieldAlert, PartyPopper, Hourglass } from "lucide-react";
 import { Panel, Button, ProgressBar } from "../components/ui";
 import { useTAApproval } from "./TAGate";
 import { useTAOnboarding } from "./useTAOnboarding";
@@ -36,7 +36,7 @@ interface Step {
 
 export default function OnboardingChecklistCard() {
   const { approved } = useTAApproval();
-  const { loading, docsDone, docLabel, scheduleDone, doneCount, total, allDone } =
+  const { loading, docState, docsDone, docLabel, scheduleDone, doneCount, total, allDone } =
     useTAOnboarding();
 
   // The green "all set" bar is a receipt, not a permanent fixture: show it once
@@ -54,11 +54,21 @@ export default function OnboardingChecklistCard() {
     setShowDoneBar(true);
   }, [allDone, approved]);
 
-  // An approved TA cleared onboarding for good — nothing to say, ever.
-  if (approved) return null;
   // Never claim "incomplete" before the data has landed; a checklist that
   // flashes 0/2 and then vanishes is worse than a beat of nothing.
   if (loading) return null;
+
+  // Sent, now with staff. The checklist used to strike the step through and,
+  // once the timetable was in too, vanish — leaving a TA whose every action was
+  // still locked with nothing on the page saying why (TA feedback 05/10/2026).
+  // Checked before `approved`: an approved profile can still have a re-uploaded
+  // file in the queue, and saying so is still true.
+  if (docState === "pending_review") {
+    return <DocsInReviewCard approved={approved} scheduleDone={scheduleDone} />;
+  }
+
+  // An approved TA cleared onboarding for good — nothing to say, ever.
+  if (approved) return null;
 
   if (allDone) {
     if (!showDoneBar) return null;
@@ -152,6 +162,53 @@ export default function OnboardingChecklistCard() {
             </li>
           ))}
         </ul>
+      </Panel>
+    </div>
+  );
+}
+
+/**
+ * Documents are in and waiting on staff. Nothing for the TA to do about the
+ * documents themselves, so the card says so plainly and spends its one action
+ * on the step they CAN take meanwhile: the timetable, which every pending TA
+ * request is also waiting on.
+ */
+function DocsInReviewCard({ approved, scheduleDone }: { approved: boolean; scheduleDone: boolean }) {
+  return (
+    <div className="mb-6">
+      <Panel className="border-sky-300 dark:border-sky-800" data-tour="ta-home-checklist">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-soft-foreground">
+            <Hourglass size={18} />
+          </div>
+          <div className="min-w-0 flex-1 basis-56">
+            <h2 className="text-sm font-semibold text-foreground">
+              เอกสารของคุณอยู่ระหว่างรอเจ้าหน้าที่ตรวจสอบ
+            </h2>
+            <p className="mt-0.5 text-xs text-muted">
+              {approved
+                ? "ส่งครบแล้ว ไม่ต้องทำอะไรเพิ่ม ระบบจะแจ้งให้ทราบเมื่อตรวจเสร็จหรือมีไฟล์ที่ต้องแก้ไข"
+                : "ส่งครบแล้ว ไม่ต้องทำอะไรเพิ่ม ระหว่างนี้ดูเมนูต่าง ๆ ได้ แต่จะบันทึกเวลาได้เมื่อเจ้าหน้าที่อนุมัติเอกสารแล้ว"}
+            </p>
+            {scheduleDone ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
+                <CheckCircle2 size={14} className="shrink-0 text-emerald-600" aria-hidden />
+                บันทึกตารางเรียนของภาคเรียนนี้แล้ว
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-foreground">
+                <b>ระหว่างรอ สร้างตารางเรียนไว้ก่อนได้เลย</b> คำขอ TA ที่อาจารย์ส่งมาจะรอตารางเรียนของคุณก่อนจึงพิจารณาได้
+              </p>
+            )}
+          </div>
+          {!scheduleDone && (
+            <Link href="/ta/schedule" className="ms-auto shrink-0">
+              <Button variant="primary" size="sm" aria-label="สร้างตารางเรียน">
+                สร้างตารางเรียน <ArrowRight size={13} />
+              </Button>
+            </Link>
+          )}
+        </div>
       </Panel>
     </div>
   );

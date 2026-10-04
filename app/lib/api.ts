@@ -12,6 +12,8 @@ export class ApiError extends Error {
   status: number;
   /** Machine-readable code the backend may send in the `error` field. */
   code?: string;
+  /** Seconds until a rate limit (429) lifts, from the Retry-After header. */
+  retryAfter?: number;
   constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
@@ -315,7 +317,10 @@ function toApiError(path: string, status: number, body: string): ApiError {
 }
 
 async function parseError(path: string, res: Response): Promise<ApiError> {
-  return toApiError(path, res.status, await res.text().catch(() => ""));
+  const err = toApiError(path, res.status, await res.text().catch(() => ""));
+  const retry = Number(res.headers.get("retry-after"));
+  if (res.status === 429 && Number.isFinite(retry) && retry > 0) err.retryAfter = retry;
+  return err;
 }
 
 // /auth/heartbeat fires silently in the background on user activity (see

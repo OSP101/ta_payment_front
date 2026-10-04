@@ -2,7 +2,7 @@
 import { Fragment, use, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid, Download } from "lucide-react";
+import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid } from "lucide-react";
 import { api, type Me } from "../../../../lib/api";
 import { PayEstimateCard, type PayEstimate, type PayEstimateMonth } from "../../../../components/PayEstimate";
 import { notify } from "../../../../lib/notify";
@@ -18,6 +18,7 @@ import {
 import { type DataColumn } from "../../../../components/DataTable";
 import { Skel, SkelRegion, SkelRows, SkelValue } from "../../../../components/Skeletons";
 import { LockedActionButton, useTAApproval } from "../../../TAGate";
+import { ClaimSheetDownload } from "./ClaimSheetDownload";
 
 // Max billable hours per single work-log entry. Kept in sync with backend.
 const MAX_ROW_HOURS = 7;
@@ -818,7 +819,6 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // Synchronous twin of `generating` — see generate()'s doc comment.
   const generatingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
-  const [downloadingClaim, setDownloadingClaim] = useState(false);
   const submittingRef = useRef(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -1400,26 +1400,6 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     } finally { setSavingId(null); }
   }
 
-  // The TA's own ใบเบิกเวลา — the same sheet staff export, cut to this TA, so
-  // they can check the hours the office will bill. A plain read on the server:
-  // it locks nothing, unlike the staff download.
-  async function downloadClaimSheet() {
-    setDownloadingClaim(true);
-    try {
-      const blob = await api.get<Blob>(`/me/ta-courses/${tcId}/claim-sheet.xlsx`);
-      const url = URL.createObjectURL(blob);
-      const el = document.createElement("a");
-      el.href = url;
-      el.download = `ใบเบิก-${(course?.code ?? "").replaceAll("/", "_")}.xlsx`;
-      el.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      notify.error(e, "ดาวน์โหลดใบเบิกไม่สำเร็จ");
-    } finally {
-      setDownloadingClaim(false);
-    }
-  }
-
   async function generate() {
     // Guards the SAME instant a second click would race the first — the
     // `disabled={generating}` on the confirm button only takes effect on the
@@ -1869,11 +1849,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               </LockedActionButton>
             </TipWrap>
             </span>
-            <TipWrap content="ไฟล์ Excel ใบเบิกเวลาแบบเดียวกับที่เจ้าหน้าที่ใช้เบิกจ่าย เฉพาะของคุณ ใช้ตรวจสอบชั่วโมง นับเฉพาะรายการที่อาจารย์อนุมัติแล้ว">
-              <Button variant="ghost" onClick={downloadClaimSheet} isPending={downloadingClaim} disabled={downloadingClaim}>
-                <Download size={14} /> ดาวน์โหลดใบเบิก
-              </Button>
-            </TipWrap>
+            <ClaimSheetDownload tcId={tcId} courseCode={course?.code} />
             {/* With several sections the submit button lives on each section's
                 card instead: on the toolbar it reads as "submit the course", which
                 is what let a TA send one section and believe they were done. */}

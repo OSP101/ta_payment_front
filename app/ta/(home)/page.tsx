@@ -6,11 +6,12 @@ import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   BookOpen, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw,
-  FileCheck2,
+  FileCheck2, Hourglass, Lock,
 } from "lucide-react";
 import type { Term } from "../../lib/api";
 import AnnouncementFeed from "../../components/AnnouncementFeed";
 import OnboardingChecklistCard from "../OnboardingChecklistCard";
+import { useTAOnboarding, type DocState } from "../useTAOnboarding";
 import {
   PageHeader, Panel, EmptyState, Chip, SelectField, Button,
   Alert, type SelectOption, type ChipTone, Tip,
@@ -135,6 +136,25 @@ interface TAStatus {
   lumpsum_baht?: number;
   estimated_baht_regular: number;
   estimated_baht_special: number;
+}
+
+/** GET /me/ta-requests/pending — a course that asked for this TA, not yet decided. */
+interface PendingRequest {
+  id: string;
+  teaching_course_id: string;
+  code: string;
+  alt_codes: string[];
+  name_th: string;
+  term_id: string;
+  academic_year: number;
+  semester: number;
+  lecturer_name: string;
+  submitted_at?: string;
+  sections: string[];
+  /** This TA has no timetable for the request's term — the only thing it waits on. */
+  waiting_on_me: boolean;
+  /** Other TAs on an older shared request who still owe a timetable. */
+  waiting_on_others: number;
 }
 
 interface TC {
@@ -269,6 +289,11 @@ export default function TAHome() {
   // Per-course monthly submission rows so the home page can show the current
   // step without the TA having to click into /ta/reminders.
   const { data: submissions } = useSWR<SubmissionRow[]>("/me/submission-periods");
+  // Courses that have asked for this TA but are not decided yet. They are not
+  // in /me/ta-courses (approved only), so a TA used to learn of a request only
+  // when it was approved — or never, if their missing timetable held it.
+  const { data: pendingRequests } = useSWR<PendingRequest[]>("/me/ta-requests/pending");
+  const { docState } = useTAOnboarding();
   const currentByCourse = useMemo(() => {
     // Surface the single period a TA most needs to see: the OLDEST month not yet
     // finished, so signing one month keeps that month on the card (now reading
@@ -377,6 +402,8 @@ export default function TAHome() {
             today={today}
           />
 
+          <PendingRequestsSection requests={pendingRequests} docState={docState} />
+
           <SectionHeading>รายวิชาที่ฉันเป็น TA</SectionHeading>
           <Panel padded={false} data-tour="ta-home-courses">
             {coursesError ? (
@@ -398,7 +425,11 @@ export default function TAHome() {
               <EmptyState
                 icon={<BookOpen size={28} />}
                 title="ยังไม่มีวิชาในภาคเรียนนี้"
-                description="อาจารย์ยังไม่ได้เสนอชื่อคุณเป็น TA หรือคำขอยังอยู่ระหว่างการพิจารณา"
+                description={
+                  (pendingRequests?.length ?? 0) > 0
+                    ? "วิชาจะมาแสดงที่นี่เมื่อคำขอด้านบนได้รับการอนุมัติ"
+                    : "อาจารย์ยังไม่ได้เสนอชื่อคุณเป็น TA"
+                }
               />
             ) : (
               // Card grid rather than table rows: each course carries several
@@ -633,6 +664,104 @@ function AlertsSection({
         </>
       )}
     </>
+  );
+}
+
+/**
+ * Courses whose lecturer has asked for this TA, still waiting on a verdict.
+ * Shown as cards like the real ones but inert: there is no course page to open
+ * yet. Each says what it is stuck on, so the TA can clear their part now
+ * rather than find out at approval (TA feedback 05/10/2026).
+ */
+function PendingRequestsSection({ requests, docState }: { requests?: PendingRequest[]; docState?: DocState }) {
+  if (!requests || requests.length === 0) return null;
+  // Documents never hold a request up (the decision treats them as a warning),
+  // but they do hold up every hour logged afterwards. Worth one line while the
+  // TA is here and it is their move.
+  const docsTodo = docState === "not_sent" || docState === "rejected";
+  return (
+    <>
+      <SectionHeading>วิชาที่ขอคุณเป็น TA (รออนุมัติ)</SectionHeading>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {requests.map(r => (
+          <PendingRequestCard key={r.id} req={r} docsTodo={docsTodo} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function PendingRequestCard({ req, docsTodo }: { req: PendingRequest; docsTodo: boolean }) {
+  const term = `${req.academic_year}/${req.semester}`;
+  const course = { code: req.code, alt_codes: req.alt_codes };
+  return (
+    <div
+      aria-disabled
+      className="flex min-w-0 flex-col rounded-xl border border-dashed border-[var(--hairline)] bg-surface p-4"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
+          <Hourglass size={17} />
+        </div>
+        <Tip content={`${courseCodeLabel(course)} ${req.name_th}`}>
+          <div className="min-w-0 flex-1" tabIndex={-1}>
+            <div className="truncate font-semibold tabular"><CourseCode c={course} /></div>
+            <div className="truncate text-xs text-muted">{req.name_th}</div>
+          </div>
+        </Tip>
+        <Chip tone="info">รออนุมัติ</Chip>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+        <span>ภาคเรียน {term}</span>
+        {req.sections.length > 0 && <span>· กลุ่ม {req.sections.join(", ")}</span>}
+        <span className="min-w-0 truncate">· ผู้ขอ {req.lecturer_name}</span>
+      </div>
+
+      {/* What it is stuck on, named by whose move it is. */}
+      <div className="mt-3 rounded-lg bg-surface-secondary px-3 py-2 text-xs">
+        {req.waiting_on_me ? (
+          <>
+            <div className="font-medium text-warning">รอคุณบันทึกตารางเรียนภาคเรียน {term}</div>
+            <div className="mt-0.5 text-muted">
+              ระบบจะพิจารณาคำขอให้อัตโนมัติทันทีที่บันทึกตารางเรียน
+            </div>
+            <Link
+              href={`/ta/schedule?term_id=${req.term_id}`}
+              className="mt-1.5 inline-flex items-center gap-1 font-medium text-accent underline underline-offset-2"
+            >
+              ไปสร้างตารางเรียน <ArrowRight size={12} />
+            </Link>
+          </>
+        ) : req.waiting_on_others > 0 ? (
+          <>
+            <div className="font-medium text-foreground">
+              รอ TA อีก {req.waiting_on_others} คนในคำขอเดียวกันบันทึกตารางเรียน
+            </div>
+            <div className="mt-0.5 text-muted">ส่วนของคุณครบแล้ว ไม่ต้องทำอะไรเพิ่ม</div>
+          </>
+        ) : (
+          <>
+            <div className="font-medium text-foreground">ระบบกำลังพิจารณาคำขอ</div>
+            <div className="mt-0.5 text-muted">ส่วนของคุณครบแล้ว ผลจะแจ้งให้ทราบเร็ว ๆ นี้</div>
+          </>
+        )}
+        {docsTodo && (
+          <div className="mt-2 border-t border-[var(--hairline)] pt-2 text-muted">
+            อีกขั้นที่ต้องทำ:{" "}
+            <Link href="/ta/documents" className="font-medium text-accent underline underline-offset-2">
+              ส่งเอกสารประกอบการเบิกจ่าย
+            </Link>{" "}
+            ต้องผ่านก่อนจึงบันทึกเวลาได้
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex items-center gap-1.5 border-t border-[var(--hairline)] pt-3 text-[11px] text-muted">
+        <Lock size={12} className="shrink-0" aria-hidden />
+        เปิดหน้ารายวิชาได้เมื่อคำขอได้รับการอนุมัติ
+      </div>
+    </div>
   );
 }
 

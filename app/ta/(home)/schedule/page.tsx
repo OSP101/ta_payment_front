@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
+import { useSearchParams } from "next/navigation";
 import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp, Lock, Printer } from "lucide-react";
 import useIsDemo from "../../../lib/useIsDemo";
 import { api, ApiError, type Term, type Me } from "../../../lib/api";
@@ -145,11 +146,16 @@ export default function TASchedulePage() {
   const { data: terms } = useSWR<Term[]>("/terms");
   const [termId, setTermId] = useState<string>("");
   const demo = useIsDemo();
+  // ?term_id= opens a specific term — the home page's pending-request card
+  // links here for the term the request is waiting on, which need not be the
+  // active one.
+  const termParam = useSearchParams().get("term_id");
   useEffect(() => {
     if (!termId && terms && terms.length) {
-      setTermId(terms.find(t => t.is_active)?.id ?? terms[0].id);
+      const wanted = termParam && terms.some(t => t.id === termParam) ? termParam : null;
+      setTermId(wanted ?? terms.find(t => t.is_active)?.id ?? terms[0].id);
     }
-  }, [terms, termId]);
+  }, [terms, termId, termParam]);
 
   interface ScheduleResp { blocks: Block[]; locked: boolean; lock_reason: string }
   const { data: sched } = useSWR<ScheduleResp>(termId ? `/me/schedule?term_id=${termId}` : null);
