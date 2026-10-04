@@ -11,7 +11,7 @@ import useSWR, { mutate } from "swr";
 import {
   CalendarOff, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MapPin, Bell, Send, Ban,
 } from "lucide-react";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, type Me } from "../lib/api";
 import { notify } from "../lib/notify";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, FieldGroup, Modal, Chip, Alert,
@@ -88,6 +88,7 @@ interface TC {
   code: string;
   name_th: string;
   sections?: CourseSection[];
+  lecturers?: { id: string }[];
 }
 
 const MONTH_TH = [
@@ -125,6 +126,15 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
   const taLocked = isTA && !approved;
   const { data: course } = useSWR<TC>(`/teaching-courses/${tcId}`);
   const { data: impacts, isLoading } = useSWR<ImpactsResponse>(`/teaching-courses/${tcId}/holiday-impacts`);
+  // Anyone who can read the course sees its holiday impacts, but only its own
+  // lecturers (and staff/admin) may file or change makeups — the API refuses
+  // everyone else. A lecturer browsing someone else's course used to get live
+  // edit buttons that ended in "คุณไม่มีสิทธิ์ดำเนินการนี้".
+  const { data: me } = useSWR<Me>(isTA ? null : "/me");
+  const notManager = !isTA && !!me && !!course?.lecturers &&
+    !me.roles.some(r => r === "admin" || r === "staff") &&
+    !course.lecturers.some(l => l.id === me.id);
+  const readOnly = isTA || notManager;
 
   const [editingSlot, setEditingSlot] = useState<{ impact: HolidayImpact; section: AffectedSection } | null>(null);
   const [waivingSlot, setWaivingSlot] = useState<{ impact: HolidayImpact; section: AffectedSection } | null>(null);
@@ -190,7 +200,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
         actions={
           // Makeups are the course's call; the API refuses every makeup
           // write from a TA.
-          isTA ? undefined : (
+          readOnly ? undefined : (
             <LockedActionButton variant="secondary" onClick={() => setManualOpen(true)} disabled={!course?.sections?.length}>
               <Plus size={14} /> เพิ่มวันชดเชย (กรณีอื่น)
             </LockedActionButton>
@@ -289,7 +299,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                 >
                   <div className="divide-y divide-(--hairline)">
                     {imp.affected_sections.map((sec, idx) => (
-                      <div key={idx} className="flex items-center gap-3 p-4 flex-wrap md:flex-nowrap">
+                      <div key={idx} className="flex items-center gap-3 p-4 flex-wrap lg:flex-nowrap">
                         {/* w-44 is a column width, and on a phone it is most of
                             the screen — the status beside it was left ~120px and
                             wrapped to three lines. Full width below sm puts the
@@ -342,7 +352,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             </div>
                           )}
                         </div>
-                        {isTA ? null : sec.makeup ? (
+                        {readOnly ? null : sec.makeup ? (
                           <div className="flex items-center gap-1">
                             {/* IconButton's own hover Tip won't fire while
                                 disabled (see LockedActionButton's doc comment),
@@ -402,7 +412,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
         >
           <div className="divide-y divide-(--hairline)">
             {manualMakeups.map(({ section, makeup }) => (
-              <div key={makeup.id} className="flex items-center gap-3 p-4 flex-wrap md:flex-nowrap">
+              <div key={makeup.id} className="flex items-center gap-3 p-4 flex-wrap lg:flex-nowrap">
                 <div className="w-44 shrink-0">
                   <span className={
                     "inline-flex items-center justify-center min-w-8 h-6 px-2 rounded-full text-xs font-semibold tabular-nums " +
@@ -421,7 +431,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                   )}
                   {makeup.note && <span className="text-xs text-muted"> — {makeup.note}</span>}
                 </div>
-                {!isTA && (
+                {!readOnly && (
                   <IconButton
                     label="ลบ"
                     variant="ghost" size="sm"
@@ -539,6 +549,11 @@ function MakeupFormModal({
   const [note, setNote] = useState(section.makeup?.note ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Editing an existing makeup is delete + create, and the delete takes the
+  // TA's draft hours on the old makeup day with it — the same loss the "ลบ"
+  // button warns about. So the first press only arms; the second saves.
+  const [armed, setArmed] = useState(false);
+  const oldMakeupDate = section.makeup && !section.makeup.waived ? section.makeup.makeup_date ?? null : null;
 
   const original = useMemo(() => formatThaiDate(impact.original_date), [impact.original_date]);
   const closedWindow = holidayWindowLabel(impact);
@@ -547,15 +562,10 @@ function MakeupFormModal({
     setError(null);
     if (!date) { setError("กรุณาระบุวันชดเชย"); return; }
     if (!start || !end) { setError("กรุณาระบุเวลาเริ่มและเวลาสิ้นสุด"); return; }
+    if (oldMakeupDate && !armed) { setArmed(true); return; }
     setSaving(true);
     try {
-      // Replace flow: delete existing, then create fresh. The backend has no
-      // PATCH for makeup because UNIQUE constraint requires the row to move
-      // atomically; the deleted+inserted pair is what the audit log wants.
-      if (isReplace && section.makeup) {
-        await api.del(`/teaching-courses/${tcId}/makeup/${section.section_id}/${section.makeup.id}`);
-      }
-      await api.post(`/teaching-courses/${tcId}/makeup/${section.section_id}`, {
+      const body = {
         original_date: impact.original_date,
         makeup_date: date,
         // Which period this replaces. Without it the backend cannot tell the
@@ -564,7 +574,15 @@ function MakeupFormModal({
         start_time: start,
         end_time: end,
         note: note || null,
-      });
+      };
+      // Replace is ONE call: the server checks the new date before removing
+      // the old makeup. The old DELETE-then-POST from here lost the makeup and
+      // the TA's draft hours whenever the new date was refused.
+      if (isReplace && section.makeup) {
+        await api.put(`/teaching-courses/${tcId}/makeup/${section.section_id}/${section.makeup.id}`, body);
+      } else {
+        await api.post(`/teaching-courses/${tcId}/makeup/${section.section_id}`, body);
+      }
       notify.success(isReplace ? "แก้ไขวันชดเชยแล้ว" : "กำหนดวันชดเชยแล้ว");
       await onSaved();
     } catch (e) {
@@ -584,11 +602,19 @@ function MakeupFormModal({
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving}>บันทึก</Button>
+          <Button variant={armed ? "danger" : "primary"} onClick={handleSave} isPending={saving} disabled={saving}>
+            {armed ? "ยืนยันแก้ไขวันชดเชย" : "บันทึก"}
+          </Button>
         </div>
       }
     >
       <div className="flex flex-col gap-3">
+        {armed && oldMakeupDate && (
+          <div role="alert" className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-sm text-danger">
+            รายการชั่วโมงฉบับร่างของ TA ในวันชดเชยเดิม ({formatThaiDate(oldMakeupDate)}) จะถูกลบ
+            กด <b>ยืนยันแก้ไขวันชดเชย</b> อีกครั้งเพื่อบันทึก ระบบจะไม่ยอมแก้ถ้ามีชั่วโมงที่ส่งอนุมัติแล้ว
+          </div>
+        )}
         <div className="rounded-lg bg-surface-secondary border border-(--hairline) px-3 py-2 text-xs text-muted flex flex-col gap-0.5">
           <div>
             <span>วันเดิม: </span>

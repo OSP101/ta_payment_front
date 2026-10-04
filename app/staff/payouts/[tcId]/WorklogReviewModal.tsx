@@ -430,7 +430,7 @@ export function WorklogReviewModal({
                   </div>
                 )}
 
-                <div className="mb-2 grid grid-cols-4 gap-2">
+                <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <Stat label="บรรยาย" value={totals.lecture} />
                   <Stat label="ปฏิบัติการ" value={totals.lab} />
                   <Stat label="ตรวจงาน + อื่นๆ" value={totals.review + totals.other} />

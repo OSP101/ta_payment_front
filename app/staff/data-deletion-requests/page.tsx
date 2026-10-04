@@ -198,7 +198,7 @@ function ReviewModal({
 
         <TextArea value={note} onChange={e => setNote(e.target.value)} placeholder="หมายเหตุ (บังคับหากปฏิเสธ)" rows={3} />
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={() => decide(true)} disabled={!!busy} isPending={busy === "approve"}>
             <Check size={14} /> อนุมัติ
           </Button>

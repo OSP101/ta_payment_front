@@ -130,7 +130,7 @@ function CitizenIdSection() {
       </div>
 
       {!revealed && (
-        <div className="mt-3 flex items-end gap-2">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
           <TextField name="reveal-password" value={password} onChange={v => { setPassword(v); setErr(null); }} className="flex-1">
             <Label className="text-xs">รหัสผ่านปัจจุบัน</Label>
             <InputGroup>
@@ -147,7 +147,7 @@ function CitizenIdSection() {
               </InputGroup.Suffix>
             </InputGroup>
           </TextField>
-          <Button variant="secondary" onClick={reveal} disabled={pending} isPending={pending}>
+          <Button variant="secondary" className="w-full sm:w-auto" onClick={reveal} disabled={pending} isPending={pending}>
             แสดงเลขบัตรเต็ม
           </Button>
         </div>

@@ -374,7 +374,10 @@ export default function DemoGuidePanel() {
 
   useEffect(() => {
     try {
-      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+      // No saved choice on a phone: start collapsed — expanded, the panel
+      // covers the whole screen.
+      const saved = localStorage.getItem(COLLAPSE_KEY);
+      setCollapsed(saved === "1" || (saved === null && window.innerWidth < 768));
     } catch {
       // Storage blocked — start expanded, the safe default for "ตลอดการสอน".
     }
@@ -394,7 +397,12 @@ export default function DemoGuidePanel() {
       document.documentElement.style.removeProperty(PANEL_WIDTH_VAR);
       return;
     }
-    const sync = () => document.documentElement.style.setProperty(PANEL_WIDTH_VAR, `${el.offsetWidth}px`);
+    // Below md the expanded panel OVERLAYS the page instead of pushing it: a
+    // 384px gutter on a 375px phone left the page zero pixels wide.
+    const sync = () => {
+      const overlay = window.innerWidth < 768 && el.offsetWidth > COLLAPSED_W;
+      document.documentElement.style.setProperty(PANEL_WIDTH_VAR, `${overlay ? 0 : el.offsetWidth}px`);
+    };
     sync();
     const ro = new ResizeObserver(sync);
     ro.observe(el);
@@ -540,7 +548,7 @@ export default function DemoGuidePanel() {
       <div
         ref={ref}
         className="fixed right-0 z-30 flex flex-col border-l border-border bg-surface"
-        style={{ top: "var(--demo-banner-h,0px)", bottom: 0, width: collapsed ? COLLAPSED_W : EXPANDED_W }}
+        style={{ top: "var(--demo-banner-h,0px)", bottom: 0, width: collapsed ? COLLAPSED_W : `min(${EXPANDED_W}px, 100vw)` }}
       >
         {collapsed ? (
           <button

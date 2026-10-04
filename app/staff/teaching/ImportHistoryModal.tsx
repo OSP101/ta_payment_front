@@ -71,9 +71,9 @@ export default function ImportHistoryModal({
                 <button
                   type="button"
                   onClick={() => setDetailId(r.id)}
-                  className="w-full flex items-center gap-3 px-4 sm:px-6 py-3 text-left hover:bg-(--surface-secondary) transition-colors"
+                  className="w-full flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 sm:px-6 py-3 text-left hover:bg-(--surface-secondary) transition-colors"
                 >
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-full sm:basis-0">
                     <div className="text-sm font-medium text-(--ink-1) truncate">{r.filename}</div>
                     <div className="text-xs text-(--ink-3)">
                       {fmtAt(r.at)}
@@ -102,7 +102,7 @@ export default function ImportHistoryModal({
         onClose={() => setDetailId(null)}
         // The list row already knows the filename — use it so the title doesn't
         // change when the detail arrives.
-        title={detail?.filename ?? rows?.find(r => r.id === detailId)?.filename ?? "รายละเอียดการนำเข้า"}
+        title={<span className="break-all">{detail?.filename ?? rows?.find(r => r.id === detailId)?.filename ?? "รายละเอียดการนำเข้า"}</span>}
         size="lg"
         icon={<FileSpreadsheet size={18} />}
         footer={<Button variant="tertiary" onClick={() => setDetailId(null)}>กลับไปที่ประวัติ</Button>}

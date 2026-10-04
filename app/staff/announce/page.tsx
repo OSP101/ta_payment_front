@@ -2,7 +2,7 @@
 import useSWR from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarDays, Eye, List as ListIcon, Megaphone, Pin, Plus, Users } from "lucide-react";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import { Skel } from "../../components/Skeletons";
 import { Button, EmptyState, PageHeader, SearchField } from "../../components/ui";

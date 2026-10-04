@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { mutate } from "swr";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import {
   CheckCircle2, Upload, AlertTriangle, FileSpreadsheet,
   ChevronRight, Loader2, GitMerge,
@@ -237,7 +237,7 @@ export default function ImportModal({
       title={`นำเข้ารายวิชา · ${termLabel}`}
       size="2xl"
       footer={
-        <div className="flex items-center justify-between w-full gap-2">
+        <div className="flex flex-wrap items-center justify-between w-full gap-2">
           <div className="text-xs text-muted">
             {phase === "preview" && preview && <PreviewSummary p={preview} decisions={decisions} merges={merges} />}
           </div>
@@ -526,6 +526,7 @@ function MergeGroups({
                   : "เปิดแยกทุกรหัส"}
               </span>
             </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <tbody className="divide-y divide-(--hairline)">
                 {g.members.map(m => {
@@ -568,6 +569,7 @@ function MergeGroups({
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         );
       })}

@@ -284,8 +284,8 @@ function MonthSection({
       {open && (
         <div className="divide-y divide-(--hairline) border-t border-(--hairline)">
           {rows.map(h => (
-            <div key={h.id} className="flex items-center gap-3 p-4">
-              <div className="w-64 shrink-0">
+            <div key={h.id} className="flex flex-wrap items-center gap-3 p-4 md:flex-nowrap">
+              <div className="w-full md:w-64 md:shrink-0">
                 <div className="text-sm font-medium">{formatThaiDate(h.holiday_date)}</div>
                 <div className="text-xs text-muted mt-0.5 flex items-center gap-1 flex-wrap">
                   <Chip tone={SOURCE_TONE[h.source]}>{SOURCE_LABEL[h.source]}</Chip>

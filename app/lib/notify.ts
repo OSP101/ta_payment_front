@@ -2,7 +2,7 @@
 // Thin wrapper over HeroUI's toast queue so the whole app has ONE consistent
 // way to show success/error feedback. The <Toast.Provider> is mounted in
 // SWRProvider. HeroUI toasts are announced via aria-live and auto-dismiss.
-import { toast } from "@heroui/react";
+import { toast } from "./toast";
 import { errMessage } from "./api";
 
 export const notify = {

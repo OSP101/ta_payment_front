@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Check, Mail, Send, ShieldCheck } from "lucide-react";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import { Button, Modal, Tip } from "../../components/ui";
 import {

@@ -22,6 +22,7 @@ import { DataTable, type DataColumn } from "../../components/DataTable";
 import UserAvatar from "../../components/UserAvatar";
 import TermSelect from "../../components/TermSelect";
 import AvatarCropper from "../../components/AvatarCropper";
+import SendCredentialsButton from "../../components/SendCredentialsButton";
 import { SkelList } from "../../components/Skeletons";
 
 /** Mirrors ProfilePhotoCard's own picker rules (app/components/ProfilePhotoCard.tsx)
@@ -536,6 +537,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   // Profile picture, staged locally until the account exists. There is no
   // user id to upload against until `submit()` returns one, so the cropped
@@ -638,6 +640,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
           notify.error(errMessage(e) || "อัปโหลดรูปโปรไฟล์ไม่สำเร็จ ผู้ใช้ถูกสร้างแล้วและอัปโหลดรูปเองภายหลังได้");
         }
       }
+      setCreatedId(res.user.id);
       setTempPassword(res.temp_password);
     } catch (e) {
       setErr((e as Error).message);
@@ -665,6 +668,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
     >
       {tempPassword ? (
         <TempPasswordPanel
+          userId={createdId ?? ""}
           name={`${form.first_name} ${form.last_name}`.trim()}
           email={form.email}
           password={tempPassword}
@@ -715,7 +719,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
               description={`${closedHolders.map(u => formatFullName(u)).join(", ")} (ปิดใช้งาน) บัญชีใหม่จะแยกจากบัญชีเดิม ข้อมูลเดิมยังอยู่ครบ และจะเปิดบัญชีเดิมกลับมาไม่ได้ตราบที่บัญชีใหม่ยังเปิดใช้งาน`}
             />
           )}
-          <div className="grid grid-cols-[140px_1fr_1fr] gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[140px_1fr_1fr]">
             <VSelect label="คำนำหน้า" value={form.title}
               onChange={v => setForm({ ...form, title: v })}
               error={errors.title} show={showErrors}
@@ -919,7 +923,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
               value={form.email} onChange={v => setForm({ ...form, email: v })}
               error={errors.email} show={showErrors}
             />
-            <div className="grid grid-cols-[140px_1fr_1fr] gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-[140px_1fr_1fr]">
               <VSelect label="คำนำหน้า" value={form.title}
                 onChange={v => setForm({ ...form, title: v })}
                 error={errors.title} show={showErrors}
@@ -1459,6 +1463,7 @@ function ResetPasswordModal({ user, onClose }: { user: User; onClose: () => void
     >
       {pw ? (
         <TempPasswordPanel
+          userId={user.id}
           name={`${user.first_name} ${user.last_name}`.trim()}
           email={user.email}
           password={pw}
@@ -1735,7 +1740,7 @@ function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
   );
 }
 
-function TempPasswordPanel({ name, email, password, role }: { name: string; email: string; password: string; role?: string }) {
+function TempPasswordPanel({ userId, name, email, password, role }: { userId: string; name: string; email: string; password: string; role?: string }) {
   const [copied, setCopied] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   async function copy() {
@@ -1759,7 +1764,7 @@ function TempPasswordPanel({ name, email, password, role }: { name: string; emai
       <Alert
         status="success"
         title="รหัสผ่านชั่วคราวถูกสร้างแล้ว"
-        description="โปรดคัดลอกและส่งให้ผู้ใช้งาน ระบบจะบังคับเปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก รหัสนี้จะไม่แสดงอีกครั้ง"
+        description="โปรดคัดลอกหรือส่งทางอีเมลให้ผู้ใช้งาน ระบบจะบังคับเปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก รหัสนี้จะไม่แสดงอีกครั้ง"
       />
       <div>
         <div className="text-xs text-muted mb-1">อีเมล</div>
@@ -1785,6 +1790,7 @@ function TempPasswordPanel({ name, email, password, role }: { name: string; emai
       <Button variant="primary" size="sm" className="w-full" onClick={copyAll}>
         <Files size={14} /> {copiedAll ? "คัดลอกแล้ว" : "คัดลอกอีเมลและรหัสผ่าน"}
       </Button>
+      {userId && <SendCredentialsButton userId={userId} email={email} password={password} />}
     </div>
   );
 }

@@ -4,8 +4,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import useSWR, { mutate } from "swr";
 import { Save, ClipboardPaste, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users, SquareArrowOutUpRight, History } from "lucide-react";
-import { toast } from "@heroui/react";
-import { api } from "../../lib/api";
+import { toast } from "@/app/lib/toast";
+import { api, errMessage } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import { notify } from "../../lib/notify";
 import {
@@ -579,7 +579,7 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
       // to its budget and save only on an explicit yes.
       const preview = budgetConfirmMessage(e);
       if (preview) setBudgetPrompt(preview);
-      else toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
+      else toast.danger("บันทึกไม่สำเร็จ", { description: errMessage(e) });
     } finally {
       setSaving(false);
     }

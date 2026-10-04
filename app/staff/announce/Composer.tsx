@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Bell, CalendarClock, FileText, Image as ImageIcon, Mail, Pencil, Pin, RotateCcw, Save, ShieldCheck,
 } from "lucide-react";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import RichText from "../../components/RichText";
 import AttachmentGallery from "../../components/AttachmentGallery";

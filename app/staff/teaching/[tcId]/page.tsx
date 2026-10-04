@@ -3,7 +3,7 @@ import { use, useEffect, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { Save, Lock, Clock, CircleAlert, ArrowLeft, Trash2, Plus, Pencil, GitMerge } from "lucide-react";
 import { api } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
@@ -830,7 +830,7 @@ function CourseInfoModal({
 
         <div>
           <div className="mb-1.5 text-sm font-medium">ชั่วโมงต่อสัปดาห์</div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 items-end gap-2 sm:gap-3">
             <FieldGroup label="บรรยาย">
               <TextInput value={lec} onChange={e => setLec(e.target.value.replace(/\D+/g, ""))} inputMode="numeric" maxLength={2} />
             </FieldGroup>

@@ -663,8 +663,11 @@ function uploadWithProgress<T>(
 /** Extract a user-safe message from any thrown value. */
 export function errMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message;
-  if (e instanceof Error && e.message) return e.message;
-  return "เกิดข้อผิดพลาด กรุณาลองใหม่";
+  // A non-API Error is a browser/JS failure ("Failed to fetch", "Cannot read
+  // properties of undefined") — meaningless to a user. Only pass through a
+  // message someone wrote in Thai for them.
+  if (e instanceof Error && /[฀-๿]/.test(e.message)) return e.message;
+  return "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่ หากยังพบปัญหาให้รีเฟรชหน้านี้";
 }
 
 // SWR-compatible fetcher — typed for direct use as `useSWR(key, fetcher)`.

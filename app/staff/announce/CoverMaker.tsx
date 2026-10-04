@@ -2,7 +2,7 @@
 import useSWR, { mutate } from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Download, ImagePlus, Moon, Sun, Trash2, Wand2 } from "lucide-react";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import { Button, ConfirmDialog, FieldGroup, Modal, TextArea, TextInput, Tip } from "../../components/ui";
 
@@ -505,7 +505,7 @@ function BackgroundPicker({
                   type="button"
                   aria-label={`ลบพื้นหลัง ${b.name}`}
                   onClick={() => setRemove(b)}
-                  className="absolute end-1 top-1 flex size-6 items-center justify-center rounded-md bg-surface/90 text-danger opacity-0 shadow-sm transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                  className="absolute end-1 top-1 flex size-6 items-center justify-center rounded-md bg-surface/90 text-danger opacity-100 shadow-sm transition-opacity pointer-fine:opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                 >
                   <Trash2 size={12} />
                 </button>

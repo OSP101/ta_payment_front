@@ -153,7 +153,7 @@ export default function Setup2FAPage() {
                     </code>
                   ))}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Button variant="secondary" fullWidth onClick={copyCodes}>
                     <Copy size={14} /> {copied ? "คัดลอกแล้ว" : "คัดลอกทั้งหมด"}
                   </Button>

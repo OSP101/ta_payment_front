@@ -688,7 +688,7 @@ function EditSittingModal({
       {sitting && (
         <div className="flex flex-col gap-3">
           <SittingSummary s={sitting} />
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <FieldGroup label="เวลาเริ่ม"><TimePicker value={start} onChange={setStart} label="เวลาเริ่ม" /></FieldGroup>
             <FieldGroup label="เวลาสิ้นสุด"><TimePicker value={end} onChange={setEnd} label="เวลาสิ้นสุด" /></FieldGroup>
             <FieldGroup label="จำนวนชั่วโมง">

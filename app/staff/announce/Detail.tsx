@@ -5,7 +5,7 @@ import {
   ArrowLeft, BellRing, CalendarClock, Clock, Eye, EyeOff, Globe, Mail, Megaphone,
   Pencil, Pin, PinOff, RefreshCw, Send, ShieldCheck, Trash2, Users,
 } from "lucide-react";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import RichText from "../../components/RichText";
 import ShareButtons from "../../components/ShareButtons";
@@ -39,7 +39,7 @@ export default function Detail({
   const { data: full } = useSWR<Ann>(key);
   const a = full ?? row;
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<"delete" | "publish" | "remind" | null>(null);
+  const [confirm, setConfirm] = useState<"delete" | "publish" | "remind" | "unpublish" | null>(null);
   const filterOpts = useFilterOptions();
 
   const refresh = () => Promise.all([mutate(LIST_KEY), mutate(key)]);
@@ -138,7 +138,7 @@ export default function Detail({
           <Tip content={a.status === "live"
             ? "ซ่อนจากหน้าประกาศของผู้รับและกลับเป็นฉบับร่าง เผยแพร่ใหม่ได้โดยไม่แจ้งเตือนคนเดิมซ้ำ"
             : "ยกเลิกเวลาที่ตั้งไว้ และกลับเป็นฉบับร่าง"}>
-            <Button variant="ghost" size="sm" onPress={unpublish} isPending={busy === "unpublish"} disabled={!!busy}>
+            <Button variant="ghost" size="sm" onPress={() => setConfirm("unpublish")} isPending={busy === "unpublish"} disabled={!!busy}>
               <EyeOff size={13} /> {a.status === "live" ? "ยกเลิกเผยแพร่" : "ยกเลิกกำหนดการ"}
             </Button>
           </Tip>
@@ -264,6 +264,20 @@ export default function Detail({
           </p>
         }
         confirmLabel="ลบ"
+      />
+      <ConfirmDialog
+        open={confirm === "unpublish"}
+        onClose={() => setConfirm(null)}
+        onConfirm={unpublish}
+        isPending={busy === "unpublish"}
+        danger
+        icon={<EyeOff size={18} />}
+        title={a.status === "live" ? "ยกเลิกการเผยแพร่?" : "ยกเลิกกำหนดเผยแพร่?"}
+        message={a.status === "live"
+          ? `“${a.title}” จะหายจากหน้าประกาศของผู้รับทุกคนทันที และกลับเป็นฉบับร่าง เผยแพร่ใหม่ได้ภายหลังโดยไม่แจ้งเตือนคนเดิมซ้ำ`
+          : `ยกเลิกเวลาเผยแพร่ ${fmtDateTime(a.published_at)} ของ “${a.title}” และกลับเป็นฉบับร่าง ผู้รับจะไม่ได้รับประกาศจนกว่าจะตั้งเวลาหรือเผยแพร่ใหม่`}
+        confirmLabel={a.status === "live" ? "ยกเลิกเผยแพร่" : "ยกเลิกกำหนดการ"}
+        cancelLabel="ไม่ยกเลิก"
       />
       <ConfirmDialog
         open={confirm === "publish"}

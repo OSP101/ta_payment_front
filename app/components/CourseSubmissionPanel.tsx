@@ -113,7 +113,7 @@ export function CourseSubmissionPanel({
     try {
       const path = `/submission-periods/${row.period_id}/courses/${tcId}/tas/${row.ta_id}/${kind}`;
       await api.post(path, { comment });
-      notify.success("บันทึกสำเร็จ");
+      notify.success(`ส่งการเงินของ ${row.ta_name ?? "ผู้ช่วยสอน"} แล้ว`);
       setCommentDraft(x => ({ ...x, [k]: "" }));
       await mutate(key);
       onDataChange?.();
@@ -135,7 +135,7 @@ export function CourseSubmissionPanel({
     try {
       const path = `/submission-periods/${row.period_id}/courses/${tcId}/tas/${row.ta_id}/send-back`;
       await api.post(path, { to_status: toStatus, reason });
-      notify.success("ตีกลับสำเร็จ");
+      notify.success(`ตีกลับของ ${row.ta_name ?? "ผู้ช่วยสอน"} แล้ว`);
       setSendBackDraft(x => ({ ...x, [k]: "" }));
       setSendBackOpen(x => ({ ...x, [k]: false }));
       await mutate(key);

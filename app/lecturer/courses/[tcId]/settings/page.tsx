@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import {
   CircleAlert, Clock, Eye, Lock, Save, TriangleAlert,
 } from "lucide-react";

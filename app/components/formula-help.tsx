@@ -81,9 +81,9 @@ export function FormulaHelpModal({
   const nav = all ? (
     <Button variant="primary" onClick={onClose}><Check size={14} /> เข้าใจแล้ว</Button>
   ) : (
-    <div className="flex w-full items-center justify-between gap-2">
+    <div className="flex w-full flex-wrap items-center justify-between gap-2">
       <Button variant="ghost" size="sm" onClick={() => setAll(true)}>
-        <LayoutList size={14} /> ดูทั้งหมดในหน้าเดียว
+        <LayoutList size={14} /> <span className="hidden sm:inline">ดูทั้งหมดในหน้าเดียว</span><span className="sm:hidden">ดูทั้งหมด</span>
       </Button>
       <div className="flex items-center gap-2">
         <Button variant="secondary" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>
@@ -117,7 +117,7 @@ export function FormulaHelpModal({
         )}
 
         {/* Step rail */}
-        <ol className="grid grid-cols-4 gap-1" aria-label="ขั้นตอน">
+        <ol className="grid grid-cols-2 gap-1 sm:grid-cols-4" aria-label="ขั้นตอน">
           {STEPS.map((s, i) => {
             const Icon = s.icon;
             const state = all || i < step ? "done" : i === step ? "now" : "todo";
@@ -152,7 +152,7 @@ export function FormulaHelpModal({
 
         {(all || step === 0) && (
           <HelpStep number={1} title="ข้อมูลตั้งต้นของวิชา" icon={<Users size={18} />} delay={0} playKey={`${step}-${all}`}>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <InputChip icon={<BookOpen size={16} />} label="หน่วยกิตบรรยาย" value={`${lecCr}`} delay={100}
                 hint={lecHrs !== undefined ? `จากบรรยาย ${lecHrs} ชั่วโมง/สัปดาห์ (1 ชั่วโมง = 1 หน่วยกิต)` : undefined} />
               <InputChip icon={<FlaskConical size={16} />} label="หน่วยกิตปฏิบัติการ" value={`${labCr}`} delay={250}

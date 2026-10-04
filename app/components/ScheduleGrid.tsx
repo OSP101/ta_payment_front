@@ -296,6 +296,10 @@ export default function ScheduleGrid({
     // Block-body / resize-handle clicks are handled by their own listeners below.
     if (target.closest("[data-block]") || target.closest("[data-handle]")) return;
     if (e.button !== 0) return;
+    // On a touchscreen a swipe over empty grid must SCROLL (the grid is wider
+    // than a phone), so it never starts a new block — the page's "เพิ่มคาบ"
+    // button covers creating one there. Blocks themselves stay draggable.
+    if (e.pointerType === "touch") return;
     const { dayIdx, slot } = coordFromEvent(e);
     setDrag({
       kind: "creating",
@@ -378,7 +382,7 @@ export default function ScheduleGrid({
           </div>
           <div
             ref={timelineRef}
-            className="relative flex-1 select-none touch-none"
+            className="relative flex-1 select-none"
             style={{
               height: ROW_PX * DAYS_LONG.length,
               cursor: disabled ? "default" : drag.kind === "creating" ? "grabbing" : "crosshair",
@@ -440,7 +444,7 @@ export default function ScheduleGrid({
                     <HTooltip.Trigger
                       data-block
                       onPointerDown={e => startMove(e, b)}
-                      className="absolute rounded-md text-white text-xs overflow-hidden hover:brightness-110 shadow-sm"
+                      className="absolute touch-none rounded-md text-white text-xs overflow-hidden hover:brightness-110 shadow-sm"
                       style={{
                         left: pct(startMin / TOTAL_MIN),
                         width: pct(Math.max(SLOT_MIN, endMin - startMin) / TOTAL_MIN),
@@ -456,7 +460,7 @@ export default function ScheduleGrid({
                           <HTooltip.Trigger
                             data-handle
                             onPointerDown={e => startResize(e, b, "left")}
-                            className="absolute left-0 top-0 bottom-0 hover:bg-white/20"
+                            className="absolute left-0 top-0 bottom-0 touch-none hover:bg-white/20"
                             style={{ width: EDGE_HANDLE_PX, cursor: "ew-resize" }}
                           />
                           <HTooltip.Content>
@@ -476,7 +480,7 @@ export default function ScheduleGrid({
                           <HTooltip.Trigger
                             data-handle
                             onPointerDown={e => startResize(e, b, "right")}
-                            className="absolute right-0 top-0 bottom-0 hover:bg-white/20"
+                            className="absolute right-0 top-0 bottom-0 touch-none hover:bg-white/20"
                             style={{ width: EDGE_HANDLE_PX, cursor: "ew-resize" }}
                           />
                           <HTooltip.Content>
@@ -550,7 +554,10 @@ export default function ScheduleGrid({
         </div>
       </div>
       <div className="text-[11px] text-muted px-3 py-2 border-t border-[var(--hairline)]">
-        ลากในพื้นที่ว่างเพื่อสร้างคาบใหม่ · ลากคาบเพื่อย้ายวัน/เวลา · จับขอบซ้ายหรือขวาของคาบเพื่อขยาย/หด · คลิกเพื่อแก้ไขรายละเอียด · คาบที่ซ้อนกันจะถูกจัดชั้นให้อัตโนมัติ · <span className="whitespace-nowrap">หากเวลานั้นมีคาบอยู่แล้ว ให้ลากที่<b>แถบลายทางด้านล่างของแถว</b>เพื่อสร้างคาบซ้อนเวลาเดียวกัน</span>
+        <span className="block pointer-fine:hidden">
+          ปัดตารางไปทางซ้ายหรือขวาเพื่อดูช่วงเวลาอื่น · เพิ่มคาบด้วยปุ่ม “เพิ่มคาบเรียน” · แตะคาบเพื่อแก้ไข
+        </span>
+        <span className="hidden pointer-fine:inline">ลากในพื้นที่ว่างเพื่อสร้างคาบใหม่ · ลากคาบเพื่อย้ายวัน/เวลา · จับขอบซ้ายหรือขวาของคาบเพื่อขยาย/หด · คลิกเพื่อแก้ไขรายละเอียด · คาบที่ซ้อนกันจะถูกจัดชั้นให้อัตโนมัติ · <span>หากเวลานั้นมีคาบอยู่แล้ว ให้ลากที่<b>แถบลายทางด้านล่างของแถว</b>เพื่อสร้างคาบซ้อนเวลาเดียวกัน</span></span>
       </div>
     </div>
   );

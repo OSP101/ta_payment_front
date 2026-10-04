@@ -205,7 +205,7 @@ export default function TARequestsPage() {
             placeholder="ค้นหารหัส/ชื่อวิชา/อาจารย์/TA…"
           />
 
-          <div className="ml-auto flex gap-2 text-xs">
+          <div className="ml-auto flex flex-wrap gap-2 text-xs">
             <Chip tone="success"><CheckCircle2 size={12} /> อนุมัติ {listReady ? approvedCount : <SkelValue className="h-3 w-4" />}</Chip>
             <Chip tone="danger"><XCircle size={12} /> ปฏิเสธ {listReady ? rejectedCount : <SkelValue className="h-3 w-4" />}</Chip>
             {listReady && waitingCount > 0 && (

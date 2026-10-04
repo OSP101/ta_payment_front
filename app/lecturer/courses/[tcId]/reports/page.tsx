@@ -613,7 +613,7 @@ function TACard({
           </div>
         </button>
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0 sm:gap-3">
           <div className="text-right text-xs text-muted">
             <div className="font-medium text-foreground">
               รอพิจารณา <HoursSplit regular={group.pendingRegular} special={group.pendingSpecial} />

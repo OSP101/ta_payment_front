@@ -4,14 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles, CalendarDays, CalendarPlus, Power, PowerOff, Mail, MailX, ChevronDown, Server, Send, CircleCheck, CircleX, CircleMinus } from "lucide-react";
 import {
-  Tabs, Pagination, toast, Accordion, Switch,
+  Tabs, Pagination, Accordion, Switch,
   DatePicker, DateField, Calendar, I18nProvider,
   Autocomplete, ListBox, useFilter, Label, Description,
   SearchField as HSearchField,
   type Key,
 } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { parseDate, parseDateTime, type DateValue } from "@internationalized/date";
-import { api, ApiError, demoTesters, demoAddTester, demoRemoveTester, type DemoTester, type Me } from "../../lib/api";
+import { api, ApiError, errMessage, demoTesters, demoAddTester, demoRemoveTester, type DemoTester, type Me } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, TextArea, FieldGroup, Chip, Modal, Alert, SearchField, Select, Tip, TipWrap,
@@ -221,7 +222,7 @@ function PayRateSection() {
         description: `เริ่มใช้ ${formatThaiDate(draft.effective_from)}`,
       });
     } catch (e) {
-      toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger("บันทึกไม่สำเร็จ", { description: errMessage(e) });
     } finally {
       setSaving(false);
     }
@@ -238,7 +239,7 @@ function PayRateSection() {
       });
       setWithdrawTarget(null);
     } catch (e) {
-      toast.danger("ยกเลิกไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger("ยกเลิกไม่สำเร็จ", { description: errMessage(e) });
     } finally {
       setWithdrawing(false);
     }
@@ -1959,7 +1960,7 @@ function RequestWindowsSection() {
       await mutate(swrKey);
       toast.success("เปิดรับสมัครทันทีแล้ว", { description: "ระยะเวลา 30 วัน" });
     } catch (e) {
-      toast.danger("เปิดไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger("เปิดรับสมัครทันทีไม่สำเร็จ", { description: errMessage(e) });
     } finally {
       setQuickOpening(false);
     }
@@ -1973,7 +1974,7 @@ function RequestWindowsSection() {
       toast.success("ลบช่วงเวลารับสมัครแล้ว");
       setDeleteTarget(null);
     } catch (e) {
-      toast.danger("ลบไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger("ลบช่วงเวลารับสมัครไม่สำเร็จ", { description: errMessage(e) });
     } finally {
       setDeleting(false);
     }
@@ -2602,7 +2603,7 @@ function MailServerTestSection() {
       setCheck(await api.post<MailCheckResult>("/mail-settings/check"));
       setCheckedAt(new Date().toISOString());
     } catch (e) {
-      toast.danger("ทดสอบไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger("ทดสอบการตั้งค่าอีเมลไม่สำเร็จ", { description: errMessage(e) });
     } finally {
       setChecking(false);
     }
@@ -2954,6 +2955,10 @@ function CurriculumEditModal({
 function AdminOfficersSection() {
   const { data } = useSWR<AdminOfficer[]>("/settings/admin-officers?include_inactive=1");
   const [editing, setEditing] = useState<AdminOfficer | null>(null);
+  // Turning a position OFF asks first: its holder loses the executive view and
+  // drops off the signer list at once. Turning one back on stays one click.
+  const [confirmOff, setConfirmOff] = useState<AdminOfficer | null>(null);
+  const [toggling, setToggling] = useState(false);
 
   const rows = useMemo(
     () => (data ?? []).slice().sort((a, b) => a.title.localeCompare(b.title, "th")),
@@ -2961,12 +2966,16 @@ function AdminOfficersSection() {
   );
 
   async function toggleActive(o: AdminOfficer) {
+    setToggling(true);
     try {
       await api.post("/settings/admin-officers", { ...o, is_active: !o.is_active });
       await mutate("/settings/admin-officers?include_inactive=1");
-      toast.success(o.is_active ? "ปิดใช้งานเรียบร้อย" : "เปิดใช้งานเรียบร้อย");
+      toast.success(o.is_active ? `ปิดใช้งานตำแหน่ง ${o.title} แล้ว` : `เปิดใช้งานตำแหน่ง ${o.title} แล้ว`);
+      setConfirmOff(null);
     } catch (e) {
-      toast.danger("บันทึกไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger(o.is_active ? "ปิดใช้งานตำแหน่งไม่สำเร็จ" : "เปิดใช้งานตำแหน่งไม่สำเร็จ", { description: errMessage(e) });
+    } finally {
+      setToggling(false);
     }
   }
 
@@ -3021,7 +3030,7 @@ function AdminOfficersSection() {
                       <Button variant="ghost" size="sm" onClick={() => setEditing(o)}>
                         <Pencil size={13} />แก้ไข
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => toggleActive(o)}>
+                      <Button variant="ghost" size="sm" disabled={toggling} onClick={() => (o.is_active ? setConfirmOff(o) : toggleActive(o))}>
                         {o.is_active ? <><PowerOff size={13} />ปิด</> : <><Power size={13} />เปิด</>}
                       </Button>
                     </div>
@@ -3040,6 +3049,20 @@ function AdminOfficersSection() {
           setEditing(null);
           toast.success(`มอบหมาย ${name} เรียบร้อยแล้ว`);
         }}
+      />
+      <ConfirmSaveModal
+        open={confirmOff !== null}
+        onClose={() => { if (!toggling) setConfirmOff(null); }}
+        onConfirm={() => { if (confirmOff) toggleActive(confirmOff); }}
+        saving={toggling}
+        variant="danger"
+        title={confirmOff ? `ปิดใช้งานตำแหน่ง ${confirmOff.title}?` : "ปิดใช้งานตำแหน่ง?"}
+        description={
+          `${confirmOff ? `${confirmOff.academic_prefix}${confirmOff.full_name}`.trim() || "ผู้ดำรงตำแหน่ง" : "ผู้ดำรงตำแหน่ง"} ` +
+          "จะเข้าหน้าผู้บริหารไม่ได้ และจะไม่อยู่ในรายชื่อผู้ลงนามของเอกสารที่สร้างหลังจากนี้ทันที เปิดใช้งานกลับได้ภายหลัง"
+        }
+        confirmLabel="ปิดใช้งาน"
+        confirmIcon={<PowerOff size={14} />}
       />
     </Panel>
   );
@@ -3296,7 +3319,7 @@ function DemoTestersSection() {
       toast.success(`ยกเลิกสิทธิ์ของ ${deleteTarget.email} เรียบร้อยแล้ว`);
       setDeleteTarget(null);
     } catch (e) {
-      toast.danger("ยกเลิกสิทธิ์ไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger("ยกเลิกสิทธิ์ไม่สำเร็จ", { description: errMessage(e) });
     } finally {
       setDeleting(false);
     }
@@ -3537,7 +3560,7 @@ function SubmissionPeriodsSection() {
       toast.success("สร้างระยะเวลารายเดือนเรียบร้อย");
       setSeedConfirm(false);
     } catch (e) {
-      toast.danger("สร้างไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger("สร้างระยะเวลารายเดือนไม่สำเร็จ", { description: errMessage(e) });
     } finally { setSeeding(false); }
   }
 
@@ -3547,10 +3570,10 @@ function SubmissionPeriodsSection() {
     try {
       await api.del(`/submission-periods/${deleteTarget.id}`);
       await refresh();
-      toast.success("ลบเรียบร้อย");
+      toast.success(`ลบรอบ "${deleteTarget.label}" เรียบร้อยแล้ว`);
       setDeleteTarget(null);
     } catch (e) {
-      toast.danger("ลบไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger("ลบรอบเบิกจ่ายไม่สำเร็จ", { description: errMessage(e) });
     } finally { setDeleting(false); }
   }
 
@@ -3725,8 +3748,20 @@ function SubmissionPeriodModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={initial ? "แก้ไขรอบเบิกจ่าย" : "เพิ่มรอบเบิกจ่าย"}>
-      <div className="space-y-3 p-4">
+    <Modal
+      open
+      onClose={onClose}
+      title={initial ? "แก้ไขรอบเบิกจ่าย" : "เพิ่มรอบเบิกจ่าย"}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="primary" onClick={save} isPending={saving} disabled={saving}>
+            <Save size={14} />บันทึก
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
         <FieldGroup label="ป้ายกำกับ (แสดงบน UI)">
           <TextInput value={draft.label}
                      placeholder="เช่น มิถุนายน 2569"
@@ -3757,14 +3792,8 @@ function SubmissionPeriodModal({
           ปิดรับแล้ว (ไม่ส่ง reminder อีก)
         </label>
         {error && (
-          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
+          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกรอบเบิกจ่ายไม่สำเร็จ" description={error} />
         )}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
-          <Button variant="primary" onClick={save} disabled={saving}>
-            <Save size={14} />บันทึก
-          </Button>
-        </div>
       </div>
     </Modal>
   );

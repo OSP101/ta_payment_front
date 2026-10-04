@@ -216,7 +216,7 @@ export default function DocsShell({
     <div className="min-h-screen bg-surface">
       <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
-          <div className="flex items-center gap-3 py-3">
+          <div className="flex min-w-0 items-center gap-3 py-3">
             <Tip content="เปิดเมนู"><button
               type="button"
               className="lg:hidden -ms-1 rounded-md p-1.5 hover:bg-slate-100"
@@ -236,10 +236,10 @@ export default function DocsShell({
                 three Thai labels ("เจ้าหน้าที่", "ผู้ช่วยสอน"...) never fit this
                 pill cluster's compact padding at 375px without wrapping
                 mid-word, so it needs the full row's width there instead. */}
-            <div className="hidden flex-1 justify-center sm:flex">
+            <div className="hidden flex-1 justify-center lg:flex">
               <AudienceSwitch current={audience} allowed={allowedAudiences} />
             </div>
-            <div className="flex-1 sm:hidden" />
+            <div className="flex-1 lg:hidden" />
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
@@ -264,7 +264,7 @@ export default function DocsShell({
             </button>
           </div>
           {allowedAudiences.length > 1 && (
-            <div className="pb-2.5 sm:hidden">
+            <div className="pb-2.5 lg:hidden">
               <AudienceSwitch current={audience} allowed={allowedAudiences} variant="full" />
             </div>
           )}

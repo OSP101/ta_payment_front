@@ -73,7 +73,7 @@ export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => voi
               <div
                 ref={scrollRef}
                 onScroll={handleScroll}
-                className="max-h-80 overflow-y-auto pr-1 text-sm leading-6 text-foreground space-y-4"
+                className="max-h-[40dvh] sm:max-h-80 overflow-y-auto pr-1 text-sm leading-6 text-foreground space-y-4"
               >
                 <p>
                   ก่อนกรอกข้อมูลในขั้นตอนนี้ ระบบ COCO TAS ขอแจ้งให้ท่านทราบและขอความยินยอมในการเก็บรวบรวม

@@ -39,7 +39,7 @@ export default function CurriculumBars({ a }: { a: TermAnalytics }) {
               </div>
               <Tip content="ดูรายละเอียดรายวิชา"><button type="button" onClick={() => setDetail(r.curriculum || "unknown")}
                       aria-label={`ดูรายวิชาของ${curriculumTH(r.curriculum)}`}
-                      className="rounded-md p-1.5 text-[var(--ink-3)] hover:bg-slate-100 hover:text-[var(--ink-1)]">
+                      className="tap-target rounded-md p-1.5 text-[var(--ink-3)] hover:bg-slate-100 hover:text-[var(--ink-1)]">
                 <Eye size={16} />
               </button></Tip>
             </div>

@@ -138,7 +138,7 @@ export default function Signature({ value, onChange }: Props) {
       <div className="flex gap-2 mt-2">
         <button
           type="button"
-          className="text-sm text-slate-600 hover:text-slate-800"
+          className="tap-target text-sm text-slate-600 hover:text-slate-800"
           onClick={clear}
         >
           ล้าง

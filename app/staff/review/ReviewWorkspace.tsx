@@ -203,7 +203,7 @@ export function ReviewWorkspace({
                 onClose={onClose}
                 onChanged={onChanged}
               />
-              <div className="flex min-h-0 flex-1">
+              <div className="flex min-h-0 flex-1 flex-col md:flex-row">
                 <SubmitterRail
                   people={ordered}
                   arrivedIds={roster.arrived}
@@ -246,9 +246,9 @@ function WorkspaceHeader({
   onChanged: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-[var(--hairline)] px-4 py-2.5">
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--hairline)] px-4 py-2.5">
       <span className="text-sm font-semibold">ตรวจสอบแบบฟอร์มใบแจ้งหนี้</span>
-      {current && <Chip tone="neutral">{current.full_name}</Chip>}
+      {current && <span className="hidden sm:inline-flex"><Chip tone="neutral">{current.full_name}</Chip></span>}
       <div className="ml-auto flex items-center gap-2">
         <DownloadAllButton approvedHere={approvedHere} />
         <Tip content="ปิด"><button
@@ -288,7 +288,7 @@ function SubmitterRail({
   let lastStatus = "";
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--hairline)] lg:w-72">
+    <aside className="flex max-h-[35dvh] w-full shrink-0 flex-col border-b border-[var(--hairline)] md:max-h-none md:w-64 md:border-b-0 md:border-r lg:w-72">
       <div className="shrink-0 border-b border-[var(--hairline)] px-3 py-2.5">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Users size={16} /> ผู้ส่งทั้งหมด

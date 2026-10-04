@@ -9,7 +9,7 @@
 // (useWidth) rather than scaled from a fixed viewBox, so a 12px label is 12px
 // on a phone too — a viewBox scaled into 360px shrank labels to ~6px.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CourseStaffing, MonthFlow, PlanRatios, StaffingStatus } from "../types";
 import { STAFFING_META, FLOW_BUCKETS, money, num1, thMonth, type BudgetView } from "./analysis";
 import { compareYearMonth } from "../../lib/dates";
@@ -44,16 +44,21 @@ export function useTip() {
   return { ref, show, hide, node };
 }
 
-/** The element's content width in CSS pixels, tracked on resize. */
+/** The element's content width in CSS pixels, tracked on resize.
+ *  A callback ref, not useRef + a mount-only effect: a chart that first renders
+ *  its empty state (no ref attached) and gets data later used to stay at the
+ *  640px fallback forever — wider than a phone. */
 export function useWidth<T extends HTMLElement>(fallback = 640) {
-  const ref = useRef<T>(null);
   const [w, setW] = useState(fallback);
-  useEffect(() => {
-    const el = ref.current;
+  const roRef = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((el: T | null) => {
+    roRef.current?.disconnect();
+    roRef.current = null;
     if (!el) return;
+    setW(Math.max(260, Math.round(el.getBoundingClientRect().width)));
     const ro = new ResizeObserver(([e]) => setW(Math.max(260, Math.round(e.contentRect.width))));
     ro.observe(el);
-    return () => ro.disconnect();
+    roRef.current = ro;
   }, []);
   return { ref, w };
 }
@@ -224,7 +229,7 @@ export function StaffingScatter({
         <div className="py-12 text-center text-sm text-[var(--ink-3)]">ยังไม่มีวิชาที่ขอ TA และมีจำนวนนักศึกษา</div>
       ) : (
         <div ref={t.ref} className="relative">
-          <svg width={W} height={H} className="block" role="group"
+          <svg width={W} height={H} className="block max-w-full" role="group"
                aria-label={`กราฟจำนวนนักศึกษาเทียบจำนวน TA ที่ขอ ${pts.length} วิชา พร้อมเส้นเกณฑ์ 1 ต่อ ${plan.students_per_ta} และเพดาน 1 ต่อ ${plan.min_students_per_ta}`}>
             <path d={above(plan.students_per_ta)} fill="#d97706" fillOpacity={0.06} />
             <path d={above(plan.min_students_per_ta)} fill="#dc2626" fillOpacity={0.07} />

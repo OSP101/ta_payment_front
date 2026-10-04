@@ -821,6 +821,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  // Months ticked in the send dialog ("YYYY-MM"). Reset to every sendable
+  // month each time the dialog opens — see openSubmit.
+  const [submitMonths, setSubmitMonths] = useState<Set<string>>(new Set());
   const [showAdd, setShowAdd] = useState(false);
   // quickAddDate: when the user clicks a month section's "+ เพิ่มในเดือนนี้"
   // we open the same modal but seed the date field to the first-of-month. null
@@ -978,6 +981,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const [rejectionSeenAids, setRejectionSeenAids] = useState<Set<string>>(new Set());
   const [showRejection, setShowRejection] = useState(false);
   const [deletingRejected, setDeletingRejected] = useState(false);
+  // "ลบทั้งหมด" in the rejection notice asks again in place (the footer turns
+  // into a confirm row) rather than stacking a second modal on this one.
+  const [confirmDeleteRejected, setConfirmDeleteRejected] = useState(false);
   useEffect(() => {
     if (!aid || !logs) return;
     if (rejectionSeenAids.has(aid)) return;
@@ -1007,6 +1013,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       revalidate();
     } finally {
       setDeletingRejected(false);
+      setConfirmDeleteRejected(false);
       dismissRejection();
     }
   }
@@ -1146,6 +1153,28 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const strandedRows = editableRows.filter(l => !!monthLockFor(l.work_date));
   const strandedMonths = [...new Set(strandedRows.map(l => monthLockFor(l.work_date)!.label))];
   const canSubmit = !!aid && submittableCount > 0;
+  // The send dialog's month list: one tick box per month that has something
+  // sendable, oldest first.
+  const submittableMonths = useMemo(() => {
+    const by = new Map<string, { count: number; hours: number; rejected: number }>();
+    for (const r of submittableRows) {
+      const ym = monthKey(r.work_date);
+      const m = by.get(ym) ?? { count: 0, hours: 0, rejected: 0 };
+      m.count++;
+      m.hours += r.hours || 0;
+      if (r.status === "rejected") m.rejected++;
+      by.set(ym, m);
+    }
+    return [...by.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([ym, m]) => ({ ym, ...m }));
+  }, [submittableRows]);
+  // Intersected with what is still sendable, so a month that emptied while the
+  // dialog was open (another tab sent it) drops out instead of being posted.
+  const chosenMonths = submittableMonths.filter(m => submitMonths.has(m.ym));
+  const chosenCount = chosenMonths.reduce((n, m) => n + m.count, 0);
+  function openSubmit() {
+    setSubmitMonths(new Set(submittableMonths.map(m => m.ym)));
+    setConfirmSubmit(true);
+  }
 
   // What pressing "ส่งอนุมัติ" is actually worth, per month — the confirm
   // dialog's whole point. Read-only and TA-scoped (see PayRateFor's Go doc
@@ -1198,6 +1227,15 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       footnote: "ยังไม่รวมรายการที่อาจารย์ยังไม่อนุมัติ และอาจลดลงหากงบของวิชานี้ไม่พอ",
     };
   }, [payRate, submittableRows, logs]);
+
+  // The estimate shown in the send dialog covers only the ticked months. Each
+  // month's figure stands alone (the cap is per month), so filtering is exact.
+  const chosenEstimate: PayEstimate | null = useMemo(() => {
+    if (!submitEstimate) return null;
+    const months = submitEstimate.months.filter(m => submitMonths.has(m.ym));
+    if (months.length === 0) return null;
+    return { ...submitEstimate, months, total: months.reduce((s, m) => s + m.baht, 0) };
+  }, [submitEstimate, submitMonths]);
 
   const activeAssignment = assignments?.find(a => a.id === aid);
   // Server-derived, never re-computed here: the rule that decides it lives in
@@ -1540,7 +1578,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      await api.post(`/assignments/${aid}/worklog/submit`);
+      const months = chosenMonths.map(m => m.ym);
+      if (months.length === 0) return;
+      await api.post(`/assignments/${aid}/worklog/submit`, { months });
+      const allMonths = months.length === submittableMonths.length;
+      const sentLabel = allMonths ? "" : ` เดือน${months.map(formatMonthTH).join(", ")}`;
+      const leftLabel = allMonths
+        ? ""
+        : ` ส่วนเดือน${submittableMonths.filter(m => !submitMonths.has(m.ym)).map(m => formatMonthTH(m.ym)).join(", ")} ยังเป็นฉบับร่าง กดส่งภายหลังได้`;
       // Name the section, and — the point of the whole change — say what is
       // still outstanding elsewhere. This is the moment the TA believes they are
       // finished, so it is the only moment where the reminder lands.
@@ -1550,15 +1595,15 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       const others = (assignments ?? []).filter(a => a.id !== aid && a.submittable_count > 0);
       if (showMultiSection && others.length > 0) {
         notify.success(
-          `ส่ง sec ${activeAssignment?.sec_no ?? ""} เรียบร้อย ยังเหลือ ` +
+          `ส่ง sec ${activeAssignment?.sec_no ?? ""}${sentLabel} เรียบร้อย ยังเหลือ ` +
           others.map(a => `sec ${a.sec_no} (${a.submittable_count} รายการ)`).join(", ") +
-          " ที่ยังไม่ได้ส่ง",
+          " ที่ยังไม่ได้ส่ง" + leftLabel,
         );
       } else {
         notify.success(
-          showMultiSection
-            ? `ส่ง sec ${activeAssignment?.sec_no ?? ""} ให้อาจารย์อนุมัติแล้ว`
-            : "ส่งให้อาจารย์อนุมัติแล้ว",
+          (showMultiSection
+            ? `ส่ง sec ${activeAssignment?.sec_no ?? ""}${sentLabel} ให้อาจารย์อนุมัติแล้ว`
+            : `ส่งบันทึกเวลา${sentLabel} ให้อาจารย์อนุมัติแล้ว`) + leftLabel,
         );
       }
       revalidate();
@@ -1862,7 +1907,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 >
                 <LockedActionButton
                   variant="primary"
-                  onClick={() => setConfirmSubmit(true)}
+                  onClick={openSubmit}
                   isPending={submitting}
                   disabled={submitting || !canSubmit}
                 >
@@ -1945,7 +1990,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           assignments={assignments}
           activeId={aid}
           onSelect={setAid}
-          onSubmit={() => setConfirmSubmit(true)}
+          onSubmit={openSubmit}
           submitting={submitting}
           canSubmitActive={canSubmit}
         />
@@ -2146,11 +2191,25 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         icon={<AlertTriangle size={18} />}
         size="md"
         footer={
-          <div className="flex justify-between gap-2 w-full">
+          confirmDeleteRejected ? (
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-danger">
+                ลบ {rejectedRows.length} รายการที่ถูกส่งกลับถาวร ย้อนกลับไม่ได้ ยืนยันหรือไม่?
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setConfirmDeleteRejected(false)} disabled={deletingRejected}>
+                  ไม่ลบ
+                </Button>
+                <Button variant="danger" onClick={deleteAllRejected} isPending={deletingRejected} disabled={deletingRejected}>
+                  <Trash2 size={14} /> ลบถาวร
+                </Button>
+              </div>
+            </div>
+          ) :
+          <div className="flex flex-wrap justify-between gap-2 w-full">
             <Button
               variant="danger-soft"
-              onClick={deleteAllRejected}
-              isPending={deletingRejected}
+              onClick={() => setConfirmDeleteRejected(true)}
               disabled={deletingRejected}
             >
               <Trash2 size={14} /> ลบทั้งหมด ({rejectedRows.length})
@@ -2199,7 +2258,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         isPending={submitting}
         size="lg"
         title="ส่งบันทึกเวลาให้อาจารย์อนุมัติ"
-        confirmLabel={`ส่งอนุมัติ (${submittableCount} รายการ)`}
+        confirmLabel={chosenCount > 0 ? `ส่งอนุมัติ (${chosenCount} รายการ)` : "เลือกเดือนที่จะส่ง"}
+        confirmDisabled={chosenCount === 0}
         message={
           /* The last screen before an irreversible hand-off, so it spells out the
              scope: which section is going, and which sections are staying behind.
@@ -2213,13 +2273,67 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                   <b className="font-medium text-foreground">
                     sec {activeAssignment.sec_no} ({activeAssignment.track === "special" ? "พิเศษ" : "ปกติ"})
                   </b>{" "}
-                  จำนวน {submittableCount} รายการ ให้อาจารย์พิจารณา
+                  ในเดือนที่เลือกด้านล่าง ให้อาจารย์พิจารณา
                 </>
               ) : (
-                <>จะส่งรายการฉบับร่างและรายการที่ไม่ผ่านทั้งหมด {submittableCount} รายการให้อาจารย์พิจารณา</>
+                <>เลือกเดือนที่ต้องการส่งให้อาจารย์พิจารณา (รวมรายการฉบับร่างและรายการที่ถูกส่งกลับให้แก้ไข)</>
               )}
               {" "}เมื่อส่งแล้วจะแก้ไขไม่ได้จนกว่าอาจารย์จะพิจารณา
             </p>
+            {/* One tick box per month, all ticked on open. A month left
+                unticked stays a draft — editable, and sendable later as long
+                as its period is open. */}
+            <fieldset className="rounded-lg border border-hairline">
+              <legend className="sr-only">เดือนที่จะส่ง</legend>
+              {submittableMonths.length > 1 && (
+                <div className="flex items-center justify-between gap-2 border-b border-hairline px-3 py-2 text-xs text-muted">
+                  <span>เลือกแล้ว {chosenMonths.length} จาก {submittableMonths.length} เดือน</span>
+                  <button
+                    type="button"
+                    className="font-medium text-accent hover:underline"
+                    onClick={() => setSubmitMonths(
+                      chosenMonths.length === submittableMonths.length
+                        ? new Set()
+                        : new Set(submittableMonths.map(m => m.ym)),
+                    )}
+                  >
+                    {chosenMonths.length === submittableMonths.length ? "ไม่เลือกทั้งหมด" : "เลือกทั้งหมด"}
+                  </button>
+                </div>
+              )}
+              <ul className="divide-y divide-hairline">
+                {submittableMonths.map(m => {
+                  const on = submitMonths.has(m.ym);
+                  return (
+                    <li key={m.ym}>
+                      <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-surface-secondary">
+                        <input
+                          type="checkbox"
+                          className="size-4 shrink-0 accent-[var(--accent)]"
+                          checked={on}
+                          disabled={submitting}
+                          onChange={e => setSubmitMonths(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(m.ym); else next.delete(m.ym);
+                            return next;
+                          })}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium text-foreground">{formatMonthTH(m.ym)}</span>
+                          <span className="block text-xs text-muted">
+                            {m.count} รายการ · {fmtHours(m.hours)} ชม.
+                            {m.rejected > 0 && <> · ถูกส่งกลับ {m.rejected} รายการ</>}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </fieldset>
+            {chosenCount === 0 && (
+              <p className="text-amber-700">กรุณาเลือกอย่างน้อย 1 เดือน</p>
+            )}
             {hasUnsaved && (
               <p className="text-amber-700">
                 มีรายการที่แก้ไขแล้วแต่ยังไม่ได้บันทึก จะไม่ถูกส่งไปด้วย โปรดบันทึกก่อนหากต้องการรวมไปด้วย
@@ -2242,7 +2356,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 คุณอยู่ในกลุ่มที่ได้ค่าตอบแทนแบบ<b>เหมาจ่ายทั้งเทอม</b> (≈ {baht(payRate.lumpsum_baht ?? 0)}) ไม่ได้คิดตามชั่วโมงเป็นรายเดือน
               </p>
             )}
-            {submitEstimate && <PayEstimateCard estimate={submitEstimate} />}
+            {chosenEstimate && <PayEstimateCard estimate={chosenEstimate} />}
           </div>
         }
       />

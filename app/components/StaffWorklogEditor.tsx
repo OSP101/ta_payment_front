@@ -5,7 +5,7 @@ import { Save, Trash2, Plus, Lock, X, Pencil, ShieldCheck } from "lucide-react";
 import { Accordion } from "@heroui/react";
 import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
-import { TextInput, Select, Button, IconButton, Chip, EmptyState, Spinner, DatePicker, TimePicker, StatusChip, Modal, Alert, TextArea, Tip } from "./ui";
+import { TextInput, Select, Button, IconButton, Chip, EmptyState, Spinner, DatePicker, TimePicker, StatusChip, Modal, Alert, TextArea, Tip, ConfirmDialog } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
 
 export interface StaffWorkLog {
@@ -277,6 +277,7 @@ function TAWorklogTable({
 function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => void }) {
   const [draft, setDraft] = useState<StaffWorkLog>(row);
   const [busy, setBusy] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
   const [editing, setEditing] = useState(false);
   // Reset the local draft whenever the server row's content changes. A single
   // joined signature (not a multi-field dep array) keeps the dependency list a
@@ -342,7 +343,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
         room: draft.room,
         note: draft.note,
       });
-      notify.success("บันทึกแล้ว");
+      notify.success(`บันทึกการแก้ไขบันทึกเวลาวันที่ ${fmtWorkDate(draft.work_date)} แล้ว`);
       setEditing(false);
       setStepUpOpen(false);
       setReason("");
@@ -357,11 +358,10 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
   }
 
   async function del() {
-    if (!confirm("ลบแถวนี้?")) return;
     setBusy(true);
     try {
       await api.del(`/staff/worklogs/${row.id}`);
-      notify.success("ลบแล้ว");
+      notify.success(`ลบบันทึกเวลาวันที่ ${fmtWorkDate(row.work_date)} แล้ว`);
       onChanged();
     } catch (e) {
       notify.error(errMessage(e));
@@ -408,10 +408,21 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
                 <Pencil size={13} />
               </IconButton>
               {canDelete && (
-                <IconButton label="ลบ" variant="ghost" size="sm" onClick={del} disabled={busy}>
+                <IconButton label="ลบ" variant="ghost" size="sm" onClick={() => setConfirmDel(true)} disabled={busy}>
                   <Trash2 size={13} />
                 </IconButton>
               )}
+              {/* Portalled, so it can sit inside the cell. */}
+              <ConfirmDialog
+                open={confirmDel}
+                onClose={() => setConfirmDel(false)}
+                onConfirm={async () => { await del(); setConfirmDel(false); }}
+                isPending={busy}
+                danger
+                title="ลบบันทึกเวลา?"
+                message={`ลบรายการวันที่ ${fmtWorkDate(row.work_date)} เวลา ${row.start_time.slice(0, 5)}–${row.end_time.slice(0, 5)} (${row.hours.toFixed(1)} ชม.) ของ sec ${row.section_no} การลบย้อนกลับไม่ได้`}
+                confirmLabel="ลบรายการ"
+              />
             </div>
           )}
         </td>

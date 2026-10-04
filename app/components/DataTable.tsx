@@ -406,7 +406,7 @@ export function DataTable<T>({
               className={f.className ?? "min-w-44"}
             />
           ))}
-          {toolbarExtra && <div className="ml-auto flex items-center gap-2">{toolbarExtra}</div>}
+          {toolbarExtra && <div className="ml-auto flex flex-wrap items-center gap-2">{toolbarExtra}</div>}
         </div>
       )}
 

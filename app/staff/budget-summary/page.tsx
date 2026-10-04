@@ -7,7 +7,7 @@ import {
   FileDown, History, Merge, Download, FileText, Users, GraduationCap, Banknote, FileSignature,
   CalendarRange, Check, ChevronDown, AlertTriangle, Eye, EyeOff, ShieldCheck,
 } from "lucide-react";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { api } from "../../lib/api";
 import { useTerm } from "../TermContext";
 import {
@@ -1505,9 +1505,9 @@ function TransferCoverHistoryModal({
       ) : (
         <ul className="divide-y divide-hairline">
           {history.map(h => (
-            <li key={h.id} className="py-3 flex items-center gap-3">
+            <li key={h.id} className="py-3 flex flex-wrap items-center gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-ink-1 flex items-center gap-1.5">
+                <div className="text-sm font-medium text-ink-1 flex flex-wrap items-center gap-1.5">
                   {new Date(h.generated_at).toLocaleString("th-TH", {
                     dateStyle: "medium", timeStyle: "short",
                   })}

@@ -553,9 +553,13 @@ export default function TASchedulePage() {
                 const heading = blockTitle(b);
                 return (
                   <div key={b.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <div className="w-20 shrink-0 text-sm text-slate-700">{DOW_LABEL[b.day_of_week]}</div>
-                    <div className="w-28 shrink-0 text-sm tabular-nums text-slate-700">
-                      {fmtTime(b.start_time)}–{fmtTime(b.end_time)}
+                    {/* Day and time stack into one narrow column on a phone so
+                        the course name keeps its width. */}
+                    <div className="flex w-24 shrink-0 flex-col sm:w-48 sm:flex-row sm:items-center sm:gap-3">
+                      <div className="text-sm text-slate-700 sm:w-20 sm:shrink-0">{DOW_LABEL[b.day_of_week]}</div>
+                      <div className="text-xs tabular-nums text-slate-700 sm:w-28 sm:shrink-0 sm:text-sm">
+                        {fmtTime(b.start_time)}–{fmtTime(b.end_time)}
+                      </div>
                     </div>
                     <div className="flex-1 min-w-0 text-sm">
                       <div className="font-medium truncate">
@@ -872,7 +876,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
       icon={<Clock size={18} />}
       size="md"
       footer={
-        <div className="flex items-center justify-between w-full gap-2">
+        <div className="flex flex-wrap items-center justify-between w-full gap-2">
           <div>
             {isEdit && block && (
               <Button variant="danger-soft" onClick={() => setConfirmDelete(true)}>
@@ -902,7 +906,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
               autoFocus
             />
           </FieldGroup>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <FieldGroup label="ชื่อวิชา">
               <TextInput
                 value={courseName}
@@ -1085,7 +1089,7 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
       icon={<FileUp size={18} />}
       size="xl"
       footer={
-        <div className="flex items-center justify-between w-full gap-2">
+        <div className="flex flex-wrap items-center justify-between w-full gap-2">
           <div className="text-xs text-muted">
             {result && result.blocks.length > 0
               ? `จะแทนที่คาบเรียนทั้งหมดในภาคการศึกษานี้ด้วย ${result.blocks.length} คาบที่นำเข้า`

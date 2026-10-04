@@ -1,6 +1,7 @@
 "use client";
 import { SWRConfig } from "swr";
-import { Toast, toast } from "@heroui/react";
+import { Toast } from "@heroui/react";
+import { toast } from "../lib/toast";
 import { fetcher, ApiError } from "../lib/api";
 
 export default function SWRProvider({ children }: { children: React.ReactNode }) {

@@ -361,7 +361,7 @@ function OutTable({
   title, hint, rows, highlight,
 }: { title: string; hint: string; rows: OutOfGrid[] | undefined; highlight?: boolean }) {
   return (
-    <div className="rounded-lg border border-[var(--hairline)] overflow-hidden">
+    <div className="rounded-lg border border-[var(--hairline)] overflow-x-auto">
       <div className={"px-3 py-1.5 " + (highlight && rows && rows.length > 0 ? "bg-amber-50" : "bg-surface-secondary")}>
         <div className="text-xs font-medium">{title}</div>
         <div className="text-[11px] text-muted">{hint}</div>

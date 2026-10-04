@@ -106,7 +106,7 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
   return (
     <div ref={box}>
       <div ref={t.ref} className="relative">
-        <svg width={W} height={H} className="block" role="img"
+        <svg width={W} height={H} className="block max-w-full" role="img"
              aria-label={`ยอดเบิกจ่ายสะสม ${money(g.total)} จากงบรวม ${money(base)} รายเดือน: ${g.bands.filter(bd => bd.baht > 0).map(bd => `${thMonth(bd.ym)} ${money(bd.baht)}`).join(", ")}`}>
           <defs>
             <pattern id="mc-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">

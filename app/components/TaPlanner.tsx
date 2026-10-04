@@ -1229,14 +1229,14 @@ function ManualPoolCard({ label, tone, inp, onChange, res, months, rateNote, gra
         <Chip tone={tone}>{label}</Chip>
         <span className="text-[11px] text-muted">{rateNote}</span>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2 items-end">
+      <div className="mt-3 grid grid-cols-2 gap-2 items-end sm:grid-cols-3">
         <label className="block text-[11px] text-muted">นศ. (คน)
           <input className={field} type="number" min={0} value={inp.students} onChange={e => set({ students: num(e.target.value, 0, 2000) })} />
         </label>
         <Stat label="งบตามสูตร/เทอม" value={baht(res.cap)} />
         <Stat label="เหลือให้วางแผน" value={baht(res.free)} />
       </div>
-      <div className="mt-3 grid grid-cols-[6rem_1fr_1fr] gap-x-2 gap-y-2 items-center text-xs">
+      <div className="mt-3 grid grid-cols-[3.5rem_1fr_1fr] sm:grid-cols-[6rem_1fr_1fr] gap-x-2 gap-y-2 items-center text-xs">
         <span>ป.ตรี</span>
         <label className="text-[11px] text-muted">จำนวน (คน)
           <input className={field} type="number" min={0} max={20} value={inp.ugCount} onChange={e => set({ ugCount: num(e.target.value, 0, 20) })} />
@@ -1375,7 +1375,7 @@ function OptionDetail({ o, total }: { o: Option; total: number }) {
   ];
   return (
     <div className="mt-2 space-y-2 rounded-lg border border-hairline bg-panel/70 p-2.5 text-[11px]">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <Stat label="TA ทั้งหมด" value={`${heads} คน`} />
         <Stat label="นศ. ที่ดูแล" value={`${o.students} คน`} />
         <Stat label="นศ. ต่อ TA" value={heads > 0 ? `≈ ${hrs1(ratio)} คน` : "—"} />

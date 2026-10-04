@@ -35,7 +35,7 @@ import PageDocsPill from "./docs/PageDocsPill";
 import type { Audience } from "../../content/docs/types";
 import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
 import type React from "react";
-import { Children, cloneElement, isValidElement, useEffect, useState } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useRef, useState } from "react";
 
 /* -------------------------------------------------------------------------- */
 /* Tooltip helpers                                                            */
@@ -191,7 +191,7 @@ export function InfoTip({
         type="button"
         aria-label="คำอธิบาย"
         className={
-          "inline-flex items-center justify-center text-muted hover:text-foreground transition-colors rounded-full " +
+          "tap-target inline-flex items-center justify-center text-muted hover:text-foreground transition-colors rounded-full " +
           (className ?? "")
         }
       >
@@ -242,7 +242,7 @@ export function PageHeader({
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">{title}</h1>
           {info && <InfoTip content={info} size={16} />}
         </div>
-        {description && <div className="text-sm text-muted mt-1">{description}</div>}
+        {description && <div className="text-sm text-muted mt-1 max-w-5xl">{description}</div>}
         {docPill}
       </div>
       {actions && <div className="flex gap-2 flex-wrap items-center">{actions}</div>}
@@ -299,14 +299,14 @@ export function Panel({
                   </HCard.Title>
                 )}
                 {actions && (
-                  <div className="flex gap-2 flex-wrap shrink-0 items-center">
+                  <div className="flex gap-2 flex-wrap min-w-0 max-w-full sm:shrink-0 items-center">
                     {actions}
                   </div>
                 )}
               </div>
             )}
             {description && (
-              <HCard.Description className={title || actions ? "mt-1" : ""}>
+              <HCard.Description className={"max-w-5xl " + (title || actions ? "mt-1" : "")}>
                 {description}
               </HCard.Description>
             )}
@@ -656,6 +656,12 @@ export function TimePicker({
   );
 }
 
+/** DateValue → "YYYY-MM-DD" (year padded, so a partial year can't masquerade). */
+function toIso(v: DateValue | null): string {
+  if (!v) return "";
+  return `${String(v.year).padStart(4, "0")}-${String(v.month).padStart(2, "0")}-${String(v.day).padStart(2, "0")}`;
+}
+
 /**
  * Segmented date picker with a calendar popover. Locked to en-GB locale so
  * segments render as dd/mm/yyyy regardless of the user's browser locale —
@@ -692,16 +698,44 @@ export function DatePicker({
     if (!s) return undefined;
     try { return parseDate(s); } catch { return undefined; }
   };
-  const toIso = (v: DateValue | null): string => {
-    if (!v) return "";
-    return `${v.year}-${String(v.month).padStart(2, "0")}-${String(v.day).padStart(2, "0")}`;
-  };
+  // Typing the year by keyboard completes the date after its FIRST digit
+  // (year 2), which used to reach the form as "2-10-05": the field then reset
+  // to dd/mm/yyyy, the form still held the bad string, and an appointment
+  // order was saved and mailed dated "2-10-05". So the field keeps what is
+  // being typed locally, and the form only hears a real date — or "" while the
+  // year is incomplete, which every "fill this first" check already blocks.
+  const [typed, setTyped] = useState<DateValue | null>(parsed);
+  // What this field last told the form. When the form echoes it back (e.g. ""
+  // mid-year), keep the half-typed date on screen; only a value set from
+  // OUTSIDE (reset, load) replaces it. Without this, retyping the year of a
+  // filled field wiped the day and month on the first digit.
+  const lastEmitted = useRef<string | null>(null);
+  useEffect(() => {
+    if (value === lastEmitted.current) return;
+    setTyped(prev => (toIso(prev) === value ? prev : parsed));
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  function send(iso: string) {
+    lastEmitted.current = iso;
+    onChange(iso);
+  }
+  function emit(v: DateValue | null) {
+    setTyped(v);
+    if (!v) { send(""); return; }
+    // A Thai user typing the Buddhist year (2569) means 2026.
+    if (v.year >= 2400 && v.year <= 2700) {
+      const ce = v.subtract({ years: 543 });
+      setTyped(ce);
+      send(toIso(ce));
+      return;
+    }
+    send(v.year >= 1900 && v.year <= 2200 ? toIso(v) : "");
+  }
   return (
     <I18nProvider locale="en-GB">
       <HDatePicker
         className={className}
-        value={parsed}
-        onChange={v => onChange(toIso(v))}
+        value={typed}
+        onChange={emit}
         isDisabled={isDisabled}
         autoFocus={autoFocus}
         minValue={parseBound(minValue)}
@@ -933,7 +967,7 @@ export function Modal({
               </HModal.Header>
             )}
             <HModal.Body>{children}</HModal.Body>
-            {footer && <HModal.Footer>{footer}</HModal.Footer>}
+            {footer && <HModal.Footer className="flex-wrap">{footer}</HModal.Footer>}
           </HModal.Dialog>
         </HModal.Container>
       </HModal.Backdrop>
@@ -967,6 +1001,7 @@ export function ConfirmDialog({
   icon,
   requireTyped,
   size = "sm",
+  confirmDisabled = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -989,6 +1024,9 @@ export function ConfirmDialog({
   // reads as cramped at that width. Widen just that call site instead of
   // the type itself.
   size?: "sm" | "md" | "lg";
+  // For a dialog whose message holds its own choice (e.g. which months to
+  // send): keeps the confirm button off until that choice is valid.
+  confirmDisabled?: boolean;
 }) {
   const [typed, setTyped] = useState<string[]>(() => (requireTyped ?? []).map(() => ""));
   useEffect(() => {
@@ -1005,7 +1043,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="tertiary" onPress={onClose} disabled={isPending}>{cancelLabel}</Button>
-          <Button variant={danger ? "danger" : "primary"} onPress={onConfirm} isPending={isPending} disabled={!typedOk}>
+          <Button variant={danger ? "danger" : "primary"} onPress={onConfirm} isPending={isPending} disabled={!typedOk || confirmDisabled}>
             {confirmLabel}
           </Button>
         </>

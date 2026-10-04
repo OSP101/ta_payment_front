@@ -59,7 +59,7 @@ export function CopyCodeButton({ code }: { code: string }) {
           }
         }}
         className={
-          "ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md align-middle transition " +
+          "tap-target ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md align-middle transition " +
           (done ? "text-success" : "text-muted hover:bg-surface-secondary hover:text-foreground")
         }
       >

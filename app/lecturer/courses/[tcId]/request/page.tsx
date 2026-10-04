@@ -20,8 +20,10 @@ import {
 } from "@heroui/react";
 import { api, type Me } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
+import SendCredentialsButton from "../../../../components/SendCredentialsButton";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, Select, SelectField, FieldGroup, Chip, EmptyState, Alert, Modal, Tip, TipWrap,
+  ConfirmDialog,
 } from "../../../../components/ui";
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 import { TaPlanner, planHandoffKey, type PlanItem, type DraftEstimate } from "../../../../components/TaPlanner";
@@ -561,6 +563,9 @@ function RequestFormSection({
 
   const [scope, setScope] = useState<"lecture" | "lab" | "both">(defaultScope);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  // "ล้างฟอร์ม" also deletes the saved server draft (the autosave effect), so
+  // it asks first — there is no undo.
+  const [confirmClear, setConfirmClear] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [creatingTa, setCreatingTa] = useState(false);
@@ -1251,11 +1256,21 @@ function RequestFormSection({
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            onClick={() => { setAssignments([]); setErr(null); }}
+            onClick={() => setConfirmClear(true)}
             disabled={assignments.length === 0}
           >
             ล้างฟอร์ม
           </Button>
+          <ConfirmDialog
+            open={confirmClear}
+            onClose={() => setConfirmClear(false)}
+            onConfirm={() => { setAssignments([]); setErr(null); setConfirmClear(false); }}
+            danger
+            title="ล้างฟอร์มคำขอ?"
+            message={`รายชื่อผู้ช่วยสอน ${assignments.length} คนและภาระงานที่กรอกไว้จะถูกลบทั้งหมด รวมถึงฉบับร่างที่บันทึกไว้ และกู้คืนไม่ได้`}
+            confirmLabel="ล้างฟอร์ม"
+            cancelLabel="เก็บไว้"
+          />
           <TipWrap
             className="inline-flex"
             content={pending || canSend === false ? undefined : submitBlockReason}
@@ -1312,7 +1327,7 @@ function RequestFormSection({
               const est = estimate?.people.find(p => p.index === i);
               const cut = est ? est.share < est.owed - 0.5 : false;
               return (
-                <li key={i} className="rounded-lg border border-hairline p-2.5 flex items-start justify-between gap-3">
+                <li key={i} className="rounded-lg border border-hairline p-2.5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                   <div className="min-w-0">
                     <div className="font-medium text-ink-1">
                       {ta ? `${ta.first_name} ${ta.last_name}` : "-"}
@@ -1324,7 +1339,7 @@ function RequestFormSection({
                     </div>
                   </div>
                   {est && (
-                    <div className="shrink-0 text-right tabular-nums">
+                    <div className="tabular-nums sm:shrink-0 sm:text-right">
                       <div className="text-xs text-ink-3">จะได้ประมาณ</div>
                       <div className={"font-semibold " + (cut ? "text-danger" : "text-ink-1")}>
                         {cut && (
@@ -1452,7 +1467,7 @@ function StepPanel({
           </Chip>
         )}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-2 sm:p-4">{children}</div>
     </Panel>
   );
 }
@@ -1585,7 +1600,7 @@ function AssignmentBlock({
         </IconButton>
       </div>
 
-      <div className="p-3 space-y-3">
+      <div className="p-2 sm:p-3 space-y-3">
         {/* TA + level picker */}
         <div data-tour="req-ta-picker" className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
           <TaAutocomplete
@@ -1702,7 +1717,7 @@ function AssignmentBlock({
                         </span>
                       )}
                     </div>
-                    <div className="p-3">
+                    <div className="p-2 sm:p-3">
                       {isGrad ? (
                         (() => {
                           // Grad regulation bounds the TA's TOTAL at 12 h/week,
@@ -1853,7 +1868,7 @@ function UndergradWorkload({
   return (
     <div className="space-y-3">
       {showLec && (
-        <div className="rounded-md border border-hairline p-3">
+        <div className="rounded-md border border-hairline p-2 sm:p-3">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <div className="text-xs font-medium text-ink-2">1. ชั่วโมงบรรยาย (ปริญญาตรี)</div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -1899,7 +1914,7 @@ function UndergradWorkload({
         </div>
       )}
       {showLab && (
-        <div className="rounded-md border border-hairline p-3">
+        <div className="rounded-md border border-hairline p-2 sm:p-3">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <div className="text-xs font-medium text-ink-2">2. ชั่วโมงปฏิบัติการ</div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -2007,14 +2022,14 @@ function CheckHrs({
           <span className={"text-[11px] " + (forced ? "text-amber-700" : "text-ink-3")}>{shownHint}</span>
         )}
       </div>
-      <div className={"flex items-center gap-2 pl-6 " + (enabled && !disabled ? "" : "opacity-50 pointer-events-none")}>
+      <div className={"flex flex-wrap items-center gap-2 pl-2 sm:pl-6 " + (enabled && !disabled ? "" : "opacity-50 pointer-events-none")}>
         <HourInput value={hrs} onChange={onH} maxValue={max ?? 99} />
         {onD && (
           <TextInput
             value={desc ?? ""}
             onChange={e => onD(e.target.value)}
             placeholder="กิจกรรมที่ปฏิบัติ"
-            className="flex-1"
+            className="min-w-0 flex-1 basis-full sm:basis-auto"
           />
         )}
       </div>
@@ -2027,13 +2042,13 @@ function HrsRow({
 }: { label: string; hrs: number; desc: string; onH: (v: number) => void; onD: (v: string) => void; max?: number }) {
   return (
     <FieldGroup label={label}>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <HourInput value={hrs} onChange={onH} maxValue={max} />
         <TextInput
           value={desc}
           onChange={e => onD(e.target.value)}
           placeholder="รายละเอียดกิจกรรม"
-          className="flex-1"
+          className="min-w-0 flex-1 basis-full sm:basis-auto"
         />
       </div>
     </FieldGroup>
@@ -2335,6 +2350,7 @@ function CreateTaPanel({
       {created ? (
         <div className="space-y-3">
           <TempPasswordPanel
+            userId={created.user.id}
             name={`${created.user.first_name} ${created.user.last_name}`.trim()}
             email={created.user.email}
             password={created.temp_password}
@@ -2423,7 +2439,7 @@ function VField({
 // Accounts made here are always TA, so the role is fixed.
 const TA_ROLE_LABEL = "ผู้ช่วยสอน";
 
-function TempPasswordPanel({ name, email, password }: { name: string; email: string; password: string }) {
+function TempPasswordPanel({ userId, name, email, password }: { userId: string; name: string; email: string; password: string }) {
   const [copied, setCopied] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   async function copy() {
@@ -2447,7 +2463,7 @@ function TempPasswordPanel({ name, email, password }: { name: string; email: str
       <Alert
         status="success"
         title="รหัสผ่านชั่วคราวถูกสร้างแล้ว"
-        description="โปรดคัดลอกและส่งให้ TA ระบบจะบังคับให้เปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก รหัสนี้จะไม่แสดงอีก"
+        description="โปรดคัดลอกหรือส่งทางอีเมลให้ TA ระบบจะบังคับให้เปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก รหัสนี้จะไม่แสดงอีก"
         icon={<CheckCircle2 size={18} />}
       />
       <div>
@@ -2472,6 +2488,7 @@ function TempPasswordPanel({ name, email, password }: { name: string; email: str
       <Button variant="primary" size="sm" className="w-full" onClick={copyAll}>
         <Files size={14} /> {copiedAll ? "คัดลอกแล้ว" : "คัดลอกอีเมลและรหัสผ่าน"}
       </Button>
+      {userId && <SendCredentialsButton userId={userId} email={email} password={password} />}
     </div>
   );
 }

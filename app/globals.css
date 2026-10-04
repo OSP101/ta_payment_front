@@ -444,3 +444,18 @@ select.field {
   .docs-flow-drop,.docs-flow-back{animation:none}
   .docs-flow-drop{stroke-dasharray:none;opacity:.35}
 }
+
+/* Touch screens: a finger needs ~40px. Small icon buttons keep their look but
+   get an invisible hit area around them (.tap-target), and native check/radio
+   boxes grow from the browser's 13px. Mouse users see no change. */
+@layer components {
+  /* In the components layer so a utility like `absolute` on the same
+     element still wins over the `relative` below. */
+  @media (pointer: coarse) {
+    .tap-target { position: relative; }
+    .tap-target::after { content: ""; position: absolute; inset: -10px; }
+    /* Bare 14–16px icons (the "คำอธิบาย" help tip) need a wider ring to reach ~44px. */
+    .tap-target.rounded-full::after { inset: -14px; }
+    input[type="checkbox"], input[type="radio"] { width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
+  }
+}

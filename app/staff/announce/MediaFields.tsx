@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import {
   Image as ImageIcon, X, Trash2, AlertTriangle, Plus, Paperclip, Play, FileText, Wand2,
 } from "lucide-react";
-import { toast } from "@heroui/react";
+import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import type { Attachment } from "../../components/AttachmentGallery";
 import { Button, FieldGroup, Alert, Tip } from "../../components/ui";

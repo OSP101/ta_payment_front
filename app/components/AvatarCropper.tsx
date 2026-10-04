@@ -272,7 +272,7 @@ export default function AvatarCropper({
           <ZoomIn size={16} className="text-muted shrink-0" aria-hidden />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <Button variant="tertiary" size="sm" onPress={() => rotate(-90)} disabled={!img}>
             <RotateCcw size={14} /> หมุนซ้าย
           </Button>

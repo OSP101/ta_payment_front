@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
   AlertTriangle, CalendarDays, Check, Download, FileSignature,
@@ -9,7 +9,7 @@ import { api, errMessage } from "../../lib/api";
 import { useTerm } from "../TermContext";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Panel, Button, Select, Chip, DatePicker, EmptyState,
+  PageHeader, Panel, Button, Select, Chip, DatePicker, EmptyState, Tip, TipWrap, ConfirmDialog,
 } from "../../components/ui";
 import { Skel, SkelList, SkelRegion } from "../../components/Skeletons";
 
@@ -158,8 +158,18 @@ function Field({
 
 /**
  * Courses held out of this round because a TA has not entered a class
- * timetable, with a reminder button per TA and one for everyone.
+ * timetable, with a reminder per course and one for everyone.
+ *
+ * Redesigned 05/10/2026: it used to give every course a two-line block with
+ * the same long reason repeated and every TA as a pill carrying its own
+ * button. Eight courses already filled two screens and pushed the order form
+ * out of sight. Now one line per course: the waiting names as plain text, one
+ * "เตือน" for the course, and only the first few courses until asked for more.
+ * The reason is said once in the description; a row says its own only when it
+ * differs (every timetable in, the hourly sweep about to decide).
  */
+const HELD_BACK_PREVIEW = 4;
+
 function HeldBackPanel({
   termId, skipped, previewKey,
 }: {
@@ -167,7 +177,8 @@ function HeldBackPanel({
   skipped: AppointmentPreview["skipped"];
   previewKey: string | null;
 }) {
-  const [busy, setBusy] = useState<string | null>(null); // ta_id, or "all"
+  const [busy, setBusy] = useState<string | null>(null); // course code, or "all"
+  const [showAll, setShowAll] = useState(false);
   const now = Date.now();
   const remindedRecently = (at?: string | null) => !!at && now - new Date(at).getTime() < REMIND_GAP_MS;
 
@@ -175,6 +186,9 @@ function HeldBackPanel({
   const waiting = new Map<string, { name: string; reminded_at?: string | null }>();
   for (const c of skipped) for (const w of c.waiting ?? []) waiting.set(w.ta_id, w);
   const remindable = [...waiting.values()].filter(w => !remindedRecently(w.reminded_at)).length;
+
+  const shown = showAll ? skipped : skipped.slice(0, HELD_BACK_PREVIEW);
+  const hidden = skipped.length - shown.length;
 
   async function remind(taIds: string[] | null, key: string) {
     setBusy(key);
@@ -205,8 +219,14 @@ function HeldBackPanel({
           ยังไม่พร้อมออกคำสั่ง {skipped.length} วิชา
         </span>
       }
-      description="วิชาเหล่านี้จะไม่อยู่ในคำสั่งรอบนี้ เมื่อเรียบร้อยแล้วให้กลับมาออกคำสั่งรอบถัดไป (จะนับเป็นรอบล่าช้า) กดเตือนเพื่อส่งอีเมลและแจ้งเตือนในระบบให้ผู้ช่วยสอนบันทึกตารางเรียน"
+      description={
+        waiting.size > 0
+          ? `รอผู้ช่วยสอน ${waiting.size} คนบันทึกตารางเรียน วิชาเหล่านี้จะไปอยู่ในคำสั่งรอบถัดไป (รอบล่าช้า)`
+          : "วิชาเหล่านี้จะไปอยู่ในคำสั่งรอบถัดไป (รอบล่าช้า)"
+      }
+      info="กดเตือนเพื่อส่งอีเมลและแจ้งเตือนในระบบให้ผู้ช่วยสอนบันทึกตารางเรียน เตือนคนเดิมซ้ำได้เมื่อครบ 24 ชั่วโมง ผู้ช่วยสอนที่มีเครื่องหมายถูกคือเพิ่งได้รับการเตือนไปแล้ว"
       className="border-amber-200 bg-amber-50/40"
+      padded={false}
       actions={
         waiting.size > 0 && (
           <Button
@@ -222,44 +242,72 @@ function HeldBackPanel({
       }
     >
       <ul className="divide-y divide-amber-200/60">
-        {skipped.map(s => (
-          <li key={s.course_code} className="py-2.5 text-sm first:pt-0 last:pb-0">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="font-semibold text-ink-1">{s.course_code}</span>
-              <span className="text-ink-3">{s.course_name_th}</span>
-              <span className="ms-auto text-xs text-amber-800">{s.reason}</span>
-            </div>
-            {!!s.waiting?.length && (
-              <div className="mt-1.5 flex flex-wrap justify-end gap-2">
-                {s.waiting.map(w => {
-                  const recent = remindedRecently(w.reminded_at);
-                  return (
-                    <span
-                      key={w.ta_id}
-                      className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-surface py-0.5 ps-3 pe-1 text-xs"
-                    >
-                      <span className="font-medium text-ink-1">{w.name}</span>
-                      {w.reminded_at && (
-                        <span className="text-ink-4">เตือนล่าสุด {shortThaiDateTime(w.reminded_at)}</span>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => remind([w.ta_id], w.ta_id)}
-                        disabled={busy !== null || recent}
-                        isPending={busy === w.ta_id}
-                        aria-label={`เตือน ${w.name} ให้บันทึกตารางเรียน`}
-                      >
-                        <BellRing size={12} /> {recent ? "เตือนแล้ว" : "เตือน"}
-                      </Button>
-                    </span>
-                  );
-                })}
+        {shown.map(s => {
+          const list = s.waiting ?? [];
+          const due = list.filter(w => !remindedRecently(w.reminded_at));
+          const last = list.map(w => w.reminded_at).filter(Boolean).sort().pop();
+          return (
+            <li
+              key={s.course_code}
+              className="grid gap-x-4 gap-y-1 px-5 py-2.5 text-sm sm:grid-cols-[minmax(0,19rem)_minmax(0,1fr)_auto] sm:items-center"
+            >
+              <div className="min-w-0">
+                <div className="truncate font-semibold text-ink-1">{s.course_code}</div>
+                <TipWrap content={s.course_name_th} className="block min-w-0">
+                  <div className="truncate text-xs text-ink-3">{s.course_name_th}</div>
+                </TipWrap>
               </div>
-            )}
-          </li>
-        ))}
+              <div className="min-w-0 text-xs leading-relaxed text-ink-2">
+                {list.length === 0 ? (
+                  <span className="text-amber-800">{s.reason}</span>
+                ) : (
+                  // Each name stays on one line; the comma after it, outside
+                  // the no-wrap span, is where a long list breaks.
+                  list.map((w, i) => (
+                    <Fragment key={w.ta_id}>
+                      <span className="whitespace-nowrap">
+                        {remindedRecently(w.reminded_at) && (
+                          <Check size={12} className="me-0.5 inline align-[-1px] text-emerald-600" aria-label="เตือนแล้ว" />
+                        )}
+                        {w.name}
+                      </span>
+                      {i < list.length - 1 && <span className="text-ink-4">, </span>}
+                    </Fragment>
+                  ))
+                )}
+              </div>
+              {list.length > 0 && (
+                <div className="flex items-center justify-end gap-2">
+                  {last && (
+                    <span className="hidden text-[11px] text-ink-4 md:inline">
+                      เตือนล่าสุด {shortThaiDateTime(last)}
+                    </span>
+                  )}
+                  <Tip content={due.length === 0 ? "เตือนทุกคนในวิชานี้ไปแล้วภายใน 24 ชั่วโมง" : undefined}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => remind(due.map(w => w.ta_id), s.course_code)}
+                      disabled={busy !== null || due.length === 0}
+                      isPending={busy === s.course_code}
+                      aria-label={`เตือนผู้ช่วยสอนวิชา ${s.course_code} ให้บันทึกตารางเรียน`}
+                    >
+                      <BellRing size={12} /> {due.length === 0 ? "เตือนแล้ว" : `เตือน ${due.length} คน`}
+                    </Button>
+                  </Tip>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
+      {skipped.length > HELD_BACK_PREVIEW && (
+        <div className="border-t border-amber-200/60 px-5 py-2 text-center">
+          <Button variant="ghost" size="sm" onClick={() => setShowAll(v => !v)}>
+            {showAll ? "ย่อรายการ" : `แสดงอีก ${hidden} วิชา`}
+          </Button>
+        </div>
+      )}
     </Panel>
   );
 }
@@ -279,6 +327,9 @@ function AppointmentSection({ termId }: { termId: string }) {
   const [effectiveDate, setEffectiveDate] = useState(""); // ISO YYYY-MM-DD
   const [signerId, setSignerId] = useState("");
   const [busy, setBusy] = useState(false);
+  // Generating writes the round to the ledger for good and e-mails every
+  // requesting lecturer, so it asks once with the order number and head count.
+  const [confirmGenerate, setConfirmGenerate] = useState(false);
   const [reprinting, setReprinting] = useState<string | null>(null);
 
   // Only seats the order accepts: listing a head of department here let staff
@@ -360,7 +411,7 @@ function AppointmentSection({ termId }: { termId: string }) {
       a.download = `appointment-order-${orderNoNum.trim()}-${orderNoYear.trim()}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-      notify.success("สร้างไฟล์คำสั่งแล้ว");
+      notify.success("สร้างไฟล์คำสั่งแล้ว กำลังส่งอีเมลแจ้งอาจารย์ผู้ขอ");
       // The round is now on the ledger — refresh so the next preview shows the
       // reduced membership rather than offering the same names again.
       if (previewKey) void mutate(previewKey);
@@ -369,6 +420,7 @@ function AppointmentSection({ termId }: { termId: string }) {
       notify.error(errMessage(e));
     } finally {
       setBusy(false);
+      setConfirmGenerate(false);
     }
   }
 
@@ -573,12 +625,22 @@ function AppointmentSection({ termId }: { termId: string }) {
                 ? "ไม่มีรายชื่อค้าง จึงยังไม่ต้องออกคำสั่งรอบใหม่"
                 : missing.length > 0
                   ? `กรอกให้ครบก่อน: ${missing.join(" · ")}`
-                  : `จะได้ไฟล์ Word 1 ไฟล์ สำหรับ TA ${pending} คน`}
+                  : `จะได้ไฟล์ Word 1 ไฟล์ สำหรับ TA ${pending} คน และระบบจะอีเมลแจ้งอาจารย์ผู้ขอพร้อมแนบไฟล์คำสั่ง`}
             </span>
-            <Button variant="primary" onClick={generate} disabled={!canGenerate}>
+            <Button variant="primary" onClick={() => setConfirmGenerate(true)} disabled={!canGenerate}>
               <FileSignature size={14} /> {busy ? "กำลังสร้าง…" : "สร้างไฟล์คำสั่ง (.docx)"}
             </Button>
           </div>
+          <ConfirmDialog
+            open={confirmGenerate}
+            onClose={() => setConfirmGenerate(false)}
+            onConfirm={generate}
+            isPending={busy}
+            icon={<FileSignature size={18} />}
+            title={`ออกคำสั่งที่ ${orderNo}?`}
+            message={`ระบบจะบันทึกคำสั่งรอบนี้สำหรับ TA ${pending} คนไว้ถาวร รายชื่อเหล่านี้จะไม่อยู่ในรายการค้างอีก และจะส่งอีเมลแจ้งอาจารย์ผู้ขอพร้อมแนบไฟล์ทันที ตรวจเลขที่คำสั่ง วันที่ และผู้ลงนามให้ถูกต้องก่อนยืนยัน`}
+            confirmLabel="สร้างไฟล์และส่งอีเมล"
+          />
         </Panel>
 
         <Panel

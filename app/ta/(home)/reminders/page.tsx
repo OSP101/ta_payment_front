@@ -175,7 +175,7 @@ export default function TAReminderPage() {
                                   type="button"
                                   aria-label={isOpen ? "ซ่อนขั้นตอน" : "ดูขั้นตอน"}
                                   onClick={() => setExpanded(x => ({ ...x, [key]: !x[key] }))}
-                                  className="p-1 text-ink-2 hover:text-ink-1"
+                                  className="tap-target p-1 text-ink-2 hover:text-ink-1"
                                 >
                                   {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                                 </button>

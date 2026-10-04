@@ -652,7 +652,7 @@ function SectionSchedulesPanel({
           const isOpen = openSec === sec;
           return (
             <div key={sec} className="p-2">
-              <div className="w-full flex items-center gap-2">
+              <div className="w-full flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <button
                   type="button"
                   onClick={() => setOpenSec(isOpen ? null : sec)}
