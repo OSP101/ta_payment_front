@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { CalendarClock, FileCheck2 } from "lucide-react";
 import { thaiDate } from "../lib/dates";
 
@@ -33,9 +36,66 @@ export function hasLoginNotices(n?: LoginNotices | null): n is LoginNotices {
   return !!n && (!!n.request_window || !!n.documents?.length);
 }
 
-function daysText(d: number): string {
-  if (d <= 0) return "วันนี้เป็นวันสุดท้าย";
-  return `เหลือ ${d} วัน`;
+/** "2026-11-02T23:59:00+07:00" → "23:59": the backend already speaks Bangkok time. */
+function clockTime(iso: string): string {
+  return iso.slice(11, 16);
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * Remaining time to the closing instant, ticking every second. Before mount it
+ * is null so the server HTML and the first client render agree; the segments
+ * keep their width (tabular numerals) so nothing shifts when it starts.
+ */
+function useRemaining(closesAt: string): number | null {
+  const [ms, setMs] = useState<number | null>(null);
+  useEffect(() => {
+    const end = new Date(closesAt).getTime();
+    const tick = () => setMs(Math.max(0, end - Date.now()));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [closesAt]);
+  return ms;
+}
+
+function Countdown({ closesAt, urgentClass, quiet }: {
+  closesAt: string;
+  urgentClass: string;
+  quiet: string;
+}) {
+  const ms = useRemaining(closesAt);
+  if (ms !== null && ms <= 0) {
+    return <p className="mt-1 text-lg font-semibold leading-snug">ถึงเวลาปิดรับแล้ว</p>;
+  }
+  const total = ms === null ? null : Math.floor(ms / 1000);
+  const days = total === null ? null : Math.floor(total / 86400);
+  const parts: [string, string][] = [
+    [days === null ? "--" : String(days), "วัน"],
+    [total === null ? "--" : pad(Math.floor((total % 86400) / 3600)), "ชม."],
+    [total === null ? "--" : pad(Math.floor((total % 3600) / 60)), "นาที"],
+    [total === null ? "--" : pad(total % 60), "วินาที"],
+  ];
+  const urgent = ms !== null && ms < URGENT_DAYS * 86400_000;
+  return (
+    <div
+      role="timer"
+      aria-live="off"
+      aria-label={days === null ? undefined : `เหลือเวลาอีก ${days} วัน ${parts[1][0]} ชั่วโมง`}
+      className={`mt-1.5 flex items-start gap-3 ${urgent ? urgentClass : ""}`}
+    >
+      {parts.map(([v, unit], i) => (
+        <div key={unit} className="flex items-start gap-3">
+          <div className="flex flex-col items-start min-w-[2ch]">
+            <span className="text-2xl font-semibold leading-none tabular-nums">{v}</span>
+            <span className={`mt-1 text-[11px] leading-none ${urgent ? "" : quiet}`}>{unit}</span>
+          </div>
+          {i < parts.length - 1 && <span aria-hidden className={`text-xl leading-none ${urgent ? "" : quiet}`}>:</span>}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -64,10 +124,14 @@ export default function LoginNoticeCards({ notices, tone }: { notices: LoginNoti
               <CalendarClock className="size-3.5 shrink-0" aria-hidden />
               <span>เปิดรับคำขอ TA ภาค {w.term_label}</span>
             </div>
-            <p className={`mt-1 text-lg font-semibold leading-snug tabular-nums ${urgent ? (dark ? "text-amber-300" : "text-warning") : ""}`}>
-              {daysText(w.days_left)}
+            <Countdown
+              closesAt={w.closes_at}
+              urgentClass={dark ? "text-amber-300" : "text-warning"}
+              quiet={quiet}
+            />
+            <p className={`mt-2 text-sm tabular-nums ${quiet}`}>
+              ปิดรับ {thaiDate(w.closes_at)} เวลา {clockTime(w.closes_at)} น.
             </p>
-            <p className={`text-sm tabular-nums ${quiet}`}>ปิดรับ {thaiDate(w.closes_at)}</p>
             <div
               role="img"
               aria-label={`ผ่านไป ${w.elapsed_pct}% ของช่วงรับคำขอ`}

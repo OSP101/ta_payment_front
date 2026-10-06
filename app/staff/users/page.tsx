@@ -136,6 +136,18 @@ function vPhone(v: string, foreign = false): string | null {
   if (!/^0\d{9}$/.test(s)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก (ขึ้นต้นด้วย 0)";
   return null;
 }
+/** 0812345678 → 081-234-5678; 9-digit landline 043123456 → 04-312-3456.
+ *  Anything else (a foreign number with its country code) is shown as +digits. */
+function formatPhone(v: string): string {
+  const d = v.replace(/\D/g, "");
+  if (/^0\d{9}$/.test(d)) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  if (/^0\d{8}$/.test(d)) return `${d.slice(0, 2)}-${d.slice(2, 5)}-${d.slice(5)}`;
+  return d.length > 10 ? `+${d}` : d;
+}
+function telHref(v: string): string {
+  const d = v.replace(/\D/g, "");
+  return d.startsWith("0") ? d : `+${d}`;
+}
 /** เก็บเฉพาะตัวเลข ตัดให้เหลือไม่เกิน 10 หลัก (15 สำหรับเบอร์ต่างประเทศ) — ใช้กับช่องเบอร์โทร */
 function onlyPhoneDigits(v: string, foreign = false): string {
   return v.replace(/\D/g, "").slice(0, foreign ? 15 : 10);
@@ -347,6 +359,16 @@ export default function UsersPage() {
       className: "text-(--ink-3) whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
       render: u => u.email,
+    },
+    {
+      // ติดต่อ TA กรณีเหตุฉุกเฉิน — TA กรอกเองในแบบฟอร์มข้อมูลส่วนตัว
+      // (UpsertProfile writes users.phone), staff may also set it here.
+      id: "phone", width: 140, minWidth: 110, label: "เบอร์โทรศัพท์",
+      className: "text-(--ink-3) whitespace-nowrap tabular-nums",
+      headerClassName: "whitespace-nowrap",
+      render: u => u.phone
+        ? <a href={`tel:${telHref(u.phone)}`} className="hover:underline underline-offset-2">{formatPhone(u.phone)}</a>
+        : "-",
     },
     {
       id: "roles", width: 170, minWidth: 110, label: "บทบาท",
