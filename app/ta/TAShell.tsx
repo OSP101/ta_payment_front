@@ -66,16 +66,21 @@ export default function TAShell({
   // longer drift apart (they did: the card counted a sent-back file as done).
   const { loading, docState, docLabel, scheduleDone, scheduleLabel } = useTAOnboarding();
 
+  // Every state gets a mark (06/10/2026): ยังไม่ส่ง/ถูกตีกลับ ⚠, รออนุมัติ 🕒,
+  // อนุมัติแล้ว ✓ — a finished item used to show nothing, which read the same
+  // as "not loaded yet".
   const docsStatus: NavStatus | undefined =
     docState === "rejected" || docState === "not_sent" ? "warn"
       : docState === "pending_review" ? "pending"
-        : undefined;
+        : docState === "approved" ? "done"
+          : undefined;
 
   const nav = buildNav(
-    docsStatus, docLabel,
-    // No warn mark while the hook is still loading — it would flash on every
-    // page load and then vanish for a TA who has a schedule.
-    loading || scheduleDone ? undefined : "warn", scheduleLabel,
+    docsStatus, docState === "approved" ? "เอกสารอนุมัติแล้ว" : docLabel,
+    // No mark at all while the hook is still loading — it would flash on
+    // every page load and then change.
+    loading ? undefined : scheduleDone ? "done" : "warn",
+    scheduleDone ? "ทำตารางเรียนของภาคเรียนนี้แล้ว" : scheduleLabel,
   );
 
   return (

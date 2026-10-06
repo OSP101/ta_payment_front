@@ -28,6 +28,8 @@ import {
 import { RequestsTable, type TARequestRow } from "../../../RequestsTable";
 import { TaPlanner, planHandoffKey, type PlanItem, type DraftEstimate } from "../../../../components/TaPlanner";
 import { Skel, SkelValue } from "../../../../components/Skeletons";
+import NationalityPicker from "../../../../components/NationalityPicker";
+import { isForeign, type Nationality } from "../../../../lib/nationality";
 
 /**
  * On a short screen the planner card fills the viewport and the numbered
@@ -2293,9 +2295,12 @@ function CreateTaPanel({
   onClose: () => void;
   onCreated: (ta: TA) => void;
 }) {
-  const [form, setForm] = useState({
-    email: "", title: "นาย", first_name: "", last_name: "", study_level: "undergrad",
+  const [form, setForm] = useState<{
+    email: string; title: string; first_name: string; last_name: string; study_level: string; nationality: Nationality;
+  }>({
+    email: "", title: "นาย", first_name: "", last_name: "", study_level: "undergrad", nationality: "thai",
   });
+  const foreign = isForeign(form.nationality);
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -2325,6 +2330,7 @@ function CreateTaPanel({
         last_name: form.last_name.trim(),
         roles: ["ta"],
         study_level: form.study_level,
+        nationality: form.nationality,
       });
       setCreated(res);
     } catch (e) {
@@ -2375,6 +2381,12 @@ function CreateTaPanel({
             value={form.email} onChange={v => setForm({ ...form, email: v })}
             error={errors.email} show={showErrors}
           />
+          <NationalityPicker value={form.nationality} onChange={v => setForm({ ...form, nationality: v })} />
+          {foreign && (
+            <p className="text-xs text-ink-3 -mt-1">
+              กรอกชื่อ-นามสกุลเป็นภาษาอังกฤษตาม Passport ส่วนคำนำหน้ายังใช้ นาย/นาง/นางสาว ตามแบบฟอร์มเจ้าหนี้
+            </p>
+          )}
           {/* Title stays on its own line on a phone — sharing one with two
               name fields left each name about 90px wide. */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_1fr_1fr]">
@@ -2383,11 +2395,13 @@ function CreateTaPanel({
                 {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
               </Select>
             </FieldGroup>
-            <VField label="ชื่อ" required
+            <VField label={foreign ? "ชื่อ (ภาษาอังกฤษ)" : "ชื่อ"} required
+              placeholder={foreign ? "John" : undefined}
               value={form.first_name} onChange={v => setForm({ ...form, first_name: v })}
               error={errors.first_name} show={showErrors}
             />
-            <VField label="นามสกุล" required
+            <VField label={foreign ? "นามสกุล (ภาษาอังกฤษ)" : "นามสกุล"} required
+              placeholder={foreign ? "Smith" : undefined}
               value={form.last_name} onChange={v => setForm({ ...form, last_name: v })}
               error={errors.last_name} show={showErrors}
             />

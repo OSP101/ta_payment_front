@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { Accordion } from "@heroui/react";
 import {
-  AlertTriangle, Save, Upload, Download, CheckCircle2, Circle, XCircle,
+  AlertTriangle, Save, Upload, Download, CheckCircle2, Circle, XCircle, Clock3,
   IdCard, Wallet, FileSignature, CreditCard, BookOpen, FileText, Eye, EyeOff,
 } from "lucide-react";
 import { api, apiUrl, type Me, type UploadProgress } from "../../../lib/api";
@@ -12,10 +12,12 @@ import {
   THAI_BANKS, findBank, normalizeAccountNo, normalizeNationalID, STUDENT_ID_PATTERN,
 } from "../../../lib/banks";
 import { THAI_PREFIXES, isThaiPrefix } from "../../../lib/prefixes";
+import { isForeign, passportNumber, passportError } from "../../../lib/nationality";
 import Signature from "../../../components/Signature";
 import PdfFrame from "../../../components/PdfFrame";
 import UploadProgressModal from "../../../components/UploadProgressModal";
 import PdpaConsentModal from "../../../components/PdpaConsentModal";
+import { ThaiAddressPicker } from "../../../components/ThaiAddressPicker";
 import {
   PageHeader, Panel, Button, TextInput, FieldGroup, StatusChip, Alert, Chip,
   SelectField, Tip,
@@ -170,8 +172,15 @@ interface Profile {
   phone: string;
   national_id: string; bank_name: string; bank_branch: string; branch_code: string;
   account_no: string; account_name: string;
+  /** For the finance office's Suppliers sheet only (not the PDF): the typed
+   *  part (บ้านเลขที่ หมู่ ถนน) plus the picked ตำบล code. */
+  address_line: string; sub_district_id: number; postal_code: string;
   signature_svg: string; signature_png_b64: string;
   status: string; reject_reason?: string;
+  /** "thai" | "foreign", set by staff on the account (output only). A foreign
+   *  TA gives the tax ID instead of the citizen ID and attaches the tax-ID
+   *  card and the passport instead of the citizen-ID card. */
+  nationality?: string;
 }
 interface Doc {
   id: string; kind: string; filename: string; status: string; reject_reason?: string;
@@ -181,43 +190,59 @@ interface Doc {
 const emptyProfile: Profile = {
   student_id: "", prefix: "", phone: "",
   national_id: "", bank_name: "", bank_branch: "", branch_code: "",
-  account_no: "", account_name: "",
+  account_no: "", account_name: "", address_line: "", sub_district_id: 0, postal_code: "",
   signature_svg: "", signature_png_b64: "", status: "pending",
 };
 
 // PDPA: none of these come back from the server on reload — bank details and
 // the signature are never persisted at all (migration 0047 dropped those
 // columns; they live in this form only, long enough to be printed into the
-// creditor-form PDF). The national ID IS persisted now (migration 0076,
-// encrypted — see internal/service/citizen_id.go) but GetProfile still never
-// selects it back out (see that handler's own comment), so it's session-only
-// here too. Anything that re-syncs from the server must therefore preserve
+// creditor-form PDF). The national ID (migration 0076) and the bank account +
+// address (migration 0152) ARE persisted now, encrypted (citizen_id.go,
+// payee.go), but GetProfile never selects them back out, so they're
+// session-only here too. Anything that re-syncs from the server must therefore preserve
 // the local value instead of adopting the blank one — see the merge in
 // ProfilePage.
 const SESSION_ONLY_FIELDS = [
   "national_id", "bank_name", "bank_branch", "branch_code",
-  "account_no", "account_name", "signature_svg", "signature_png_b64",
+  "account_no", "account_name", "address_line", "sub_district_id", "postal_code", "signature_svg", "signature_png_b64",
 ] as const satisfies readonly (keyof Profile)[];
 
-type DocKind = "creditor_form" | "national_id" | "bank_book";
+type DocKind = "creditor_form" | "national_id" | "passport" | "bank_book";
 
-const STEP_META: Array<{
+type StepMeta = {
   id: string;
   n: number;
   title: string;
   subtitle: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-}> = [
-  { id: "profile",       n: 1, title: "ข้อมูลส่วนตัว + บัญชี + ลายเซ็น", subtitle: "รหัสนักศึกษา, เลขบัตรประชาชน, บัญชีรับเงิน, ลายเซ็น",         icon: IdCard },
-  { id: "creditor_form", n: 2, title: "แบบแจ้งเจ้าหนี้ (PDF)",           subtitle: "ตรวจฟอร์มที่ระบบกรอกจากข้อมูลขั้นตอนที่ 1 แล้วยืนยัน",       icon: FileSignature },
-  { id: "national_id",   n: 3, title: "สำเนาบัตรประชาชน",                subtitle: "รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อบนสำเนา ก่อนอัปโหลด",          icon: CreditCard },
-  { id: "bank_book",     n: 4, title: "หน้าสมุดบัญชี",                    subtitle: "หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลขบัตร ปชช.", icon: BookOpen },
+};
+
+// Every step either nationality can have, in page order. `n` is assigned by
+// stepsFor once the list is filtered.
+const ALL_STEPS: Array<Omit<StepMeta, "n"> & { only?: "thai" | "foreign" }> = [
+  { id: "profile",       title: "ข้อมูลส่วนตัว + บัญชี + ลายเซ็น", subtitle: "รหัสนักศึกษา, เลขบัตรประชาชน, บัญชีรับเงิน, ลายเซ็น",         icon: IdCard, only: "thai" },
+  { id: "profile",       title: "ข้อมูลส่วนตัว + บัญชี + ลายเซ็น", subtitle: "รหัสนักศึกษา, เลข Passport, บัญชีรับเงิน, ลายเซ็น",           icon: IdCard, only: "foreign" },
+  { id: "creditor_form", title: "แบบแจ้งเจ้าหนี้ (PDF)",           subtitle: "ตรวจฟอร์มที่ระบบกรอกจากข้อมูลขั้นตอนที่ 1 แล้วยืนยัน",       icon: FileSignature },
+  { id: "national_id",   title: "สำเนาบัตรประชาชน",                subtitle: "รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อบนสำเนา ก่อนอัปโหลด",          icon: CreditCard, only: "thai" },
+  // ชาวต่างชาติ: สำเนา Passport แทนสำเนาบัตรประชาชน (เจ้าหน้าที่, 06/10/2026)
+  { id: "passport",      title: "สำเนา Passport",                  subtitle: "หน้าที่มีรูปถ่ายและข้อมูลส่วนตัว รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อ", icon: IdCard, only: "foreign" },
+  { id: "bank_book",     title: "หน้าสมุดบัญชี",                    subtitle: "หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลขบัตร ปชช.", icon: BookOpen, only: "thai" },
+  { id: "bank_book",     title: "หน้าสมุดบัญชี",                    subtitle: "หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลข Passport", icon: BookOpen, only: "foreign" },
 ];
 
+/** The steps this TA works through, numbered. Mirrors ta_required_doc_kinds. */
+function stepsFor(nationality: string | undefined): StepMeta[] {
+  const mine = isForeign(nationality) ? "foreign" : "thai";
+  return ALL_STEPS
+    .filter(s => !s.only || s.only === mine)
+    .map((s, i) => ({ id: s.id, title: s.title, subtitle: s.subtitle, icon: s.icon, n: i + 1 }));
+}
+
 // Step titles by doc kind, for messages that name a specific document. Derived
-// from STEP_META so a rename cannot leave the two spellings disagreeing.
+// from ALL_STEPS so a rename cannot leave the two spellings disagreeing.
 const DOC_LABEL: Record<string, string> = Object.fromEntries(
-  STEP_META.map(s => [s.id, s.title]),
+  ALL_STEPS.map(s => [s.id, s.title]),
 );
 
 // A step is "done" enough to unlock the next when the user has taken the
@@ -250,6 +275,7 @@ function isValidThaiID(id: string): boolean {
 // Kept as a single function so the Save button and the "step done" indicator
 // use identical rules — otherwise we'd have UX drift between the two.
 function validateProfile(p: Profile): string | null {
+  const foreign = isForeign(p.nationality);
   const sid = (p.student_id ?? "").trim();
   if (!STUDENT_ID_PATTERN.test(sid)) {
     return "รหัสนักศึกษาต้องอยู่ในรูป XXXXXXXXX-X (11 อักษรรวมขีด)";
@@ -258,17 +284,35 @@ function validateProfile(p: Profile): string | null {
     return "โปรดเลือกคำนำหน้าชื่อ (นาย / นาง / นางสาว)";
   }
   const phone = (p.phone ?? "").replace(/[^0-9]/g, "");
-  if (phone.length !== 9 && phone.length !== 10) {
-    return "เบอร์โทรศัพท์ต้องมี 9-10 หลัก";
+  if (foreign ? phone.length < 9 || phone.length > 15 : phone.length !== 9 && phone.length !== 10) {
+    return foreign ? "เบอร์โทรศัพท์ต้องมี 9-15 หลัก" : "เบอร์โทรศัพท์ต้องมี 9-10 หลัก";
+  }
+  if (foreign) {
+    const ppErr = passportError(p.national_id);
+    if (ppErr) return ppErr;
   }
   const nid = normalizeNationalID(p.national_id);
-  if (nid.length !== 13) {
+  if (!foreign && nid.length !== 13) {
     return "เลขบัตรประชาชนต้องมี 13 หลัก";
   }
   // The backend refuses a check-digit mismatch (validateProfileInput), so the
   // form must too — a soft warning here promised a save the server rejects.
-  if (!isValidThaiID(nid)) {
+  // A foreign TA gives a passport number instead (validateIDNumber).
+  if (!foreign && !isValidThaiID(nid)) {
     return "เลขบัตรประชาชนไม่ถูกต้อง (หลักตรวจสอบไม่ตรง) กรุณาตรวจสอบอีกครั้ง";
+  }
+  const line = (p.address_line ?? "").trim();
+  if (!line) {
+    return "โปรดกรอกบ้านเลขที่";
+  }
+  if (line.length > 200) {
+    return "บ้านเลขที่ หมู่ ถนน ยาวเกิน 200 ตัวอักษร";
+  }
+  if (!p.sub_district_id) {
+    return "โปรดเลือกจังหวัด อำเภอ และตำบล";
+  }
+  if ((p.postal_code ?? "").replace(/[^0-9]/g, "").length !== 5) {
+    return "รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก";
   }
   const bank = findBank(p.bank_name);
   if (!bank) {
@@ -377,7 +421,8 @@ export default function ProfilePage() {
     if (!data) return;
     setForm(prev => {
       const next = { ...prev, ...data };
-      for (const k of SESSION_ONLY_FIELDS) next[k] = prev[k] || data[k] || "";
+      const blank = next as unknown as Record<string, string | number>;
+      for (const k of SESSION_ONLY_FIELDS) blank[k] = prev[k] || data[k] || (k === "sub_district_id" ? 0 : "");
       return next;
     });
   }, [data]);
@@ -402,6 +447,10 @@ export default function ProfilePage() {
   // it bumps the submission round for no reason.
   const profileNeedsFix = data?.status === "rejected";
 
+  // Steps follow nationality: a foreign TA sends the tax-ID card and passport
+  // in place of the citizen-ID card (ta_required_doc_kinds on the server).
+  const STEP_META = useMemo(() => stepsFor(data?.nationality), [data?.nationality]);
+
   // What the TA actually has to fix, read off the documents themselves. The
   // profile's own reject_reason is not reliable for this: it is only rewritten by
   // RejectBatch, so a document rejected on its own afterwards never appears in it
@@ -409,23 +458,20 @@ export default function ProfilePage() {
   const rejectedDocs = useMemo(
     // /me/documents only returns current rows (superseded_at IS NULL), so a
     // replaced file cannot linger here as a stale complaint.
-    () => (docs ?? []).filter(d => d.status === "rejected" || d.status === "needs_fix"),
-    [docs],
+    () => (docs ?? []).filter(d =>
+      (d.status === "rejected" || d.status === "needs_fix") && STEP_META.some(s => s.id === d.kind)),
+    [docs, STEP_META],
   );
 
-  const doneMap = useMemo(() => ({
-    profile:       isProfileStepDone(data ?? undefined) && !profileNeedsFix,
-    creditor_form: isDocDone(findDoc(docs, "creditor_form")),
-    national_id:   isDocDone(findDoc(docs, "national_id")),
-    bank_book:     isDocDone(findDoc(docs, "bank_book")),
-  }), [data, docs, profileNeedsFix]);
+  const doneMap = useMemo(() => Object.fromEntries(STEP_META.map(s => [s.id,
+    s.id === "profile"
+      ? isProfileStepDone(data ?? undefined) && !profileNeedsFix
+      : isDocDone(findDoc(docs, s.id as DocKind)),
+  ])) as Record<string, boolean>, [STEP_META, data, docs, profileNeedsFix]);
 
-  const needsFixMap = useMemo(() => ({
-    profile:       profileNeedsFix,
-    creditor_form: isDocNeedsFix(findDoc(docs, "creditor_form")),
-    national_id:   isDocNeedsFix(findDoc(docs, "national_id")),
-    bank_book:     isDocNeedsFix(findDoc(docs, "bank_book")),
-  }), [docs, profileNeedsFix]);
+  const needsFixMap = useMemo(() => Object.fromEntries(STEP_META.map(s => [s.id,
+    s.id === "profile" ? profileNeedsFix : isDocNeedsFix(findDoc(docs, s.id as DocKind)),
+  ])) as Record<string, boolean>, [STEP_META, docs, profileNeedsFix]);
 
   // Open the step the TA actually has to act on. "profile" is the right default
   // for a first visit, but for someone sent back on their ID copy it opened the
@@ -440,7 +486,7 @@ export default function ProfilePage() {
       STEP_META.find(s => needsFixMap[s.id as keyof typeof needsFixMap]) ??
       STEP_META.find(s => !doneMap[s.id as keyof typeof doneMap]);
     if (first) setExpanded(new Set([first.id]));
-  }, [data, docs, doneMap, needsFixMap]);
+  }, [STEP_META, data, docs, doneMap, needsFixMap]);
 
   // Profile and documents are separate requests; until both answer, the step
   // ticks and the n/total count would claim "nothing done" and then jump.
@@ -455,7 +501,7 @@ export default function ProfilePage() {
       <PageHeader
         title="เอกสารสำหรับการเบิกจ่าย"
         description="กรอกข้อมูลบัญชี ลายเซ็น และอัปโหลดเอกสารประกอบให้ครบตามลำดับ"
-        actions={data?.status ? <StatusChip status={data.status} /> : undefined}
+        actions={data?.status ? <ProfileStatusBadge status={data.status} /> : undefined}
       />
 
       {data?.status === "rejected" && (
@@ -663,7 +709,9 @@ function ProfileStep({
   form, setForm, saved, onSaved, pdpaConsented, onPdpaAccepted,
 }: {
   form: Profile;
-  setForm: (p: Profile) => void;
+  // The functional form too: the address picker sets the ตำบล and the postal
+  // code in one event, and two plain sets would drop the first.
+  setForm: React.Dispatch<React.SetStateAction<Profile>>;
   saved: string | boolean | undefined;
   onSaved: () => void;
   /** From Me.pdpa_consented_at — undefined while /me is still loading. */
@@ -678,6 +726,8 @@ function ProfileStep({
   const nidDigits  = useMemo(() => normalizeNationalID(form.national_id), [form.national_id]);
   const phoneDigits = useMemo(() => (form.phone ?? "").replace(/[^0-9]/g, ""), [form.phone]);
   const formErr    = useMemo(() => validateProfile(form), [form]);
+  const foreign = isForeign(form.nationality);
+  const phoneMax = foreign ? 15 : 10;
 
   // Field-level errors only surface after the user has interacted with that
   // field — new-form users shouldn't see red before they've typed anything.
@@ -686,13 +736,16 @@ function ProfileStep({
       ? "รูปแบบต้องเป็น XXXXXXXXX-X (11 อักษรรวมขีด)"
       : undefined;
   const phoneErr =
-    touched.phone && phoneDigits.length > 0 && phoneDigits.length !== 9 && phoneDigits.length !== 10
-      ? `กรอก ${phoneDigits.length} หลัก (ต้องมี 9-10 หลัก)`
+    touched.phone && phoneDigits.length > 0 && (foreign
+      ? phoneDigits.length < 9 || phoneDigits.length > 15
+      : phoneDigits.length !== 9 && phoneDigits.length !== 10)
+      ? `กรอก ${phoneDigits.length} หลัก (ต้องมี ${foreign ? "9-15" : "9-10"} หลัก)`
       : undefined;
   // Both are hard errors: the backend rejects a mod-11 mismatch as well as a
   // wrong length.
-  const nidErr =
-    touched.national_id && nidDigits.length > 0 && nidDigits.length !== 13
+  const nidErr = foreign
+    ? (touched.national_id && form.national_id ? passportError(form.national_id) ?? undefined : undefined)
+    : touched.national_id && nidDigits.length > 0 && nidDigits.length !== 13
       ? `กรอก ${nidDigits.length}/13 หลัก`
       : touched.national_id && nidDigits.length === 13 && !isValidThaiID(nidDigits)
         ? "หลักสุดท้าย (หลักตรวจสอบ) ไม่ตรงกับ 12 หลักแรก โปรดตรวจว่าพิมพ์ถูกทุกหลัก"
@@ -700,6 +753,13 @@ function ProfileStep({
   const branchCodeErr =
     touched.branch_code && form.branch_code.length > 0 && form.branch_code.length !== 4
       ? `กรอก ${form.branch_code.length}/4 หลัก`
+      : undefined;
+  const addressErr =
+    touched.address_line && !form.address_line.trim() ? "โปรดกรอกบ้านเลขที่" : undefined;
+  const placeErr = touched.sub_district_id && !form.sub_district_id ? "โปรดเลือกให้ครบ" : undefined;
+  const postalErr =
+    touched.postal_code && form.postal_code.length > 0 && form.postal_code.length !== 5
+      ? `กรอก ${form.postal_code.length}/5 หลัก`
       : undefined;
   const acctErr =
     touched.account_no && bank && acctDigits.length > 0 && !bank.accountLen.includes(acctDigits.length)
@@ -712,6 +772,7 @@ function ProfileStep({
       setTouched({
         student_id: true, phone: true, national_id: true, bank_name: true,
         bank_branch: true, branch_code: true, account_no: true, account_name: true,
+        address_line: true, sub_district_id: true, postal_code: true,
       });
       notify.error(formErr);
       return;
@@ -750,8 +811,11 @@ function ProfileStep({
 
   return (
     <div>
+      <p className="mb-3 text-xs text-muted">
+        ช่องที่มีเครื่องหมาย <span className="text-danger">*</span> ต้องกรอกทุกช่อง
+      </p>
       <div className="grid md:grid-cols-2 gap-3">
-        <FieldGroup label="คำนำหน้าชื่อ" hint="ระบบใช้ค่านี้วงกลมในแบบแจ้งเจ้าหนี้อัตโนมัติ">
+        <FieldGroup required label="คำนำหน้าชื่อ" hint="ระบบใช้ค่านี้วงกลมในแบบแจ้งเจ้าหนี้อัตโนมัติ">
           <SelectField
             placeholder="— เลือกคำนำหน้า —"
             value={form.prefix}
@@ -759,7 +823,7 @@ function ProfileStep({
             options={prefixOptions}
           />
         </FieldGroup>
-        <FieldGroup label="รหัสนักศึกษา" hint="รูปแบบ XXXXXXXXX-X (เช่น 653020123-4)" error={sidErr}>
+        <FieldGroup required label="รหัสนักศึกษา" hint="รูปแบบ XXXXXXXXX-X (เช่น 653020123-4)" error={sidErr}>
           <TextInput value={form.student_id}
             onChange={e => setForm({ ...form, student_id: formatStudentID(e.target.value) })}
             onBlur={() => setTouched(t => ({ ...t, student_id: true }))}
@@ -767,37 +831,85 @@ function ProfileStep({
             maxLength={11}
             placeholder="เช่น 653020123-4" />
         </FieldGroup>
-        <FieldGroup label="เบอร์โทรศัพท์" hint="9-10 หลัก (ใช้กรอกในแบบแจ้งเจ้าหนี้)" error={phoneErr}>
+        <FieldGroup required label="เบอร์โทรศัพท์"
+          hint={foreign
+            ? "9-15 หลัก ใส่รหัสประเทศได้ ไม่ต้องใส่ + (ใช้กรอกในแบบแจ้งเจ้าหนี้)"
+            : "9-10 หลัก (ใช้กรอกในแบบแจ้งเจ้าหนี้)"}
+          error={phoneErr}>
           <TextInput value={form.phone}
-            onChange={e => setForm({ ...form, phone: onlyDigits(e.target.value).slice(0, 10) })}
+            onChange={e => setForm({ ...form, phone: onlyDigits(e.target.value).slice(0, phoneMax) })}
             onBlur={() => setTouched(t => ({ ...t, phone: true }))}
             inputMode="tel"
-            maxLength={10}
+            maxLength={phoneMax}
             placeholder="เช่น 0812345678" />
         </FieldGroup>
-        <FieldGroup
-          label="เลขบัตรประชาชน (13 หลัก)"
-          hint={
-            nidDigits.length > 0 && !nidErr
-              ? `กรอกครบ ${nidDigits.length}/13`
-              : "ระบบจัดเก็บเลขบัตรนี้แบบเข้ารหัส ใช้เพื่อพิมพ์ลงแบบฟอร์มเจ้าหนี้และยืนยันตัวตนกับธนาคารเท่านั้น"
-          }
-          error={nidErr}
-        >
-          <TextInput value={form.national_id}
-            onChange={e => setForm({ ...form, national_id: formatNationalID(e.target.value) })}
-            onBlur={() => setTouched(t => ({ ...t, national_id: true }))}
-            inputMode="numeric"
-            maxLength={17}
-            placeholder="X-XXXX-XXXXX-XX-X" />
+        {foreign ? (
+          <FieldGroup required
+            label="เลข Passport"
+            hint="ตามหน้าข้อมูลใน Passport ใช้พิมพ์ลงแบบฟอร์มเจ้าหนี้และเป็นเลขพร้อมเพย์สำหรับรับเงิน ระบบจัดเก็บแบบเข้ารหัส"
+            error={nidErr}
+          >
+            <TextInput value={form.national_id}
+              onChange={e => setForm({ ...form, national_id: passportNumber(e.target.value) })}
+              onBlur={() => setTouched(t => ({ ...t, national_id: true }))}
+              autoCapitalize="characters"
+              maxLength={12}
+              placeholder="เช่น AB1234567" />
+          </FieldGroup>
+        ) : (
+          <FieldGroup required
+            label="เลขบัตรประชาชน (13 หลัก)"
+            hint={
+              nidDigits.length > 0 && !nidErr
+                ? `กรอกครบ ${nidDigits.length}/13`
+                : "ระบบจัดเก็บเลขบัตรนี้แบบเข้ารหัส ใช้เพื่อพิมพ์ลงแบบฟอร์มเจ้าหนี้และยืนยันตัวตนกับธนาคารเท่านั้น"
+            }
+            error={nidErr}
+          >
+            <TextInput value={form.national_id}
+              onChange={e => setForm({ ...form, national_id: formatNationalID(e.target.value) })}
+              onBlur={() => setTouched(t => ({ ...t, national_id: true }))}
+              inputMode="numeric"
+              maxLength={17}
+              placeholder="X-XXXX-XXXXX-XX-X" />
+          </FieldGroup>
+        )}
+        <FieldGroup required label="ที่อยู่ปัจจุบัน (บ้านเลขที่ หมู่ ซอย ถนน)"
+          hint="ใช้ลงทะเบียนผู้รับเงินกับการเงิน ระบบจัดเก็บแบบเข้ารหัส"
+          error={addressErr}>
+          <TextInput value={form.address_line}
+            onChange={e => setForm({ ...form, address_line: e.target.value.slice(0, 200) })}
+            onBlur={() => setTouched(t => ({ ...t, address_line: true }))}
+            maxLength={200}
+            placeholder="เช่น 123 ม.4 ซ.มิตรภาพ 5 ถ.มิตรภาพ" />
         </FieldGroup>
-        <FieldGroup label="ชื่อบัญชี" hint="ตัวอักษรและช่องว่างเท่านั้น (ห้ามใส่ตัวเลข)">
+        <ThaiAddressPicker
+          subDistrictId={form.sub_district_id}
+          onChange={id => {
+            // A cleared ตำบล (province/district changed) takes its postal
+            // code with it, or the old one would be sent with the new place.
+            setForm(f => ({ ...f, sub_district_id: id, ...(id ? {} : { postal_code: "" }) }));
+            // No setTouched here: "เลือกให้ครบ" mid-way through a correct
+            // pick reads as a mistake. save() marks it when it matters.
+          }}
+          onZip={zip => setForm(f => ({ ...f, postal_code: zip }))}
+          error={placeErr}
+        />
+        <FieldGroup required label="รหัสไปรษณีย์" hint="เติมให้เมื่อเลือกตำบล แก้ได้ถ้าไม่ตรง" error={postalErr}>
+          <TextInput value={form.postal_code}
+            onChange={e => setForm({ ...form, postal_code: onlyDigits(e.target.value).slice(0, 5) })}
+            onBlur={() => setTouched(t => ({ ...t, postal_code: true }))}
+            inputMode="numeric"
+            maxLength={5}
+            placeholder="เช่น 40002" />
+        </FieldGroup>
+        <FieldGroup required label="ชื่อบัญชี" hint="ตัวอักษรและช่องว่างเท่านั้น (ห้ามใส่ตัวเลข)">
           <TextInput value={form.account_name}
             onChange={e => setForm({ ...form, account_name: onlyLetters(e.target.value) })}
             onBlur={() => setTouched(t => ({ ...t, account_name: true }))}
-            placeholder="เช่น นายสมชาย ใจดี" />
+            placeholder={foreign ? "เช่น MR. JOHN SMITH (ตามหน้าสมุดบัญชี)" : "เช่น นายสมชาย ใจดี"} />
         </FieldGroup>
-        <FieldGroup
+        <FieldGroup required
           label="ธนาคาร"
           hint={bank ? `เลขที่บัญชีของ${bank.name}ต้องมี ${bank.accountLen.join(" หรือ ")} หลัก` : "เลือกจากรายการ เพื่อให้ระบบตรวจสอบความยาวเลขที่บัญชีให้อัตโนมัติ"}
         >
@@ -808,12 +920,12 @@ function ProfileStep({
             options={bankOptions}
           />
         </FieldGroup>
-        <FieldGroup label="สาขา" hint="สาขาของธนาคารที่ไปเปิดบัญชี">
+        <FieldGroup required label="สาขา" hint="สาขาของธนาคารที่ไปเปิดบัญชี">
           <TextInput value={form.bank_branch}
             onChange={e => setForm({ ...form, bank_branch: e.target.value })}
             placeholder="เช่น ขอนแก่น" />
         </FieldGroup>
-        <FieldGroup label="รหัสสาขา" hint="ตัวเลข 4 หลัก" error={branchCodeErr}>
+        <FieldGroup required label="รหัสสาขา" hint="ตัวเลข 4 หลัก" error={branchCodeErr}>
           <TextInput value={form.branch_code}
             onChange={e => setForm({ ...form, branch_code: onlyDigits(e.target.value).slice(0, 4) })}
             onBlur={() => setTouched(t => ({ ...t, branch_code: true }))}
@@ -821,7 +933,7 @@ function ProfileStep({
             maxLength={4}
             placeholder="เช่น 0555" />
         </FieldGroup>
-        <FieldGroup
+        <FieldGroup required
           label="เลขที่บัญชี"
           hint={bank
             ? (acctDigits.length && !acctErr
@@ -839,16 +951,20 @@ function ProfileStep({
         </FieldGroup>
       </div>
 
+      {/* The transfer cover's PromptPay column takes the citizen ID, or a
+          foreign TA's passport number (the office, 06/10/2026). */}
       <div className="mt-4">
         <Alert
           status="warning"
           icon={<Wallet size={16} />}
-          title="บัญชีที่แนบต้องผูกพร้อมเพย์กับเลขบัตรประชาชน 13 หลักที่กรอก"
+          title={foreign
+            ? "บัญชีที่แนบต้องผูกพร้อมเพย์กับเลข Passport ที่กรอก"
+            : "บัญชีที่แนบต้องผูกพร้อมเพย์กับเลขบัตรประชาชน 13 หลักที่กรอก"}
         />
       </div>
 
       <div className="mt-5">
-        <FieldGroup label="ลายเซ็น">
+        <FieldGroup required label="ลายเซ็น">
           <Signature
             value={form.signature_svg}
             onChange={(svg, png) => setForm({ ...form, signature_svg: svg, signature_png_b64: png })}
@@ -974,7 +1090,7 @@ function CreditorFormStep({
         icon={<AlertTriangle size={16} />}
         title={doc ? "กรอกข้อมูลขั้นตอนที่ 1 อีกครั้งเพื่อสร้างฟอร์มใหม่" : "กรอกข้อมูลในขั้นตอนที่ 1 ให้ครบก่อน"}
         description={doc
-          ? "ระบบจัดเก็บเฉพาะเลขบัตรประชาชนแบบเข้ารหัส ส่วนข้อมูลธนาคารและลายเซ็นไม่ถูกบันทึกไว้ในฐานข้อมูล (PDPA) ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง"
+          ? "ระบบจัดเก็บเฉพาะเลขบัตรประชาชน (หรือเลข Passport) แบบเข้ารหัส ส่วนข้อมูลธนาคารและลายเซ็นไม่ถูกบันทึกไว้ในฐานข้อมูล (PDPA) ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง"
           : "ระบบจะสร้างฟอร์มจากข้อมูลที่กรอก โดยข้อมูลธนาคารและลายเซ็นจะไม่ถูกบันทึกลงฐานข้อมูล"}
       />
     );
@@ -1239,5 +1355,36 @@ function SubmittedDoc({ doc }: { doc: Doc }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** The page's overall status, larger than a table StatusChip and with an icon,
+ *  so a TA can tell at a glance where their documents stand. Same tones as
+ *  StatusChip; the wording is the TA's point of view. */
+function ProfileStatusBadge({ status }: { status: string }) {
+  // A plain span, not HeroUI Chip: Chip pins its label to 12px, and the point
+  // here is to be bigger than every other chip on the page. Colours are the
+  // soft-chip pair (soft bg + *-soft-foreground) so contrast matches Chip.
+  const map: Record<string, {
+    cls: string;
+    icon: React.ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
+    label: string;
+  }> = {
+    approved:  { cls: "bg-success-soft text-[var(--success-soft-foreground)]", icon: CheckCircle2,  label: "อนุมัติแล้ว" },
+    submitted: { cls: "bg-accent-soft text-[var(--accent-soft-foreground)]",   icon: Clock3,        label: "รอเจ้าหน้าที่ตรวจ" },
+    pending:   { cls: "bg-warning-soft text-[var(--warning-soft-foreground)]", icon: Circle,        label: "ยังไม่ส่งเอกสาร" },
+    needs_fix: { cls: "bg-warning-soft text-[var(--warning-soft-foreground)]", icon: AlertTriangle, label: "ต้องแก้ไข" },
+    rejected:  { cls: "bg-danger-soft text-[var(--danger-soft-foreground)]",   icon: XCircle,       label: "ไม่ผ่าน" },
+  };
+  const m = map[status] ?? { cls: "bg-default text-foreground", icon: Circle, label: status };
+  const Icon = m.icon;
+  return (
+    <span
+      role="status"
+      className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-base font-semibold ${m.cls}`}
+    >
+      <Icon size={20} className="shrink-0" aria-hidden />
+      <span><span className="sr-only">สถานะเอกสาร: </span>{m.label}</span>
+    </span>
   );
 }

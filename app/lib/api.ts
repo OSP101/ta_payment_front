@@ -277,7 +277,9 @@ function isReauthPath(path: string): boolean {
     // Staff rebuilding a TA's creditor form re-type their own password: a typo
     // must stay in the users screen, not log them out.
     || path.endsWith("/creditor-form/regenerate")
-    || /\/transfer-cover(-bundle\.zip|\.xlsx|\/[^/?]+\/reprint)(\?|$)/.test(path);
+    || /\/transfer-cover(-bundle\.zip|\.xlsx|\/[^/?]+\/reprint)(\?|$)/.test(path)
+    // The Suppliers file (full citizen IDs and bank accounts) re-asks too.
+    || /\/ta-review\/suppliers\.xlsx(\?|$)/.test(path);
 }
 
 /** Handle auth-related statuses with a client-side redirect where appropriate. */

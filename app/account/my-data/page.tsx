@@ -160,6 +160,7 @@ function CitizenIdSection() {
 function DocumentsSection({ exp }: { exp: MyDataExport | undefined }) {
   const DOC_LABEL: Record<string, string> = {
     creditor_form: "แบบแจ้งเจ้าหนี้", national_id: "สำเนาบัตรประชาชน", bank_book: "หน้าสมุดบัญชี",
+    passport: "สำเนา Passport",
   };
   return (
     <Panel title="เอกสาร" className="mb-4">

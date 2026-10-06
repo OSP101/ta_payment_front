@@ -24,6 +24,11 @@ export function formatFullName(
   p: { title?: string | null; first_name?: string | null; last_name?: string | null } | null | undefined,
 ): string {
   if (!p) return "";
-  const given = `${(p.title ?? "").trim()}${(p.first_name ?? "").trim()}`;
+  const title = (p.title ?? "").trim();
+  const first = (p.first_name ?? "").trim();
+  // A foreign TA's name is in English (as on the passport): "นาย John Smith",
+  // not "นายJohn Smith" — same rule as pdfgen.printedName.
+  const sep = title && /^[A-Za-z]/.test(first) ? " " : "";
+  const given = `${title}${sep}${first}`;
   return [given, (p.last_name ?? "").trim()].filter(Boolean).join(" ");
 }

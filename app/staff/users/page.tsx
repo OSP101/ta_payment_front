@@ -14,6 +14,8 @@ import { api, errMessage, mfaAdminReset, type Enrollment, type Me, type Term } f
 import { STUDENT_ID_PATTERN, THAI_BANKS } from "../../lib/banks";
 import { notify } from "../../lib/notify";
 import { formatFullName } from "../../lib/prefixes";
+import { isForeign, passportError, passportNumber, type Nationality } from "../../lib/nationality";
+import NationalityPicker from "../../components/NationalityPicker";
 import {
   Alert, Button, Chip, FieldGroup, IconButton, Modal,
   PageHeader, Select, TextArea, Tip,
@@ -53,6 +55,8 @@ interface User {
    *  migration 0094) — kept in sync by EnrollmentService.RecordTransition, not
    *  editable directly here. Use the "ประวัติการศึกษา" action to change it. */
   student_id?: string | null;
+  /** "thai" | "foreign" — decides which ID and documents a TA gives (0151). */
+  nationality?: Nationality;
   roles: string[];
   /** สิทธิ์ผู้บริหาร — เห็นแดชบอร์ดสถิติงบแบบอ่านอย่างเดียว (ไม่ใช่ role) */
   is_executive?: boolean;
@@ -121,16 +125,20 @@ function vName(v: string, label: string): string | null {
   if (v.trim().length > 100) return `${label}ยาวเกินไป`;
   return null;
 }
-function vPhone(v: string): string | null {
+function vPhone(v: string, foreign = false): string | null {
   const s = v.trim();
   if (!s) return null;
+  // ชาวต่างชาติอาจมีแต่เบอร์ต่างประเทศ: รับรหัสประเทศได้ สูงสุด 15 หลัก (E.164)
+  if (foreign) {
+    return /^\d{9,15}$/.test(s) ? null : "เบอร์โทรศัพท์ต้องเป็นตัวเลข 9–15 หลัก (ใส่รหัสประเทศได้)";
+  }
   // เบอร์โทรศัพท์ไทย: ตัวเลข 10 หลัก ขึ้นต้นด้วย 0
   if (!/^0\d{9}$/.test(s)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก (ขึ้นต้นด้วย 0)";
   return null;
 }
-/** เก็บเฉพาะตัวเลข ตัดให้เหลือไม่เกิน 10 หลัก — ใช้กับช่องเบอร์โทร */
-function onlyPhoneDigits(v: string): string {
-  return v.replace(/\D/g, "").slice(0, 10);
+/** เก็บเฉพาะตัวเลข ตัดให้เหลือไม่เกิน 10 หลัก (15 สำหรับเบอร์ต่างประเทศ) — ใช้กับช่องเบอร์โทร */
+function onlyPhoneDigits(v: string, foreign = false): string {
+  return v.replace(/\D/g, "").slice(0, foreign ? 15 : 10);
 }
 function vAccountNo(v: string): string | null {
   const s = v.trim();
@@ -373,7 +381,12 @@ export default function UsersPage() {
       id: "level", width: 140, minWidth: 100, label: "ระดับ",
       className: "text-(--ink-3) whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
-      render: u => levelLabel(u),
+      render: u => (
+        <span className="inline-flex items-center gap-1.5">
+          {levelLabel(u)}
+          {u.roles.includes("ta") && isForeign(u.nationality) && <Chip tone="info">ต่างชาติ</Chip>}
+        </span>
+      ),
     },
     {
       id: "student_id", width: 140, minWidth: 110, label: "รหัสนักศึกษา",
@@ -529,10 +542,15 @@ export default function UsersPage() {
 /* -------------------------------------------------------------------------- */
 
 function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    email: string; title: string; first_name: string; last_name: string; phone: string;
+    role: string; study_level: string; nationality: Nationality;
+  }>({
     email: "", title: "นาย", first_name: "", last_name: "", phone: "",
-    role: "ta", study_level: "undergrad",
+    role: "ta", study_level: "undergrad", nationality: "thai",
   });
+  // Nationality only means something for a TA account.
+  const foreign = form.role === "ta" && isForeign(form.nationality);
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -549,7 +567,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
 
   useEffect(() => {
     if (open) {
-      setForm({ email: "", title: "นาย", first_name: "", last_name: "", phone: "", role: "ta", study_level: "undergrad" });
+      setForm({ email: "", title: "นาย", first_name: "", last_name: "", phone: "", role: "ta", study_level: "undergrad", nationality: "thai" });
       setErr(null); setTempPassword(null); setShowErrors(false);
       setPickedPhoto(null); setPhotoBlob(null); setPhotoPreview(null);
     }
@@ -608,8 +626,8 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
     last_name: vName(form.last_name, "นามสกุล"),
     role: vSelect(form.role, ROLE_OPTIONS),
     study_level: form.role === "ta" ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
-    phone: vPhone(form.phone),
-  }), [form, emailTaken, activeHolder, debouncedEmail, typedEmail]);
+    phone: vPhone(form.phone, foreign),
+  }), [form, foreign, emailTaken, activeHolder, debouncedEmail, typedEmail]);
   const hasErrors = Object.values(errors).some(Boolean);
 
   async function submit() {
@@ -625,6 +643,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
         phone: form.phone.trim() || undefined,
         roles: [form.role],
         study_level: form.role === "ta" ? form.study_level : undefined,
+        nationality: form.role === "ta" ? form.nationality : undefined,
       };
       const res = await api.post<{ user: User; temp_password: string }>("/users", body);
       refreshUsers();
@@ -719,6 +738,17 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
               description={`${closedHolders.map(u => formatFullName(u)).join(", ")} (ปิดใช้งาน) บัญชีใหม่จะแยกจากบัญชีเดิม ข้อมูลเดิมยังอยู่ครบ และจะเปิดบัญชีเดิมกลับมาไม่ได้ตราบที่บัญชีใหม่ยังเปิดใช้งาน`}
             />
           )}
+          {form.role === "ta" && (
+            <>
+              <NationalityPicker value={form.nationality} onChange={v => setForm({ ...form, nationality: v })} />
+              {foreign && (
+                <p className="text-xs text-muted -mt-1">
+                  กรอกชื่อ-นามสกุลเป็นภาษาอังกฤษตาม Passport ส่วนคำนำหน้ายังใช้ นาย/นาง/นางสาว ตามแบบฟอร์มเจ้าหนี้
+                  ผู้ช่วยสอนจะกรอกเลข Passport แทนเลขบัตรประชาชน (ใช้เป็นเลขพร้อมเพย์ในใบปะหน้าด้วย) และแนบสำเนา Passport แทนสำเนาบัตรประชาชน
+                </p>
+              )}
+            </>
+          )}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-[140px_1fr_1fr]">
             <VSelect label="คำนำหน้า" value={form.title}
               onChange={v => setForm({ ...form, title: v })}
@@ -726,17 +756,17 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
             >
               {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
             </VSelect>
-            <VField label="ชื่อ" required value={form.first_name}
+            <VField label={foreign ? "ชื่อ (ภาษาอังกฤษ)" : "ชื่อ"} required value={form.first_name}
               onChange={v => setForm({ ...form, first_name: v })}
               error={errors.first_name} show={showErrors}
             />
-            <VField label="นามสกุล" required value={form.last_name}
+            <VField label={foreign ? "นามสกุล (ภาษาอังกฤษ)" : "นามสกุล"} required value={form.last_name}
               onChange={v => setForm({ ...form, last_name: v })}
               error={errors.last_name} show={showErrors}
             />
           </div>
-          <VField label="เบอร์โทรศัพท์" type="tel" placeholder="0812345678"
-            value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v) })}
+          <VField label="เบอร์โทรศัพท์" type="tel" placeholder={foreign ? "0812345678 หรือ 8613812345678" : "0812345678"}
+            value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v, foreign) })}
             error={errors.phone} show={showErrors}
           />
           <div className="grid grid-cols-2 gap-3">
@@ -785,18 +815,20 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     first_name: user.first_name,
     last_name: user.last_name,
     phone: user.phone ?? "",
+    nationality: (user.nationality ?? "thai") as Nationality,
   });
   const [showErrors, setShowErrors] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const isTa = user.roles.includes("ta");
+  const foreign = isTa && isForeign(form.nationality);
   const errors = useMemo(() => ({
     email: vEmail(form.email),
     title: form.title === "" ? null : vSelect(form.title, TITLE_OPTIONS),
     first_name: vName(form.first_name, "ชื่อ"),
     last_name: vName(form.last_name, "นามสกุล"),
-    phone: vPhone(form.phone),
-  }), [form]);
+    phone: vPhone(form.phone, foreign),
+  }), [form, foreign]);
   const hasErrors = Object.values(errors).some(Boolean);
 
   // Photo edits upload immediately (the account already exists, unlike the
@@ -852,6 +884,10 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         phone: form.phone.trim(),
+        // Only when changed: the server refuses any change once the TA's
+        // documents are approved, and re-sending the same value must not
+        // block an unrelated edit like a phone number.
+        nationality: isTa && form.nationality !== (user.nationality ?? "thai") ? form.nationality : undefined,
         // Roles are deliberately never sent from here — see the read-only
         // "สิทธิ์การใช้งาน" field below for why.
         // study_level is deliberately NOT sent here — changing it now goes
@@ -931,19 +967,27 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 <option value="">-</option>
                 {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
               </VSelect>
-              <VField label="ชื่อ" required value={form.first_name}
+              <VField label={foreign ? "ชื่อ (ภาษาอังกฤษ)" : "ชื่อ"} required value={form.first_name}
                 onChange={v => setForm({ ...form, first_name: v })}
                 error={errors.first_name} show={showErrors}
               />
-              <VField label="นามสกุล" required value={form.last_name}
+              <VField label={foreign ? "นามสกุล (ภาษาอังกฤษ)" : "นามสกุล"} required value={form.last_name}
                 onChange={v => setForm({ ...form, last_name: v })}
                 error={errors.last_name} show={showErrors}
               />
             </div>
-            <VField label="เบอร์โทรศัพท์" type="tel" placeholder="0812345678"
-              value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v) })}
+            <VField label="เบอร์โทรศัพท์" type="tel" placeholder={foreign ? "0812345678 หรือ 8613812345678" : "0812345678"}
+              value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v, foreign) })}
               error={errors.phone} show={showErrors}
             />
+            {isTa && (
+              <div>
+                <NationalityPicker value={form.nationality} onChange={v => setForm({ ...form, nationality: v })} />
+                <div className="text-xs text-muted mt-1.5">
+                  เปลี่ยนได้จนกว่าเอกสารของผู้ช่วยสอนจะอนุมัติ เพราะชุดเอกสารที่ต้องส่งเปลี่ยนตามสัญชาติ
+                </div>
+              </div>
+            )}
             {/* Read-only by design: reassigning a role is a security-sensitive
                 action (it can grant admin/staff access), so it does not belong
                 in a general-purpose edit form where it is easy to change by
@@ -1010,21 +1054,28 @@ function TAIdentityFix({ userId }: { userId: string }) {
   const key = `/users/${userId}/ta-identity`;
   const { data } = useSWR<{
     student_id: string | null; prefix: string | null; citizen_id_last4: string | null; has_profile: boolean;
+    foreign?: boolean;
   }>(key);
+  // A foreign TA's stored number is their passport number (0151).
+  const foreign = !!data?.foreign;
+  const idLabel = foreign ? "เลข Passport" : "เลขบัตรประชาชน";
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ student_id: "", national_id: "", prefix: "", reason: "", password: "" });
   const [showErrors, setShowErrors] = useState(false);
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const nidDigits = form.national_id.replace(/\D/g, "");
+  // Named for the Thai case; for a foreign TA it holds the passport number.
+  const nidDigits = foreign ? passportNumber(form.national_id) : form.national_id.replace(/\D/g, "");
   // The creditor form prints the prefix and the citizen ID, so correcting
   // either rebuilds it — and the rebuilt file carries the full ID and bank
   // details, hence the officer's own password, like every such download.
   const rebuildsForm = !!data?.has_profile && (nidDigits !== "" || form.prefix !== "");
   const errors = {
     student_id: form.student_id.trim() === "" ? null : vStudentID(form.student_id),
-    national_id: nidDigits === "" ? null : nidDigits.length === 13 ? null : "เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก",
+    national_id: nidDigits === "" ? null
+      : foreign ? passportError(nidDigits)
+      : nidDigits.length === 13 ? null : `${idLabel}ต้องเป็นตัวเลข 13 หลัก`,
     reason: vRequired(form.reason, "กรุณาระบุเหตุผล เช่น ผู้ช่วยสอนแสดงบัตรนักศึกษาที่ห้องธุรการ"),
     nothing: form.student_id.trim() === "" && nidDigits === "" && form.prefix === "" ? "กรอกอย่างน้อย 1 ช่องที่ต้องการแก้" : null,
     password: rebuildsForm && form.password === "" ? "กรอกรหัสผ่านของคุณเพื่อดาวน์โหลดแบบฟอร์มเจ้าหนี้ฉบับใหม่" : null,
@@ -1098,7 +1149,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
         <div className="text-sm">
           <div className="font-medium">ข้อมูลที่ผู้ช่วยสอนกรอก</div>
           <div className="text-xs text-muted mt-0.5">
-            รหัสนักศึกษา {data?.student_id ?? "-"} · คำนำหน้า {data?.prefix ?? "-"} · เลขบัตรประชาชน{" "}
+            รหัสนักศึกษา {data?.student_id ?? "-"} · คำนำหน้า {data?.prefix ?? "-"} · {idLabel}{" "}
             {data?.citizen_id_last4 ? `ลงท้าย ${data.citizen_id_last4}` : "-"}
           </div>
         </div>
@@ -1141,8 +1192,8 @@ function TAIdentityFix({ userId }: { userId: string }) {
               value={form.student_id} onChange={v => setForm({ ...form, student_id: formatStudentID(v) })}
               error={errors.student_id} show={showErrors}
             />
-            <VField label="เลขบัตรประชาชนที่ถูกต้อง" placeholder="13 หลัก"
-              value={form.national_id} onChange={v => setForm({ ...form, national_id: v.replace(/[^\d-]/g, "").slice(0, 17) })}
+            <VField label={`${idLabel}ที่ถูกต้อง`} placeholder={foreign ? "เช่น AB1234567" : "13 หลัก"}
+              value={form.national_id} onChange={v => setForm({ ...form, national_id: foreign ? passportNumber(v) : v.replace(/[^\d-]/g, "").slice(0, 17) })}
               error={errors.national_id} show={showErrors}
             />
             <VSelect label="คำนำหน้า" value={form.prefix}

@@ -8,8 +8,10 @@ import {
   Users, Check, X, Download, AlertTriangle, FileText,
 } from "lucide-react";
 import { api, apiUrl } from "../../lib/api";
+import { requiredDocKinds } from "../../lib/nationality";
 import { notify } from "../../lib/notify";
 import PdfFrame from "../../components/PdfFrame";
+import { SuppliersButton } from "./SuppliersButton";
 import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
 import {
   Button, Chip, Select, TextArea, FieldGroup, Modal, TipWrap, Tip,
@@ -44,7 +46,6 @@ interface DetailResp {
   documents: Doc[];
 }
 
-const REQUIRED_KINDS = DOC_KIND_PRINT_ORDER;
 
 /** DOM id for a document panel, used by the sticky jump-to nav. */
 const docAnchor = (docId: string) => `doc-${docId}`;
@@ -251,6 +252,7 @@ function WorkspaceHeader({
       {current && <span className="hidden sm:inline-flex"><Chip tone="neutral">{current.full_name}</Chip></span>}
       <div className="ml-auto flex items-center gap-2">
         <DownloadAllButton approvedHere={approvedHere} />
+        <SuppliersButton />
         <Tip content="ปิด"><button
           type="button"
           onClick={onClose}
@@ -361,12 +363,22 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
   // the stacked previews, and the exported/downloaded bundle all agree on the
   // same sequence — staff hand-collate the printout in this order.
   const docs = (data?.documents ?? []).filter(d => !d.superseded).sort(byPrintOrder);
+  // A foreign TA's passport takes the citizen-ID copy's place (ta_required_doc_kinds).
+  const REQUIRED_KINDS = requiredDocKinds(person.foreign ? "foreign" : "thai")
+    .sort((a, b) => DOC_KIND_PRINT_ORDER.indexOf(a) - DOC_KIND_PRINT_ORDER.indexOf(b));
   const required = docs.filter(d => REQUIRED_KINDS.includes(d.kind));
   const approved = required.filter(d => d.status === "approved").length;
 
   return (
     <div className="p-5">
-      <h2 className="text-xl font-semibold">{person.full_name}</h2>
+      <h2 className="text-xl font-semibold flex items-center gap-2">
+        {person.full_name}
+        {person.foreign && (
+          <Tip content="ตรวจเลข Passport และชื่อในแบบฟอร์มเจ้าหนี้กับสำเนา Passport">
+            <span className="inline-flex"><Chip tone="info">ต่างชาติ</Chip></span>
+          </Tip>
+        )}
+      </h2>
       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-muted">
         <span>{person.email}</span>
         <span>·</span>
@@ -603,7 +615,7 @@ function DocPanel({
 // no hover events of its own — the same arrangement LockedActionButton uses.
 function downloadAllReason(approvedCount: number): string {
   return approvedCount === 0
-    ? "ยังไม่มีใครในรายชื่อนี้ที่อนุมัติครบทั้ง 3 ไฟล์ ต้องอนุมัติอย่างน้อย 1 คนก่อน"
+    ? "ยังไม่มีใครในรายชื่อนี้ที่อนุมัติเอกสารครบทุกไฟล์ ต้องอนุมัติอย่างน้อย 1 คนก่อน"
     : `อนุมัติแล้ว ${approvedCount} คนในรอบนี้`;
 }
 

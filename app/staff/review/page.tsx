@@ -15,6 +15,7 @@ import {
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { Skel, SkelRegion } from "../../components/Skeletons";
 import { ReviewWorkspace } from "./ReviewWorkspace";
+import { SuppliersButton } from "./SuppliersButton";
 import { fmtDate, daysUntil, type Pending } from "./types";
 
 type Bucket = "pending" | "approved";
@@ -71,7 +72,8 @@ export default function ReviewPage() {
     <div>
       <PageHeader
         title="ตรวจสอบเอกสาร TA"
-        description="กดที่ชื่อ TA เพื่อดูรายละเอียด ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่ออนุมัติครบทั้ง 3 ไฟล์ ระบบจะอนุมัติผู้ใช้ให้อัตโนมัติ"
+        description="กดที่ชื่อ TA เพื่อดูรายละเอียด ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่ออนุมัติครบทุกไฟล์ ระบบจะอนุมัติผู้ใช้ให้อัตโนมัติ"
+        actions={<SuppliersButton />}
       />
 
       {/* Approval is now a by-product of approving the third document, so an
@@ -331,7 +333,7 @@ function IncompleteList({ people }: { people?: Pending[] }) {
                     not opened the form at all, say so — it is a different
                     conversation from one who is a file short. */}
                 <Chip tone={n === 0 ? "danger" : "warn"}>
-                  {n === 0 ? "ยังไม่ส่งอะไรเลย" : `ส่งแล้ว ${n}/3`}
+                  {n === 0 ? "ยังไม่ส่งอะไรเลย" : `ส่งแล้ว ${n}/${u.docs_needed ?? 3}`}
                 </Chip>
               </li>
             );

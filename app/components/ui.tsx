@@ -816,16 +816,29 @@ export function FieldGroup({
   label,
   hint,
   error,
+  required,
   children,
 }: {
   label?: React.ReactNode;
   hint?: React.ReactNode;
   error?: React.ReactNode;
+  /** Red asterisk after the label, same mark SelectField's isRequired draws. */
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      {label && <HLabel>{label}</HLabel>}
+      {label && (
+        <HLabel>
+          {label}
+          {required && (
+            <>
+              <span aria-hidden className="text-danger"> *</span>
+              <span className="sr-only"> (จำเป็น)</span>
+            </>
+          )}
+        </HLabel>
+      )}
       {children}
       {hint && !error && <HDescription>{hint}</HDescription>}
       {/* Plain div, not HeroUI FieldError: FieldError only renders inside a

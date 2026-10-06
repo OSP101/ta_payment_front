@@ -21,10 +21,14 @@ export interface Pending {
    * from the quota, so it advances this and not that. The "don't forget to
    * download" reminder must use this one. */
   ever_downloaded?: boolean;
-  /** How many of the three required documents are currently uploaded. Only
-   * meaningful in the incomplete bucket, where it is what distinguishes
-   * "has not started" from "one file to go". */
+  /** How many of the required documents are currently uploaded, out of
+   * docs_needed (3 today for either nationality). Only meaningful in the incomplete
+   * bucket, where it is what distinguishes "has not started" from "one file
+   * to go". */
   docs_in?: number;
+  docs_needed?: number;
+  /** Foreign TA: passport number and passport copy instead of the citizen ID. */
+  foreign?: boolean;
 }
 
 export interface Doc {
@@ -66,16 +70,18 @@ export const OTHER_PRESET = "อื่นๆ (ระบุเอง)";
 
 export const DOC_KIND_LABEL: Record<string, string> = {
   national_id:   "สำเนาบัตรประชาชน",
+  passport:      "สำเนา Passport",
   bank_book:     "สำเนาสมุดบัญชีธนาคาร",
   creditor_form: "แบบฟอร์มเจ้าหนี้",
 };
 
 // The order these get printed/stacked per person: creditor form first, then
-// ID, then bank book — staff hand-collate the physical printout in this
-// sequence, so the review workspace and the export bundle must both match it
-// instead of falling back to upload order. Any kind not listed here (there
-// shouldn't be one) sorts after all three, in its original order.
-export const DOC_KIND_PRINT_ORDER = ["creditor_form", "national_id", "bank_book"];
+// ID (a foreign TA's passport), then bank book — staff
+// hand-collate the physical printout in this sequence, so the review workspace
+// and the export bundle must both match it instead of falling back to upload
+// order. Any kind not listed here (there shouldn't be one) sorts last, in its
+// original order. A person owes only some of these: see requiredDocKinds.
+export const DOC_KIND_PRINT_ORDER = ["creditor_form", "national_id", "passport", "bank_book"];
 
 export function byPrintOrder(a: { kind: string }, b: { kind: string }): number {
   const ia = DOC_KIND_PRINT_ORDER.indexOf(a.kind);

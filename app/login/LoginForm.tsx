@@ -30,6 +30,7 @@ import {
 import { notify } from "../lib/notify";
 import { sameOriginPath } from "../lib/safePath";
 import { rememberLoginMethod } from "./loginMethod";
+import LoginNoticeCards, { hasLoginNotices, type LoginNotices } from "./LoginNotices";
 import useDocumentTitle from "../lib/useDocumentTitle";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -123,10 +124,13 @@ const LOGIN_NEXT_KEY = "login-next";
 export default function LoginForm({
   initialSso,
   emailFormOpen = true,
+  notices,
 }: {
   initialSso?: SSOConfig | null;
   /** Start with the email form expanded — see page.tsx for when. */
   emailFormOpen?: boolean;
+  /** Announcement cards; absent or empty means none are shown. */
+  notices?: LoginNotices | null;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -473,9 +477,12 @@ export default function LoginForm({
           </span>
         </div>
 
-        <p className="relative text-xs text-white/80">
-          © {new Date().getFullYear()} College of Computing, Khon Kaen University
-        </p>
+        <div className="relative flex flex-col gap-5 max-w-[340px]">
+          {hasLoginNotices(notices) && <LoginNoticeCards notices={notices} tone="dark" />}
+          <p className="text-xs text-white/80">
+            © {new Date().getFullYear()} College of Computing, Khon Kaen University
+          </p>
+        </div>
       </aside>
 
       <main className="flex flex-col min-h-screen">
@@ -726,6 +733,14 @@ export default function LoginForm({
               </>
               )}
           </div>
+          {/* Phones have no photo panel, so the cards sit under the form where
+              they never push the sign-in button down; only on the plain
+              sign-in view, not mid-2FA or while confirming a KKU account. */}
+          {!challenge && !sso && hasLoginNotices(notices) && (
+            <div className="lg:hidden mt-8">
+              <LoginNoticeCards notices={notices} tone="light" />
+            </div>
+          )}
         </div>
         </div>
 

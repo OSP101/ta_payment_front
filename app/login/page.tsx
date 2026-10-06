@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import LoginForm, { type SSOConfig } from "./LoginForm";
+import { type LoginNotices } from "./LoginNotices";
 import { LOGIN_METHOD_COOKIE } from "./loginMethod";
 import { backendURL } from "../lib/site";
 
@@ -28,12 +29,31 @@ async function getSSOConfig(): Promise<SSOConfig | null | undefined> {
   }
 }
 
+/**
+ * The announcement cards (open TA-request window, claim-document stage). Same
+ * rules as the SSO lookup: rendered into the first HTML so nothing pops in, a
+ * short timeout so a slow backend cannot hold the page, and any failure just
+ * means no cards.
+ */
+async function getLoginNotices(): Promise<LoginNotices | null> {
+  try {
+    const res = await fetch(`${backendURL()}/api/v1/public/login-notices`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as LoginNotices;
+  } catch {
+    return null;
+  }
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [sso, params, jar] = await Promise.all([getSSOConfig(), searchParams, cookies()]);
+  const [sso, params, jar, notices] = await Promise.all([getSSOConfig(), searchParams, cookies(), getLoginNotices()]);
   // The email form starts folded behind the KKU button, except when that
   // would leave someone looking for it: SSO is off or its state unknown,
   // they just set a new password (so they are about to type it), or this
@@ -42,5 +62,5 @@ export default async function LoginPage({
     !sso ||
     params.reason === "password_changed" ||
     jar.get(LOGIN_METHOD_COOKIE)?.value === "email";
-  return <LoginForm initialSso={sso} emailFormOpen={emailFormOpen} />;
+  return <LoginForm initialSso={sso} emailFormOpen={emailFormOpen} notices={notices} />;
 }

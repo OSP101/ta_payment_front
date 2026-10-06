@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import useSWR from "swr";
 import { api, type Term } from "../lib/api";
+import { requiredDocKinds } from "../lib/nationality";
 
 /* -------------------------------------------------------------------------- */
 /* One source of truth for "has this TA finished setting up?"                 */
@@ -17,9 +18,6 @@ import { api, type Term } from "../lib/api";
 // Both now read this hook. It is presentation only: the same four endpoints
 // the pages already fetch, deduped by SWR into one request each.
 
-/** national_id + bank_book + creditor_form — see service.DocKinds. */
-export const REQUIRED_DOC_KINDS = ["creditor_form", "national_id", "bank_book"] as const;
-const REQUIRED_DOC_COUNT = REQUIRED_DOC_KINDS.length;
 
 /**
  * Where the document set stands, from the TA's point of view.
@@ -30,7 +28,7 @@ const REQUIRED_DOC_COUNT = REQUIRED_DOC_KINDS.length;
  */
 export type DocState = "not_sent" | "rejected" | "pending_review" | "approved";
 
-interface Profile { student_id: string; status: string }
+interface Profile { student_id: string; status: string; nationality?: string }
 interface Doc { kind: string; status: string }
 interface Block { id: string }
 
@@ -71,9 +69,13 @@ export function useTAOnboarding(): TAOnboarding {
     let docState: DocState | undefined;
     let docLabel: string | undefined;
     if (docs) {
-      const rejected = docs.filter(d => d.status === "rejected" || d.status === "needs_fix").length;
-      const sent = docs.filter(d => d.status !== "rejected" && d.status !== "needs_fix").length;
-      const approved = docs.filter(d => d.status === "approved").length;
+      // Which documents depends on nationality (ta_required_doc_kinds).
+      const kinds = requiredDocKinds(profile?.nationality);
+      const REQUIRED_DOC_COUNT = kinds.length;
+      const mine = docs.filter(d => kinds.includes(d.kind));
+      const rejected = mine.filter(d => d.status === "rejected" || d.status === "needs_fix").length;
+      const sent = mine.filter(d => d.status !== "rejected" && d.status !== "needs_fix").length;
+      const approved = mine.filter(d => d.status === "approved").length;
       const profileSubmitted = !!profile?.student_id
         && profile.status !== "pending" && profile.status !== "";
       if (rejected > 0) {

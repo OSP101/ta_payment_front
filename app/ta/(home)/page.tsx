@@ -8,7 +8,8 @@ import {
   BookOpen, ArrowRight, CalendarClock, CalendarX2, AlertTriangle, RefreshCw,
   FileCheck2, Hourglass, Lock,
 } from "lucide-react";
-import type { Term } from "../../lib/api";
+import { api, type Term } from "../../lib/api";
+import { requiredDocKinds } from "../../lib/nationality";
 import AnnouncementFeed from "../../components/AnnouncementFeed";
 import OnboardingChecklistCard from "../OnboardingChecklistCard";
 import { useTAOnboarding, type DocState } from "../useTAOnboarding";
@@ -170,8 +171,6 @@ const SEMESTER_LABELS: Record<number, string> = {
   3: "ภาคฤดูร้อน",
 };
 
-/** national_id + bank_book + creditor_form — see service.DocKinds. */
-const REQUIRED_DOC_COUNT = 3;
 
 interface DocRow {
   id: string;
@@ -529,8 +528,12 @@ function AlertsSection({
   // round to reviewing. Count what the TA controls: files not yet sent.
   // docs still loading → 0, not 3: otherwise every visit flashes "ขาดอีก 3
   // รายการ" until /me/documents answers.
-  const notSent = docs === undefined ? 0 : REQUIRED_DOC_COUNT - docs.filter(
-    d => d.status !== "rejected" && d.status !== "needs_fix").length;
+  // Which documents depends on nationality (ta_required_doc_kinds).
+  const { data: profile } = useSWR<{ nationality?: string } | undefined>(
+    "/me/profile", (u: string) => api.get<{ nationality?: string }>(u).catch(() => undefined));
+  const kinds = requiredDocKinds(profile?.nationality);
+  const notSent = docs === undefined ? 0 : kinds.length - docs.filter(
+    d => kinds.includes(d.kind) && d.status !== "rejected" && d.status !== "needs_fix").length;
 
   // Only months whose window has opened can be acted on.
   //
@@ -583,7 +586,7 @@ function AlertsSection({
             title={`ยังส่งเอกสารไม่ครบ (ขาดอีก ${notSent} รายการ)`}
             description={
               hasCourses
-                ? "ต้องผ่านครบทั้ง 3 ไฟล์ ก่อนจึงจะเบิกค่าตอบแทนได้"
+                ? `ต้องผ่านครบทั้ง ${kinds.length} ไฟล์ ก่อนจึงจะเบิกค่าตอบแทนได้`
                 : "เตรียมเอกสารไว้ล่วงหน้าได้ แม้ยังไม่ได้รับมอบหมายวิชา"
             }
             action={

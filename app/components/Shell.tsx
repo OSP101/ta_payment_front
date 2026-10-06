@@ -14,6 +14,7 @@ import {
   IdCard,
   LogOut,
   AlertTriangle,
+  CheckCircle2,
   Clock,
   Menu,
   PanelLeftClose,
@@ -98,7 +99,7 @@ export interface NavItem {
   /**
    * State of the thing behind the link, when it is a state rather than a
    * count. `warn` = the user has to do something; `pending` = it is done and
-   * waiting on someone else. A count badge would be wrong for both: "1" next
+   * waiting on someone else; `done` = finished, nothing left for anyone. A count badge would be wrong for both: "1" next
    * to "เอกสารของฉัน" says nothing about whether that 1 is the user's problem.
    * `badge` wins if both are set.
    */
@@ -106,7 +107,7 @@ export interface NavItem {
   /** Why the status icon is there, for screen readers and the hover tooltip. */
   statusLabel?: string;
 }
-export type NavStatus = "warn" | "pending";
+export type NavStatus = "warn" | "pending" | "done";
 
 export interface NavSection {
   title?: string;
@@ -520,12 +521,20 @@ function NavRow({
   // Badge wins: a number is more specific than a state, and showing both puts
   // two competing marks on one row.
   const status = hasBadge ? undefined : item.status;
+  // Amber = your move, blue = waiting on staff, green = finished. Each also has
+  // its own shape, so the three still differ for anyone who cannot tell the
+  // colours apart. The darker *-soft-foreground shades: the bright ones were
+  // near-invisible on the active row's tinted background.
   const statusIcon = status === "warn"
-    ? <AlertTriangle size={14} className="text-warning-soft-foreground" />
+    ? <AlertTriangle size={16} className="text-[var(--warning-soft-foreground)]" />
     : status === "pending"
-      ? <Clock size={14} className="text-muted" />
-      : null;
-  const statusTitle = status ? (item.statusLabel ?? (status === "warn" ? "ต้องดำเนินการ" : "รอตรวจสอบ")) : undefined;
+      ? <Clock size={16} className="text-[var(--accent-soft-foreground)]" />
+      : status === "done"
+        ? <CheckCircle2 size={16} className="text-[var(--success-soft-foreground)]" />
+        : null;
+  const statusTitle = status
+    ? (item.statusLabel ?? (status === "warn" ? "ต้องดำเนินการ" : status === "pending" ? "รอตรวจสอบ" : "เรียบร้อยแล้ว"))
+    : undefined;
 
   if (item.external) {
     return (
@@ -560,7 +569,8 @@ function NavRow({
               aria-label={badgeTitle ?? statusTitle}
               className={
                 "absolute -top-1 -right-1 size-2 rounded-full ring-2 ring-surface " +
-                (hasBadge ? "bg-danger" : status === "warn" ? "bg-warning" : "bg-foreground/40")
+                (hasBadge ? "bg-danger" : status === "warn" ? "bg-warning"
+                  : status === "done" ? "bg-success" : "bg-accent")
               }
             />
           )}
