@@ -9,6 +9,8 @@
  * and how a date is written.
  * -------------------------------------------------------------------------- */
 
+import { msg, type Vars } from "../../lib/i18n/core";
+
 export type Severity = "info" | "notice" | "warn" | "danger";
 export type Outcome = "ok" | "failed" | "denied";
 export type ActorKind = "user" | "system" | "anonymous" | "unknown";
@@ -129,37 +131,40 @@ export type Trace =
   | { kind: "session"; id: string };
 
 export const ROLE_LABEL: Record<string, string> = {
-  admin: "ผู้ดูแลระบบ",
-  staff: "เจ้าหน้าที่",
-  lecturer: "อาจารย์",
-  ta: "ผู้ช่วยสอน",
-  executive: "ผู้บริหาร",
+  admin: msg("ผู้ดูแลระบบ"),
+  staff: msg("เจ้าหน้าที่"),
+  lecturer: msg("อาจารย์"),
+  ta: msg("ผู้ช่วยสอน"),
+  executive: msg("ผู้บริหาร"),
 };
 
 export const OUTCOME_LABEL: Record<Outcome, string> = {
-  ok: "สำเร็จ",
-  failed: "ไม่สำเร็จ",
-  denied: "ถูกปฏิเสธ",
+  ok: msg("สำเร็จ"),
+  failed: msg("ไม่สำเร็จ"),
+  denied: msg("ถูกปฏิเสธ"),
 };
 
 export const NETWORK_LABEL: Record<string, string> = {
-  local: "เครื่องเซิร์ฟเวอร์เอง",
-  private: "เครือข่ายภายใน",
-  public: "อินเทอร์เน็ตภายนอก",
+  local: msg("เครื่องเซิร์ฟเวอร์เอง"),
+  private: msg("เครือข่ายภายใน"),
+  public: msg("อินเทอร์เน็ตภายนอก"),
 };
+
+/** t() from useI18n(), handed to the text helpers below. */
+type T = (key: string, vars?: Vars) => string;
 
 /** Who was behind a row, in words. A missing actor is three different things
  *  and the screen used to call all of them "ระบบ". */
-export function actorText(r: Pick<Row, "actor_kind" | "actor_name" | "actor_id">): string {
+export function actorText(r: Pick<Row, "actor_kind" | "actor_name" | "actor_id">, t: T): string {
   switch (r.actor_kind) {
     case "user":
-      return r.actor_name || "ผู้ใช้ที่ไม่มีชื่อในระบบ";
+      return r.actor_name || t("ผู้ใช้ที่ไม่มีชื่อในระบบ");
     case "system":
-      return "ระบบ";
+      return t("ระบบ");
     case "anonymous":
-      return "ผู้ที่ยังไม่ได้เข้าสู่ระบบ";
+      return t("ผู้ที่ยังไม่ได้เข้าสู่ระบบ");
     default:
-      return "ไม่ได้บันทึกผู้กระทำ";
+      return t("ไม่ได้บันทึกผู้กระทำ");
   }
 }
 
@@ -172,66 +177,80 @@ export function subjectText(r: Pick<Row, "subject_name" | "entity" | "entity_id"
 }
 
 /** The headline of a row as plain text (also what a screen reader hears). */
-export function headline(r: Row): { who: string; what: string } {
+export function headline(r: Row, t: T): { who: string; what: string } {
   // Something the system did by itself: its label already says so, and the
-  // person whose request set it off did not do it.
+  // person whose request set it off did not do it. (The label comes from the
+  // backend catalog, Thai or English.)
   if (r.automatic) {
-    return { who: r.label.startsWith("ระบบ") ? "" : "ระบบ", what: r.label };
+    const saysSystem = r.label.startsWith("ระบบ") || r.label.startsWith("System"); // i18n-ignore — matched against backend text
+    return { who: saysSystem ? "" : t("ระบบ"), what: r.label };
   }
-  return { who: actorText(r), what: r.label };
+  return { who: actorText(r, t), what: r.label };
 }
 
-const dayFmt = new Intl.DateTimeFormat("th-TH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-const timeFmt = new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false });
-const fullFmt = new Intl.DateTimeFormat("th-TH", {
-  day: "numeric", month: "long", year: "numeric",
-  hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-});
-const shortFmt = new Intl.DateTimeFormat("th-TH", {
-  day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
-});
-const stampFmt = new Intl.DateTimeFormat("th-TH", {
-  day: "2-digit", month: "2-digit", year: "numeric",
-});
-const secFmt = new Intl.DateTimeFormat("th-TH", {
-  hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-});
+// Formatters per interface language (intl from useI18n(): "th-TH" or "en-GB").
+const fmtCache = new Map<string, ReturnType<typeof makeFmts>>();
+function makeFmts(intl: string) {
+  return {
+    day: new Intl.DateTimeFormat(intl, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+    time: new Intl.DateTimeFormat(intl, { hour: "2-digit", minute: "2-digit", hour12: false }),
+    full: new Intl.DateTimeFormat(intl, {
+      day: "numeric", month: "long", year: "numeric",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }),
+    short: new Intl.DateTimeFormat(intl, {
+      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+    }),
+    stamp: new Intl.DateTimeFormat(intl, {
+      day: "2-digit", month: "2-digit", year: "numeric",
+    }),
+    sec: new Intl.DateTimeFormat(intl, {
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }),
+  };
+}
+function fmts(intl: string) {
+  let f = fmtCache.get(intl);
+  if (!f) { f = makeFmts(intl); fmtCache.set(intl, f); }
+  return f;
+}
 
 function localDayKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
 /** "วันนี้ · วันพุธที่ 30 กันยายน 2569" — the day heading of the timeline. */
-export function dayHeading(iso: string, now: Date = new Date()): string {
+export function dayHeading(iso: string, t: T, intl: string, now: Date = new Date()): string {
   const d = new Date(iso);
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  const full = dayFmt.format(d);
-  if (localDayKey(d) === localDayKey(now)) return `วันนี้ · ${full}`;
-  if (localDayKey(d) === localDayKey(yesterday)) return `เมื่อวาน · ${full}`;
+  const full = fmts(intl).day.format(d);
+  if (localDayKey(d) === localDayKey(now)) return t("วันนี้ · {date}", { date: full });
+  if (localDayKey(d) === localDayKey(yesterday)) return t("เมื่อวาน · {date}", { date: full });
   return full;
 }
 
 export const dayKey = (iso: string) => localDayKey(new Date(iso));
-export const clock = (iso: string) => timeFmt.format(new Date(iso));
-export const clockSeconds = (iso: string) => secFmt.format(new Date(iso));
-export const fullDateTime = (iso: string) => fullFmt.format(new Date(iso));
-export const shortDateTime = (iso: string) => shortFmt.format(new Date(iso));
-export const dateStamp = (iso: string) => stampFmt.format(new Date(iso));
+export const clock = (iso: string, intl: string) => fmts(intl).time.format(new Date(iso));
+export const clockSeconds = (iso: string, intl: string) => fmts(intl).sec.format(new Date(iso));
+export const fullDateTime = (iso: string, intl: string) => fmts(intl).full.format(new Date(iso));
+export const shortDateTime = (iso: string, intl: string) => fmts(intl).short.format(new Date(iso));
+export const dateStamp = (iso: string, intl: string) => fmts(intl).stamp.format(new Date(iso));
 
 /** "5 นาทีก่อน" — for the list of sessions in use right now. */
-export function ago(iso: string, now: Date = new Date()): string {
+export function ago(iso: string, t: T, now: Date = new Date()): string {
   const mins = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 60000));
-  if (mins < 1) return "เมื่อสักครู่";
-  if (mins < 60) return `${mins} นาทีก่อน`;
+  if (mins < 1) return t("เมื่อสักครู่");
+  if (mins < 60) return t("{n} นาทีก่อน", { n: mins });
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} ชั่วโมงก่อน`;
-  return `${Math.round(hours / 24)} วันก่อน`;
+  if (hours < 24) return t("{n} ชั่วโมงก่อน", { n: hours });
+  return t("{n} วันก่อน", { n: Math.round(hours / 24) });
 }
 
-/** One change as a short phrase: "ชั่วโมง 3 → 2", "สถานะ อนุมัติแล้ว". */
-export function changePhrase(c: Change): string {
-  const show = (v: string | null) => (v === null ? "" : v === "" ? "(ว่าง)" : v);
+/** One change as a short phrase: "ชั่วโมง 3 → 2", "สถานะ อนุมัติแล้ว". The
+ *  label and values come from the backend catalog. */
+export function changePhrase(c: Change, t: T): string {
+  const show = (v: string | null) => (v === null ? "" : v === "" ? t("(ว่าง)") : v);
   if (c.before !== null && c.after !== null) return `${c.label} ${show(c.before)} → ${show(c.after)}`;
   if (c.after !== null) return `${c.label} ${show(c.after)}`;
   return `${c.label} ${show(c.before)}`;

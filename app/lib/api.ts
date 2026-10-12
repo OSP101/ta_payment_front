@@ -4,6 +4,14 @@
 // Uploads are the exception — see UPLOAD_ORIGIN below.
 
 import { beginRequest, endRequest } from "./loadingBar";
+import { tc as clientTc } from "./i18n/client";
+import { interpolate, msg, type Vars } from "./i18n/core";
+
+// This module is also loaded on the server (lib/session → getMe), where the
+// client-only tc() must not be called; there the Thai key is returned as is.
+// In the browser the message is translated where it is produced.
+const tc = (key: string, vars?: Vars): string =>
+  typeof window === "undefined" ? interpolate(key, vars) : clientTc(key, vars);
 
 export type ApiErrorBody = { error: string };
 
@@ -189,21 +197,21 @@ const UPLOAD_ORIGIN = (process.env.NEXT_PUBLIC_API_ORIGIN ?? "").replace(/\/$/, 
 // Backend error codes that carry a specific redirect/UX meaning rather than a
 // human message.
 const CODE_MESSAGES: Record<string, string> = {
-  password_change_required: "กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน",
+  password_change_required: msg("กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน"),
   // See internal/handler/middleware.go's AccountGuard — the mandatory-2FA
   // twin of password_change_required, same shape: every admin/staff/
   // executive account without totp_enabled_at set gets this on every
   // endpoint except /me, /me/2fa/*, and /auth/heartbeat.
-  mfa_setup_required: "กรุณาตั้งค่าการยืนยันตัวตนสองขั้นตอน (2FA) ก่อนใช้งาน",
-  ta_profile_not_approved: "เอกสารของคุณยังไม่ได้รับการอนุมัติ",
+  mfa_setup_required: msg("กรุณาตั้งค่าการยืนยันตัวตนสองขั้นตอน (2FA) ก่อนใช้งาน"),
+  ta_profile_not_approved: msg("เอกสารของคุณยังไม่ได้รับการอนุมัติ"),
   // See internal/handler/middleware.go's AccountGuard — these three all come
   // back as a plain 401 with one of these as the `error` field. SESSION_REASONS
   // below is the subset the login page turns into a banner via ?reason=; the
   // messages here are what shows in an inline toast for a request that fails
   // mid-page instead of at the moment of redirect (e.g. a background poll).
-  session_idle: "ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 15 นาที",
-  session_superseded: "บัญชีนี้ถูกเข้าใช้งานจากอุปกรณ์อื่น คุณจึงถูกออกจากระบบที่นี่",
-  session_revoked: "เซสชันนี้สิ้นสุดแล้ว กรุณาเข้าสู่ระบบใหม่",
+  session_idle: msg("ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 15 นาที"),
+  session_superseded: msg("บัญชีนี้ถูกเข้าใช้งานจากอุปกรณ์อื่น คุณจึงถูกออกจากระบบที่นี่"),
+  session_revoked: msg("เซสชันนี้สิ้นสุดแล้ว กรุณาเข้าสู่ระบบใหม่"),
 };
 
 /** The subset of CODE_MESSAGES that the login page shows as a ?reason= banner. */
@@ -211,22 +219,24 @@ export const SESSION_REASONS = ["session_idle", "session_superseded", "session_r
 export type SessionReason = (typeof SESSION_REASONS)[number];
 
 function humanMessage(status: number, raw: string): string {
-  if (raw && CODE_MESSAGES[raw]) return CODE_MESSAGES[raw];
-  // Handler messages meant for a person are Thai. A bare Fiber/validation
-  // string ("forbidden", "invalid id", "term_id required") is not, so it falls
-  // through to the status wording below; the raw text stays on ApiError.code
-  // for anything that branches on it.
-  if (raw && raw.trim() !== "" && /[\u0E00-\u0E7F]/.test(raw)) return raw;
-  if (status === 0) return "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่";
+  if (raw && CODE_MESSAGES[raw]) return tc(CODE_MESSAGES[raw]);
+  // Handler messages meant for a person are Thai — or English, when the API
+  // translated them for an English reader (internal/i18n), which it writes as
+  // a sentence: a capital letter and at least one space. A bare Fiber/
+  // validation string ("forbidden", "invalid id", "term_id required") is
+  // neither, so it falls through to the status wording below; the raw text
+  // stays on ApiError.code for anything that branches on it.
+  if (raw && raw.trim() !== "" && (/[\u0E00-\u0E7F]/.test(raw) || /^[A-Z][^_]*\s\S/.test(raw.trim()))) return raw;
+  if (status === 0) return tc("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่");
   // The bare middleware strings ("missing token", "invalid token") land here:
   // the session cookie is gone or expired, so say that rather than the raw text.
-  if (status === 401) return "เซสชันหมดอายุหรือยังไม่ได้เข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่";
-  if (status === 403) return "คุณไม่มีสิทธิ์ดำเนินการนี้";
-  if (status === 404) return "ไม่พบข้อมูลที่ต้องการ";
-  if (status === 408 || status === 504) return "การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่";
-  if (status === 429) return "ทำรายการบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่";
-  if (status >= 500) return "ระบบขัดข้อง กรุณาลองใหม่ภายหลัง";
-  return `ทำรายการไม่สำเร็จ (รหัส ${status})`;
+  if (status === 401) return tc("เซสชันหมดอายุหรือยังไม่ได้เข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่");
+  if (status === 403) return tc("คุณไม่มีสิทธิ์ดำเนินการนี้");
+  if (status === 404) return tc("ไม่พบข้อมูลที่ต้องการ");
+  if (status === 408 || status === 504) return tc("การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่");
+  if (status === 429) return tc("ทำรายการบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่");
+  if (status >= 500) return tc("ระบบขัดข้อง กรุณาลองใหม่ภายหลัง");
+  return tc("ทำรายการไม่สำเร็จ (รหัส {status})", { status });
 }
 
 /**
@@ -423,7 +433,9 @@ export const demoSwitchAccount = (email: string) => {
   const basePath = getDemoBasePath();
   const password = getDemoPassword();
   if (!basePath || !password) {
-    return Promise.reject(new Error("ไม่พบข้อมูลห้องทดลอง กรุณาเข้าห้องทดลองใหม่อีกครั้ง"));
+    // Left as the Thai key: errMessage() passes Thai Error text through and
+    // the toast translates it.
+    return Promise.reject(new Error(msg("ไม่พบข้อมูลห้องทดลอง กรุณาเข้าห้องทดลองใหม่อีกครั้ง")));
   }
   return demoLogin(basePath, email, password);
 };
@@ -649,14 +661,14 @@ function uploadWithProgress<T>(
       try {
         resolve(JSON.parse(body) as T);
       } catch {
-        reject(new ApiError(xhr.status, "อ่านคำตอบจากเซิร์ฟเวอร์ไม่ได้"));
+        reject(new ApiError(xhr.status, tc("อ่านคำตอบจากเซิร์ฟเวอร์ไม่ได้")));
       }
     };
     // A CORS rejection also lands here with status 0 — indistinguishable from
     // an offline browser by design, so the generic "cannot connect" is right.
     xhr.onerror = () => reject(new ApiError(0, humanMessage(0, "")));
     xhr.ontimeout = () => reject(new ApiError(408, humanMessage(408, "")));
-    xhr.onabort = () => reject(new ApiError(0, "ยกเลิกการอัปโหลดแล้ว"));
+    xhr.onabort = () => reject(new ApiError(0, tc("ยกเลิกการอัปโหลดแล้ว")));
 
     xhr.send(form);
   });
@@ -668,8 +680,8 @@ export function errMessage(e: unknown): string {
   // A non-API Error is a browser/JS failure ("Failed to fetch", "Cannot read
   // properties of undefined") — meaningless to a user. Only pass through a
   // message someone wrote in Thai for them.
-  if (e instanceof Error && /[฀-๿]/.test(e.message)) return e.message;
-  return "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่ หากยังพบปัญหาให้รีเฟรชหน้านี้";
+  if (e instanceof Error && /[฀-๿]/.test(e.message)) return tc(e.message);
+  return tc("เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่ หากยังพบปัญหาให้รีเฟรชหน้านี้");
 }
 
 // SWR-compatible fetcher — typed for direct use as `useSWR(key, fetcher)`.
@@ -729,6 +741,10 @@ export interface Me {
    *  means no selection yet (or the TA has 0-1 periods and was never asked)
    *  — EnrollmentScopeModal in app/ta/layout.tsx watches this. */
   selected_enrollment_id?: string | null;
+  /** Display preferences saved on the account (migration 0153); absent on
+   *  older APIs. See app/lib/preferences.ts. */
+  ui_theme?: "light" | "dark" | "system";
+  ui_locale?: "th" | "en";
 }
 
 /**

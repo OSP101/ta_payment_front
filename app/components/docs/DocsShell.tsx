@@ -14,8 +14,9 @@ import SearchDialog from "./SearchDialog";
 import BackToTop from "./BackToTop";
 import type { Audience } from "../../../content/docs/types";
 import { docHref, type DocPageMeta } from "../../../content/docs/meta";
-import { APP_VERSION, DOCS_UPDATED, thaiDate } from "../../lib/docs/version";
+import { APP_VERSION, DOCS_UPDATED } from "../../lib/docs/version";
 import { Tip } from "../ui";
+import { useI18n } from "../../lib/i18n/client";
 
 // Metadata only — the server layout maps pages through `toMeta`, so no page
 // text rides along in this client component's props.
@@ -42,6 +43,7 @@ function NavList({
   onToggle: (section: string) => void;
   filter: string;
 }) {
+  const { t } = useI18n();
   const q = filter.trim().toLowerCase();
   const shown = sections
     .map(({ section, pages }) => ({
@@ -51,7 +53,7 @@ function NavList({
     .filter((s) => s.pages.length > 0);
 
   if (shown.length === 0) {
-    return <p className="px-3 py-2 text-sm text-muted">ไม่พบหัวข้อที่ตรงกับ “{filter}”</p>;
+    return <p className="px-3 py-2 text-sm text-muted">{t("ไม่พบหัวข้อที่ตรงกับ “{q}”", { q: filter })}</p>;
   }
   return (
     <nav className="space-y-5">
@@ -105,35 +107,62 @@ function NavList({
 
 /** One icon per sidebar section, so a long menu scans by shape as well as by
  *  word (developers.cloudflare.com does the same). Unknown sections fall
- *  back to a folder rather than rendering nothing. */
+ *  back to a folder rather than rendering nothing. Keyed by the section name
+ *  as written in the content — Thai, and the English manual's own names
+ *  (content/docs/pages-en) below them. These keys are lookup data, not text. */
 const SECTION_ICON: Record<string, LucideIcon> = {
-  "เริ่มต้น": Rocket,
-  "บัญชีและการเข้าใช้": UserRound,
-  "รายวิชา": GraduationCap,
-  "คำขอ TA": Send,
-  "เอกสาร": FileText,
-  "ตารางเรียน": CalendarDays,
-  "ลงเวลา": Clock,
-  "วันชดเชย": CalendarHeart,
-  "รายงาน": ClipboardCheck,
-  "ติดตาม": Route,
-  "งบ": Calculator,
-  "ผู้บริหาร": Landmark,
-  "อ้างอิง": BookMarked,
-  "คำถามที่พบบ่อย": CircleHelp,
-  "ตั้งค่า": Settings,
-  "ผู้ใช้": Users,
-  "ประกาศ": Megaphone,
-  "ขั้นที่ 1: ตรวจคำร้องขอ TA": ClipboardCheck,
-  "ขั้นที่ 2: ตรวจเอกสาร TA": FileCheck2,
-  "ขั้นที่ 3: ตรวจและส่งออกเอกสาร": PackageCheck,
-  "ปฏิบัติงาน": LayoutGrid,
-  "ระบบ": Wrench,
+  "เริ่มต้น": Rocket, // i18n-ignore
+  "บัญชีและการเข้าใช้": UserRound, // i18n-ignore
+  "รายวิชา": GraduationCap, // i18n-ignore
+  "คำขอ TA": Send, // i18n-ignore
+  "เอกสาร": FileText, // i18n-ignore
+  "ตารางเรียน": CalendarDays, // i18n-ignore
+  "ลงเวลา": Clock, // i18n-ignore
+  "วันชดเชย": CalendarHeart, // i18n-ignore
+  "รายงาน": ClipboardCheck, // i18n-ignore
+  "ติดตาม": Route, // i18n-ignore
+  "งบ": Calculator, // i18n-ignore
+  "ผู้บริหาร": Landmark, // i18n-ignore
+  "อ้างอิง": BookMarked, // i18n-ignore
+  "คำถามที่พบบ่อย": CircleHelp, // i18n-ignore
+  "ตั้งค่า": Settings, // i18n-ignore
+  "ผู้ใช้": Users, // i18n-ignore
+  "ประกาศ": Megaphone, // i18n-ignore
+  "ขั้นที่ 1: ตรวจคำร้องขอ TA": ClipboardCheck, // i18n-ignore
+  "ขั้นที่ 2: ตรวจเอกสาร TA": FileCheck2, // i18n-ignore
+  "ขั้นที่ 3: ตรวจและส่งออกเอกสาร": PackageCheck, // i18n-ignore
+  "ปฏิบัติงาน": LayoutGrid, // i18n-ignore
+  "ระบบ": Wrench, // i18n-ignore
   "Admin": ShieldCheck,
+  // English manual
+  "Getting started": Rocket,
+  "Courses": GraduationCap,
+  "TA requests": Send,
+  "Documents": FileText,
+  "Class schedule": CalendarDays,
+  "Work log": Clock,
+  "Make-up days": CalendarHeart,
+  "Make-ups": CalendarHeart,
+  "Reports": ClipboardCheck,
+  "Tracking": Route,
+  "Budget": Calculator,
+  "Executive": Landmark,
+  "Reference": BookMarked,
+  "FAQ": CircleHelp,
+  "Frequently asked questions": CircleHelp,
+  "Settings": Settings,
+  "Users": Users,
+  "Announcements": Megaphone,
+  "Step 1: Review TA requests": ClipboardCheck,
+  "Step 2: Review TA documents": FileCheck2,
+  "Step 3: Review and export documents": PackageCheck,
+  "Operations": LayoutGrid,
+  "System": Wrench,
 };
 
 /** The "กรองเมนู" box above the sidebar, as on developers.cloudflare.com. */
 function NavFilter({ value, onChange, inputRef }: { value: string; onChange: (v: string) => void; inputRef?: React.Ref<HTMLInputElement> }) {
+  const { t } = useI18n();
   return (
     <div className="relative mb-5">
       <input
@@ -142,8 +171,8 @@ function NavFilter({ value, onChange, inputRef }: { value: string; onChange: (v:
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") { onChange(""); (e.target as HTMLInputElement).blur(); } }}
-        placeholder="กรองเมนู"
-        aria-label="กรองหัวข้อในเมนู"
+        placeholder={t("กรองเมนู")}
+        aria-label={t("กรองหัวข้อในเมนู")}
         className="h-10 w-full rounded-lg border border-border bg-white px-3 pe-9 text-sm text-foreground placeholder:text-slate-400 focus:border-(--brand) focus:outline-none"
       />
       {!value && (
@@ -176,6 +205,7 @@ export default function DocsShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { t, fmtDate, year } = useI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -214,18 +244,18 @@ export default function DocsShell({
 
   return (
     <div className="min-h-screen bg-surface">
-      <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
         <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3 py-3">
-            <Tip content="เปิดเมนู"><button
+            <Tip content={t("เปิดเมนู")}><button
               type="button"
               className="lg:hidden -ms-1 rounded-md p-1.5 hover:bg-slate-100"
               onClick={() => setMobileOpen(true)}
-              aria-label="เปิดเมนู"
+              aria-label={t("เปิดเมนู")}
             >
               <Menu size={20} />
             </button></Tip>
-            <Link href={homeHref} className="flex items-center gap-2.5 shrink-0" aria-label="COCO TAS Docs หน้าแรกของระบบ">
+            <Link href={homeHref} className="flex items-center gap-2.5 shrink-0" aria-label={t("COCO TAS Docs หน้าแรกของระบบ")}>
               <Image src="/images/logo-cp-1.png" alt="" width={32} height={32} priority className="h-8 w-8 shrink-0 object-contain" />
               <span className="text-[15px] sm:text-[17px] font-bold tracking-[0.02em] text-foreground">COCO TAS</span>
               <span className="rounded-md border border-slate-300 px-1.5 py-px text-[10px] sm:text-[11px] font-semibold tracking-[0.12em] text-slate-600">DOCS</span>
@@ -243,11 +273,11 @@ export default function DocsShell({
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              aria-label="ค้นหาในคู่มือ"
+              aria-label={t("ค้นหาในคู่มือ")}
               className="flex h-10 items-center gap-2 rounded-xl border border-border bg-white px-3 text-sm text-slate-500 hover:border-slate-300 transition-colors md:min-w-[200px]"
             >
               <Search size={17} aria-hidden="true" />
-              <span className="hidden md:inline flex-1 text-start">ค้นหา</span>
+              <span className="hidden md:inline flex-1 text-start">{t("ค้นหา")}</span>
               <span className="hidden md:flex gap-1" aria-hidden="true">
                 <kbd className="rounded border border-border bg-slate-50 px-1.5 text-[11px]">⌘</kbd>
                 <kbd className="rounded border border-border bg-slate-50 px-1.5 text-[11px]">K</kbd>
@@ -260,7 +290,7 @@ export default function DocsShell({
               onClick={() => router.push(homeHref)}
               className="hidden sm:inline-flex h-10 shrink-0 items-center rounded-full bg-(--brand) px-5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
             >
-              กลับสู่ระบบ
+              {t("กลับสู่ระบบ")}
             </button>
           </div>
           {allowedAudiences.length > 1 && (
@@ -284,8 +314,8 @@ export default function DocsShell({
             <div className="docs-anim-fade absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
             <div className="docs-anim-slide-start absolute inset-y-0 start-0 w-72 max-w-[85vw] overflow-y-auto bg-white p-4 shadow-xl">
               <div className="mb-4 flex items-center justify-between">
-                <span className="text-sm font-semibold">เมนูคู่มือ</span>
-                <Tip content="ปิดเมนู"><button type="button" onClick={() => setMobileOpen(false)} aria-label="ปิดเมนู">
+                <span className="text-sm font-semibold">{t("เมนูคู่มือ")}</span>
+                <Tip content={t("ปิดเมนู")}><button type="button" onClick={() => setMobileOpen(false)} aria-label={t("ปิดเมนู")}>
                   <X size={18} />
                 </button></Tip>
               </div>
@@ -296,7 +326,7 @@ export default function DocsShell({
                 onClick={() => router.push(homeHref)}
                 className="mt-6 flex h-10 w-full items-center justify-center rounded-full bg-(--brand) text-sm font-semibold text-white"
               >
-                กลับสู่ระบบ
+                {t("กลับสู่ระบบ")}
               </button>
             </div>
           </div>
@@ -306,8 +336,8 @@ export default function DocsShell({
           <div className="mx-auto max-w-[760px] xl:max-w-[1040px]">
             {children}
             <footer className="mt-16 border-t border-border pt-6 pb-2 text-xs leading-6 text-muted">
-              <div>ปรับปรุงคู่มือล่าสุด {thaiDate(DOCS_UPDATED)} ตรงกับระบบเวอร์ชัน {APP_VERSION}</div>
-              <div>© {new Date(DOCS_UPDATED).getFullYear() + 543} วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น สงวนลิขสิทธิ์</div>
+              <div>{t("ปรับปรุงคู่มือล่าสุด {date} ตรงกับระบบเวอร์ชัน {version}", { date: fmtDate(DOCS_UPDATED, { long: true }), version: APP_VERSION })}</div>
+              <div>{t("© {year} วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น สงวนลิขสิทธิ์", { year: year(new Date(DOCS_UPDATED).getFullYear()) })}</div>
             </footer>
           </div>
         </main>

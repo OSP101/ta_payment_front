@@ -4,6 +4,7 @@ import type { Audience } from "../../../../content/docs/types";
 import DocArticle from "../../../components/docs/DocArticle";
 import { getMe } from "../../../lib/session";
 import { canViewAudience } from "../../../lib/docs/audience";
+import { getLocale } from "../../../lib/i18n/server";
 
 const VALID: Audience[] = ["staff", "lecturer", "ta"];
 
@@ -16,7 +17,7 @@ export default async function EmbedContentPage({
   if (!VALID.includes(raw as Audience)) notFound();
   const audience = raw as Audience;
 
-  const page = findPage(audience, slugParts.join("/"));
+  const page = findPage(audience, slugParts.join("/"), await getLocale());
   if (!page) notFound();
 
   const me = await getMe();

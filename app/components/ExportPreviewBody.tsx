@@ -10,6 +10,7 @@ import {
   MonthChips, monthLabels, monthsQuery, suggestMonths,
   type MonthCoverage,
 } from "./monthScope";
+import { msg, useI18n, type TFn } from "../lib/i18n/client";
 
 
 // Pull the download filename out of a Content-Disposition header, handling both
@@ -83,7 +84,7 @@ export interface ExportBlocker {
 }
 
 export const fmtBaht = (n: number) =>
-  `฿${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  `฿${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`; // i18n-ignore — currency symbol
 
 // ExportPreviewBody shows the payout numbers and hosts the locking ZIP download
 // (gated behind an acknowledge checkbox + all-TAs-ready). Self-contained so it
@@ -101,6 +102,7 @@ export function ExportPreviewBody({
   // มิ.ย.–ก.ย. and ตุลาคม are claimed on separate documents against separate
   // appropriations — without a scope, re-exporting after October would bill
   // มิ.ย.–ก.ย. a second time.
+  const { t } = useI18n();
   const { data: coverage } = useSWR<MonthCoverage>(`/exports/course/${tcId}/coverage`);
   const allMonths = useMemo(() => coverage?.months ?? [], [coverage]);
   const split = coverage?.fiscal_split;
@@ -163,7 +165,7 @@ export function ExportPreviewBody({
         } catch {
           /* non-JSON error body */
         }
-        notify.error(msg || "ดาวน์โหลดไม่สำเร็จ กรุณาลองใหม่");
+        notify.error(msg || t("ดาวน์โหลดไม่สำเร็จ กรุณาลองใหม่"));
         return;
       }
       const blob = await res.blob();
@@ -181,7 +183,7 @@ export function ExportPreviewBody({
       setAck(false);
       onExported?.();
     } catch {
-      notify.error("ดาวน์โหลดไม่สำเร็จ กรุณาลองใหม่");
+      notify.error(t("ดาวน์โหลดไม่สำเร็จ กรุณาลองใหม่"));
     } finally {
       setDownloading(false);
     }
@@ -200,16 +202,16 @@ export function ExportPreviewBody({
   // table header, the (disabled) download button — with placeholder values.
   if (isLoading && !data) {
     return (
-      <SkelRegion label="กำลังคำนวณข้อมูลเบิกจ่าย" className="space-y-4">
+      <SkelRegion label={t("กำลังคำนวณข้อมูลเบิกจ่าย")} className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {["งบรายวิชา", "รวมที่คำนวณได้", "จ่ายจริง (หลังตัดเดือนที่เกินงบ)", "จำนวน TA"].map(l => (
-            <SummaryStat key={l} label={l} value={<SkelValue className="h-4 w-20" />} />
+          {[msg("งบรายวิชา"), msg("รวมที่คำนวณได้"), msg("จ่ายจริง (หลังตัดเดือนที่เกินงบ)"), msg("จำนวน TA")].map(l => (
+            <SummaryStat key={l} label={t(l)} value={<SkelValue className="h-4 w-20" />} />
           ))}
         </div>
         <div className="overflow-x-auto rounded-lg border border-hairline">
           <div className="flex gap-4 bg-slate-50 px-3 py-2 text-sm text-ink-2">
-            {["ชื่อ TA", "ระดับ", "ชม.อนุมัติ", "เป็นเงิน", "จ่ายจริง", "ข้อมูล"].map(h => (
-              <span key={h} className="flex-1">{h}</span>
+            {[msg("ชื่อ TA"), msg("ระดับ"), msg("ชม.อนุมัติ"), msg("เป็นเงิน"), msg("จ่ายจริง"), msg("ข้อมูล")].map(h => (
+              <span key={h} className="flex-1">{t(h)}</span>
             ))}
           </div>
           <SkelRows rows={3} columns={6} className="px-3" />
@@ -223,7 +225,7 @@ export function ExportPreviewBody({
   if (error && !data) {
     return (
       <div className="py-8 text-center text-sm text-danger">
-        โหลดข้อมูลไม่สำเร็จ {errMessage(error)}
+        {t("โหลดข้อมูลไม่สำเร็จ {error}", { error: errMessage(error) })}
       </div>
     );
   }
@@ -237,95 +239,94 @@ export function ExportPreviewBody({
           it popped in and out, nudging the whole panel). */}
       {isLoading && (
         <div className="flex items-center gap-1.5 text-xs text-muted">
-          <Spinner size="sm" /> กำลังอัปเดตข้อมูลตามเดือนที่เลือก…
+          <Spinner size="sm" /> {t("กำลังอัปเดตข้อมูลตามเดือนที่เลือก…")}
         </div>
       )}
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
-          อัปเดตข้อมูลไม่สำเร็จ {errMessage(error)} — ตัวเลขด้านล่างเป็นของเดือนที่เลือกไว้ก่อนหน้า
+        <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+          {t("อัปเดตข้อมูลไม่สำเร็จ {error} — ตัวเลขด้านล่างเป็นของเดือนที่เลือกไว้ก่อนหน้า", { error: errMessage(error) })}
         </div>
       )}
       {showPicker && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 dark:border-amber-800 dark:bg-amber-950/30">
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5">
           <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
-              <CalendarRange size={14} /> เลือกเดือนที่จะเบิก
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-900">
+              <CalendarRange size={14} /> {t("เลือกเดือนที่จะเบิก")}
             </span>
-            <span className="text-xs text-amber-900/80 dark:text-amber-200/80">
-              ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — {monthLabels(allMonths, split!.after).join(", ")}{" "}
-              ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสาร
+            <span className="text-xs text-amber-900/80">
+              {t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — {months} ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสาร", { months: monthLabels(allMonths, split!.after).join(", ") })}
             </span>
           </div>
           <div className="mb-2 flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={() => setPicked(split!.before)}>
-              งบปีเก่า ({split!.before.length} เดือน)
+              {t("งบปีเก่า ({n} เดือน)", { n: split!.before.length })}
             </Button>
             <Button variant="secondary" size="sm" onClick={() => setPicked(split!.after)}>
-              งบปีใหม่ ({split!.after.length} เดือน)
+              {t("งบปีใหม่ ({n} เดือน)", { n: split!.after.length })}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setPicked(allMonths.map(m => m.year_month))}>
-              ทั้งภาคเรียน
+              {t("ทั้งภาคเรียน")}
             </Button>
           </div>
           <MonthChips months={allMonths} selected={months} onChange={setPicked} />
           {/* Re-issuing to correct a file is normal; billing the same month
               twice by accident is not. */}
           {months.some(ym => allMonths.find(m => m.year_month === ym)?.issued) && (
-            <p className="mt-2 text-xs text-amber-900 dark:text-amber-200">
-              เดือนที่เลือกบางเดือนเคยออกเอกสารไปแล้ว เดือนที่ยังล็อกอยู่ใช้ยอดตามเอกสารเดิมเสมอ
-              หากเลือกเฉพาะเดือนเดิมทั้งชุด ระบบจะส่งไฟล์เดิมฉบับเดียวกันกลับมา
+            <p className="mt-2 text-xs text-amber-900">
+              {t("เดือนที่เลือกบางเดือนเคยออกเอกสารไปแล้ว เดือนที่ยังล็อกอยู่ใช้ยอดตามเอกสารเดิมเสมอ หากเลือกเฉพาะเดือนเดิมทั้งชุด ระบบจะส่งไฟล์เดิมฉบับเดียวกันกลับมา")}
             </p>
           )}
         </div>
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <SummaryStat label="งบรายวิชา" value={data.budget_max > 0 ? fmtBaht(data.budget_max) : "ไม่จำกัด"} />
-        <SummaryStat label="รวมที่คำนวณได้" value={fmtBaht(data.total_pay)} />
+        <SummaryStat label={t("งบรายวิชา")} value={data.budget_max > 0 ? fmtBaht(data.budget_max) : t("ไม่จำกัด")} />
+        <SummaryStat label={t("รวมที่คำนวณได้")} value={fmtBaht(data.total_pay)} />
         <SummaryStat
-          label="จ่ายจริง (หลังตัดเดือนที่เกินงบ)"
+          label={t("จ่ายจริง (หลังตัดเดือนที่เกินงบ)")}
           value={fmtBaht(data.total_actual)}
           tone={data.prorated ? "warn" : undefined}
         />
-        <SummaryStat label="จำนวน TA" value={String(data.rows.length)} />
+        <SummaryStat label={t("จำนวน TA")} value={String(data.rows.length)} />
       </div>
 
       {data.over_budget && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-          <b>ยอดรวมเกินงบรายวิชา</b> ระบบเกลี่ยเงิน (pro-rata) ให้อัตโนมัติ คอลัมน์ “จ่ายจริง” คือยอดหลังเกลี่ยแล้ว
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <b>{t("ยอดรวมเกินงบรายวิชา")}</b> {t("ระบบเกลี่ยเงิน (pro-rata) ให้อัตโนมัติ คอลัมน์ “จ่ายจริง” คือยอดหลังเกลี่ยแล้ว")}
         </div>
       )}
 
       {!data.all_ready && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
-          <b>ยังดาวน์โหลดไม่ได้</b> มี TA ที่ข้อมูลไม่พร้อม {notReady.length} คน:{" "}
-          {notReady.map(r => `${r.full_name} (${r.profile_issue})`).join(", ")} โปรดให้ TA แก้ไขหรือเจ้าหน้าที่อนุมัติเอกสารก่อน
+        <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+          <b>{t("ยังดาวน์โหลดไม่ได้")}</b>{" "}
+          {t("มี TA ที่ข้อมูลไม่พร้อม {n} คน: {list} โปรดให้ TA แก้ไขหรือเจ้าหน้าที่อนุมัติเอกสารก่อน", { n: notReady.length, list: notReady.map(r => `${r.full_name} (${r.profile_issue})`).join(", ") })}
         </div>
       )}
 
       {archived && (
-        <div className="rounded-lg border border-hairline bg-slate-50/60 dark:bg-slate-900/30 px-3 py-2 text-xs text-ink-2">
-          เดือนที่เลือกส่งออกแล้ว{archived.version > 1 ? ` (ฉบับแก้ไข ครั้งที่ ${archived.version - 1})` : ""}{" "}
-          ยอดตามเอกสาร <b className="tabular">{fmtBaht(archived.total_baht)}</b>
+        <div className="rounded-lg border border-hairline bg-slate-50/60 px-3 py-2 text-xs text-ink-2">
+          {archived.version > 1
+            ? t("เดือนที่เลือกส่งออกแล้ว (ฉบับแก้ไข ครั้งที่ {n})", { n: archived.version - 1 })
+            : t("เดือนที่เลือกส่งออกแล้ว")}{" "}
+          {t.rich("ยอดตามเอกสาร {amount}", { amount: <b className="tabular">{fmtBaht(archived.total_baht)}</b> })}{" "}
           {archived.file_available
-            ? " การดาวน์โหลดจะได้ไฟล์เดิมที่ส่งออกไว้ ไม่มีการคำนวณใหม่"
-            : " ไม่พบไฟล์เดิมในระบบจัดเก็บ การดาวน์โหลดจะสร้างเอกสารใหม่จากยอดที่บันทึกไว้ตอนส่งออก"}
+            ? t("การดาวน์โหลดจะได้ไฟล์เดิมที่ส่งออกไว้ ไม่มีการคำนวณใหม่")
+            : t("ไม่พบไฟล์เดิมในระบบจัดเก็บ การดาวน์โหลดจะสร้างเอกสารใหม่จากยอดที่บันทึกไว้ตอนส่งออก")}
           {archived.legacy && (
-            <span className="block mt-1 text-amber-800 dark:text-amber-200">
-              เดือนนี้ส่งออกก่อนที่ระบบจะบันทึกยอดรายคน ตัวเลขในตารางเป็นการคำนวณใหม่และอาจไม่ตรงกับเอกสาร
-              ยอดที่ถูกต้องคือยอดตามเอกสารด้านบน
+            <span className="block mt-1 text-amber-800">
+              {t("เดือนนี้ส่งออกก่อนที่ระบบจะบันทึกยอดรายคน ตัวเลขในตารางเป็นการคำนวณใหม่และอาจไม่ตรงกับเอกสาร ยอดที่ถูกต้องคือยอดตามเอกสารด้านบน")}
             </span>
           )}
         </div>
       )}
 
       {blockers.length > 0 && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2 text-xs text-red-800 dark:text-red-200">
-          <b>ยังดาวน์โหลดไม่ได้</b> ต้องผ่านครบทุกขั้นก่อน เพราะการดาวน์โหลดจะล็อกตัวเลขทันที
+        <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+          <b>{t("ยังดาวน์โหลดไม่ได้")}</b> {t("ต้องผ่านครบทุกขั้นก่อน เพราะการดาวน์โหลดจะล็อกตัวเลขทันที")}
           <ul className="mt-1 list-disc pl-4 space-y-0.5">
             {blockers.map((b, i) => (
               <li key={i}>
-                {b.ta_name} — {blockerText(b)}{b.months.length > 0 ? ` (${b.months.join(", ")})` : ""}
+                {b.ta_name} — {blockerText(b, t)}{b.months.length > 0 ? ` (${b.months.join(", ")})` : ""}
               </li>
             ))}
           </ul>
@@ -336,28 +337,28 @@ export function ExportPreviewBody({
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-ink-2">
             <tr>
-              <th className="text-left px-3 py-2">ชื่อ TA</th>
-              <th className="text-left px-3 py-2">ระดับ</th>
-              <th className="text-right px-3 py-2">ชม.อนุมัติ</th>
-              <Tip content="ค่าตอบแทนตามชั่วโมงที่อนุมัติ ก่อนปรับตามงบ">
-                <th className="text-right px-3 py-2">เป็นเงิน</th>
+              <th className="text-left px-3 py-2">{t("ชื่อ TA")}</th>
+              <th className="text-left px-3 py-2">{t("ระดับ")}</th>
+              <th className="text-right px-3 py-2">{t("ชม.อนุมัติ")}</th>
+              <Tip content={t("ค่าตอบแทนตามชั่วโมงที่อนุมัติ ก่อนปรับตามงบ")}>
+                <th className="text-right px-3 py-2">{t("เป็นเงิน")}</th>
               </Tip>
-              <Tip content="ยอดที่จ่ายจริงหลังปรับตามงบ หากงบไม่พอระบบแบ่งตามสัดส่วน">
-                <th className="text-right px-3 py-2">จ่ายจริง</th>
+              <Tip content={t("ยอดที่จ่ายจริงหลังปรับตามงบ หากงบไม่พอระบบแบ่งตามสัดส่วน")}>
+                <th className="text-right px-3 py-2">{t("จ่ายจริง")}</th>
               </Tip>
-              <th className="text-left px-3 py-2">ข้อมูล</th>
+              <th className="text-left px-3 py-2">{t("ข้อมูล")}</th>
             </tr>
           </thead>
           <tbody>
             {data.rows.length === 0 ? (
-              <tr><td colSpan={6} className="px-3 py-6 text-center text-muted">ยังไม่มี TA ที่อนุมัติในวิชานี้</td></tr>
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-muted">{t("ยังไม่มี TA ที่อนุมัติในวิชานี้")}</td></tr>
             ) : data.rows.map(r => (
               <tr key={r.ta_id} className="border-t border-hairline">
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{r.full_name}</span>
-                    <Tip content={r.is_returning ? "เคยเป็น TA ในภาคเรียนก่อนหน้า" : "เป็น TA ครั้งแรก"}>
-                      <span><Chip tone={r.is_returning ? "info" : "neutral"}>{r.is_returning ? "เก่า" : "ใหม่"}</Chip></span>
+                    <Tip content={r.is_returning ? t("เคยเป็น TA ในภาคเรียนก่อนหน้า") : t("เป็น TA ครั้งแรก")}>
+                      <span><Chip tone={r.is_returning ? "info" : "neutral"}>{r.is_returning ? t("เก่า") : t("ใหม่")}</Chip></span>
                     </Tip>
                   </div>
                   <div className="text-xs text-ink-3">{r.email}</div>
@@ -367,8 +368,8 @@ export function ExportPreviewBody({
                 <td className="px-3 py-2 text-right tabular">{fmtBaht(r.pay_baht)}</td>
                 <td className="px-3 py-2 text-right tabular">
                   {r.actual_paid !== r.pay_baht ? (
-                    <Tip content={`งบไม่พอ ยอดถูกปรับตามสัดส่วนจาก ${fmtBaht(r.pay_baht)}`}>
-                      <span className="text-amber-700 dark:text-amber-300 font-medium">{fmtBaht(r.actual_paid)}</span>
+                    <Tip content={t("งบไม่พอ ยอดถูกปรับตามสัดส่วนจาก {amount}", { amount: fmtBaht(r.pay_baht) })}>
+                      <span className="text-amber-700 font-medium">{fmtBaht(r.actual_paid)}</span>
                     </Tip>
                   ) : (
                     fmtBaht(r.actual_paid)
@@ -376,7 +377,7 @@ export function ExportPreviewBody({
                 </td>
                 <td className="px-3 py-2">
                   {r.profile_ready ? (
-                    <Chip tone="success"><CheckCircle2 size={11} /> พร้อม</Chip>
+                    <Chip tone="success"><CheckCircle2 size={11} /> {t("พร้อม")}</Chip>
                   ) : (
                     <Chip tone="warn"><AlertTriangle size={11} /> {r.profile_issue}</Chip>
                   )}
@@ -387,7 +388,7 @@ export function ExportPreviewBody({
           {data.rows.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-hairline bg-slate-50/60 font-medium">
-                <td className="px-3 py-2" colSpan={2}>รวม</td>
+                <td className="px-3 py-2" colSpan={2}>{t("รวม")}</td>
                 <td className="px-3 py-2 text-right tabular">
                   {data.rows.reduce((a, r) => a + r.hours_total, 0).toFixed(1)}
                 </td>
@@ -404,15 +405,15 @@ export function ExportPreviewBody({
         <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
           <input type="checkbox" className="mt-0.5" checked={ack} onChange={e => setAck(e.target.checked)} />
           <span>
-            ตรวจสอบข้อมูลข้างต้นถูกต้องแล้ว เข้าใจว่าการดาวน์โหลดจะ<b>ล็อกบันทึกเวลาของเดือนที่อนุมัติครบ</b> (แก้ไม่ได้จนกว่าเจ้าหน้าที่จะตีกลับหรือแอดมินปลดล็อก)
+            {t.rich("ตรวจสอบข้อมูลข้างต้นถูกต้องแล้ว เข้าใจว่าการดาวน์โหลดจะ{lock} (แก้ไม่ได้จนกว่าเจ้าหน้าที่จะตีกลับหรือแอดมินปลดล็อก)", { lock: <b>{t("ล็อกบันทึกเวลาของเดือนที่อนุมัติครบ")}</b> })}
           </span>
         </label>
       )}
       {alreadyExported && blockers.length === 0 && (
         <p className="text-xs text-ink-3">
           {outstandingAfterSplit.length > 0
-            ? <>วิชานี้ส่งออก (ล็อก) งบปีเก่าแล้ว ดาวน์โหลดซ้ำได้ทันที — <b>ยังเหลือ {outstandingAfterSplit.join(", ")}</b> ที่ยังไม่ได้ทำเบิก (งบปีใหม่)</>
-            : "เดือนที่เลือกส่งออก (ล็อก) แล้ว ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม"}
+            ? t.rich("วิชานี้ส่งออก (ล็อก) งบปีเก่าแล้ว ดาวน์โหลดซ้ำได้ทันที — {left} ที่ยังไม่ได้ทำเบิก (งบปีใหม่)", { left: <b>{t("ยังเหลือ {months}", { months: outstandingAfterSplit.join(", ") })}</b> })
+            : t("เดือนที่เลือกส่งออก (ล็อก) แล้ว ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม")}
         </p>
       )}
 
@@ -424,33 +425,33 @@ export function ExportPreviewBody({
         <Button variant="primary" onClick={download} disabled={!canDownload} className="shrink-0">
           {alreadyExported ? <Download size={14} /> : <Lock size={14} />}
           {downloading
-            ? "กำลังดาวน์โหลด…"
+            ? t("กำลังดาวน์โหลด…")
             : alreadyExported
-            ? "ดาวน์โหลดซ้ำ"
-            : "ดาวน์โหลด ZIP (ล็อก)"}
+            ? t("ดาวน์โหลดซ้ำ")
+            : t("ดาวน์โหลด ZIP (ล็อก)")}
         </Button>
       </div>
     </div>
   );
 }
 
-function blockerText(b: ExportBlocker) {
-  if (b.kind === "waiting_ta") return `ยังไม่ส่งบันทึกเวลา ${b.rows ?? 0} รายการ`;
-  if (b.kind === "waiting_lecturer") return `รออาจารย์อนุมัติ ${b.rows ?? 0} รายการ`;
+function blockerText(b: ExportBlocker, t: TFn) {
+  if (b.kind === "waiting_ta") return t("ยังไม่ส่งบันทึกเวลา {n} รายการ", { n: b.rows ?? 0 });
+  if (b.kind === "waiting_lecturer") return t("รออาจารย์อนุมัติ {n} รายการ", { n: b.rows ?? 0 });
   // Approved hours that now overlap the TA's own class timetable (the TA edited
   // it after the hours were approved). Reject or edit those rows first.
-  if (b.kind === "class_clash") return `อนุมัติแล้วแต่ตรงกับตารางเรียนปัจจุบันของ TA ${b.rows ?? 0} รายการ — ตีกลับหรือแก้ไขก่อน`;
+  if (b.kind === "class_clash") return t("อนุมัติแล้วแต่ตรงกับตารางเรียนปัจจุบันของ TA {n} รายการ — ตีกลับหรือแก้ไขก่อน", { n: b.rows ?? 0 });
   // Not a review the officer can do: the review queue does not list this TA
   // until an appointment order names them.
-  if (b.kind === "not_appointed") return "ยังไม่อยู่ในคำสั่งแต่งตั้ง — ออกคำสั่งรอบถัดไปก่อน";
+  if (b.kind === "not_appointed") return t("ยังไม่อยู่ในคำสั่งแต่งตั้ง — ออกคำสั่งรอบถัดไปก่อน");
   // The TA's own documents: staff approve them on the TA documents screen.
-  if (b.kind === "profile") return `เอกสาร TA ยังไม่พร้อม: ${b.issue ?? ""}`;
-  return "ยังไม่ได้ตรวจสอบเบิกจ่าย";
+  if (b.kind === "profile") return t("เอกสาร TA ยังไม่พร้อม: {issue}", { issue: b.issue ?? "" });
+  return t("ยังไม่ได้ตรวจสอบเบิกจ่าย");
 }
 
 function SummaryStat({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "warn" }) {
   return (
-    <div className={`rounded-lg border px-3 py-2 ${tone === "warn" ? "border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/20" : "border-hairline bg-slate-50/60 dark:bg-slate-900/30"}`}>
+    <div className={`rounded-lg border px-3 py-2 ${tone === "warn" ? "border-amber-300 bg-amber-50/60" : "border-hairline bg-slate-50/60"}`}>
       <div className="text-[11px] text-ink-3">{label}</div>
       <div className="text-sm font-semibold tabular">{value}</div>
     </div>

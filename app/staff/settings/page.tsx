@@ -20,6 +20,7 @@ import {
 import { FormulaHelpModal } from "../../components/formula-help";
 import { budgetConfirmMessage } from "../teaching/budgetConfirm";
 import { Skel, SkelValue, SkelList, SkelRows, SkelForm } from "../../components/Skeletons";
+import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 interface Rate {
   id?: string;
@@ -48,6 +49,7 @@ interface Rate {
   note?: string;
 }
 export default function SettingsPage() {
+  const { t } = useI18n();
   const params = useSearchParams();
   // Allow deep-linking to a specific tab, e.g. /staff/settings?tab=terms
   const tabParam = params.get("tab");
@@ -71,18 +73,18 @@ export default function SettingsPage() {
     <div>
       {/* The page-level pill is this screen's one docs entry: it opens the
           whole ตั้งค่า topic (one doc page per tab) in the full manual. */}
-      <PageHeader title="ตั้งค่าระบบ" description="อัตราค่าตอบแทน วิชา ภาคเรียน และฝ่ายบริหาร" />
+      <PageHeader title={t("ตั้งค่าระบบ")} description={t("อัตราค่าตอบแทน วิชา ภาคเรียน และฝ่ายบริหาร")} />
       <Tabs variant="secondary" selectedKey={activeTab} onSelectionChange={k => selectTab(String(k))}>
         <Tabs.ListContainer>
-          <Tabs.List aria-label="หมวดตั้งค่า" data-tour="settings-tabs">
-            <Tabs.Tab id="rate">อัตราค่าตอบแทน<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="terms">ภาคเรียน<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="calendar">ปฏิทินเทอม<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="curricula">หลักสูตร<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="admins">ฝ่ายบริหาร<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="email">อีเมลแจ้งเตือน<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="mail-test">ทดสอบอีเมล<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="demo-access">สิทธิ์ห้องทดลอง<Tabs.Indicator /></Tabs.Tab>
+          <Tabs.List aria-label={t("หมวดตั้งค่า")} data-tour="settings-tabs">
+            <Tabs.Tab id="rate">{t("อัตราค่าตอบแทน")}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="terms">{t("ภาคเรียน")}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="calendar">{t("ปฏิทินเทอม")}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="curricula">{t("หลักสูตร")}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="admins">{t("ฝ่ายบริหาร")}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="email">{t("อีเมลแจ้งเตือน")}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="mail-test">{t("ทดสอบอีเมล")}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="demo-access">{t("สิทธิ์ห้องทดลอง")}<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
 
@@ -131,6 +133,7 @@ function todayLocal(): string {
 }
 
 function PayRateSection() {
+  const { t, fmtDate } = useI18n();
   const { data, error: rateError } = useSWR<Rate>("/settings/pay-rate");
   // Versions saved ahead of time. The backend only starts using one on its own
   // date, so they are listed apart from "in force now" rather than shown as it.
@@ -185,7 +188,7 @@ function PayRateSection() {
     graduate_regular: vPositive(draft.graduate_regular),
     graduate_special_lumpsum: vPositive(draft.graduate_special_lumpsum),
     max_courses_per_student: vPositiveInt(draft.max_courses_per_student)
-      ?? (draft.max_courses_per_student > 10 ? "ต้องไม่เกิน 10 วิชา" : null),
+      ?? (draft.max_courses_per_student > 10 ? msg("ต้องไม่เกิน 10 วิชา") : null),
     ug_lecture_hours_per_credit: vPositive(draft.ug_lecture_hours_per_credit),
     ug_lab_hours_per_credit: vPositive(draft.ug_lab_hours_per_credit),
     baseline_students_lecture: vPositive(draft.baseline_students_lecture),
@@ -199,10 +202,10 @@ function PayRateSection() {
     grad_regular_daily_hour_cap: vPositive(draft.grad_regular_daily_hour_cap),
     plan_students_per_ta: vPositive(draft.plan_students_per_ta),
     plan_min_students_per_ta: vPositive(draft.plan_min_students_per_ta) ??
-      (draft.plan_min_students_per_ta > draft.plan_students_per_ta ? "ต้องไม่มากกว่าเกณฑ์ นศ. ต่อ TA" : null),
+      (draft.plan_min_students_per_ta > draft.plan_students_per_ta ? msg("ต้องไม่มากกว่าเกณฑ์ นศ. ต่อ TA") : null),
   };
   const hasRateErrors = Object.values(rateErrors).some(Boolean);
-  const effectiveFromError = !draft.effective_from ? "กรุณาระบุวันเริ่มใช้" : null;
+  const effectiveFromError = !draft.effective_from ? msg("กรุณาระบุวันเริ่มใช้") : null;
   const effectiveFromPast =
     !!draft.effective_from && draft.effective_from < todayLocal();
   const effectiveFromFuture =
@@ -218,11 +221,11 @@ function PayRateSection() {
       await mutate("/settings/pay-rate/scheduled");
       setEditing(false);
       setConfirming(false);
-      toast.success("บันทึกเวอร์ชันใหม่เรียบร้อยแล้ว", {
-        description: `เริ่มใช้ ${formatThaiDate(draft.effective_from)}`,
+      toast.success(t("บันทึกเวอร์ชันใหม่เรียบร้อยแล้ว"), {
+        description: t("เริ่มใช้ {date}", { date: fmtDate(draft.effective_from) }),
       });
     } catch (e) {
-      toast.danger("บันทึกไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(t("บันทึกไม่สำเร็จ"), { description: errMessage(e) });
     } finally {
       setSaving(false);
     }
@@ -234,12 +237,12 @@ function PayRateSection() {
     try {
       await api.del(`/settings/pay-rate/${withdrawTarget.id}`);
       await mutate("/settings/pay-rate/scheduled");
-      toast.success("ยกเลิกอัตราที่ตั้งล่วงหน้าแล้ว", {
-        description: `เวอร์ชันที่จะเริ่มใช้ ${formatThaiDate(withdrawTarget.effective_from)}`,
+      toast.success(t("ยกเลิกอัตราที่ตั้งล่วงหน้าแล้ว"), {
+        description: t("เวอร์ชันที่จะเริ่มใช้ {date}", { date: fmtDate(withdrawTarget.effective_from) }),
       });
       setWithdrawTarget(null);
     } catch (e) {
-      toast.danger("ยกเลิกไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(t("ยกเลิกไม่สำเร็จ"), { description: errMessage(e) });
     } finally {
       setWithdrawing(false);
     }
@@ -247,22 +250,22 @@ function PayRateSection() {
 
   return (
     <Panel
-      title="อัตราค่าตอบแทน TA"
-      description="ค่าตอบแทนแบบมีเวอร์ชัน สร้างเวอร์ชันใหม่ทุกครั้งที่แก้ (เก็บประวัติ)"
+      title={t("อัตราค่าตอบแทน TA")}
+      description={t("ค่าตอบแทนแบบมีเวอร์ชัน สร้างเวอร์ชันใหม่ทุกครั้งที่แก้ (เก็บประวัติ)")}
       actions={
         editing ? (
           <>
-            <Button variant="ghost" onClick={cancel}><X size={14} />ยกเลิก</Button>
+            <Button variant="ghost" onClick={cancel}><X size={14} />{t("ยกเลิก")}</Button>
             <Button variant="primary" onClick={() => setConfirming(true)} disabled={!canSaveRate}>
-              <Save size={14} />บันทึกเวอร์ชันใหม่
+              <Save size={14} />{t("บันทึกเวอร์ชันใหม่")}
             </Button>
           </>
         ) : (
           <>
             <Button variant="ghost" onClick={() => setShowFormula(true)}>
-              <HelpCircle size={14} />ดูตัวอย่างการคำนวณ
+              <HelpCircle size={14} />{t("ดูตัวอย่างการคำนวณ")}
             </Button>
-            <Button variant="secondary" onClick={startEdit}><Pencil size={14} />แก้ไข</Button>
+            <Button variant="secondary" onClick={startEdit}><Pencil size={14} />{t("แก้ไข")}</Button>
           </>
         )
       }
@@ -271,25 +274,25 @@ function PayRateSection() {
       {!editing && (scheduled?.length ?? 0) > 0 && (
         <div className="mb-5 rounded-lg border border-warning/40 bg-warning-soft/40 p-4">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <CalendarDays size={16} />อัตราที่ตั้งล่วงหน้า (ยังไม่มีผล)
+            <CalendarDays size={16} />{t("อัตราที่ตั้งล่วงหน้า (ยังไม่มีผล)")}
           </div>
           <p className="mt-1 text-xs text-muted">
-            ระบบยังคำนวณด้วยอัตราปัจจุบันด้านล่างจนถึงวันเริ่มใช้ของแต่ละเวอร์ชัน
-            {isAdmin ? "" : " — ถ้าตั้งวันผิด แจ้งผู้ดูแลระบบให้ยกเลิก"}
+            {isAdmin
+              ? t("ระบบยังคำนวณด้วยอัตราปัจจุบันด้านล่างจนถึงวันเริ่มใช้ของแต่ละเวอร์ชัน")
+              : t("ระบบยังคำนวณด้วยอัตราปัจจุบันด้านล่างจนถึงวันเริ่มใช้ของแต่ละเวอร์ชัน — ถ้าตั้งวันผิด แจ้งผู้ดูแลระบบให้ยกเลิก")}
           </p>
           <ul className="mt-3 space-y-2">
             {scheduled!.map(r => (
               <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                <span className="font-medium">เริ่มใช้ {formatThaiDate(r.effective_from)}</span>
-                <Tip content={`ปริญญาตรี ภาคปกติ ${r.undergrad_regular} บาท/ชั่วโมง\nปริญญาตรี ภาคพิเศษ ${r.undergrad_special} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคปกติ ${r.graduate_regular_hourly} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคพิเศษ เหมาจ่าย ${r.graduate_special_lumpsum.toLocaleString()} บาท/คน/วิชา/ภาค`}>
+                <span className="font-medium">{t("เริ่มใช้ {date}", { date: fmtDate(r.effective_from) })}</span>
+                <Tip content={t("ปริญญาตรี ภาคปกติ {ugr} บาท/ชั่วโมง\nปริญญาตรี ภาคพิเศษ {ugs} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคปกติ {gr} บาท/ชั่วโมง\nบัณฑิตศึกษา ภาคพิเศษ เหมาจ่าย {ls} บาท/คน/วิชา/ภาค", { ugr: r.undergrad_regular, ugs: r.undergrad_special, gr: r.graduate_regular_hourly, ls: r.graduate_special_lumpsum.toLocaleString() })}>
                   <span className="text-muted">
-                    ตรี {r.undergrad_regular}/{r.undergrad_special} · บัณฑิต {r.graduate_regular_hourly} บาท/ชม.
-                    · เหมาจ่าย {r.graduate_special_lumpsum.toLocaleString()} บาท/ภาค
+                    {t("ตรี {ugr}/{ugs} · บัณฑิต {gr} บาท/ชม. · เหมาจ่าย {ls} บาท/ภาค", { ugr: r.undergrad_regular, ugs: r.undergrad_special, gr: r.graduate_regular_hourly, ls: r.graduate_special_lumpsum.toLocaleString() })}
                   </span>
                 </Tip>
                 {isAdmin && (
                   <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setWithdrawTarget(r)}>
-                    <Trash2 size={14} />ยกเลิกเวอร์ชันนี้
+                    <Trash2 size={14} />{t("ยกเลิกเวอร์ชันนี้")}
                   </Button>
                 )}
               </li>
@@ -304,35 +307,35 @@ function PayRateSection() {
           <PayRateSkeleton />
         ) : data ? (
           <div className="space-y-5">
-            <ViewGroup title="อัตราค่าจ้าง ปริญญาตรี" hint="อ้างอิงประกาศ 731/2565 + 1080/2565">
-              <ViewRow label="ภาคปกติ" value={`${data.undergrad_regular} บาท/ชั่วโมง`} />
-              <ViewRow label="ภาคพิเศษ" value={`${data.undergrad_special} บาท/ชั่วโมง`} />
-              <ViewRow label="ชั่วโมงสูงสุด/วัน (ปกติ)" value={`${data.ug_regular_daily_hour_cap ?? 7} ชั่วโมง`} />
-              <ViewRow label="ชั่วโมงสูงสุด/วัน (พิเศษ)" value={`${data.ug_special_daily_hour_cap ?? 6} ชั่วโมง`} />
+            <ViewGroup title={t("อัตราค่าจ้าง ปริญญาตรี")} hint={t("อ้างอิงประกาศ 731/2565 + 1080/2565")}>
+              <ViewRow label={t("ภาคปกติ")} value={t("{n} บาท/ชั่วโมง", { n: data.undergrad_regular })} />
+              <ViewRow label={t("ภาคพิเศษ")} value={t("{n} บาท/ชั่วโมง", { n: data.undergrad_special })} />
+              <ViewRow label={t("ชั่วโมงสูงสุด/วัน (ปกติ)")} value={t("{n} ชั่วโมง", { n: data.ug_regular_daily_hour_cap ?? 7 })} />
+              <ViewRow label={t("ชั่วโมงสูงสุด/วัน (พิเศษ)")} value={t("{n} ชั่วโมง", { n: data.ug_special_daily_hour_cap ?? 6 })} />
             </ViewGroup>
-            <ViewGroup title="อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)">
-              <ViewRow label="ภาคปกติ (คิดชั่วโมง)" value={`${data.graduate_regular_hourly ?? 50} บาท/ชั่วโมง`} />
-              <ViewRow label="ชั่วโมงสูงสุด/วัน (บัณฑิต ปกติ)" value={`${data.grad_regular_daily_hour_cap ?? 6} ชั่วโมง`} />
-              <ViewRow label="ภาคพิเศษ (เหมาจ่าย)" value={`${data.graduate_special_lumpsum.toLocaleString()} บาท/คน/วิชา/ภาค`} />
-              <ViewRow label="เพดานพิเศษ/เทอม (ต่อ TA × วิชา)" value={`${(data.grad_special_term_cap ?? 12000).toLocaleString()} บาท`} />
+            <ViewGroup title={t("อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)")}>
+              <ViewRow label={t("ภาคปกติ (คิดชั่วโมง)")} value={t("{n} บาท/ชั่วโมง", { n: data.graduate_regular_hourly ?? 50 })} />
+              <ViewRow label={t("ชั่วโมงสูงสุด/วัน (บัณฑิต ปกติ)")} value={t("{n} ชั่วโมง", { n: data.grad_regular_daily_hour_cap ?? 6 })} />
+              <ViewRow label={t("ภาคพิเศษ (เหมาจ่าย)")} value={t("{n} บาท/คน/วิชา/ภาค", { n: data.graduate_special_lumpsum.toLocaleString() })} />
+              <ViewRow label={t("เพดานพิเศษ/เทอม (ต่อ TA × วิชา)")} value={t("{n} บาท", { n: (data.grad_special_term_cap ?? 12000).toLocaleString() })} />
             </ViewGroup>
-            <ViewGroup title="เพดานรายวัน (ทุกคนคิดชั่วโมง)">
-              <ViewRow label="ค่าตอบแทนสูงสุด/วัน" value={`${(data.daily_pay_cap_baht ?? 300).toLocaleString()} บาท`} />
+            <ViewGroup title={t("เพดานรายวัน (ทุกคนคิดชั่วโมง)")}>
+              <ViewRow label={t("ค่าตอบแทนสูงสุด/วัน")} value={t("{n} บาท", { n: (data.daily_pay_cap_baht ?? 300).toLocaleString() })} />
             </ViewGroup>
-            <ViewGroup title="เกณฑ์วางแผนจำนวน TA" hint="ใช้ในตัววางแผน TA บนหน้าอาจารย์">
-              <ViewRow label="เกณฑ์ 1 TA ต่อ นศ." value={`${data.plan_students_per_ta ?? 25} คน`} />
-              <ViewRow label="ไม่เกิน 1 TA ต่อ นศ." value={`${data.plan_min_students_per_ta ?? 15} คน`} />
-              <ViewRow label="เพดานจำนวน TA ตามเกณฑ์" value={(data.plan_suggested_ta_cap ?? 3) > 0 ? `${data.plan_suggested_ta_cap ?? 3} คน` : "ไม่จำกัด"} />
+            <ViewGroup title={t("เกณฑ์วางแผนจำนวน TA")} hint={t("ใช้ในตัววางแผน TA บนหน้าอาจารย์")}>
+              <ViewRow label={t("เกณฑ์ 1 TA ต่อ นศ.")} value={t("{n} คน", { n: data.plan_students_per_ta ?? 25 })} />
+              <ViewRow label={t("ไม่เกิน 1 TA ต่อ นศ.")} value={t("{n} คน", { n: data.plan_min_students_per_ta ?? 15 })} />
+              <ViewRow label={t("เพดานจำนวน TA ตามเกณฑ์")} value={(data.plan_suggested_ta_cap ?? 3) > 0 ? t("{n} คน", { n: data.plan_suggested_ta_cap ?? 3 }) : t("ไม่จำกัด")} />
             </ViewGroup>
-            <ViewGroup title="ข้อกำหนดทั่วไป" hint={`ใช้ตั้งแต่ ${formatThaiDate(data.effective_from)}`}>
-              <ViewRow label="จำนวนวิชา TA สูงสุด/คน" value={`${data.max_courses_per_student ?? 3} วิชา`} />
+            <ViewGroup title={t("ข้อกำหนดทั่วไป")} hint={t("ใช้ตั้งแต่ {date}", { date: fmtDate(data.effective_from) })}>
+              <ViewRow label={t("จำนวนวิชา TA สูงสุด/คน")} value={t("{n} วิชา", { n: data.max_courses_per_student ?? 3 })} />
             </ViewGroup>
-            <ViewGroup title="สูตรคำนวณโหลด TA ปริญญาตรี">
-              <ViewRow label="ชั่วโมงบรรยาย / หน่วยกิต" value={data.ug_lecture_hours_per_credit} />
-              <ViewRow label="ชั่วโมงปฏิบัติ / หน่วยกิต" value={data.ug_lab_hours_per_credit} />
-              <ViewRow label="Baseline นศ./sec บรรยาย" value={data.baseline_students_lecture} />
-              <ViewRow label="Baseline นศ./sec ปฏิบัติ" value={data.baseline_students_lab} />
-              <ViewRow label="Effective rate (บาท/ชั่วโมงสัปดาห์/เดือน)" value={data.ug_workload_rate_regular} />
+            <ViewGroup title={t("สูตรคำนวณโหลด TA ปริญญาตรี")}>
+              <ViewRow label={t("ชั่วโมงบรรยาย / หน่วยกิต")} value={data.ug_lecture_hours_per_credit} />
+              <ViewRow label={t("ชั่วโมงปฏิบัติ / หน่วยกิต")} value={data.ug_lab_hours_per_credit} />
+              <ViewRow label={t("Baseline นศ./sec บรรยาย")} value={data.baseline_students_lecture} />
+              <ViewRow label={t("Baseline นศ./sec ปฏิบัติ")} value={data.baseline_students_lab} />
+              <ViewRow label={t("Effective rate (บาท/ชั่วโมงสัปดาห์/เดือน)")} value={data.ug_workload_rate_regular} />
             </ViewGroup>
 
             <button
@@ -344,74 +347,74 @@ function PayRateSection() {
                 <Sparkles size={18} />
               </span>
               <span className="flex-1">
-                <span className="block text-sm font-medium">ดูตัวอย่างการคำนวณทีละขั้น</span>
+                <span className="block text-sm font-medium">{t("ดูตัวอย่างการคำนวณทีละขั้น")}</span>
                 <span className="block text-xs text-muted mt-0.5">
-                  ใช้ค่า rate ปัจจุบันด้านบน + วิชาตัวอย่าง 2 หน่วยกิตบรรยาย + 1 หน่วยกิตปฏิบัติ + 5 นักศึกษาภาคปกติ
+                  {t("ใช้ค่า rate ปัจจุบันด้านบน + วิชาตัวอย่าง 2 หน่วยกิตบรรยาย + 1 หน่วยกิตปฏิบัติ + 5 นักศึกษาภาคปกติ")}
                 </span>
               </span>
               <span className="text-muted group-hover:text-accent transition-colors">→</span>
             </button>
           </div>
         ) : (
-          <div className="text-sm text-muted py-4">ยังไม่มีอัตราค่าตอบแทน กด "แก้ไข" เพื่อกำหนดครั้งแรก</div>
+          <div className="text-sm text-muted py-4">{t("ยังไม่มีอัตราค่าตอบแทน กด \"แก้ไข\" เพื่อกำหนดครั้งแรก")}</div>
         )
       )}
 
       {/* Edit mode */}
       {editing && (
         <div className="space-y-6">
-          <EditGroup title="อัตราค่าจ้าง ปริญญาตรี" description="ประกาศ 731/2565: ปกติ 40, พิเศษ 50 บาท/ชั่วโมง">
-            <F label="ตรี ปกติ (บาท/ชั่วโมง)" type="number" min={0} value={draft.undergrad_regular}
+          <EditGroup title={t("อัตราค่าจ้าง ปริญญาตรี")} description={t("ประกาศ 731/2565: ปกติ 40, พิเศษ 50 บาท/ชั่วโมง")}>
+            <F label={t("ตรี ปกติ (บาท/ชั่วโมง)")} type="number" min={0} value={draft.undergrad_regular}
                error={rateErrors.undergrad_regular}
                onChange={v => setDraft({ ...draft, undergrad_regular: Number(v) })} />
-            <F label="ตรี พิเศษ (บาท/ชั่วโมง)" type="number" min={0} value={draft.undergrad_special}
+            <F label={t("ตรี พิเศษ (บาท/ชั่วโมง)")} type="number" min={0} value={draft.undergrad_special}
                error={rateErrors.undergrad_special}
                onChange={v => setDraft({ ...draft, undergrad_special: Number(v) })} />
-            <F label="ชม. สูงสุด/วัน (ปกติ)" type="number" min={0} value={draft.ug_regular_daily_hour_cap}
+            <F label={t("ชม. สูงสุด/วัน (ปกติ)")} type="number" min={0} value={draft.ug_regular_daily_hour_cap}
                error={rateErrors.ug_regular_daily_hour_cap}
                onChange={v => setDraft({ ...draft, ug_regular_daily_hour_cap: Number(v) })} />
-            <F label="ชม. สูงสุด/วัน (พิเศษ)" type="number" min={0} value={draft.ug_special_daily_hour_cap}
+            <F label={t("ชม. สูงสุด/วัน (พิเศษ)")} type="number" min={0} value={draft.ug_special_daily_hour_cap}
                error={rateErrors.ug_special_daily_hour_cap}
                onChange={v => setDraft({ ...draft, ug_special_daily_hour_cap: Number(v) })} />
           </EditGroup>
 
-          <EditGroup title="อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)" description="ประกาศ 1080/2565: ปกติ 50 บาท/ชม., พิเศษเหมาจ่าย 4,000 บาท/คน/วิชา/ภาค (ไม่เกินเพดานต่อเทอมด้านล่าง)">
-            <F label="ภาคปกติ (บาท/ชั่วโมง)" type="number" min={0} value={draft.graduate_regular_hourly}
+          <EditGroup title={t("อัตราค่าจ้าง บัณฑิตศึกษา (โท/เอก)")} description={t("ประกาศ 1080/2565: ปกติ 50 บาท/ชม., พิเศษเหมาจ่าย 4,000 บาท/คน/วิชา/ภาค (ไม่เกินเพดานต่อเทอมด้านล่าง)")}>
+            <F label={t("ภาคปกติ (บาท/ชั่วโมง)")} type="number" min={0} value={draft.graduate_regular_hourly}
                error={rateErrors.graduate_regular_hourly}
                onChange={v => setDraft({ ...draft, graduate_regular_hourly: Number(v) })} />
-            <F label="ชม. สูงสุด/วัน (บัณฑิต ปกติ)" type="number" min={0} value={draft.grad_regular_daily_hour_cap}
+            <F label={t("ชม. สูงสุด/วัน (บัณฑิต ปกติ)")} type="number" min={0} value={draft.grad_regular_daily_hour_cap}
                error={rateErrors.grad_regular_daily_hour_cap}
                onChange={v => setDraft({ ...draft, grad_regular_daily_hour_cap: Number(v) })} />
-            <F label="ภาคพิเศษ (เหมาจ่าย/คน/วิชา/ภาค)" type="number" min={0} value={draft.graduate_special_lumpsum}
+            <F label={t("ภาคพิเศษ (เหมาจ่าย/คน/วิชา/ภาค)")} type="number" min={0} value={draft.graduate_special_lumpsum}
                error={rateErrors.graduate_special_lumpsum}
                onChange={v => setDraft({ ...draft, graduate_special_lumpsum: Number(v) })} />
-            <F label="เพดานพิเศษ/เทอม (ต่อ TA × วิชา)" type="number" min={0} value={draft.grad_special_term_cap}
+            <F label={t("เพดานพิเศษ/เทอม (ต่อ TA × วิชา)")} type="number" min={0} value={draft.grad_special_term_cap}
                error={rateErrors.grad_special_term_cap}
                onChange={v => setDraft({ ...draft, grad_special_term_cap: Number(v) })} />
           </EditGroup>
 
-          <EditGroup title="เพดานรายวัน (ทุกคนคิดชั่วโมง)" description="ประกาศ: ค่าตอบแทนรวมของ TA ที่คิดชั่วโมง ต้องไม่เกิน 300 บาท/วัน">
-            <F label="ค่าตอบแทนสูงสุด/วัน (บาท)" type="number" min={0} value={draft.daily_pay_cap_baht}
+          <EditGroup title={t("เพดานรายวัน (ทุกคนคิดชั่วโมง)")} description={t("ประกาศ: ค่าตอบแทนรวมของ TA ที่คิดชั่วโมง ต้องไม่เกิน 300 บาท/วัน")}>
+            <F label={t("ค่าตอบแทนสูงสุด/วัน (บาท)")} type="number" min={0} value={draft.daily_pay_cap_baht}
                error={rateErrors.daily_pay_cap_baht}
                onChange={v => setDraft({ ...draft, daily_pay_cap_baht: Number(v) })} />
           </EditGroup>
 
-          <EditGroup title="เกณฑ์วางแผนจำนวน TA" description="ตัววางแผนบนหน้าอาจารย์: ให้ครบตามเกณฑ์ก่อน แล้วเพิ่มคนได้จนถึงความหนาแน่นสูงสุด ถ้างบพอ">
-            <F label="เกณฑ์ 1 TA ต่อ นศ. (คน)" type="number" min={1} value={draft.plan_students_per_ta}
+          <EditGroup title={t("เกณฑ์วางแผนจำนวน TA")} description={t("ตัววางแผนบนหน้าอาจารย์: ให้ครบตามเกณฑ์ก่อน แล้วเพิ่มคนได้จนถึงความหนาแน่นสูงสุด ถ้างบพอ")}>
+            <F label={t("เกณฑ์ 1 TA ต่อ นศ. (คน)")} type="number" min={1} value={draft.plan_students_per_ta}
                error={rateErrors.plan_students_per_ta}
                onChange={v => setDraft({ ...draft, plan_students_per_ta: Number(v) })} />
-            <F label="ไม่เกิน 1 TA ต่อ นศ. (คน)" type="number" min={1} value={draft.plan_min_students_per_ta}
+            <F label={t("ไม่เกิน 1 TA ต่อ นศ. (คน)")} type="number" min={1} value={draft.plan_min_students_per_ta}
                error={rateErrors.plan_min_students_per_ta}
                onChange={v => setDraft({ ...draft, plan_min_students_per_ta: Number(v) })} />
-            <F label="เพดานจำนวน TA ตามเกณฑ์ (0 = ไม่จำกัด)" type="number" min={0} value={draft.plan_suggested_ta_cap}
+            <F label={t("เพดานจำนวน TA ตามเกณฑ์ (0 = ไม่จำกัด)")} type="number" min={0} value={draft.plan_suggested_ta_cap}
                onChange={v => setDraft({ ...draft, plan_suggested_ta_cap: Number(v) })} />
           </EditGroup>
 
-          <EditGroup title="ข้อกำหนดทั่วไป" description="เริ่มใช้เมื่อไร + ข้อจำกัดตามระเบียบ (จำนวนเดือนของแต่ละเทอมกำหนดที่แท็บ 'ภาคเรียน')">
-            <F label="เริ่มใช้" type="date" value={draft.effective_from}
+          <EditGroup title={t("ข้อกำหนดทั่วไป")} description={t("เริ่มใช้เมื่อไร + ข้อจำกัดตามระเบียบ (จำนวนเดือนของแต่ละเทอมกำหนดที่แท็บ 'ภาคเรียน')")}>
+            <F label={t("เริ่มใช้")} type="date" value={draft.effective_from}
                error={effectiveFromError}
                onChange={v => setDraft({ ...draft, effective_from: v })} />
-            <F label="จำนวนวิชา TA สูงสุด/คน/ภาค (1–10, ระบบใช้ตัดสินคำขอ TA ทันที)" type="number" min={1} value={draft.max_courses_per_student}
+            <F label={t("จำนวนวิชา TA สูงสุด/คน/ภาค (1–10, ระบบใช้ตัดสินคำขอ TA ทันที)")} type="number" min={1} value={draft.max_courses_per_student}
                error={rateErrors.max_courses_per_student}
                onChange={v => setDraft({ ...draft, max_courses_per_student: Number(v) })} />
           </EditGroup>
@@ -420,36 +423,36 @@ function PayRateSection() {
             <Alert
               status="accent"
               icon={<CalendarDays size={16} />}
-              title="ตั้งอัตราล่วงหน้า"
-              description={`เวอร์ชันนี้จะเริ่มมีผลวันที่ ${formatThaiDate(draft.effective_from)} — ก่อนถึงวันนั้นระบบยังคำนวณด้วยอัตราปัจจุบัน`}
+              title={t("ตั้งอัตราล่วงหน้า")}
+              description={t("เวอร์ชันนี้จะเริ่มมีผลวันที่ {date} — ก่อนถึงวันนั้นระบบยังคำนวณด้วยอัตราปัจจุบัน", { date: fmtDate(draft.effective_from) })}
             />
           )}
           {effectiveFromPast && (
             <Alert
               status="warning"
               icon={<CircleAlert size={16} />}
-              title="วันเริ่มใช้เป็นวันในอดีต"
-              description="เวอร์ชันนี้จะเริ่มใช้ย้อนหลัง อาจกระทบการคำนวณค่าจ้างของรายการที่ผ่านมา โปรดตรวจสอบก่อนบันทึก"
+              title={t("วันเริ่มใช้เป็นวันในอดีต")}
+              description={t("เวอร์ชันนี้จะเริ่มใช้ย้อนหลัง อาจกระทบการคำนวณค่าจ้างของรายการที่ผ่านมา โปรดตรวจสอบก่อนบันทึก")}
             />
           )}
 
           <EditGroup
-            title="สูตรคำนวณโหลด TA ปริญญาตรี"
-            description="ตามชีต 2_59 ป.ตรี ปกติ/พิเศษ ใช้ effective rate เดียวกัน (default 300 = 50% × 200 ตรี + 50% × 400 บัณฑิต)"
+            title={t("สูตรคำนวณโหลด TA ปริญญาตรี")}
+            description={t("ตามชีต 2_59 ป.ตรี ปกติ/พิเศษ ใช้ effective rate เดียวกัน (default 300 = 50% × 200 ตรี + 50% × 400 บัณฑิต)")}
           >
-            <F label="ชั่วโมงบรรยาย / หน่วยกิต" type="number" min={0} value={draft.ug_lecture_hours_per_credit}
+            <F label={t("ชั่วโมงบรรยาย / หน่วยกิต")} type="number" min={0} value={draft.ug_lecture_hours_per_credit}
                error={rateErrors.ug_lecture_hours_per_credit}
                onChange={v => setDraft({ ...draft, ug_lecture_hours_per_credit: Number(v) })} />
-            <F label="ชั่วโมงปฏิบัติ / หน่วยกิต" type="number" min={0} value={draft.ug_lab_hours_per_credit}
+            <F label={t("ชั่วโมงปฏิบัติ / หน่วยกิต")} type="number" min={0} value={draft.ug_lab_hours_per_credit}
                error={rateErrors.ug_lab_hours_per_credit}
                onChange={v => setDraft({ ...draft, ug_lab_hours_per_credit: Number(v) })} />
-            <F label="Baseline นักศึกษา/section บรรยาย" type="number" min={0} value={draft.baseline_students_lecture}
+            <F label={t("Baseline นักศึกษา/section บรรยาย")} type="number" min={0} value={draft.baseline_students_lecture}
                error={rateErrors.baseline_students_lecture}
                onChange={v => setDraft({ ...draft, baseline_students_lecture: Number(v) })} />
-            <F label="Baseline นักศึกษา/section ปฏิบัติ" type="number" min={0} value={draft.baseline_students_lab}
+            <F label={t("Baseline นักศึกษา/section ปฏิบัติ")} type="number" min={0} value={draft.baseline_students_lab}
                error={rateErrors.baseline_students_lab}
                onChange={v => setDraft({ ...draft, baseline_students_lab: Number(v) })} />
-            <F label="Effective rate (บาท/ชั่วโมง/สัปดาห์/เดือน)" type="number" min={0} value={draft.ug_workload_rate_regular}
+            <F label={t("Effective rate (บาท/ชั่วโมง/สัปดาห์/เดือน)")} type="number" min={0} value={draft.ug_workload_rate_regular}
                error={rateErrors.ug_workload_rate_regular}
                onChange={v => setDraft({ ...draft, ug_workload_rate_regular: Number(v) })} />
           </EditGroup>
@@ -461,8 +464,8 @@ function PayRateSection() {
         onClose={() => setConfirming(false)}
         onConfirm={doSave}
         saving={saving}
-        title="ยืนยันสร้างเวอร์ชันใหม่?"
-        description={`ระบบจะสร้างอัตราค่าตอบแทนเวอร์ชันใหม่ เริ่มใช้ ${formatThaiDate(draft.effective_from)} เวอร์ชันเก่ายังเก็บไว้เป็นประวัติ`}
+        title={t("ยืนยันสร้างเวอร์ชันใหม่?")}
+        description={t("ระบบจะสร้างอัตราค่าตอบแทนเวอร์ชันใหม่ เริ่มใช้ {date} เวอร์ชันเก่ายังเก็บไว้เป็นประวัติ", { date: fmtDate(draft.effective_from) })}
       />
 
       <ConfirmSaveModal
@@ -471,10 +474,10 @@ function PayRateSection() {
         onConfirm={doWithdraw}
         saving={withdrawing}
         variant="danger"
-        confirmLabel="ยกเลิกเวอร์ชันนี้"
+        confirmLabel={t("ยกเลิกเวอร์ชันนี้")}
         confirmIcon={<Trash2 size={14} />}
-        title="ยกเลิกอัตราที่ตั้งล่วงหน้า?"
-        description={`เวอร์ชันที่จะเริ่มใช้ ${withdrawTarget ? formatThaiDate(withdrawTarget.effective_from) : ""} ยังไม่เคยถูกใช้คำนวณ ยกเลิกได้โดยไม่กระทบยอดใด ๆ (บันทึกไว้ในประวัติการใช้งาน)`}
+        title={t("ยกเลิกอัตราที่ตั้งล่วงหน้า?")}
+        description={t("เวอร์ชันที่จะเริ่มใช้ {date} ยังไม่เคยถูกใช้คำนวณ ยกเลิกได้โดยไม่กระทบยอดใด ๆ (บันทึกไว้ในประวัติการใช้งาน)", { date: withdrawTarget ? fmtDate(withdrawTarget.effective_from) : "" })}
       />
 
       <FormulaHelpModal
@@ -490,8 +493,8 @@ function PayRateSection() {
         }}
         example={{
           lecCr: 2, labCr: 1, students: 5,
-          trackLabel: "ภาคปกติ (ตัวอย่าง)",
-          courseName: "ตัวอย่าง SW-TESTING (3 นก.)",
+          trackLabel: t("ภาคปกติ (ตัวอย่าง)"),
+          courseName: t("ตัวอย่าง SW-TESTING (3 นก.)"),
         }}
       />
     </Panel>
@@ -524,32 +527,17 @@ interface TermUsage {
 }
 
 const SEMESTER_LABELS: Record<number, string> = {
-  1: "ภาคต้น",
-  2: "ภาคปลาย",
-  3: "ภาคฤดูร้อน",
+  1: msg("ภาคต้น"),
+  2: msg("ภาคปลาย"),
+  3: msg("ภาคฤดูร้อน"),
 };
 
-function semesterLabel(n: number): string {
-  return SEMESTER_LABELS[n] ?? `ภาค ${n}`;
+function semesterLabel(n: number, t: TFn): string {
+  return SEMESTER_LABELS[n] ? t(SEMESTER_LABELS[n]) : t("ภาค {n}", { n });
 }
 
-function termLabel(t: Pick<Term, "academic_year" | "semester">) {
-  return `${t.academic_year} ${semesterLabel(t.semester)}`;
-}
-
-const THAI_MONTHS_ABBR = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-] as const;
-
-// "2569-06-22" or "2026-06-22" (ISO Gregorian) → "22 มิ.ย. 2569" (BE).
-function formatThaiDate(iso?: string | null): string {
-  if (!iso) return "—";
-  const parts = iso.split("-").map(Number);
-  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return iso;
-  const [y, m, d] = parts;
-  if (m < 1 || m > 12) return iso;
-  return `${d} ${THAI_MONTHS_ABBR[m - 1]} ${y + 543}`;
+function termLabel(term: Pick<Term, "academic_year" | "semester">, t: TFn) {
+  return `${term.academic_year} ${semesterLabel(term.semester, t)}`;
 }
 
 // Wrap a Thai-locale DatePicker around an ISO-YYYY-MM-DD string. The
@@ -563,12 +551,13 @@ function TermDateField({
   onChange: (iso: string) => void;
   autoFocus?: boolean;
 }) {
+  const { intl } = useI18n();
   let dv: DateValue | null = null;
   if (value) {
     try { dv = parseDate(value); } catch { dv = null; }
   }
   return (
-    <I18nProvider locale="th-TH">
+    <I18nProvider locale={intl}>
       <DatePicker
         aria-label={label}
         value={dv}
@@ -632,6 +621,7 @@ function mutateAllTerms() {
 }
 
 function TermsSection() {
+  const { t, fmtDate } = useI18n();
   const router = useRouter();
   // Progressive load: start with the last N years, widen when the user asks.
   // Null = load everything (no filter).
@@ -751,25 +741,25 @@ function TermsSection() {
     // Holidays for the term's years now sync automatically from TDBM (see
     // /staff/holidays) — no BOT prompt needed here any more.
     if (mode === "edit" || !saved.id) {
-      toast.success(mode === "edit" ? `แก้ไข${label} เรียบร้อยแล้ว` : `เพิ่ม${label} เรียบร้อยแล้ว`);
+      toast.success(mode === "edit" ? t("แก้ไข{label} เรียบร้อยแล้ว", { label }) : t("เพิ่ม{label} เรียบร้อยแล้ว", { label }));
       return;
     }
     // A new term takes no TA request and no work log until staff set its
     // ช่วงรับคำขอ and รอบเบิกจ่าย (both enforced by the backend), so the next
     // step is the calendar tab, on the term just created.
-    toast.success(`เพิ่ม${label} เรียบร้อยแล้ว`, {
-      description: "ขั้นต่อไป กำหนดช่วงรับคำขอ TA และรอบเบิกจ่ายรายเดือนของภาคเรียนนี้",
+    toast.success(t("เพิ่ม{label} เรียบร้อยแล้ว", { label }), {
+      description: t("ขั้นต่อไป กำหนดช่วงรับคำขอ TA และรอบเบิกจ่ายรายเดือนของภาคเรียนนี้"),
     });
     router.push(`/staff/settings?tab=calendar&term=${saved.id}`);
   }
 
   return (
     <Panel
-      title="ปีการศึกษา / ภาคเรียน"
-      description="สร้างปีการศึกษาก่อน แล้วจึงเพิ่มภาคเรียนในปีนั้น (ภาคต้น / ภาคปลาย / ภาคฤดูร้อน)"
+      title={t("ปีการศึกษา / ภาคเรียน")}
+      description={t("สร้างปีการศึกษาก่อน แล้วจึงเพิ่มภาคเรียนในปีนั้น (ภาคต้น / ภาคปลาย / ภาคฤดูร้อน)")}
       actions={
         <Button variant="primary" onClick={openAddYear}>
-          <Plus size={14} />เพิ่มปีการศึกษา
+          <Plus size={14} />{t("เพิ่มปีการศึกษา")}
         </Button>
       }
     >
@@ -782,33 +772,33 @@ function TermsSection() {
           <SkelList items={3} icon={false} bordered />
         </div>
       ) : grouped.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีปีการศึกษา กด "เพิ่มปีการศึกษา" เพื่อเริ่ม</div>
+        <div className="text-sm text-muted py-4">{t("ยังไม่มีปีการศึกษา กด \"เพิ่มปีการศึกษา\" เพื่อเริ่ม")}</div>
       ) : (
         <div className="space-y-3">
           <div className="flex items-end gap-3 flex-wrap">
             <SearchField
               value={yearFilter}
               onChange={setYearFilter}
-              placeholder="ค้นหาปีการศึกษา… (เช่น 2568)"
-              ariaLabel="ค้นหาปีการศึกษา"
+              placeholder={t("ค้นหาปีการศึกษา… (เช่น 2568)")}
+              ariaLabel={t("ค้นหาปีการศึกษา")}
             />
             <div className="text-xs text-muted tabular ms-auto">
               {yearFilter.trim()
-                ? `พบ ${visibleGroups.length} ปี`
+                ? t("พบ {n} ปี", { n: visibleGroups.length })
                 : totalYears !== undefined
-                  ? `โหลด ${grouped.length} จาก ${totalYears} ปี`
-                  : `${grouped.length} ปี`}
+                  ? t("โหลด {n} จาก {total} ปี", { n: grouped.length, total: totalYears })
+                  : t("{n} ปี", { n: grouped.length })}
             </div>
           </div>
 
           {visibleGroups.length === 0 ? (
             <div className="space-y-2 py-6 text-center">
               <div className="text-sm text-muted">
-                ไม่พบปีการศึกษา "{yearFilter}" ในที่โหลดไว้
+                {t("ไม่พบปีการศึกษา \"{q}\" ในที่โหลดไว้", { q: yearFilter })}
               </div>
               {hiddenCount > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => setYearFromLimit(null)}>
-                  โหลดปีทั้งหมด ({hiddenCount} ปีที่ยังไม่โหลด) แล้วค้นใหม่
+                  {t("โหลดปีทั้งหมด ({n} ปีที่ยังไม่โหลด) แล้วค้นใหม่", { n: hiddenCount })}
                 </Button>
               )}
             </div>
@@ -834,7 +824,7 @@ function TermsSection() {
                         key={`decade-${decade}`}
                         className="text-xs font-medium text-muted uppercase tracking-wider pt-3 pb-1 px-1 tabular"
                       >
-                        ทศวรรษ {decade}
+                        {t("ทศวรรษ {decade}", { decade })}
                       </div>
                     );
                     lastDecade = decade;
@@ -851,9 +841,9 @@ function TermsSection() {
                     <Accordion.Heading>
                       <Accordion.Trigger>
                         <span className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className="text-base font-bold tabular">ปีการศึกษา {year}</span>
+                          <span className="text-base font-bold tabular">{t("ปีการศึกษา {year}", { year })}</span>
                           <span className="text-xs text-muted">
-                            {list.length > 0 ? `· ${list.length} ภาคเรียน` : "· ยังไม่ได้เพิ่มภาคเรียน"}
+                            {list.length > 0 ? t("· {n} ภาคเรียน", { n: list.length }) : t("· ยังไม่ได้เพิ่มภาคเรียน")}
                           </span>
                           {hasActive && <Chip tone="success">active</Chip>}
                         </span>
@@ -865,61 +855,61 @@ function TermsSection() {
                         <div className="flex justify-end mb-3">
                           {hasEmptySlot && (
                             <Button variant="secondary" size="sm" onClick={() => openAddTerm(year)}>
-                              <Plus size={13} />เพิ่มภาคเรียน
+                              <Plus size={13} />{t("เพิ่มภาคเรียน")}
                             </Button>
                           )}
                         </div>
                         {list.length === 0 ? (
                           <div className="text-sm text-muted py-4">
-                            ยังไม่มีภาคเรียนในปีนี้ กด "เพิ่มภาคเรียน" เพื่อเริ่ม
+                            {t("ยังไม่มีภาคเรียนในปีนี้ กด \"เพิ่มภาคเรียน\" เพื่อเริ่ม")}
                           </div>
                         ) : (
                           <div className="overflow-x-auto rounded-lg border border-border">
                             <table className="data-table w-full">
                               <thead>
                                 <tr>
-                                  <th>ภาคเรียน</th>
-                                  <th>ช่วงวันสอน</th>
-                                  <th className="num">จำนวนเดือน</th>
-                                  <th>เพดานงบรายวิชา</th>
-                                  <th>สถานะ</th>
+                                  <th>{t("ภาคเรียน")}</th>
+                                  <th>{t("ช่วงวันสอน")}</th>
+                                  <th className="num">{t("จำนวนเดือน")}</th>
+                                  <th>{t("เพดานงบรายวิชา")}</th>
+                                  <th>{t("สถานะ")}</th>
                                   <th className="actions" />
                                 </tr>
                               </thead>
                               <tbody>
-                                {list.map(t => (
-                                  <tr key={t.id}>
-                                    <td className="font-medium">{semesterLabel(t.semester)}</td>
+                                {list.map(tm => (
+                                  <tr key={tm.id}>
+                                    <td className="font-medium">{semesterLabel(tm.semester, t)}</td>
                                     <td className="text-muted text-sm">
-                                      {formatThaiDate(t.starts_on)} → {formatThaiDate(t.ends_on)}
+                                      {fmtDate(tm.starts_on)} → {fmtDate(tm.ends_on)}
                                     </td>
-                                    <td className="num tabular">{t.months ?? 4}</td>
+                                    <td className="num tabular">{tm.months ?? 4}</td>
                                     <td>
                                       <button
                                         type="button"
-                                        onClick={() => setCapTarget(t)}
+                                        onClick={() => setCapTarget(tm)}
                                         // A real button, not muted text with a tiny pencil:
                                         // staff could not find where the cap is set.
                                         className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-sm hover:bg-surface-secondary"
                                       >
-                                        {t.course_budget_cap_baht != null
-                                          ? <span className="tabular-nums">ไม่เกิน {t.course_budget_cap_baht.toLocaleString()} บ.</span>
-                                          : <span className="text-muted">ไม่กำหนด</span>}
+                                        {tm.course_budget_cap_baht != null
+                                          ? <span className="tabular-nums">{t("ไม่เกิน {n} บ.", { n: tm.course_budget_cap_baht.toLocaleString() })}</span>
+                                          : <span className="text-muted">{t("ไม่กำหนด")}</span>}
                                         <Pencil size={13} className="text-[var(--brand)]" />
-                                        <span className="text-[var(--brand)]">{t.course_budget_cap_baht != null ? "แก้ไข" : "กำหนดเพดาน"}</span>
+                                        <span className="text-[var(--brand)]">{tm.course_budget_cap_baht != null ? t("แก้ไข") : t("กำหนดเพดาน")}</span>
                                       </button>
                                     </td>
                                     <td>
-                                      {t.is_active
+                                      {tm.is_active
                                         ? <Chip tone="success">active</Chip>
                                         : <Chip tone="neutral">—</Chip>}
                                     </td>
                                     <td className="actions">
                                       <div className="inline-flex gap-1">
-                                        <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => openEdit(t)}>
+                                        <IconButton label={t("แก้ไข")} variant="ghost" size="sm" onClick={() => openEdit(tm)}>
                                           <Pencil size={13} />
                                         </IconButton>
-                                        <IconButton label="ลบ" variant="danger-soft" size="sm" onClick={() => setDeleteTarget(t)}>
+                                        <IconButton label={t("ลบ")} variant="danger-soft" size="sm" onClick={() => setDeleteTarget(tm)}>
                                           <Trash2 size={13} />
                                         </IconButton>
                                       </div>
@@ -949,10 +939,10 @@ function TermsSection() {
                   setYearFromLimit(v => (v === null ? null : v - YEAR_PAGE_SIZE))
                 }
               >
-                แสดงปีเก่ากว่านี้ ({hiddenCount} ปี)
+                {t("แสดงปีเก่ากว่านี้ ({n} ปี)", { n: hiddenCount })}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setYearFromLimit(null)}>
-                โหลดทั้งหมด
+                {t("โหลดทั้งหมด")}
               </Button>
             </div>
           )}
@@ -979,7 +969,7 @@ function TermsSection() {
       <TermDeleteModal
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onDone={label => { setDeleteTarget(null); toast.success(`ลบ${label} เรียบร้อยแล้ว`); }}
+        onDone={label => { setDeleteTarget(null); toast.success(t("ลบ{label} เรียบร้อยแล้ว", { label })); }}
       />
       {capTarget && <TermBudgetCapModal term={capTarget} onClose={() => setCapTarget(null)} />}
     </Panel>
@@ -996,6 +986,7 @@ function TermsSection() {
  * need an explicit confirm after seeing which ones.
  */
 function TermBudgetCapModal({ term, onClose }: { term: Term; onClose: () => void }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"none" | "cap">(term.course_budget_cap_baht == null ? "none" : "cap");
   const [amount, setAmount] = useState(term.course_budget_cap_baht == null ? "" : String(term.course_budget_cap_baht));
   const [saving, setSaving] = useState(false);
@@ -1013,7 +1004,7 @@ function TermBudgetCapModal({ term, onClose }: { term: Term; onClose: () => void
         confirm: confirm || undefined,
       });
       await mutate((k: unknown) => typeof k === "string" && (k.startsWith("/terms") || k.startsWith("/teaching-courses")));
-      toast.success("บันทึกเพดานงบรายวิชาแล้ว");
+      toast.success(t("บันทึกเพดานงบรายวิชาแล้ว"));
       onClose();
     } catch (e) {
       const preview = budgetConfirmMessage(e);
@@ -1029,34 +1020,34 @@ function TermBudgetCapModal({ term, onClose }: { term: Term; onClose: () => void
       open
       onClose={() => { if (!saving) onClose(); }}
       size="sm"
-      title={`เพดานงบรายวิชา · ${semesterLabel(term.semester)} ${term.academic_year}`}
+      title={t("เพดานงบรายวิชา · {semester} {year}", { semester: semesterLabel(term.semester, t), year: term.academic_year })}
       footer={
         confirmMsg ? (
           <>
-            <Button variant="ghost" onClick={() => setConfirmMsg(null)} disabled={saving}>ย้อนกลับ</Button>
-            <Button variant="danger" onClick={() => save(true)} disabled={saving} isPending={saving}>ยืนยันการเปลี่ยนงบ</Button>
+            <Button variant="ghost" onClick={() => setConfirmMsg(null)} disabled={saving}>{t("ย้อนกลับ")}</Button>
+            <Button variant="danger" onClick={() => save(true)} disabled={saving} isPending={saving}>{t("ยืนยันการเปลี่ยนงบ")}</Button>
           </>
         ) : (
           <>
-            <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+            <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
             <Button variant="primary" onClick={() => save()} disabled={invalid || saving} isPending={saving}>
-              <Save size={14} />บันทึก
+              <Save size={14} />{t("บันทึก")}
             </Button>
           </>
         )
       }
     >
       {confirmMsg ? (
-        <Alert status="warning" title="ยืนยันการเปลี่ยนงบประมาณรายวิชา" description={confirmMsg} />
+        <Alert status="warning" title={t("ยืนยันการเปลี่ยนงบประมาณรายวิชา")} description={confirmMsg} />
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-muted">
-            ใช้ร่วมกันทุกวิชาในภาคเรียนนี้ ภาคเรียนที่สร้างใหม่จะใช้ค่าเดียวกับภาคล่าสุดให้เอง
+            {t("ใช้ร่วมกันทุกวิชาในภาคเรียนนี้ ภาคเรียนที่สร้างใหม่จะใช้ค่าเดียวกับภาคล่าสุดให้เอง")}
           </p>
-          <div role="radiogroup" aria-label="เพดานงบรายวิชา" className="space-y-2">
+          <div role="radiogroup" aria-label={t("เพดานงบรายวิชา")} className="space-y-2">
             {([
-              { id: "none", title: "ไม่กำหนดเพดาน", note: "งบของแต่ละวิชาเป็นไปตามสูตรคำนวณ" },
-              { id: "cap", title: "กำหนดเพดาน", note: "งบของแต่ละวิชาไม่เกินจำนวนที่กำหนด (ใช้ค่าที่น้อยกว่าระหว่างงบตามสูตรกับเพดาน)" },
+              { id: "none", title: msg("ไม่กำหนดเพดาน"), note: msg("งบของแต่ละวิชาเป็นไปตามสูตรคำนวณ") },
+              { id: "cap", title: msg("กำหนดเพดาน"), note: msg("งบของแต่ละวิชาไม่เกินจำนวนที่กำหนด (ใช้ค่าที่น้อยกว่าระหว่างงบตามสูตรกับเพดาน)") },
             ] as const).map(o => {
               const on = mode === o.id;
               return (
@@ -1080,25 +1071,25 @@ function TermBudgetCapModal({ term, onClose }: { term: Term; onClose: () => void
                       {on && <span className="h-2 w-2 rounded-full bg-[var(--brand)]" />}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium">{o.title}</div>
-                      <div className="mt-0.5 text-xs text-muted">{o.note}</div>
+                      <div className="text-sm font-medium">{t(o.title)}</div>
+                      <div className="mt-0.5 text-xs text-muted">{t(o.note)}</div>
                       {o.id === "cap" && on && (
                         <div className="mt-3" onClick={e => e.stopPropagation()}>
-                          <label className="mb-1 block text-xs font-medium" htmlFor="cap-amount">ไม่เกินวิชาละ</label>
+                          <label className="mb-1 block text-xs font-medium" htmlFor="cap-amount">{t("ไม่เกินวิชาละ")}</label>
                           <div className="flex items-center gap-2">
                             <TextInput
                               id="cap-amount"
                               inputMode="numeric"
-                              placeholder="เช่น 20,000"
+                              placeholder={t("เช่น 20,000")}
                               value={amount === "" ? "" : Number(amount.replace(/,/g, "")).toLocaleString("en-US")}
                               onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
                               className="text-right tabular"
                               autoFocus
                             />
-                            <span className="text-sm text-muted">บาท</span>
+                            <span className="text-sm text-muted">{t("บาท")}</span>
                           </div>
                           {invalid && amount.trim() !== "" && (
-                            <div className="mt-1 text-xs text-danger">ต้องเป็นจำนวนเงินตั้งแต่ 0 บาทขึ้นไป</div>
+                            <div className="mt-1 text-xs text-danger">{t("ต้องเป็นจำนวนเงินตั้งแต่ 0 บาทขึ้นไป")}</div>
                           )}
                         </div>
                       )}
@@ -1108,7 +1099,7 @@ function TermBudgetCapModal({ term, onClose }: { term: Term; onClose: () => void
               );
             })}
           </div>
-          {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+          {err && <Alert status="danger" title={t("บันทึกไม่สำเร็จ")} description={err} />}
         </div>
       )}
     </Modal>
@@ -1123,6 +1114,7 @@ function YearPickerModal({
   existingYears: number[];
   onPicked: (year: number) => void;
 }) {
+  const { t } = useI18n();
   const [year, setYear] = useState<string>("");
 
   useEffect(() => {
@@ -1132,8 +1124,8 @@ function YearPickerModal({
   const yearNum = Number(year);
   const yearError =
     year.trim() === "" ? null :
-    !Number.isInteger(yearNum) ? "ปีการศึกษาต้องเป็นจำนวนเต็ม" :
-    yearNum < 2500 || yearNum > 2700 ? "ปีการศึกษาต้องอยู่ระหว่าง 2500–2700 (พ.ศ.)" :
+    !Number.isInteger(yearNum) ? t("ปีการศึกษาต้องเป็นจำนวนเต็ม") :
+    yearNum < 2500 || yearNum > 2700 ? t("ปีการศึกษาต้องอยู่ระหว่าง 2500–2700 (พ.ศ.)") :
     null;
   const duplicate = year.trim() !== "" && existingYears.includes(yearNum);
   const canPick = year.trim() !== "" && !yearError && !duplicate;
@@ -1144,26 +1136,26 @@ function YearPickerModal({
       onClose={onClose}
       title={
         <span className="inline-flex items-center gap-2">
-          <Plus size={18} />เพิ่มปีการศึกษา
+          <Plus size={18} />{t("เพิ่มปีการศึกษา")}
         </span>
       }
       size="sm"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={() => onPicked(yearNum)} disabled={!canPick}>
-            ถัดไป เพิ่มภาคเรียน
+            {t("ถัดไป เพิ่มภาคเรียน")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <div className="text-sm text-muted">
-          กรอกปีการศึกษาที่ต้องการสร้าง จากนั้นจะให้เพิ่มภาคเรียน (ต้น / ปลาย / ฤดูร้อน) ภายในปีนั้น
+          {t("กรอกปีการศึกษาที่ต้องการสร้าง จากนั้นจะให้เพิ่มภาคเรียน (ต้น / ปลาย / ฤดูร้อน) ภายในปีนั้น")}
         </div>
         <FieldGroup
-          label="ปีการศึกษา (พ.ศ.)"
-          hint="เช่น 2568"
+          label={t("ปีการศึกษา (พ.ศ.)")}
+          hint={t("เช่น 2568")}
           error={yearError ?? undefined}
         >
           <TextInput
@@ -1178,8 +1170,8 @@ function YearPickerModal({
           <Alert
             status="warning"
             icon={<CircleAlert size={16} />}
-            title={`ปีการศึกษา ${yearNum} มีอยู่แล้ว`}
-            description="ให้ปิดหน้านี้แล้วเลื่อนลงไปที่กลุ่มของปีนั้น กด 'เพิ่มภาคเรียน' แทน"
+            title={t("ปีการศึกษา {year} มีอยู่แล้ว", { year: yearNum })}
+            description={t("ให้ปิดหน้านี้แล้วเลื่อนลงไปที่กลุ่มของปีนั้น กด 'เพิ่มภาคเรียน' แทน")}
           />
         )}
       </div>
@@ -1221,6 +1213,7 @@ function TermFormModal({
   activeCount: number;
   onSaved: (label: string, mode: "add" | "edit", saved: Term) => void;
 }) {
+  const { t, fmtDate } = useI18n();
   const isEdit = editing !== null;
   const yearIsLocked = isEdit || lockedYear !== null;
   const [draft, setDraft] = useState<Term>(() => ({
@@ -1269,11 +1262,11 @@ function TermFormModal({
   }, [open, editing, lockedYear]);
 
   const yearError =
-    !Number.isInteger(draft.academic_year) ? "ปีการศึกษาต้องเป็นจำนวนเต็ม" :
-    draft.academic_year < 2500 || draft.academic_year > 2700 ? "ปีการศึกษาต้องอยู่ระหว่าง 2500–2700 (พ.ศ.)" :
+    !Number.isInteger(draft.academic_year) ? t("ปีการศึกษาต้องเป็นจำนวนเต็ม") :
+    draft.academic_year < 2500 || draft.academic_year > 2700 ? t("ปีการศึกษาต้องอยู่ระหว่าง 2500–2700 (พ.ศ.)") :
     null;
   const semesterError =
-    ![1, 2, 3].includes(draft.semester) ? "ภาคเรียนต้องเป็น 1, 2 หรือ 3 (ฤดูร้อน)" : null;
+    ![1, 2, 3].includes(draft.semester) ? t("ภาคเรียนต้องเป็น 1, 2 หรือ 3 (ฤดูร้อน)") : null;
   // Same bound the server enforces (UpsertTerm): months multiplies every
   // course budget, so it may not exceed the calendar months the dates touch —
   // a Jun 1–Sep 30 term saved with 12 tripled every budget.
@@ -1282,28 +1275,28 @@ function TermFormModal({
   const monthsError =
     !Number.isFinite(draft.months) || draft.months < 1 || draft.months > maxMonths
       ? (calSpan !== null
-          ? `จำนวนเดือนต้องอยู่ระหว่าง 1–${calSpan} ตามช่วงวันเริ่ม–สิ้นสุด (ครอบคลุม ${calSpan} เดือน)`
-          : "จำนวนเดือนต้องอยู่ระหว่าง 1–12")
+          ? t("จำนวนเดือนต้องอยู่ระหว่าง 1–{n} ตามช่วงวันเริ่ม–สิ้นสุด (ครอบคลุม {n} เดือน)", { n: calSpan })
+          : t("จำนวนเดือนต้องอยู่ระหว่าง 1–12"))
       : null;
   const startsError =
-    !draft.starts_on ? "กรุณาระบุวันเริ่มสอน" : null;
+    !draft.starts_on ? t("กรุณาระบุวันเริ่มสอน") : null;
   const endsError =
-    !draft.ends_on ? "กรุณาระบุวันสิ้นสุดสอน" :
+    !draft.ends_on ? t("กรุณาระบุวันสิ้นสุดสอน") :
     draft.starts_on && draft.ends_on && draft.starts_on >= draft.ends_on
-      ? "วันสิ้นสุดต้องหลังวันเริ่ม" : null;
+      ? t("วันสิ้นสุดต้องหลังวันเริ่ม") : null;
   // Exam ranges — required (backend enforces). Also sanity-check that the
   // range is closed (start ≤ end); we don't force it inside term start/end
   // because faculty sometimes sets exams just outside the teaching window.
-  const midtermStartsError = !draft.midterm_starts_on ? "กรุณาระบุวันเริ่มสอบกลางภาค" : null;
+  const midtermStartsError = !draft.midterm_starts_on ? t("กรุณาระบุวันเริ่มสอบกลางภาค") : null;
   const midtermEndsError =
-    !draft.midterm_ends_on ? "กรุณาระบุวันสิ้นสุดสอบกลางภาค" :
+    !draft.midterm_ends_on ? t("กรุณาระบุวันสิ้นสุดสอบกลางภาค") :
     draft.midterm_starts_on && draft.midterm_ends_on && draft.midterm_starts_on > draft.midterm_ends_on
-      ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่ม" : null;
-  const finalStartsError = !draft.final_starts_on ? "กรุณาระบุวันเริ่มสอบปลายภาค" : null;
+      ? t("วันสิ้นสุดต้องไม่มาก่อนวันเริ่ม") : null;
+  const finalStartsError = !draft.final_starts_on ? t("กรุณาระบุวันเริ่มสอบปลายภาค") : null;
   const finalEndsError =
-    !draft.final_ends_on ? "กรุณาระบุวันสิ้นสุดสอบปลายภาค" :
+    !draft.final_ends_on ? t("กรุณาระบุวันสิ้นสุดสอบปลายภาค") :
     draft.final_starts_on && draft.final_ends_on && draft.final_starts_on > draft.final_ends_on
-      ? "วันสิ้นสุดต้องไม่มาก่อนวันเริ่ม" : null;
+      ? t("วันสิ้นสุดต้องไม่มาก่อนวันเริ่ม") : null;
 
   // Duplicate (year, semester) — only relevant in add mode; edit mode locks these.
   const duplicate = !isEdit
@@ -1351,10 +1344,10 @@ function TermFormModal({
       };
       const saved = await api.post<Term>("/terms", payload);
       await mutateAllTerms();
-      onSaved(termLabel(draft), isEdit ? "edit" : "add", { ...payload, ...(saved ?? {}) });
+      onSaved(termLabel(draft, t), isEdit ? "edit" : "add", { ...payload, ...(saved ?? {}) });
       setConfirming(false);
     } catch (e) {
-      setError((e as Error).message || "บันทึกไม่สำเร็จ");
+      setError((e as Error).message || t("บันทึกไม่สำเร็จ"));
       setConfirming(false);
     } finally {
       setSaving(false);
@@ -1370,18 +1363,18 @@ function TermFormModal({
           <span className="inline-flex items-center gap-2">
             {isEdit ? <Pencil size={18} /> : <Plus size={18} />}
             {isEdit
-              ? `แก้ไข${termLabel(editing!)}`
+              ? t("แก้ไข{term}", { term: termLabel(editing!, t) })
               : lockedYear !== null
-                ? `เพิ่มภาคเรียน ปีการศึกษา ${lockedYear}`
-                : "เพิ่มภาคเรียนใหม่"}
+                ? t("เพิ่มภาคเรียน ปีการศึกษา {year}", { year: lockedYear })
+                : t("เพิ่มภาคเรียนใหม่")}
           </span>
         }
         size="lg"
         footer={
           <>
-            <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+            <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
             <Button variant="primary" onClick={askSave} disabled={!canSave || saving} isPending={saving}>
-              <Save size={14} />{isEdit ? "บันทึกการแก้ไข" : "เพิ่มภาคเรียน"}
+              <Save size={14} />{isEdit ? t("บันทึกการแก้ไข") : t("เพิ่มภาคเรียน")}
             </Button>
           </>
         }
@@ -1391,15 +1384,15 @@ function TermFormModal({
             <Alert
               status="default"
               icon={<CircleAlert size={16} />}
-              title="แก้ไขภาคเรียน ล็อกคีย์หลัก"
-              description="ปีการศึกษาและภาคเรียนล็อกไว้ เพราะเป็นตัวอ้างอิงของวิชาที่เปิดสอน / ตารางสอน TA / งบประมาณ หากต้องเปลี่ยน ให้ลบและสร้างใหม่ (ต้องไม่มีข้อมูลอ้างอิงเหลืออยู่)"
+              title={t("แก้ไขภาคเรียน ล็อกคีย์หลัก")}
+              description={t("ปีการศึกษาและภาคเรียนล็อกไว้ เพราะเป็นตัวอ้างอิงของวิชาที่เปิดสอน / ตารางสอน TA / งบประมาณ หากต้องเปลี่ยน ให้ลบและสร้างใหม่ (ต้องไม่มีข้อมูลอ้างอิงเหลืออยู่)")}
             />
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <FieldGroup
-              label="ปีการศึกษา (พ.ศ.)"
-              hint={yearIsLocked ? (isEdit ? "ล็อกไม่ให้แก้" : "เลือกจากขั้นก่อนหน้า") : "เช่น 2568"}
+              label={t("ปีการศึกษา (พ.ศ.)")}
+              hint={yearIsLocked ? (isEdit ? t("ล็อกไม่ให้แก้") : t("เลือกจากขั้นก่อนหน้า")) : t("เช่น 2568")}
               error={yearError ?? undefined}
             >
               <TextInput
@@ -1411,13 +1404,13 @@ function TermFormModal({
               />
             </FieldGroup>
             <FieldGroup
-              label="ภาคเรียน"
+              label={t("ภาคเรียน")}
               hint={
                 isEdit
-                  ? "ล็อกไม่ให้แก้"
+                  ? t("ล็อกไม่ให้แก้")
                   : usedSemesters.size > 0
-                    ? `ภาคที่มีแล้ว: ${Array.from(usedSemesters).sort().map(semesterLabel).join(", ")}`
-                    : "ต้น / ปลาย / ฤดูร้อน"
+                    ? t("ภาคที่มีแล้ว: {list}", { list: Array.from(usedSemesters).sort().map(s => semesterLabel(s, t)).join(", ") })
+                    : t("ต้น / ปลาย / ฤดูร้อน")
               }
               error={semesterError ?? undefined}
             >
@@ -1433,14 +1426,14 @@ function TermFormModal({
                     value={String(s)}
                     disabled={!isEdit && usedSemesters.has(s)}
                   >
-                    {semesterLabel(s)}{!isEdit && usedSemesters.has(s) ? " (มีแล้ว)" : ""}
+                    {!isEdit && usedSemesters.has(s) ? t("{semester} (มีแล้ว)", { semester: semesterLabel(s, t) }) : semesterLabel(s, t)}
                   </option>
                 ))}
               </Select>
             </FieldGroup>
             <FieldGroup
-              label="จำนวนเดือนที่เปิด"
-              hint="ใช้คำนวณค่าจ้าง"
+              label={t("จำนวนเดือนที่เปิด")}
+              hint={t("ใช้คำนวณค่าจ้าง")}
               error={monthsError ?? undefined}
             >
               <TextInput
@@ -1452,16 +1445,16 @@ function TermFormModal({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FieldGroup label="วันที่เริ่มสอน" error={startsError ?? undefined}>
+            <FieldGroup label={t("วันที่เริ่มสอน")} error={startsError ?? undefined}>
               <TermDateField
-                label="วันที่เริ่มสอน"
+                label={t("วันที่เริ่มสอน")}
                 value={draft.starts_on ?? ""}
                 onChange={v => setDraft({ ...draft, starts_on: v })}
               />
             </FieldGroup>
-            <FieldGroup label="วันที่สิ้นสุดสอน" error={endsError ?? undefined}>
+            <FieldGroup label={t("วันที่สิ้นสุดสอน")} error={endsError ?? undefined}>
               <TermDateField
-                label="วันที่สิ้นสุดสอน"
+                label={t("วันที่สิ้นสุดสอน")}
                 value={draft.ends_on ?? ""}
                 onChange={v => setDraft({ ...draft, ends_on: v })}
               />
@@ -1471,39 +1464,39 @@ function TermFormModal({
           {/* Exam windows — worklog entries falling inside these ranges are
               rejected. Faculty publishes these once per term. */}
           <div className="rounded-lg border border-border p-3 space-y-3 bg-surface-secondary/40">
-            <div className="text-xs font-semibold text-muted uppercase tracking-wide">ช่วงสอบตามประกาศคณะ</div>
+            <div className="text-xs font-semibold text-muted uppercase tracking-wide">{t("ช่วงสอบตามประกาศคณะ")}</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FieldGroup label="เริ่มสอบกลางภาค" error={midtermStartsError ?? undefined}>
+              <FieldGroup label={t("เริ่มสอบกลางภาค")} error={midtermStartsError ?? undefined}>
                 <TermDateField
-                  label="เริ่มสอบกลางภาค"
+                  label={t("เริ่มสอบกลางภาค")}
                   value={draft.midterm_starts_on ?? ""}
                   onChange={v => setDraft({ ...draft, midterm_starts_on: v })}
                 />
               </FieldGroup>
-              <FieldGroup label="สิ้นสุดสอบกลางภาค" error={midtermEndsError ?? undefined}>
+              <FieldGroup label={t("สิ้นสุดสอบกลางภาค")} error={midtermEndsError ?? undefined}>
                 <TermDateField
-                  label="สิ้นสุดสอบกลางภาค"
+                  label={t("สิ้นสุดสอบกลางภาค")}
                   value={draft.midterm_ends_on ?? ""}
                   onChange={v => setDraft({ ...draft, midterm_ends_on: v })}
                 />
               </FieldGroup>
-              <FieldGroup label="เริ่มสอบปลายภาค" error={finalStartsError ?? undefined}>
+              <FieldGroup label={t("เริ่มสอบปลายภาค")} error={finalStartsError ?? undefined}>
                 <TermDateField
-                  label="เริ่มสอบปลายภาค"
+                  label={t("เริ่มสอบปลายภาค")}
                   value={draft.final_starts_on ?? ""}
                   onChange={v => setDraft({ ...draft, final_starts_on: v })}
                 />
               </FieldGroup>
-              <FieldGroup label="สิ้นสุดสอบปลายภาค" error={finalEndsError ?? undefined}>
+              <FieldGroup label={t("สิ้นสุดสอบปลายภาค")} error={finalEndsError ?? undefined}>
                 <TermDateField
-                  label="สิ้นสุดสอบปลายภาค"
+                  label={t("สิ้นสุดสอบปลายภาค")}
                   value={draft.final_ends_on ?? ""}
                   onChange={v => setDraft({ ...draft, final_ends_on: v })}
                 />
               </FieldGroup>
             </div>
             <div className="text-xs text-muted">
-              TA จะลงบันทึกเวลาในช่วงนี้ไม่ได้ ระบบจะปฏิเสธอัตโนมัติ
+              {t("TA จะลงบันทึกเวลาในช่วงนี้ไม่ได้ ระบบจะปฏิเสธอัตโนมัติ")}
             </div>
           </div>
 
@@ -1515,7 +1508,7 @@ function TermFormModal({
               onChange={e => setDraft({ ...draft, is_active: e.target.checked })}
             />
             <label htmlFor="term-active-modal" className="text-sm select-none">
-              ตั้งเป็นภาคเรียนปัจจุบัน (active)
+              {t("ตั้งเป็นภาคเรียนปัจจุบัน (active)")}
             </label>
           </div>
 
@@ -1523,8 +1516,8 @@ function TermFormModal({
             <Alert
               status="danger"
               icon={<CircleAlert size={16} />}
-              title={`${termLabel(duplicate)} มีอยู่แล้ว`}
-              description="ห้ามซ้ำ หากต้องการแก้ไข ให้ปิดหน้านี้แล้วกด 'แก้ไข' ที่แถวนั้นแทน"
+              title={t("{term} มีอยู่แล้ว", { term: termLabel(duplicate, t) })}
+              description={t("ห้ามซ้ำ หากต้องการแก้ไข ให้ปิดหน้านี้แล้วกด 'แก้ไข' ที่แถวนั้นแทน")}
             />
           )}
 
@@ -1532,8 +1525,8 @@ function TermFormModal({
             <Alert
               status="warning"
               icon={<CircleAlert size={16} />}
-              title="จำนวนเดือนไม่ตรงกับช่วงวันที่"
-              description={`ช่วงวันที่เริ่ม–สิ้นสุดคือประมาณ ${spanMismatch.span} เดือน แต่กรอกไว้ ${spanMismatch.months} เดือน ค่าจ้างอาจคำนวณไม่ตรงกับที่คาด`}
+              title={t("จำนวนเดือนไม่ตรงกับช่วงวันที่")}
+              description={t("ช่วงวันที่เริ่ม–สิ้นสุดคือประมาณ {span} เดือน แต่กรอกไว้ {months} เดือน ค่าจ้างอาจคำนวณไม่ตรงกับที่คาด", { span: spanMismatch.span, months: spanMismatch.months })}
             />
           )}
 
@@ -1541,17 +1534,17 @@ function TermFormModal({
             <Alert
               status="warning"
               icon={<CircleAlert size={16} />}
-              title={`มีภาคเรียนที่ active อยู่ ${activeCount} รายการแล้ว`}
-              description="ระบบยอมให้มีหลาย active พร้อมกัน แต่จะกำกวมว่าอันไหนคือภาคปัจจุบัน แนะนำให้ปิด active ของภาคเดิมก่อน"
+              title={t("มีภาคเรียนที่ active อยู่ {n} รายการแล้ว", { n: activeCount })}
+              description={t("ระบบยอมให้มีหลาย active พร้อมกัน แต่จะกำกวมว่าอันไหนคือภาคปัจจุบัน แนะนำให้ปิด active ของภาคเดิมก่อน")}
             />
           )}
 
           {noChange && (
-            <div className="text-xs text-muted">ยังไม่มีการเปลี่ยนแปลง</div>
+            <div className="text-xs text-muted">{t("ยังไม่มีการเปลี่ยนแปลง")}</div>
           )}
 
           {error && (
-            <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
+            <Alert status="danger" icon={<CircleAlert size={16} />} title={t("บันทึกไม่สำเร็จ")} description={error} />
           )}
         </div>
       </Modal>
@@ -1561,10 +1554,17 @@ function TermFormModal({
         onClose={() => setConfirming(false)}
         onConfirm={doSave}
         saving={saving}
-        title={isEdit ? "ยืนยันบันทึกการแก้ไข?" : "ยืนยันเพิ่มภาคเรียน?"}
-        description={
-          `${isEdit ? "อัปเดต" : "สร้าง"}${termLabel(draft)} ${draft.months} เดือน, ${formatThaiDate(draft.starts_on)} → ${formatThaiDate(draft.ends_on)}${draft.is_active ? ", active" : ""}`
-        }
+        title={isEdit ? t("ยืนยันบันทึกการแก้ไข?") : t("ยืนยันเพิ่มภาคเรียน?")}
+        description={(() => {
+          const vars = {
+            term: termLabel(draft, t), months: draft.months,
+            start: fmtDate(draft.starts_on), end: fmtDate(draft.ends_on),
+            active: draft.is_active ? ", active" : "",
+          };
+          return isEdit
+            ? t("อัปเดต{term} {months} เดือน, {start} → {end}{active}", vars)
+            : t("สร้าง{term} {months} เดือน, {start} → {end}{active}", vars);
+        })()}
       />
     </>
   );
@@ -1577,6 +1577,7 @@ function TermDeleteModal({
   onClose: () => void;
   onDone: (label: string) => void;
 }) {
+  const { t, fmtDate } = useI18n();
   const open = target !== null;
   const [usage, setUsage] = useState<TermUsage | null>(null);
   const [loadingUsage, setLoadingUsage] = useState(false);
@@ -1596,7 +1597,7 @@ function TermDeleteModal({
     setLoadingUsage(true);
     api.get<TermUsage>(`/terms/${target.id}/usage`)
       .then(setUsage)
-      .catch(e => setLoadError((e as Error).message || "โหลดข้อมูลอ้างอิงไม่สำเร็จ"))
+      .catch(e => setLoadError((e as Error).message || t("โหลดข้อมูลอ้างอิงไม่สำเร็จ")))
       .finally(() => setLoadingUsage(false));
   }, [open, target?.id]);
 
@@ -1608,7 +1609,7 @@ function TermDeleteModal({
     );
   }
 
-  const label = termLabel(target);
+  const label = termLabel(target, t);
   // Confirmation code — easier to type than the Thai label, unambiguous per term.
   const confirmCode = `${target.academic_year}/${target.semester}`;
   const blocking =
@@ -1627,7 +1628,7 @@ function TermDeleteModal({
       await mutateAllTerms();
       onDone(label);
     } catch (e) {
-      setError((e as Error).message || "ลบไม่สำเร็จ");
+      setError((e as Error).message || t("ลบไม่สำเร็จ"));
     } finally {
       setSaving(false);
     }
@@ -1637,31 +1638,31 @@ function TermDeleteModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="ยืนยันลบภาคเรียน"
+      title={t("ยืนยันลบภาคเรียน")}
       icon={<CircleAlert size={20} />}
       size="md"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="danger" onClick={doDelete} disabled={!canDelete || saving} isPending={saving}>
-            <Trash2 size={14} />ลบภาคเรียน
+            <Trash2 size={14} />{t("ลบภาคเรียน")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <div className="rounded-lg border border-border bg-slate-50 p-3">
-          <div className="text-xs text-muted mb-1">ภาคเรียนที่จะลบ</div>
+          <div className="text-xs text-muted mb-1">{t("ภาคเรียนที่จะลบ")}</div>
           <div className="tabular font-medium">{label}</div>
           <div className="text-xs text-muted mt-1">
-            {formatThaiDate(target.starts_on)} → {formatThaiDate(target.ends_on)} · {target.months} เดือน
+            {t("{start} → {end} · {months} เดือน", { start: fmtDate(target.starts_on), end: fmtDate(target.ends_on), months: target.months })}
             {target.is_active && " · active"}
           </div>
         </div>
 
         {loadingUsage ? (
           <div className="rounded-lg border border-border p-3" role="status" aria-busy="true">
-            <span className="sr-only">กำลังตรวจข้อมูลอ้างอิง…</span>
+            <span className="sr-only">{t("กำลังตรวจข้อมูลอ้างอิง…")}</span>
             <Skel className="h-3 w-16 mb-3" />
             <div className="space-y-2">
               {[0, 1, 2, 3].map(i => (
@@ -1676,29 +1677,29 @@ function TermDeleteModal({
           <>
             <div className="rounded-lg border border-border p-3">
               <div className="text-xs font-medium text-muted uppercase tracking-wider mb-2">
-                ผลกระทบ
+                {t("ผลกระทบ")}
               </div>
               <ul className="text-sm space-y-1">
                 <li className="flex justify-between">
-                  <span>รายวิชาที่เปิดสอนในภาคนี้</span>
+                  <span>{t("รายวิชาที่เปิดสอนในภาคนี้")}</span>
                   <span className={usage.teaching_courses > 0 ? "text-red-600 font-medium tabular" : "tabular"}>
                     {usage.teaching_courses}
                   </span>
                 </li>
                 <li className="flex justify-between">
-                  <span>ตารางสอน TA</span>
+                  <span>{t("ตารางสอน TA")}</span>
                   <span className={usage.class_schedules > 0 ? "text-red-600 font-medium tabular" : "tabular"}>
                     {usage.class_schedules}
                   </span>
                 </li>
                 <li className="flex justify-between">
-                  <span>ไฟล์ส่งออกที่ผูกไว้</span>
+                  <span>{t("ไฟล์ส่งออกที่ผูกไว้")}</span>
                   <span className={usage.exports > 0 ? "text-red-600 font-medium tabular" : "tabular"}>
                     {usage.exports}
                   </span>
                 </li>
                 <li className="flex justify-between">
-                  <span>รอบเปิดรับ TA (จะถูกลบตาม)</span>
+                  <span>{t("รอบเปิดรับ TA (จะถูกลบตาม)")}</span>
                   <span className="tabular text-muted">{usage.request_windows}</span>
                 </li>
               </ul>
@@ -1708,8 +1709,8 @@ function TermDeleteModal({
               <Alert
                 status="danger"
                 icon={<CircleAlert size={16} />}
-                title="ลบไม่ได้ มีข้อมูลอ้างอิงอยู่"
-                description="ต้องลบวิชาที่เปิดสอน ตารางสอน TA และไฟล์ส่งออกของภาคเรียนนี้ก่อน จึงจะลบได้ (ป้องกันข้อมูลกำพร้า)"
+                title={t("ลบไม่ได้ มีข้อมูลอ้างอิงอยู่")}
+                description={t("ต้องลบวิชาที่เปิดสอน ตารางสอน TA และไฟล์ส่งออกของภาคเรียนนี้ก่อน จึงจะลบได้ (ป้องกันข้อมูลกำพร้า)")}
               />
             ) : (
               <>
@@ -1717,14 +1718,14 @@ function TermDeleteModal({
                   <Alert
                     status="warning"
                     icon={<CircleAlert size={16} />}
-                    title={`รอบเปิดรับ TA จำนวน ${usage.request_windows} รายการจะถูกลบพร้อมกัน`}
-                    description="ตารางรอบเปิดรับผูกกับภาคเรียนแบบ cascade เมื่อลบภาคเรียนจะลบตามอัตโนมัติ"
+                    title={t("รอบเปิดรับ TA จำนวน {n} รายการจะถูกลบพร้อมกัน", { n: usage.request_windows })}
+                    description={t("ตารางรอบเปิดรับผูกกับภาคเรียนแบบ cascade เมื่อลบภาคเรียนจะลบตามอัตโนมัติ")}
                   />
                 )}
                 <div className="text-sm">
-                  การลบไม่สามารถย้อนกลับได้ เพื่อยืนยัน กรุณาพิมพ์ <b className="tabular">{confirmCode}</b> ด้านล่าง
+                  {t.rich("การลบไม่สามารถย้อนกลับได้ เพื่อยืนยัน กรุณาพิมพ์ {code} ด้านล่าง", { code: <b className="tabular">{confirmCode}</b> })}
                 </div>
-                <FieldGroup label={`พิมพ์ "${confirmCode}" เพื่อยืนยัน`}>
+                <FieldGroup label={t("พิมพ์ \"{code}\" เพื่อยืนยัน", { code: confirmCode })}>
                   <TextInput
                     value={typed}
                     onChange={e => setTyped(e.target.value)}
@@ -1733,7 +1734,7 @@ function TermDeleteModal({
                   />
                 </FieldGroup>
                 {typed.trim() !== "" && !codeMatch && (
-                  <div className="text-xs text-red-600">รหัสไม่ตรง</div>
+                  <div className="text-xs text-red-600">{t("รหัสไม่ตรง")}</div>
                 )}
               </>
             )}
@@ -1744,13 +1745,13 @@ function TermDeleteModal({
           <Alert
             status="danger"
             icon={<CircleAlert size={16} />}
-            title="ตรวจข้อมูลอ้างอิงไม่สำเร็จ"
-            description={`${loadError} ยังลบไม่ได้จนกว่าจะตรวจได้ว่ามีอะไรผูกอยู่กับภาคเรียนนี้`}
+            title={t("ตรวจข้อมูลอ้างอิงไม่สำเร็จ")}
+            description={t("{error} ยังลบไม่ได้จนกว่าจะตรวจได้ว่ามีอะไรผูกอยู่กับภาคเรียนนี้", { error: loadError })}
           />
         )}
 
         {error && (
-          <Alert status="danger" icon={<CircleAlert size={16} />} title="ลบไม่สำเร็จ" description={error} />
+          <Alert status="danger" icon={<CircleAlert size={16} />} title={t("ลบไม่สำเร็จ")} description={error} />
         )}
       </div>
     </Modal>
@@ -1781,9 +1782,10 @@ function ViewGroup({
 // formula button), so the values land in place instead of the "ยังไม่มีอัตรา…"
 // empty line flashing first.
 function PayRateSkeleton() {
+  const { t } = useI18n();
   return (
     <div className="space-y-5" role="status" aria-busy="true">
-      <span className="sr-only">กำลังโหลด</span>
+      <span className="sr-only">{t("กำลังโหลด")}</span>
       {[4, 4, 1, 3, 1, 5].map((n, g) => (
         <div key={g} className="rounded-lg border border-border border-l-4 bg-default/40 p-4">
           <Skel className="h-4 w-44 mb-3" />
@@ -1830,8 +1832,10 @@ function EditGroup({
 function F({
   label, value, onChange, type = "text", error, min,
 }: { label: string; value: string | number; onChange: (v: string) => void; type?: string; error?: string | null; min?: number }) {
+  // Validation messages arrive as msg() keys (vPositive & co.); translated here.
+  const { t } = useI18n();
   return (
-    <FieldGroup label={label} error={error ?? undefined}>
+    <FieldGroup label={label} error={error ? t(error) : undefined}>
       <TextInput
         type={type}
         min={min}
@@ -1845,19 +1849,19 @@ function F({
 
 /* Positive-number validators shared by the pay-rate editor. */
 function vPositive(v: number): string | null {
-  if (!Number.isFinite(v)) return "กรุณากรอกตัวเลข";
-  if (v <= 0) return "ต้องมากกว่า 0";
+  if (!Number.isFinite(v)) return msg("กรุณากรอกตัวเลข");
+  if (v <= 0) return msg("ต้องมากกว่า 0");
   return null;
 }
 function vPositiveInt(v: number): string | null {
-  if (!Number.isFinite(v)) return "กรุณากรอกตัวเลข";
-  if (!Number.isInteger(v) || v <= 0) return "ต้องเป็นจำนวนเต็มมากกว่า 0";
+  if (!Number.isFinite(v)) return msg("กรุณากรอกตัวเลข");
+  if (!Number.isInteger(v) || v <= 0) return msg("ต้องเป็นจำนวนเต็มมากกว่า 0");
   return null;
 }
 
 function ConfirmSaveModal({
   open, onClose, onConfirm, saving, title, description,
-  variant = "primary", confirmLabel = "ยืนยันบันทึก", confirmIcon,
+  variant = "primary", confirmLabel = msg("ยืนยันบันทึก"), confirmIcon,
 }: {
   open: boolean; onClose: () => void; onConfirm: () => void;
   saving: boolean; title: string; description: string;
@@ -1865,6 +1869,7 @@ function ConfirmSaveModal({
   confirmLabel?: string;
   confirmIcon?: React.ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <Modal
       open={open}
@@ -1874,9 +1879,9 @@ function ConfirmSaveModal({
       size="md"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant={variant} onClick={onConfirm} isPending={saving}>
-            {confirmIcon ?? <Check size={14} />}{confirmLabel}
+            {confirmIcon ?? <Check size={14} />}{t(confirmLabel)}
           </Button>
         </>
       }
@@ -1916,11 +1921,12 @@ interface WindowReadiness {
 // ยังไม่ถึงกำหนด (ส่งแล้วนับว่าทันเวลา) กับ เลยกำหนด (ส่งได้ แต่นับว่าล่าช้า)
 function windowStatus(w: RequestWindow, now = Date.now()) {
   const closes = new Date(w.closes_at).getTime();
-  if (now > closes) return { tone: "warn" as const, label: "เลยกำหนด คำขอใหม่นับเป็นส่งช้า" };
-  return { tone: "success" as const, label: "ยังไม่ถึงกำหนด ส่งทันเวลา" };
+  if (now > closes) return { tone: "warn" as const, label: msg("เลยกำหนด คำขอใหม่นับเป็นส่งช้า") };
+  return { tone: "success" as const, label: msg("ยังไม่ถึงกำหนด ส่งทันเวลา") };
 }
 
 function RequestWindowsSection() {
+  const { t, fmtDate } = useI18n();
   // Follows the shell's term switcher like every other term-scoped staff view.
   // This section used to carry its own <Select>, which meant the settings page
   // could show one term in the top bar and a different one here — the exact
@@ -1954,13 +1960,13 @@ function RequestWindowsSection() {
         opens_at: now.toISOString(),
         closes_at: end.toISOString(),
         is_open: true,
-        note: "เปิดด่วน (30 วัน)",
+        note: "เปิดด่วน (30 วัน)", // i18n-ignore — stored note (data), shown as saved
         notify_lecturers: true,
       });
       await mutate(swrKey);
-      toast.success("เปิดรับสมัครทันทีแล้ว", { description: "ระยะเวลา 30 วัน" });
+      toast.success(t("เปิดรับสมัครทันทีแล้ว"), { description: t("ระยะเวลา 30 วัน") });
     } catch (e) {
-      toast.danger("เปิดรับสมัครทันทีไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(t("เปิดรับสมัครทันทีไม่สำเร็จ"), { description: errMessage(e) });
     } finally {
       setQuickOpening(false);
     }
@@ -1971,10 +1977,10 @@ function RequestWindowsSection() {
     try {
       await api.del(`/ta-request/windows/${deleteTarget.id}`);
       await mutate(swrKey);
-      toast.success("ลบช่วงเวลารับสมัครแล้ว");
+      toast.success(t("ลบช่วงเวลารับสมัครแล้ว"));
       setDeleteTarget(null);
     } catch (e) {
-      toast.danger("ลบช่วงเวลารับสมัครไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(t("ลบช่วงเวลารับสมัครไม่สำเร็จ"), { description: errMessage(e) });
     } finally {
       setDeleting(false);
     }
@@ -1982,8 +1988,8 @@ function RequestWindowsSection() {
 
   return (
     <Panel
-      title="ระยะเวลารับสมัคร TA"
-      description="อาจารย์ส่งคำขอ TA ได้ตั้งแต่วันเปิดรับของภาคเรียน เลยกำหนดส่งแล้วยังส่งได้ แต่คำขอจะถูกทำเครื่องหมายว่า “ส่งช้า” และการเบิกจ่ายจะล่าช้าตาม"
+      title={t("ระยะเวลารับสมัคร TA")}
+      description={t("อาจารย์ส่งคำขอ TA ได้ตั้งแต่วันเปิดรับของภาคเรียน เลยกำหนดส่งแล้วยังส่งได้ แต่คำขอจะถูกทำเครื่องหมายว่า “ส่งช้า” และการเบิกจ่ายจะล่าช้าตาม")}
       actions={
         !noTerms && (
           <Button
@@ -1991,7 +1997,7 @@ function RequestWindowsSection() {
             disabled={!termId}
             onClick={() => { setEditing(null); setFormOpen(true); }}
           >
-            <Plus size={14} /> เพิ่มช่วงเวลา
+            <Plus size={14} /> {t("เพิ่มช่วงเวลา")}
           </Button>
         )
       }
@@ -2000,8 +2006,8 @@ function RequestWindowsSection() {
       {noTerms ? (
         <Alert
           status="warning"
-          title="ยังไม่มีปีการศึกษา / ภาคเรียน"
-          description="ต้องสร้างภาคเรียนที่แท็บ 'ภาคเรียน' ก่อน จึงจะกำหนดช่วงเวลารับสมัครได้"
+          title={t("ยังไม่มีปีการศึกษา / ภาคเรียน")}
+          description={t("ต้องสร้างภาคเรียนที่แท็บ 'ภาคเรียน' ก่อน จึงจะกำหนดช่วงเวลารับสมัครได้")}
         />
       ) : !windows ? (
         <SkelList items={2} icon={false} bordered />
@@ -2010,10 +2016,10 @@ function RequestWindowsSection() {
           <CalendarDays size={28} className="text-muted" />
           <div>
             <div className="text-sm font-medium">
-              ยังไม่ได้กำหนดวันส่งคำขอ TA สำหรับ {term?.academic_year}/{term?.semester}
+              {t("ยังไม่ได้กำหนดวันส่งคำขอ TA สำหรับ {term}", { term: `${term?.academic_year ?? ""}/${term?.semester ?? ""}` })}
             </div>
             <div className="text-xs text-muted mt-1">
-              อาจารย์จะส่งคำขอ TA ของภาคเรียนนี้ไม่ได้ จนกว่าจะกำหนดช่วงรับคำขอ
+              {t("อาจารย์จะส่งคำขอ TA ของภาคเรียนนี้ไม่ได้ จนกว่าจะกำหนดช่วงรับคำขอ")}
             </div>
           </div>
           <div className="flex gap-2">
@@ -2021,7 +2027,7 @@ function RequestWindowsSection() {
               variant="secondary"
               onClick={() => { setEditing(null); setFormOpen(true); }}
             >
-              <CalendarDays size={14} /> กำหนดวันเอง
+              <CalendarDays size={14} /> {t("กำหนดวันเอง")}
             </Button>
             <Button
               variant="primary"
@@ -2029,7 +2035,7 @@ function RequestWindowsSection() {
               disabled={quickOpening}
               isPending={quickOpening}
             >
-              <Power size={14} /> กำหนดส่งใน 30 วัน
+              <Power size={14} /> {t("กำหนดส่งใน 30 วัน")}
             </Button>
           </div>
         </div>
@@ -2042,10 +2048,10 @@ function RequestWindowsSection() {
                 key={w.id}
                 className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-panel px-4 py-3"
               >
-                <Chip tone={st.tone}>{st.label}</Chip>
+                <Chip tone={st.tone}>{t(st.label)}</Chip>
                 <div className="flex flex-col min-w-0">
                   <div className="text-sm font-medium tabular">
-                    {formatThaiDateTime(w.opens_at)} → {formatThaiDateTime(w.closes_at)}
+                    {formatDateTime(w.opens_at, fmtDate, t)} → {formatDateTime(w.closes_at, fmtDate, t)}
                   </div>
                   {w.note && (
                     <Tip content={w.note}>
@@ -2056,17 +2062,18 @@ function RequestWindowsSection() {
                     {w.notify_lecturers ? (
                       <>
                         <Mail size={12} />
-                        แจ้งอาจารย์อัตโนมัติ · แจ้งเปิดรับแล้ว {w.open_sent ?? 0} คน
-                        {(w.closing_sent ?? 0) > 0 && ` · เตือนก่อนครบกำหนด ${w.closing_sent} คน`}
+                        {(w.closing_sent ?? 0) > 0
+                          ? t("แจ้งอาจารย์อัตโนมัติ · แจ้งเปิดรับแล้ว {open} คน · เตือนก่อนครบกำหนด {closing} คน", { open: w.open_sent ?? 0, closing: w.closing_sent })
+                          : t("แจ้งอาจารย์อัตโนมัติ · แจ้งเปิดรับแล้ว {open} คน", { open: w.open_sent ?? 0 })}
                       </>
                     ) : (
-                      <><MailX size={12} /> ไม่ส่งอีเมลแจ้งอาจารย์</>
+                      <><MailX size={12} /> {t("ไม่ส่งอีเมลแจ้งอาจารย์")}</>
                     )}
                   </div>
                 </div>
                 <div className="ms-auto flex items-center gap-2">
                   <IconButton
-                    label="แก้ไข"
+                    label={t("แก้ไข")}
                     variant="ghost"
                     size="sm"
                     onClick={() => { setEditing(w); setFormOpen(true); }}
@@ -2074,7 +2081,7 @@ function RequestWindowsSection() {
                     <Pencil size={14} />
                   </IconButton>
                   <IconButton
-                    label="ลบ"
+                    label={t("ลบ")}
                     variant="ghost"
                     size="sm"
                     onClick={() => setDeleteTarget(w)}
@@ -2096,7 +2103,7 @@ function RequestWindowsSection() {
         onSaved={async () => {
           setFormOpen(false);
           await mutate(swrKey);
-          toast.success(editing ? "แก้ไขช่วงเวลาแล้ว" : "เพิ่มช่วงเวลาแล้ว");
+          toast.success(editing ? t("แก้ไขช่วงเวลาแล้ว") : t("เพิ่มช่วงเวลาแล้ว"));
         }}
       />
 
@@ -2106,10 +2113,10 @@ function RequestWindowsSection() {
         onConfirm={doDelete}
         saving={deleting}
         variant="danger"
-        confirmLabel="ลบ"
+        confirmLabel={t("ลบ")}
         confirmIcon={<Trash2 size={14} />}
-        title="ลบช่วงเวลารับสมัคร?"
-        description="การลบจะไม่มีผลกับคำขอที่ส่งมาก่อนหน้านี้ แต่จะไม่สามารถลบได้ถ้ามีคำขออ้างอิงช่วงเวลานี้อยู่"
+        title={t("ลบช่วงเวลารับสมัคร?")}
+        description={t("การลบจะไม่มีผลกับคำขอที่ส่งมาก่อนหน้านี้ แต่จะไม่สามารถลบได้ถ้ามีคำขออ้างอิงช่วงเวลานี้อยู่")}
       />
     </Panel>
   );
@@ -2120,6 +2127,7 @@ function RequestWindowsSection() {
 // would leave someone out: courses nobody is attached to (usually a registrar
 // name that did not match an account) and lecturers still without a course.
 function WindowReadinessPanel({ termId }: { termId: string }) {
+  const { t } = useI18n();
   const { data, error } = useSWR<WindowReadiness>(`/ta-request/windows/readiness?term_id=${termId}`);
   const [showCourses, setShowCourses] = useState(false);
   const [showLecturers, setShowLecturers] = useState(false);
@@ -2130,7 +2138,7 @@ function WindowReadinessPanel({ termId }: { termId: string }) {
     return (
       <div className="mb-3 rounded-lg border border-hairline bg-panel px-4 py-3 space-y-2">
         <div className="text-sm font-medium flex items-center gap-1.5">
-          <Mail size={14} /> ความพร้อมก่อนแจ้งอาจารย์
+          <Mail size={14} /> {t("ความพร้อมก่อนแจ้งอาจารย์")}
         </div>
         <div className="flex flex-wrap gap-2">
           <Skel className="h-6 w-56 rounded-full" />
@@ -2145,28 +2153,28 @@ function WindowReadinessPanel({ termId }: { termId: string }) {
   return (
     <div className="mb-3 rounded-lg border border-hairline bg-panel px-4 py-3 space-y-2">
       <div className="text-sm font-medium flex items-center gap-1.5">
-        <Mail size={14} /> ความพร้อมก่อนแจ้งอาจารย์
+        <Mail size={14} /> {t("ความพร้อมก่อนแจ้งอาจารย์")}
       </div>
       {data.courses_total === 0 ? (
         <Alert
           status="warning"
-          title="ยังไม่มีรายวิชาในภาคเรียนนี้"
-          description="ระบบจะยังไม่ส่งอีเมลถึงอาจารย์คนใด จนกว่าจะนำเข้าหรือเพิ่มรายวิชาที่หน้า 'วิชาที่เปิดสอน'"
+          title={t("ยังไม่มีรายวิชาในภาคเรียนนี้")}
+          description={t("ระบบจะยังไม่ส่งอีเมลถึงอาจารย์คนใด จนกว่าจะนำเข้าหรือเพิ่มรายวิชาที่หน้า 'วิชาที่เปิดสอน'")}
         />
       ) : (
         <div className="flex flex-wrap gap-2 text-xs">
-          <Chip tone="success"><Check size={12} /> อาจารย์ที่มีวิชาแล้ว {data.lecturers_ready} คน (จะได้รับอีเมล)</Chip>
+          <Chip tone="success"><Check size={12} /> {t("อาจารย์ที่มีวิชาแล้ว {n} คน (จะได้รับอีเมล)", { n: data.lecturers_ready })}</Chip>
           {missingCourses.length > 0 ? (
             <button type="button" className="inline-flex items-center gap-1 cursor-pointer text-muted" aria-expanded={showCourses} onClick={() => setShowCourses(v => !v)}>
-              <Chip tone="warn"><CircleAlert size={12} /> วิชาที่ยังไม่มีอาจารย์ผูก {missingCourses.length} วิชา</Chip>
+              <Chip tone="warn"><CircleAlert size={12} /> {t("วิชาที่ยังไม่มีอาจารย์ผูก {n} วิชา", { n: missingCourses.length })}</Chip>
               <ChevronDown size={14} className={showCourses ? "rotate-180" : ""} />
             </button>
           ) : (
-            <Chip tone="success"><Check size={12} /> ทุกวิชามีอาจารย์ผู้สอนแล้ว</Chip>
+            <Chip tone="success"><Check size={12} /> {t("ทุกวิชามีอาจารย์ผู้สอนแล้ว")}</Chip>
           )}
           {idle.length > 0 && (
             <button type="button" className="inline-flex items-center gap-1 cursor-pointer text-muted" aria-expanded={showLecturers} onClick={() => setShowLecturers(v => !v)}>
-              <Chip tone="neutral">อาจารย์ที่ยังไม่มีวิชา {idle.length} คน (ยังไม่ส่ง)</Chip>
+              <Chip tone="neutral">{t("อาจารย์ที่ยังไม่มีวิชา {n} คน (ยังไม่ส่ง)", { n: idle.length })}</Chip>
               <ChevronDown size={14} className={showLecturers ? "rotate-180" : ""} />
             </button>
           )}
@@ -2175,9 +2183,9 @@ function WindowReadinessPanel({ termId }: { termId: string }) {
       {showCourses && missingCourses.length > 0 && (
         <div className="text-xs">
           <div className="text-muted mb-1">
-            อาจารย์ของวิชาเหล่านี้จะไม่ได้รับอีเมลและจะไม่เห็นวิชาที่หน้าแรก — ผูกอาจารย์ผู้สอนที่หน้า{" "}
-            <a href="/staff/teaching" className="underline">วิชาที่เปิดสอน</a>{" "}
-            แล้วระบบจะส่งอีเมลให้เองภายใน 1 ชั่วโมง
+            {t.rich("อาจารย์ของวิชาเหล่านี้จะไม่ได้รับอีเมลและจะไม่เห็นวิชาที่หน้าแรก — ผูกอาจารย์ผู้สอนที่หน้า {link} แล้วระบบจะส่งอีเมลให้เองภายใน 1 ชั่วโมง", {
+              link: <a href="/staff/teaching" className="underline">{t("วิชาที่เปิดสอน")}</a>,
+            })}
           </div>
           <ul className="list-disc ps-5 space-y-0.5">
             {missingCourses.map(c => (
@@ -2191,7 +2199,7 @@ function WindowReadinessPanel({ termId }: { termId: string }) {
       {showLecturers && idle.length > 0 && (
         <div className="text-xs">
           <div className="text-muted mb-1">
-            ส่วนใหญ่เป็นอาจารย์ที่ไม่ได้สอนภาคนี้ หากมีวิชาภายหลัง ระบบจะส่งอีเมลให้เอง
+            {t("ส่วนใหญ่เป็นอาจารย์ที่ไม่ได้สอนภาคนี้ หากมีวิชาภายหลัง ระบบจะส่งอีเมลให้เอง")}
           </div>
           <ul className="list-disc ps-5 space-y-0.5">
             {idle.map(l => <li key={l.id}>{l.name} <span className="text-muted">{l.email}</span></li>)}
@@ -2202,13 +2210,14 @@ function WindowReadinessPanel({ termId }: { termId: string }) {
   );
 }
 
-function formatThaiDateTime(iso: string): string {
+// "22 มิ.ย. 2569 14:30 น." / "22 Jun 2026 14:30" — local wall clock.
+function formatDateTime(iso: string, fmtDate: (iso?: string | null) => string, t: TFn): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const dateStr = `${d.getDate()} ${THAI_MONTHS_ABBR[d.getMonth()]} ${d.getFullYear() + 543}`;
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${dateStr} ${hh}:${mm} น.`;
+  return t("{date} {time} น.", { date: fmtDate(day), time: `${hh}:${mm}` });
 }
 
 // "YYYY-MM-DDTHH:mm" (local wall-clock) ↔ ISO round-trip. We deliberately treat
@@ -2241,6 +2250,7 @@ function TermDateTimeField({
   onChange: (localMinute: string) => void;
   autoFocus?: boolean;
 }) {
+  const { intl } = useI18n();
   let dv: DateValue | null = null;
   if (value) {
     // Accept "YYYY-MM-DDTHH:mm" (no seconds) — parseDateTime wants seconds.
@@ -2248,7 +2258,7 @@ function TermDateTimeField({
     try { dv = parseDateTime(withSec); } catch { dv = null; }
   }
   return (
-    <I18nProvider locale="th-TH">
+    <I18nProvider locale={intl}>
       <DatePicker
         aria-label={label}
         value={dv}
@@ -2304,6 +2314,7 @@ function WindowFormModal({
   editing: RequestWindow | null;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   // Local wall-clock strings in "YYYY-MM-DDTHH:mm" — timezone applied at submit.
   const [opensAt, setOpensAt] = useState("");
   const [closesAt, setClosesAt] = useState("");
@@ -2338,7 +2349,7 @@ function WindowFormModal({
 
   async function submit() {
     if (!canSave) {
-      setErr("กรุณากรอกวันเวลาให้ครบและเวลาปิดต้องหลังเวลาเปิด");
+      setErr(t("กรุณากรอกวันเวลาให้ครบและเวลาปิดต้องหลังเวลาเปิด"));
       return;
     }
     setSaving(true); setErr(null);
@@ -2364,57 +2375,57 @@ function WindowFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={editing ? "แก้ไขช่วงเวลารับสมัคร" : "เพิ่มช่วงเวลารับสมัคร"}
+      title={editing ? t("แก้ไขช่วงเวลารับสมัคร") : t("เพิ่มช่วงเวลารับสมัคร")}
       size="md"
       icon={<CalendarDays size={18} />}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={submit} disabled={!canSave || saving} isPending={saving}>
-            <Save size={14} /> บันทึก
+            <Save size={14} /> {t("บันทึก")}
           </Button>
         </>
       }
     >
       <div className="space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FieldGroup label="เริ่มรับสมัคร (วัน-เดือน-ปี เวลา)">
-            <TermDateTimeField label="เวลาเริ่ม" value={opensAt} onChange={setOpensAt} />
+          <FieldGroup label={t("เริ่มรับสมัคร (วัน-เดือน-ปี เวลา)")}>
+            <TermDateTimeField label={t("เวลาเริ่ม")} value={opensAt} onChange={setOpensAt} />
           </FieldGroup>
-          <FieldGroup label="ปิดรับสมัคร (วัน-เดือน-ปี เวลา)">
-            <TermDateTimeField label="เวลาปิด" value={closesAt} onChange={setClosesAt} />
+          <FieldGroup label={t("ปิดรับสมัคร (วัน-เดือน-ปี เวลา)")}>
+            <TermDateTimeField label={t("เวลาปิด")} value={closesAt} onChange={setClosesAt} />
           </FieldGroup>
         </div>
-        <FieldGroup label="สถานะ" hint="ปิดชั่วคราวเพื่อหยุดรับคำขอโดยไม่ต้องลบช่วงเวลา">
+        <FieldGroup label={t("สถานะ")} hint={t("ปิดชั่วคราวเพื่อหยุดรับคำขอโดยไม่ต้องลบช่วงเวลา")}>
           <div className="flex items-center gap-3">
-            <Switch isSelected={isOpen} onChange={setIsOpen} aria-label="สถานะเปิดรับ">
+            <Switch isSelected={isOpen} onChange={setIsOpen} aria-label={t("สถานะเปิดรับ")}>
               <Switch.Content>
                 <Switch.Control>
                   <Switch.Thumb />
                 </Switch.Control>
-                <span>{isOpen ? "เปิดรับคำขอ" : "ปิดชั่วคราว"}</span>
+                <span>{isOpen ? t("เปิดรับคำขอ") : t("ปิดชั่วคราว")}</span>
               </Switch.Content>
             </Switch>
             {!isOpen && <PowerOff size={14} className="text-muted" />}
           </div>
         </FieldGroup>
         <FieldGroup
-          label="แจ้งอาจารย์ทางอีเมล"
-          hint="ส่งเมื่อถึงเวลาเริ่มรับสมัคร และเตือนอีกครั้ง 3 วันก่อนครบกำหนดเฉพาะวิชาที่ยังไม่มีคำขอ ส่งเฉพาะอาจารย์ที่มีวิชาในภาคเรียนนี้แล้ว อาจารย์ที่ได้วิชาภายหลังจะได้รับอีเมลตามมาเอง ไม่ส่งซ้ำ"
+          label={t("แจ้งอาจารย์ทางอีเมล")}
+          hint={t("ส่งเมื่อถึงเวลาเริ่มรับสมัคร และเตือนอีกครั้ง 3 วันก่อนครบกำหนดเฉพาะวิชาที่ยังไม่มีคำขอ ส่งเฉพาะอาจารย์ที่มีวิชาในภาคเรียนนี้แล้ว อาจารย์ที่ได้วิชาภายหลังจะได้รับอีเมลตามมาเอง ไม่ส่งซ้ำ")}
         >
-          <Switch isSelected={notifyLecturers} onChange={setNotifyLecturers} aria-label="แจ้งอาจารย์ทางอีเมล">
+          <Switch isSelected={notifyLecturers} onChange={setNotifyLecturers} aria-label={t("แจ้งอาจารย์ทางอีเมล")}>
             <Switch.Content>
               <Switch.Control>
                 <Switch.Thumb />
               </Switch.Control>
-              <span>{notifyLecturers ? "ส่งอีเมลแจ้งอัตโนมัติ" : "ไม่ส่งอีเมล"}</span>
+              <span>{notifyLecturers ? t("ส่งอีเมลแจ้งอัตโนมัติ") : t("ไม่ส่งอีเมล")}</span>
             </Switch.Content>
           </Switch>
         </FieldGroup>
-        <FieldGroup label="หมายเหตุ (ถ้ามี)">
-          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น 'รอบแรก' หรือ 'ขยายเวลาให้ CS'" />
+        <FieldGroup label={t("หมายเหตุ (ถ้ามี)")}>
+          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder={t("เช่น 'รอบแรก' หรือ 'ขยายเวลาให้ CS'")} />
         </FieldGroup>
-        {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+        {err && <Alert status="danger" title={t("บันทึกไม่สำเร็จ")} description={err} />}
       </div>
     </Modal>
   );
@@ -2434,6 +2445,7 @@ interface MailSettings {
 }
 
 function MailSettingsSection() {
+  const { t, fmtDate } = useI18n();
   const { data, mutate: reload } = useSWR<MailSettings>("/mail-settings");
   const [heading, setHeading] = useState("");
   const [unit, setUnit] = useState("");
@@ -2475,7 +2487,7 @@ function MailSettingsSection() {
     try {
       await api.put("/mail-settings", { contact_heading: heading, contact_unit: unit, contact_detail: detail });
       await reload();
-      toast.success("บันทึกข้อมูลการติดต่อแล้ว", { description: "อีเมลที่ส่งหลังจากนี้จะใช้ข้อความใหม่" });
+      toast.success(t("บันทึกข้อมูลการติดต่อแล้ว"), { description: t("อีเมลที่ส่งหลังจากนี้จะใช้ข้อความใหม่") });
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -2485,11 +2497,11 @@ function MailSettingsSection() {
 
   return (
     <Panel
-      title="ข้อมูลการติดต่อท้ายอีเมล"
-      description="ข้อความส่วนท้ายของอีเมลแจ้งเตือนทุกฉบับที่ระบบส่งถึงอาจารย์และผู้ช่วยสอน ใช้บอกว่าหากมีข้อสงสัยให้ติดต่อใคร"
+      title={t("ข้อมูลการติดต่อท้ายอีเมล")}
+      description={t("ข้อความส่วนท้ายของอีเมลแจ้งเตือนทุกฉบับที่ระบบส่งถึงอาจารย์และผู้ช่วยสอน ใช้บอกว่าหากมีข้อสงสัยให้ติดต่อใคร")}
       actions={
         <Button variant="primary" onClick={save} disabled={!dirty || saving} isPending={saving}>
-          <Save size={14} /> บันทึก
+          <Save size={14} /> {t("บันทึก")}
         </Button>
       }
     >
@@ -2497,49 +2509,50 @@ function MailSettingsSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <SkelForm fields={3} />
           <div>
-            <div className="text-sm font-medium mb-2">ตัวอย่างอีเมล</div>
+            <div className="text-sm font-medium mb-2">{t("ตัวอย่างอีเมล")}</div>
             <Skel className="w-full rounded-lg" style={{ height: 760 }} />
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
-            <FieldGroup label="หัวข้อ" hint="ข้อความตัวหนาบรรทัดแรกของส่วนท้าย">
+            <FieldGroup label={t("หัวข้อ")} hint={t("ข้อความตัวหนาบรรทัดแรกของส่วนท้าย")}>
               <TextInput value={heading} onChange={e => setHeading(e.target.value)} maxLength={200} />
             </FieldGroup>
-            <FieldGroup label="หน่วยงานที่ติดต่อ" hint="เช่น ชื่องานหรือชื่อเจ้าหน้าที่ผู้รับผิดชอบ">
+            <FieldGroup label={t("หน่วยงานที่ติดต่อ")} hint={t("เช่น ชื่องานหรือชื่อเจ้าหน้าที่ผู้รับผิดชอบ")}>
               <TextArea value={unit} onChange={e => setUnit(e.target.value)} rows={2} maxLength={300} />
             </FieldGroup>
             <FieldGroup
-              label="รายละเอียดการติดต่อ (ถ้ามี)"
-              hint="พิมพ์บรรทัดละหนึ่งช่องทาง เช่น อาคารและห้อง หมายเลขโทรศัพท์ อีเมล ไม่เกิน 6 บรรทัด"
+              label={t("รายละเอียดการติดต่อ (ถ้ามี)")}
+              hint={t("พิมพ์บรรทัดละหนึ่งช่องทาง เช่น อาคารและห้อง หมายเลขโทรศัพท์ อีเมล ไม่เกิน 6 บรรทัด")}
             >
               <TextArea
                 value={detail}
                 onChange={e => setDetail(e.target.value)}
                 rows={4}
-                placeholder={"อาคาร ... ชั้น ... ห้อง ...\nโทร 043-00-0000 ต่อ ...\nอีเมล ...@kku.ac.th"}
+                placeholder={t("อาคาร ... ชั้น ... ห้อง ...\nโทร 043-00-0000 ต่อ ...\nอีเมล ...@kku.ac.th")}
               />
             </FieldGroup>
-            {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+            {err && <Alert status="danger" title={t("บันทึกไม่สำเร็จ")} description={err} />}
             {data.updated_at && (
               <div className="text-xs text-muted">
-                แก้ไขล่าสุด {formatThaiDateTime(data.updated_at)}
-                {data.updated_by_name ? ` โดย ${data.updated_by_name}` : ""}
+                {data.updated_by_name
+                  ? t("แก้ไขล่าสุด {when} โดย {name}", { when: formatDateTime(data.updated_at, fmtDate, t), name: data.updated_by_name })
+                  : t("แก้ไขล่าสุด {when}", { when: formatDateTime(data.updated_at, fmtDate, t) })}
               </div>
             )}
           </div>
           <div>
-            <div className="text-sm font-medium mb-2">ตัวอย่างอีเมล</div>
+            <div className="text-sm font-medium mb-2">{t("ตัวอย่างอีเมล")}</div>
             {previewErr ? (
-              <Alert status="warning" title="แสดงตัวอย่างไม่ได้" description={previewErr} />
+              <Alert status="warning" title={t("แสดงตัวอย่างไม่ได้")} description={previewErr} />
             ) : !preview ? (
               // First render lands 400ms after the form (debounced) — hold the
               // frame's space rather than show a blank white box.
               <Skel className="w-full rounded-lg" style={{ height: 760 }} />
             ) : (
               <iframe
-                title="ตัวอย่างอีเมล"
+                title={t("ตัวอย่างอีเมล")}
                 sandbox=""
                 srcDoc={preview}
                 className="w-full rounded-lg border border-hairline bg-white"
@@ -2571,16 +2584,17 @@ interface MailServerInfo {
 }
 
 const MAIL_ENCRYPTION_LABEL: Record<MailServerInfo["encryption"], string> = {
-  starttls: "STARTTLS (เข้ารหัสหลังเชื่อมต่อ)",
-  ssl: "SSL (เข้ารหัสตั้งแต่เชื่อมต่อ)",
-  none: "ไม่เข้ารหัส",
-  auto: "STARTTLS เมื่อเซิร์ฟเวอร์รองรับ",
+  starttls: msg("STARTTLS (เข้ารหัสหลังเชื่อมต่อ)"),
+  ssl: msg("SSL (เข้ารหัสตั้งแต่เชื่อมต่อ)"),
+  none: msg("ไม่เข้ารหัส"),
+  auto: msg("STARTTLS เมื่อเซิร์ฟเวอร์รองรับ"),
 };
 interface MailCheckStep { key: string; label: string; ok: boolean; skipped?: boolean; warning?: boolean; detail?: string; ms: number }
 interface MailCheckResult { ok: boolean; steps: MailCheckStep[]; advice?: string }
 interface MailTestSendResult { to: string; sent: boolean; disabled?: boolean; error?: string; ms: number }
 
 function MailServerTestSection() {
+  const { t, fmtDate } = useI18n();
   const { data: info } = useSWR<MailServerInfo>("/mail-settings/server");
   const { data: me } = useSWR<Me>("/me");
   const [checking, setChecking] = useState(false);
@@ -2603,7 +2617,7 @@ function MailServerTestSection() {
       setCheck(await api.post<MailCheckResult>("/mail-settings/check"));
       setCheckedAt(new Date().toISOString());
     } catch (e) {
-      toast.danger("ทดสอบการตั้งค่าอีเมลไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(t("ทดสอบการตั้งค่าอีเมลไม่สำเร็จ"), { description: errMessage(e) });
     } finally {
       setChecking(false);
     }
@@ -2623,61 +2637,61 @@ function MailServerTestSection() {
   return (
     <div className="space-y-6">
       <Panel
-        title="เมลเซิร์ฟเวอร์ที่ใช้ส่ง"
-        description="ค่าที่ระบบใช้ส่งอีเมลแจ้งเตือน กำหนดในไฟล์ตั้งค่าของเซิร์ฟเวอร์ (.env) หากต้องการเปลี่ยนกรุณาแจ้งผู้ดูแลระบบ"
+        title={t("เมลเซิร์ฟเวอร์ที่ใช้ส่ง")}
+        description={t("ค่าที่ระบบใช้ส่งอีเมลแจ้งเตือน กำหนดในไฟล์ตั้งค่าของเซิร์ฟเวอร์ (.env) หากต้องการเปลี่ยนกรุณาแจ้งผู้ดูแลระบบ")}
       >
         {!info ? (
-          <div className="py-4 text-sm text-muted">กำลังโหลด…</div>
+          <div className="py-4 text-sm text-muted">{t("กำลังโหลด…")}</div>
         ) : !info.enabled ? (
           <Alert
             status="warning"
-            title="ยังไม่ได้ตั้งค่าเมลเซิร์ฟเวอร์"
-            description="ไม่ได้กำหนด SMTP_HOST ระบบจึงไม่ส่งอีเมลใด ๆ การแจ้งเตือนจะแสดงเฉพาะในระบบ"
+            title={t("ยังไม่ได้ตั้งค่าเมลเซิร์ฟเวอร์")}
+            description={t("ไม่ได้กำหนด SMTP_HOST ระบบจึงไม่ส่งอีเมลใด ๆ การแจ้งเตือนจะแสดงเฉพาะในระบบ")}
           />
         ) : (
           <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-            <dt className="text-muted">เซิร์ฟเวอร์</dt>
+            <dt className="text-muted">{t("เซิร์ฟเวอร์")}</dt>
             <dd className="font-medium tabular break-all">{info.host}:{info.port}</dd>
-            <dt className="text-muted">การเข้ารหัส</dt>
+            <dt className="text-muted">{t("การเข้ารหัส")}</dt>
             <dd>
-              {MAIL_ENCRYPTION_LABEL[info.encryption] ?? info.encryption}
-              {info.legacy_ciphers && <span className="text-muted"> รองรับการเข้ารหัสรุ่นเก่า</span>}
+              {MAIL_ENCRYPTION_LABEL[info.encryption] ? t(MAIL_ENCRYPTION_LABEL[info.encryption]) : info.encryption}
+              {info.legacy_ciphers && <span className="text-muted"> {t("รองรับการเข้ารหัสรุ่นเก่า")}</span>}
             </dd>
-            <dt className="text-muted">ส่งในนาม</dt>
+            <dt className="text-muted">{t("ส่งในนาม")}</dt>
             <dd className="break-all">{info.from_header || info.from}</dd>
-            <dt className="text-muted">บัญชีเข้าสู่ระบบ</dt>
+            <dt className="text-muted">{t("บัญชีเข้าสู่ระบบ")}</dt>
             <dd className="break-all">
               {info.auth_user
-                ? <>{info.auth_user} {info.has_password ? <span className="text-muted">(กำหนดรหัสผ่านแล้ว)</span> : <span className="text-danger">(ยังไม่กำหนดรหัสผ่าน)</span>}</>
-                : <span className="text-muted">ไม่เข้าสู่ระบบ (อนุญาตตาม IP ของเซิร์ฟเวอร์)</span>}
+                ? <>{info.auth_user} {info.has_password ? <span className="text-muted">{t("(กำหนดรหัสผ่านแล้ว)")}</span> : <span className="text-danger">{t("(ยังไม่กำหนดรหัสผ่าน)")}</span>}</>
+                : <span className="text-muted">{t("ไม่เข้าสู่ระบบ (อนุญาตตาม IP ของเซิร์ฟเวอร์)")}</span>}
             </dd>
           </dl>
         )}
       </Panel>
 
       <Panel
-        title="ทดสอบการเชื่อมต่อ"
-        description="ตรวจทีละขั้นตอนว่าระบบติดต่อเมลเซิร์ฟเวอร์ได้หรือไม่ โดยไม่ส่งอีเมลจริง"
+        title={t("ทดสอบการเชื่อมต่อ")}
+        description={t("ตรวจทีละขั้นตอนว่าระบบติดต่อเมลเซิร์ฟเวอร์ได้หรือไม่ โดยไม่ส่งอีเมลจริง")}
         actions={
           <Button variant="secondary" onClick={runCheck} disabled={checking || !info?.enabled} isPending={checking}>
-            <Server size={14} /> ทดสอบการเชื่อมต่อ
+            <Server size={14} /> {t("ทดสอบการเชื่อมต่อ")}
           </Button>
         }
       >
         {!check ? (
-          <div className="text-sm text-muted">กดปุ่ม “ทดสอบการเชื่อมต่อ” เพื่อเริ่มตรวจ ใช้เวลาไม่เกิน 1 นาที</div>
+          <div className="text-sm text-muted">{t("กดปุ่ม “ทดสอบการเชื่อมต่อ” เพื่อเริ่มตรวจ ใช้เวลาไม่เกิน 1 นาที")}</div>
         ) : (
           <div className="space-y-3">
             <Alert
               status={check.ok ? "success" : "danger"}
-              title={check.ok ? "เชื่อมต่อเมลเซิร์ฟเวอร์ได้" : "เชื่อมต่อเมลเซิร์ฟเวอร์ไม่สำเร็จ"}
-              description={checkedAt ? `ทดสอบเมื่อ ${formatThaiDateTime(checkedAt)}` : undefined}
+              title={check.ok ? t("เชื่อมต่อเมลเซิร์ฟเวอร์ได้") : t("เชื่อมต่อเมลเซิร์ฟเวอร์ไม่สำเร็จ")}
+              description={checkedAt ? t("ทดสอบเมื่อ {when}", { when: formatDateTime(checkedAt, fmtDate, t) }) : undefined}
             />
-            {check.advice && <Alert status="warning" title="ข้อแนะนำ" description={check.advice} />}
+            {check.advice && <Alert status="warning" title={t("ข้อแนะนำ")} description={check.advice} />}
             <ol className="divide-y divide-hairline rounded-lg border border-hairline">
               {check.steps.map(st => (
                 <li key={st.key} className="flex items-start gap-3 px-4 py-3 text-sm">
-                  <Tip content={st.warning ? "มีข้อควรระวัง แต่ยังส่งอีเมลได้" : st.skipped ? "ข้ามขั้นตอนนี้" : st.ok ? "ผ่าน" : "ไม่ผ่าน"}>
+                  <Tip content={st.warning ? t("มีข้อควรระวัง แต่ยังส่งอีเมลได้") : st.skipped ? t("ข้ามขั้นตอนนี้") : st.ok ? t("ผ่าน") : t("ไม่ผ่าน")}>
                     <span className="inline-flex shrink-0 mt-0.5">
                       {st.warning
                         ? <CircleAlert size={18} className="text-warning" />
@@ -2701,31 +2715,31 @@ function MailServerTestSection() {
       </Panel>
 
       <Panel
-        title="ส่งอีเมลทดสอบ"
-        description="ส่งอีเมลตัวอย่างจริงหนึ่งฉบับด้วยรูปแบบเดียวกับอีเมลแจ้งเตือน ส่งได้ไม่เกิน 5 ฉบับใน 10 นาที และทุกครั้งจะถูกบันทึกในประวัติการใช้งาน"
+        title={t("ส่งอีเมลทดสอบ")}
+        description={t("ส่งอีเมลตัวอย่างจริงหนึ่งฉบับด้วยรูปแบบเดียวกับอีเมลแจ้งเตือน ส่งได้ไม่เกิน 5 ฉบับใน 10 นาที และทุกครั้งจะถูกบันทึกในประวัติการใช้งาน")}
       >
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex-1 min-w-0">
-            <FieldGroup label="ส่งถึง" hint="ระบุอีเมลผู้รับหนึ่งที่อยู่">
+            <FieldGroup label={t("ส่งถึง")} hint={t("ระบุอีเมลผู้รับหนึ่งที่อยู่")}>
               <TextInput type="email" value={to} onChange={e => setTo(e.target.value)} placeholder="name@kku.ac.th" />
             </FieldGroup>
           </div>
           <Button variant="primary" onClick={sendTest} disabled={sending || !to.trim() || !info?.enabled} isPending={sending}>
-            <Send size={14} /> ส่งอีเมลทดสอบ
+            <Send size={14} /> {t("ส่งอีเมลทดสอบ")}
           </Button>
         </div>
         <div className="mt-4 space-y-2">
-          {sendErr && <Alert status="danger" title="ส่งไม่สำเร็จ" description={sendErr} />}
+          {sendErr && <Alert status="danger" title={t("ส่งไม่สำเร็จ")} description={sendErr} />}
           {sent && (sent.sent ? (
             <Alert
               status="success"
-              title={`ส่งถึง ${sent.to} แล้ว`}
-              description={`เมลเซิร์ฟเวอร์รับอีเมลแล้ว (${sent.ms} ms) หากไม่พบในกล่องจดหมาย กรุณาตรวจสอบโฟลเดอร์จดหมายขยะ`}
+              title={t("ส่งถึง {to} แล้ว", { to: sent.to })}
+              description={t("เมลเซิร์ฟเวอร์รับอีเมลแล้ว ({ms} ms) หากไม่พบในกล่องจดหมาย กรุณาตรวจสอบโฟลเดอร์จดหมายขยะ", { ms: sent.ms })}
             />
           ) : (
             <Alert
               status={sent.disabled ? "warning" : "danger"}
-              title={sent.disabled ? "ระบบปิดการส่งอีเมลอยู่" : `ส่งถึง ${sent.to} ไม่สำเร็จ`}
+              title={sent.disabled ? t("ระบบปิดการส่งอีเมลอยู่") : t("ส่งถึง {to} ไม่สำเร็จ", { to: sent.to })}
               description={sent.error}
             />
           ))}
@@ -2770,16 +2784,17 @@ interface LinkableUser {
 // uses the abbreviated form, documents print the spelled-out form. The
 // backend re-derives this the same way at save time (see
 // AdminOfficerService.Upsert) — this copy only drives the live preview.
+// i18n-ignore: academic prefixes are printed on official Thai documents (data).
 const USER_TITLE_TO_PREFIX: Record<string, string> = {
-  "อาจารย์": "อาจารย์",
-  "อ. ดร.": "ดร.",
-  "ดร.": "ดร.",
-  "ผศ.": "ผู้ช่วยศาสตราจารย์",
-  "ผศ. ดร.": "ผู้ช่วยศาสตราจารย์ ดร.",
-  "รศ.": "รองศาสตราจารย์",
-  "รศ. ดร.": "รองศาสตราจารย์ ดร.",
-  "ศ.": "ศาสตราจารย์",
-  "ศ. ดร.": "ศาสตราจารย์ ดร.",
+  "อาจารย์": "อาจารย์", // i18n-ignore
+  "อ. ดร.": "ดร.", // i18n-ignore
+  "ดร.": "ดร.", // i18n-ignore
+  "ผศ.": "ผู้ช่วยศาสตราจารย์", // i18n-ignore
+  "ผศ. ดร.": "ผู้ช่วยศาสตราจารย์ ดร.", // i18n-ignore
+  "รศ.": "รองศาสตราจารย์", // i18n-ignore
+  "รศ. ดร.": "รองศาสตราจารย์ ดร.", // i18n-ignore
+  "ศ.": "ศาสตราจารย์", // i18n-ignore
+  "ศ. ดร.": "ศาสตราจารย์ ดร.", // i18n-ignore
 };
 
 /* -------------------------------------------------------------------------- */
@@ -2795,29 +2810,27 @@ interface Curriculum {
 }
 
 function CurriculaSection() {
+  const { t } = useI18n();
   const { data } = useSWR<Curriculum[]>("/curricula");
   const [editing, setEditing] = useState<Curriculum | null>(null);
   const rows = data ?? [];
 
   return (
     <Panel
-      title="หลักสูตร"
-      description={
-        "ชื่อชีตและชื่อเต็มของแต่ละหลักสูตร ใช้พิมพ์ในเอกสารสรุปรายวิชาที่ขอใช้ TA " +
-        "และปะหน้าจ่ายตรง — แก้ตรงนี้เมื่อคณะเปลี่ยนชื่อหลักสูตร (เช่น IT → ITII) โดยไม่ต้องแก้โค้ด"
-      }
+      title={t("หลักสูตร")}
+      description={t("ชื่อชีตและชื่อเต็มของแต่ละหลักสูตร ใช้พิมพ์ในเอกสารสรุปรายวิชาที่ขอใช้ TA และปะหน้าจ่ายตรง — แก้ตรงนี้เมื่อคณะเปลี่ยนชื่อหลักสูตร (เช่น IT → ITII) โดยไม่ต้องแก้โค้ด")}
     >
       {data && rows.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีหลักสูตรในระบบ</div>
+        <div className="text-sm text-muted py-4">{t("ยังไม่มีหลักสูตรในระบบ")}</div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="data-table w-full">
             <thead>
               <tr>
-                <th>รหัส</th>
-                <th>ชื่อชีต</th>
-                <th>ชื่อเต็มหลักสูตร</th>
-                <th>ระดับ</th>
+                <th>{t("รหัส")}</th>
+                <th>{t("ชื่อชีต")}</th>
+                <th>{t("ชื่อเต็มหลักสูตร")}</th>
+                <th>{t("ระดับ")}</th>
                 <th className="actions" />
               </tr>
             </thead>
@@ -2839,12 +2852,12 @@ function CurriculaSection() {
                   <td>{cur.full_name_th}</td>
                   <td>
                     {cur.level === "graduate"
-                      ? <Chip tone="neutral">บัณฑิตศึกษา</Chip>
-                      : <Chip tone="success">ปริญญาตรี</Chip>}
+                      ? <Chip tone="neutral">{t("บัณฑิตศึกษา")}</Chip>
+                      : <Chip tone="success">{t("ปริญญาตรี")}</Chip>}
                   </td>
                   <td className="actions">
                     <Button variant="ghost" size="sm" onClick={() => setEditing(cur)}>
-                      <Pencil size={13} />แก้ไข
+                      <Pencil size={13} />{t("แก้ไข")}
                     </Button>
                   </td>
                 </tr>
@@ -2859,7 +2872,7 @@ function CurriculaSection() {
         onClose={() => setEditing(null)}
         onSaved={() => {
           setEditing(null);
-          toast.success("บันทึกการแก้ไขหลักสูตรเรียบร้อยแล้ว");
+          toast.success(t("บันทึกการแก้ไขหลักสูตรเรียบร้อยแล้ว"));
         }}
       />
     </Panel>
@@ -2873,6 +2886,7 @@ function CurriculumEditModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [sheetName, setSheetName] = useState("");
   const [fullName, setFullName] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
@@ -2902,7 +2916,7 @@ function CurriculumEditModal({
       await mutate("/curricula");
       onSaved();
     } catch (e) {
-      setError((e as Error).message || "บันทึกไม่สำเร็จ");
+      setError((e as Error).message || t("บันทึกไม่สำเร็จ"));
     } finally {
       setSaving(false);
     }
@@ -2915,27 +2929,27 @@ function CurriculumEditModal({
       title={
         <span className="inline-flex items-center gap-2">
           <Pencil size={18} />
-          {editing ? `แก้ไขหลักสูตร ${editing.code}` : ""}
+          {editing ? t("แก้ไขหลักสูตร {code}", { code: editing.code }) : ""}
         </span>
       }
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
-            <Save size={14} />บันทึกการแก้ไข
+            <Save size={14} />{t("บันทึกการแก้ไข")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         {error && <Alert status="danger" title={error} />}
-        <FieldGroup label="ชื่อชีต" hint="ชื่อแท็บชีตที่พิมพ์ในเอกสาร Excel">
+        <FieldGroup label={t("ชื่อชีต")} hint={t("ชื่อแท็บชีตที่พิมพ์ในเอกสาร Excel")}>
           <TextInput value={sheetName} onChange={e => setSheetName(e.target.value)} maxLength={40} autoFocus />
         </FieldGroup>
-        <FieldGroup label="ชื่อเต็มหลักสูตร">
+        <FieldGroup label={t("ชื่อเต็มหลักสูตร")}>
           <TextInput value={fullName} onChange={e => setFullName(e.target.value)} maxLength={200} />
         </FieldGroup>
-        <FieldGroup label="ลำดับการพิมพ์" hint="ชีตที่มีเลขน้อยกว่าจะอยู่ก่อนในเอกสาร">
+        <FieldGroup label={t("ลำดับการพิมพ์")} hint={t("ชีตที่มีเลขน้อยกว่าจะอยู่ก่อนในเอกสาร")}>
           <TextInput
             type="number"
             value={String(sortOrder)}
@@ -2953,6 +2967,7 @@ function CurriculumEditModal({
 // (ดู userTitleToPrefix/rbac.RoleExecutive ฝั่ง backend) — จึงไม่มีช่องติ๊กแยก
 // ที่หน้าจัดการผู้ใช้อีกแล้ว
 function AdminOfficersSection() {
+  const { t } = useI18n();
   const { data } = useSWR<AdminOfficer[]>("/settings/admin-officers?include_inactive=1");
   const [editing, setEditing] = useState<AdminOfficer | null>(null);
   // Turning a position OFF asks first: its holder loses the executive view and
@@ -2970,10 +2985,10 @@ function AdminOfficersSection() {
     try {
       await api.post("/settings/admin-officers", { ...o, is_active: !o.is_active });
       await mutate("/settings/admin-officers?include_inactive=1");
-      toast.success(o.is_active ? `ปิดใช้งานตำแหน่ง ${o.title} แล้ว` : `เปิดใช้งานตำแหน่ง ${o.title} แล้ว`);
+      toast.success(o.is_active ? t("ปิดใช้งานตำแหน่ง {title} แล้ว", { title: o.title }) : t("เปิดใช้งานตำแหน่ง {title} แล้ว", { title: o.title }));
       setConfirmOff(null);
     } catch (e) {
-      toast.danger(o.is_active ? "ปิดใช้งานตำแหน่งไม่สำเร็จ" : "เปิดใช้งานตำแหน่งไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(o.is_active ? t("ปิดใช้งานตำแหน่งไม่สำเร็จ") : t("เปิดใช้งานตำแหน่งไม่สำเร็จ"), { description: errMessage(e) });
     } finally {
       setToggling(false);
     }
@@ -2981,19 +2996,19 @@ function AdminOfficersSection() {
 
   return (
     <Panel
-      title="ตำแหน่งฝ่ายบริหาร"
-      description="ตำแหน่งเป็นรายการคงที่ (คณบดี / รองคณบดี / หัวหน้าสาขา ฯลฯ) — มอบหมายอาจารย์เข้าดำรงตำแหน่งได้ที่นี่ ผู้ดำรงตำแหน่งที่เปิดใช้งานอยู่จะเห็นแดชบอร์ดผู้บริหารโดยอัตโนมัติ"
+      title={t("ตำแหน่งฝ่ายบริหาร")}
+      description={t("ตำแหน่งเป็นรายการคงที่ (คณบดี / รองคณบดี / หัวหน้าสาขา ฯลฯ) — มอบหมายอาจารย์เข้าดำรงตำแหน่งได้ที่นี่ ผู้ดำรงตำแหน่งที่เปิดใช้งานอยู่จะเห็นแดชบอร์ดผู้บริหารโดยอัตโนมัติ")}
     >
       {data && rows.length === 0 ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีข้อมูลตำแหน่งฝ่ายบริหารในระบบ</div>
+        <div className="text-sm text-muted py-4">{t("ยังไม่มีข้อมูลตำแหน่งฝ่ายบริหารในระบบ")}</div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="data-table w-full">
             <thead>
               <tr>
-                <th>ตำแหน่งบริหาร</th>
-                <th>ผู้ดำรงตำแหน่ง</th>
-                <th>สถานะ</th>
+                <th>{t("ตำแหน่งบริหาร")}</th>
+                <th>{t("ผู้ดำรงตำแหน่ง")}</th>
+                <th>{t("สถานะ")}</th>
                 <th className="actions" />
               </tr>
             </thead>
@@ -3018,20 +3033,20 @@ function AdminOfficersSection() {
                   <td>
                     <div className="flex flex-col gap-1 items-start">
                       {o.is_active
-                        ? <Chip tone="success">เปิดใช้งาน</Chip>
-                        : <Chip tone="neutral">ปิดใช้งาน</Chip>}
+                        ? <Chip tone="success">{t("เปิดใช้งาน@status")}</Chip>
+                        : <Chip tone="neutral">{t("ปิดใช้งาน")}</Chip>}
                       {o.linked_active === false && (
-                        <Chip tone="warn">บัญชีถูกปิดใช้งาน</Chip>
+                        <Chip tone="warn">{t("บัญชีถูกปิดใช้งาน")}</Chip>
                       )}
                     </div>
                   </td>
                   <td className="actions">
                     <div className="inline-flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => setEditing(o)}>
-                        <Pencil size={13} />แก้ไข
+                        <Pencil size={13} />{t("แก้ไข")}
                       </Button>
                       <Button variant="ghost" size="sm" disabled={toggling} onClick={() => (o.is_active ? setConfirmOff(o) : toggleActive(o))}>
-                        {o.is_active ? <><PowerOff size={13} />ปิด</> : <><Power size={13} />เปิด</>}
+                        {o.is_active ? <><PowerOff size={13} />{t("ปิด@toggle")}</> : <><Power size={13} />{t("เปิด@toggle")}</>}
                       </Button>
                     </div>
                   </td>
@@ -3047,7 +3062,7 @@ function AdminOfficersSection() {
         onClose={() => setEditing(null)}
         onSaved={name => {
           setEditing(null);
-          toast.success(`มอบหมาย ${name} เรียบร้อยแล้ว`);
+          toast.success(t("มอบหมาย {name} เรียบร้อยแล้ว", { name }));
         }}
       />
       <ConfirmSaveModal
@@ -3056,12 +3071,11 @@ function AdminOfficersSection() {
         onConfirm={() => { if (confirmOff) toggleActive(confirmOff); }}
         saving={toggling}
         variant="danger"
-        title={confirmOff ? `ปิดใช้งานตำแหน่ง ${confirmOff.title}?` : "ปิดใช้งานตำแหน่ง?"}
-        description={
-          `${confirmOff ? `${confirmOff.academic_prefix}${confirmOff.full_name}`.trim() || "ผู้ดำรงตำแหน่ง" : "ผู้ดำรงตำแหน่ง"} ` +
-          "จะเข้าหน้าผู้บริหารไม่ได้ และจะไม่อยู่ในรายชื่อผู้ลงนามของเอกสารที่สร้างหลังจากนี้ทันที เปิดใช้งานกลับได้ภายหลัง"
-        }
-        confirmLabel="ปิดใช้งาน"
+        title={confirmOff ? t("ปิดใช้งานตำแหน่ง {title}?", { title: confirmOff.title }) : t("ปิดใช้งานตำแหน่ง?")}
+        description={t("{name} จะเข้าหน้าผู้บริหารไม่ได้ และจะไม่อยู่ในรายชื่อผู้ลงนามของเอกสารที่สร้างหลังจากนี้ทันที เปิดใช้งานกลับได้ภายหลัง", {
+          name: (confirmOff ? `${confirmOff.academic_prefix}${confirmOff.full_name}`.trim() : "") || t("ผู้ดำรงตำแหน่ง"),
+        })}
+        confirmLabel={t("ปิดใช้งาน")}
         confirmIcon={<PowerOff size={14} />}
       />
     </Panel>
@@ -3079,6 +3093,7 @@ function AdminOfficerFormModal({
   onClose: () => void;
   onSaved: (name: string) => void;
 }) {
+  const { t } = useI18n();
   const open = editing !== null;
   const [draft, setDraft] = useState<AdminOfficer>({
     user_id: "", academic_prefix: "", full_name: "", title: "", is_active: true,
@@ -3140,7 +3155,7 @@ function AdminOfficerFormModal({
       await mutate("/settings/admin-officers?include_inactive=1");
       onSaved(draft.full_name);
     } catch (e) {
-      setError((e as Error).message || "บันทึกไม่สำเร็จ");
+      setError((e as Error).message || t("บันทึกไม่สำเร็จ"));
     } finally {
       setSaving(false);
     }
@@ -3153,15 +3168,15 @@ function AdminOfficerFormModal({
       title={
         <span className="inline-flex items-center gap-2">
           <Pencil size={18} />
-          {editing ? `เปลี่ยนตัวผู้ดำรงตำแหน่ง: ${editing.title}` : ""}
+          {editing ? t("เปลี่ยนตัวผู้ดำรงตำแหน่ง: {title}", { title: editing.title }) : ""}
         </span>
       }
       size="lg"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
-            <Save size={14} />บันทึก
+            <Save size={14} />{t("บันทึก")}
           </Button>
         </>
       }
@@ -3177,9 +3192,9 @@ function AdminOfficerFormModal({
               if (u) pickUser(u);
             }}
             className="w-full"
-            placeholder="พิมพ์ชื่อหรืออีเมลเพื่อค้นหา…"
+            placeholder={t("พิมพ์ชื่อหรืออีเมลเพื่อค้นหา…")}
           >
-            <Label>ชื่อ-นามสกุล</Label>
+            <Label>{t("ชื่อ-นามสกุล")}</Label>
             <Autocomplete.Trigger>
               <Autocomplete.Value>
                 {({ defaultChildren, isPlaceholder }) => {
@@ -3202,12 +3217,12 @@ function AdminOfficerFormModal({
                 <HSearchField autoFocus name="admin-officer-user-search" variant="secondary">
                   <HSearchField.Group>
                     <HSearchField.SearchIcon />
-                    <HSearchField.Input placeholder="ค้นหาชื่อหรืออีเมล…" />
+                    <HSearchField.Input placeholder={t("ค้นหาชื่อหรืออีเมล…")} />
                     <HSearchField.ClearButton />
                   </HSearchField.Group>
                 </HSearchField>
                 <ListBox renderEmptyState={() => (
-                  <div className="text-sm text-muted p-3 text-center">ไม่พบบัญชีที่ตรงกัน</div>
+                  <div className="text-sm text-muted p-3 text-center">{t("ไม่พบบัญชีที่ตรงกัน")}</div>
                 )}>
                   {candidates.map(u => (
                     <ListBox.Item key={u.id} id={u.id} textValue={`${u.first_name} ${u.last_name} ${u.email}`}>
@@ -3223,42 +3238,42 @@ function AdminOfficerFormModal({
             </Autocomplete.Popover>
           </Autocomplete>
           <div className="text-xs text-muted">
-            เลือกจากบัญชีผู้ใช้ที่มีอยู่ในระบบ — ชื่อและคำนำหน้าจะตรงกับบัญชีเสมอ
+            {t("เลือกจากบัญชีผู้ใช้ที่มีอยู่ในระบบ — ชื่อและคำนำหน้าจะตรงกับบัญชีเสมอ")}
           </div>
         </div>
 
         <FieldGroup
-          label="สถานะ"
-          hint="ปิดใช้งานจะไม่ถูกนำไปใช้ในเอกสารใหม่ และผู้ดำรงตำแหน่งจะไม่เห็นแดชบอร์ดผู้บริหารอีกต่อไป"
+          label={t("สถานะ")}
+          hint={t("ปิดใช้งานจะไม่ถูกนำไปใช้ในเอกสารใหม่ และผู้ดำรงตำแหน่งจะไม่เห็นแดชบอร์ดผู้บริหารอีกต่อไป")}
         >
           <div className="flex items-center gap-3 pt-2">
             <Switch
               isSelected={draft.is_active}
               onChange={v => setDraft({ ...draft, is_active: v })}
-              aria-label="สถานะเปิดใช้งาน"
+              aria-label={t("สถานะเปิดใช้งาน")}
             >
               <Switch.Content>
                 <Switch.Control>
                   <Switch.Thumb />
                 </Switch.Control>
-                <span>{draft.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</span>
+                <span>{draft.is_active ? t("เปิดใช้งาน@status") : t("ปิดใช้งาน")}</span>
               </Switch.Content>
             </Switch>
           </div>
         </FieldGroup>
 
         <div className="rounded-lg border border-border bg-accent-soft/40 p-3">
-          <div className="text-xs text-muted uppercase tracking-wider mb-1">ตัวอย่างการปรากฏในเอกสาร</div>
+          <div className="text-xs text-muted uppercase tracking-wider mb-1">{t("ตัวอย่างการปรากฏในเอกสาร")}</div>
           <div className="text-sm">
             <div className="font-medium">
-              {(draft.academic_prefix || "") + (draft.full_name || "— ยังไม่เลือกบัญชี —")}
+              {(draft.academic_prefix || "") + (draft.full_name || t("— ยังไม่เลือกบัญชี —"))}
             </div>
             <div className="text-muted">{editing?.title}</div>
           </div>
         </div>
 
         {error && (
-          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
+          <Alert status="danger" icon={<CircleAlert size={16} />} title={t("บันทึกไม่สำเร็จ")} description={error} />
         )}
       </div>
     </Modal>
@@ -3272,9 +3287,9 @@ function AdminOfficerFormModal({
 /* -------------------------------------------------------------------------- */
 
 const TIER_LABELS: Record<DemoTester["tier"], string> = {
-  staff: "เจ้าหน้าที่ (ทุกสิทธิ์)",
-  lecturer: "อาจารย์ (อาจารย์ + TA)",
-  ta: "TA (เฉพาะสิทธิ์ TA)",
+  staff: msg("เจ้าหน้าที่ (ทุกสิทธิ์)"),
+  lecturer: msg("อาจารย์ (อาจารย์ + TA)"),
+  ta: msg("TA (เฉพาะสิทธิ์ TA)"),
 };
 const TIER_TONE: Record<DemoTester["tier"], "brand" | "success" | "neutral"> = {
   staff: "brand",
@@ -3283,6 +3298,7 @@ const TIER_TONE: Record<DemoTester["tier"], "brand" | "success" | "neutral"> = {
 };
 
 function DemoTestersSection() {
+  const { t } = useI18n();
   const { data, error } = useSWR<{ items: DemoTester[] }>("/demo-testers", () => demoTesters());
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DemoTester | null>(null);
@@ -3300,11 +3316,11 @@ function DemoTestersSection() {
   // silently 404'd on submit, with nothing telling the admin why.
   if (error instanceof ApiError && error.status === 404) {
     return (
-      <Panel title="สิทธิ์เข้าใช้งานห้องทดลอง">
+      <Panel title={t("สิทธิ์เข้าใช้งานห้องทดลอง")}>
         <Alert
           status="default"
-          title="เซิร์ฟเวอร์นี้ไม่ได้เปิดใช้งานโหมดทดลอง (Demo)"
-          description='ฟีเจอร์ "ห้องทดลอง" เปิดเฉพาะบางเซิร์ฟเวอร์ (เช่นสำหรับสาธิตระบบ) เซิร์ฟเวอร์นี้ไม่ได้ตั้งค่าไว้ จึงไม่มีอะไรให้จัดการในส่วนนี้'
+          title={t("เซิร์ฟเวอร์นี้ไม่ได้เปิดใช้งานโหมดทดลอง (Demo)")}
+          description={t("ฟีเจอร์ \"ห้องทดลอง\" เปิดเฉพาะบางเซิร์ฟเวอร์ (เช่นสำหรับสาธิตระบบ) เซิร์ฟเวอร์นี้ไม่ได้ตั้งค่าไว้ จึงไม่มีอะไรให้จัดการในส่วนนี้")}
         />
       </Panel>
     );
@@ -3316,10 +3332,10 @@ function DemoTestersSection() {
     try {
       await demoRemoveTester(deleteTarget.email);
       await mutate("/demo-testers");
-      toast.success(`ยกเลิกสิทธิ์ของ ${deleteTarget.email} เรียบร้อยแล้ว`);
+      toast.success(t("ยกเลิกสิทธิ์ของ {email} เรียบร้อยแล้ว", { email: deleteTarget.email }));
       setDeleteTarget(null);
     } catch (e) {
-      toast.danger("ยกเลิกสิทธิ์ไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(t("ยกเลิกสิทธิ์ไม่สำเร็จ"), { description: errMessage(e) });
     } finally {
       setDeleting(false);
     }
@@ -3327,30 +3343,27 @@ function DemoTestersSection() {
 
   return (
     <Panel
-      title="สิทธิ์เข้าใช้งานห้องทดลอง"
-      description={
-        'กำหนดว่าอีเมลไหนเข้า "โหมดทดลอง" ได้บ้าง และเห็นบทบาทไหนบ้าง — เจ้าหน้าที่เห็นทุกบทบาท ' +
-        "อาจารย์เห็นเฉพาะบทบาทอาจารย์และ TA ส่วน TA เห็นเฉพาะบทบาท TA ของตัวเอง อีเมลที่ไม่อยู่ในรายการนี้เข้าห้องทดลองไม่ได้เลย"
-      }
+      title={t("สิทธิ์เข้าใช้งานห้องทดลอง")}
+      description={t("กำหนดว่าอีเมลไหนเข้า \"โหมดทดลอง\" ได้บ้าง และเห็นบทบาทไหนบ้าง — เจ้าหน้าที่เห็นทุกบทบาท อาจารย์เห็นเฉพาะบทบาทอาจารย์และ TA ส่วน TA เห็นเฉพาะบทบาท TA ของตัวเอง อีเมลที่ไม่อยู่ในรายการนี้เข้าห้องทดลองไม่ได้เลย")}
       actions={
         <Button variant="primary" onClick={() => setFormOpen(true)}>
-          <Plus size={14} />เพิ่มผู้มีสิทธิ์
+          <Plus size={14} />{t("เพิ่มผู้มีสิทธิ์")}
         </Button>
       }
     >
       {(data || error) && rows.length === 0 ? (
         <div className="text-sm text-muted py-4">
-          ยังไม่มีใครมีสิทธิ์เข้าห้องทดลอง กด "เพิ่มผู้มีสิทธิ์" เพื่อเริ่ม
+          {t("ยังไม่มีใครมีสิทธิ์เข้าห้องทดลอง กด \"เพิ่มผู้มีสิทธิ์\" เพื่อเริ่ม")}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="data-table w-full">
             <thead>
               <tr>
-                <th>อีเมล</th>
-                <th>ระดับสิทธิ์</th>
-                <th>หมายเหตุ</th>
-                <th>เพิ่มโดย</th>
+                <th>{t("อีเมล")}</th>
+                <th>{t("ระดับสิทธิ์")}</th>
+                <th>{t("หมายเหตุ")}</th>
+                <th>{t("เพิ่มโดย")}</th>
                 <th className="actions" />
               </tr>
             </thead>
@@ -3364,15 +3377,15 @@ function DemoTestersSection() {
                   <td className="actions"><Skel className="ms-auto h-7 w-20 rounded-lg" /></td>
                 </tr>
               ))}
-              {rows.map(t => (
-                <tr key={t.email}>
-                  <td className="font-medium">{t.email}</td>
-                  <td><Chip tone={TIER_TONE[t.tier]}>{TIER_LABELS[t.tier]}</Chip></td>
-                  <td className="text-muted text-sm">{t.note || <span className="text-muted">—</span>}</td>
-                  <td className="text-muted text-sm">{t.added_by}</td>
+              {rows.map(tester => (
+                <tr key={tester.email}>
+                  <td className="font-medium">{tester.email}</td>
+                  <td><Chip tone={TIER_TONE[tester.tier]}>{t(TIER_LABELS[tester.tier])}</Chip></td>
+                  <td className="text-muted text-sm">{tester.note || <span className="text-muted">—</span>}</td>
+                  <td className="text-muted text-sm">{tester.added_by}</td>
                   <td className="actions">
-                    <Button variant="danger-soft" size="sm" onClick={() => setDeleteTarget(t)}>
-                      <Trash2 size={13} />ยกเลิกสิทธิ์
+                    <Button variant="danger-soft" size="sm" onClick={() => setDeleteTarget(tester)}>
+                      <Trash2 size={13} />{t("ยกเลิกสิทธิ์")}
                     </Button>
                   </td>
                 </tr>
@@ -3387,7 +3400,7 @@ function DemoTestersSection() {
         onClose={() => setFormOpen(false)}
         onSaved={email => {
           setFormOpen(false);
-          toast.success(`ให้สิทธิ์ ${email} เรียบร้อยแล้ว`);
+          toast.success(t("ให้สิทธิ์ {email} เรียบร้อยแล้ว", { email }));
         }}
       />
 
@@ -3396,10 +3409,10 @@ function DemoTestersSection() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={doDelete}
         saving={deleting}
-        title="ยืนยันยกเลิกสิทธิ์เข้าห้องทดลอง?"
+        title={t("ยืนยันยกเลิกสิทธิ์เข้าห้องทดลอง?")}
         description={
           deleteTarget
-            ? `ยกเลิกสิทธิ์ของ "${deleteTarget.email}" — คำขอเข้าห้องทดลองครั้งถัดไปของอีเมลนี้จะถูกปฏิเสธ และหากกำลังทดลองอยู่ ระบบจะบล็อกการเข้าสู่ระบบครั้งถัดไปทันที`
+            ? t("ยกเลิกสิทธิ์ของ \"{email}\" — คำขอเข้าห้องทดลองครั้งถัดไปของอีเมลนี้จะถูกปฏิเสธ และหากกำลังทดลองอยู่ ระบบจะบล็อกการเข้าสู่ระบบครั้งถัดไปทันที", { email: deleteTarget.email })
             : ""
         }
         variant="danger"
@@ -3415,6 +3428,7 @@ function DemoTesterFormModal({
   onClose: () => void;
   onSaved: (email: string) => void;
 }) {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [tier, setTier] = useState<DemoTester["tier"]>("ta");
   const [note, setNote] = useState("");
@@ -3431,7 +3445,7 @@ function DemoTesterFormModal({
 
   const emailTrim = email.trim();
   const emailError = emailTrim === "" ? null
-    : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim) ? "รูปแบบอีเมลไม่ถูกต้อง" : null;
+    : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim) ? t("รูปแบบอีเมลไม่ถูกต้อง") : null;
   const canSave = emailTrim !== "" && !emailError;
 
   async function save() {
@@ -3443,7 +3457,7 @@ function DemoTesterFormModal({
       await mutate("/demo-testers");
       onSaved(emailTrim);
     } catch (e) {
-      setError((e as Error).message || "บันทึกไม่สำเร็จ");
+      setError((e as Error).message || t("บันทึกไม่สำเร็จ"));
     } finally {
       setSaving(false);
     }
@@ -3455,21 +3469,21 @@ function DemoTesterFormModal({
       onClose={onClose}
       title={
         <span className="inline-flex items-center gap-2">
-          <Plus size={18} />เพิ่มผู้มีสิทธิ์เข้าห้องทดลอง
+          <Plus size={18} />{t("เพิ่มผู้มีสิทธิ์เข้าห้องทดลอง")}
         </span>
       }
       size="md"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
-            <Plus size={14} />ให้สิทธิ์
+            <Plus size={14} />{t("ให้สิทธิ์")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <FieldGroup label="อีเมลผู้ทดสอบ" hint="อีเมลจริงของอาจารย์/TA/เจ้าหน้าที่ที่จะทดลองใช้งาน" error={emailError ?? undefined}>
+        <FieldGroup label={t("อีเมลผู้ทดสอบ")} hint={t("อีเมลจริงของอาจารย์/TA/เจ้าหน้าที่ที่จะทดลองใช้งาน")} error={emailError ?? undefined}>
           <TextInput
             type="email"
             value={email}
@@ -3480,27 +3494,27 @@ function DemoTesterFormModal({
         </FieldGroup>
 
         <FieldGroup
-          label="ระดับสิทธิ์"
-          hint="กำหนดว่าจะเลือกทดลองบทบาทไหนได้บ้างในห้องทดลอง"
+          label={t("ระดับสิทธิ์")}
+          hint={t("กำหนดว่าจะเลือกทดลองบทบาทไหนได้บ้างในห้องทดลอง")}
         >
           <Select value={tier} onChange={e => setTier(e.target.value as DemoTester["tier"])}>
-            <option value="ta">{TIER_LABELS.ta}</option>
-            <option value="lecturer">{TIER_LABELS.lecturer}</option>
-            <option value="staff">{TIER_LABELS.staff}</option>
+            <option value="ta">{t(TIER_LABELS.ta)}</option>
+            <option value="lecturer">{t(TIER_LABELS.lecturer)}</option>
+            <option value="staff">{t(TIER_LABELS.staff)}</option>
           </Select>
         </FieldGroup>
 
-        <FieldGroup label="หมายเหตุ (ถ้ามี)" hint="เช่น ชื่อ-นามสกุล หรือเหตุผลที่ให้สิทธิ์">
+        <FieldGroup label={t("หมายเหตุ (ถ้ามี)")} hint={t("เช่น ชื่อ-นามสกุล หรือเหตุผลที่ให้สิทธิ์")}>
           <TextInput
             value={note}
             onChange={e => setNote(e.target.value)}
-            placeholder="เช่น อาจารย์สมชาย ภาควิชา..."
+            placeholder={t("เช่น อาจารย์สมชาย ภาควิชา...")}
             maxLength={200}
           />
         </FieldGroup>
 
         {error && (
-          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={error} />
+          <Alert status="danger" icon={<CircleAlert size={16} />} title={t("บันทึกไม่สำเร็จ")} description={error} />
         )}
       </div>
     </Modal>
@@ -3523,6 +3537,7 @@ interface SubmissionPeriod {
 }
 
 function SubmissionPeriodsSection() {
+  const { t, fmtDate } = useI18n();
   // Follows the shell's term switcher, like every other term-scoped staff view.
   const { term, termId, loaded: termsLoaded } = useTerm();
   const { data: periods, mutate: refresh } = useSWR<SubmissionPeriod[]>(
@@ -3539,7 +3554,7 @@ function SubmissionPeriodsSection() {
 
   const selectedTerm = term;
   const seedSemester = selectedTerm?.semester ?? 1;
-  const seedMonthsLabel = seedSemester === 1 ? "มิ.ย.–ต.ค." : "พ.ย.–มี.ค.";
+  const seedMonthsLabel = seedSemester === 1 ? t("มิ.ย.–ต.ค.") : t("พ.ย.–มี.ค.");
   const existingMonths = new Set((periods ?? []).map(p => p.year_month));
   const seedTemplateMonths =
     seedSemester === 1 ? [6, 7, 8, 9, 10] : [11, 12, 1, 2, 3];
@@ -3557,10 +3572,10 @@ function SubmissionPeriodsSection() {
     try {
       await api.post(`/submission-periods/bulk-for-term/${termId}`, {});
       await refresh();
-      toast.success("สร้างระยะเวลารายเดือนเรียบร้อย");
+      toast.success(t("สร้างระยะเวลารายเดือนเรียบร้อย"));
       setSeedConfirm(false);
     } catch (e) {
-      toast.danger("สร้างระยะเวลารายเดือนไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(t("สร้างระยะเวลารายเดือนไม่สำเร็จ"), { description: errMessage(e) });
     } finally { setSeeding(false); }
   }
 
@@ -3570,48 +3585,48 @@ function SubmissionPeriodsSection() {
     try {
       await api.del(`/submission-periods/${deleteTarget.id}`);
       await refresh();
-      toast.success(`ลบรอบ "${deleteTarget.label}" เรียบร้อยแล้ว`);
+      toast.success(t("ลบรอบ \"{label}\" เรียบร้อยแล้ว", { label: deleteTarget.label }));
       setDeleteTarget(null);
     } catch (e) {
-      toast.danger("ลบรอบเบิกจ่ายไม่สำเร็จ", { description: errMessage(e) });
+      toast.danger(t("ลบรอบเบิกจ่ายไม่สำเร็จ"), { description: errMessage(e) });
     } finally { setDeleting(false); }
   }
 
   return (
     <Panel
-      title="ระยะเวลาเบิกจ่ายรายเดือน"
-      description="รอบเบิกจ่ายต่อเดือน (ประกาศ 2569: มิ.ย.–ต.ค.) ระบบส่ง reminder ผ่าน email/in-app ให้ TA อัตโนมัติก่อนวันครบกำหนด"
+      title={t("ระยะเวลาเบิกจ่ายรายเดือน")}
+      description={t("รอบเบิกจ่ายต่อเดือน (ประกาศ 2569: มิ.ย.–ต.ค.) ระบบส่ง reminder ผ่าน email/in-app ให้ TA อัตโนมัติก่อนวันครบกำหนด")}
       actions={
         <>
           <Button variant="secondary" onClick={() => setSeedConfirm(true)} disabled={!termId || seeding}>
-            <Plus size={14} />สร้างอัตโนมัติ 5 เดือน
+            <Plus size={14} />{t("สร้างอัตโนมัติ 5 เดือน")}
           </Button>
           <Button variant="primary" onClick={() => setCreating(true)} disabled={!termId}>
-            <Plus size={14} />เพิ่มเดือน
+            <Plus size={14} />{t("เพิ่มเดือน")}
           </Button>
         </>
       }
     >
       {termsLoaded && !termId ? (
-        <div className="text-sm text-muted py-4">ยังไม่มีภาคเรียนในระบบ สร้างที่แท็บ "ภาคเรียน" ก่อน</div>
+        <div className="text-sm text-muted py-4">{t("ยังไม่มีภาคเรียนในระบบ สร้างที่แท็บ \"ภาคเรียน\" ก่อน")}</div>
       ) : !periods ? (
         <SkelRows rows={5} columns={6} />
       ) : periods.length === 0 ? (
         <Alert
           status="warning"
-          title={`ยังไม่มีรอบเบิกจ่ายของภาคเรียน ${selectedTerm?.academic_year ?? ""}/${selectedTerm?.semester ?? ""}`}
-          description="TA จะลงเวลาและส่งอนุมัติไม่ได้ และวิชาจะไม่ขึ้นในหน้าตรวจและส่งออกเอกสาร จนกว่าจะสร้างรอบ กด “สร้างอัตโนมัติ 5 เดือน” เพื่อสร้างตามวันเปิดและปิดภาค"
+          title={t("ยังไม่มีรอบเบิกจ่ายของภาคเรียน {term}", { term: `${selectedTerm?.academic_year ?? ""}/${selectedTerm?.semester ?? ""}` })}
+          description={t("TA จะลงเวลาและส่งอนุมัติไม่ได้ และวิชาจะไม่ขึ้นในหน้าตรวจและส่งออกเอกสาร จนกว่าจะสร้างรอบ กด “สร้างอัตโนมัติ 5 เดือน” เพื่อสร้างตามวันเปิดและปิดภาค")}
         />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-ink-2">
               <tr>
-                <th className="text-left px-3 py-2">ป้ายกำกับ</th>
-                <th className="text-left px-3 py-2">รหัสเดือน</th>
-                <th className="text-left px-3 py-2">ช่วงเวลา (เปิด → ปิด)</th>
-                <th className="text-left px-3 py-2">แจ้งเตือน (วัน)</th>
-                <th className="text-left px-3 py-2">สถานะ</th>
+                <th className="text-left px-3 py-2">{t("ป้ายกำกับ")}</th>
+                <th className="text-left px-3 py-2">{t("รหัสเดือน")}</th>
+                <th className="text-left px-3 py-2">{t("ช่วงเวลา (เปิด → ปิด)")}</th>
+                <th className="text-left px-3 py-2">{t("แจ้งเตือน (วัน)")}</th>
+                <th className="text-left px-3 py-2">{t("สถานะ")}</th>
                 <th className="text-right px-3 py-2">Actions</th>
               </tr>
             </thead>
@@ -3621,19 +3636,19 @@ function SubmissionPeriodsSection() {
                   <td className="px-3 py-2">{p.label}</td>
                   <td className="px-3 py-2 tabular">{p.year_month}</td>
                   <td className="px-3 py-2 tabular whitespace-nowrap">
-                    {formatThaiDate(p.starts_on)} → {formatThaiDate(p.due_date)}
+                    {fmtDate(p.starts_on)} → {fmtDate(p.due_date)}
                   </td>
                   <td className="px-3 py-2 tabular">{p.remind_days_before}</td>
                   <td className="px-3 py-2">
                     <Chip tone={p.is_closed ? "neutral" : "brand"}>
-                      {p.is_closed ? "ปิดแล้ว" : "เปิดรับ"}
+                      {p.is_closed ? t("ปิดแล้ว") : t("เปิดรับ")}
                     </Chip>
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => setEditing(p)}>
+                    <IconButton label={t("แก้ไข")} variant="ghost" size="sm" onClick={() => setEditing(p)}>
                       <Pencil size={12} />
                     </IconButton>
-                    <IconButton label="ลบ" variant="ghost" size="sm" onClick={() => setDeleteTarget(p)}>
+                    <IconButton label={t("ลบ")} variant="ghost" size="sm" onClick={() => setDeleteTarget(p)}>
                       <Trash2 size={12} />
                     </IconButton>
                   </td>
@@ -3656,33 +3671,34 @@ function SubmissionPeriodsSection() {
       <Modal
         open={seedConfirm}
         onClose={() => !seeding && setSeedConfirm(false)}
-        title="สร้างระยะเวลาเบิกจ่ายอัตโนมัติ"
+        title={t("สร้างระยะเวลาเบิกจ่ายอัตโนมัติ")}
         icon={<CalendarPlus size={20} />}
         size="md"
         footer={
           <>
             <Button variant="ghost" onClick={() => setSeedConfirm(false)} disabled={seeding}>
-              ยกเลิก
+              {t("ยกเลิก")}
             </Button>
             <Button variant="primary" onClick={bulkSeed} isPending={seeding} disabled={seedWillCreate === 0}>
               <Plus size={14} />
               {seedWillCreate === 0
-                ? "ไม่มีเดือนใหม่ให้สร้าง"
-                : `สร้าง ${seedWillCreate} เดือน`}
+                ? t("ไม่มีเดือนใหม่ให้สร้าง")
+                : t("สร้าง {n} เดือน", { n: seedWillCreate })}
             </Button>
           </>
         }
       >
         <div className="space-y-3 text-sm">
           <p>
-            ระบบจะสร้างรอบเบิกจ่ายรายเดือนตามเทมเพลตของภาคเรียน{" "}
-            <b>{selectedTerm ? termLabel(selectedTerm) : ""}</b> โดยอัตโนมัติ
+            {t.rich("ระบบจะสร้างรอบเบิกจ่ายรายเดือนตามเทมเพลตของภาคเรียน {term} โดยอัตโนมัติ", {
+              term: <b>{selectedTerm ? termLabel(selectedTerm, t) : ""}</b>,
+            })}
           </p>
-          <ul className="rounded-md border border-hairline bg-slate-50 dark:bg-slate-900/40 px-3 py-2 space-y-1 text-xs">
-            <li>· ครอบคลุมเดือน <b>{seedMonthsLabel}</b> (5 รอบ)</li>
-            <li>· วันเปิดรอบ = วันที่ 1 ของแต่ละเดือน</li>
-            <li>· กำหนดส่งตามประกาศ 2569 (3 เดือนแรกครบ 31 ก.ค. · ที่เหลือ +5 วัน)</li>
-            <li>· ส่ง reminder ให้ TA ล่วงหน้า 3 วันก่อนครบกำหนด</li>
+          <ul className="rounded-md border border-hairline bg-slate-50 px-3 py-2 space-y-1 text-xs">
+            <li>{t.rich("· ครอบคลุมเดือน {months} (5 รอบ)", { months: <b>{seedMonthsLabel}</b> })}</li>
+            <li>{t("· วันเปิดรอบ = วันที่ 1 ของแต่ละเดือน")}</li>
+            <li>{t("· กำหนดส่งตามประกาศ 2569 (3 เดือนแรกครบ 31 ก.ค. · ที่เหลือ +5 วัน)")}</li>
+            <li>{t("· ส่ง reminder ให้ TA ล่วงหน้า 3 วันก่อนครบกำหนด")}</li>
           </ul>
           {seedWillCreate < seedTemplateMonths.length && (
             <Alert
@@ -3690,10 +3706,10 @@ function SubmissionPeriodsSection() {
               icon={<CircleAlert size={14} />}
               title={
                 seedWillCreate === 0
-                  ? "มีรอบครบทุกเดือนแล้ว"
-                  : `จะข้าม ${seedTemplateMonths.length - seedWillCreate} เดือนที่มีอยู่แล้ว`
+                  ? t("มีรอบครบทุกเดือนแล้ว")
+                  : t("จะข้าม {n} เดือนที่มีอยู่แล้ว", { n: seedTemplateMonths.length - seedWillCreate })
               }
-              description="ระบบจะไม่ทับรอบเดิม เดือนที่มีอยู่แล้วต้องแก้จากปุ่ม “แก้ไข” ในตารางแทน"
+              description={t("ระบบจะไม่ทับรอบเดิม เดือนที่มีอยู่แล้วต้องแก้จากปุ่ม “แก้ไข” ในตารางแทน")}
             />
           )}
         </div>
@@ -3705,10 +3721,10 @@ function SubmissionPeriodsSection() {
         onConfirm={doDelete}
         saving={deleting}
         variant="danger"
-        confirmLabel="ลบรอบนี้"
+        confirmLabel={t("ลบรอบนี้")}
         confirmIcon={<Trash2 size={14} />}
-        title={deleteTarget ? `ลบรอบ "${deleteTarget.label}"?` : "ลบรอบเบิกจ่าย?"}
-        description="สถานะการเซ็น/ลงนามของ TA และอาจารย์ที่ผูกอยู่กับรอบนี้จะถูกลบทั้งหมด หากมี TA เซ็นไปแล้ว จะไม่สามารถกู้กลับได้"
+        title={deleteTarget ? t("ลบรอบ \"{label}\"?", { label: deleteTarget.label }) : t("ลบรอบเบิกจ่าย?")}
+        description={t("สถานะการเซ็น/ลงนามของ TA และอาจารย์ที่ผูกอยู่กับรอบนี้จะถูกลบทั้งหมด หากมี TA เซ็นไปแล้ว จะไม่สามารถกู้กลับได้")}
       />
     </Panel>
   );
@@ -3722,6 +3738,7 @@ function SubmissionPeriodModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState<SubmissionPeriod>(
     initial ?? {
       id: "",
@@ -3751,48 +3768,48 @@ function SubmissionPeriodModal({
     <Modal
       open
       onClose={onClose}
-      title={initial ? "แก้ไขรอบเบิกจ่าย" : "เพิ่มรอบเบิกจ่าย"}
+      title={initial ? t("แก้ไขรอบเบิกจ่าย") : t("เพิ่มรอบเบิกจ่าย")}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={save} isPending={saving} disabled={saving}>
-            <Save size={14} />บันทึก
+            <Save size={14} />{t("บันทึก")}
           </Button>
         </>
       }
     >
       <div className="space-y-3">
-        <FieldGroup label="ป้ายกำกับ (แสดงบน UI)">
+        <FieldGroup label={t("ป้ายกำกับ (แสดงบน UI)")}>
           <TextInput value={draft.label}
-                     placeholder="เช่น มิถุนายน 2569"
+                     placeholder={t("เช่น มิถุนายน 2569")}
                      onChange={e => setDraft({ ...draft, label: e.target.value })} />
         </FieldGroup>
-        <FieldGroup label="รหัสเดือน (year-month)">
+        <FieldGroup label={t("รหัสเดือน (year-month)")}>
           <TextInput value={draft.year_month}
                      placeholder="2569-06"
                      onChange={e => setDraft({ ...draft, year_month: e.target.value })} />
         </FieldGroup>
-        <FieldGroup label="วันเปิดรอบ (TA เริ่มเซ็นได้)">
-          <TermDateField label="วันเปิดรอบ"
+        <FieldGroup label={t("วันเปิดรอบ (TA เริ่มเซ็นได้)")}>
+          <TermDateField label={t("วันเปิดรอบ")}
                          value={draft.starts_on}
                          onChange={v => setDraft({ ...draft, starts_on: v })} />
         </FieldGroup>
-        <FieldGroup label="กำหนดส่ง (วันสุดท้ายที่เซ็นได้)">
-          <TermDateField label="กำหนดส่ง"
+        <FieldGroup label={t("กำหนดส่ง (วันสุดท้ายที่เซ็นได้)")}>
+          <TermDateField label={t("กำหนดส่ง")}
                          value={draft.due_date}
                          onChange={v => setDraft({ ...draft, due_date: v })} />
         </FieldGroup>
-        <FieldGroup label="แจ้งเตือนล่วงหน้า (วัน)">
+        <FieldGroup label={t("แจ้งเตือนล่วงหน้า (วัน)")}>
           <TextInput type="number" min={0} value={draft.remind_days_before}
                      onChange={e => setDraft({ ...draft, remind_days_before: Number(e.target.value) })} />
         </FieldGroup>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={draft.is_closed}
                  onChange={e => setDraft({ ...draft, is_closed: e.target.checked })} />
-          ปิดรับแล้ว (ไม่ส่ง reminder อีก)
+          {t("ปิดรับแล้ว (ไม่ส่ง reminder อีก)")}
         </label>
         {error && (
-          <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกรอบเบิกจ่ายไม่สำเร็จ" description={error} />
+          <Alert status="danger" icon={<CircleAlert size={16} />} title={t("บันทึกรอบเบิกจ่ายไม่สำเร็จ")} description={error} />
         )}
       </div>
     </Modal>

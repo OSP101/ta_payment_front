@@ -2,10 +2,11 @@
 
 import { RadioGroup, Radio, Description, Label } from "@heroui/react";
 import type { Nationality } from "../lib/nationality";
+import { msg, useI18n } from "../lib/i18n/client";
 
 const OPTIONS: { value: Nationality; label: string; desc: string }[] = [
-  { value: "thai", label: "ไทย", desc: "ใช้บัตรประจำตัวประชาชน" },
-  { value: "foreign", label: "ต่างชาติ", desc: "ใช้เลขและสำเนา Passport" },
+  { value: "thai", label: msg("ไทย"), desc: msg("ใช้บัตรประจำตัวประชาชน") },
+  { value: "foreign", label: msg("ต่างชาติ"), desc: msg("ใช้เลขและสำเนา Passport") },
 ];
 
 /**
@@ -19,6 +20,7 @@ export default function NationalityPicker({
   onChange: (v: Nationality) => void;
   isDisabled?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <RadioGroup
       value={value}
@@ -27,7 +29,7 @@ export default function NationalityPicker({
       isDisabled={isDisabled}
       className="w-full"
     >
-      <Label className="text-sm font-medium">สัญชาติ</Label>
+      <Label className="text-sm font-medium">{t("สัญชาติ")}</Label>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
         {OPTIONS.map(o => (
           <Radio
@@ -40,8 +42,8 @@ export default function NationalityPicker({
                 <Radio.Indicator />
               </Radio.Control>
               <div className="flex flex-col">
-                <span className="font-medium">{o.label}</span>
-                <Description className="text-xs text-ink-3">{o.desc}</Description>
+                <span className="font-medium">{t(o.label)}</span>
+                <Description className="text-xs text-ink-3">{t(o.desc)}</Description>
               </div>
             </Radio.Content>
           </Radio>

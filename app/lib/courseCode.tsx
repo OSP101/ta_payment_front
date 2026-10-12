@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Tip } from "../components/ui";
 import { notify } from "./notify";
+import { useI18n } from "./i18n/client";
 
 export interface HasCodes { code: string; alt_codes?: string[] | null }
 
@@ -38,6 +39,7 @@ export function regClassInfoUrl(code: string, year: number, semester: number): s
 /** A small "copy this code" button: the icon turns into a tick for a moment
  *  so the click is visibly confirmed without a toast per copy. */
 export function CopyCodeButton({ code }: { code: string }) {
+  const { t } = useI18n();
   const [done, setDone] = useState(false);
   useEffect(() => {
     if (!done) return;
@@ -45,17 +47,17 @@ export function CopyCodeButton({ code }: { code: string }) {
     return () => clearTimeout(t);
   }, [done]);
   return (
-    <Tip content={done ? "คัดลอกแล้ว" : `คัดลอก ${code}`}>
+    <Tip content={done ? t("คัดลอกแล้ว") : t("คัดลอก {code}", { code })}>
       <button
         type="button"
-        aria-label={`คัดลอกรหัสวิชา ${code}`}
+        aria-label={t("คัดลอกรหัสวิชา {code}", { code })}
         onClick={async e => {
           e.stopPropagation();
           try {
             await navigator.clipboard.writeText(code);
             setDone(true);
           } catch {
-            notify.error("คัดลอกไม่สำเร็จ เบราว์เซอร์ไม่อนุญาตให้เข้าถึงคลิปบอร์ด");
+            notify.error(t("คัดลอกไม่สำเร็จ เบราว์เซอร์ไม่อนุญาตให้เข้าถึงคลิปบอร์ด"));
           }
         }}
         className={
@@ -75,10 +77,11 @@ export function CopyCodeButton({ code }: { code: string }) {
 export function CourseCode({ c, className = "", reg, copyable }: {
   c: HasCodes; className?: string; reg?: { year: number; semester: number }; copyable?: boolean;
 }) {
+  const { t } = useI18n();
   const alt = c.alt_codes ?? [];
   const show = (code: string) => <>{link(code)}{copyable && <CopyCodeButton code={code} />}</>;
   const link = (code: string) => !reg ? code : (
-    <Tip content={`เปิด ${code} ในระบบทะเบียน (reg.kku.ac.th) ภาค ${reg.year}/${reg.semester}`}>
+    <Tip content={t("เปิด {code} ในระบบทะเบียน (reg.kku.ac.th) ภาค {term}", { code, term: `${reg.year}/${reg.semester}` })}>
       <a
         href={regClassInfoUrl(code, reg.year, reg.semester)}
         target="_blank"

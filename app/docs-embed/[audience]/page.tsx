@@ -5,6 +5,7 @@ import { effectiveAudience, findPage, gettingStarted, sidebarSections } from "..
 import { AUDIENCE_LABEL, type Audience } from "../../../content/docs/types";
 import { getMe } from "../../lib/session";
 import { canViewAudience } from "../../lib/docs/audience";
+import { getT } from "../../lib/i18n/server";
 
 const VALID: Audience[] = ["staff", "lecturer", "ta"];
 
@@ -19,27 +20,28 @@ export default async function EmbedHomePage({ params }: { params: Promise<{ audi
   const me = await getMe();
   if (!me || !canViewAudience(me, audience)) return null;
   const href = (slug: string, aud: Audience) => `/docs-embed/${aud}/${slug}`;
+  const { t, locale } = await getT();
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-foreground tracking-tight">คู่มือการใช้งาน · {AUDIENCE_LABEL[audience]}</h1>
-      <p className="mt-1 text-sm text-muted">หน้านี้ยังไม่มีคู่มือเฉพาะ เริ่มจากลำดับด้านล่าง หรือเลือกหัวข้อที่ต้องการ</p>
+      <h1 className="text-xl font-semibold text-foreground tracking-tight">{t("คู่มือการใช้งาน · {audience}", { audience: t(AUDIENCE_LABEL[audience]) })}</h1>
+      <p className="mt-1 text-sm text-muted">{t("หน้านี้ยังไม่มีคู่มือเฉพาะ เริ่มจากลำดับด้านล่าง หรือเลือกหัวข้อที่ต้องการ")}</p>
 
-      {findPage(audience, "start") && (
+      {findPage(audience, "start", locale) && (
         <Link
           href={href("start", audience)}
           className="mt-4 flex items-center gap-3 rounded-lg border border-(--brand)/40 bg-accent-soft/40 px-3 py-2.5 hover:border-(--brand) transition-colors"
         >
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-foreground">ใช้งานครั้งแรก เริ่มที่นี่</span>
-            <span className="block text-xs text-muted">ทุกขั้นตอนตามลำดับจริงในหน้าเดียว</span>
+            <span className="block text-sm font-semibold text-foreground">{t("ใช้งานครั้งแรก เริ่มที่นี่")}</span>
+            <span className="block text-xs text-muted">{t("ทุกขั้นตอนตามลำดับจริงในหน้าเดียว")}</span>
           </span>
           <ArrowRight size={14} className="shrink-0 text-(--brand)" />
         </Link>
       )}
 
       <ol className="mt-5 space-y-2">
-        {gettingStarted(audience).map((p, i) => (
+        {gettingStarted(audience, locale).map((p, i) => (
           <li key={p.slug}>
             <Link
               href={href(p.slug, effectiveAudience(p, audience))}
@@ -57,7 +59,7 @@ export default async function EmbedHomePage({ params }: { params: Promise<{ audi
       </ol>
 
       <div className="mt-8 border-t border-border pt-4 space-y-4">
-        {sidebarSections(audience).map(({ section, pages }) => (
+        {sidebarSections(audience, locale).map(({ section, pages }) => (
           <div key={section}>
             <div className="text-xs font-semibold text-muted mb-1">{section}</div>
             <ul className="space-y-0.5">

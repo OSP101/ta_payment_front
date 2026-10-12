@@ -11,6 +11,7 @@ import { resolveDocForRoute } from "../../lib/docs/routeMap";
 import useIsDemo from "../../lib/useIsDemo";
 import { Skel, SkelRegion } from "../Skeletons";
 import { Tip } from "../ui";
+import { useI18n } from "../../lib/i18n/client";
 
 /**
  * Cloudflare-dashboard-style contextual help: the manual opens in a panel
@@ -138,10 +139,14 @@ export function DocsPanelProvider({ audience, children }: { audience: Audience; 
   const [target, setTarget] = useState<DocsTarget | null>(null);
   const open = useCallback((t: DocsTarget) => setTarget(t), []);
   const close = useCallback(() => setTarget(null), []);
+  const { locale } = useI18n();
   // Array key: keeps it out of the global fetcher's string-path space. Quiet
   // on failure (overrides SWRProvider's toast) — the pill simply stays
-  // generic, which still opens the manual.
-  const { data: index, isLoading: indexLoading } = useSWR(["docs-index"], fetchDocsIndex, {
+  // generic, which still opens the manual. The locale is in the key because
+  // the route answers in the reader's language and a language switch
+  // (router.refresh) keeps SWR's cache: without it the pill kept the old
+  // language's titles until a full reload.
+  const { data: index, isLoading: indexLoading } = useSWR(["docs-index", locale], fetchDocsIndex, {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
     onError: () => {},
@@ -172,6 +177,7 @@ function embedHref(t: DocsTarget): string {
  */
 export function DocsDock() {
   const { target, close } = useDocsPanel();
+  const { t } = useI18n();
   // See PageDocsPill: a new tab would lose the demo sandbox's per-tab API
   // prefix and bounce to the real /login, so in demo it opens in this tab.
   const demo = useIsDemo();
@@ -195,7 +201,7 @@ export function DocsDock() {
       <div className="docs-anim-fade fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={close} />
       <aside
         role="complementary"
-        aria-label="คู่มือการใช้งาน"
+        aria-label={t("คู่มือการใช้งาน")}
         // top/height read --demo-banner-h like Shell's own chrome (unset →
         // 0px outside demo mode), so the demo banner never covers this
         // header and its close button. Written out in full, not built from
@@ -217,15 +223,15 @@ export function DocsDock() {
             rel={demo ? undefined : "noopener"}
             className="ms-auto inline-flex items-center gap-1 text-xs text-muted underline underline-offset-2 hover:text-foreground"
           >
-            เปิดคู่มือฉบับเต็ม {!demo && <ExternalLink size={12} />}
+            {t("เปิดคู่มือฉบับเต็ม")} {!demo && <ExternalLink size={12} />}
           </Link>
-          <Tip content="ปิดคู่มือ"><button type="button" onClick={close} aria-label="ปิดคู่มือ" className="ms-1 rounded-md p-1.5 hover:bg-slate-100">
+          <Tip content={t("ปิดคู่มือ")}><button type="button" onClick={close} aria-label={t("ปิดคู่มือ")} className="ms-1 rounded-md p-1.5 hover:bg-slate-100">
             <X size={18} />
           </button></Tip>
         </header>
         <div className="relative min-h-0 flex-1">
           {loadedSrc !== embedHref(target) && (
-            <SkelRegion label="กำลังโหลดคู่มือ" className="absolute inset-0 flex flex-col gap-3 p-5">
+            <SkelRegion label={t("กำลังโหลดคู่มือ")} className="absolute inset-0 flex flex-col gap-3 p-5">
               <Skel className="h-3 w-24" />
               <Skel className="h-7 w-3/4" />
               <Skel className="h-3.5 w-full mt-2" />
@@ -237,7 +243,7 @@ export function DocsDock() {
           <iframe
             key={embedHref(target)}
             src={embedHref(target)}
-            title="คู่มือการใช้งาน"
+            title={t("คู่มือการใช้งาน")}
             onLoad={() => setLoadedSrc(embedHref(target))}
             className={"relative h-full w-full border-0 " + (loadedSrc === embedHref(target) ? "" : "opacity-0")}
           />

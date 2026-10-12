@@ -2,17 +2,20 @@ import { Clapperboard } from "lucide-react";
 import { MEDIA } from "../../../content/docs/registry";
 import { mediaExists } from "./mediaExists";
 import DocVideo from "./DocVideo";
+import { withCode } from "./Screenshot";
+import { getT } from "../../lib/i18n/server";
 
 /** Same "check disk, show placeholder if missing" contract as `Screenshot`,
  *  for the short looping GIFs (see PLAN §6 for the capture spec: ≤10s, 12fps,
  *  960px wide, palette 128, ≤3MB). Plain `<img>` autoplays/loops a GIF for
  *  free — no player chrome, matching the "reads like a real GIF" decision. */
-export default function Gif({ id, caption }: { id: string; caption?: string }) {
+export default async function Gif({ id, caption }: { id: string; caption?: string }) {
   const meta = MEDIA[id];
+  const { t } = await getT();
   if (!meta) {
     return (
       <div className="my-3 rounded-lg border-2 border-dashed border-danger/40 bg-danger-soft/30 px-4 py-3 text-sm text-danger-soft-foreground">
-        ไม่พบรหัส GIF <code className="font-mono">{id}</code> ใน media.json
+        {withCode(t("ไม่พบรหัส GIF {id} ใน media.json"), { id })}
       </div>
     );
   }
@@ -32,12 +35,11 @@ export default function Gif({ id, caption }: { id: string; caption?: string }) {
         <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
           <Clapperboard className="mx-auto mb-2 text-slate-400" size={28} />
           <div className="text-sm font-medium text-slate-600">
-            รอ GIF <code className="font-mono">{id}</code>
+            {withCode(t("รอ GIF {id}"), { id })}
           </div>
           <div className="mt-1 text-xs text-slate-500 max-w-md mx-auto">{meta.desc}</div>
           <div className="mt-2 text-[11px] text-slate-400">
-            หน้า/route: <code className="font-mono">{meta.route}</code> · บัญชี {meta.account} · วางไฟล์ที่{" "}
-            <code className="font-mono">public/docs/v1/{meta.file}</code>
+            {withCode(t("หน้า/route: {route} · บัญชี {account} · วางไฟล์ที่ {file}", { account: meta.account }), { route: meta.route, file: `public/docs/v1/${meta.file}` })}
           </div>
         </div>
         {caption && <figcaption className="mt-1.5 text-xs text-muted text-center">{caption}</figcaption>}

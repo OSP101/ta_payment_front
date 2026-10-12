@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR, { mutate as globalMutate } from "swr";
+import { tc } from "./i18n/client";
 import {
   api,
   demoScenarioEvents,
@@ -204,7 +205,7 @@ export function useScenarioEngine() {
     setResetting(true);
     try {
       await api.post("/scenario/reset");
-      notify.success("เริ่มห้องทดลองใหม่แล้ว กรุณาเข้าสู่ระบบอีกครั้ง");
+      notify.success(tc("เริ่มห้องทดลองใหม่แล้ว กรุณาเข้าสู่ระบบอีกครั้ง"));
     } catch (e) {
       // The reset itself may have succeeded even if THIS response looks like
       // an error — see ResetSlot's doc comment: wiping/reseeding the users
@@ -249,7 +250,7 @@ export function useScenarioEngine() {
     try {
       await demoSaveCheckpoint();
       refetchCheckpoint();
-      notify.success("บันทึกจุดตรวจสอบแล้ว");
+      notify.success(tc("บันทึกจุดตรวจสอบแล้ว"));
     } catch (e) {
       notify.error(e);
     } finally {
@@ -261,7 +262,7 @@ export function useScenarioEngine() {
     setRestoringCheckpoint(true);
     try {
       await demoRestoreCheckpoint();
-      notify.success("ย้อนกลับไปจุดตรวจสอบแล้ว");
+      notify.success(tc("ย้อนกลับไปจุดตรวจสอบแล้ว"));
       // Unlike reset, restore keeps the session valid — see the route's own
       // doc comment — so no redirect to /demo, just refresh what's stale:
       // this hook's own step status, and the current page's server data.

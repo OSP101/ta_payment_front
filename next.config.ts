@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
   // carries ~1/4 of the full install. Left off outside Docker so `next dev`
   // / `next start` on a developer machine behave exactly as before.
   output: process.env.NEXT_OUTPUT_STANDALONE === "1" ? "standalone" : undefined,
+  // Set by the Dockerfile only. The maps are uploaded to GlitchTip so error
+  // reports show real file names and lines, then deleted from the image
+  // before it is built, so they are never served to browsers. See the
+  // Dockerfile's build stage and deploy/scripts/deploy.sh.
+  productionBrowserSourceMaps: process.env.BROWSER_SOURCEMAPS === "1",
   experimental: {
     // Next buffers a proxied request body in memory so it can be read twice,
     // and caps that buffer at 10 MB by default. Document uploads are capped at

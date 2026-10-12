@@ -3,7 +3,7 @@
 // coordinate keyed off this exact string. Extending this list means also
 // picking a circle centre in internal/pdfgen/creditor.go.
 
-export const THAI_PREFIXES = ["นาย", "นาง", "นางสาว"] as const;
+export const THAI_PREFIXES = ["นาย", "นาง", "นางสาว"] as const; // i18n-ignore — part of a person's name (data), mirrored on the server
 export type ThaiPrefix = (typeof THAI_PREFIXES)[number];
 
 export function isThaiPrefix(s: string): s is ThaiPrefix {

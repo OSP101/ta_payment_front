@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useI18n } from "../../lib/i18n/client";
 
 export interface TocEntry { id: string; title: string }
 
@@ -14,6 +15,7 @@ export interface TocEntry { id: string; title: string }
  * column needs the width more than the reader needs a map of it.
  */
 export default function OnThisPage({ entries }: { entries: TocEntry[] }) {
+  const { t } = useI18n();
   const [active, setActive] = useState<string | null>(entries[0]?.id ?? null);
 
   useEffect(() => {
@@ -46,8 +48,8 @@ export default function OnThisPage({ entries }: { entries: TocEntry[] }) {
   if (entries.length === 0) return null;
 
   return (
-    <nav aria-label="ในหน้านี้" className="text-sm">
-      <div className="mb-2 text-xs font-semibold text-foreground">ในหน้านี้</div>
+    <nav aria-label={t("ในหน้านี้")} className="text-sm">
+      <div className="mb-2 text-xs font-semibold text-foreground">{t("ในหน้านี้")}</div>
       <ol className="border-s border-border">
         {entries.map((e) => {
           const isActive = e.id === active;

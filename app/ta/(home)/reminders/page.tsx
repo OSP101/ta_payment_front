@@ -5,19 +5,13 @@ import { CalendarClock, AlertTriangle, ChevronDown, ChevronRight } from "lucide-
 import { type Me } from "../../../lib/api";
 import { PageHeader, Panel, Chip, type ChipTone } from "../../../components/ui";
 import { Skel, SkelRegion, SkelRows, SkelValue } from "../../../components/Skeletons";
+import { useI18n, type TFn } from "../../../lib/i18n/client";
 
 import {
   SubmissionTimeline,
   type SubmissionTimelineData,
 } from "../../../components/SubmissionTimeline";
 
-// "2026-07-01" → "1 ก.ค. 2569": the page showed raw ISO dates, unlike every
-// other TA screen.
-function thDate(iso?: string | null): string {
-  if (!iso) return "-";
-  const d = new Date(iso.length === 10 ? iso + "T00:00:00+07:00" : iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
-}
 
 interface PendingRow {
   period_id: string;
@@ -50,30 +44,31 @@ type Group = { period_id: string; label: string; starts_on: string; due_date: st
 // the TA can see exactly where each month stands. There is no TA "confirm"
 // step: after the lecturer approves every row, staff export (lock) then send to
 // finance.
-function statusBadge(r: PendingRow, today: string): { label: string; tone: ChipTone } {
+function statusBadge(r: PendingRow, today: string, t: TFn): { label: string; tone: ChipTone } {
   // Final from the TA's side — ส่งการเงิน has no staff step by design, so
   // "รอส่งการเงิน" was a wait that never ended.
-  if (r.status === "exported")     return { label: "เจ้าหน้าที่ส่งเอกสารเบิกจ่ายแล้ว", tone: "success" };
-  if (r.status === "finance_sent") return { label: "ส่งการเงินแล้ว", tone: "success" };
-  if (r.status === "skipped")      return { label: "ข้ามรอบนี้", tone: "neutral" };
-  if (r.status === "staff_reviewed") return { label: "เจ้าหน้าที่ตรวจแล้ว", tone: "info" };
+  if (r.status === "exported")     return { label: t("เจ้าหน้าที่ส่งเอกสารเบิกจ่ายแล้ว"), tone: "success" };
+  if (r.status === "finance_sent") return { label: t("ส่งการเงินแล้ว"), tone: "success" };
+  if (r.status === "skipped")      return { label: t("ข้ามรอบนี้"), tone: "neutral" };
+  if (r.status === "staff_reviewed") return { label: t("เจ้าหน้าที่ตรวจแล้ว"), tone: "info" };
   // pending — derive from worklog readiness
-  if (!r.is_closed && r.starts_on > today) return { label: "ยังไม่ถึงรอบ", tone: "neutral" };
-  if (r.worklog_total === 0)               return { label: "ไม่มีรายการเดือนนี้", tone: "neutral" };
+  if (!r.is_closed && r.starts_on > today) return { label: t("ยังไม่ถึงรอบ"), tone: "neutral" };
+  if (r.worklog_total === 0)               return { label: t("ไม่มีรายการเดือนนี้"), tone: "neutral" };
   // Worst actionable state first: a bounced row is the TA's to fix, then rows
   // the TA never sent, and only then what is genuinely with the lecturer.
   if ((r.worklog_rejected ?? 0) > 0)
-    return { label: `อาจารย์ตีกลับ ต้องแก้ไข ${r.worklog_rejected} รายการ`, tone: "danger" };
+    return { label: t("อาจารย์ตีกลับ ต้องแก้ไข {n} รายการ", { n: r.worklog_rejected }), tone: "danger" };
   if ((r.worklog_waiting_ta ?? 0) > 0 && !r.is_closed)
-    return { label: `ยังไม่ได้ส่งอนุมัติ ${r.worklog_waiting_ta} รายการ`, tone: "warn" };
+    return { label: t("ยังไม่ได้ส่งอนุมัติ {n} รายการ", { n: r.worklog_waiting_ta }), tone: "warn" };
   if ((r.worklog_waiting_lecturer ?? 0) > 0)
-    return { label: `รออาจารย์อนุมัติงาน ${r.worklog_waiting_lecturer} รายการ`, tone: "info" };
+    return { label: t("รออาจารย์อนุมัติงาน {n} รายการ", { n: r.worklog_waiting_lecturer }), tone: "info" };
   if (r.worklog_unapproved > 0 && r.worklog_waiting_lecturer === undefined)
-    return { label: `รออาจารย์อนุมัติงาน ${r.worklog_unapproved} รายการ`, tone: "warn" };
-  return { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
+    return { label: t("รออาจารย์อนุมัติงาน {n} รายการ", { n: r.worklog_unapproved }), tone: "warn" };
+  return { label: t("รอเจ้าหน้าที่ส่งออก"), tone: "info" };
 }
 
 export default function TAReminderPage() {
+  const { t, fmtDate } = useI18n();
   const { data } = useSWR<PendingRow[]>("/me/submission-periods");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const timelineKey = (r: PendingRow) => `${r.period_id}/${r.teaching_course_id}`;
@@ -95,8 +90,8 @@ export default function TAReminderPage() {
   return (
     <div>
       <PageHeader
-        title="สถานะการเบิกจ่ายรายเดือน"
-        description="ติดตามสถานะบันทึกเวลาปฏิบัติงานแต่ละเดือน เมื่ออาจารย์อนุมัติงานครบ เจ้าหน้าที่จะตรวจสอบ ส่งออกไฟล์ แล้วส่งให้การเงิน (ไม่ต้องยืนยันด้วยตนเอง)"
+        title={t("สถานะการเบิกจ่ายรายเดือน")}
+        description={t("ติดตามสถานะบันทึกเวลาปฏิบัติงานแต่ละเดือน เมื่ออาจารย์อนุมัติงานครบ เจ้าหน้าที่จะตรวจสอบ ส่งออกไฟล์ แล้วส่งให้การเงิน (ไม่ต้องยืนยันด้วยตนเอง)")}
       />
       {!data ? (
         // One month-card shaped placeholder per likely group, so the list
@@ -114,9 +109,9 @@ export default function TAReminderPage() {
           ))}
         </SkelRegion>
       ) : groups.length === 0 ? (
-        <Panel title="ไม่มีรายการที่ต้องทำ">
+        <Panel title={t("ไม่มีรายการที่ต้องทำ")}>
           <div className="text-sm text-muted py-4">
-            ยังไม่มีรอบเบิกจ่ายที่ต้องยืนยัน เมื่อเจ้าหน้าที่สร้างรอบเดือนใหม่ระบบจะแจ้งเตือนคุณ
+            {t("ยังไม่มีรอบเบิกจ่ายที่ต้องยืนยัน เมื่อเจ้าหน้าที่สร้างรอบเดือนใหม่ระบบจะแจ้งเตือนคุณ")}
           </div>
         </Panel>
       ) : (
@@ -131,23 +126,23 @@ export default function TAReminderPage() {
             return (
               <Panel
                 key={g.period_id}
-                title={g.label}
+                title={g.label /* period label from the API */}
                 description={
                   g.is_closed
-                    ? "รอบนี้ปิดรับแล้ว"
+                    ? t("รอบนี้ปิดรับแล้ว")
                     : notYet
-                    ? `จะเปิดรับวันที่ ${thDate(g.starts_on)} · กำหนดส่ง ${thDate(g.due_date)}`
-                    : `เปิดรับ ${thDate(g.starts_on)} → ${thDate(g.due_date)}`
+                    ? t("จะเปิดรับวันที่ {start} · กำหนดส่ง {due}", { start: fmtDate(g.starts_on), due: fmtDate(g.due_date) })
+                    : t("เปิดรับ {start} → {due}", { start: fmtDate(g.starts_on), due: fmtDate(g.due_date) })
                 }
                 actions={
                   overdue ? (
-                    <Chip tone="warn"><AlertTriangle size={12} /> เลยกำหนด</Chip>
+                    <Chip tone="warn"><AlertTriangle size={12} /> {t("เลยกำหนด")}</Chip>
                   ) : g.is_closed ? (
-                    <Chip tone="neutral">ปิดแล้ว</Chip>
+                    <Chip tone="neutral">{t("ปิดแล้ว")}</Chip>
                   ) : notYet ? (
-                    <Chip tone="neutral"><CalendarClock size={12} /> ยังไม่ถึงวันเปิด</Chip>
+                    <Chip tone="neutral"><CalendarClock size={12} /> {t("ยังไม่ถึงวันเปิด")}</Chip>
                   ) : (
-                    <Chip tone="brand"><CalendarClock size={12} /> เปิดรับ</Chip>
+                    <Chip tone="brand"><CalendarClock size={12} /> {t("เปิดรับ")}</Chip>
                   )
                 }
               >
@@ -156,24 +151,24 @@ export default function TAReminderPage() {
                     <thead className="bg-slate-50 text-ink-2">
                       <tr>
                         <th className="w-8 px-2 py-2"></th>
-                        <th className="text-left px-3 py-2">รหัสวิชา</th>
-                        <th className="text-left px-3 py-2">ชื่อวิชา</th>
-                        <th className="text-left px-3 py-2">ชั่วโมงอนุมัติ</th>
-                        <th className="text-right px-3 py-2">สถานะ</th>
+                        <th className="text-left px-3 py-2">{t("รหัสวิชา")}</th>
+                        <th className="text-left px-3 py-2">{t("ชื่อวิชา")}</th>
+                        <th className="text-left px-3 py-2">{t("ชั่วโมงอนุมัติ")}</th>
+                        <th className="text-right px-3 py-2">{t("สถานะ")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {g.rows.map(r => {
                         const key = timelineKey(r);
                         const isOpen = !!expanded[key];
-                        const badge = statusBadge(r, today);
+                        const badge = statusBadge(r, today, t);
                         return (
                           <Fragment key={r.teaching_course_id}>
                             <tr className="border-t border-hairline">
                               <td className="px-2 py-2">
                                 <button
                                   type="button"
-                                  aria-label={isOpen ? "ซ่อนขั้นตอน" : "ดูขั้นตอน"}
+                                  aria-label={isOpen ? t("ซ่อนขั้นตอน") : t("ดูขั้นตอน")}
                                   onClick={() => setExpanded(x => ({ ...x, [key]: !x[key] }))}
                                   className="tap-target p-1 text-ink-2 hover:text-ink-1"
                                 >
@@ -182,7 +177,7 @@ export default function TAReminderPage() {
                               </td>
                               <td className="px-3 py-2 tabular">{r.course_code}</td>
                               <td className="px-3 py-2">{r.course_name_th}</td>
-                              <td className="px-3 py-2 tabular">{r.worklog_approved_hrs.toFixed(1)} ชม.</td>
+                              <td className="px-3 py-2 tabular">{t("{h} ชม.", { h: r.worklog_approved_hrs.toFixed(1) })}</td>
                               <td className="px-3 py-2 text-right">
                                 <Chip tone={badge.tone}>{badge.label}</Chip>
                               </td>
@@ -213,14 +208,15 @@ export default function TAReminderPage() {
 // Kept local because the TA case pins ta_id to the current user; other roles
 // pass an explicit taId.
 function TimelineLoader({ periodId, tcId }: { periodId: string; tcId: string }) {
+  const { t } = useI18n();
   const { data: me } = useSWR<Me>("/me");
   const { data, error } = useSWR<SubmissionTimelineData>(
     me?.id ? `/submission-periods/${periodId}/courses/${tcId}/tas/${me.id}/timeline` : null,
   );
-  if (error) return <div className="text-xs text-danger px-2">โหลดขั้นตอนไม่สำเร็จ</div>;
+  if (error) return <div className="text-xs text-danger px-2">{t("โหลดขั้นตอนไม่สำเร็จ")}</div>;
   if (!data) {
     return (
-      <SkelRegion label="กำลังโหลดขั้นตอน" className="rounded-xl border border-hairline px-4 py-3 flex flex-col gap-3">
+      <SkelRegion label={t("กำลังโหลดขั้นตอน")} className="rounded-xl border border-hairline px-4 py-3 flex flex-col gap-3">
         <Skel className="h-4 w-28" />
         {Array.from({ length: 3 }, (_, i) => (
           <div key={i} className="flex items-center gap-3">
@@ -231,5 +227,5 @@ function TimelineLoader({ periodId, tcId }: { periodId: string; tcId: string }) 
       </SkelRegion>
     );
   }
-  return <SubmissionTimeline data={data} title="สถานะการอนุมัติ" />;
+  return <SubmissionTimeline data={data} title={t("สถานะการอนุมัติ")} />;
 }

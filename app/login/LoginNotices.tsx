@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CalendarClock, FileCheck2 } from "lucide-react";
-import { thaiDate } from "../lib/dates";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * What the login page may say before anyone signs in: the live TA-request
@@ -65,24 +65,25 @@ function Countdown({ closesAt, urgentClass, quiet }: {
   urgentClass: string;
   quiet: string;
 }) {
+  const { t } = useI18n();
   const ms = useRemaining(closesAt);
   if (ms !== null && ms <= 0) {
-    return <p className="mt-1 text-lg font-semibold leading-snug">ถึงเวลาปิดรับแล้ว</p>;
+    return <p className="mt-1 text-lg font-semibold leading-snug">{t("ถึงเวลาปิดรับแล้ว")}</p>;
   }
   const total = ms === null ? null : Math.floor(ms / 1000);
   const days = total === null ? null : Math.floor(total / 86400);
   const parts: [string, string][] = [
-    [days === null ? "--" : String(days), "วัน"],
-    [total === null ? "--" : pad(Math.floor((total % 86400) / 3600)), "ชม."],
-    [total === null ? "--" : pad(Math.floor((total % 3600) / 60)), "นาที"],
-    [total === null ? "--" : pad(total % 60), "วินาที"],
+    [days === null ? "--" : String(days), t("วัน")],
+    [total === null ? "--" : pad(Math.floor((total % 86400) / 3600)), t("ชม.")],
+    [total === null ? "--" : pad(Math.floor((total % 3600) / 60)), t("นาที")],
+    [total === null ? "--" : pad(total % 60), t("วินาที")],
   ];
   const urgent = ms !== null && ms < URGENT_DAYS * 86400_000;
   return (
     <div
       role="timer"
       aria-live="off"
-      aria-label={days === null ? undefined : `เหลือเวลาอีก ${days} วัน ${parts[1][0]} ชั่วโมง`}
+      aria-label={days === null ? undefined : t("เหลือเวลาอีก {days} วัน {hours} ชั่วโมง", { days, hours: parts[1][0] })}
       className={`mt-1.5 flex items-start gap-3 ${urgent ? urgentClass : ""}`}
     >
       {parts.map(([v, unit], i) => (
@@ -103,6 +104,7 @@ function Countdown({ closesAt, urgentClass, quiet }: {
  * phone, where the photo panel does not exist.
  */
 export default function LoginNoticeCards({ notices, tone }: { notices: LoginNotices; tone: "dark" | "light" }) {
+  const { t, fmtDate } = useI18n();
   const dark = tone === "dark";
   const w = notices.request_window;
   const docs = notices.documents ?? [];
@@ -115,14 +117,14 @@ export default function LoginNoticeCards({ notices, tone }: { notices: LoginNoti
   const fill = dark ? "bg-white" : "bg-accent";
 
   return (
-    <section aria-label="ประกาศจากระบบ" className="flex flex-col gap-3 w-full">
+    <section aria-label={t("ประกาศจากระบบ")} className="flex flex-col gap-3 w-full">
       {w && (() => {
         const urgent = w.days_left <= URGENT_DAYS;
         return (
           <article className={`${card} px-4 py-3`}>
             <div className={`flex items-center gap-2 text-xs ${quiet}`}>
               <CalendarClock className="size-3.5 shrink-0" aria-hidden />
-              <span>เปิดรับคำขอ TA ภาค {w.term_label}</span>
+              <span>{t("เปิดรับคำขอ TA ภาค {term}", { term: w.term_label })}</span>
             </div>
             <Countdown
               closesAt={w.closes_at}
@@ -130,11 +132,11 @@ export default function LoginNoticeCards({ notices, tone }: { notices: LoginNoti
               quiet={quiet}
             />
             <p className={`mt-2 text-sm tabular-nums ${quiet}`}>
-              ปิดรับ {thaiDate(w.closes_at)} เวลา {clockTime(w.closes_at)} น.
+              {t("ปิดรับ {date} เวลา {time} น.", { date: fmtDate(w.closes_at), time: clockTime(w.closes_at) })}
             </p>
             <div
               role="img"
-              aria-label={`ผ่านไป ${w.elapsed_pct}% ของช่วงรับคำขอ`}
+              aria-label={t("ผ่านไป {pct}% ของช่วงรับคำขอ", { pct: w.elapsed_pct })}
               className={`mt-2.5 h-1.5 rounded-full overflow-hidden ${track}`}
             >
               <div
@@ -150,21 +152,21 @@ export default function LoginNoticeCards({ notices, tone }: { notices: LoginNoti
         <article className={`${card} px-4 py-3`}>
           <div className={`flex items-center gap-2 text-xs ${quiet}`}>
             <FileCheck2 className="size-3.5 shrink-0" aria-hidden />
-            <span>ใบเบิกค่าตอบแทน ภาค {docs[0].term_label}</span>
+            <span>{t("ใบเบิกค่าตอบแทน ภาค {term}", { term: docs[0].term_label })}</span>
           </div>
           <ul className="mt-1.5 flex flex-col gap-2.5">
             {docs.map((d, i) => (
               <li key={i}>
                 <p className={`text-xs tabular-nums ${quiet}`}>
-                  {d.round_label ? `${d.round_label} · ` : ""}อัปเดต {thaiDate(d.updated_at)}
+                  {d.round_label ? `${d.round_label} · ` : ""}{t("อัปเดต {date}", { date: fmtDate(d.updated_at) })}
                 </p>
                 <p className="mt-0.5 text-base font-semibold leading-snug">
-                  <span className="tabular-nums">ขั้นที่ {d.stage}/{d.stage_total}</span>
+                  <span className="tabular-nums">{t("ขั้นที่ {stage}/{total}", { stage: d.stage, total: d.stage_total })}</span>
                   <span className="font-medium"> · {d.stage_label}</span>
                 </p>
                 <div
                   role="img"
-                  aria-label={`ขั้นที่ ${d.stage} จากทั้งหมด ${d.stage_total} ขั้น`}
+                  aria-label={t("ขั้นที่ {stage} จากทั้งหมด {total} ขั้น", { stage: d.stage, total: d.stage_total })}
                   className="mt-1.5 grid gap-1"
                   style={{ gridTemplateColumns: `repeat(${d.stage_total}, minmax(0, 1fr))` }}
                 >

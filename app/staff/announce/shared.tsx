@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import type { Attachment } from "../../components/AttachmentGallery";
 import { Chip } from "../../components/ui";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 // ============================================================================
 // Types
@@ -127,12 +128,13 @@ export const emptyDraft: Draft = {
 // ============================================================================
 
 export const ROLES = [
-  { value: "ta",       label: "ผู้ช่วยสอน" },
-  { value: "lecturer", label: "อาจารย์" },
-  { value: "staff",    label: "เจ้าหน้าที่" },
-  { value: "admin",    label: "ผู้ดูแลระบบ" },
+  { value: "ta",       label: msg("ผู้ช่วยสอน") },
+  { value: "lecturer", label: msg("อาจารย์") },
+  { value: "staff",    label: msg("เจ้าหน้าที่") },
+  { value: "admin",    label: msg("ผู้ดูแลระบบ") },
 ] as const;
 
+/** Returns a Thai key; translate where it is shown (t(roleLabel(r))). */
 export const roleLabel = (r: string) => ROLES.find(x => x.value === r)?.label ?? r;
 
 // Category metadata drives icon, chip tone, and the mailer prefix on the
@@ -141,11 +143,11 @@ export const CATEGORIES: {
   value: Category; label: string; icon: React.ReactNode;
   tone: "info" | "success" | "warn" | "danger" | "brand"; description: string;
 }[] = [
-  { value: "info",    label: "ข้อมูลทั่วไป", icon: <Info size={14} />,        tone: "info",   description: "ข่าวสารทั่วไปที่ต้องการให้ทราบ" },
-  { value: "news",    label: "ข่าวประชาสัมพันธ์", icon: <Newspaper size={14} />, tone: "brand",  description: "ข่าวใหม่หรือประกาศจากคณะ/สาขา" },
-  { value: "event",   label: "กิจกรรม / อบรม",  icon: <PartyPopper size={14} />, tone: "success",description: "งาน กิจกรรม หรืออบรมที่มีวันจัด" },
-  { value: "warning", label: "แจ้งเตือน",       icon: <AlertTriangle size={14} />, tone: "warn",  description: "เตือนให้ปฏิบัติภายในกำหนด อีเมลจะขึ้นต้นหัวเรื่องด้วย [แจ้งเตือน]" },
-  { value: "urgent",  label: "ด่วน",           icon: <Radio size={14} />,       tone: "danger", description: "เรื่องเร่งด่วน อีเมลจะขึ้นต้นหัวเรื่องด้วย [ด่วน]" },
+  { value: "info",    label: msg("ข้อมูลทั่วไป"), icon: <Info size={14} />,        tone: "info",   description: msg("ข่าวสารทั่วไปที่ต้องการให้ทราบ") },
+  { value: "news",    label: msg("ข่าวประชาสัมพันธ์"), icon: <Newspaper size={14} />, tone: "brand",  description: msg("ข่าวใหม่หรือประกาศจากคณะ/สาขา") },
+  { value: "event",   label: msg("กิจกรรม / อบรม"),  icon: <PartyPopper size={14} />, tone: "success",description: msg("งาน กิจกรรม หรืออบรมที่มีวันจัด") },
+  { value: "warning", label: msg("แจ้งเตือน"),       icon: <AlertTriangle size={14} />, tone: "warn",  description: msg("เตือนให้ปฏิบัติภายในกำหนด อีเมลจะขึ้นต้นหัวเรื่องด้วย [แจ้งเตือน]") },
+  { value: "urgent",  label: msg("ด่วน"),           icon: <Radio size={14} />,       tone: "danger", description: msg("เรื่องเร่งด่วน อีเมลจะขึ้นต้นหัวเรื่องด้วย [ด่วน]") },
 ];
 
 export const CAT_META = Object.fromEntries(
@@ -153,19 +155,20 @@ export const CAT_META = Object.fromEntries(
 ) as Record<Category, typeof CATEGORIES[number]>;
 
 /** The subject line the mailer and the bell will show. Mirrors the backend's
- *  announceSubject, so the pre-publish preview cannot promise another one. */
+ *  announceSubject, so the pre-publish preview cannot promise another one.
+ *  The e-mail stays Thai, so the prefixes are data and are not translated. */
 export function mailSubject(category: Category, title: string): string {
-  const prefix = category === "urgent" ? "[ด่วน] "
-    : category === "warning" ? "[แจ้งเตือน] "
-    : category === "event" ? "[กิจกรรม] " : "";
+  const prefix = category === "urgent" ? "[ด่วน] " // i18n-ignore
+    : category === "warning" ? "[แจ้งเตือน] " // i18n-ignore
+    : category === "event" ? "[กิจกรรม] " : ""; // i18n-ignore
   return prefix + title;
 }
 
 export const STATUS_LABEL: Record<Status, string> = {
-  live: "เผยแพร่อยู่",
-  scheduled: "ตั้งเวลาไว้",
-  draft: "ฉบับร่าง",
-  expired: "หมดอายุ",
+  live: msg("เผยแพร่อยู่"),
+  scheduled: msg("ตั้งเวลาไว้"),
+  draft: msg("ฉบับร่าง"),
+  expired: msg("หมดอายุ"),
 };
 
 // Cover image constraints — mirrored on the backend and shown to the user.
@@ -186,20 +189,22 @@ export const LIST_KEY = "/announcements?scope=all";
 // ============================================================================
 
 export function CategoryChip({ category }: { category: Category }) {
+  const { t } = useI18n();
   const meta = CAT_META[category] ?? CAT_META.info;
   return (
     <Chip tone={meta.tone}>
-      <span className="inline-flex items-center gap-1">{meta.icon}{meta.label}</span>
+      <span className="inline-flex items-center gap-1">{meta.icon}{t(meta.label)}</span>
     </Chip>
   );
 }
 
 export function StatusChip({ status, publishedAt }: { status: Status; publishedAt?: string | null }) {
+  const { t, intl } = useI18n();
   const tone = { live: "success", scheduled: "info", draft: "neutral", expired: "warn" }[status] as
     "success" | "info" | "neutral" | "warn";
   const label = status === "scheduled" && publishedAt
-    ? `ตั้งเวลา ${fmtDateTime(publishedAt)}`
-    : STATUS_LABEL[status];
+    ? t("ตั้งเวลา {at}", { at: fmtDateTime(publishedAt, intl) })
+    : t(STATUS_LABEL[status]);
   return <Chip tone={tone}>{label}</Chip>;
 }
 
@@ -231,9 +236,10 @@ export function todayLocal(): string {
   return toLocalParts(new Date().toISOString()).date;
 }
 
-export function fmtDateTime(iso?: string | null): string {
+/** `intl` comes from useI18n() in the calling component. */
+export function fmtDateTime(iso: string | null | undefined, intl: string): string {
   if (!iso) return "-";
-  return new Date(iso).toLocaleString("th-TH", {
+  return new Date(iso).toLocaleString(intl, {
     day: "numeric", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit",
   });
 }
@@ -243,7 +249,7 @@ export function fmtDateTime(iso?: string | null): string {
 // ============================================================================
 
 /** The body with its markup taken off, for one-line previews. The list used
- *  to show the raw source, so every row read "**สำคัญ** :::center". */
+ *  to show the raw source, so every row read "**bold** :::center". */
 export function plainText(body: string): string {
   return (body ?? "")
     .split("\n")
@@ -332,14 +338,15 @@ export interface UpsertPayload {
  *
  * `asDraft` saves without a publish time — nothing is checked beyond the title
  * and body, so a half-decided announcement can be put away.
+ * The error is a Thai key; translate it where it is shown.
  */
 export function buildPayload(d: Draft, asDraft: boolean): UpsertPayload | { error: string } {
   const title = d.title.trim();
   const body = d.body.trim();
-  if (!title) return { error: "กรุณากรอกหัวข้อ" };
-  if (title.length > 200) return { error: "หัวข้อยาวเกิน 200 ตัวอักษร" };
-  if (!body) return { error: "กรุณากรอกเนื้อหา" };
-  if (body.length > 8000) return { error: "เนื้อหายาวเกิน 8000 ตัวอักษร" };
+  if (!title) return { error: msg("กรุณากรอกหัวข้อ") };
+  if (title.length > 200) return { error: msg("หัวข้อยาวเกิน 200 ตัวอักษร") };
+  if (!body) return { error: msg("กรุณากรอกเนื้อหา") };
+  if (body.length > 8000) return { error: msg("เนื้อหายาวเกิน 8000 ตัวอักษร") };
 
   const alreadyOut = d.originalStatus === "live" || d.originalStatus === "expired";
   let publishedAt: string | null = null;
@@ -350,8 +357,8 @@ export function buildPayload(d: Draft, asDraft: boolean): UpsertPayload | { erro
     publishedAt = d.originalPublishedAt;
   } else if (d.when === "scheduled") {
     const at = fromLocalParts(d.publishDate, d.publishTime);
-    if (!at) return { error: "กรุณาระบุวันและเวลาที่จะเผยแพร่" };
-    if (at.getTime() <= Date.now()) return { error: "เวลาที่ตั้งเผยแพร่ต้องอยู่ในอนาคต" };
+    if (!at) return { error: msg("กรุณาระบุวันและเวลาที่จะเผยแพร่") };
+    if (at.getTime() <= Date.now()) return { error: msg("เวลาที่ตั้งเผยแพร่ต้องอยู่ในอนาคต") };
     publishedAt = at.toISOString();
   } else {
     publishedAt = new Date().toISOString();
@@ -360,12 +367,13 @@ export function buildPayload(d: Draft, asDraft: boolean): UpsertPayload | { erro
   let expiresAt: string | null = null;
   if (d.expires) {
     const at = fromLocalParts(d.expireDate, d.expireTime);
-    if (!at) return { error: "กรุณาระบุวันและเวลาหมดอายุ" };
+    if (!at) return { error: msg("กรุณาระบุวันและเวลาหมดอายุ") };
     if (publishedAt && at.getTime() <= new Date(publishedAt).getTime()) {
-      return { error: "วันหมดอายุต้องอยู่หลังวันเผยแพร่" };
+      return { error: msg("วันหมดอายุต้องอยู่หลังวันเผยแพร่") };
     }
     if (!asDraft && at.getTime() <= Date.now()) {
-      return { error: "วันหมดอายุผ่านมาแล้ว กรุณาเลื่อนออกไปหรือเอาวันหมดอายุออก" };
+      return { error: msg("วันหมดอายุผ่านมาแล้ว กรุณาเลื่อนออกไปหรือเอาวันหมดอายุออก") };
+
     }
     expiresAt = at.toISOString();
   }

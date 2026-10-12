@@ -5,6 +5,7 @@ import { CalendarClock, ChevronLeft, ChevronRight, FileText, Flag, GripVertical,
 import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import { Button, ConfirmDialog, FieldGroup, TimePicker, Tip } from "../../components/ui";
+import { msg, useI18n } from "../../lib/i18n/client";
 import {
   CAT_META, LIST_KEY, STATUS_LABEL, fmtDateTime, fromLocalParts, toLocalParts, toPinPayload, todayLocal,
   type Ann,
@@ -28,7 +29,7 @@ import {
 interface Holiday { id: string; holiday_date: string; name_th: string }
 interface Period { id: string; due_date: string; label: string }
 
-const WEEKDAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+const WEEKDAYS = [msg("อา"), msg("จ"), msg("อ"), msg("พ"), msg("พฤ"), msg("ศ"), msg("ส")];
 const MAX_LANES = 3;
 const DRAG_TYPE = "application/x-announcement";
 
@@ -78,6 +79,7 @@ export default function Calendar({
   onScheduleDraft: (id: string, day: string) => void;
   onNewOnDay: (day: string) => void;
 }) {
+  const { t, intl } = useI18n();
   const today = todayLocal();
   const [month, setMonth] = useState(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); });
   const [focusDay, setFocusDay] = useState<string | null>(null);
@@ -103,11 +105,15 @@ export default function Calendar({
   const drafts = useMemo(() => items.filter(a => a.status === "draft"), [items]);
 
   const marks = useMemo(() => {
-    const m = new Map<string, { holiday?: string; due?: string }>();
+    const m = new Map<string, { holiday?: string; due?: string; dueShort?: string }>();
     (holidays ?? []).forEach(h => m.set(h.holiday_date, { ...m.get(h.holiday_date), holiday: h.name_th }));
-    (periods ?? []).forEach(p => m.set(p.due_date, { ...m.get(p.due_date), due: `ปิดรับบันทึกเวลา ${p.label}` }));
+    (periods ?? []).forEach(p => m.set(p.due_date, {
+      ...m.get(p.due_date),
+      due: t("ปิดรับบันทึกเวลา {label}", { label: p.label }),
+      dueShort: t("ปิดรับ {label}", { label: p.label }),
+    }));
     return m;
-  }, [holidays, periods]);
+  }, [holidays, periods, t]);
 
   /** Lay one week's bars out in lanes, so overlapping notices stack. */
   function layoutWeek(days: string[]) {
@@ -149,15 +155,15 @@ export default function Calendar({
   async function confirmMove() {
     if (!move) return;
     const at = fromLocalParts(move.day, move.time);
-    if (!at || at.getTime() <= Date.now()) { toast.danger("เวลาที่ตั้งเผยแพร่ต้องอยู่ในอนาคต"); return; }
+    if (!at || at.getTime() <= Date.now()) { toast.danger(t("เวลาที่ตั้งเผยแพร่ต้องอยู่ในอนาคต")); return; }
     if (move.a.expires_at && new Date(move.a.expires_at).getTime() <= at.getTime()) {
-      toast.danger(`วันเผยแพร่ใหม่ต้องอยู่ก่อนวันหมดอายุ (${fmtDateTime(move.a.expires_at)}) แก้ไขวันหมดอายุในหน้าแก้ไขก่อน`);
+      toast.danger(t("วันเผยแพร่ใหม่ต้องอยู่ก่อนวันหมดอายุ ({at}) แก้ไขวันหมดอายุในหน้าแก้ไขก่อน", { at: fmtDateTime(move.a.expires_at, intl) }));
       return;
     }
     setMoving(true);
     try {
       await api.post("/announcements", { ...toPinPayload(move.a, move.a.pinned), published_at: at.toISOString() });
-      toast.success(`เลื่อนเวลาเผยแพร่เป็น ${fmtDateTime(at.toISOString())} แล้ว`);
+      toast.success(t("เลื่อนเวลาเผยแพร่เป็น {at} แล้ว", { at: fmtDateTime(at.toISOString(), intl) }));
       await Promise.all([mutate(LIST_KEY), mutate(`/announcements/${move.a.id}`)]);
       setMove(null);
     } catch (e) {
@@ -175,7 +181,7 @@ export default function Calendar({
     },
   });
 
-  const monthLabel = month.toLocaleDateString("th-TH", { month: "long", year: "numeric" });
+  const monthLabel = month.toLocaleDateString(intl, { month: "long", year: "numeric" });
   const focusSpans = focusDay ? onDay(focusDay) : [];
   const agenda = useMemo(() => spans.filter(s => s.start.slice(0, 7) === monthKey ||
     (s.start < `${monthKey}-01` && s.end >= `${monthKey}-01`)), [spans, monthKey]);
@@ -186,8 +192,8 @@ export default function Calendar({
       {drafts.length > 0 && (
         <div className="rounded-xl border border-dashed border-border bg-surface px-3 py-2.5">
           <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 text-xs">
-            <span className="font-medium text-foreground">ฉบับร่าง ยังไม่กำหนดวัน</span>
-            <span className="hidden text-muted sm:inline">ลากไปวางบนวันที่เพื่อตั้งเวลาเผยแพร่</span>
+            <span className="font-medium text-foreground">{t("ฉบับร่าง ยังไม่กำหนดวัน")}</span>
+            <span className="hidden text-muted sm:inline">{t("ลากไปวางบนวันที่เพื่อตั้งเวลาเผยแพร่")}</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {drafts.map(a => (
@@ -212,22 +218,22 @@ export default function Calendar({
 
       <div className="rounded-xl border border-border bg-surface">
         <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-3 py-2">
-          <Tip content="เดือนก่อน">
-            <Button variant="ghost" size="sm" isIconOnly aria-label="เดือนก่อน"
+          <Tip content={t("เดือนก่อน")}>
+            <Button variant="ghost" size="sm" isIconOnly aria-label={t("เดือนก่อน")}
               onPress={() => { setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1)); setFocusDay(null); }}>
               <ChevronLeft size={16} />
             </Button>
           </Tip>
           <span className="min-w-[9rem] text-center text-sm font-semibold text-foreground" aria-live="polite">{monthLabel}</span>
-          <Tip content="เดือนถัดไป">
-            <Button variant="ghost" size="sm" isIconOnly aria-label="เดือนถัดไป"
+          <Tip content={t("เดือนถัดไป")}>
+            <Button variant="ghost" size="sm" isIconOnly aria-label={t("เดือนถัดไป")}
               onPress={() => { setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1)); setFocusDay(null); }}>
               <ChevronRight size={16} />
             </Button>
           </Tip>
           <Button variant="tertiary" size="sm"
             onPress={() => { const t = new Date(); setMonth(new Date(t.getFullYear(), t.getMonth(), 1)); setFocusDay(today); }}>
-            วันนี้
+            {t("วันนี้")}
           </Button>
           <span className="flex-1" />
           <Legend />
@@ -236,7 +242,7 @@ export default function Calendar({
         {/* Month grid — tablets and up */}
         <div className="hidden sm:block">
           <div className="grid grid-cols-7 border-b border-hairline text-center text-[11px] text-muted">
-            {WEEKDAYS.map(d => <div key={d} className="py-1.5">{d}</div>)}
+            {WEEKDAYS.map(d => <div key={d} className="py-1.5">{t(d)}</div>)}
           </div>
           {weeks.map(days => {
             const { placed, hidden } = layoutWeek(days);
@@ -265,7 +271,7 @@ export default function Calendar({
                         <button
                           type="button"
                           onClick={() => setFocusDay(f => (f === day ? null : day))}
-                          aria-label={`ประกาศวันที่ ${parseKey(day).toLocaleDateString("th-TH", { day: "numeric", month: "long" })}`}
+                          aria-label={t("ประกาศวันที่ {date}", { date: parseKey(day).toLocaleDateString(intl, { day: "numeric", month: "long" }) })}
                           className={
                             "flex size-6 items-center justify-center rounded-full text-xs tabular-nums transition-colors hover:bg-surface-secondary " +
                             (day === today ? "bg-[var(--brand)] font-semibold text-white hover:bg-[var(--brand)] " : inMonth ? "text-foreground " : "text-muted ")
@@ -274,10 +280,10 @@ export default function Calendar({
                           {parseKey(day).getDate()}
                         </button>
                         {!past && (
-                          <Tip content="เขียนประกาศสำหรับวันนี้">
+                          <Tip content={t("เขียนประกาศสำหรับวันนี้")}>
                             <button
                               type="button"
-                              aria-label="เขียนประกาศสำหรับวันนี้"
+                              aria-label={t("เขียนประกาศสำหรับวันนี้")}
                               onClick={() => onNewOnDay(day)}
                               className="ms-auto flex size-5 items-center justify-center rounded text-muted opacity-0 transition-opacity hover:bg-surface-secondary hover:text-brand focus-visible:opacity-100 group-hover:opacity-100"
                             >
@@ -290,13 +296,13 @@ export default function Calendar({
                       <div className="absolute inset-x-1.5 bottom-1 space-y-0.5">
                         {(hidden.get(day) ?? 0) > 0 && (
                           <button type="button" onClick={() => setFocusDay(day)} className="block text-[10px] font-medium text-accent hover:underline">
-                            +{hidden.get(day)} รายการ
+                            {t("+{n} รายการ", { n: hidden.get(day) })}
                           </button>
                         )}
                         {mark?.due && (
                           <Tip content={mark.due}>
                             <div className="flex items-center gap-0.5 truncate text-[10px] text-amber-700">
-                              <Flag size={10} className="shrink-0" />{mark.due.replace("ปิดรับบันทึกเวลา ", "ปิดรับ ")}
+                              <Flag size={10} className="shrink-0" />{mark.dueShort}
                             </div>
                           </Tip>
                         )}
@@ -315,7 +321,9 @@ export default function Calendar({
                   {placed.map(({ s, col, len, lane, cutL, cutR }) => {
                     const meta = CAT_META[s.a.category] ?? CAT_META.info;
                     return (
-                      <Tip key={s.a.id + col} content={`${s.a.title}\n${STATUS_LABEL[s.a.status]} · ${fmtDateTime(s.a.published_at)}${s.a.expires_at ? ` ถึง ${fmtDateTime(s.a.expires_at)}` : ""}`}>
+                      <Tip key={s.a.id + col} content={`${s.a.title}\n${t(STATUS_LABEL[s.a.status])} · ` + (s.a.expires_at
+                        ? t("{from} ถึง {to}", { from: fmtDateTime(s.a.published_at, intl), to: fmtDateTime(s.a.expires_at, intl) })
+                        : fmtDateTime(s.a.published_at, intl))}>
                         <button
                           type="button"
                           {...(s.a.status === "scheduled" ? dragProps(s.a) : {})}
@@ -344,7 +352,7 @@ export default function Calendar({
 
         {/* Agenda — phones, where seven columns are too narrow to read */}
         <ul className="divide-y divide-[var(--hairline)] sm:hidden">
-          {agenda.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">ไม่มีประกาศในเดือนนี้</li>}
+          {agenda.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">{t("ไม่มีประกาศในเดือนนี้")}</li>}
           {agenda.map(s => <AgendaRow key={s.a.id} s={s} selected={s.a.id === selectedId} onSelect={onSelect} />)}
         </ul>
       </div>
@@ -354,19 +362,19 @@ export default function Calendar({
         <div className="rounded-xl border border-border bg-surface">
           <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-2.5">
             <span className="text-sm font-semibold text-foreground">
-              {parseKey(focusDay).toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              {parseKey(focusDay).toLocaleDateString(intl, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </span>
             {marks.get(focusDay)?.due && <span className="text-xs text-amber-700">{marks.get(focusDay)?.due}</span>}
             {marks.get(focusDay)?.holiday && <span className="text-xs text-rose-700">{marks.get(focusDay)?.holiday}</span>}
             <span className="flex-1" />
             {focusDay >= today && (
               <Button variant="secondary" size="sm" onPress={() => onNewOnDay(focusDay)}>
-                <Plus size={13} /> เขียนประกาศสำหรับวันนี้
+                <Plus size={13} /> {t("เขียนประกาศสำหรับวันนี้")}
               </Button>
             )}
           </div>
           <ul className="divide-y divide-[var(--hairline)]">
-            {focusSpans.length === 0 && <li className="px-4 py-4 text-sm text-muted">ไม่มีประกาศที่แสดงในวันนี้</li>}
+            {focusSpans.length === 0 && <li className="px-4 py-4 text-sm text-muted">{t("ไม่มีประกาศที่แสดงในวันนี้")}</li>}
             {focusSpans.map(s => <AgendaRow key={s.a.id} s={s} selected={s.a.id === selectedId} onSelect={onSelect} />)}
           </ul>
         </div>
@@ -378,17 +386,19 @@ export default function Calendar({
         onConfirm={confirmMove}
         isPending={moving}
         icon={<CalendarClock size={18} />}
-        title="เลื่อนเวลาเผยแพร่?"
-        confirmLabel="เลื่อนเวลา"
+        title={t("เลื่อนเวลาเผยแพร่?")}
+        confirmLabel={t("เลื่อนเวลา")}
         message={move && (
           <div className="space-y-3 text-sm">
             <p className="text-muted">
-              <span className="font-medium text-foreground">“{move.a.title}”</span> ตั้งเวลาไว้ {fmtDateTime(move.a.published_at)}
-              {" "}จะเลื่อนเป็นวันที่ {parseKey(move.day).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
-              {" "}ผู้รับจะได้รับแจ้งเตือนและอีเมลตามเวลาใหม่
+              {t.rich("{title} ตั้งเวลาไว้ {at} จะเลื่อนเป็นวันที่ {date} ผู้รับจะได้รับแจ้งเตือนและอีเมลตามเวลาใหม่", {
+                title: <span className="font-medium text-foreground">“{move.a.title}”</span>,
+                at: fmtDateTime(move.a.published_at, intl),
+                date: parseKey(move.day).toLocaleDateString(intl, { day: "numeric", month: "long", year: "numeric" }),
+              })}
             </p>
-            <FieldGroup label="เวลา">
-              <TimePicker label="เวลาเผยแพร่" value={move.time} onChange={v => setMove(m => (m ? { ...m, time: v } : m))} />
+            <FieldGroup label={t("เวลา")}>
+              <TimePicker label={t("เวลาเผยแพร่")} value={move.time} onChange={v => setMove(m => (m ? { ...m, time: v } : m))} />
             </FieldGroup>
           </div>
         )}
@@ -398,10 +408,14 @@ export default function Calendar({
 }
 
 function AgendaRow({ s, selected, onSelect }: { s: Span; selected: boolean; onSelect: (id: string) => void }) {
+  const { t, intl } = useI18n();
   const meta = CAT_META[s.a.category] ?? CAT_META.info;
   const range = s.start === s.end
-    ? parseKey(s.start).toLocaleDateString("th-TH", { day: "numeric", month: "short" })
-    : `${parseKey(s.start).toLocaleDateString("th-TH", { day: "numeric", month: "short" })} ถึง ${parseKey(s.end).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}`;
+    ? parseKey(s.start).toLocaleDateString(intl, { day: "numeric", month: "short" })
+    : t("{from} ถึง {to}", {
+      from: parseKey(s.start).toLocaleDateString(intl, { day: "numeric", month: "short" }),
+      to: parseKey(s.end).toLocaleDateString(intl, { day: "numeric", month: "short" }),
+    });
   return (
     <li>
       <button
@@ -415,7 +429,7 @@ function AgendaRow({ s, selected, onSelect }: { s: Span; selected: boolean; onSe
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-foreground">{s.a.title}</span>
           <span className="block text-xs text-muted">
-            {STATUS_LABEL[s.a.status]} · {range}{s.open ? " เป็นต้นไป" : ""}
+            {t(STATUS_LABEL[s.a.status])} · {s.open ? t("{date} เป็นต้นไป", { date: range }) : range}
           </span>
         </span>
       </button>
@@ -424,16 +438,18 @@ function AgendaRow({ s, selected, onSelect }: { s: Span; selected: boolean; onSe
 }
 
 function Legend() {
+  const { t } = useI18n();
   const item = (cls: string, label: string) => (
     <span className="inline-flex items-center gap-1"><span className={"inline-block h-2.5 w-4 rounded-sm " + cls} />{label}</span>
   );
   return (
     <div className="hidden flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted md:flex">
-      {item(BAR.live, "เผยแพร่อยู่")}
-      {item(BAR.scheduled, "ตั้งเวลาไว้")}
-      {item("bg-surface-secondary", "หมดอายุ")}
-      <span className="inline-flex items-center gap-1 text-amber-700"><Flag size={10} />ปิดรับบันทึกเวลา</span>
-      <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-4 rounded-sm bg-rose-50 ring-1 ring-rose-200" />วันหยุด</span>
+      {item(BAR.live, t("เผยแพร่อยู่"))}
+      {item(BAR.scheduled, t("ตั้งเวลาไว้"))}
+      {item("bg-surface-secondary", t("หมดอายุ"))}
+      <span className="inline-flex items-center gap-1 text-amber-700"><Flag size={10} />{t("ปิดรับบันทึกเวลา")}</span>
+      <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-4 rounded-sm bg-rose-50 ring-1 ring-rose-200" />{t("วันหยุด")}</span>
+
     </div>
   );
 }

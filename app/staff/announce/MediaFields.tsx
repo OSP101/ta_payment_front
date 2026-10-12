@@ -7,6 +7,7 @@ import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import type { Attachment } from "../../components/AttachmentGallery";
 import { Button, FieldGroup, Alert, Tip } from "../../components/ui";
+import { msg, useI18n } from "../../lib/i18n/client";
 import CoverMaker, { defaultCoverText, type CoverText } from "./CoverMaker";
 import { IMG, type Draft, type SetDraft } from "./shared";
 
@@ -17,6 +18,7 @@ import { IMG, type Draft, type SetDraft } from "./shared";
 const MEDIA_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf";
 
 export function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const { t } = useI18n();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(0);
   const [err, setErr] = useState<string | null>(null);
@@ -26,7 +28,7 @@ export function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: 
     setErr(null);
     const picked = Array.from(files);
     if (draft.attachments.length + picked.length > 20) {
-      setErr("แนบไฟล์ได้ไม่เกิน 20 ไฟล์ต่อหนึ่งประกาศ");
+      setErr(t("แนบไฟล์ได้ไม่เกิน 20 ไฟล์ต่อหนึ่งประกาศ"));
       return;
     }
     setBusy(b => b + picked.length);
@@ -61,8 +63,8 @@ export function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: 
 
   return (
     <FieldGroup
-      label={<span className="inline-flex items-center gap-1.5"><Paperclip size={14} />ไฟล์แนบ (รูป วิดีโอ หรือ PDF)</span>}
-      hint="รูปได้หลายรูป เรียงลำดับได้ · รูป ≤ 8MB · วิดีโอ ≤ 80MB · PDF ≤ 20MB"
+      label={<span className="inline-flex items-center gap-1.5"><Paperclip size={14} />{t("ไฟล์แนบ (รูป วิดีโอ หรือ PDF)")}</span>}
+      hint={t("รูปได้หลายรูป เรียงลำดับได้ · รูป ≤ 8MB · วิดีโอ ≤ 80MB · PDF ≤ 20MB")}
     >
       <div className="space-y-2">
         <input
@@ -74,7 +76,7 @@ export function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: 
           onChange={e => void addFiles(e.target.files)}
         />
         <Button variant="ghost" size="sm" onPress={() => fileRef.current?.click()} isDisabled={busy > 0}>
-          <Plus size={13} />{busy > 0 ? `กำลังอัปโหลด… (${busy})` : "เพิ่มไฟล์"}
+          <Plus size={13} />{busy > 0 ? t("กำลังอัปโหลด… ({n})", { n: busy }) : t("เพิ่มไฟล์")}
         </Button>
 
         {err && <div className="text-xs text-danger">{err}</div>}
@@ -92,11 +94,11 @@ export function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: 
                   </span>
                 )}
                 <span className="min-w-0 flex-1 truncate text-xs">{a.filename}</span>
-                <button type="button" aria-label="เลื่อนขึ้น" onClick={() => move(i, -1)}
+                <button type="button" aria-label={t("เลื่อนขึ้น")} onClick={() => move(i, -1)}
                   className="px-1 text-ink-3 hover:text-brand disabled:opacity-30" disabled={i === 0}>↑</button>
-                <button type="button" aria-label="เลื่อนลง" onClick={() => move(i, 1)}
+                <button type="button" aria-label={t("เลื่อนลง")} onClick={() => move(i, 1)}
                   className="px-1 text-ink-3 hover:text-brand disabled:opacity-30" disabled={i === draft.attachments.length - 1}>↓</button>
-                <Tip content={`เอา ${a.filename} ออก`}><button type="button" aria-label={`เอา ${a.filename} ออก`}
+                <Tip content={t("เอา {name} ออก", { name: a.filename })}><button type="button" aria-label={t("เอา {name} ออก", { name: a.filename })}
                   onClick={() => setDraft(d => ({ ...d, attachments: d.attachments.filter(x => x.storage_key !== a.storage_key) }))}
                   className="px-1 text-ink-3 hover:text-danger">
                   <X size={13} />
@@ -115,6 +117,7 @@ export function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: 
 // ============================================================================
 
 export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const { t } = useI18n();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -125,7 +128,7 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
   const [coverText, setCoverText] = useState<CoverText | null>(null);
 
   function openMaker() {
-    setCoverText(t => t ?? defaultCoverText(draft.title.trim()));
+    setCoverText(c => c ?? defaultCoverText(draft.title.trim()));
     setMakerOpen(true);
   }
 
@@ -133,11 +136,11 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
   async function upload(file: File): Promise<boolean> {
     setError(null);
     if (!IMG.accept.split(",").includes(file.type)) {
-      setError(`รองรับเฉพาะไฟล์ ${IMG.acceptLabel}`);
+      setError(t("รองรับเฉพาะไฟล์ {types}", { types: IMG.acceptLabel }));
       return false;
     }
     if (file.size > IMG.maxBytes) {
-      setError("ไฟล์ใหญ่เกิน 5MB ระบบจะพยายามย่อขนาดให้อัตโนมัติ");
+      setError(t("ไฟล์ใหญ่เกิน 5MB ระบบจะพยายามย่อขนาดให้อัตโนมัติ"));
     }
     setUploading(true);
     try {
@@ -148,10 +151,10 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
       // Functional update: the upload takes seconds, and writing back the
       // `draft` captured when it started erased whatever was typed meanwhile.
       setDraft(d => ({ ...d, cover_image_key: res.key, cover_image_url: res.url }));
-      toast.success("ใส่รูปหน้าปกแล้ว");
+      toast.success(t("ใส่รูปหน้าปกแล้ว"));
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "อัปโหลดไม่สำเร็จ");
+      setError(e instanceof Error ? e.message : t("อัปโหลดไม่สำเร็จ"));
       return false;
     } finally {
       setUploading(false);
@@ -160,11 +163,12 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
 
   return (
     <FieldGroup
-      label={<span>รูปหน้าปก <span className="text-muted">(ไม่บังคับ)</span></span>}
+      label={<span>{t("รูปหน้าปก")} <span className="text-muted">{t("(ไม่บังคับ)")}</span></span>}
       hint={
         <span>
-          แนะนำอัตราส่วน {IMG.aspectHint} ขนาด {IMG.maxWidth}×{IMG.maxHeight}px, ขั้นต่ำ {IMG.minWidth}px แนวกว้าง
-          รองรับ {IMG.acceptLabel} ไม่เกิน 5MB (ระบบย่ออัตโนมัติ)
+          {t("แนะนำอัตราส่วน {ratio} ขนาด {w}×{h}px, ขั้นต่ำ {min}px แนวกว้าง รองรับ {types} ไม่เกิน 5MB (ระบบย่ออัตโนมัติ)", {
+            ratio: IMG.aspectHint, w: IMG.maxWidth, h: IMG.maxHeight, min: IMG.minWidth, types: IMG.acceptLabel,
+          })}
         </span>
       }
     >
@@ -173,22 +177,22 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={draft.cover_image_url}
-            alt="cover preview"
+            alt={t("ตัวอย่างรูปหน้าปก")}
             className="w-full aspect-video object-cover bg-surface-secondary"
           />
           <div className="absolute top-2 right-2 flex flex-wrap justify-end gap-1.5">
             <Button variant="secondary" size="sm" onPress={openMaker}>
-              <Wand2 size={13} /> สร้างจากแม่แบบ
+              <Wand2 size={13} /> {t("สร้างจากแม่แบบ")}
             </Button>
             <Button variant="secondary" size="sm" onPress={() => fileRef.current?.click()}>
-              <ImageIcon size={13} /> เปลี่ยนรูป
+              <ImageIcon size={13} /> {t("เปลี่ยนรูป")}
             </Button>
             <Button
               variant="danger-soft"
               size="sm"
               onPress={() => setDraft(d => ({ ...d, cover_image_key: null, cover_image_url: null }))}
             >
-              <Trash2 size={13} /> เอาออก
+              <Trash2 size={13} /> {t("เอาออก")}
             </Button>
           </div>
         </div>
@@ -212,7 +216,7 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
             <ImageIcon size={22} />
           </div>
           <div className="text-sm font-medium">
-            {uploading ? "กำลังอัปโหลด…" : "ลากรูปมาวางหรือคลิกเพื่อเลือก"}
+            {uploading ? t("กำลังอัปโหลด…") : t("ลากรูปมาวางหรือคลิกเพื่อเลือก")}
           </div>
           <div className="text-xs text-muted mt-1">
             {IMG.acceptLabel} • ≤ 5MB • {IMG.maxWidth}×{IMG.maxHeight}px
@@ -221,7 +225,7 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
       )}
       {!draft.cover_image_url && (
         <Button variant="secondary" size="sm" onPress={openMaker} className="self-start">
-          <Wand2 size={13} /> หรือพิมพ์ข้อความลงรูปจากแม่แบบ
+          <Wand2 size={13} /> {t("หรือพิมพ์ข้อความลงรูปจากแม่แบบ")}
         </Button>
       )}
       {coverText && (
@@ -231,7 +235,8 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
           value={coverText}
           onChange={setCoverText}
           onUse={async file => {
-            if (!(await upload(file))) throw new Error("ใส่รูปหน้าปกไม่สำเร็จ");
+            // Thai key: errMessage() in CoverMaker passes only Thai through, then translates it.
+            if (!(await upload(file))) throw new Error(msg("ใส่รูปหน้าปกไม่สำเร็จ"));
           }}
         />
       )}
@@ -248,7 +253,8 @@ export function CoverImageField({ draft, setDraft }: { draft: Draft; setDraft: S
         }}
       />
       {error && (
-        <Alert status="warning" title={error} icon={<AlertTriangle size={14} />} />
+        <Alert status="warning" title={t(error)} icon={<AlertTriangle size={14} />} />
+
       )}
     </FieldGroup>
   );

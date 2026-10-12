@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 import { PageHeader, Panel, EmptyState, Button } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
+import { msg, useI18n } from "../lib/i18n/client";
 
 interface Notif {
   id: string;
@@ -21,14 +22,15 @@ interface Notif {
 // for every role. Wrap it in a role-specific page component (e.g. /ta uses
 // this with a role-specific banner via `header` prop).
 export default function NotificationsList({
-  title = "การเตือน",
-  description = "ข่าวสารและการแจ้งเตือนสำหรับคุณ",
+  title = msg("การเตือน"),
+  description = msg("ข่าวสารและการแจ้งเตือนสำหรับคุณ"),
   header,
 }: {
   title?: string;
   description?: string;
   header?: React.ReactNode;
 }) {
+  const { t, intl } = useI18n();
   const [tab, setTab] = useState<"all" | "unread">("all");
   const key = tab === "unread"
     ? "/me/notifications?limit=100&unread=1"
@@ -54,7 +56,7 @@ export default function NotificationsList({
     try {
       await api.post(`/me/notifications/read-all`);
       mutate((k) => typeof k === "string" && k.startsWith("/me/notifications"));
-      notify.success("ทำเครื่องหมายอ่านทั้งหมดแล้ว");
+      notify.success(t("ทำเครื่องหมายอ่านทั้งหมดแล้ว"));
     } catch (e) {
       notify.error(e);
     }
@@ -62,7 +64,7 @@ export default function NotificationsList({
 
   return (
     <div>
-      <PageHeader title={title} description={description} />
+      <PageHeader title={t(title)} description={t(description)} />
       {header}
 
       <div data-tour="ntf-filters" className="flex items-center gap-2 mb-3 flex-wrap">
@@ -71,18 +73,18 @@ export default function NotificationsList({
           onClick={() => setTab("all")}
           className={`chip cursor-pointer transition ${tab === "all" ? "chip-brand" : "chip-neutral"}`}
         >
-          ทั้งหมด
+          {t("ทั้งหมด")}
         </button>
         <button
           type="button"
           onClick={() => setTab("unread")}
           className={`chip cursor-pointer transition ${tab === "unread" ? "chip-brand" : "chip-neutral"}`}
         >
-          ยังไม่อ่าน
+          {t("ยังไม่อ่าน")}
         </button>
         <div className="flex-1" />
         <Button variant="ghost" size="sm" onPress={markAll} disabled={list.every(n => n.read_at)}>
-          <CheckCheck size={13} /> อ่านทั้งหมด
+          <CheckCheck size={13} /> {t("อ่านทั้งหมด")}
         </Button>
       </div>
 
@@ -96,8 +98,8 @@ export default function NotificationsList({
         ) : list.length === 0 ? (
           <EmptyState
             icon={<Bell size={28} />}
-            title={tab === "unread" ? "ไม่มีการเตือนที่ยังไม่อ่าน" : "ยังไม่มีการเตือน"}
-            description="ระบบจะแจ้งเตือนเมื่อมีข่าวสารสำคัญ"
+            title={tab === "unread" ? t("ไม่มีการเตือนที่ยังไม่อ่าน") : t("ยังไม่มีการเตือน")}
+            description={t("ระบบจะแจ้งเตือนเมื่อมีข่าวสารสำคัญ")}
           />
         ) : (
           <ul className="divide-y divide-[var(--hairline)]">
@@ -120,19 +122,19 @@ export default function NotificationsList({
                     </div>
                     <div className="text-xs text-muted mt-0.5 whitespace-pre-wrap">{n.body}</div>
                     <div className="text-[11px] text-muted mt-1 tabular">
-                      {formatDate(n.created_at)}
+                      {formatDate(n.created_at, intl)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {!n.read_at && (
                       <Button variant="ghost" size="sm" onPress={() => markRead(n.id)}>
-                        <Check size={13} /> อ่านแล้ว
+                        <Check size={13} /> {t("อ่านแล้ว")}
                       </Button>
                     )}
                     {n.link && (
                       <Link href={n.link}>
                         <Button variant="ghost" size="sm">
-                          เปิด <ArrowRight size={13} />
+                          {t("เปิด")} <ArrowRight size={13} />
                         </Button>
                       </Link>
                     )}
@@ -167,7 +169,7 @@ function NotifSkeleton() {
   );
 }
 
-function formatDate(iso: string) {
+function formatDate(iso: string, intl: string) {
   try {
     const d = new Date(iso);
     // An unparseable timestamp does NOT throw: `new Date()` yields an Invalid
@@ -175,7 +177,7 @@ function formatDate(iso: string) {
     // the catch below never fires and that text renders straight into the row.
     // Fall back to the raw value instead — it at least shows what arrived.
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString("th-TH", {
+    return d.toLocaleString(intl, {
       year: "numeric", month: "short", day: "numeric",
       hour: "2-digit", minute: "2-digit",
     });

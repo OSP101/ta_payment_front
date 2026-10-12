@@ -1,4 +1,6 @@
+"use client";
 import { Wallet } from "lucide-react";
+import { useI18n } from "../lib/i18n/client";
 
 /* -------------------------------------------------------------------------- */
 /* PayEstimateCard — a rough per-month pay breakdown, presentational only.    */
@@ -46,35 +48,38 @@ export interface PayEstimate {
 }
 
 export function PayEstimateCard({ estimate }: { estimate: PayEstimate }) {
+  const { t, intl } = useI18n();
+  const baht = (n: number) => `฿${Math.round(n).toLocaleString(intl)}`; // i18n-ignore — currency symbol
+  const hrs1 = (n: number) => (Math.round(n * 10) / 10).toLocaleString(intl);
   return (
     <div className="rounded-lg border border-hairline bg-surface-secondary px-3 py-2 text-xs">
       <div className="mb-1.5 flex items-center gap-1.5 font-medium text-ink-1">
-        <Wallet size={13} /> ประมาณการที่จะได้รับ (คร่าวๆ)
+        <Wallet size={13} /> {t("ประมาณการที่จะได้รับ (คร่าวๆ)")}
       </div>
       <ul className="space-y-1.5">
         {estimate.months.map(m => (
           <li key={m.ym} className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-muted">{m.label}</div>
+              <div className="text-muted">{t(m.label)}</div>
               {m.activities.length > 0 && (
                 <div className="mt-0.5 text-[11px] text-ink-2">
-                  {m.activities.map(a => `${a.label} ${hrs1(a.hours)} ชม.`).join(" · ")}
+                  {m.activities.map(a => t("{label} {h} ชม.", { label: t(a.label), h: hrs1(a.hours) })).join(" · ")}
                 </div>
               )}
             </div>
             <span className="shrink-0 pt-px tabular-nums">
-              {hrs1(m.hours)} ชม. ≈ <b className="text-ink-1">{baht(m.baht)}</b>
+              {t.rich("{h} ชม. ≈ {amount}", { h: hrs1(m.hours), amount: <b className="text-ink-1">{baht(m.baht)}</b> })}
             </span>
           </li>
         ))}
       </ul>
       <div className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-hairline pt-1 font-medium">
-        <span>รวม</span>
+        <span>{t("รวม")}</span>
         <span className="tabular-nums">{baht(estimate.total)}</span>
       </div>
       {(estimate.capped || estimate.footnote) && (
         <div className="mt-1 text-[11px] text-muted">
-          {estimate.capped && "แต่ละเดือนไม่เกินเพดานที่ประกาศกำหนดไว้ — "}
+          {estimate.capped && t("แต่ละเดือนไม่เกินเพดานที่ประกาศกำหนดไว้ — ")}
           {estimate.footnote}
         </div>
       )}
@@ -85,5 +90,4 @@ export function PayEstimateCard({ estimate }: { estimate: PayEstimate }) {
 // Local formatters — same rounding TaPlanner.tsx uses for the same reason:
 // whole baht (a satang means nothing to a TA reading this), one decimal of
 // hours (enough for a half-hour ตรวจงาน slot without float noise).
-const baht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
-const hrs1 = (n: number) => (Math.round(n * 10) / 10).toLocaleString("th-TH");
+// (Defined inside PayEstimateCard so they follow the reader's locale.)

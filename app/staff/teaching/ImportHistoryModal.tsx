@@ -9,6 +9,7 @@ import useSWR from "swr";
 import { History, ChevronRight, FileSpreadsheet, TriangleAlert, CircleX, CircleCheck } from "lucide-react";
 import { Modal, Button, Chip, EmptyState, Alert } from "../../components/ui";
 import { Skel, SkelList, SkelRegion } from "../../components/Skeletons";
+import { useI18n } from "../../lib/i18n/client";
 
 interface HistoryRow {
   id: string;
@@ -34,8 +35,8 @@ interface HistoryDetail extends HistoryRow {
   errors: string[];
 }
 
-function fmtAt(iso: string): string {
-  return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+function fmtAt(iso: string, intl: string): string {
+  return new Date(iso).toLocaleString(intl, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export default function ImportHistoryModal({
@@ -45,6 +46,7 @@ export default function ImportHistoryModal({
   onClose: () => void;
   termId?: string;
 }) {
+  const { t, intl } = useI18n();
   const [detailId, setDetailId] = useState<string | null>(null);
   const { data: rows, isLoading } = useSWR<HistoryRow[]>(
     open && termId ? `/teaching-courses/import/history?term_id=${termId}` : null,
@@ -55,14 +57,14 @@ export default function ImportHistoryModal({
 
   return (
     <>
-      <Modal open={open && !detailId} onClose={onClose} title="ประวัติการนำเข้าไฟล์ทะเบียน" size="lg" icon={<History size={18} />}>
+      <Modal open={open && !detailId} onClose={onClose} title={t("ประวัติการนำเข้าไฟล์ทะเบียน")} size="lg" icon={<History size={18} />}>
         {isLoading ? (
           <SkelList items={3} icon={false} className="py-3" />
         ) : !rows || rows.length === 0 ? (
           <EmptyState
             icon={<FileSpreadsheet size={28} />}
-            title="ยังไม่เคยนำเข้าไฟล์"
-            description="ประวัติการนำเข้าไฟล์ทะเบียนของภาคเรียนนี้จะแสดงที่นี่"
+            title={t("ยังไม่เคยนำเข้าไฟล์")}
+            description={t("ประวัติการนำเข้าไฟล์ทะเบียนของภาคเรียนนี้จะแสดงที่นี่")}
           />
         ) : (
           <ul className="divide-y divide-(--hairline) -mx-4 sm:-mx-6">
@@ -76,17 +78,17 @@ export default function ImportHistoryModal({
                   <div className="min-w-0 flex-1 basis-full sm:basis-0">
                     <div className="text-sm font-medium text-(--ink-1) truncate">{r.filename}</div>
                     <div className="text-xs text-(--ink-3)">
-                      {fmtAt(r.at)}
+                      {fmtAt(r.at, intl)}
                       {r.imported_by_name ? ` · ${r.imported_by_name}` : ""}
                     </div>
                   </div>
                   {r.fatal_error ? (
-                    <Chip tone="danger">นำเข้าไม่สำเร็จ</Chip>
+                    <Chip tone="danger">{t("นำเข้าไม่สำเร็จ")}</Chip>
                   ) : (
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Chip tone="success">สร้าง {r.created_count}</Chip>
-                      {r.warning_count > 0 && <Chip tone="warn">เตือน {r.warning_count}</Chip>}
-                      {r.error_count > 0 && <Chip tone="danger">ผิดพลาด {r.error_count}</Chip>}
+                      <Chip tone="success">{t("สร้าง {n}", { n: r.created_count })}</Chip>
+                      {r.warning_count > 0 && <Chip tone="warn">{t("เตือน {n}", { n: r.warning_count })}</Chip>}
+                      {r.error_count > 0 && <Chip tone="danger">{t("ผิดพลาด {n}", { n: r.error_count })}</Chip>}
                     </div>
                   )}
                   <ChevronRight size={16} className="text-(--ink-3) shrink-0" />
@@ -102,10 +104,10 @@ export default function ImportHistoryModal({
         onClose={() => setDetailId(null)}
         // The list row already knows the filename — use it so the title doesn't
         // change when the detail arrives.
-        title={<span className="break-all">{detail?.filename ?? rows?.find(r => r.id === detailId)?.filename ?? "รายละเอียดการนำเข้า"}</span>}
+        title={<span className="break-all">{detail?.filename ?? rows?.find(r => r.id === detailId)?.filename ?? t("รายละเอียดการนำเข้า")}</span>}
         size="lg"
         icon={<FileSpreadsheet size={18} />}
-        footer={<Button variant="tertiary" onClick={() => setDetailId(null)}>กลับไปที่ประวัติ</Button>}
+        footer={<Button variant="tertiary" onClick={() => setDetailId(null)}>{t("กลับไปที่ประวัติ")}</Button>}
       >
         {!detail ? (
           <SkelRegion className="space-y-3">
@@ -119,42 +121,42 @@ export default function ImportHistoryModal({
         ) : (
           <div className="space-y-3 text-sm">
             <div className="text-xs text-(--ink-3)">
-              {fmtAt(detail.at)}{detail.imported_by_name ? ` · ${detail.imported_by_name}` : ""}
+              {fmtAt(detail.at, intl)}{detail.imported_by_name ? ` · ${detail.imported_by_name}` : ""}
             </div>
             {detail.fatal_error ? (
-              <Alert status="danger" icon={<CircleX size={16} />} title="นำเข้าไม่สำเร็จ" description={detail.fatal_error} />
+              <Alert status="danger" icon={<CircleX size={16} />} title={t("นำเข้าไม่สำเร็จ")} description={detail.fatal_error} />
             ) : (
               <>
                 <div className="flex flex-wrap gap-2">
-                  <Chip tone="success"><CircleCheck size={12} className="me-1 inline" />สร้าง {detail.created_count}</Chip>
-                  {detail.skipped_count > 0 && <Chip tone="neutral">ข้าม {detail.skipped_count}</Chip>}
-                  {detail.merged_count > 0 && <Chip tone="neutral">รวม {detail.merged_count}</Chip>}
+                  <Chip tone="success"><CircleCheck size={12} className="me-1 inline" />{t("สร้าง {n}", { n: detail.created_count })}</Chip>
+                  {detail.skipped_count > 0 && <Chip tone="neutral">{t("ข้าม {n}", { n: detail.skipped_count })}</Chip>}
+                  {detail.merged_count > 0 && <Chip tone="neutral">{t("รวม {n}", { n: detail.merged_count })}</Chip>}
                   {detail.warning_count > 0 && (
-                    <Chip tone="warn"><TriangleAlert size={12} className="me-1 inline" />เตือน {detail.warning_count}</Chip>
+                    <Chip tone="warn"><TriangleAlert size={12} className="me-1 inline" />{t("เตือน {n}", { n: detail.warning_count })}</Chip>
                   )}
-                  <Chip tone={detail.error_count > 0 ? "danger" : "neutral"}>ผิดพลาด {detail.error_count}</Chip>
+                  <Chip tone={detail.error_count > 0 ? "danger" : "neutral"}>{t("ผิดพลาด {n}", { n: detail.error_count })}</Chip>
                 </div>
                 {detail.created_codes?.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium mb-1 text-(--ink-2)">รหัสวิชาที่สร้าง</p>
+                    <p className="text-xs font-medium mb-1 text-(--ink-2)">{t("รหัสวิชาที่สร้าง")}</p>
                     <p className="text-xs text-(--ink-3) font-mono">{detail.created_codes.join(", ")}</p>
                   </div>
                 )}
                 {detail.merged_codes?.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium mb-1 text-(--ink-2)">รหัสที่รวมเป็นวิชาเดียว</p>
+                    <p className="text-xs font-medium mb-1 text-(--ink-2)">{t("รหัสที่รวมเป็นวิชาเดียว")}</p>
                     <p className="text-xs text-(--ink-3) font-mono">{detail.merged_codes.join(", ")}</p>
                   </div>
                 )}
                 {detail.skipped_codes?.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium mb-1 text-(--ink-2)">รหัสวิชาที่ข้าม</p>
+                    <p className="text-xs font-medium mb-1 text-(--ink-2)">{t("รหัสวิชาที่ข้าม")}</p>
                     <p className="text-xs text-(--ink-3) font-mono">{detail.skipped_codes.join(", ")}</p>
                   </div>
                 )}
                 {detail.errors?.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium mb-1 text-(--ink-2)">รายการที่มีปัญหา (ต้องตรวจ)</p>
+                    <p className="text-xs font-medium mb-1 text-(--ink-2)">{t("รายการที่มีปัญหา (ต้องตรวจ)")}</p>
                     <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
                       {detail.errors.map((e, i) => <li key={i} className="text-red-700">• {e}</li>)}
                     </ul>
@@ -163,7 +165,7 @@ export default function ImportHistoryModal({
                 {detail.warnings?.length > 0 && (
                   <div>
                     <p className="text-xs font-medium mb-1 text-(--ink-2)">
-                      รายการที่เตือน (ไม่มีตารางเรียน — ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)
+                      {t("รายการที่เตือน (ไม่มีตารางเรียน — ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)")}
                     </p>
                     <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
                       {detail.warnings.map((w, i) => <li key={i} className="text-(--ink-3)">• {w}</li>)}

@@ -11,6 +11,7 @@ import AttachmentGallery from "../../components/AttachmentGallery";
 import {
   Alert, Button, Chip, ConfirmDialog, DatePicker, FieldGroup, Panel, TextInput, TimePicker, Tip,
 } from "../../components/ui";
+import { msg, useI18n } from "../../lib/i18n/client";
 import BodyEditor from "./BodyEditor";
 import { AttachmentsField, CoverImageField } from "./MediaFields";
 import { AudienceSection, describeRule, useAudiencePreview, useFilterOptions } from "./AudienceFields";
@@ -51,33 +52,36 @@ function writeStored(id: string | undefined, d: Draft | null) {
 // Starting points for the notices that go out every month
 // ============================================================================
 
+// The label is UI and is translated; title and body are the announcement
+// itself, which goes out (and is mailed) in Thai, so they stay Thai.
+
 const TEMPLATES: { label: string; apply: Partial<Draft> }[] = [
   {
-    label: "ตามเอกสารผู้ช่วยสอน",
+    label: msg("ตามเอกสารผู้ช่วยสอน"),
     apply: {
       category: "warning", audience: ["ta"], targetFilters: ["ta_missing_documents"],
-      title: "ขอให้ส่งเอกสารประกอบการเบิกจ่ายให้ครบ",
-      body: "เรียน ผู้ช่วยสอน\n\nระบบพบว่าท่านยังส่งเอกสารประกอบการเบิกจ่ายไม่ครบ ขอให้ดำเนินการดังนี้\n\n- สำเนาบัตรประจำตัวประชาชน\n- สำเนาหน้าสมุดบัญชีธนาคาร\n- แบบฟอร์มเจ้าหนี้\n\nกรุณาอัปโหลดในเมนูเอกสารของฉันภายในวันที่ **(ระบุวันที่)** เพื่อให้เบิกจ่ายค่าตอบแทนได้ตามรอบ",
+      title: "ขอให้ส่งเอกสารประกอบการเบิกจ่ายให้ครบ", // i18n-ignore
+      body: "เรียน ผู้ช่วยสอน\n\nระบบพบว่าท่านยังส่งเอกสารประกอบการเบิกจ่ายไม่ครบ ขอให้ดำเนินการดังนี้\n\n- สำเนาบัตรประจำตัวประชาชน\n- สำเนาหน้าสมุดบัญชีธนาคาร\n- แบบฟอร์มเจ้าหนี้\n\nกรุณาอัปโหลดในเมนูเอกสารของฉันภายในวันที่ **(ระบุวันที่)** เพื่อให้เบิกจ่ายค่าตอบแทนได้ตามรอบ", // i18n-ignore
     },
   },
   {
-    label: "ตามตารางเรียนผู้ช่วยสอน",
+    label: msg("ตามตารางเรียนผู้ช่วยสอน"),
     apply: {
       category: "warning", audience: ["ta"], targetFilters: ["ta_missing_schedule"],
-      title: "ขอให้บันทึกตารางเรียนของตนเอง",
-      body: "เรียน ผู้ช่วยสอน\n\nท่านยังไม่ได้บันทึกตารางเรียนของภาคการศึกษานี้ ระบบจึงยังไม่เปิดให้ลงเวลาปฏิบัติงาน\n\nกรุณาบันทึกตารางเรียนในเมนูตารางเรียนภายในวันที่ **(ระบุวันที่)**",
+      title: "ขอให้บันทึกตารางเรียนของตนเอง", // i18n-ignore
+      body: "เรียน ผู้ช่วยสอน\n\nท่านยังไม่ได้บันทึกตารางเรียนของภาคการศึกษานี้ ระบบจึงยังไม่เปิดให้ลงเวลาปฏิบัติงาน\n\nกรุณาบันทึกตารางเรียนในเมนูตารางเรียนภายในวันที่ **(ระบุวันที่)**", // i18n-ignore
     },
   },
   {
-    label: "ตามอาจารย์อนุมัติเวลา",
+    label: msg("ตามอาจารย์อนุมัติเวลา"),
     apply: {
       category: "warning", audience: ["lecturer"], targetFilters: ["lecturer_pending_worklog"],
-      title: "มีบันทึกเวลาปฏิบัติงานของผู้ช่วยสอนรอการอนุมัติ",
-      body: "เรียน อาจารย์ผู้สอน\n\nมีบันทึกเวลาปฏิบัติงานของผู้ช่วยสอนในรายวิชาของท่านรอการอนุมัติ ขอความกรุณาตรวจสอบและอนุมัติภายในวันที่ **(ระบุวันที่)** เพื่อให้จัดทำเอกสารเบิกจ่ายได้ทันรอบ",
+      title: "มีบันทึกเวลาปฏิบัติงานของผู้ช่วยสอนรอการอนุมัติ", // i18n-ignore
+      body: "เรียน อาจารย์ผู้สอน\n\nมีบันทึกเวลาปฏิบัติงานของผู้ช่วยสอนในรายวิชาของท่านรอการอนุมัติ ขอความกรุณาตรวจสอบและอนุมัติภายในวันที่ **(ระบุวันที่)** เพื่อให้จัดทำเอกสารเบิกจ่ายได้ทันรอบ", // i18n-ignore
     },
   },
   {
-    label: "ประกาศทั่วไปถึงทุกคน",
+    label: msg("ประกาศทั่วไปถึงทุกคน"),
     apply: { category: "info", audience: ["ta", "lecturer", "staff", "admin"], targetFilters: [], title: "", body: "" },
   },
 ];
@@ -107,6 +111,7 @@ export default function Composer({
   onClose: () => void;
   onSaved: (id: string) => void;
 }) {
+  const { t, intl } = useI18n();
   const [draft, setDraft] = useState<Draft>(initial);
   const [pending, setPending] = useState<"draft" | "publish" | null>(null);
   const [checkOpen, setCheckOpen] = useState(false);
@@ -120,7 +125,7 @@ export default function Composer({
   const rule = useMemo(() => ruleOf(draft), [draft]);
   const audience = useAudiencePreview(rule);
   const { preview, loading: previewLoading } = audience;
-  const sentence = describeRule(draft, filterOpts);
+  const sentence = describeRule(draft, filterOpts, t);
   const ruleChanged = useMemo(
     () => normRule(ruleOf(draft)) !== normRule(ruleOf(initial)),
     [draft, initial],
@@ -138,8 +143,8 @@ export default function Composer({
   useEffect(() => {
     if (saved.current) return;
     if (!dirty) return;
-    const t = setTimeout(() => writeStored(initial.id, draft), 500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => writeStored(initial.id, draft), 500);
+    return () => clearTimeout(timer);
   }, [draft, dirty, initial.id]);
   const latest = useRef(draft);
   latest.current = draft;
@@ -159,17 +164,17 @@ export default function Composer({
 
   async function save(asDraft: boolean) {
     const payload = buildPayload(draft, asDraft);
-    if ("error" in payload) { toast.danger(payload.error); setCheckOpen(false); return; }
+    if ("error" in payload) { toast.danger(t(payload.error)); setCheckOpen(false); return; }
     setPending(asDraft ? "draft" : "publish");
     try {
       const res = await api.post<{ id: string }>("/announcements", payload);
       saved.current = true;
       writeStored(initial.id, null);
       toast.success(
-        asDraft ? "บันทึกฉบับร่างแล้ว"
-          : alreadyOut ? "บันทึกการแก้ไขแล้ว"
-          : draft.when === "scheduled" ? "ตั้งเวลาเผยแพร่แล้ว"
-          : "เผยแพร่ประกาศแล้ว",
+        asDraft ? t("บันทึกฉบับร่างแล้ว")
+          : alreadyOut ? t("บันทึกการแก้ไขแล้ว")
+          : draft.when === "scheduled" ? t("ตั้งเวลาเผยแพร่แล้ว")
+          : t("เผยแพร่ประกาศแล้ว"),
       );
       await Promise.all([mutate(LIST_KEY), mutate(`/announcements/${res.id}`)]);
       setCheckOpen(false);
@@ -184,9 +189,9 @@ export default function Composer({
   /** Validate first, so the check never opens on a form that cannot be sent. */
   function tryOpenCheck() {
     const payload = buildPayload(draft, false);
-    if ("error" in payload) { toast.danger(payload.error); return; }
+    if ("error" in payload) { toast.danger(t(payload.error)); return; }
     // The check exists to show who gets it; without the count there is nothing to check.
-    if (audience.failed) { audience.retry(); toast.danger("นับจำนวนผู้รับไม่สำเร็จ กำลังลองใหม่ กรุณากดอีกครั้ง"); return; }
+    if (audience.failed) { audience.retry(); toast.danger(t("นับจำนวนผู้รับไม่สำเร็จ กำลังลองใหม่ กรุณากดอีกครั้ง")); return; }
     setCheckOpen(true);
   }
 
@@ -210,19 +215,19 @@ export default function Composer({
     <div data-testid="announce-composer">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" onPress={onClose}>
-          <ArrowLeft size={14} /> กลับไปรายการประกาศ
+          <ArrowLeft size={14} /> {t("กลับไปรายการประกาศ")}
         </Button>
         <span className="text-sm font-medium text-foreground">
-          {initial.id ? "แก้ไขประกาศ" : "เขียนประกาศใหม่"}
+          {initial.id ? t("แก้ไขประกาศ") : t("เขียนประกาศใหม่")}
         </span>
         {initial.originalStatus && initial.originalStatus !== "draft" && (
           <Chip tone={alreadyOut ? "success" : "info"}>
-            {initial.originalStatus === "live" ? "เผยแพร่อยู่"
-              : initial.originalStatus === "expired" ? "หมดอายุแล้ว" : "ตั้งเวลาไว้"}
+            {initial.originalStatus === "live" ? t("เผยแพร่อยู่")
+              : initial.originalStatus === "expired" ? t("หมดอายุแล้ว") : t("ตั้งเวลาไว้")}
           </Chip>
         )}
         <span className="flex-1" />
-        {dirty && <span className="text-xs text-muted">เก็บสิ่งที่พิมพ์ไว้ในเบราว์เซอร์นี้แล้ว</span>}
+        {dirty && <span className="text-xs text-muted">{t("เก็บสิ่งที่พิมพ์ไว้ในเบราว์เซอร์นี้แล้ว")}</span>}
       </div>
 
       {restorable && (
@@ -230,15 +235,15 @@ export default function Composer({
           <Alert
             status="accent"
             icon={<RotateCcw size={14} />}
-            title="มีเนื้อหาที่พิมพ์ค้างไว้จากครั้งก่อนและยังไม่ได้บันทึก"
-            description={restorable.title ? `หัวข้อ “${restorable.title}”` : undefined}
+            title={t("มีเนื้อหาที่พิมพ์ค้างไว้จากครั้งก่อนและยังไม่ได้บันทึก")}
+            description={restorable.title ? t("หัวข้อ “{title}”", { title: restorable.title }) : undefined}
             action={
               <div className="flex gap-2">
                 <Button size="sm" variant="primary" onPress={() => { setDraft(restorable); setRestorable(null); }}>
-                  นำกลับมา
+                  {t("นำกลับมา")}
                 </Button>
                 <Button size="sm" variant="tertiary" onPress={() => { writeStored(initial.id, null); setRestorable(null); }}>
-                  ไม่ใช้
+                  {t("ไม่ใช้")}
                 </Button>
               </div>
             }
@@ -250,37 +255,37 @@ export default function Composer({
         <div className="min-w-0 space-y-3 lg:col-span-3">
           {untouchedNew && (
             <div className="rounded-xl border border-dashed border-border px-4 py-3">
-              <div className="mb-2 text-xs text-muted">เริ่มจากแม่แบบ แล้วแก้ข้อความได้ตามต้องการ</div>
+              <div className="mb-2 text-xs text-muted">{t("เริ่มจากแม่แบบ แล้วแก้ข้อความได้ตามต้องการ")}</div>
               <div className="flex flex-wrap gap-1.5">
-                {TEMPLATES.map(t => (
+                {TEMPLATES.map(tpl => (
                   <button
-                    key={t.label}
+                    key={tpl.label}
                     type="button"
                     className="chip chip-neutral cursor-pointer transition hover:border-brand"
-                    onClick={() => setDraft(d => ({ ...d, ...t.apply }))}
+                    onClick={() => setDraft(d => ({ ...d, ...tpl.apply }))}
                   >
-                    {t.label}
+                    {t(tpl.label)}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          <Section icon={<Pencil size={15} />} title="เนื้อหาประกาศ">
-            <FieldGroup label={<span>หัวข้อ <span className="text-muted">({draft.title.length}/200)</span></span>}>
+          <Section icon={<Pencil size={15} />} title={t("เนื้อหาประกาศ")}>
+            <FieldGroup label={<span>{t("หัวข้อ")} <span className="text-muted">({draft.title.length}/200)</span></span>}>
               <TextInput
-                placeholder="หัวข้อประกาศ"
+                placeholder={t("หัวข้อประกาศ")}
                 value={draft.title}
                 maxLength={200}
                 onChange={e => set("title", e.target.value)}
               />
             </FieldGroup>
 
-            <FieldGroup label={<span>เนื้อหา <span className="text-muted">({draft.body.length}/8000)</span></span>}>
+            <FieldGroup label={<span>{t("เนื้อหา")} <span className="text-muted">({draft.body.length}/8000)</span></span>}>
               <BodyEditor value={draft.body} onChange={v => set("body", v)} />
             </FieldGroup>
 
-            <FieldGroup label="หมวดหมู่">
+            <FieldGroup label={t("หมวดหมู่")}>
               <div className="flex flex-wrap gap-1.5">
                 {CATEGORIES.map(c => {
                   const on = draft.category === c.value;
@@ -292,12 +297,12 @@ export default function Composer({
                       onClick={() => set("category", c.value as Category)}
                       className={`chip inline-flex cursor-pointer items-center gap-1.5 transition ${on ? "chip-brand" : "chip-neutral"}`}
                     >
-                      {c.icon}{c.label}
+                      {c.icon}{t(c.label)}
                     </button>
                   );
                 })}
               </div>
-              <p className="text-xs text-muted">{cat.description}</p>
+              <p className="text-xs text-muted">{t(cat.description)}</p>
             </FieldGroup>
           </Section>
 
@@ -305,33 +310,34 @@ export default function Composer({
           {alreadyOut && ruleChanged && (
             <Alert
               status="warning"
-              title="ผู้รับต่างจากตอนที่เผยแพร่"
-              description="เมื่อบันทึก ระบบจะคำนวณรายชื่อผู้รับใหม่ คนที่เพิ่มเข้ามาจะได้รับแจ้งเตือน คนที่หลุดออกจะไม่เห็นประกาศนี้อีก จะมีหน้าตรวจให้ดูก่อน"
+              title={t("ผู้รับต่างจากตอนที่เผยแพร่")}
+              description={t("เมื่อบันทึก ระบบจะคำนวณรายชื่อผู้รับใหม่ คนที่เพิ่มเข้ามาจะได้รับแจ้งเตือน คนที่หลุดออกจะไม่เห็นประกาศนี้อีก จะมีหน้าตรวจให้ดูก่อน")}
             />
           )}
 
           <Section
             icon={<ImageIcon size={15} />}
-            title="รูปภาพและไฟล์แนบ"
-            hint="ไม่ใส่ก็ได้ · พิมพ์ข้อความลงรูปจากแม่แบบเป็นรูปหน้าปกได้"
+            title={t("รูปภาพและไฟล์แนบ")}
+            hint={t("ไม่ใส่ก็ได้ · พิมพ์ข้อความลงรูปจากแม่แบบเป็นรูปหน้าปกได้")}
             collapsible
             defaultOpen={mediaCount > 0}
-            summary={mediaCount > 0 ? `${mediaCount} ไฟล์` : "ยังไม่มีไฟล์"}
+            summary={mediaCount > 0 ? t("{n} ไฟล์", { n: mediaCount }) : t("ยังไม่มีไฟล์")}
           >
             <CoverImageField draft={draft} setDraft={setDraft} />
             <AttachmentsField draft={draft} setDraft={setDraft} />
           </Section>
 
-          <Section icon={<CalendarClock size={15} />} title="เวลาเผยแพร่">
+          <Section icon={<CalendarClock size={15} />} title={t("เวลาเผยแพร่")}>
             {alreadyOut ? (
               <p className="text-sm text-ink-2">
-                เผยแพร่แล้วเมื่อ {fmtDateTime(initial.originalPublishedAt)}
-                {initial.originalStatus === "expired" && " และหมดอายุแล้ว เลื่อนหรือเอาวันหมดอายุออกเพื่อให้กลับมาแสดง"}
+                {initial.originalStatus === "expired"
+                  ? t("เผยแพร่แล้วเมื่อ {at} และหมดอายุแล้ว เลื่อนหรือเอาวันหมดอายุออกเพื่อให้กลับมาแสดง", { at: fmtDateTime(initial.originalPublishedAt, intl) })
+                  : t("เผยแพร่แล้วเมื่อ {at}", { at: fmtDateTime(initial.originalPublishedAt, intl) })}
               </p>
             ) : (
-              <FieldGroup label="เผยแพร่เมื่อไหร่">
+              <FieldGroup label={t("เผยแพร่เมื่อไหร่")}>
                 <div className="flex flex-wrap gap-1.5">
-                  {([["now", "ทันทีที่กดเผยแพร่"], ["scheduled", "ตั้งเวลา"]] as const).map(([v, label]) => (
+                  {([["now", msg("ทันทีที่กดเผยแพร่")], ["scheduled", msg("ตั้งเวลา")]] as const).map(([v, label]) => (
                     <button
                       key={v}
                       type="button"
@@ -339,63 +345,63 @@ export default function Composer({
                       onClick={() => set("when", v)}
                       className={`chip cursor-pointer transition ${draft.when === v ? "chip-brand" : "chip-neutral"}`}
                     >
-                      {label}
+                      {t(label)}
                     </button>
                   ))}
                 </div>
                 {draft.when === "scheduled" && (
                   <div className="flex flex-wrap items-center gap-2">
-                    <DatePicker label="วันที่เผยแพร่" value={draft.publishDate} minValue={todayLocal()} onChange={v => set("publishDate", v)} />
-                    <TimePicker label="เวลาเผยแพร่" value={draft.publishTime} onChange={v => set("publishTime", v)} />
-                    <span className="text-xs text-muted">ระบบจะเผยแพร่และแจ้งเตือนเองตามเวลานี้</span>
+                    <DatePicker label={t("วันที่เผยแพร่")} value={draft.publishDate} minValue={todayLocal()} onChange={v => set("publishDate", v)} />
+                    <TimePicker label={t("เวลาเผยแพร่")} value={draft.publishTime} onChange={v => set("publishTime", v)} />
+                    <span className="text-xs text-muted">{t("ระบบจะเผยแพร่และแจ้งเตือนเองตามเวลานี้")}</span>
                   </div>
                 )}
               </FieldGroup>
             )}
 
-            <FieldGroup label="วันหมดอายุ" hint="หลังเวลานี้ประกาศจะหายจากหน้าประกาศของผู้รับ">
+            <FieldGroup label={t("วันหมดอายุ")} hint={t("หลังเวลานี้ประกาศจะหายจากหน้าประกาศของผู้รับ")}>
               <label className="flex cursor-pointer items-center gap-2 text-sm">
                 <input type="checkbox" checked={draft.expires} onChange={e => set("expires", e.target.checked)} />
-                ตั้งวันหมดอายุ
+                {t("ตั้งวันหมดอายุ")}
               </label>
               {draft.expires && (
                 <div className="flex flex-wrap items-center gap-2">
                   <DatePicker
-                    label="วันหมดอายุ"
+                    label={t("วันหมดอายุ")}
                     value={draft.expireDate}
                     minValue={draft.when === "scheduled" && draft.publishDate ? draft.publishDate : todayLocal()}
                     onChange={v => setDraft(d => ({ ...d, expireDate: v, expireTime: d.expireTime || "23:59" }))}
                   />
-                  <TimePicker label="เวลาหมดอายุ" value={draft.expireTime} onChange={v => set("expireTime", v)} />
+                  <TimePicker label={t("เวลาหมดอายุ")} value={draft.expireTime} onChange={v => set("expireTime", v)} />
                 </div>
               )}
             </FieldGroup>
 
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input type="checkbox" checked={draft.pinned} onChange={e => set("pinned", e.target.checked)} />
-              <Pin size={14} /> ปักหมุดไว้บนสุดของหน้าประกาศ
+              <Pin size={14} /> {t("ปักหมุดไว้บนสุดของหน้าประกาศ")}
             </label>
           </Section>
         </div>
 
         <div className="min-w-0 lg:col-span-2">
           <div className="space-y-3 lg:sticky lg:top-4">
-            <Panel title="ผู้รับจะเห็นแบบนี้" description="หน้าประกาศในระบบ">
+            <Panel title={t("ผู้รับจะเห็นแบบนี้")} description={t("หน้าประกาศในระบบ")}>
               <CardPreview draft={draft} />
             </Panel>
-            <Panel title="แจ้งเตือนและอีเมล" description="ข้อความย่อที่ส่งออกไปพร้อมลิงก์เปิดอ่าน">
+            <Panel title={t("แจ้งเตือนและอีเมล")} description={t("ข้อความย่อที่ส่งออกไปพร้อมลิงก์เปิดอ่าน")}>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
                   <Bell size={14} className="mt-1 shrink-0 text-muted" />
                   <div className="min-w-0">
-                    <div className="font-medium break-words">{mailSubject(draft.category, draft.title.trim() || "หัวข้อ…")}</div>
+                    <div className="font-medium break-words">{draft.title.trim() ? mailSubject(draft.category, draft.title.trim()) : mailSubject(draft.category, "") + t("หัวข้อ…")}</div>
                     <div className="text-xs text-muted line-clamp-3 break-words">
-                      {plainText(draft.body).slice(0, 240) || "เนื้อหา…"}
+                      {plainText(draft.body).slice(0, 240) || t("เนื้อหา…")}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted">
-                  <Mail size={13} className="shrink-0" /> อีเมลใช้หัวเรื่องและข้อความเดียวกัน
+                  <Mail size={13} className="shrink-0" /> {t("อีเมลใช้หัวเรื่องและข้อความเดียวกัน")}
                 </div>
               </div>
             </Panel>
@@ -408,32 +414,32 @@ export default function Composer({
       <div className="sticky bottom-3 z-10 mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-surface px-4 py-3 shadow-sm">
         <div className="min-w-0 flex-1 basis-56 text-sm">
           <span className="font-medium text-foreground">
-            {audience.failed ? "นับจำนวนผู้รับไม่สำเร็จ"
-              : !preview ? "กำลังนับผู้รับ…"
-              : preview.empty ? "ยังไม่ได้เลือกผู้รับ"
-              : `ส่งถึง ${preview.total} คน`}
+            {audience.failed ? t("นับจำนวนผู้รับไม่สำเร็จ")
+              : !preview ? t("กำลังนับผู้รับ…")
+              : preview.empty ? t("ยังไม่ได้เลือกผู้รับ")
+              : t("ส่งถึง {n} คน", { n: preview.total })}
           </span>
           {preview && !preview.empty && <span className="ms-2 text-xs text-muted">{sentence}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {dirty && (
-            <Tip content="ล้างสิ่งที่พิมพ์ไว้และกลับไปรายการ ประกาศที่บันทึกแล้วไม่ถูกแตะต้อง">
-              <Button variant="ghost" onPress={() => setConfirmDiscard(true)} disabled={!!pending}>ทิ้งการแก้ไข</Button>
+            <Tip content={t("ล้างสิ่งที่พิมพ์ไว้และกลับไปรายการ ประกาศที่บันทึกแล้วไม่ถูกแตะต้อง")}>
+              <Button variant="ghost" onPress={() => setConfirmDiscard(true)} disabled={!!pending}>{t("ทิ้งการแก้ไข")}</Button>
             </Tip>
           )}
           {alreadyOut ? (
             <Button variant="primary" onPress={saveLiveEdit} isPending={pending === "publish"} disabled={!!pending || !dirty}>
-              <Save size={14} /> บันทึกการแก้ไข
+              <Save size={14} /> {t("บันทึกการแก้ไข")}
             </Button>
           ) : (
             <>
-              <Tip content="เก็บไว้ก่อน ยังไม่มีใครเห็นและไม่มีการแจ้งเตือน">
+              <Tip content={t("เก็บไว้ก่อน ยังไม่มีใครเห็นและไม่มีการแจ้งเตือน")}>
                 <Button variant="secondary" onPress={() => void save(true)} isPending={pending === "draft"} disabled={!!pending}>
-                  <FileText size={14} /> บันทึกเป็นร่าง
+                  <FileText size={14} /> {t("บันทึกเป็นร่าง")}
                 </Button>
               </Tip>
               <Button variant="primary" onPress={tryOpenCheck} disabled={!!pending}>
-                <ShieldCheck size={14} /> {scheduleAt || draft.when === "scheduled" ? "ตรวจและตั้งเวลา" : "ตรวจและเผยแพร่"}
+                <ShieldCheck size={14} /> {scheduleAt || draft.when === "scheduled" ? t("ตรวจและตั้งเวลา") : t("ตรวจและเผยแพร่")}
               </Button>
             </>
           )}
@@ -445,12 +451,12 @@ export default function Composer({
         onClose={() => setConfirmDiscard(false)}
         onConfirm={discard}
         danger
-        title="ทิ้งสิ่งที่พิมพ์ไว้?"
+        title={t("ทิ้งสิ่งที่พิมพ์ไว้?")}
         message={initial.id
-          ? "การแก้ไขที่ยังไม่ได้บันทึกจะหายไป ประกาศจะกลับเป็นฉบับที่บันทึกไว้ล่าสุด"
-          : "ข้อความที่พิมพ์ไว้จะหายไปและนำกลับมาไม่ได้"}
-        confirmLabel="ทิ้ง"
-        cancelLabel="เขียนต่อ"
+          ? t("การแก้ไขที่ยังไม่ได้บันทึกจะหายไป ประกาศจะกลับเป็นฉบับที่บันทึกไว้ล่าสุด")
+          : t("ข้อความที่พิมพ์ไว้จะหายไปและนำกลับมาไม่ได้")}
+        confirmLabel={t("ทิ้ง")}
+        cancelLabel={t("เขียนต่อ")}
       />
 
       <PublishCheck
@@ -476,6 +482,7 @@ function normRule(r: ReturnType<typeof ruleOf>): string {
 }
 
 function CardPreview({ draft }: { draft: Draft }) {
+  const { t } = useI18n();
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       {draft.cover_image_url && (
@@ -486,17 +493,18 @@ function CardPreview({ draft }: { draft: Draft }) {
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <CategoryChip category={draft.category} />
           {draft.pinned && (
-            <Chip tone="brand"><span className="inline-flex items-center gap-1"><Pin size={11} />ปักหมุด</span></Chip>
+            <Chip tone="brand"><span className="inline-flex items-center gap-1"><Pin size={11} />{t("ปักหมุด")}</span></Chip>
           )}
         </div>
         <div className="text-base font-semibold text-foreground break-words">
-          {draft.title || <span className="text-muted">หัวข้อ…</span>}
+          {draft.title || <span className="text-muted">{t("หัวข้อ…")}</span>}
         </div>
         {/* The same renderer the readers get, so the preview cannot promise a
             layout the announcement will not actually have. */}
         {draft.body
           ? <RichText body={draft.body} className="mt-2 text-sm text-foreground/80" />
-          : <div className="mt-2 text-sm text-muted">เนื้อหา…</div>}
+          : <div className="mt-2 text-sm text-muted">{t("เนื้อหา…")}</div>}
+
         {!!draft.attachments.length && (
           <div className="mt-3"><AttachmentGallery items={draft.attachments} /></div>
         )}

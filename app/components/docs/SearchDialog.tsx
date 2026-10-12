@@ -9,6 +9,8 @@ import { Skel, SkelRegion } from "../Skeletons";
 import { docHref, type DocPageMeta } from "../../../content/docs/meta";
 import { recordMiss } from "../../lib/docs/searchMiss";
 import { AUDIENCE_LABEL, type Audience } from "../../../content/docs/types";
+import { useI18n } from "../../lib/i18n/client";
+import type { Locale } from "../../lib/i18n/core";
 
 const AUD_TONE: Record<Audience, "info" | "success" | "warn" | "neutral"> = {
   common: "neutral", ta: "success", lecturer: "info", staff: "warn",
@@ -16,7 +18,10 @@ const AUD_TONE: Record<Audience, "info" | "success" | "warn" | "neutral"> = {
 
 interface SearchHit { page: DocPageMeta; matchedIn: string[] }
 
-type SearchKey = readonly ["docs-search", string, Audience, string];
+// The locale is in the key only so a language switch (router.refresh keeps
+// SWR's cache) never shows results from the other language's manual; the
+// route itself reads the reader's language from the session/cookie.
+type SearchKey = readonly ["docs-search", string, Audience, string, Locale];
 
 async function fetchSearch([, q, audience, slug]: SearchKey): Promise<SearchHit[]> {
   const params = new URLSearchParams({ q, audience });
@@ -51,6 +56,7 @@ export default function SearchDialog({
   const [debounced, setDebounced] = useState("");
   const router = useRouter();
   const pathname = usePathname();
+  const { t, locale } = useI18n();
 
   // The page actually open behind this dialog — read straight off the URL
   // (`/docs/<audience>/<slug...>`); the server boosts results in its
@@ -71,7 +77,7 @@ export default function SearchDialog({
     if (!open) { setQ(""); setDebounced(""); }
   }, [open]);
 
-  const key: SearchKey | null = open && debounced ? ["docs-search", debounced, currentAudience, currentSlug] : null;
+  const key: SearchKey | null = open && debounced ? ["docs-search", debounced, currentAudience, currentSlug, locale] : null;
   const { data, error, isLoading } = useSWR(key, fetchSearch, {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
@@ -97,22 +103,22 @@ export default function SearchDialog({
   };
 
   return (
-    <Modal open={open} onClose={onClose} size="lg" placement="top" title="ค้นหาคู่มือการใช้งาน" icon={<Search size={18} />}>
+    <Modal open={open} onClose={onClose} size="lg" placement="top" title={t("ค้นหาคู่มือการใช้งาน")} icon={<Search size={18} />}>
       <div className="space-y-3">
         <SearchField
           value={q}
           onChange={setQ}
-          placeholder="พิมพ์คำ เช่น “ลงเวลา”, “ตีกลับ”, หรือข้อความ error ที่เห็นในระบบ…"
-          ariaLabel="ค้นหาคู่มือ"
+          placeholder={t("พิมพ์คำ เช่น “ลงเวลา”, “ตีกลับ”, หรือข้อความ error ที่เห็นในระบบ…")}
+          ariaLabel={t("ค้นหาคู่มือ")}
           className="w-full"
         />
         {typed && error && (
-          <div className="py-8 text-center text-sm text-muted">ค้นหาไม่สำเร็จ ลองใหม่อีกครั้ง</div>
+          <div className="py-8 text-center text-sm text-muted">{t("ค้นหาไม่สำเร็จ ลองใหม่อีกครั้ง")}</div>
         )}
         {typed && !error && !settled && results.length === 0 && (
           // First answer on its way: result rows (chip + section, title,
           // one-line description) rather than a centred spinner.
-          <SkelRegion label="กำลังค้นหา" className="divide-y divide-border rounded-lg border border-border">
+          <SkelRegion label={t("กำลังค้นหา")} className="divide-y divide-border rounded-lg border border-border">
             {Array.from({ length: 3 }, (_, i) => (
               <div key={i} className="flex flex-col gap-1.5 px-3.5 py-2.5">
                 <div className="flex items-center gap-2">
@@ -128,8 +134,8 @@ export default function SearchDialog({
         {settled && !error && results.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted">
             <FileQuestion size={28} className="text-slate-300" />
-            <div>ไม่พบหัวข้อที่ตรงกับ “{typed}”</div>
-            <div className="text-xs">ลองคำอื่น หรือแจ้งเจ้าหน้าที่ว่าหาไม่เจอ</div>
+            <div>{t("ไม่พบหัวข้อที่ตรงกับ “{q}”", { q: typed })}</div>
+            <div className="text-xs">{t("ลองคำอื่น หรือแจ้งเจ้าหน้าที่ว่าหาไม่เจอ")}</div>
           </div>
         )}
         {!error && results.length > 0 && (
@@ -143,7 +149,7 @@ export default function SearchDialog({
                   className="flex w-full flex-col items-start gap-1 px-3.5 py-2.5 text-start hover:bg-slate-50 transition-colors"
                 >
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Chip tone={AUD_TONE[r.page.audience]}>{AUDIENCE_LABEL[r.page.audience]}</Chip>
+                    <Chip tone={AUD_TONE[r.page.audience]}>{t(AUDIENCE_LABEL[r.page.audience])}</Chip>
                     <span className="text-xs text-muted">{r.page.section}</span>
                   </div>
                   <div className="text-sm font-medium text-foreground">{r.page.title}</div>
@@ -155,9 +161,9 @@ export default function SearchDialog({
         )}
         {!typed && (
           <div className="text-xs text-muted">
-            พิมพ์ <kbd className="rounded border border-border bg-slate-50 px-1">/</kbd> จากหน้าไหนก็ได้ในคู่มือเพื่อเปิดช่องนี้ ·{" "}
+            {t.rich("พิมพ์ {key} จากหน้าไหนก็ได้ในคู่มือเพื่อเปิดช่องนี้", { key: <kbd className="rounded border border-border bg-slate-50 px-1">/</kbd> })} ·{" "}
             <Link href={`/docs/${currentAudience}`} onClick={onClose} className="underline">
-              กลับหน้าเริ่มต้นใช้งาน
+              {t("กลับหน้าเริ่มต้นใช้งาน")}
             </Link>
           </div>
         )}

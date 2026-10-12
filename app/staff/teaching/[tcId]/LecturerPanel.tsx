@@ -16,6 +16,7 @@ import { Skel, SkelRegion } from "../../../components/Skeletons";
 import {
   LecturerAutocomplete, lecturerName, type LecturerUser,
 } from "../OpenCourseModal";
+import { useI18n } from "../../../lib/i18n/client";
 
 interface CurrentLecturer {
   id: string;
@@ -32,6 +33,7 @@ export default function LecturerPanel({
   /** The course itself is still loading — draw the panel with placeholder chips. */
   loading?: boolean;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   // ids in selection order; the FIRST id is always the primary lecturer —
@@ -73,7 +75,7 @@ export default function LecturerPanel({
 
   async function save() {
     if (ids.length === 0) {
-      notify.error("ต้องเลือกอาจารย์ผู้สอนอย่างน้อย 1 คน");
+      notify.error(t("ต้องเลือกอาจารย์ผู้สอนอย่างน้อย 1 คน"));
       return;
     }
     setSaving(true);
@@ -83,7 +85,7 @@ export default function LecturerPanel({
         primary_id: ids[0],
       });
       await mutate(`/teaching-courses/${tcId}`);
-      notify.success("บันทึกอาจารย์ผู้สอนแล้ว");
+      notify.success(t("บันทึกอาจารย์ผู้สอนแล้ว"));
       setEditing(false);
     } catch (e) {
       notify.error(e);
@@ -96,16 +98,16 @@ export default function LecturerPanel({
 
   return (
     <Panel
-      title="อาจารย์ผู้สอน"
+      title={t("อาจารย์ผู้สอน")}
       description={
         editing
-          ? "อาจารย์คนแรก (ดาว) คืออาจารย์ผู้รับผิดชอบหลัก — เปลี่ยนได้ด้วยปุ่มดาวที่ชื่อ"
-          : "แก้ไขได้เมื่อเปลี่ยนผู้สอน เพิ่มอาจารย์สอนร่วม หรือแก้ชื่อที่นำเข้าผิด"
+          ? t("อาจารย์คนแรก (ดาว) คืออาจารย์ผู้รับผิดชอบหลัก — เปลี่ยนได้ด้วยปุ่มดาวที่ชื่อ")
+          : t("แก้ไขได้เมื่อเปลี่ยนผู้สอน เพิ่มอาจารย์สอนร่วม หรือแก้ชื่อที่นำเข้าผิด")
       }
       actions={
         !editing && !loading && (
           <Button variant="secondary" size="sm" onClick={startEdit}>
-            <Pencil size={14} />แก้ไขอาจารย์ผู้สอน
+            <Pencil size={14} />{t("แก้ไขอาจารย์ผู้สอน")}
           </Button>
         )
       }
@@ -118,8 +120,8 @@ export default function LecturerPanel({
       ) : !editing ? (
         current.length === 0 ? (
           <EmptyState
-            title="ยังไม่มีอาจารย์ผู้สอน"
-            description="วิชานี้อาจนำเข้าจากไฟล์ทะเบียนโดยจับคู่ชื่ออาจารย์ไม่ได้ — กด 'แก้ไขอาจารย์ผู้สอน' เพื่อเพิ่ม"
+            title={t("ยังไม่มีอาจารย์ผู้สอน")}
+            description={t("วิชานี้อาจนำเข้าจากไฟล์ทะเบียนโดยจับคู่ชื่ออาจารย์ไม่ได้ — กด 'แก้ไขอาจารย์ผู้สอน' เพื่อเพิ่ม")}
           />
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -129,7 +131,7 @@ export default function LecturerPanel({
               .map(l => (
                 <Chip key={l.id} tone={l.is_primary ? "brand" : "neutral"}>
                   {l.is_primary && (
-                    <Tip content="อาจารย์ผู้รับผิดชอบหลัก">
+                    <Tip content={t("อาจารย์ผู้รับผิดชอบหลัก")}>
                       <span className="me-1 inline-flex -mt-0.5 align-middle"><Star size={11} /></span>
                     </Tip>
                   )}
@@ -146,26 +148,26 @@ export default function LecturerPanel({
               {ids.map((id, i) => (
                 <Chip key={id} tone={i === 0 ? "brand" : "neutral"}>
                   {i === 0 && (
-                    <Tip content="อาจารย์ผู้รับผิดชอบหลัก">
+                    <Tip content={t("อาจารย์ผู้รับผิดชอบหลัก")}>
                       <span className="me-1 inline-flex -mt-0.5 align-middle"><Star size={11} /></span>
                     </Tip>
                   )}
                   {nameFor(id)}
                   {i !== 0 && (
-                    <Tip content="ตั้งเป็นอาจารย์ผู้รับผิดชอบหลัก"><button
+                    <Tip content={t("ตั้งเป็นอาจารย์ผู้รับผิดชอบหลัก")}><button
                       type="button"
                       onClick={() => makePrimary(id)}
                       className="ms-1 inline-flex hover:text-[var(--brand)]"
-                      aria-label={`ตั้ง ${nameFor(id)} เป็นอาจารย์ผู้รับผิดชอบหลัก`}
+                      aria-label={t("ตั้ง {name} เป็นอาจารย์ผู้รับผิดชอบหลัก", { name: nameFor(id) })}
                     >
                       <Star size={11} />
                     </button></Tip>
                   )}
-                  <Tip content={`เอา ${nameFor(id)} ออก`}><button
+                  <Tip content={t("เอา {name} ออก", { name: nameFor(id) })}><button
                     type="button"
                     onClick={() => remove(id)}
                     className="ms-1 inline-flex hover:text-danger"
-                    aria-label={`เอา ${nameFor(id)} ออก`}
+                    aria-label={t("เอา {name} ออก", { name: nameFor(id) })}
                   >
                     <X size={11} />
                   </button></Tip>
@@ -174,15 +176,15 @@ export default function LecturerPanel({
             </div>
           ) : (
             <div className="text-xs text-warning font-medium mt-2">
-              ยังไม่ได้เลือกอาจารย์ ต้องเลือกอย่างน้อย 1 คน
+              {t("ยังไม่ได้เลือกอาจารย์ ต้องเลือกอย่างน้อย 1 คน")}
             </div>
           )}
           <div className="flex gap-2 mt-3">
             <Button variant="primary" size="sm" onClick={save} isPending={saving} disabled={saving}>
-              <Check size={14} />บันทึก
+              <Check size={14} />{t("บันทึก")}
             </Button>
             <Button variant="tertiary" size="sm" onClick={() => setEditing(false)} disabled={saving}>
-              ยกเลิก
+              {t("ยกเลิก")}
             </Button>
           </div>
         </div>

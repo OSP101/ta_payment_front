@@ -10,6 +10,7 @@ import {
 } from "../../../components/ui";
 import { courseCodeLabel } from "../../../lib/courseCode";
 import { Skel, SkelRegion, SkelValue } from "../../../components/Skeletons";
+import { msg, useI18n } from "../../../lib/i18n/client";
 
 interface SectionSchedule {
   id: string;
@@ -67,20 +68,20 @@ interface Assignment {
   state_reason?: string;
 }
 
-const DOW_LABEL = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+const DOW_LABEL = [msg("อา"), msg("จ"), msg("อ"), msg("พ"), msg("พฤ"), msg("ศ"), msg("ส")];
 const KIND_LABEL: Record<string, string> = {
-  lecture: "บรรยาย",
-  lab: "ปฏิบัติการ",
-  review: "ตรวจงาน",
+  lecture: msg("บรรยาย"),
+  lab: msg("ปฏิบัติการ"),
+  review: msg("ตรวจงาน"),
 };
 
 const STAGE_LABEL: Record<TAStatus["stage"], string> = {
-  draft: "แบบร่าง",
-  submitted: "รออนุมัติ",
-  approved: "อนุมัติแล้ว",
-  exported: "ส่งออกแล้ว",
+  draft: msg("แบบร่าง"),
+  submitted: msg("รออนุมัติ"),
+  approved: msg("อนุมัติแล้ว"),
+  exported: msg("ส่งออกแล้ว"),
   // Bounced rows the TA can still fix; outranks approved (dashboard.go).
-  rejected: "อาจารย์ตีกลับ ต้องแก้ไข",
+  rejected: msg("อาจารย์ตีกลับ ต้องแก้ไข"),
 };
 const STAGE_TONE: Record<TAStatus["stage"], ChipTone> = {
   draft: "neutral",
@@ -92,6 +93,7 @@ const STAGE_TONE: Record<TAStatus["stage"], ChipTone> = {
 
 export default function TACoursePage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
+  const { t } = useI18n();
   const courseKey = tcId ? `/teaching-courses/${tcId}` : null;
   const { data: course, error: courseError } = useSWR<TC>(courseKey);
   const { data: status } = useSWR<TAStatus[]>("/dashboard/ta/me");
@@ -132,12 +134,12 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
   return (
     <div>
       <PageHeader
-        title={course ? `${courseCodeLabel(course)} ${course.name_th}` : "รายวิชา"}
-        description="ภาพรวมสถานะภาระงาน TA ในรายวิชานี้"
+        title={course ? `${courseCodeLabel(course)} ${course.name_th}` : t("รายวิชา")}
+        description={t("ภาพรวมสถานะภาระงาน TA ในรายวิชานี้")}
         actions={
           <Link href={`/ta/courses/${tcId}/worklog`}>
             <Button variant="primary">
-              <Clock size={14} /> ลงเวลาปฏิบัติงาน
+              <Clock size={14} /> {t("ลงเวลาปฏิบัติงาน")}
             </Button>
           </Link>
         }
@@ -145,15 +147,15 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
 
       {notFound ? (
         <Panel>
-          <EmptyState title="ไม่พบรายวิชา" description="อาจถูกลบ หรือคุณไม่ได้เป็น TA ของรายวิชานี้" />
+          <EmptyState title={t("ไม่พบรายวิชา")} description={t("อาจถูกลบ หรือคุณไม่ได้เป็น TA ของรายวิชานี้")} />
         </Panel>
       ) : courseError ? (
         <Panel>
           <Alert
             status="danger"
             icon={<CircleAlert size={16} />}
-            title="โหลดข้อมูลรายวิชาไม่สำเร็จ"
-            description={(courseError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+            title={t("โหลดข้อมูลรายวิชาไม่สำเร็จ")}
+            description={(courseError as Error).message || t("กรุณาลองใหม่อีกครั้ง")}
           />
         </Panel>
       ) : (
@@ -161,8 +163,8 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
           {/* Hours + stage summary */}
           <div data-tour="ta-course-stats" className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <StatCard
-              label="สถานะ"
-              value={statusLoading ? <SkelValue className="h-7 w-20" /> : myStatus ? STAGE_LABEL[myStatus.stage] : "—"}
+              label={t("สถานะ")}
+              value={statusLoading ? <SkelValue className="h-7 w-20" /> : myStatus ? t(STAGE_LABEL[myStatus.stage]) : "—"}
               icon={<CalendarClock size={18} />}
               tone={myStatus?.stage === "rejected" ? "danger" : myStatus?.stage === "approved" ? "success" : myStatus?.stage === "submitted" ? "warn" : "brand"}
             />
@@ -170,22 +172,22 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                 paid at different rates from different budgets, so one total
                 would say nothing about what arrives. */}
             <StatCard
-              label="ชม.อนุมัติแล้ว"
+              label={t("ชม.อนุมัติแล้ว")}
               value={statusLoading ? <SkelValue className="h-7 w-14" /> : (myStatus?.hours_approved ?? 0).toFixed(1)}
               hint={(myStatus?.hours_approved ?? 0) > 0 ? hoursSplitText(myStatus?.hours_approved_regular ?? 0, myStatus?.hours_approved_special ?? 0) : undefined}
               icon={<Clock size={18} />}
               tone="success"
             />
             <StatCard
-              label="ชม.รออนุมัติ"
+              label={t("ชม.รออนุมัติ")}
               value={statusLoading ? <SkelValue className="h-7 w-14" /> : (myStatus?.hours_pending ?? 0).toFixed(1)}
               hint={(myStatus?.hours_pending ?? 0) > 0 ? hoursSplitText(myStatus?.hours_pending_regular ?? 0, myStatus?.hours_pending_special ?? 0) : undefined}
               icon={<Clock size={18} />}
               tone="warn"
             />
             <StatCard
-              label="ยอดเงินโดยประมาณ"
-              value={statusLoading ? <SkelValue className="h-7 w-20" /> : `฿${(myStatus?.estimated_baht ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+              label={t("ยอดเงินโดยประมาณ")}
+              value={statusLoading ? <SkelValue className="h-7 w-20" /> : `฿${(myStatus?.estimated_baht ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} // i18n-ignore — ฿ symbol only
               hint={(myStatus?.estimated_baht ?? 0) > 0 ? bahtSplitText(myStatus?.estimated_baht_regular ?? 0, myStatus?.estimated_baht_special ?? 0) : undefined}
               icon={<Wallet size={18} />}
               tone="brand"
@@ -197,8 +199,8 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
               <Alert
                 status="warning"
                 icon={<AlertTriangle size={16} />}
-                title="ยังไม่พบ assignment ของคุณในรายวิชานี้"
-                description="อาจารย์อาจยังไม่ได้ยืนยันการมอบหมาย หรือคำขอยังอยู่ระหว่างพิจารณา"
+                title={t("ยังไม่พบ assignment ของคุณในรายวิชานี้")}
+                description={t("อาจารย์อาจยังไม่ได้ยืนยันการมอบหมาย หรือคำขอยังอยู่ระหว่างพิจารณา")}
               />
             </div>
           )}
@@ -212,7 +214,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
               <Alert
                 status="warning"
                 icon={<CalendarClock size={16} />}
-                title="บางคาบของคุณถูกตัดออกเพราะตรงกับตารางเรียน"
+                title={t("บางคาบของคุณถูกตัดออกเพราะตรงกับตารางเรียน")}
                 description={
                   <div className="space-y-2">
                     {/* state_reason is multi-line: a heading, one bullet per
@@ -221,8 +223,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                       <div key={a.id} className="whitespace-pre-line">{a.state_reason}</div>
                     ))}
                     <div className="text-xs opacity-80 pt-1">
-                      คาบที่เหลือยังลงบันทึกเวลาได้ตามปกติ หากตารางเรียนของคุณเปลี่ยน
-                      (เช่น ถอนวิชาหรือย้ายกลุ่มเรียน) กรุณาติดต่อเจ้าหน้าที่ให้แก้ไขตารางเรียน
+                      {t("คาบที่เหลือยังลงบันทึกเวลาได้ตามปกติ หากตารางเรียนของคุณเปลี่ยน (เช่น ถอนวิชาหรือย้ายกลุ่มเรียน) กรุณาติดต่อเจ้าหน้าที่ให้แก้ไขตารางเรียน")}
                     </div>
                   </div>
                 }
@@ -232,14 +233,14 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
 
           {/* Section schedule */}
           <Panel
-            title="ตารางสอนของรายวิชา"
+            title={t("ตารางสอนของรายวิชา")}
             data-tour="ta-course-schedule"
             description={
               !sectionsReady
                 ? <SkelValue className="h-3 w-56" />
                 : mySections.length > 0 && mySectionIds.size > 0
-                ? `แสดงเฉพาะ section ที่คุณเป็น TA (${mySections.length} section)`
-                : `รายวิชานี้มี ${course?.sections?.length ?? 0} section`
+                ? t("แสดงเฉพาะ section ที่คุณเป็น TA ({n} section)", { n: mySections.length })
+                : t("รายวิชานี้มี {n} section", { n: course?.sections?.length ?? 0 })
             }
             className="mb-4"
             padded={false}
@@ -263,8 +264,8 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
               <div className="p-6">
                 <EmptyState
                   icon={<BookOpen size={24} />}
-                  title="ยังไม่มี section"
-                  description="อาจารย์ยังไม่ได้สร้าง section สำหรับรายวิชานี้"
+                  title={t("ยังไม่มี section")}
+                  description={t("อาจารย์ยังไม่ได้สร้าง section สำหรับรายวิชานี้")}
                 />
               </div>
             ) : (
@@ -279,7 +280,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                         sec {sec.sec_no}
                       </span>
                       <span className="text-xs text-muted">
-                        {sec.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
+                        {sec.track === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ")}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -289,19 +290,19 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                         </div>
                       )}
                       {(sec.schedules ?? []).length === 0 ? (
-                        <div className="text-xs text-muted">ยังไม่ระบุตารางสอน</div>
+                        <div className="text-xs text-muted">{t("ยังไม่ระบุตารางสอน")}</div>
                       ) : (
                         <ul className="flex flex-col gap-1">
                           {sec.schedules!.map(sch => (
                             <li key={sch.id} className="text-sm flex items-center gap-2 flex-wrap">
                               <span className="inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded bg-surface-secondary text-xs font-medium">
-                                {DOW_LABEL[sch.day_of_week] ?? "-"}
+                                {DOW_LABEL[sch.day_of_week] ? t(DOW_LABEL[sch.day_of_week]) : "-"}
                               </span>
                               <span className="tabular-nums text-foreground/90">
                                 {sch.start_time.slice(0, 5)}–{sch.end_time.slice(0, 5)}
                               </span>
                               <Chip tone={sch.kind === "lab" ? "warn" : "info"}>
-                                {KIND_LABEL[sch.kind] ?? sch.kind}
+                                {KIND_LABEL[sch.kind] ? t(KIND_LABEL[sch.kind]) : sch.kind}
                               </Chip>
                               {sch.room && (
                                 <span className="text-xs text-muted inline-flex items-center gap-1">
@@ -329,9 +330,9 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                 <Clock size={18} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-foreground">ลงเวลาปฏิบัติงาน</div>
+                <div className="font-semibold text-foreground">{t("ลงเวลาปฏิบัติงาน")}</div>
                 <div className="text-xs text-muted mt-0.5">
-                  บันทึกชั่วโมงการทำงานประจำวัน แล้วส่งให้อาจารย์อนุมัติ
+                  {t("บันทึกชั่วโมงการทำงานประจำวัน แล้วส่งให้อาจารย์อนุมัติ")}
                 </div>
               </div>
               <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />

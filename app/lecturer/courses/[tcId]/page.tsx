@@ -15,6 +15,7 @@ import { CourseSubmissionPanel } from "../../../components/CourseSubmissionPanel
 import { type TARequestRow } from "../../RequestsTable";
 import { courseCodeLabel } from "../../../lib/courseCode";
 import { Skel, SkelValue } from "../../../components/Skeletons";
+import { useI18n } from "../../../lib/i18n/client";
 
 interface Section {
   id: string; sec_no: string; track: string; room?: string;
@@ -62,7 +63,7 @@ interface Budget {
 const TRACK_BAR_COLOR = { regular: "bg-teal-500", special: "bg-orange-500" };
 
 /** 12,345 ฿ — ตัดเศษสตางค์ทิ้ง เพราะเป็นตัวเลข "โดยประมาณ" อยู่แล้ว */
-const baht = (n: number) => Math.round(n).toLocaleString("th-TH");
+const baht = (n: number, intl: string) => Math.round(n).toLocaleString(intl);
 interface PendingReport {
   id: string;
   course_code: string;
@@ -71,6 +72,7 @@ interface PendingReport {
 
 export default function CoursePage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
+  const { t } = useI18n();
   const courseKey = tcId ? `/teaching-courses/${tcId}` : null;
   const budgetKey = tcId ? `/teaching-courses/${tcId}/budget` : null;
 
@@ -101,12 +103,12 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
   return (
     <div>
       <PageHeader
-        title={course ? `${courseCodeLabel(course)} ${course.name_th}` : "รายวิชา"}
-        description="ภาพรวมสถานะและข้อมูลของรายวิชานี้"
+        title={course ? `${courseCodeLabel(course)} ${course.name_th}` : t("รายวิชา")}
+        description={t("ภาพรวมสถานะและข้อมูลของรายวิชานี้")}
         actions={
           <Link href="/lecturer">
             <Button variant="ghost" size="sm">
-              <ChevronLeft size={14} /> วิชาอื่น
+              <ChevronLeft size={14} /> {t("วิชาอื่น")}
             </Button>
           </Link>
         }
@@ -114,19 +116,19 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
 
       {notFound ? (
         <Panel>
-          <EmptyState title="ไม่พบรายวิชา" description="อาจถูกลบหรือคุณไม่ได้รับผิดชอบวิชานี้" />
+          <EmptyState title={t("ไม่พบรายวิชา")} description={t("อาจถูกลบหรือคุณไม่ได้รับผิดชอบวิชานี้")} />
         </Panel>
       ) : courseError ? (
         <Panel>
           <Alert
             status="danger"
             icon={<CircleAlert size={16} />}
-            title="โหลดข้อมูลรายวิชาไม่สำเร็จ"
-            description={(courseError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+            title={t("โหลดข้อมูลรายวิชาไม่สำเร็จ")}
+            description={(courseError as Error).message || t("กรุณาลองใหม่อีกครั้ง")}
             action={
               courseKey && (
                 <Button variant="secondary" size="sm" onPress={() => mutate(courseKey)}>
-                  ลองใหม่
+                  {t("ลองใหม่")}
                 </Button>
               )
             }
@@ -140,13 +142,13 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
           {/* Compact info strip — everything at a glance, no drilling */}
           <Panel className="mb-4" data-tour="course-info">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
-              <InfoItem label="นักศึกษา">
+              <InfoItem label={t("นักศึกษา")}>
                 {course ? (
                   <>
                     <span className="text-lg font-semibold tabular-nums">{course.num_students}</span>
-                    <span className="text-muted ml-1">คน</span>
+                    <span className="text-muted ml-1">{t("คน")}</span>
                     <span className="text-xs text-muted ml-2">
-                      ({course.num_students_regular} ปกติ / {course.num_students_special} พิเศษ)
+                      {t("({regular} ปกติ / {special} พิเศษ)", { regular: course.num_students_regular, special: course.num_students_special })}
                     </span>
                   </>
                 ) : <InfoSkel />}
@@ -159,24 +161,24 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
                       {course.sections?.length ?? 0}
                     </span>
                     <span className="text-xs text-muted ml-2">
-                      ({regularSecs} ปกติ / {specialSecs} พิเศษ)
+                      {t("({regular} ปกติ / {special} พิเศษ)", { regular: regularSecs, special: specialSecs })}
                     </span>
                   </>
                 ) : <InfoSkel />}
               </InfoItem>
               <Divider />
-              <InfoItem label="TA ในรายวิชา">
+              <InfoItem label={t("TA ในรายวิชา")}>
                 {/* Matching falls back to the course code, so wait for both. */}
                 {course && allReqs ? (
                   <>
                     <span className="text-lg font-semibold tabular-nums">{approvedTaCount}</span>
-                    <span className="text-muted ml-1">คน</span>
-                    <span className="text-xs text-muted ml-2">(อนุมัติแล้ว)</span>
+                    <span className="text-muted ml-1">{t("คน")}</span>
+                    <span className="text-xs text-muted ml-2">{t("(อนุมัติแล้ว)")}</span>
                   </>
                 ) : <InfoSkel />}
               </InfoItem>
               <Divider />
-              <InfoItem label="หน่วยกิต">
+              <InfoItem label={t("หน่วยกิต")}>
                 {course ? (
                   <>
                     <span className="text-lg font-semibold tabular-nums">{course.credits}</span>
@@ -195,11 +197,11 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
               <Alert
                 status="danger"
                 icon={<CalendarOff size={16} />}
-                title={`ต้องกำหนดวันชดเชย ${course.unresolved_makeups} คาบ`}
-                description="คาบเหล่านี้ตรงกับวันหยุด ถ้ายังไม่กำหนดวันชดเชย ระบบจะข้ามวันนั้น TA จะลงเวลาไม่ได้และเบิกค่าตอบแทนส่วนนี้ไม่ได้"
+                title={t("ต้องกำหนดวันชดเชย {n} คาบ", { n: course.unresolved_makeups })}
+                description={t("คาบเหล่านี้ตรงกับวันหยุด ถ้ายังไม่กำหนดวันชดเชย ระบบจะข้ามวันนั้น TA จะลงเวลาไม่ได้และเบิกค่าตอบแทนส่วนนี้ไม่ได้")}
                 action={
                   <Link href={`/lecturer/courses/${tcId}/holidays`}>
-                    <Button variant="primary" size="sm">กำหนดวันชดเชย</Button>
+                    <Button variant="primary" size="sm">{t("กำหนดวันชดเชย")}</Button>
                   </Link>
                 }
               />
@@ -211,11 +213,11 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
               <Alert
                 status="danger"
                 icon={<AlertTriangle size={16} />}
-                title="งบใช้เกินเพดาน"
-                description="ลดจำนวน TA หรือปรับภาระงานเพื่อให้ไม่เกินเพดานงบต่อวิชา"
+                title={t("งบใช้เกินเพดาน")}
+                description={t("ลดจำนวน TA หรือปรับภาระงานเพื่อให้ไม่เกินเพดานงบต่อวิชา")}
                 action={
                   <Link href={`/lecturer/courses/${tcId}/budget`}>
-                    <Button variant="secondary" size="sm">ตรวจสอบงบ</Button>
+                    <Button variant="secondary" size="sm">{t("ตรวจสอบงบ")}</Button>
                   </Link>
                 }
               />
@@ -242,11 +244,11 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
           {/* Sections — compact inline chips */}
           <Panel
             data-tour="course-sections-list"
-            title="Section ทั้งหมด"
+            title={t("Section ทั้งหมด")}
             description={
               course
-                ? `รายวิชานี้มี ${course.sections?.length ?? 0} section`
-                : <>รายวิชานี้มี <SkelValue className="h-3 w-4" /> section</>
+                ? t("รายวิชานี้มี {n} section", { n: course.sections?.length ?? 0 })
+                : t.rich("รายวิชานี้มี {n} section", { n: <SkelValue className="h-3 w-4" /> })
             }
             className="mb-4"
           >
@@ -255,7 +257,7 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
                 {[0, 1, 2].map(i => <Skel key={i} className="h-8 w-28 rounded-full" />)}
               </div>
             ) : (course.sections ?? []).length === 0 ? (
-              <div className="text-sm text-muted">ยังไม่มี section</div>
+              <div className="text-sm text-muted">{t("ยังไม่มี section")}</div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {course.sections!.map(s => (
@@ -270,7 +272,7 @@ export default function CoursePage({ params }: { params: Promise<{ tcId: string 
                       {s.sec_no}
                     </span>
                     <span className="text-xs text-muted">
-                      {s.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
+                      {s.track === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ")}
                       {s.room ? ` · ${s.room}` : ""}
                     </span>
                   </div>
@@ -360,13 +362,14 @@ function StatusCardShell({
 }
 
 function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
+  const { t, intl } = useI18n();
   if (!budget) {
     return (
       <StatusCardShell
         icon={<Wallet size={16} />}
-        title="งบประมาณโดยประมาณ"
+        title={t("งบประมาณโดยประมาณ")}
         href={`/lecturer/courses/${tcId}/budget`}
-        hrefLabel="คำนวณงบ / ดูรายละเอียด"
+        hrefLabel={t("คำนวณงบ / ดูรายละเอียด")}
       >
         {/* Same rows as the loaded card: total, two track boxes, bar, legend. */}
         <div className="flex items-baseline justify-between mb-2">
@@ -390,16 +393,16 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
   return (
     <StatusCardShell
       icon={<Wallet size={16} />}
-      title="งบประมาณโดยประมาณ"
+      title={t("งบประมาณโดยประมาณ")}
       tone={tone}
       href={`/lecturer/courses/${tcId}/budget`}
-      hrefLabel="คำนวณงบ / ดูรายละเอียด"
+      hrefLabel={t("คำนวณงบ / ดูรายละเอียด")}
     >
       {/* งบทั้งเทอมของรายวิชา (โดยประมาณ) + แยกภาคปกติ/ภาคพิเศษ */}
       <div className="flex items-baseline justify-between mb-2">
-        <span className="text-sm text-muted">งบทั้งเทอม</span>
+        <span className="text-sm text-muted">{t("งบทั้งเทอม")}</span>
         <span className="text-xl font-semibold tabular-nums">
-          ~{baht(budget.per_course_max)} <span className="text-sm font-normal text-muted">บ.</span>
+          ~{baht(budget.per_course_max, intl)} <span className="text-sm font-normal text-muted">{t("บ.")}</span>
         </span>
       </div>
 
@@ -409,12 +412,12 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
 
       <div className="grid grid-cols-2 gap-2 mb-3">
         <TrackBudget
-          label="ภาคปกติ"
+          label={t("ภาคปกติ")}
           amount={budget.term_pay_regular}
           students={budget.num_students_regular}
         />
         <TrackBudget
-          label="ภาคพิเศษ"
+          label={t("ภาคพิเศษ")}
           amount={budget.term_pay_special}
           students={budget.num_students_special}
         />
@@ -427,13 +430,13 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
           which pool. */}
       <div className="flex h-2 w-full overflow-hidden rounded-full bg-surface-secondary">
         {budget.used_baht_regular > 0.5 && (
-          <Tip content={`ภาคปกติ ~${baht(budget.used_baht_regular)} บ.`}><div
+          <Tip content={t("ภาคปกติ ~{n} บ.", { n: baht(budget.used_baht_regular, intl) })}><div
             className={TRACK_BAR_COLOR.regular}
             style={{ width: `${Math.min(100, (budget.used_baht_regular / budget.per_course_max) * 100)}%` }}
           /></Tip>
         )}
         {budget.used_baht_special > 0.5 && (
-          <Tip content={`ภาคพิเศษ ~${baht(budget.used_baht_special)} บ.`}><div
+          <Tip content={t("ภาคพิเศษ ~{n} บ.", { n: baht(budget.used_baht_special, intl) })}><div
             className={TRACK_BAR_COLOR.special}
             style={{ width: `${Math.min(100, (budget.used_baht_special / budget.per_course_max) * 100)}%` }}
           /></Tip>
@@ -443,21 +446,21 @@ function BudgetStatusCard({ tcId, budget }: { tcId: string; budget?: Budget }) {
         <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           {budget.used_baht_regular > 0.5 && (
             <span className="inline-flex items-center gap-1">
-              <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + TRACK_BAR_COLOR.regular} /> ปกติ ~{baht(budget.used_baht_regular)}
+              <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + TRACK_BAR_COLOR.regular} /> {t("ปกติ ~{n}", { n: baht(budget.used_baht_regular, intl) })}
             </span>
           )}
           {budget.used_baht_special > 0.5 && (
             <span className="inline-flex items-center gap-1">
-              <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + TRACK_BAR_COLOR.special} /> พิเศษ ~{baht(budget.used_baht_special)}
+              <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + TRACK_BAR_COLOR.special} /> {t("พิเศษ ~{n}", { n: baht(budget.used_baht_special, intl) })}
             </span>
           )}
         </span>
         <span>
-          ใช้ไปแล้ว ~{baht(budget.used_baht)} บ. ({pct.toFixed(0)}%)
+          {t("ใช้ไปแล้ว ~{n} บ. ({pct}%)", { n: baht(budget.used_baht, intl), pct: pct.toFixed(0) })}
           {budget.over_budget
-            ? " เกินเพดานงบ (โดยประมาณ)"
+            ? " " + t("เกินเพดานงบ (โดยประมาณ)")
             : pct >= 80
-            ? " ใกล้เต็มงบ (โดยประมาณ)"
+            ? " " + t("ใกล้เต็มงบ (โดยประมาณ)")
             : ""}
         </span>
       </div>
@@ -471,16 +474,17 @@ function TrackBudget({
 }: {
   label: string; amount: number; students: number;
 }) {
+  const { t, intl } = useI18n();
   return (
     <div className="rounded-lg border border-(--hairline) px-2.5 py-2">
       <div className="text-[11px] text-muted">{label}</div>
       <div className={
         "text-sm font-semibold tabular-nums " + (students === 0 ? "text-muted" : "")
       }>
-        ~{baht(amount)} <span className="text-[11px] font-normal text-muted">บ.</span>
+        ~{baht(amount, intl)} <span className="text-[11px] font-normal text-muted">{t("บ.")}</span>
       </div>
       <div className="text-[11px] text-muted">
-        {students === 0 ? "ไม่มีนักศึกษา" : `${students} คน`}
+        {students === 0 ? t("ไม่มีนักศึกษา") : t("{n} คน", { n: students })}
       </div>
     </div>
   );
@@ -494,14 +498,15 @@ function RequestStatusCard({
   total: number;
   loading: boolean;
 }) {
+  const { t } = useI18n();
   const active = counts.approved + counts.submitted + counts.pending;
   return (
     <StatusCardShell
       icon={<Send size={16} />}
-      title="คำขอ TA"
+      title={t("คำขอ TA")}
       tone={counts.rejected > 0 ? "warn" : counts.approved > 0 ? "success" : "brand"}
       href={`/lecturer/courses/${tcId}/request`}
-      hrefLabel={total === 0 ? "ส่งคำขอ TA" : "จัดการคำขอ"}
+      hrefLabel={total === 0 ? t("ส่งคำขอ TA") : t("จัดการคำขอ")}
     >
       {loading ? (
         <>
@@ -516,30 +521,30 @@ function RequestStatusCard({
         </>
       ) : total === 0 ? (
         <div className="text-sm text-muted">
-          ยังไม่มีคำขอ TA สำหรับวิชานี้
-          <div className="text-xs mt-1">ส่งคำขอเพื่อระบุ TA และภาระงานรายสัปดาห์</div>
+          {t("ยังไม่มีคำขอ TA สำหรับวิชานี้")}
+          <div className="text-xs mt-1">{t("ส่งคำขอเพื่อระบุ TA และภาระงานรายสัปดาห์")}</div>
         </div>
       ) : (
         <>
           <div className="flex items-baseline gap-2 mb-2">
             <span className="text-xl font-semibold tabular-nums">{total}</span>
-            <span className="text-xs text-muted">คำขอ · {active} ยัง active</span>
+            <span className="text-xs text-muted">{t("คำขอ · {n} ยัง active", { n: active })}</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {counts.approved > 0 && (
-              <Chip tone="success">อนุมัติ {counts.approved}</Chip>
+              <Chip tone="success">{t("อนุมัติ {n}", { n: counts.approved })}</Chip>
             )}
             {counts.submitted > 0 && (
-              <Chip tone="info">รอตรวจ {counts.submitted}</Chip>
+              <Chip tone="info">{t("รอตรวจ {n}", { n: counts.submitted })}</Chip>
             )}
             {counts.pending > 0 && (
-              <Chip tone="warn">รอดำเนินการ {counts.pending}</Chip>
+              <Chip tone="warn">{t("รอดำเนินการ {n}", { n: counts.pending })}</Chip>
             )}
             {counts.draft > 0 && (
-              <Chip tone="neutral">ร่าง {counts.draft}</Chip>
+              <Chip tone="neutral">{t("ร่าง {n}", { n: counts.draft })}</Chip>
             )}
             {counts.rejected > 0 && (
-              <Chip tone="danger">ปฏิเสธ {counts.rejected}</Chip>
+              <Chip tone="danger">{t("ปฏิเสธ {n}", { n: counts.rejected })}</Chip>
             )}
           </div>
         </>
@@ -555,13 +560,14 @@ function ReportStatusCard({
   count: number;
   loading: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <StatusCardShell
       icon={<ClipboardCheck size={16} />}
-      title="รายงาน TA"
+      title={t("รายงาน TA")}
       tone={count > 0 ? "warn" : "brand"}
       href={`/lecturer/courses/${tcId}/reports`}
-      hrefLabel={count > 0 ? "ตรวจและอนุมัติ" : "ดูรายการ"}
+      hrefLabel={count > 0 ? t("ตรวจและอนุมัติ") : t("ดูรายการ")}
     >
       {loading ? (
         <>
@@ -573,17 +579,17 @@ function ReportStatusCard({
         </>
       ) : count === 0 ? (
         <div className="text-sm text-muted">
-          ไม่มีรายงานรออนุมัติ
-          <div className="text-xs mt-1">TA จะส่งบันทึกเวลาให้อนุมัติเมื่อสิ้นสุดรอบ</div>
+          {t("ไม่มีรายงานรออนุมัติ")}
+          <div className="text-xs mt-1">{t("TA จะส่งบันทึกเวลาให้อนุมัติเมื่อสิ้นสุดรอบ")}</div>
         </div>
       ) : (
         <>
           <div className="flex items-baseline gap-2 mb-1">
             <span className="text-xl font-semibold tabular-nums text-orange-700">{count}</span>
-            <span className="text-xs text-muted">รายการรออนุมัติ</span>
+            <span className="text-xs text-muted">{t("รายการรออนุมัติ")}</span>
           </div>
           <div className="text-xs text-muted">
-            TA รอให้คุณตรวจบันทึกเวลาที่ส่งเข้ามาสำหรับวิชานี้
+            {t("TA รอให้คุณตรวจบันทึกเวลาที่ส่งเข้ามาสำหรับวิชานี้")}
           </div>
         </>
       )}

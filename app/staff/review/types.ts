@@ -1,3 +1,5 @@
+import { msg } from "../../lib/i18n/core";
+
 export interface Pending {
   user_id: string;
   full_name: string;
@@ -60,19 +62,21 @@ export interface Profile {
 // Preset rejection reasons the officer can pick without typing. "อื่นๆ" opens
 // a free-text box so unusual problems can still be described. Used by each
 // document panel in the full-screen review workspace.
+// The Thai text is also the reason stored and sent to the TA (msg() leaves
+// the value as is); the picker shows t(preset).
 export const REJECT_PRESETS = [
-  "เอกสารไม่ชัด / อ่านไม่ออก",
-  "ยังไม่เซ็นชื่อ",
-  "แนบผิดไฟล์ / ไม่ตรงประเภทเอกสาร",
-  "อื่นๆ (ระบุเอง)",
+  msg("เอกสารไม่ชัด / อ่านไม่ออก"),
+  msg("ยังไม่เซ็นชื่อ"),
+  msg("แนบผิดไฟล์ / ไม่ตรงประเภทเอกสาร"),
+  msg("อื่นๆ (ระบุเอง)"),
 ];
-export const OTHER_PRESET = "อื่นๆ (ระบุเอง)";
+export const OTHER_PRESET = msg("อื่นๆ (ระบุเอง)");
 
 export const DOC_KIND_LABEL: Record<string, string> = {
-  national_id:   "สำเนาบัตรประชาชน",
-  passport:      "สำเนา Passport",
-  bank_book:     "สำเนาสมุดบัญชีธนาคาร",
-  creditor_form: "แบบฟอร์มเจ้าหนี้",
+  national_id:   msg("สำเนาบัตรประชาชน"),
+  passport:      msg("สำเนา Passport"),
+  bank_book:     msg("สำเนาสมุดบัญชีธนาคาร"),
+  creditor_form: msg("แบบฟอร์มเจ้าหนี้"),
 };
 
 // The order these get printed/stacked per person: creditor form first, then
@@ -89,10 +93,11 @@ export function byPrintOrder(a: { kind: string }, b: { kind: string }): number {
   return (ia === -1 ? DOC_KIND_PRINT_ORDER.length : ia) - (ib === -1 ? DOC_KIND_PRINT_ORDER.length : ib);
 }
 
-export function fmtDate(s?: string | null): string {
+/** `intl` is useI18n().intl. */
+export function fmtDate(s: string | null | undefined, intl: string): string {
   if (!s) return "-";
   try {
-    return new Date(s).toLocaleString("th-TH", {
+    return new Date(s).toLocaleString(intl, {
       year: "numeric", month: "short", day: "numeric",
       hour: "2-digit", minute: "2-digit",
     });

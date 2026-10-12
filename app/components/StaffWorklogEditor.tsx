@@ -7,6 +7,7 @@ import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { TextInput, Select, Button, IconButton, Chip, EmptyState, Spinner, DatePicker, TimePicker, StatusChip, Modal, Alert, TextArea, Tip, ConfirmDialog } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
+import { msg, useI18n, type I18n } from "../lib/i18n/client";
 
 export interface StaffWorkLog {
   id: string;
@@ -40,36 +41,33 @@ interface StaffAssignment {
 }
 
 const LEVEL_TH: Record<string, string> = {
-  undergrad: "ปริญญาตรี", master: "ปริญญาโท", phd: "ปริญญาเอก",
+  undergrad: msg("ปริญญาตรี"), master: msg("ปริญญาโท"), phd: msg("ปริญญาเอก"),
 };
 const TRACK_TH: Record<string, string> = {
-  regular: "ภาคปกติ", special: "ภาคพิเศษ",
+  regular: msg("ภาคปกติ"), special: msg("ภาคพิเศษ"),
 };
 
 const ACTIVITY_OPTS = [
-  { v: "lecture", l: "บรรยาย" },
-  { v: "lab", l: "ปฏิบัติการ" },
-  { v: "review", l: "ตรวจงาน" },
-  { v: "other", l: "อื่นๆ" },
+  { v: "lecture", l: msg("บรรยาย") },
+  { v: "lab", l: msg("ปฏิบัติการ") },
+  { v: "review", l: msg("ตรวจงาน") },
+  { v: "other", l: msg("อื่นๆ") },
 ];
 const activityLabel = (a: string) => ACTIVITY_OPTS.find(o => o.v === a)?.l ?? a;
-const PARENT_KIND_TH: Record<string, string> = { lecture: "บรรยาย", lab: "ปฏิบัติการ" };
+const PARENT_KIND_TH: Record<string, string> = { lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ") };
 
-const DOW_TH = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
-const MONTH_TH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+const DOW_TH = [msg("อา."), msg("จ."), msg("อ."), msg("พ."), msg("พฤ."), msg("ศ."), msg("ส.")];
 // fmtWorkDate("2026-06-25") → "พฤ. 25 มิ.ย. 2569" — matches the TA page's
 // read-only date presentation.
-function fmtWorkDate(iso: string): string {
+// (English: "Thu 25 Jun 2026".)
+function fmtWorkDate(iso: string, i: Pick<I18n, "t" | "monthName" | "year">): string {
   const [y, m, d] = (iso ?? "").split("-").map(Number);
   if (!y || !m || !d || m < 1 || m > 12) return iso;
   const dt = new Date(y, m - 1, d);
   if (Number.isNaN(dt.getTime())) return iso;
-  return `${DOW_TH[dt.getDay()]} ${d} ${MONTH_TH_SHORT[m - 1]} ${y + 543}`;
+  return `${i.t(DOW_TH[dt.getDay()])} ${d} ${i.monthName(m)} ${i.year(y)}`;
 }
 
-const THAI_MONTHS = ["", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 // monthLabel("2026-06") → "มิถุนายน 2569".
 // The label must match the submission-period label, which keys off the term's
 // Buddhist ACADEMIC year — not the raw Gregorian year of the work_date. In the
@@ -77,10 +75,11 @@ const THAI_MONTHS = ["", "มกราคม", "กุมภาพันธ์",
 // year that started the previous June: for those months the academic year is
 // (Gregorian+543)−1. Without this, semester-2 Jan–Mar rows showed e.g.
 // "มกราคม 2570" while the period label said "…2569".
-function monthLabel(ym: string): string {
+// The academic year is an identifier, so it stays BE in English too.
+function monthLabel(ym: string, monthName: I18n["monthName"]): string {
   const [y, m] = ym.split("-").map(Number);
   const academicYear = m >= 6 ? y + 543 : y + 543 - 1;
-  return `${THAI_MONTHS[m] ?? ym} ${academicYear}`;
+  return `${m >= 1 && m <= 12 ? monthName(m, false) : ym} ${academicYear}`;
 }
 
 // StaffWorklogEditor: view + edit + add + delete a course's worklog, grouped by
@@ -93,6 +92,7 @@ export function StaffWorklogEditor({
   tcId: string;
   onDataChange?: () => void;
 }) {
+  const { t } = useI18n();
   const logsKey = `/staff/courses/${tcId}/worklogs`;
   const { data: logs } = useSWR<StaffWorkLog[]>(logsKey);
   const { data: assignments } = useSWR<StaffAssignment[]>(`/staff/courses/${tcId}/assignments`);
@@ -119,7 +119,7 @@ export function StaffWorklogEditor({
   // collapsed accordion headers (name + chips), the shape it lands in.
   if (!logs || !assignments) {
     return (
-      <SkelRegion label="กำลังโหลดบันทึกเวลา" className="divide-y divide-border">
+      <SkelRegion label={t("กำลังโหลดบันทึกเวลา")} className="divide-y divide-border">
         {Array.from({ length: 3 }, (_, i) => (
           <div key={i} className="flex items-center gap-2 px-4 py-3">
             <div className="flex flex-col gap-1.5 mr-1">
@@ -135,7 +135,7 @@ export function StaffWorklogEditor({
     );
   }
   if (groups.length === 0) {
-    return <EmptyState title="วิชานี้ยังไม่มี TA ที่อนุมัติ" />;
+    return <EmptyState title={t("วิชานี้ยังไม่มี TA ที่อนุมัติ")} />;
   }
 
   return (
@@ -157,26 +157,26 @@ export function StaffWorklogEditor({
                     <span tabIndex={-1} className="font-medium text-ink-1 truncate">{g.taName}</span>
                   </Tip>
                   {meta?.student_id && (
-                    <span className="text-[11px] text-ink-3">รหัส {meta.student_id}</span>
+                    <span className="text-[11px] text-ink-3">{t("รหัส {id}", { id: meta.student_id })}</span>
                   )}
                 </div>
                 {level && (
                   <Chip tone="info">
-                    {LEVEL_TH[level] ?? level}{track ? ` · ${TRACK_TH[track] ?? track}` : ""}
+                    {LEVEL_TH[level] ? t(LEVEL_TH[level]) : level}{track ? ` · ${TRACK_TH[track] ? t(TRACK_TH[track]) : track}` : ""}
                   </Chip>
                 )}
                 {meta && (
-                  <Tip content={meta.is_returning ? "เคยเป็น TA ในภาคเรียนก่อนหน้า" : "เป็น TA ครั้งแรก"}>
+                  <Tip content={meta.is_returning ? t("เคยเป็น TA ในภาคเรียนก่อนหน้า") : t("เป็น TA ครั้งแรก")}>
                     <span tabIndex={-1}>
                       <Chip tone={meta.is_returning ? "info" : "neutral"}>
-                        {meta.is_returning ? "TA เก่า" : "TA ใหม่"}
+                        {meta.is_returning ? t("TA เก่า") : t("TA ใหม่")}
                       </Chip>
                     </span>
                   </Tip>
                 )}
-                <Chip tone="neutral">{g.rows.length} รายการ</Chip>
-                <Chip tone="success">{approvedHrs.toFixed(1)} ชม.</Chip>
-                {lockedCount > 0 && <Chip tone="warn"><Lock size={11} /> ล็อก {lockedCount}</Chip>}
+                <Chip tone="neutral">{t("{n} รายการ", { n: g.rows.length })}</Chip>
+                <Chip tone="success">{t("{h} ชม.", { h: approvedHrs.toFixed(1) })}</Chip>
+                {lockedCount > 0 && <Chip tone="warn"><Lock size={11} /> {t("ล็อก {n}", { n: lockedCount })}</Chip>}
                 <Accordion.Indicator className="ml-auto" />
               </Accordion.Trigger>
             </Accordion.Heading>
@@ -199,6 +199,7 @@ function TAWorklogTable({
   group: { taId: string; taName: string; assignments: StaffAssignment[]; rows: StaffWorkLog[] };
   onChanged: () => void;
 }) {
+  const { t, monthName } = useI18n();
   const [adding, setAdding] = useState<number[]>([]);
   const [seq, setSeq] = useState(0);
 
@@ -221,28 +222,28 @@ function TAWorklogTable({
       <table className="w-full min-w-[560px] text-sm sm:min-w-0">
         <thead className="bg-surface-secondary/50 text-xs uppercase tracking-wider text-muted">
           <tr>
-            <th className="text-left px-3 py-2 font-medium">วันที่</th>
-            <th className="text-left px-3 py-2 font-medium">เวลา</th>
-            <th className="text-right px-3 py-2 font-medium">ชม.</th>
-            <th className="text-left px-3 py-2 font-medium">กิจกรรม</th>
-            <th className="text-left px-3 py-2 font-medium">หมายเหตุ</th>
-            <th className="text-left px-3 py-2 font-medium">สถานะ</th>
-            <th className="text-right px-3 py-2 font-medium pr-4">การทำงาน</th>
+            <th className="text-left px-3 py-2 font-medium">{t("วันที่")}</th>
+            <th className="text-left px-3 py-2 font-medium">{t("เวลา")}</th>
+            <th className="text-right px-3 py-2 font-medium">{t("ชม.")}</th>
+            <th className="text-left px-3 py-2 font-medium">{t("กิจกรรม")}</th>
+            <th className="text-left px-3 py-2 font-medium">{t("หมายเหตุ")}</th>
+            <th className="text-left px-3 py-2 font-medium">{t("สถานะ")}</th>
+            <th className="text-right px-3 py-2 font-medium pr-4">{t("การทำงาน")}</th>
           </tr>
         </thead>
         <tbody>
           {monthGroups.length === 0 && adding.length === 0 && (
-            <tr><td colSpan={7} className="px-3 py-4 text-center text-muted text-xs">ยังไม่มีบันทึกเวลา กด “เพิ่มแถว” เพื่อบันทึก</td></tr>
+            <tr><td colSpan={7} className="px-3 py-4 text-center text-muted text-xs">{t("ยังไม่มีบันทึกเวลา กด “เพิ่มแถว” เพื่อบันทึก")}</td></tr>
           )}
           {monthGroups.map(([ym, rows]) => {
             const mHrs = rows.filter(r => r.status === "approved").reduce((a, r) => a + r.hours, 0);
             return (
               <Fragment key={ym}>
-                <tr className="bg-slate-100/80 dark:bg-slate-800/50 border-t border-hairline">
+                <tr className="bg-slate-100/80 border-t border-hairline">
                   <td colSpan={7} className="px-3 py-1.5 text-xs font-semibold text-ink-2">
                     <span className="inline-flex items-center gap-2">
-                      <span>{monthLabel(ym)}</span>
-                      <span className="font-normal text-ink-3">· {rows.length} รายการ · อนุมัติ {mHrs.toFixed(1)} ชม.</span>
+                      <span>{monthLabel(ym, monthName)}</span>
+                      <span className="font-normal text-ink-3">· {t("{n} รายการ · อนุมัติ {h} ชม.", { n: rows.length, h: mHrs.toFixed(1) })}</span>
                     </span>
                   </td>
                 </tr>
@@ -267,7 +268,7 @@ function TAWorklogTable({
           onClick={() => { setAdding(a => [...a, seq]); setSeq(s => s + 1); }}
           disabled={group.assignments.length === 0}
         >
-          <Plus size={12} /> เพิ่มแถว
+          <Plus size={12} /> {t("เพิ่มแถว")}
         </Button>
       </div>
     </div>
@@ -275,6 +276,8 @@ function TAWorklogTable({
 }
 
 function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => void }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const [draft, setDraft] = useState<StaffWorkLog>(row);
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -343,7 +346,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
         room: draft.room,
         note: draft.note,
       });
-      notify.success(`บันทึกการแก้ไขบันทึกเวลาวันที่ ${fmtWorkDate(draft.work_date)} แล้ว`);
+      notify.success(t("บันทึกการแก้ไขบันทึกเวลาวันที่ {date} แล้ว", { date: fmtWorkDate(draft.work_date, i18n) }));
       setEditing(false);
       setStepUpOpen(false);
       setReason("");
@@ -361,7 +364,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
     setBusy(true);
     try {
       await api.del(`/staff/worklogs/${row.id}`);
-      notify.success(`ลบบันทึกเวลาวันที่ ${fmtWorkDate(row.work_date)} แล้ว`);
+      notify.success(t("ลบบันทึกเวลาวันที่ {date} แล้ว", { date: fmtWorkDate(row.work_date, i18n) }));
       onChanged();
     } catch (e) {
       notify.error(errMessage(e));
@@ -373,8 +376,8 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
   const canDelete = row.status === "draft" || row.status === "rejected";
   const activityText =
     row.activity === "other" && (row.parent_kind === "lecture" || row.parent_kind === "lab")
-      ? `${activityLabel(row.activity)} (${PARENT_KIND_TH[row.parent_kind]})`
-      : activityLabel(row.activity);
+      ? `${t(activityLabel(row.activity))} (${t(PARENT_KIND_TH[row.parent_kind])})`
+      : t(activityLabel(row.activity));
 
   // Read-only presentation (default) — mirrors the TA worklog page: values as
   // text, edit controls revealed only on demand. Locked months stay read-only
@@ -382,7 +385,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
   if (!editing) {
     return (
       <tr className={"border-t border-hairline " + (row.locked ? "bg-slate-50/40" : "")}>
-        <td className="px-3 py-2 align-middle">{fmtWorkDate(row.work_date)}</td>
+        <td className="px-3 py-2 align-middle">{fmtWorkDate(row.work_date, i18n)}</td>
         <td className="px-3 py-2 align-middle tabular whitespace-nowrap">
           {row.start_time.slice(0, 5)}–{row.end_time.slice(0, 5)}
         </td>
@@ -391,7 +394,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
           <div className="flex flex-col leading-tight">
             <span>{activityText}</span>
             <span className="text-xs text-ink-3 whitespace-nowrap">
-              sec {row.section_no} · {TRACK_TH[row.track] ?? row.track}
+              sec {row.section_no} · {TRACK_TH[row.track] ? t(TRACK_TH[row.track]) : row.track}
             </span>
           </div>
         </td>
@@ -399,16 +402,16 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
         <td className="px-3 py-2 align-middle"><StatusChip status={row.status} /></td>
         <td className="px-3 py-2 align-middle text-right whitespace-nowrap pr-4">
           {row.locked ? (
-            <Tip content="งวดของเดือนนี้ปิดแล้ว หรือส่งออก/ส่งการเงินไปแล้ว แก้ไขย้อนหลังไม่ได้"><span>
-              <Chip tone="warn"><Lock size={11} /> ล็อก</Chip>
+            <Tip content={t("งวดของเดือนนี้ปิดแล้ว หรือส่งออก/ส่งการเงินไปแล้ว แก้ไขย้อนหลังไม่ได้")}><span>
+              <Chip tone="warn"><Lock size={11} /> {t("ล็อก")}</Chip>
             </span></Tip>
           ) : (
             <div className="inline-flex items-center gap-1">
-              <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => setEditing(true)}>
+              <IconButton label={t("แก้ไข")} variant="ghost" size="sm" onClick={() => setEditing(true)}>
                 <Pencil size={13} />
               </IconButton>
               {canDelete && (
-                <IconButton label="ลบ" variant="ghost" size="sm" onClick={() => setConfirmDel(true)} disabled={busy}>
+                <IconButton label={t("ลบ")} variant="ghost" size="sm" onClick={() => setConfirmDel(true)} disabled={busy}>
                   <Trash2 size={13} />
                 </IconButton>
               )}
@@ -419,9 +422,9 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
                 onConfirm={async () => { await del(); setConfirmDel(false); }}
                 isPending={busy}
                 danger
-                title="ลบบันทึกเวลา?"
-                message={`ลบรายการวันที่ ${fmtWorkDate(row.work_date)} เวลา ${row.start_time.slice(0, 5)}–${row.end_time.slice(0, 5)} (${row.hours.toFixed(1)} ชม.) ของ sec ${row.section_no} การลบย้อนกลับไม่ได้`}
-                confirmLabel="ลบรายการ"
+                title={t("ลบบันทึกเวลา?")}
+                message={t("ลบรายการวันที่ {date} เวลา {start}–{end} ({h} ชม.) ของ sec {sec} การลบย้อนกลับไม่ได้", { date: fmtWorkDate(row.work_date, i18n), start: row.start_time.slice(0, 5), end: row.end_time.slice(0, 5), h: row.hours.toFixed(1), sec: row.section_no })}
+                confirmLabel={t("ลบรายการ")}
               />
             </div>
           )}
@@ -434,13 +437,13 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
   return (
     <tr className="border-t border-hairline bg-brand-soft/10">
       <td className="px-3 py-2 align-middle">
-        <DatePicker value={draft.work_date} onChange={v => setDraft({ ...draft, work_date: v })} label="วันที่ปฏิบัติงาน" />
+        <DatePicker value={draft.work_date} onChange={v => setDraft({ ...draft, work_date: v })} label={t("วันที่ปฏิบัติงาน")} />
       </td>
       <td className="px-3 py-2 align-middle">
         <div className="flex items-center gap-1 whitespace-nowrap">
-          <TimePicker value={draft.start_time} onChange={v => setDraft({ ...draft, start_time: v.length === 5 ? v + ":00" : v })} label="เวลาเริ่ม" />
+          <TimePicker value={draft.start_time} onChange={v => setDraft({ ...draft, start_time: v.length === 5 ? v + ":00" : v })} label={t("เวลาเริ่ม")} />
           <span className="text-ink-3">–</span>
-          <TimePicker value={draft.end_time} onChange={v => setDraft({ ...draft, end_time: v.length === 5 ? v + ":00" : v })} label="เวลาสิ้นสุด" />
+          <TimePicker value={draft.end_time} onChange={v => setDraft({ ...draft, end_time: v.length === 5 ? v + ":00" : v })} label={t("เวลาสิ้นสุด")} />
         </div>
       </td>
       <td className="px-3 py-2 align-middle text-right">
@@ -449,7 +452,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
       <td className="px-3 py-2 align-middle">
         <div className="flex flex-col gap-1">
           <Select value={draft.activity} onChange={e => setDraft({ ...draft, activity: e.target.value })} className="w-32">
-            {ACTIVITY_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+            {ACTIVITY_OPTS.map(o => <option key={o.v} value={o.v}>{t(o.l)}</option>)}
           </Select>
           {draft.activity === "other" && (
             <Select
@@ -457,71 +460,71 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
               onChange={e => setDraft({ ...draft, parent_kind: (e.target.value || null) as "lecture" | "lab" | null })}
               className="w-32"
             >
-              <option value="">— คู่กับ —</option>
-              <option value="lecture">คู่บรรยาย</option>
-              <option value="lab">คู่ปฏิบัติการ</option>
+              <option value="">{t("— คู่กับ —")}</option>
+              <option value="lecture">{t("คู่บรรยาย")}</option>
+              <option value="lab">{t("คู่ปฏิบัติการ")}</option>
             </Select>
           )}
         </div>
       </td>
       <td className="px-3 py-2 align-middle">
-        <TextInput value={draft.note ?? ""} onChange={e => setDraft({ ...draft, note: e.target.value })} className="w-40" placeholder="หมายเหตุ" />
+        <TextInput value={draft.note ?? ""} onChange={e => setDraft({ ...draft, note: e.target.value })} className="w-40" placeholder={t("หมายเหตุ")} />
       </td>
       <td className="px-3 py-2 align-middle"><StatusChip status={row.status} /></td>
       <td className="px-3 py-2 align-middle text-right whitespace-nowrap pr-4">
         <div className="inline-flex items-center gap-1">
           <Button variant="primary" size="sm" onClick={save} disabled={!dirty || busy}>
-            <Save size={12} /> บันทึก
+            <Save size={12} /> {t("บันทึก")}
           </Button>
-          <IconButton label="ยกเลิก" variant="ghost" size="sm" onClick={() => { setDraft(row); setEditing(false); }} disabled={busy}>
+          <IconButton label={t("ยกเลิก")} variant="ghost" size="sm" onClick={() => { setDraft(row); setEditing(false); }} disabled={busy}>
             <X size={13} />
           </IconButton>
         </div>
         {stepUpOpen && (
-          <Modal open onClose={closeStepUp} size="md" title="ยืนยันการแก้ไขรายการที่อนุมัติแล้ว" icon={<ShieldCheck size={16} />}>
+          <Modal open onClose={closeStepUp} size="md" title={t("ยืนยันการแก้ไขรายการที่อนุมัติแล้ว")} icon={<ShieldCheck size={16} />}>
             <div className="space-y-3 text-left whitespace-normal">
               <Alert
                 status="warning"
-                title="รายการนี้อาจารย์อนุมัติแล้ว"
-                description="เหตุผลจะถูกส่งถึงอาจารย์ผู้สอนทุกคนของวิชานี้ และบันทึกไว้ในประวัติการแก้ไขถาวร"
+                title={t("รายการนี้อาจารย์อนุมัติแล้ว")}
+                description={t("เหตุผลจะถูกส่งถึงอาจารย์ผู้สอนทุกคนของวิชานี้ และบันทึกไว้ในประวัติการแก้ไขถาวร")}
               />
               <p className="text-xs text-muted">
-                {fmtWorkDate(row.work_date)} {row.start_time.slice(0, 5)}–{row.end_time.slice(0, 5)} ({row.hours.toFixed(2)} ชม.)
+                {fmtWorkDate(row.work_date, i18n)} {row.start_time.slice(0, 5)}–{row.end_time.slice(0, 5)} ({t("{h} ชม.", { h: row.hours.toFixed(2) })})
                 {" → "}
-                {draft.start_time.slice(0, 5)}–{draft.end_time.slice(0, 5)} ({Number(draft.hours).toFixed(2)} ชม.)
+                {draft.start_time.slice(0, 5)}–{draft.end_time.slice(0, 5)} ({t("{h} ชม.", { h: Number(draft.hours).toFixed(2) })})
               </p>
               <div>
-                <label className="mb-1 block text-xs text-ink-2">เหตุผล (อย่างน้อย 10 ตัวอักษร)</label>
+                <label className="mb-1 block text-xs text-ink-2">{t("เหตุผล (อย่างน้อย 10 ตัวอักษร)")}</label>
                 <TextArea
                   className="w-full"
                   value={reason}
                   onChange={e => setReason(e.target.value)}
                   rows={3}
-                  placeholder="เช่น ลงเวลาผิดจากใบลงชื่อจริงของวันนั้น"
+                  placeholder={t("เช่น ลงเวลาผิดจากใบลงชื่อจริงของวันนั้น")}
                 />
                 {!reasonOK && reason.length > 0 && (
-                  <p className="mt-1 text-xs text-red-600">ยังสั้นเกินไป ({reason.trim().length}/10)</p>
+                  <p className="mt-1 text-xs text-red-600">{t("ยังสั้นเกินไป ({n}/10)", { n: reason.trim().length })}</p>
                 )}
               </div>
               <label className="block text-xs text-ink-2">
-                รหัสผ่านของคุณ
+                {t("รหัสผ่านของคุณ")}
                 <TextInput
                   className="mt-1 w-full"
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="ยืนยันว่าเป็นคุณจริง"
+                  placeholder={t("ยืนยันว่าเป็นคุณจริง")}
                 />
               </label>
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onPress={closeStepUp}>ยกเลิก</Button>
+                <Button variant="ghost" size="sm" onPress={closeStepUp}>{t("ยกเลิก")}</Button>
                 <Button
                   variant="primary"
                   size="sm"
                   isDisabled={busy || !reasonOK || password === ""}
                   onPress={() => void submit({ password, reason: reason.trim() })}
                 >
-                  {busy ? <Spinner size="sm" /> : <ShieldCheck size={14} />} บันทึกการแก้ไข
+                  {busy ? <Spinner size="sm" /> : <ShieldCheck size={14} />} {t("บันทึกการแก้ไข")}
                 </Button>
               </div>
             </div>
@@ -544,6 +547,7 @@ function NewRow({
   onDone: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useI18n();
   const [assignmentId, setAssignmentId] = useState(assignments[0]?.assignment_id ?? "");
   const [workDate, setWorkDate] = useState("");
   const [start, setStart] = useState("09:00");
@@ -555,7 +559,7 @@ function NewRow({
   const [busy, setBusy] = useState(false);
 
   async function save() {
-    if (!assignmentId || !workDate) { notify.error("กรุณาเลือก section และวันที่"); return; }
+    if (!assignmentId || !workDate) { notify.error(t("กรุณาเลือก section และวันที่")); return; }
     setBusy(true);
     try {
       await api.put(`/staff/worklogs`, {
@@ -568,7 +572,7 @@ function NewRow({
         parent_kind: activity === "other" ? (parentKind || null) : null,
         note: note || null,
       });
-      notify.success("เพิ่มแล้ว (แบบร่าง ต้องอนุมัติจึงจะนับยอด)");
+      notify.success(t("เพิ่มแล้ว (แบบร่าง ต้องอนุมัติจึงจะนับยอด)"));
       onSaved();
       onDone();
     } catch (e) {
@@ -581,7 +585,7 @@ function NewRow({
   return (
     <tr className="border-t border-hairline bg-brand-soft/20">
       <td className="px-3 py-2 align-middle">
-        <DatePicker value={workDate} onChange={setWorkDate} label="วันที่ปฏิบัติงาน" />
+        <DatePicker value={workDate} onChange={setWorkDate} label={t("วันที่ปฏิบัติงาน")} />
         {assignments.length > 1 && (
           <Select value={assignmentId} onChange={e => setAssignmentId(e.target.value)} className="w-36 mt-1">
             {assignments.map(a => <option key={a.assignment_id} value={a.assignment_id}>Sec {a.section_no} · {a.track}</option>)}
@@ -590,36 +594,36 @@ function NewRow({
       </td>
       <td className="px-3 py-2 align-middle">
         <div className="flex items-center gap-1 whitespace-nowrap">
-          <TimePicker value={start} onChange={setStart} label="เวลาเริ่ม" />
+          <TimePicker value={start} onChange={setStart} label={t("เวลาเริ่ม")} />
           <span className="text-ink-3">–</span>
-          <TimePicker value={end} onChange={setEnd} label="เวลาสิ้นสุด" />
+          <TimePicker value={end} onChange={setEnd} label={t("เวลาสิ้นสุด")} />
         </div>
       </td>
       <td className="px-3 py-2 align-middle text-right"><TextInput type="number" step="0.25" min="0" value={hours} onChange={e => setHours(parseFloat(e.target.value) || 0)} className="w-20 min-w-16 text-right" /></td>
       <td className="px-3 py-2 align-middle">
         <div className="flex flex-col gap-1">
           <Select value={activity} onChange={e => setActivity(e.target.value)} className="w-32">
-            {ACTIVITY_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+            {ACTIVITY_OPTS.map(o => <option key={o.v} value={o.v}>{t(o.l)}</option>)}
           </Select>
           {activity === "other" && (
             <Select value={parentKind} onChange={e => setParentKind(e.target.value as "lecture" | "lab" | "")} className="w-32">
-              <option value="">— คู่กับ —</option>
-              <option value="lecture">คู่บรรยาย</option>
-              <option value="lab">คู่ปฏิบัติการ</option>
+              <option value="">{t("— คู่กับ —")}</option>
+              <option value="lecture">{t("คู่บรรยาย")}</option>
+              <option value="lab">{t("คู่ปฏิบัติการ")}</option>
             </Select>
           )}
         </div>
       </td>
       <td className="px-3 py-2 align-middle">
-        <TextInput value={note} onChange={e => setNote(e.target.value)} className="w-40" placeholder="หมายเหตุ" />
+        <TextInput value={note} onChange={e => setNote(e.target.value)} className="w-40" placeholder={t("หมายเหตุ")} />
       </td>
-      <td className="px-3 py-2 align-middle"><Chip tone="neutral">ใหม่</Chip></td>
+      <td className="px-3 py-2 align-middle"><Chip tone="neutral">{t("ใหม่")}</Chip></td>
       <td className="px-3 py-2 align-middle text-right whitespace-nowrap pr-4">
         <Button variant="primary" size="sm" onClick={save} disabled={busy}>
-          <Save size={12} /> เพิ่ม
+          <Save size={12} /> {t("เพิ่ม")}
         </Button>
         <Button variant="ghost" size="sm" onClick={onDone} disabled={busy}>
-          <X size={12} /> ยกเลิก
+          <X size={12} /> {t("ยกเลิก")}
         </Button>
       </td>
     </tr>

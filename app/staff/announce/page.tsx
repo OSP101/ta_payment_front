@@ -6,6 +6,7 @@ import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import { Skel } from "../../components/Skeletons";
 import { Button, EmptyState, PageHeader, SearchField } from "../../components/ui";
+import { msg, useI18n } from "../../lib/i18n/client";
 import Calendar from "./Calendar";
 import Composer from "./Composer";
 import Detail, { DetailEmpty } from "./Detail";
@@ -42,6 +43,7 @@ function readLayout(): Layout {
 }
 
 export default function AnnouncePage() {
+  const { t } = useI18n();
   const { data: list } = useSWR<Ann[]>(LIST_KEY);
   const [view, setView] = useState<View>({ mode: "browse" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export default function AnnouncePage() {
     try {
       const full = await api.get<Ann>(`/announcements/${id}`);
       compose({ ...draftFromAnn(full), ...whenFor(day) }, full);
-      toast.info("ตั้งวันเผยแพร่ให้แล้ว ตรวจเวลาแล้วกด “ตรวจและตั้งเวลา”");
+      toast.info(t("ตั้งวันเผยแพร่ให้แล้ว ตรวจเวลาแล้วกด “ตรวจและตั้งเวลา”"));
     } catch (e) {
       toast.danger(errMessage(e));
     }
@@ -113,7 +115,7 @@ export default function AnnouncePage() {
   if (view.mode === "compose") {
     return (
       <div>
-        <PageHeader title="ประชาสัมพันธ์" description="เขียน ตรวจ และเผยแพร่ประกาศถึงผู้ใช้ตามกลุ่ม" />
+        <PageHeader title={t("ประชาสัมพันธ์")} description={t("เขียน ตรวจ และเผยแพร่ประกาศถึงผู้ใช้ตามกลุ่ม")} />
         <Composer
           key={view.key}
           initial={view.initial}
@@ -135,7 +137,7 @@ export default function AnnouncePage() {
 
   const filterBar = (
     <div className="mb-3 space-y-2">
-      <SearchField value={q} onChange={setQ} placeholder="ค้นหาหัวข้อหรือเนื้อหา" ariaLabel="ค้นหาประกาศ" className={layout === "list" ? "w-full" : undefined} />
+      <SearchField value={q} onChange={setQ} placeholder={t("ค้นหาหัวข้อหรือเนื้อหา")} ariaLabel={t("ค้นหาประกาศ")} className={layout === "list" ? "w-full" : undefined} />
       <div className="flex flex-wrap gap-1.5">
         {FILTERS.map(f => (
           <button
@@ -145,7 +147,7 @@ export default function AnnouncePage() {
             onClick={() => setStatus(f)}
             className={`chip cursor-pointer transition ${status === f ? "chip-brand" : "chip-neutral"}`}
           >
-            {f === "all" ? "ทั้งหมด" : STATUS_LABEL[f]}{list ? ` ${counts[f]}` : ""}
+            {f === "all" ? t("ทั้งหมด") : t(STATUS_LABEL[f])}{list ? ` ${counts[f]}` : ""}
           </button>
         ))}
       </div>
@@ -165,12 +167,12 @@ export default function AnnouncePage() {
   return (
     <div>
       <PageHeader
-        title="ประชาสัมพันธ์"
-        description="เขียน ตรวจ และเผยแพร่ประกาศถึงผู้ใช้ตามกลุ่ม พร้อมดูผลการส่งรายคน"
+        title={t("ประชาสัมพันธ์")}
+        description={t("เขียน ตรวจ และเผยแพร่ประกาศถึงผู้ใช้ตามกลุ่ม พร้อมดูผลการส่งรายคน")}
         actions={
           <>
-            <div role="group" aria-label="มุมมอง" className="inline-flex rounded-lg border border-border bg-surface p-0.5" data-tour="announce-layout">
-              {([["list", "รายการ", <ListIcon key="l" size={14} />], ["calendar", "ปฏิทิน", <CalendarDays key="c" size={14} />]] as const).map(([v, label, icon]) => (
+            <div role="group" aria-label={t("มุมมอง")} className="inline-flex rounded-lg border border-border bg-surface p-0.5" data-tour="announce-layout">
+              {([["list", msg("รายการ"), <ListIcon key="l" size={14} />], ["calendar", msg("ปฏิทิน"), <CalendarDays key="c" size={14} />]] as const).map(([v, label, icon]) => (
                 <button
                   key={v}
                   type="button"
@@ -181,12 +183,12 @@ export default function AnnouncePage() {
                     (layout === v ? "bg-accent-soft font-medium text-accent-soft-foreground" : "text-ink-2 hover:text-foreground")
                   }
                 >
-                  {icon}{label}
+                  {icon}{t(label)}
                 </button>
               ))}
             </div>
             <Button variant="primary" onPress={() => compose(emptyDraft)} data-tour="announce-new">
-              <Plus size={14} /> เขียนประกาศ
+              <Plus size={14} /> {t("เขียนประกาศ")}
             </Button>
           </>
         }
@@ -209,7 +211,7 @@ export default function AnnouncePage() {
           <div ref={detailRef} className="min-w-0 scroll-mt-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
             {detail ?? (
               <div className="hidden rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted xl:block">
-                คลิกประกาศบนปฏิทินเพื่อดูเนื้อหา ผู้รับ และผลการส่ง
+                {t("คลิกประกาศบนปฏิทินเพื่อดูเนื้อหา ผู้รับ และผลการส่ง")}
               </div>
             )}
           </div>
@@ -225,7 +227,7 @@ export default function AnnouncePage() {
           <div className="overflow-hidden rounded-xl border border-border bg-surface">
             {!list ? (
               <div role="status" aria-busy="true" className="divide-y divide-[var(--hairline)]">
-                <span className="sr-only">กำลังโหลด</span>
+                <span className="sr-only">{t("กำลังโหลด")}</span>
                 {[0, 1, 2, 3].map(i => (
                   <div key={i} className="flex flex-col gap-2 px-4 py-3">
                     <Skel className="h-5 w-32 rounded-full" />
@@ -237,11 +239,11 @@ export default function AnnouncePage() {
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={<Megaphone size={28} />}
-                title={list.length === 0 ? "ยังไม่มีประกาศ" : "ไม่พบประกาศที่ตรงกับตัวกรอง"}
-                description={list.length === 0 ? "กด “เขียนประกาศ” เพื่อเริ่มฉบับแรก" : "ลองเปลี่ยนคำค้นหรือสถานะ"}
+                title={list.length === 0 ? t("ยังไม่มีประกาศ") : t("ไม่พบประกาศที่ตรงกับตัวกรอง")}
+                description={list.length === 0 ? t("กด “เขียนประกาศ” เพื่อเริ่มฉบับแรก") : t("ลองเปลี่ยนคำค้นหรือสถานะ")}
                 action={list.length === 0
-                  ? <Button variant="primary" size="sm" onPress={() => compose(emptyDraft)}><Plus size={13} /> เขียนประกาศ</Button>
-                  : <Button variant="secondary" size="sm" onPress={() => { setQ(""); setStatus("all"); }}>ล้างตัวกรอง</Button>}
+                  ? <Button variant="primary" size="sm" onPress={() => compose(emptyDraft)}><Plus size={13} /> {t("เขียนประกาศ")}</Button>
+                  : <Button variant="secondary" size="sm" onPress={() => { setQ(""); setStatus("all"); }}>{t("ล้างตัวกรอง")}</Button>}
               />
             ) : (
               <ul className="divide-y divide-[var(--hairline)]">
@@ -271,6 +273,7 @@ export default function AnnouncePage() {
 }
 
 function ListRow({ a, active, onSelect }: { a: Ann; active: boolean; onSelect: () => void }) {
+  const { t, intl } = useI18n();
   const total = a.audience_count ?? 0;
   const failed = a.failed_count ?? 0;
   const read = a.read_count ?? 0;
@@ -291,25 +294,26 @@ function ListRow({ a, active, onSelect }: { a: Ann; active: boolean; onSelect: (
         <span className="flex flex-wrap items-center gap-1.5">
           <CategoryChip category={a.category} />
           <StatusChip status={a.status} publishedAt={a.published_at} />
-          {a.pinned && a.status === "live" && <Pin size={12} className="text-brand" aria-label="ปักหมุด" />}
+          {a.pinned && a.status === "live" && <Pin size={12} className="text-brand" aria-label={t("ปักหมุด")} />}
         </span>
         <span className="mt-1.5 block truncate text-sm font-medium text-foreground">{a.title}</span>
         <span className="mt-0.5 block truncate text-xs text-muted">{excerpt}</span>
         <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted">
           {out ? (
             <>
-              <span>{fmtDateTime(a.published_at)}</span>
-              <span className="inline-flex items-center gap-1"><Users size={11} />ถึง {total} คน</span>
-              {total > 0 && <span className="inline-flex items-center gap-1"><Eye size={11} />อ่าน {read}</span>}
+              <span>{fmtDateTime(a.published_at, intl)}</span>
+              <span className="inline-flex items-center gap-1"><Users size={11} />{t("ถึง {n} คน", { n: total })}</span>
+              {total > 0 && <span className="inline-flex items-center gap-1"><Eye size={11} />{t("อ่าน {n}", { n: read })}</span>}
               {failed > 0 && (
                 <span className="inline-flex items-center gap-1 font-medium text-danger">
-                  <AlertTriangle size={11} />ไม่สำเร็จ {failed}
+                  <AlertTriangle size={11} />{t("ไม่สำเร็จ {n}", { n: failed })}
                 </span>
               )}
             </>
           ) : (
             <span>
-              {a.status === "scheduled" ? "ยังไม่มีใครเห็น จนถึงเวลาที่ตั้งไว้" : `แก้ไขล่าสุด ${fmtDateTime(a.updated_at)}`}
+              {a.status === "scheduled" ? t("ยังไม่มีใครเห็น จนถึงเวลาที่ตั้งไว้") : t("แก้ไขล่าสุด {at}", { at: fmtDateTime(a.updated_at, intl) })}
+
             </span>
           )}
         </span>

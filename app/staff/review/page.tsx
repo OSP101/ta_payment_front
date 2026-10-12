@@ -17,15 +17,17 @@ import { Skel, SkelRegion } from "../../components/Skeletons";
 import { ReviewWorkspace } from "./ReviewWorkspace";
 import { SuppliersButton } from "./SuppliersButton";
 import { fmtDate, daysUntil, type Pending } from "./types";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 type Bucket = "pending" | "approved";
 
 const BUCKETS: { id: Bucket; label: string; icon: React.ReactNode }[] = [
-  { id: "pending",  label: "รอตรวจ",     icon: <Clock size={14} /> },
-  { id: "approved", label: "อนุมัติแล้ว", icon: <CheckCircle2 size={14} /> },
+  { id: "pending",  label: msg("รอตรวจ"),     icon: <Clock size={14} /> },
+  { id: "approved", label: msg("อนุมัติแล้ว"), icon: <CheckCircle2 size={14} /> },
 ];
 
 export default function ReviewPage() {
+  const { t } = useI18n();
   // The tab lives in ?tab= so a reload lands back on it. replace, not push:
   // switching tabs isn't a new destination for the back button.
   const params = useSearchParams();
@@ -71,15 +73,15 @@ export default function ReviewPage() {
   return (
     <div>
       <PageHeader
-        title="ตรวจสอบเอกสาร TA"
-        description="กดที่ชื่อ TA เพื่อดูรายละเอียด ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่ออนุมัติครบทุกไฟล์ ระบบจะอนุมัติผู้ใช้ให้อัตโนมัติ"
+        title={t("ตรวจสอบเอกสาร TA")}
+        description={t("กดที่ชื่อ TA เพื่อดูรายละเอียด ตรวจและอนุมัติ/ตีกลับเอกสารทีละไฟล์ เมื่ออนุมัติครบทุกไฟล์ ระบบจะอนุมัติผู้ใช้ให้อัตโนมัติ")}
         actions={<SuppliersButton />}
       />
 
       {/* Approval is now a by-product of approving the third document, so an
           officer can finish reviewing without ever downloading — and the files
           are purged after 7 days. This is the nudge that used to be implicit in
-          the old combined "อนุมัติและดาวน์โหลด" click. */}
+          the old combined t("อนุมัติและดาวน์โหลด") click. */}
       <NotDownloadedNotice people={approved.data} />
 
       <Tabs
@@ -88,11 +90,11 @@ export default function ReviewPage() {
         onSelectionChange={k => setBucket(String(k) as Bucket)}
       >
         <Tabs.ListContainer>
-          <Tabs.List aria-label="สถานะการตรวจสอบ" data-tour="review-tabs">
+          <Tabs.List aria-label={t("สถานะการตรวจสอบ")} data-tour="review-tabs">
             {BUCKETS.map(b => (
               <Tabs.Tab key={b.id} id={b.id}>
                 <TabLabel icon={b.icon} count={counts[b.id]} active={bucket === b.id}>
-                  {b.label}
+                  {t(b.label)}
                 </TabLabel>
                 <Tabs.Indicator />
               </Tabs.Tab>
@@ -157,6 +159,7 @@ function NotDownloadedNotice({ people }: { people?: Pending[] }) {
   );
   if (pendingDownload.length === 0) return null;
 
+  const { t } = useI18n();
   const names = pendingDownload.slice(0, 3).map(p => p.full_name).join(", ");
   const more = pendingDownload.length - 3;
 
@@ -165,8 +168,10 @@ function NotDownloadedNotice({ people }: { people?: Pending[] }) {
       <Alert
         status="warning"
         icon={<AlertTriangle size={18} />}
-        title={`มี ${pendingDownload.length} คนที่อนุมัติแล้วแต่ยังไม่ได้ดาวน์โหลดเอกสาร`}
-        description={`${names}${more > 0 ? ` และอีก ${more} คน` : ""} ไฟล์จะถูกลบอัตโนมัติภายใน 7 วันนับจากวันอนุมัติ กรุณาดาวน์โหลดเก็บไว้ก่อนถึงกำหนด`}
+        title={t("มี {n} คนที่อนุมัติแล้วแต่ยังไม่ได้ดาวน์โหลดเอกสาร", { n: pendingDownload.length })}
+        description={more > 0
+          ? t("{names} และอีก {more} คน ไฟล์จะถูกลบอัตโนมัติภายใน 7 วันนับจากวันอนุมัติ กรุณาดาวน์โหลดเก็บไว้ก่อนถึงกำหนด", { names, more })
+          : t("{names} ไฟล์จะถูกลบอัตโนมัติภายใน 7 วันนับจากวันอนุมัติ กรุณาดาวน์โหลดเก็บไว้ก่อนถึงกำหนด", { names })}
       />
     </div>
   );
@@ -187,6 +192,7 @@ function PendingList({
   /** Submitted-but-not-complete TAs, shown as a nudge list below the queue. */
   incomplete?: Pending[];
 }) {
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -202,9 +208,9 @@ function PendingList({
     return (
       <Alert
         status="danger"
-        title="โหลดข้อมูลไม่สำเร็จ"
+        title={t("โหลดข้อมูลไม่สำเร็จ")}
         action={onRetry ? (
-          <Button variant="secondary" size="sm" onClick={onRetry}>ลองใหม่</Button>
+          <Button variant="secondary" size="sm" onClick={onRetry}>{t("ลองใหม่")}</Button>
         ) : undefined}
       />
     );
@@ -216,8 +222,8 @@ function PendingList({
         <SearchField
           value={q}
           onChange={setQ}
-          ariaLabel="ค้นหาชื่อ / อีเมล"
-          placeholder="ค้นหาชื่อ / อีเมล…"
+          ariaLabel={t("ค้นหาชื่อ / อีเมล")}
+          placeholder={t("ค้นหาชื่อ / อีเมล…")}
         />
       </div>
       {loading || !data ? (
@@ -235,7 +241,7 @@ function PendingList({
         </SkelRegion>
       ) : filtered.length === 0 ? (
         <div className="text-sm text-muted py-6 text-center">
-          {q ? "ไม่พบผลลัพธ์" : "ไม่มีเอกสารที่รอตรวจ"}
+          {q ? t("ไม่พบผลลัพธ์") : t("ไม่มีเอกสารที่รอตรวจ")}
         </div>
       ) : (
         <ul className="divide-y divide-[var(--hairline)] border-t border-[var(--hairline)]">
@@ -296,6 +302,7 @@ function PendingList({
  * look like the queue would invite officers to open rows that have no documents.
  */
 function IncompleteList({ people }: { people?: Pending[] }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   if (!people || people.length === 0) return null;
 
@@ -310,12 +317,12 @@ function IncompleteList({ people }: { people?: Pending[] }) {
       >
         <Clock3 size={14} className="shrink-0 text-muted" />
         <span className="flex-1 text-sm">
-          มี <span className="font-medium">{people.length}</span> คนยังส่งเอกสารไม่ครบ
+          {t.rich("มี {n} คนยังส่งเอกสารไม่ครบ", { n: <span className="font-medium">{people.length}</span> })}
           {notStarted > 0 && (
-            <span className="text-muted"> ในนั้น {notStarted} คนยังไม่ส่งอะไรเลย</span>
+            <span className="text-muted"> {t("ในนั้น {n} คนยังไม่ส่งอะไรเลย", { n: notStarted })}</span>
           )}
         </span>
-        <span className="text-xs text-muted">{open ? "ซ่อน" : "ดูรายชื่อ"}</span>
+        <span className="text-xs text-muted">{open ? t("ซ่อน") : t("ดูรายชื่อ")}</span>
       </button>
       {open && (
         <ul className="divide-y divide-[var(--hairline)] border-t border-[var(--hairline)]">
@@ -333,7 +340,7 @@ function IncompleteList({ people }: { people?: Pending[] }) {
                     not opened the form at all, say so — it is a different
                     conversation from one who is a file short. */}
                 <Chip tone={n === 0 ? "danger" : "warn"}>
-                  {n === 0 ? "ยังไม่ส่งอะไรเลย" : `ส่งแล้ว ${n}/${u.docs_needed ?? 3}`}
+                  {n === 0 ? t("ยังไม่ส่งอะไรเลย") : t("ส่งแล้ว {n}/{total}", { n, total: u.docs_needed ?? 3 })}
                 </Chip>
               </li>
             );
@@ -359,42 +366,43 @@ function DecidedTable({
   /** Only set for the approved bucket — the parent handles password gating. */
   onRedownload?: (u: Pending) => void;
 }) {
+  const { t, intl } = useI18n();
   const emptyText = {
-    pending:  "ไม่มีเอกสารที่รอตรวจ",
-    approved: "ยังไม่มีรายการที่อนุมัติ",
+    pending:  t("ไม่มีเอกสารที่รอตรวจ"),
+    approved: t("ยังไม่มีรายการที่อนุมัติ"),
   }[bucket];
 
   const columns: DataColumn<Pending>[] = [
     {
-      id: "name", width: 220, label: "ชื่อ - นามสกุล", sortable: true, isRowHeader: true,
+      id: "name", width: 220, label: t("ชื่อ - นามสกุล"), sortable: true, isRowHeader: true,
       sortValue: u => u.full_name,
       className: "font-medium",
       render: u => u.full_name,
     },
     {
-      id: "email", width: 240, label: "อีเมล", sortable: true,
+      id: "email", width: 240, label: t("อีเมล"), sortable: true,
       sortValue: u => u.email,
       className: "text-muted",
       render: u => u.email,
     },
     {
-      id: "status", width: 130, label: "สถานะ",
+      id: "status", width: 130, label: t("สถานะ"),
       render: u => <StatusChip status={u.status} />,
     },
     {
-      id: "verified_at", width: 140, label: "วันที่ตรวจ",
+      id: "verified_at", width: 140, label: t("วันที่ตรวจ"),
       className: "text-muted",
-      render: u => fmtDate(u.verified_at),
+      render: u => fmtDate(u.verified_at, intl),
     },
     ...(bucket === "approved"
       ? [{
-          id: "expires_at", width: 120, label: "อายุไฟล์",
+          id: "expires_at", width: 120, label: t("อายุไฟล์"),
           render: (u: Pending) => <RetentionChip user={u} />,
         } satisfies DataColumn<Pending>]
       : []),
     ...(onRedownload
       ? [{
-          id: "actions", width: 150, label: <span className="sr-only">การจัดการ</span>,
+          id: "actions", width: 150, label: <span className="sr-only">{t("การจัดการ")}</span>,
           className: "text-right" as const,
           render: (u: Pending) => (
             <DownloadCell person={u} onRedownload={onRedownload} />
@@ -405,17 +413,17 @@ function DecidedTable({
 
   return (
     <DataTable
-      ariaLabel="รายชื่อ TA"
+      ariaLabel={t("รายชื่อ TA")}
       rows={data}
       loading={loading}
       error={error}
       onRetry={onRetry}
       rowKey={u => u.user_id}
       searchFn={u => `${u.full_name} ${u.email}`}
-      searchPlaceholder="ค้นหาชื่อ / อีเมล…"
+      searchPlaceholder={t("ค้นหาชื่อ / อีเมล…")}
       initialSort={{ column: "verified_at", direction: "descending" }}
       pageSize={20}
-      emptyTitle={emptyText}
+      emptyTitle={t(emptyText)}
       columns={columns}
     />
   );
@@ -425,10 +433,11 @@ function DecidedTable({
  * this TA's approved doc files. Uses `earliest_expires_at` (min across the
  * three docs) so the officer sees the tightest deadline. */
 function RetentionChip({ user }: { user: Pending }) {
+  const { t } = useI18n();
   if (user.all_files_deleted) {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-muted">
-        <Trash2 size={12} /> ถูกลบแล้ว
+        <Trash2 size={12} /> {t("ถูกลบแล้ว")}
       </span>
     );
   }
@@ -439,7 +448,7 @@ function RetentionChip({ user }: { user: Pending }) {
   if (days <= 0) {
     return (
       <Chip tone="warn">
-        <Clock3 size={12} /> หมดอายุแล้ว
+        <Clock3 size={12} /> {t("หมดอายุแล้ว")}
       </Chip>
     );
   }
@@ -448,13 +457,13 @@ function RetentionChip({ user }: { user: Pending }) {
   if (days <= 3) {
     return (
       <Chip tone="warn">
-        <Clock3 size={12} /> เหลือ {days} วัน
+        <Clock3 size={12} /> {t("เหลือ {n} วัน", { n: days })}
       </Chip>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted">
-      <Clock3 size={12} /> เหลือ {days} วัน
+      <Clock3 size={12} /> {t("เหลือ {n} วัน", { n: days })}
     </span>
   );
 }
@@ -484,12 +493,13 @@ function DownloadCell({
   person: Pending;
   onRedownload?: (u: Pending) => void;
 }) {
+  const { t } = useI18n();
   const left = downloadsLeft(person);
 
   if (left === 0) {
     return (
       <Chip tone="danger">
-        <Lock size={12} /> ดาวน์โหลดครบ {person.downloads_limit} ครั้งแล้ว
+        <Lock size={12} /> {t("ดาวน์โหลดครบ {n} ครั้งแล้ว", { n: person.downloads_limit })}
       </Chip>
     );
   }
@@ -502,11 +512,11 @@ function DownloadCell({
         onClick={() => onRedownload?.(person)}
         disabled={person.all_files_deleted}
       >
-        <Lock size={14} /> ดาวน์โหลด
+        <Lock size={14} /> {t("ดาวน์โหลด")}
       </Button>
       {left !== null && !person.all_files_deleted && (
         <span className={"text-xs " + (left === 1 ? "text-warning-soft-foreground" : "text-muted")}>
-          เหลือ {left}/{person.downloads_limit} ครั้ง
+          {t("เหลือ {left}/{limit} ครั้ง", { left, limit: person.downloads_limit })}
         </span>
       )}
     </div>
@@ -524,6 +534,7 @@ function RedownloadModal({
   target: Pending | null;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -542,7 +553,7 @@ function RedownloadModal({
   async function submit() {
     if (!target || busy) return;
     if (!password) {
-      setErr("กรุณากรอกรหัสผ่าน");
+      setErr(t("กรุณากรอกรหัสผ่าน"));
       return;
     }
     setBusy(true);
@@ -555,13 +566,13 @@ function RedownloadModal({
       window.location.assign(
         apiUrl(`/ta-review/${target.user_id}/download.zip?token=${encodeURIComponent(res.zip_token)}`),
       );
-      notify.success("กำลังดาวน์โหลด…");
+      notify.success(t("กำลังดาวน์โหลด…"));
       onClose();
     } catch (e) {
       // Show the server's message inline so the officer can retry without
       // losing modal state; a toast would be easy to miss with focus on
       // the password field.
-      const msg = e instanceof Error ? e.message : "ยืนยันไม่สำเร็จ";
+      const msg = e instanceof Error ? e.message : t("ยืนยันไม่สำเร็จ");
       setErr(msg);
     } finally {
       setBusy(false);
@@ -572,14 +583,14 @@ function RedownloadModal({
     <Modal
       open={!!target}
       onClose={onClose}
-      title="ยืนยันตัวตนก่อนดาวน์โหลด"
+      title={t("ยืนยันตัวตนก่อนดาวน์โหลด")}
       icon={<Shield size={18} />}
       size="sm"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={submit} disabled={busy || !password} isPending={busy}>
-            <Download size={14} /> ยืนยันและดาวน์โหลด
+            <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
           </Button>
         </>
       }
@@ -587,21 +598,22 @@ function RedownloadModal({
       {target && (
         <div className="space-y-4">
           <div className="text-sm text-muted">
-            เอกสารของ <span className="font-medium text-foreground">{target.full_name}</span> มีข้อมูลส่วนบุคคล (เลขบัตร ปชช. / เลขบัญชี)
-            กรุณากรอกรหัสผ่านของคุณเพื่อยืนยันตัวตน
+            {t.rich("เอกสารของ {name} มีข้อมูลส่วนบุคคล (เลขบัตร ปชช. / เลขบัญชี) กรุณากรอกรหัสผ่านของคุณเพื่อยืนยันตัวตน", {
+              name: <span className="font-medium text-foreground">{target.full_name}</span>,
+            })}
           </div>
           {/* Restated at the point of no return: this is the click that spends
-              the allowance, and "เหลือ 1 ครั้ง" means something different here
+              the allowance, and t("เหลือ 1 ครั้ง") means something different here
               than it does on a row the officer is only scanning past. */}
           {downloadsLeft(target) !== null && (
             <Alert
               status={downloadsLeft(target) === 1 ? "warning" : "default"}
               icon={<Lock size={16} />}
-              title={`ครั้งนี้จะเป็นครั้งที่ ${(target.downloads_used ?? 0) + 1} จาก ${target.downloads_limit}`}
+              title={t("ครั้งนี้จะเป็นครั้งที่ {n} จาก {limit}", { n: (target.downloads_used ?? 0) + 1, limit: target.downloads_limit })}
               description={
                 downloadsLeft(target) === 1
-                  ? "เป็นครั้งสุดท้าย หลังจากนี้จะดาวน์โหลดไม่ได้อีก และไม่มีวิธีขอเพิ่ม กรุณาเก็บไฟล์ให้เรียบร้อย"
-                  : "ระบบจำกัดจำนวนการดาวน์โหลดต่อ TA หนึ่งคน เพื่อคุมจำนวนสำเนาที่ออกจากระบบ ใช้ครบแล้วขอเพิ่มไม่ได้"
+                  ? t("เป็นครั้งสุดท้าย หลังจากนี้จะดาวน์โหลดไม่ได้อีก และไม่มีวิธีขอเพิ่ม กรุณาเก็บไฟล์ให้เรียบร้อย")
+                  : t("ระบบจำกัดจำนวนการดาวน์โหลดต่อ TA หนึ่งคน เพื่อคุมจำนวนสำเนาที่ออกจากระบบ ใช้ครบแล้วขอเพิ่มไม่ได้")
               }
             />
           )}
@@ -612,7 +624,7 @@ function RedownloadModal({
             onChange={v => { setPassword(v); if (err) setErr(null); }}
             isInvalid={!!err}
           >
-            <Label>รหัสผ่าน</Label>
+            <Label>{t("รหัสผ่าน")}</Label>
             <InputGroup>
               <InputGroup.Input
                 type={showPw ? "text" : "password"}
@@ -625,7 +637,7 @@ function RedownloadModal({
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowPw(v => !v)}
-                  label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                  label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
                 >
                   {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                 </IconButton>

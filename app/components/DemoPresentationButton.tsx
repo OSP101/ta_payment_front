@@ -9,8 +9,10 @@ import { useSWRConfig } from "swr";
 import { Button } from "@heroui/react";
 import { Presentation } from "lucide-react";
 import { demoLoadPresentation, demoPresentationStatus } from "../lib/api";
+import { useI18n } from "../lib/i18n/client";
 
 export default function DemoPresentationButton() {
+  const { t } = useI18n();
   const { mutate } = useSWRConfig();
   const [loaded, setLoaded] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -31,7 +33,7 @@ export default function DemoPresentationButton() {
       // The term picker and every dashboard read these.
       await mutate(k => typeof k === "string" && (k === "/terms" || k.startsWith("/dashboard")));
     } catch (e) {
-      setMessage({ ok: false, text: e instanceof Error ? e.message : "โหลดไม่สำเร็จ" });
+      setMessage({ ok: false, text: e instanceof Error ? e.message : t("โหลดไม่สำเร็จ") });
     } finally {
       setPending(false);
     }
@@ -39,16 +41,16 @@ export default function DemoPresentationButton() {
 
   return (
     <div className="border-t border-border pt-4 flex flex-col gap-2">
-      <div className="text-xs font-medium text-foreground">ชุดข้อมูลนำเสนอผู้บริหาร</div>
+      <div className="text-xs font-medium text-foreground">{t("ชุดข้อมูลนำเสนอผู้บริหาร")}</div>
       <p className="text-xs text-muted">
-        สร้างภาคเรียนแยกที่มีรายวิชาสมมติ 24 วิชาใน 6 หลักสูตร ครบทุกกรณีบนแดชบอร์ด ไม่กระทบเส้นทางหลัก
+        {t("สร้างภาคเรียนแยกที่มีรายวิชาสมมติ 24 วิชาใน 6 หลักสูตร ครบทุกกรณีบนแดชบอร์ด ไม่กระทบเส้นทางหลัก")}
       </p>
       <Button size="sm" variant="secondary" fullWidth isPending={pending} isDisabled={!!loaded} onPress={load}>
         <Presentation size={14} />
-        {loaded ? `โหลดแล้ว (ภาคเรียน ${loaded})` : "ชุดข้อมูลนำเสนอผู้บริหาร"}
+        {loaded ? t("โหลดแล้ว (ภาคเรียน {term})", { term: loaded }) : t("ชุดข้อมูลนำเสนอผู้บริหาร")}
       </Button>
       {loaded && !message && (
-        <p className="text-xs text-muted">เลือกภาคเรียน {loaded} ที่มุมขวาบน แล้วเปิดแดชบอร์ดหรือมุมมองผู้บริหาร</p>
+        <p className="text-xs text-muted">{t("เลือกภาคเรียน {term} ที่มุมขวาบน แล้วเปิดแดชบอร์ดหรือมุมมองผู้บริหาร", { term: loaded })}</p>
       )}
       {message && (
         <p role="status" className={`text-xs ${message.ok ? "text-emerald-800" : "text-red-700"}`}>{message.text}</p>

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "../lib/i18n/client";
 
 // Minimal signature capture — collects strokes, emits both SVG and PNG-base64.
 // PNG is used for embedding into the DOCX creditor form; SVG is kept as an
@@ -24,6 +25,7 @@ const W = 500;
 const H = 140;
 
 export default function Signature({ value, onChange }: Props) {
+  const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const [strokes, setStrokes] = useState<Point[][]>([]);
@@ -130,7 +132,7 @@ export default function Signature({ value, onChange }: Props) {
           onPointerUp={up}
           onPointerCancel={up}
           onPointerLeave={e => { if (drawingRef.current) up(e); }}
-          aria-label="พื้นที่วาดลายเซ็น"
+          aria-label={t("พื้นที่วาดลายเซ็น")}
           role="img"
           className="touch-none cursor-crosshair block max-w-full h-auto"
         />
@@ -141,9 +143,9 @@ export default function Signature({ value, onChange }: Props) {
           className="tap-target text-sm text-slate-600 hover:text-slate-800"
           onClick={clear}
         >
-          ล้าง
+          {t("ล้าง")}
         </button>
-        {value && <span className="text-xs text-slate-500">✓ มีลายเซ็นบันทึกไว้</span>}
+        {value && <span className="text-xs text-slate-500">{t("✓ มีลายเซ็นบันทึกไว้")}</span>}
       </div>
     </div>
   );

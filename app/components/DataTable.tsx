@@ -5,6 +5,7 @@ import {
   Pagination, Table, type SortDescriptor,
 } from "@heroui/react";
 import { ArrowDownAZ, ArrowUpAZ } from "lucide-react";
+import { msg, useI18n } from "../lib/i18n/client";
 import { EmptyState, SearchField, SelectField, Spinner, Alert, Button, IconButton, type SelectOption } from "./ui";
 
 // Skeleton placeholders shown while the first page of data is still in
@@ -173,11 +174,16 @@ function pageItems(total: number, current: number): (number | "…")[] {
 
 export function DataTable<T>({
   ariaLabel, columns, rows, rowKey,
-  searchFn, searchPlaceholder = "ค้นหา…",
+  searchFn, searchPlaceholder: searchPlaceholderKey = msg("ค้นหา…"),
   filters, initialFilterValues, pageSize = 10, initialSort,
-  emptyTitle = "ไม่มีข้อมูล", emptyDescription,
+  emptyTitle: emptyTitleKey = msg("ไม่มีข้อมูล"), emptyDescription: emptyDescriptionKey,
   loading, error, onRetry, toolbarExtra, minWidth, server, resizable = true,
 }: DataTableProps<T>) {
+  const { t } = useI18n();
+  // Callers may hand over Thai (or already translated) text; t() of either is safe.
+  const searchPlaceholder = t(searchPlaceholderKey);
+  const emptyTitle = t(emptyTitleKey);
+  const emptyDescription = emptyDescriptionKey && t(emptyDescriptionKey);
   // v2: widths became proportional (03/10/2026); v1 saved fixed px for every
   // column, which no longer filled a wide screen.
   const widthsKey = `datatable-widths:v2:${ariaLabel}`;
@@ -413,9 +419,9 @@ export function DataTable<T>({
       {showError ? (
         <Alert
           status="danger"
-          title="โหลดข้อมูลไม่สำเร็จ"
-          description={error instanceof Error ? error.message : "กรุณาลองใหม่อีกครั้ง"}
-          action={onRetry && <Button variant="secondary" size="sm" onPress={onRetry}>ลองใหม่</Button>}
+          title={t("โหลดข้อมูลไม่สำเร็จ")}
+          description={error instanceof Error ? error.message : t("กรุณาลองใหม่อีกครั้ง")}
+          action={onRetry && <Button variant="secondary" size="sm" onPress={onRetry}>{t("ลองใหม่")}</Button>}
         />
       ) : (
       <div className="relative" aria-busy={!!loading}>
@@ -431,7 +437,7 @@ export function DataTable<T>({
           {mobileSortOptions.length > 1 && total > 0 && (
             <div className="mb-2 flex items-center gap-2">
               <SelectField
-                placeholder="เรียงตาม"
+                placeholder={t("เรียงตาม")}
                 value={String(sort?.column ?? mobileSortOptions[0].id)}
                 onChange={v => setSort({ column: v, direction: sort?.direction ?? "ascending" })}
                 options={mobileSortOptions}
@@ -442,7 +448,7 @@ export function DataTable<T>({
                 size="sm"
                 // The label names what pressing does, not what the list is doing
                 // now — it matches the icon, which points at the next state.
-                label={sort?.direction === "descending" ? "เรียงจากน้อยไปมาก" : "เรียงจากมากไปน้อย"}
+                label={sort?.direction === "descending" ? t("เรียงจากน้อยไปมาก") : t("เรียงจากมากไปน้อย")}
                 onPress={() => setSort({
                   column: sort?.column ?? mobileSortOptions[0].id,
                   direction: sort?.direction === "descending" ? "ascending" : "descending",
@@ -458,8 +464,8 @@ export function DataTable<T>({
               <CardRowsSkeleton />
             ) : (
               <EmptyState
-                title={hasQuery ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}
-                description={hasQuery ? "ลองปรับคำค้นหาหรือตัวกรอง" : emptyDescription}
+                title={hasQuery ? t("ไม่พบรายการที่ตรงกับเงื่อนไข") : emptyTitle}
+                description={hasQuery ? t("ลองปรับคำค้นหาหรือตัวกรอง") : emptyDescription}
               />
             )
           ) : (
@@ -539,8 +545,8 @@ export function DataTable<T>({
               renderEmptyState={() =>
                 firstLoad ? null : (
                   <EmptyState
-                    title={hasQuery ? "ไม่พบรายการที่ตรงกับเงื่อนไข" : emptyTitle}
-                    description={hasQuery ? "ลองปรับคำค้นหาหรือตัวกรอง" : emptyDescription}
+                    title={hasQuery ? t("ไม่พบรายการที่ตรงกับเงื่อนไข") : emptyTitle}
+                    description={hasQuery ? t("ลองปรับคำค้นหาหรือตัวกรอง") : emptyDescription}
                   />
                 )
               }
@@ -577,7 +583,7 @@ export function DataTable<T>({
           <div className="mt-3 border-t border-(--hairline) pt-3">
             <Pagination size="sm" className="w-full justify-between gap-2">
               <Pagination.Summary className="text-xs sm:text-sm">
-                {start + 1}–{Math.min(start + pageSize, total)} จาก {total} รายการ
+                {t("{from}–{to} จาก {total} รายการ", { from: start + 1, to: Math.min(start + pageSize, total), total })}
               </Pagination.Summary>
               {totalPages > 1 && (
                 <Pagination.Content>
@@ -624,7 +630,7 @@ export function DataTable<T>({
         >
           <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-(--hairline) bg-surface/95 px-3 py-1.5 text-xs text-(--ink-2) shadow-sm">
             <Spinner size="sm" />
-            กำลังโหลดข้อมูล…
+            {t("กำลังโหลดข้อมูล…")}
           </div>
         </div>
       )}

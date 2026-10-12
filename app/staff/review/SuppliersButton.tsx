@@ -7,6 +7,7 @@ import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { Button, Modal, Chip, TipWrap } from "../../components/ui";
 import { useTerm } from "../TermContext";
+import { useI18n } from "../../lib/i18n/client";
 
 /** GET /ta-review/suppliers — one new TA of the term. No PII: only whether
  *  each piece is on file, and why the TA is left out when they are. */
@@ -31,6 +32,7 @@ interface SupplierCandidate {
  * supplier in the ERP. Uses the top-bar term, like every other staff page.
  */
 export function SuppliersButton() {
+  const { t } = useI18n();
   const { termId, termLabel } = useTerm();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
@@ -55,16 +57,16 @@ export function SuppliersButton() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Suppliers-ทีเอใหม่-${termLabel.split("/").reverse().join("-") || "term"}.xlsx`;
+      a.download = `Suppliers-ทีเอใหม่-${termLabel.split("/").reverse().join("-") || "term"}.xlsx`; // i18n-ignore — file name of the Thai finance export
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      notify.success(`ดาวน์โหลดไฟล์ Suppliers ของทีเอใหม่ ${ready.length} คนแล้ว`);
+      notify.success(t("ดาวน์โหลดไฟล์ Suppliers ของทีเอใหม่ {n} คนแล้ว", { n: ready.length }));
       setOpen(false);
     } catch (e) {
       // Inline, not a toast: focus is in the password field.
-      setErr(e instanceof Error ? e.message : "ดาวน์โหลดไม่สำเร็จ");
+      setErr(e instanceof Error ? e.message : t("ดาวน์โหลดไม่สำเร็จ"));
     } finally {
       setBusy(false);
     }
@@ -72,53 +74,52 @@ export function SuppliersButton() {
 
   return (
     <>
-      <TipWrap content={termId ? `รายชื่อทีเอใหม่ของภาคการศึกษา ${termLabel} สำหรับส่งฝ่ายการเงิน` : "ยังไม่ได้เลือกภาคการศึกษา"} className="inline-flex">
+      <TipWrap content={termId ? t("รายชื่อทีเอใหม่ของภาคการศึกษา {term} สำหรับส่งฝ่ายการเงิน", { term: termLabel }) : t("ยังไม่ได้เลือกภาคการศึกษา")} className="inline-flex">
         <Button
           size="sm"
           variant="secondary"
           isDisabled={!termId}
           onPress={() => { setPassword(""); setErr(null); setOpen(true); }}
         >
-          <FileSpreadsheet size={14} /> ไฟล์ Suppliers ทีเอใหม่
+          <FileSpreadsheet size={14} /> {t("ไฟล์ Suppliers ทีเอใหม่")}
         </Button>
       </TipWrap>
 
       <Modal
         open={open}
         onClose={() => { if (!busy) setOpen(false); }}
-        title={`ไฟล์ Suppliers ทีเอใหม่ ภาคการศึกษา ${termLabel}`}
+        title={t("ไฟล์ Suppliers ทีเอใหม่ ภาคการศึกษา {term}", { term: termLabel })}
         icon={<FileSpreadsheet size={18} />}
         size="lg"
         footer={
           <>
             <Button variant="ghost" onPress={() => setOpen(false)} isDisabled={busy}>
-              ยกเลิก
+              {t("ยกเลิก")}
             </Button>
             <Button onPress={submit} isDisabled={busy || !password || ready.length === 0} isPending={busy}>
-              <Download size={14} /> ยืนยันและดาวน์โหลด
+              <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
           <p className="text-sm text-muted">
-            ทีเอที่ได้รับอนุมัติเป็นครั้งแรกในภาคการศึกษานี้ ฝ่ายการเงินใช้ไฟล์นี้ลงทะเบียนผู้รับเงินในระบบ ERP
+            {t("ทีเอที่ได้รับอนุมัติเป็นครั้งแรกในภาคการศึกษานี้ ฝ่ายการเงินใช้ไฟล์นี้ลงทะเบียนผู้รับเงินในระบบ ERP")}
           </p>
 
           {isLoading ? (
-            <p className="text-sm text-muted">กำลังโหลดรายชื่อ…</p>
+            <p className="text-sm text-muted">{t("กำลังโหลดรายชื่อ…")}</p>
           ) : (data ?? []).length === 0 ? (
             <p className="rounded-lg border border-[var(--hairline)] p-3 text-sm text-muted">
-              ภาคการศึกษานี้ยังไม่มีทีเอใหม่ที่ได้รับอนุมัติคำขอ
+              {t("ภาคการศึกษานี้ยังไม่มีทีเอใหม่ที่ได้รับอนุมัติคำขอ")}
             </p>
           ) : (
             <>
               <div>
-                <p className="text-sm font-medium">อยู่ในไฟล์ {ready.length} คน</p>
+                <p className="text-sm font-medium">{t("อยู่ในไฟล์ {n} คน", { n: ready.length })}</p>
                 {gaps > 0 && (
                   <p className="mt-1 text-xs text-muted">
-                    {gaps} คนได้รับอนุมัติก่อนระบบเริ่มเก็บข้อมูลนี้ ช่องที่ขาดในไฟล์จะว่างและระบายสีเหลือง
-                    ให้กรอกจากแบบแจ้งข้อมูลเจ้าหนี้ของทีเอคนนั้น
+                    {t("{n} คนได้รับอนุมัติก่อนระบบเริ่มเก็บข้อมูลนี้ ช่องที่ขาดในไฟล์จะว่างและระบายสีเหลือง ให้กรอกจากแบบแจ้งข้อมูลเจ้าหนี้ของทีเอคนนั้น", { n: gaps })}
                   </p>
                 )}
                 {ready.length > 0 && (
@@ -135,7 +136,7 @@ export function SuppliersButton() {
               </div>
               {left.length > 0 && (
                 <div>
-                  <p className="text-sm font-medium">ยังไม่อยู่ในไฟล์ {left.length} คน</p>
+                  <p className="text-sm font-medium">{t("ยังไม่อยู่ในไฟล์ {n} คน", { n: left.length })}</p>
                   <ul className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-[var(--hairline)] divide-y divide-[var(--hairline)]">
                     {left.map(c => (
                       <li key={c.user_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 text-sm">
@@ -154,8 +155,7 @@ export function SuppliersButton() {
             <div className="flex items-start gap-2">
               <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
               <p className="text-xs text-muted">
-                ไฟล์นี้มีเลขบัตรประชาชน เลขที่บัญชีธนาคาร และที่อยู่ของทีเอ จึงต้องยืนยันรหัสผ่านทุกครั้ง
-                ระบบบันทึกว่าใครดาวน์โหลดและมีใครอยู่ในไฟล์ กรุณาส่งให้ฝ่ายการเงินผ่านช่องทางของหน่วยงานเท่านั้น
+                {t("ไฟล์นี้มีเลขบัตรประชาชน เลขที่บัญชีธนาคาร และที่อยู่ของทีเอ จึงต้องยืนยันรหัสผ่านทุกครั้ง ระบบบันทึกว่าใครดาวน์โหลดและมีใครอยู่ในไฟล์ กรุณาส่งให้ฝ่ายการเงินผ่านช่องทางของหน่วยงานเท่านั้น")}
               </p>
             </div>
           </div>
@@ -167,7 +167,7 @@ export function SuppliersButton() {
             onChange={v => { setPassword(v); if (err) setErr(null); }}
             isInvalid={!!err}
           >
-            <Label>รหัสผ่านของคุณ</Label>
+            <Label>{t("รหัสผ่านของคุณ")}</Label>
             <InputGroup>
               <InputGroup.Input type="password" autoComplete="current-password" />
             </InputGroup>

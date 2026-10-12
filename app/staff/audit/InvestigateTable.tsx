@@ -4,6 +4,7 @@ import { KeyRound, Link2, Search } from "lucide-react";
 import { Chip, Tip, TipWrap } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { RowBadges } from "./RowBadges";
+import { useI18n, type TFn } from "../../lib/i18n/client";
 import {
   NETWORK_LABEL, OUTCOME_LABEL, ROLE_LABEL, actorText, clockSeconds, dateStamp, subjectText,
   type Actor, type Catalog, type Row, type Trace,
@@ -48,7 +49,8 @@ export function InvestigateTable({
   onActor: (id: string) => void;
   toolbarExtra?: React.ReactNode;
 }) {
-  const columns = useMemo(() => buildColumns(onOpen, onTrace, onActor), [onOpen, onTrace, onActor]);
+  const { t, intl } = useI18n();
+  const columns = useMemo(() => buildColumns(onOpen, onTrace, onActor, t, intl), [onOpen, onTrace, onActor, t, intl]);
 
   const actionOptions = useMemo(() => {
     const cats = catalog?.categories ?? [];
@@ -58,31 +60,31 @@ export function InvestigateTable({
       (a, b) => (order.get(a.category) ?? 99) - (order.get(b.category) ?? 99) || a.label.localeCompare(b.label, "th"),
     );
     return [
-      { id: "", label: "ทุกเหตุการณ์" },
+      { id: "", label: t("ทุกเหตุการณ์") },
       ...sorted.map(a => ({
         id: a.action,
         // Two actions can share words; the category in front tells them apart.
         label: `${label.get(a.category) ?? a.category}: ${a.label}`,
       })),
     ];
-  }, [catalog]);
+  }, [catalog, t]);
 
   // An actor picked from a row may not be among the busiest in the window;
   // without an option for them the select would show as empty.
   const actorOptions = useMemo(() => {
     const opts = actors.map(a => ({
       id: a.id,
-      label: `${a.name || a.id.slice(0, 8)} (${a.count.toLocaleString("th-TH")})`,
+      label: `${a.name || a.id.slice(0, 8)} (${a.count.toLocaleString(intl)})`,
     }));
     if (filters.actor && !actors.some(a => a.id === filters.actor)) {
-      opts.unshift({ id: filters.actor, label: `ผู้ใช้ ${filters.actor.slice(0, 8)}` });
+      opts.unshift({ id: filters.actor, label: t("ผู้ใช้ {id}", { id: filters.actor.slice(0, 8) }) });
     }
-    return [{ id: "", label: "ทุกคน" }, ...opts];
-  }, [actors, filters.actor]);
+    return [{ id: "", label: t("ทุกคน") }, ...opts];
+  }, [actors, filters.actor, t, intl]);
 
   return (
     <DataTable
-      ariaLabel="บันทึกการใช้งาน แบบสืบสวน"
+      ariaLabel={t("บันทึกการใช้งาน แบบสืบสวน")}
       rows={rows}
       loading={loading}
       error={error}
@@ -93,9 +95,9 @@ export function InvestigateTable({
       filters={[
         {
           id: "category",
-          placeholder: "ทุกหมวด",
+          placeholder: t("ทุกหมวด"),
           options: [
-            { id: "", label: "ทุกหมวด" },
+            { id: "", label: t("ทุกหมวด") },
             ...(catalog?.categories ?? []).map(c => ({ id: c.id, label: c.label })),
           ],
           // Server mode: the API answers every filter. The predicate is never
@@ -104,30 +106,30 @@ export function InvestigateTable({
         },
         {
           id: "outcome",
-          placeholder: "ทุกผลลัพธ์",
+          placeholder: t("ทุกผลลัพธ์"),
           options: [
-            { id: "", label: "ทุกผลลัพธ์" },
-            { id: "ok", label: OUTCOME_LABEL.ok },
-            { id: "failed", label: OUTCOME_LABEL.failed },
-            { id: "denied", label: OUTCOME_LABEL.denied },
+            { id: "", label: t("ทุกผลลัพธ์") },
+            { id: "ok", label: t(OUTCOME_LABEL.ok) },
+            { id: "failed", label: t(OUTCOME_LABEL.failed) },
+            { id: "denied", label: t(OUTCOME_LABEL.denied) },
           ],
           predicate: () => true,
         },
         {
           id: "role",
-          placeholder: "ทุกบทบาท",
+          placeholder: t("ทุกบทบาท"),
           options: [
-            { id: "", label: "ทุกบทบาท" },
-            ...["admin", "staff", "lecturer", "ta"].map(id => ({ id, label: ROLE_LABEL[id] })),
+            { id: "", label: t("ทุกบทบาท") },
+            ...["admin", "staff", "lecturer", "ta"].map(id => ({ id, label: t(ROLE_LABEL[id]) })),
           ],
           predicate: () => true,
         },
-        { id: "action", placeholder: "ทุกเหตุการณ์", options: actionOptions, predicate: () => true },
-        { id: "actor", placeholder: "ทุกคน", options: actorOptions, predicate: () => true },
+        { id: "action", placeholder: t("ทุกเหตุการณ์"), options: actionOptions, predicate: () => true },
+        { id: "actor", placeholder: t("ทุกคน"), options: actorOptions, predicate: () => true },
       ]}
       pageSize={pageSize}
-      emptyTitle="ไม่พบรายการ"
-      emptyDescription="ลองขยายช่วงเวลา หรือลดตัวกรองลง"
+      emptyTitle={t("ไม่พบรายการ")}
+      emptyDescription={t("ลองขยายช่วงเวลา หรือลดตัวกรองลง")}
       columns={columns}
       server={{
         total,
@@ -156,10 +158,12 @@ function buildColumns(
   onOpen: (r: Row) => void,
   onTrace: (t: Trace) => void,
   onActor: (id: string) => void,
+  t: TFn,
+  intl: string,
 ): DataColumn<Row>[] {
   return [
     {
-      id: "ref", width: 110, label: "อ้างอิง", isRowHeader: true,
+      id: "ref", width: 110, label: t("อ้างอิง"), isRowHeader: true,
       className: "whitespace-nowrap font-mono text-xs",
       render: r => (
         <button type="button" className="text-(--brand) underline decoration-dotted" onClick={() => onOpen(r)}>
@@ -168,17 +172,17 @@ function buildColumns(
       ),
     },
     {
-      id: "at", width: 150, label: "เวลา",
+      id: "at", width: 150, label: t("เวลา"),
       className: "whitespace-nowrap text-xs",
       render: r => (
         <div className="leading-tight tabular-nums">
-          <div>{dateStamp(r.at)}</div>
-          <div className="text-(--ink-3)">{clockSeconds(r.at)}</div>
+          <div>{dateStamp(r.at, intl)}</div>
+          <div className="text-(--ink-3)">{clockSeconds(r.at, intl)}</div>
         </div>
       ),
     },
     {
-      id: "what", width: 260, label: "เหตุการณ์",
+      id: "what", width: 260, label: t("เหตุการณ์"),
       className: "min-w-64",
       render: r => (
         <div className="min-w-0">
@@ -191,13 +195,13 @@ function buildColumns(
       ),
     },
     {
-      id: "actor", width: 180, label: "ผู้กระทำ",
+      id: "actor", width: 180, label: t("ผู้กระทำ"),
       className: "whitespace-nowrap",
       render: r => (
         <span className="text-xs">
           {r.actor_id ? (
             <>
-              <Tip content="ดูทุกอย่างที่คนนี้ทำ">
+              <Tip content={t("ดูทุกอย่างที่คนนี้ทำ")}>
                 <button type="button" className="text-(--brand) underline decoration-dotted"
                   onClick={() => onActor(r.actor_id!)}>
                   {r.actor_name || r.actor_id.slice(0, 8)}
@@ -205,26 +209,26 @@ function buildColumns(
               </Tip>
               <span className="ml-1.5">
                 {r.actor_role
-                  ? <Chip tone="neutral">{ROLE_LABEL[r.actor_role] ?? r.actor_role}</Chip>
-                  : <TipWrap content="รายการนี้บันทึกก่อนที่ระบบจะเก็บบทบาท" inline>
-                      <span className="text-(--ink-3)">ไม่ระบุบทบาท</span>
+                  ? <Chip tone="neutral">{ROLE_LABEL[r.actor_role] ? t(ROLE_LABEL[r.actor_role]) : r.actor_role}</Chip>
+                  : <TipWrap content={t("รายการนี้บันทึกก่อนที่ระบบจะเก็บบทบาท")} inline>
+                      <span className="text-(--ink-3)">{t("ไม่ระบุบทบาท")}</span>
                     </TipWrap>}
               </span>
             </>
           ) : (
-            <span className="text-(--ink-3)">{actorText(r)}</span>
+            <span className="text-(--ink-3)">{actorText(r, t)}</span>
           )}
         </span>
       ),
     },
     {
-      id: "subject", width: 200, label: "เกี่ยวกับ",
+      id: "subject", width: 200, label: t("เกี่ยวกับ"),
       className: "min-w-52 text-xs",
       render: r => {
         const s = subjectText(r);
         return (
           <div className="min-w-0">
-            {s ? <div>{s}</div> : !r.entity_id && <span className="text-(--ink-4)">ไม่มี</span>}
+            {s ? <div>{s}</div> : !r.entity_id && <span className="text-(--ink-4)">{t("ไม่มี")}</span>}
             {r.entity_id && (
               <TipWrap content={`${r.entity} ${r.entity_id}`} inline>
                 <span className="font-mono text-[11px] text-(--ink-3)">
@@ -237,18 +241,18 @@ function buildColumns(
       },
     },
     {
-      id: "where", width: 140, label: "จากที่ไหน",
+      id: "where", width: 140, label: t("จากที่ไหน"),
       className: "whitespace-nowrap text-xs",
       hideOnMobile: true,
       render: r => (
         r.ip ? (
-          <TipWrap content={[r.device, r.network ? NETWORK_LABEL[r.network] : ""].filter(Boolean).join(" · ")} inline>
+          <TipWrap content={[r.device, r.network && NETWORK_LABEL[r.network] ? t(NETWORK_LABEL[r.network]) : ""].filter(Boolean).join(" · ")} inline>
             <span className="leading-tight">
               <span className="block font-mono">{r.ip}</span>
-              <span className="block text-(--ink-3)">{r.device || "ไม่ทราบอุปกรณ์"}</span>
+              <span className="block text-(--ink-3)">{r.device || t("ไม่ทราบอุปกรณ์")}</span>
             </span>
           </TipWrap>
-        ) : <span className="text-(--ink-4)">ไม่ได้บันทึก</span>
+        ) : <span className="text-(--ink-4)">{t("ไม่ได้บันทึก")}</span>
       ),
     },
     {
@@ -257,23 +261,23 @@ function buildColumns(
       render: r => (
         <div className="flex items-center justify-end gap-2.5">
           {r.request_id && (
-            <Tip content="ทุกอย่างที่ request เดียวกันนี้ทำ">
-              <button type="button" aria-label="ตาม request" className="text-(--ink-3) hover:text-(--brand)"
+            <Tip content={t("ทุกอย่างที่ request เดียวกันนี้ทำ")}>
+              <button type="button" aria-label={t("ตาม request")} className="text-(--ink-3) hover:text-(--brand)"
                 onClick={() => onTrace({ kind: "request", id: r.request_id! })}>
                 <Link2 size={14} />
               </button>
             </Tip>
           )}
           {r.session_id && (
-            <Tip content="ทุกอย่างใน session (การเข้าระบบ) เดียวกัน">
-              <button type="button" aria-label="ตาม session" className="text-(--ink-3) hover:text-(--brand)"
+            <Tip content={t("ทุกอย่างใน session (การเข้าระบบ) เดียวกัน")}>
+              <button type="button" aria-label={t("ตาม session")} className="text-(--ink-3) hover:text-(--brand)"
                 onClick={() => onTrace({ kind: "session", id: r.session_id! })}>
                 <KeyRound size={14} />
               </button>
             </Tip>
           )}
-          <Tip content="รายละเอียดและข้อมูลดิบ">
-            <button type="button" aria-label="รายละเอียด" className="text-(--ink-3) hover:text-(--brand)"
+          <Tip content={t("รายละเอียดและข้อมูลดิบ")}>
+            <button type="button" aria-label={t("รายละเอียด")} className="text-(--ink-3) hover:text-(--brand)"
               onClick={() => onOpen(r)}>
               <Search size={14} />
             </button>

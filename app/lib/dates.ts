@@ -1,9 +1,6 @@
 // Date helpers shared across pages.
 
-const THAI_MONTHS_ABBR = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-] as const;
+import { formatDate, type Locale } from "./i18n/core";
 
 // submission_periods.year_month is an ACADEMIC-year key ("2568-01" is
 // มกราคม 2569), so plain string order puts ม.ค.–พ.ค. before มิ.ย.–ธ.ค. of the
@@ -25,15 +22,12 @@ export function localDateISO(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** "2026-06-15" (ISO Gregorian) → "15 มิ.ย. 2569" (BE). Anything unparsable is
- *  returned unchanged. */
-export function thaiDate(iso?: string | null): string {
-  if (!iso) return "-";
-  const parts = iso.slice(0, 10).split("-").map(Number);
-  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return iso;
-  const [y, m, d] = parts;
-  if (m < 1 || m > 12) return iso;
-  return `${d} ${THAI_MONTHS_ABBR[m - 1]} ${y + 543}`;
+/** "2026-06-15" (ISO Gregorian) → "15 มิ.ย. 2569" (BE), or "15 Jun 2026"
+ *  with locale "en". Anything unparsable is returned unchanged. Components
+ *  should prefer fmtDate() from useI18n(); this stays for callers that pass
+ *  the locale themselves (or still expect Thai). */
+export function thaiDate(iso?: string | null, locale: Locale = "th"): string {
+  return formatDate(locale, iso);
 }
 
 /** Hours for display. work_logs.hours is stored exact (minutes/60, e.g.

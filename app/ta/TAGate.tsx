@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 import { Alert, Button, Tip, TipWrap } from "../components/ui";
+import { msg, useI18n } from "../lib/i18n/client";
 
 // TAApprovalContext lets any TA-scoped component (pages, sidebar bell, etc.)
 // know whether the current user's profile has been approved. It is provided
@@ -31,13 +32,14 @@ export function TAApprovalProvider({
 }
 
 // LockedActionButton disables its inner button when the TA is not approved.
-const LOCKED_REASON = "รอเจ้าหน้าที่อนุมัติเอกสาร";
+const LOCKED_REASON = msg("รอเจ้าหน้าที่อนุมัติเอกสาร");
 export function LockedActionButton({
   children,
   disabled,
   ...rest
 }: React.ComponentProps<typeof Button>) {
   const { approved } = useTAApproval();
+  const { t } = useI18n();
   const button = (
     <Button {...rest} disabled={disabled || !approved}>
       {children}
@@ -48,7 +50,7 @@ export function LockedActionButton({
   // wrapping span (which still receives them).
   if (!approved) {
     return (
-      <TipWrap content={LOCKED_REASON} className="inline-flex">
+      <TipWrap content={t(LOCKED_REASON)} className="inline-flex">
         {button}
       </TipWrap>
     );
@@ -69,6 +71,7 @@ export function LockedActionButton({
 export function TAApprovalBanner() {
   const { approved, status } = useTAApproval();
   const pathname = usePathname();
+  const { t } = useI18n();
   if (approved) return null;
   if (pathname === "/ta/documents" || pathname === "/ta" || pathname === "/ta/schedule") return null;
 
@@ -79,16 +82,16 @@ export function TAApprovalBanner() {
         icon={<AlertTriangle size={18} />}
         title={
           status === "rejected"
-            ? "เอกสารไม่ผ่านการตรวจสอบ โปรดแก้ไขและส่งใหม่"
+            ? t("เอกสารไม่ผ่านการตรวจสอบ โปรดแก้ไขและส่งใหม่")
             : status === "submitted"
-              ? "เอกสารรอเจ้าหน้าที่ตรวจสอบ"
-              : "ยังไม่ได้ส่งเอกสาร เมนูอื่นจะถูกล็อกจนกว่าจะอนุมัติ"
+              ? t("เอกสารรอเจ้าหน้าที่ตรวจสอบ")
+              : t("ยังไม่ได้ส่งเอกสาร เมนูอื่นจะถูกล็อกจนกว่าจะอนุมัติ")
         }
-        description="คุณดูเมนูต่าง ๆ ได้ แต่ยังบันทึก/ส่งข้อมูลไม่ได้ จนกว่าเจ้าหน้าที่จะอนุมัติเอกสารในโปรไฟล์"
+        description={t("คุณดูเมนูต่าง ๆ ได้ แต่ยังบันทึก/ส่งข้อมูลไม่ได้ จนกว่าเจ้าหน้าที่จะอนุมัติเอกสารในโปรไฟล์")}
         action={
           <Link href="/ta/documents">
             <Button variant="primary" size="sm">
-              ไปที่เอกสาร <ArrowRight size={14} />
+              {t("ไปที่เอกสาร")} <ArrowRight size={14} />
             </Button>
           </Link>
         }

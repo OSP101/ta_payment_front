@@ -24,6 +24,7 @@ import { type Executive, emptyExecutive } from "./types";
 import { TermProvider, useTerm } from "./TermContext";
 import TermSwitcher from "./TermSwitcher";
 import TourLauncher from "./tours/TourLauncher";
+import { msg } from "../lib/i18n/client";
 
 // The four steps a payment actually travels through, in order. Numbered
 // instead of iconned at the lecturers' request: icons made every entry look
@@ -38,30 +39,30 @@ import TourLauncher from "./tours/TourLauncher";
 // sit untouched for a week and the sidebar looked identical to a clear one.
 const buildNav = (s: Executive, isAdmin: boolean): NavSection[] => [
   {
-    title: "ภาพรวม",
-    items: [{ label: "แดชบอร์ด", href: "/staff", icon: LayoutDashboard }],
+    title: msg("ภาพรวม"),
+    items: [{ label: msg("แดชบอร์ด"), href: "/staff", icon: LayoutDashboard }],
   },
   {
-    title: "สิ่งที่ต้องทำ",
+    title: msg("สิ่งที่ต้องทำ"),
     items: [
-      { step: 1, label: "ตรวจคำร้องขอ TA", href: "/staff/approvals",
-        badge: s.pending_ta_requests, badgeLabel: "คำร้องรอตรวจ" },
+      { step: 1, label: msg("ตรวจคำร้องขอ TA"), href: "/staff/approvals",
+        badge: s.pending_ta_requests, badgeLabel: msg("คำร้องรอตรวจ") },
       // "แบบแจ้งเจ้าหนี้" — the KKU creditor-registration form. "ใบแจ้งหนี้" is
       // an invoice, a different document; the page itself reviews TA documents.
-      { step: 2, label: "ตรวจเอกสาร TA", href: "/staff/review",
-        badge: s.pending_reviews, badgeLabel: "แบบฟอร์มรอตรวจ" },
+      { step: 2, label: msg("ตรวจเอกสาร TA"), href: "/staff/review",
+        badge: s.pending_reviews, badgeLabel: msg("แบบฟอร์มรอตรวจ") },
       // Steps 3 and 4 were merged on 31/07/2026. They were one errand split
       // across two menus: an officer who finished a review was left on a screen
       // with no way forward and had to know that a separate export menu existed.
       // The badge is now one number in the unit the screen lists — courses with
       // something to do — instead of two counts of two different things that
       // could not be added together.
-      { step: 3, label: "ตรวจและส่งออกเอกสาร", href: "/staff/payouts",
-        badge: s.payout_courses_actionable, badgeLabel: "วิชาที่ทำได้ตอนนี้" },
+      { step: 3, label: msg("ตรวจและส่งออกเอกสาร"), href: "/staff/payouts",
+        badge: s.payout_courses_actionable, badgeLabel: msg("วิชาที่ทำได้ตอนนี้") },
     ],
   },
   {
-    title: "จัดการ",
+    title: msg("จัดการ"),
     items: [
       // Printing appointment orders is a term-level act that gates everything
       // above; it lived as a tab inside the export screen, where it read as one
@@ -71,43 +72,43 @@ const buildNav = (s: Executive, isAdmin: boolean): NavSection[] => [
       // order — the exact list the next round would print. A TA without an
       // order cannot pass payout review, so this is workflow-gating work, which
       // is what badges mean here. Same number the page itself shows.
-      { label: "ใบแต่งตั้งทีเอ", href: "/staff/appointments", icon: FileSignature,
-        badge: s.pending_appointments, badgeLabel: "รายชื่อรอออกคำสั่ง" },
+      { label: msg("ใบแต่งตั้งทีเอ"), href: "/staff/appointments", icon: FileSignature,
+        badge: s.pending_appointments, badgeLabel: msg("รายชื่อรอออกคำสั่ง") },
       // สรุปรายวิชาที่ขอใช้ TA / ปะหน้าจ่ายตรง / รหัสคู่ (10/08/2026) — briefly
       // lived under ใบแต่งตั้งทีเอ ("ส่งออกเอกสาร"), split back out into its own
       // menu: staff wanted a page they could actually READ a summary on
       // on-screen before downloading, not just a bundle of download buttons
       // bolted onto the appointment-order screen.
-      { label: "สรุปงบและปะหน้าจ่ายตรง", href: "/staff/budget-summary", icon: Calculator },
-      { label: "จัดการผู้ใช้", href: "/staff/users", icon: Users },
+      { label: msg("สรุปงบและปะหน้าจ่ายตรง"), href: "/staff/budget-summary", icon: Calculator },
+      { label: msg("จัดการผู้ใช้"), href: "/staff/users", icon: Users },
       // No badge here on purpose: badges mean "a step of the workflow is
       // waiting on you". Missing student counts are a blocker, but they are
       // surfaced by the dashboard's to-do panel; putting a count on a
       // reference page too spreads the signal thin.
-      { label: "วิชาที่เปิดสอน", href: "/staff/teaching", icon: BookOpen },
+      { label: msg("วิชาที่เปิดสอน"), href: "/staff/teaching", icon: BookOpen },
     ],
   },
   {
-    title: "ปฏิบัติงาน",
+    title: msg("ปฏิบัติงาน"),
     items: [
-      { label: "อัปเดตความคืบหน้า", href: "/staff/progress", icon: Route },
-      { label: "ประชาสัมพันธ์", href: "/staff/announce", icon: Megaphone },
+      { label: msg("อัปเดตความคืบหน้า"), href: "/staff/progress", icon: Route },
+      { label: msg("ประชาสัมพันธ์"), href: "/staff/announce", icon: Megaphone },
     ],
   },
   {
-    title: "ระบบ",
+    title: msg("ระบบ"),
     items: [
-      { label: "วันหยุดราชการ", href: "/staff/holidays", icon: CalendarOff },
+      { label: msg("วันหยุดราชการ"), href: "/staff/holidays", icon: CalendarOff },
       // ตรวจสอบว่าระบบดึงวันสอนชดเชยจาก TDBM มาได้จริง — ตารางดิบ + สถานะจับคู่
       // วิชา/กลุ่มเรียน ไม่ใช่หน้าจัดการ (แก้ไข/อนุมัติ ยังทำในระบบ TDBM เอง)
-      { label: "ข้อมูลจาก TDBM", href: "/staff/tdbm", icon: Database },
-      { label: "ตั้งค่า", href: "/staff/settings", icon: Settings },
+      { label: msg("ข้อมูลจาก TDBM"), href: "/staff/tdbm", icon: Database },
+      { label: msg("ตั้งค่า"), href: "/staff/settings", icon: Settings },
       // Both are RequireRole(admin) server-side. Shown to staff they opened on
       // a raw "forbidden" (Audit Log) — so they are listed for admins only.
       ...(isAdmin
         ? [
-            { label: "บันทึกการใช้งาน", href: "/staff/audit", icon: ScrollText },
-            { label: "คำขอลบข้อมูล (PDPA)", href: "/staff/data-deletion-requests", icon: ShieldOff },
+            { label: msg("บันทึกการใช้งาน"), href: "/staff/audit", icon: ScrollText },
+            { label: msg("คำขอลบข้อมูล (PDPA)"), href: "/staff/data-deletion-requests", icon: ShieldOff },
           ]
         : []),
     ],
@@ -115,9 +116,9 @@ const buildNav = (s: Executive, isAdmin: boolean): NavSection[] => [
 ];
 
 const userMenuItems: UserMenuItem[] = [
-  { id: "account",  label: "ตั้งค่าบัญชี", href: "/account",     icon: IdCard },
-  { id: "announce", label: "ประกาศ",   href: "/announcements",  icon: Megaphone },
-  { id: "notif",    label: "การเตือน", href: "/notifications",  icon: Bell },
+  { id: "account",  label: msg("ตั้งค่าบัญชี"), href: "/account",     icon: IdCard },
+  { id: "announce", label: msg("ประกาศ"),   href: "/announcements",  icon: Megaphone },
+  { id: "notif",    label: msg("การเตือน"), href: "/notifications",  icon: Bell },
 ];
 
 export default function StaffShell({ me, children }: { me: Me; children: React.ReactNode }) {

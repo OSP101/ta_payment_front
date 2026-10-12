@@ -9,6 +9,7 @@ import {
 import { api } from "../../lib/api";
 import { Modal, Button, Chip, FieldGroup, Alert, Tip } from "../../components/ui";
 import { pickPrimaryCode } from "../../lib/courseCode";
+import { useI18n } from "../../lib/i18n/client";
 
 interface PreviewCourse {
   code: string;
@@ -137,6 +138,7 @@ export default function ImportModal({
   termId: string;
   termLabel: string;
 }) {
+  const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -218,8 +220,10 @@ export default function ImportModal({
       setResult(res);
       setPhase("done");
       const merged = res.merged_codes?.length ?? 0;
-      toast.success("นำเข้าเรียบร้อยแล้ว", {
-        description: `สร้าง ${res.created_ids?.length ?? 0} รายวิชา${merged ? ` · รวม ${merged} รหัส` : ""}`,
+      toast.success(t("นำเข้าเรียบร้อยแล้ว"), {
+        description: merged
+          ? t("สร้าง {n} รายวิชา · รวม {m} รหัส", { n: res.created_ids?.length ?? 0, m: merged })
+          : t("สร้าง {n} รายวิชา", { n: res.created_ids?.length ?? 0 }),
       });
     } catch (e) {
       setErr((e as Error).message);
@@ -234,7 +238,7 @@ export default function ImportModal({
       open={open}
       onClose={handleClose}
       icon={<FileSpreadsheet size={18} />}
-      title={`นำเข้ารายวิชา · ${termLabel}`}
+      title={t("นำเข้ารายวิชา · {term}", { term: termLabel })}
       size="2xl"
       footer={
         <div className="flex flex-wrap items-center justify-between w-full gap-2">
@@ -243,11 +247,11 @@ export default function ImportModal({
           </div>
           <div className="flex gap-2">
             <Button variant="tertiary" onPress={handleClose} disabled={pending}>
-              {phase === "done" ? "ปิด" : "ยกเลิก"}
+              {phase === "done" ? t("ปิด") : t("ยกเลิก")}
             </Button>
             {phase === "upload" && (
               <Button variant="primary" onPress={loadPreview} disabled={!file || pending} isPending={pending}>
-                <ChevronRight size={14} /> อ่านไฟล์
+                <ChevronRight size={14} /> {t("อ่านไฟล์")}
               </Button>
             )}
             {phase === "preview" && preview && (
@@ -257,7 +261,7 @@ export default function ImportModal({
                 disabled={pending || !hasWorkToDo(preview, decisions, merges)}
                 isPending={pending}
               >
-                <CheckCircle2 size={14} /> ยืนยันนำเข้า
+                <CheckCircle2 size={14} /> {t("ยืนยันนำเข้า")}
               </Button>
             )}
           </div>
@@ -266,14 +270,14 @@ export default function ImportModal({
     >
       {err && (
         <div className="mb-3">
-          <Alert status="danger" title="เกิดข้อผิดพลาด" description={err} />
+          <Alert status="danger" title={t("เกิดข้อผิดพลาด")} description={err} />
         </div>
       )}
 
       {phase === "upload" && (
         <FieldGroup
-          label="ไฟล์ Excel"
-          hint="ไฟล์ 'รายวิชาที่เปิดสอน-<เทอม>-<ปี>.xlsx' จากระบบทะเบียน ระบบสร้างวิชาจากไฟล์โดยตรง (อ่านชีต 'Normalized' หรือไฟล์ดิบ 'sysTitle' ก็ได้)"
+          label={t("ไฟล์ Excel")}
+          hint={t("ไฟล์ 'รายวิชาที่เปิดสอน-<เทอม>-<ปี>.xlsx' จากระบบทะเบียน ระบบสร้างวิชาจากไฟล์โดยตรง (อ่านชีต 'Normalized' หรือไฟล์ดิบ 'sysTitle' ก็ได้)")}
         >
           <input
             type="file"
@@ -299,7 +303,7 @@ export default function ImportModal({
       {phase === "committing" && (
         <div className="py-8 text-center text-sm text-muted inline-flex flex-col items-center gap-2">
           <Loader2 size={20} className="animate-spin" />
-          กำลังบันทึกลงฐานข้อมูล…
+          {t("กำลังบันทึกลงฐานข้อมูล…")}
         </div>
       )}
 
@@ -336,12 +340,13 @@ function hasWorkToDo(p: Preview, decisions: Record<string, UnmatchedDecision>, m
 function PreviewSummary({ p, decisions, merges }: {
   p: Preview; decisions: Record<string, UnmatchedDecision>; merges: MergeChoices;
 }) {
-  const t = tally(p, decisions, merges);
+  const { t } = useI18n();
+  const n = tally(p, decisions, merges);
   return (
     <span className="inline-flex items-center gap-2">
-      <span>จะสร้าง <b className="text-(--ink-1)">{t.create}</b></span>
-      {t.merge > 0 && <span>· รวมเข้าวิชาอื่น <b className="text-(--ink-1)">{t.merge}</b></span>}
-      <span>· ข้าม {t.skip}</span>
+      <span>{t.rich("จะสร้าง {n}", { n: <b className="text-(--ink-1)">{n.create}</b> })}</span>
+      {n.merge > 0 && <span>· {t.rich("รวมเข้าวิชาอื่น {n}", { n: <b className="text-(--ink-1)">{n.merge}</b> })}</span>}
+      <span>· {t("ข้าม {n}", { n: n.skip })}</span>
     </span>
   );
 }
@@ -355,25 +360,26 @@ function PreviewTable({
   merges: MergeChoices;
   setMerges: React.Dispatch<React.SetStateAction<MergeChoices>>;
 }) {
+  const { t } = useI18n();
   const groups = p.merge_groups ?? [];
   const targets = mergeTargets(merges);
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-        <SummaryChip tone="success" label="ใหม่ (จะสร้าง)" count={p.new_count} icon={<CheckCircle2 size={12} />} />
-        <SummaryChip tone="neutral" label="มีแล้ว ข้าม" count={p.existing_count} />
-        <SummaryChip tone="warn" label="ต้องตัดสินใจ" count={p.blocked_count} icon={<AlertTriangle size={12} />} />
-        <SummaryChip tone={(p.invalid_count ?? 0) > 0 ? "danger" : "neutral"} label="ข้อมูลผิด ไม่นำเข้า" count={p.invalid_count ?? 0} />
+        <SummaryChip tone="success" label={t("ใหม่ (จะสร้าง)")} count={p.new_count} icon={<CheckCircle2 size={12} />} />
+        <SummaryChip tone="neutral" label={t("มีแล้ว ข้าม")} count={p.existing_count} />
+        <SummaryChip tone="warn" label={t("ต้องตัดสินใจ")} count={p.blocked_count} icon={<AlertTriangle size={12} />} />
+        <SummaryChip tone={(p.invalid_count ?? 0) > 0 ? "danger" : "neutral"} label={t("ข้อมูลผิด ไม่นำเข้า")} count={p.invalid_count ?? 0} />
       </div>
 
       <MessageList
         tone="danger"
-        title="แถวที่อ่านไม่ได้ (จะถูกข้าม ตรวจไฟล์ก่อนยืนยัน)"
+        title={t("แถวที่อ่านไม่ได้ (จะถูกข้าม ตรวจไฟล์ก่อนยืนยัน)")}
         items={p.errors ?? []}
       />
       <MessageList
         tone="neutral"
-        title="ข้อสังเกต (ส่วนใหญ่เป็นวิชาโครงงาน/สหกิจ/วิทยานิพนธ์ที่ไม่มีตารางเรียน)"
+        title={t("ข้อสังเกต (ส่วนใหญ่เป็นวิชาโครงงาน/สหกิจ/วิทยานิพนธ์ที่ไม่มีตารางเรียน)")}
         items={p.warnings ?? []}
       />
 
@@ -385,13 +391,13 @@ function PreviewTable({
         <table className="w-full text-xs">
           <thead className="bg-slate-50 text-(--ink-3)">
             <tr>
-              <th className="px-2 py-1.5 text-left">รหัส</th>
-              <th className="px-2 py-1.5 text-left">ชื่อวิชา</th>
+              <th className="px-2 py-1.5 text-left">{t("รหัส")}</th>
+              <th className="px-2 py-1.5 text-left">{t("ชื่อวิชา")}</th>
               <th className="px-2 py-1.5 text-right">Sec</th>
-              <th className="px-2 py-1.5 text-right">คาบ</th>
-              <th className="px-2 py-1.5 text-left">อาจารย์</th>
-              <th className="px-2 py-1.5 text-left">สถานะ</th>
-              <th className="px-2 py-1.5 text-left">ดำเนินการ</th>
+              <th className="px-2 py-1.5 text-right">{t("คาบ")}</th>
+              <th className="px-2 py-1.5 text-left">{t("อาจารย์")}</th>
+              <th className="px-2 py-1.5 text-left">{t("สถานะ")}</th>
+              <th className="px-2 py-1.5 text-left">{t("ดำเนินการ")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-(--hairline)">
@@ -420,6 +426,7 @@ function PreviewRow({
   mergeInto?: string;
   onDecide: (v: UnmatchedDecision) => void;
 }) {
+  const { t } = useI18n();
   const isSkipped =
     c.status === "existing"
     || c.status === "invalid"
@@ -439,13 +446,13 @@ function PreviewRow({
       <td className="px-2 py-1.5">
         {c.status === "new" && (
           mergeInto
-            ? <span className="text-sky-700">รวมเข้า {mergeInto}</span>
-            : <span className="text-emerald-700">จะสร้าง</span>
+            ? <span className="text-sky-700">{t("รวมเข้า {code}", { code: mergeInto })}</span>
+            : <span className="text-emerald-700">{t("จะสร้าง")}</span>
         )}
-        {c.status === "existing" && <span>ข้าม (มีอยู่แล้ว)</span>}
+        {c.status === "existing" && <span>{t("ข้าม (มีอยู่แล้ว)")}</span>}
         {c.status === "invalid" && (
           <div className="text-red-700">
-            <div>ไม่นำเข้า</div>
+            <div>{t("ไม่นำเข้า")}</div>
             <ul className="mt-0.5 space-y-0.5">
               {(c.problems ?? []).map((m, i) => <li key={i}>{m}</li>)}
             </ul>
@@ -460,7 +467,7 @@ function PreviewRow({
                 checked={decision === "proceed"}
                 onChange={() => onDecide("proceed")}
               />
-              <span>{mergeInto ? `รวมเข้า ${mergeInto}` : "สร้างโดยยังไม่ผูก (ผูกภายหลังได้ที่หน้าตั้งค่ารายวิชา)"}</span>
+              <span>{mergeInto ? t("รวมเข้า {code}", { code: mergeInto }) : t("สร้างโดยยังไม่ผูก (ผูกภายหลังได้ที่หน้าตั้งค่ารายวิชา)")}</span>
             </label>
             <label className="inline-flex items-center gap-1">
               <input
@@ -469,7 +476,7 @@ function PreviewRow({
                 checked={decision === "skip"}
                 onChange={() => onDecide("skip")}
               />
-              <span>ข้าม</span>
+              <span>{t("ข้าม")}</span>
             </label>
           </div>
         )}
@@ -490,6 +497,7 @@ function MergeGroups({
   // A course already open in the term can only be the primary — the file's
   // courses fold INTO it, never the other way round — so at most one existing
   // course may be ticked per group, and ticking it makes it the primary.
+  const { t } = useI18n();
   const isExisting = (g: MergeGroup, code: string) =>
     g.members.find(m => m.code === code)?.status === "existing";
   function toggle(g: MergeGroup, code: string) {
@@ -502,14 +510,13 @@ function MergeGroups({
     });
   }
   return (
-    <div className="rounded-md border border-sky-200 bg-sky-50/40 dark:border-sky-900 dark:bg-sky-950/20 p-3 space-y-3">
+    <div className="rounded-md border border-sky-200 bg-sky-50/40 p-3 space-y-3">
       <div className="text-xs">
         <p className="font-medium text-(--ink-1) inline-flex items-center gap-1">
-          <GitMerge size={13} /> วิชาชื่อเดียวกันแต่คนละรหัส {groups.length} กลุ่ม
+          <GitMerge size={13} /> {t("วิชาชื่อเดียวกันแต่คนละรหัส {n} กลุ่ม", { n: groups.length })}
         </p>
         <p className="text-(--ink-3) mt-0.5">
-          ติ๊กรหัสที่เป็นวิชาเดียวกัน ระบบจะรวมเป็นวิชาเดียว นับนักศึกษารวมกันและคิดงบก้อนเดียว
-          รหัสที่ไม่ติ๊กเปิดแยกตามปกติ · เอกสารใช้รหัสหลักรหัสเดียว: CP ก่อน SC ก่อนเลข 6 หลัก
+          {t("ติ๊กรหัสที่เป็นวิชาเดียวกัน ระบบจะรวมเป็นวิชาเดียว นับนักศึกษารวมกันและคิดงบก้อนเดียว รหัสที่ไม่ติ๊กเปิดแยกตามปกติ · เอกสารใช้รหัสหลักรหัสเดียว: CP ก่อน SC ก่อนเลข 6 หลัก")}
         </p>
       </div>
       {groups.map(g => {
@@ -517,13 +524,13 @@ function MergeGroups({
         const merging = choice.codes.length >= 2;
         const existingOn = g.members.find(m => m.status === "existing" && choice.codes.includes(m.code));
         return (
-          <div key={g.name} className="rounded border border-(--hairline) bg-white dark:bg-transparent">
+          <div key={g.name} className="rounded border border-(--hairline) bg-white">
             <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-(--hairline)">
               <span className="text-xs font-medium">{g.name}</span>
               <span className="text-[11px] text-(--ink-3)">
                 {merging
-                  ? `รวม ${choice.codes.length} รหัสเป็นวิชาเดียว · รหัสหลัก ${pickPrimaryCode(choice.codes)}`
-                  : "เปิดแยกทุกรหัส"}
+                  ? t("รวม {n} รหัสเป็นวิชาเดียว · รหัสหลัก {code}", { n: choice.codes.length, code: pickPrimaryCode(choice.codes) })
+                  : t("เปิดแยกทุกรหัส")}
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -536,9 +543,9 @@ function MergeGroups({
                   return (
                     <tr key={m.code} className={on ? "" : "text-(--ink-3)"}>
                       <td className="px-2 py-1.5 w-8">
-                        <Tip content={blocked ? "รวมวิชาที่เปิดอยู่แล้วสองวิชาเข้าด้วยกันไม่ได้จากหน้านี้" : undefined}><input
+                        <Tip content={blocked ? t("รวมวิชาที่เปิดอยู่แล้วสองวิชาเข้าด้วยกันไม่ได้จากหน้านี้") : undefined}><input
                           type="checkbox"
-                          aria-label={`รวม ${m.code}`}
+                          aria-label={t("รวม {code}", { code: m.code })}
                           checked={on}
                           disabled={blocked}
                           onChange={() => toggle(g, m.code)}
@@ -550,18 +557,18 @@ function MergeGroups({
                       </td>
                       <td className="px-2 py-1.5">
                         {m.status === "existing"
-                          ? <Chip tone="neutral">เปิดอยู่แล้ว</Chip>
-                          : <Chip tone="success">ในไฟล์</Chip>}
+                          ? <Chip tone="neutral">{t("เปิดอยู่แล้ว")}</Chip>
+                          : <Chip tone="success">{t("ในไฟล์")}</Chip>}
                       </td>
                       <td className="px-2 py-1.5 whitespace-nowrap">
-                        {m.lecturers.length > 0 ? m.lecturers.join(", ") : <span className="text-(--ink-4)">(ไม่ระบุอาจารย์)</span>}
+                        {m.lecturers.length > 0 ? m.lecturers.join(", ") : <span className="text-(--ink-4)">{t("(ไม่ระบุอาจารย์)")}</span>}
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                        {m.section_count} sec · {m.students} คน
+                        {t("{sec} sec · {n} คน", { sec: m.section_count, n: m.students })}
                       </td>
                       <td className="px-2 py-1.5 w-20 text-(--ink-3)">
                         {on && merging && pickPrimaryCode(choice.codes) === m.code && (
-                          <span className="whitespace-nowrap">รหัสหลัก</span>
+                          <span className="whitespace-nowrap">{t("รหัสหลัก")}</span>
                         )}
                       </td>
                     </tr>
@@ -578,17 +585,18 @@ function MergeGroups({
 }
 
 function OfficerCell({ c }: { c: PreviewCourse }) {
+  const { t } = useI18n();
   const officers = c.officer_names ?? [];
   const matched = c.matched_lecturer_ids ?? [];
   const matchedNames = c.matched_lecturer_names ?? [];
   const unmatched = c.unmatched_names ?? [];
   if (officers.length === 0 && unmatched.length === 0) {
-    return <span className="text-(--ink-4)">(ไม่ระบุ)</span>;
+    return <span className="text-(--ink-4)">{t("(ไม่ระบุ)")}</span>;
   }
   // Each auto-matched lecturer becomes a co-owner of the course, so name them:
   // a wrong match hidden behind "2 คน" is one nobody would catch.
   return (
-    <Tip content={c.officer_raw ? `ในไฟล์: ${c.officer_raw}` : undefined}><div className="flex flex-wrap gap-1">
+    <Tip content={c.officer_raw ? t("ในไฟล์: {raw}", { raw: c.officer_raw }) : undefined}><div className="flex flex-wrap gap-1">
       {matchedNames.length > 0
         ? matchedNames.map((n, i) => (
             <Chip key={matched[i] ?? n} tone="success">
@@ -597,7 +605,7 @@ function OfficerCell({ c }: { c: PreviewCourse }) {
           ))
         : matched.length > 0 && (
             <Chip tone="success">
-              <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} /> {matched.length} คน</span>
+              <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} /> {t("{n} คน", { n: matched.length })}</span>
             </Chip>
           )}
       {unmatched.map(n => (
@@ -610,20 +618,22 @@ function OfficerCell({ c }: { c: PreviewCourse }) {
 }
 
 function StatusChip({ status }: { status: PreviewCourse["status"] }) {
+  const { t } = useI18n();
   switch (status) {
-    case "new": return <Chip tone="success">ใหม่</Chip>;
-    case "existing": return <Chip tone="neutral">มีแล้ว</Chip>;
-    case "unmatched_officer": return <Chip tone="warn">ต้องตัดสินใจ</Chip>;
-    case "invalid": return <Chip tone="danger">ข้อมูลผิด</Chip>;
+    case "new": return <Chip tone="success">{t("ใหม่")}</Chip>;
+    case "existing": return <Chip tone="neutral">{t("มีแล้ว")}</Chip>;
+    case "unmatched_officer": return <Chip tone="warn">{t("ต้องตัดสินใจ")}</Chip>;
+    case "invalid": return <Chip tone="danger">{t("ข้อมูลผิด")}</Chip>;
   }
 }
 
 function MessageList({ tone, title, items }: { tone: "danger" | "neutral"; title: string; items: string[] }) {
+  const { t } = useI18n();
   if (items.length === 0) return null;
   return (
     <details className="rounded-md border border-(--hairline) px-2 py-1.5 text-xs" open={tone === "danger"}>
       <summary className="cursor-pointer font-medium text-(--ink-2)">
-        {title} · {items.length} รายการ
+        {t("{title} · {n} รายการ", { title, n: items.length })}
       </summary>
       <ul className="mt-1 space-y-0.5 max-h-40 overflow-y-auto">
         {items.map((m, i) => (
@@ -654,32 +664,35 @@ function SummaryChip({
 }
 
 function ResultView({ r }: { r: CommitResult }) {
+  const { t } = useI18n();
   const warningCount = r.warning_count ?? 0;
   const errorCount = r.error_count ?? 0;
   return (
     <div className="space-y-3 text-sm">
       <Alert
         status="success"
-        title={`นำเข้าเรียบร้อย · สร้าง ${r.created_ids?.length ?? 0} รายวิชา`}
-        description={`${r.merged_codes?.length ? `รวม ${r.merged_codes.length} รหัส · ` : ""}ข้าม ${r.skipped_codes?.length ?? 0} รายการ`}
+        title={t("นำเข้าเรียบร้อย · สร้าง {n} รายวิชา", { n: r.created_ids?.length ?? 0 })}
+        description={r.merged_codes?.length
+          ? t("รวม {m} รหัส · ข้าม {n} รายการ", { m: r.merged_codes.length, n: r.skipped_codes?.length ?? 0 })
+          : t("ข้าม {n} รายการ", { n: r.skipped_codes?.length ?? 0 })}
       />
       {/* Warnings and errors are shown as separate chips — a course with no
           timetable (โครงงาน/สหกิจ/วิทยานิพนธ์) is expected and not a problem,
           so it must not read as one next to a genuine data error. */}
       <div className="flex flex-wrap gap-2">
-        <SummaryChip tone="success" label="นำเข้าสำเร็จ" count={r.created_ids?.length ?? 0} />
-        {warningCount > 0 && <SummaryChip tone="warn" label="เตือน (ไม่มีตารางเรียน)" count={warningCount} />}
-        <SummaryChip tone={errorCount > 0 ? "danger" : "neutral"} label="ผิดพลาด" count={errorCount} />
+        <SummaryChip tone="success" label={t("นำเข้าสำเร็จ")} count={r.created_ids?.length ?? 0} />
+        {warningCount > 0 && <SummaryChip tone="warn" label={t("เตือน (ไม่มีตารางเรียน)")} count={warningCount} />}
+        <SummaryChip tone={errorCount > 0 ? "danger" : "neutral"} label={t("ผิดพลาด")} count={errorCount} />
       </div>
       {(r.merged_codes?.length ?? 0) > 0 && (
         <div>
-          <p className="text-xs font-medium mb-1 text-(--ink-2)">รหัสที่รวมเป็นวิชาเดียว</p>
+          <p className="text-xs font-medium mb-1 text-(--ink-2)">{t("รหัสที่รวมเป็นวิชาเดียว")}</p>
           <p className="text-xs text-(--ink-3) font-mono">{r.merged_codes!.join(", ")}</p>
         </div>
       )}
       {(r.errors?.length ?? 0) > 0 && (
         <div>
-          <p className="text-xs font-medium mb-1 text-(--ink-2)">รายการที่มีปัญหา (ต้องตรวจ)</p>
+          <p className="text-xs font-medium mb-1 text-(--ink-2)">{t("รายการที่มีปัญหา (ต้องตรวจ)")}</p>
           <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
             {r.errors!.map((e, i) => (
               <li key={i} className="text-red-700">• {e}</li>
@@ -690,7 +703,7 @@ function ResultView({ r }: { r: CommitResult }) {
       {(r.warnings?.length ?? 0) > 0 && (
         <div>
           <p className="text-xs font-medium mb-1 text-(--ink-2)">
-            รายการที่เตือน (ไม่มีตารางเรียน — ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)
+            {t("รายการที่เตือน (ไม่มีตารางเรียน — ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)")}
           </p>
           <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
             {r.warnings!.map((w, i) => (
@@ -701,7 +714,7 @@ function ResultView({ r }: { r: CommitResult }) {
       )}
       {(r.skipped_codes?.length ?? 0) > 0 && (
         <div>
-          <p className="text-xs font-medium mb-1 text-(--ink-2)">รหัสวิชาที่ข้าม</p>
+          <p className="text-xs font-medium mb-1 text-(--ink-2)">{t("รหัสวิชาที่ข้าม")}</p>
           <p className="text-xs text-(--ink-3) font-mono">{r.skipped_codes!.join(", ")}</p>
         </div>
       )}

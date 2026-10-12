@@ -2,6 +2,7 @@
 import { AlertTriangle, Ban, CheckCircle2, Eye, XCircle } from "lucide-react";
 import { Chip } from "../../components/ui";
 import { OUTCOME_LABEL, type Row } from "./types";
+import { useI18n } from "../../lib/i18n/client";
 
 /** The state of a row, said in a chip so the same colour always means the same
  *  thing on this screen: red is a failure or refusal, amber is "worth a second
@@ -12,25 +13,26 @@ import { OUTCOME_LABEL, type Row } from "./types";
  *  say the least. `always` is for the detail view, where the answer to "did it
  *  work?" should be stated either way. */
 export function RowBadges({ row, always = false }: { row: Pick<Row, "outcome" | "severity">; always?: boolean }) {
+  const { t } = useI18n();
   return (
     <>
       {row.outcome === "failed" && (
-        <Chip tone="danger"><XCircle size={12} />{OUTCOME_LABEL.failed}</Chip>
+        <Chip tone="danger"><XCircle size={12} />{t(OUTCOME_LABEL.failed)}</Chip>
       )}
       {row.outcome === "denied" && (
-        <Chip tone="danger"><Ban size={12} />{OUTCOME_LABEL.denied}</Chip>
+        <Chip tone="danger"><Ban size={12} />{t(OUTCOME_LABEL.denied)}</Chip>
       )}
       {row.outcome === "ok" && always && (
-        <Chip tone="success"><CheckCircle2 size={12} />{OUTCOME_LABEL.ok}</Chip>
+        <Chip tone="success"><CheckCircle2 size={12} />{t(OUTCOME_LABEL.ok)}</Chip>
       )}
       {row.outcome === "ok" && row.severity === "danger" && (
-        <Chip tone="danger"><AlertTriangle size={12} />สำคัญ</Chip>
+        <Chip tone="danger"><AlertTriangle size={12} />{t("สำคัญ")}</Chip>
       )}
       {row.outcome === "ok" && row.severity === "warn" && (
-        <Chip tone="warn"><AlertTriangle size={12} />ควรตรวจ</Chip>
+        <Chip tone="warn"><AlertTriangle size={12} />{t("ควรตรวจ")}</Chip>
       )}
       {row.severity === "notice" && (
-        <Chip tone="neutral"><Eye size={12} />ข้อมูลอ่อนไหว</Chip>
+        <Chip tone="neutral"><Eye size={12} />{t("ข้อมูลอ่อนไหว")}</Chip>
       )}
     </>
   );

@@ -6,6 +6,7 @@ import { Tabs } from "@heroui/react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { Alert, Button, Chip, Modal, TextArea, type ChipTone } from "../../components/ui";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 /**
  * อัปเดตจำนวนนักศึกษาจริงหลายวิชาพร้อมกัน — staff copy the registrar's real
@@ -64,13 +65,13 @@ export function parsePasted(text: string): { rows: Row[]; skipped: number; bad: 
 }
 
 const STATUS: Record<Result["status"], { label: string; tone: ChipTone }> = {
-  update: { label: "จะอัปเดต", tone: "info" },
-  unchanged: { label: "ไม่เปลี่ยน", tone: "neutral" },
-  not_found: { label: "ไม่พบรหัสวิชา", tone: "warn" },
-  locked: { label: "แก้ไม่ได้", tone: "danger" },
-  confirm: { label: "ต้องยืนยันงบ", tone: "warn" },
-  zero: { label: "จะเหลือ 0 คน", tone: "danger" },
-  error: { label: "ข้อมูลผิด", tone: "danger" },
+  update: { label: msg("จะอัปเดต"), tone: "info" },
+  unchanged: { label: msg("ไม่เปลี่ยน"), tone: "neutral" },
+  not_found: { label: msg("ไม่พบรหัสวิชา"), tone: "warn" },
+  locked: { label: msg("แก้ไม่ได้"), tone: "danger" },
+  confirm: { label: msg("ต้องยืนยันงบ"), tone: "warn" },
+  zero: { label: msg("จะเหลือ 0 คน"), tone: "danger" },
+  error: { label: msg("ข้อมูลผิด"), tone: "danger" },
 };
 
 function Change({ from, to }: { from: number | null; to: number | null }) {
@@ -87,6 +88,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
   /** Courses that can still change, for the REG tab's scope choice. */
   scopeCounts?: ScopeCounts;
 }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("reg");
   // Each tab keeps its own data: switching to Excel never shows (or sends)
   // what REG returned, and the other way round.
@@ -128,7 +130,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
         setApplied(res.items);
         const done = res.items.filter(r => r.status === "update").length;
         await mutate((k: unknown) => typeof k === "string" && k.startsWith("/teaching-courses"));
-        notify.success(`อัปเดตจำนวนนักศึกษาแล้ว ${done} วิชา`);
+        notify.success(t("อัปเดตจำนวนนักศึกษาแล้ว {n} วิชา", { n: done }));
       }
     } catch (e) {
       notify.error(e);
@@ -138,13 +140,13 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
   }
 
   const footer = applied ? (
-    <Button variant="primary" onClick={onClose}>ปิด</Button>
+    <Button variant="primary" onClick={onClose}>{t("ปิด")}</Button>
   ) : (
     <>
-      <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
+      <Button variant="ghost" onClick={onClose} disabled={pending}>{t("ยกเลิก")}</Button>
       {!preview ? (
         <Button variant="primary" onClick={() => run(true)} disabled={pending || parsed.rows.length === 0} isPending={pending}>
-          <SearchCheck size={14} /> ตรวจสอบ ({parsed.rows.length} แถว)
+          <SearchCheck size={14} /> {t("ตรวจสอบ ({n} แถว)", { n: parsed.rows.length })}
         </Button>
       ) : (
         <Button
@@ -153,7 +155,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
           disabled={pending || (toUpdate === 0 && !(confirmBudget && needConfirm > 0) && !(allowZero && zeroing > 0))}
           isPending={pending}
         >
-          <Save size={14} /> บันทึก {toUpdate + (confirmBudget ? needConfirm : 0) + (allowZero ? zeroing : 0)} วิชา
+          <Save size={14} /> {t("บันทึก {n} วิชา", { n: toUpdate + (confirmBudget ? needConfirm : 0) + (allowZero ? zeroing : 0) })}
         </Button>
       )}
     </>
@@ -165,20 +167,20 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
       onClose={() => { if (!pending) onClose(); }}
       size="2xl"
       icon={<ClipboardPaste size={18} />}
-      title={`อัปเดตจำนวนนักศึกษาจริง${termLabel ? ` · ภาค ${termLabel}` : ""}`}
+      title={termLabel ? t("อัปเดตจำนวนนักศึกษาจริง · ภาค {term}", { term: termLabel }) : t("อัปเดตจำนวนนักศึกษาจริง")}
       footer={footer}
     >
       <div className="space-y-3">
         {!preview && (
           <Tabs variant="secondary" selectedKey={tab} onSelectionChange={k => setTab(String(k) as Tab)}>
             <Tabs.ListContainer>
-              <Tabs.List aria-label="ที่มาของจำนวนนักศึกษา">
+              <Tabs.List aria-label={t("ที่มาของจำนวนนักศึกษา")}>
                 <Tabs.Tab id="reg">
-                  <span className="inline-flex items-center gap-1.5"><CloudDownload size={14} /> ดึงจากระบบทะเบียน (REG)</span>
+                  <span className="inline-flex items-center gap-1.5"><CloudDownload size={14} /> {t("ดึงจากระบบทะเบียน (REG)")}</span>
                   <Tabs.Indicator />
                 </Tabs.Tab>
                 <Tabs.Tab id="excel">
-                  <span className="inline-flex items-center gap-1.5"><FileSpreadsheet size={14} /> วางจาก Excel</span>
+                  <span className="inline-flex items-center gap-1.5"><FileSpreadsheet size={14} /> {t("วางจาก Excel")}</span>
                   <Tabs.Indicator />
                 </Tabs.Tab>
               </Tabs.List>
@@ -194,9 +196,9 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
             <Tabs.Panel id="excel">
               <div className="space-y-3 pt-4">
                 <ol className="space-y-1 text-sm">
-                  <li><b>1.</b> ใน Excel จัดคอลัมน์ให้เรียงเป็น <b>รหัสวิชา</b> | <b>จำนวนภาคปกติ</b> | <b>จำนวนภาคพิเศษ</b> ตามตัวอย่าง</li>
-                  <li><b>2.</b> ลากเลือกตารางทั้งหมด แล้วกด <kbd className="rounded border border-border px-1 text-xs">Ctrl</kbd>+<kbd className="rounded border border-border px-1 text-xs">C</kbd> (Mac: ⌘+C)</li>
-                  <li><b>3.</b> คลิกในช่องด้านล่าง แล้วกด <kbd className="rounded border border-border px-1 text-xs">Ctrl</kbd>+<kbd className="rounded border border-border px-1 text-xs">V</kbd> (Mac: ⌘+V) จากนั้นกด <b>ตรวจสอบ</b></li>
+                  <li><b>1.</b> {t.rich("ใน Excel จัดคอลัมน์ให้เรียงเป็น {code} | {regular} | {special} ตามตัวอย่าง", { code: <b>{t("รหัสวิชา")}</b>, regular: <b>{t("จำนวนภาคปกติ")}</b>, special: <b>{t("จำนวนภาคพิเศษ")}</b> })}</li>
+                  <li><b>2.</b> {t.rich("ลากเลือกตารางทั้งหมด แล้วกด {keys} (Mac: ⌘+C)", { keys: <><kbd className="rounded border border-border px-1 text-xs">Ctrl</kbd>+<kbd className="rounded border border-border px-1 text-xs">C</kbd></> })}</li>
+                  <li><b>3.</b> {t.rich("คลิกในช่องด้านล่าง แล้วกด {keys} (Mac: ⌘+V) จากนั้นกด {check}", { keys: <><kbd className="rounded border border-border px-1 text-xs">Ctrl</kbd>+<kbd className="rounded border border-border px-1 text-xs">V</kbd></>, check: <b>{t("ตรวจสอบ")}</b> })}</li>
                 </ol>
 
                 <ExampleSheet />
@@ -205,9 +207,9 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
                   rows={6}
                   value={text}
                   onChange={e => setText(e.target.value)}
-                  placeholder="วางข้อมูลที่คัดลอกจาก Excel ที่นี่"
+                  placeholder={t("วางข้อมูลที่คัดลอกจาก Excel ที่นี่")}
                   className="w-full font-mono text-xs"
-                  aria-label="ข้อมูลจำนวนนักศึกษาที่วางจาก Excel"
+                  aria-label={t("ข้อมูลจำนวนนักศึกษาที่วางจาก Excel")}
                 />
 
                 {parsed.rows.length > 0 ? (
@@ -215,15 +217,15 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
                 ) : text.trim() ? (
                   <Alert
                     status="warning"
-                    title="ยังไม่พบรหัสวิชาในข้อมูลที่วาง"
-                    description="รหัสวิชาต้องเป็นตัวเลข 6 หลัก มีตัวอักษรนำหน้าได้ เช่น CP245201 หรือ 342372 ตรวจว่าคัดลอกคอลัมน์รหัสวิชามาด้วย"
+                    title={t("ยังไม่พบรหัสวิชาในข้อมูลที่วาง")}
+                    description={t("รหัสวิชาต้องเป็นตัวเลข 6 หลัก มีตัวอักษรนำหน้าได้ เช่น CP245201 หรือ 342372 ตรวจว่าคัดลอกคอลัมน์รหัสวิชามาด้วย")}
                   />
                 ) : null}
                 {parsed.bad.length > 0 && (
                   <Alert
                     status="warning"
-                    title={`${parsed.bad.length} แถวมีจำนวนที่ไม่ใช่ตัวเลข`}
-                    description={`${parsed.bad.join(", ")} ช่องจำนวนต้องเป็นตัวเลขจำนวนเต็ม หรือเว้นว่าง/ใส่ "-" ถ้าไม่แก้ แถวเหล่านี้จะไม่ถูกนำเข้า`}
+                    title={t("{n} แถวมีจำนวนที่ไม่ใช่ตัวเลข", { n: parsed.bad.length })}
+                    description={t("{codes} ช่องจำนวนต้องเป็นตัวเลขจำนวนเต็ม หรือเว้นว่าง/ใส่ \"-\" ถ้าไม่แก้ แถวเหล่านี้จะไม่ถูกนำเข้า", { codes: parsed.bad.join(", ") })}
                   />
                 )}
               </div>
@@ -236,11 +238,11 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
             {!applied && needConfirm > 0 && (
               <Alert
                 status="warning"
-                title={`${needConfirm} วิชามี TA หรือชั่วโมงที่อนุมัติแล้ว`}
+                title={t("{n} วิชามี TA หรือชั่วโมงที่อนุมัติแล้ว", { n: needConfirm })}
                 description={
                   <label className="flex items-start gap-2 mt-1 cursor-pointer">
                     <input type="checkbox" className="mt-1" checked={confirmBudget} onChange={e => setConfirmBudget(e.target.checked)} />
-                    <span>การเปลี่ยนจำนวนนักศึกษาจะเปลี่ยนงบของวิชาเหล่านี้ ติ๊กเพื่อยืนยันให้บันทึกด้วย (ไม่ติ๊ก = ข้ามวิชาเหล่านี้)</span>
+                    <span>{t("การเปลี่ยนจำนวนนักศึกษาจะเปลี่ยนงบของวิชาเหล่านี้ ติ๊กเพื่อยืนยันให้บันทึกด้วย (ไม่ติ๊ก = ข้ามวิชาเหล่านี้)")}</span>
                   </label>
                 }
               />
@@ -248,42 +250,42 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
             {!applied && zeroing > 0 && (
               <Alert
                 status="danger"
-                title={`${zeroing} วิชาจะเหลือนักศึกษา 0 คน และงบจะเป็น 0`}
+                title={t("{n} วิชาจะเหลือนักศึกษา 0 คน และงบจะเป็น 0", { n: zeroing })}
                 description={
                   <div className="space-y-1">
                     <div>
-                      ระบบทะเบียนอาจยังไม่เปิดลงทะเบียน หรือตัวเลขในแถวผิด วิชาเหล่านี้มีจำนวนเดิมอยู่ จึงข้ามไว้ก่อน
+                      {t("ระบบทะเบียนอาจยังไม่เปิดลงทะเบียน หรือตัวเลขในแถวผิด วิชาเหล่านี้มีจำนวนเดิมอยู่ จึงข้ามไว้ก่อน")}
                     </div>
                     <label className="flex items-start gap-2 cursor-pointer">
                       <input type="checkbox" className="mt-1" checked={allowZero} onChange={e => setAllowZero(e.target.checked)} />
-                      <span>ยืนยันว่าวิชาเหล่านี้ไม่มีนักศึกษาจริง ให้บันทึกเป็น 0 ด้วย (ไม่ติ๊ก = ข้ามวิชาเหล่านี้)</span>
+                      <span>{t("ยืนยันว่าวิชาเหล่านี้ไม่มีนักศึกษาจริง ให้บันทึกเป็น 0 ด้วย (ไม่ติ๊ก = ข้ามวิชาเหล่านี้)")}</span>
                     </label>
                   </div>
                 }
               />
             )}
             {applied && (
-              <Alert status="success" title="บันทึกเสร็จแล้ว" description="ผลของแต่ละวิชาอยู่ในตารางด้านล่าง วิชาที่แก้ไม่ได้ยังคงจำนวนเดิม" />
+              <Alert status="success" title={t("บันทึกเสร็จแล้ว")} description={t("ผลของแต่ละวิชาอยู่ในตารางด้านล่าง วิชาที่แก้ไม่ได้ยังคงจำนวนเดิม")} />
             )}
             <div className="overflow-auto max-h-[50vh] rounded-lg border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-surface-secondary text-xs text-muted sticky top-0">
                   <tr>
-                    <th className="text-left px-3 py-2">รหัสวิชา</th>
-                    <th className="text-left px-3 py-2">ชื่อวิชา</th>
-                    <th className="text-right px-3 py-2 whitespace-nowrap">ภาคปกติ</th>
-                    <th className="text-right px-3 py-2 whitespace-nowrap">ภาคพิเศษ</th>
-                    <th className="text-left px-3 py-2">ผล</th>
+                    <th className="text-left px-3 py-2">{t("รหัสวิชา")}</th>
+                    <th className="text-left px-3 py-2">{t("ชื่อวิชา")}</th>
+                    <th className="text-right px-3 py-2 whitespace-nowrap">{t("ภาคปกติ")}</th>
+                    <th className="text-right px-3 py-2 whitespace-nowrap">{t("ภาคพิเศษ")}</th>
+                    <th className="text-left px-3 py-2">{t("ผล")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--hairline)]">
                   {shown.map((r, i) => {
                     const st = applied && r.status === "update"
-                      ? { label: "อัปเดตแล้ว", tone: "success" as ChipTone }
+                      ? { label: msg("อัปเดตแล้ว"), tone: "success" as ChipTone }
                       : applied && r.status === "confirm"
-                        ? { label: "ข้าม (ไม่ได้ยืนยันงบ)", tone: "warn" as ChipTone }
+                        ? { label: msg("ข้าม (ไม่ได้ยืนยันงบ)"), tone: "warn" as ChipTone }
                         : applied && r.status === "zero"
-                          ? { label: "ข้าม (ไม่บันทึก 0)", tone: "warn" as ChipTone }
+                          ? { label: msg("ข้าม (ไม่บันทึก 0)"), tone: "warn" as ChipTone }
                         : STATUS[r.status];
                     return (
                       <tr key={i} className="align-top">
@@ -292,7 +294,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
                         <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap"><Change from={r.old_regular} to={r.new_regular} /></td>
                         <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap"><Change from={r.old_special} to={r.new_special} /></td>
                         <td className="px-3 py-2">
-                          <Chip tone={st.tone}>{st.label}</Chip>
+                          <Chip tone={st.tone}>{t(st.label)}</Chip>
                           {r.message && <div className="text-xs text-muted mt-1 whitespace-pre-line">{r.message}</div>}
                           {r.warn && <div className="text-xs text-warning mt-1">{r.warn}</div>}
                         </td>
@@ -304,7 +306,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
             </div>
             {!applied && (
               <Button variant="ghost" size="sm" onClick={() => { setPreview(null); setConfirmBudget(false); setAllowZero(false); }}>
-                {tab === "reg" ? "กลับไปหน้าดึงข้อมูล" : "แก้ข้อมูลที่วาง"}
+                {tab === "reg" ? t("กลับไปหน้าดึงข้อมูล") : t("แก้ข้อมูลที่วาง")}
               </Button>
             )}
           </>
@@ -316,28 +318,31 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
 
 /** The rows about to be checked, read back so a column slip shows before ตรวจสอบ. */
 function ParsedRows({ parsed, source }: { parsed: ReturnType<typeof parsePasted>; source: "reg" | "excel" }) {
+  const { t } = useI18n();
   return (
     <div>
       <div className="mb-1 text-xs text-muted">
-        {source === "reg" ? "จำนวนที่ได้จากระบบทะเบียน" : "ระบบอ่านได้"} {parsed.rows.length} รหัสวิชา
-        {parsed.skipped > 0 ? ` (ข้าม ${parsed.skipped} แถวที่ไม่มีรหัสวิชา เช่น หัวตาราง)` : ""}
-        {" "}กด <b>ตรวจสอบ</b> เพื่อเทียบกับจำนวนเดิมก่อนบันทึก
+        {source === "reg"
+          ? t("จำนวนที่ได้จากระบบทะเบียน {n} รหัสวิชา", { n: parsed.rows.length })
+          : t("ระบบอ่านได้ {n} รหัสวิชา", { n: parsed.rows.length })}
+        {parsed.skipped > 0 ? t(" (ข้าม {n} แถวที่ไม่มีรหัสวิชา เช่น หัวตาราง)", { n: parsed.skipped }) : ""}
+        {" "}{t.rich("กด {check} เพื่อเทียบกับจำนวนเดิมก่อนบันทึก", { check: <b>{t("ตรวจสอบ")}</b> })}
       </div>
       <div className="max-h-48 overflow-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-surface-secondary text-xs text-muted">
             <tr>
-              <th className="px-3 py-1.5 text-left">รหัสวิชา</th>
-              <th className="px-3 py-1.5 text-right">ภาคปกติ</th>
-              <th className="px-3 py-1.5 text-right">ภาคพิเศษ</th>
+              <th className="px-3 py-1.5 text-left">{t("รหัสวิชา")}</th>
+              <th className="px-3 py-1.5 text-right">{t("ภาคปกติ")}</th>
+              <th className="px-3 py-1.5 text-right">{t("ภาคพิเศษ")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--hairline)]">
             {parsed.rows.map((r, i) => (
               <tr key={i}>
                 <td className="px-3 py-1 font-medium tabular-nums">{r.code}</td>
-                <td className="px-3 py-1 text-right tabular-nums">{r.regular ?? <span className="text-muted">ไม่แก้</span>}</td>
-                <td className="px-3 py-1 text-right tabular-nums">{r.special ?? <span className="text-muted">ไม่แก้</span>}</td>
+                <td className="px-3 py-1 text-right tabular-nums">{r.regular ?? <span className="text-muted">{t("ไม่แก้")}</span>}</td>
+                <td className="px-3 py-1 text-right tabular-nums">{r.special ?? <span className="text-muted">{t("ไม่แก้")}</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -350,16 +355,17 @@ function ParsedRows({ parsed, source }: { parsed: ReturnType<typeof parsePasted>
 /** What the pasted sheet should look like, drawn like Excel (column letters,
  *  row numbers) with a note beside each row saying how it is read. */
 function ExampleSheet() {
+  const { t } = useI18n();
   const rows: Array<[string, string, string, string]> = [
-    ["รหัสวิชา", "ภาคปกติ", "ภาคพิเศษ", "หัวตาราง ระบบข้ามให้เอง ไม่ต้องลบ"],
-    ["CP245201", "45", "30", "ภาคปกติ 45 คน ภาคพิเศษ 30 คน"],
-    ["CP363205", "12", "", "ช่องว่าง = ไม่แก้ภาคพิเศษ ใช้ค่าเดิม"],
-    ["CP353301", "60", "0", "ใส่ 0 = ไม่มีนักศึกษาภาคพิเศษ"],
+    [msg("รหัสวิชา"), msg("ภาคปกติ"), msg("ภาคพิเศษ"), msg("หัวตาราง ระบบข้ามให้เอง ไม่ต้องลบ")],
+    ["CP245201", "45", "30", msg("ภาคปกติ 45 คน ภาคพิเศษ 30 คน")],
+    ["CP363205", "12", "", msg("ช่องว่าง = ไม่แก้ภาคพิเศษ ใช้ค่าเดิม")],
+    ["CP353301", "60", "0", msg("ใส่ 0 = ไม่มีนักศึกษาภาคพิเศษ")],
   ];
   const cell = "border border-border px-2 py-1";
   return (
     <div className="rounded-lg border border-border bg-surface-secondary/50 p-3">
-      <div className="mb-2 text-xs font-medium text-muted">ตัวอย่างใน Excel</div>
+      <div className="mb-2 text-xs font-medium text-muted">{t("ตัวอย่างใน Excel")}</div>
       <div className="overflow-x-auto">
         <table className="text-xs tabular-nums">
           <thead>
@@ -375,17 +381,17 @@ function ExampleSheet() {
             {rows.map(([a, b, c, note], i) => (
               <tr key={i}>
                 <td className="pr-1 text-right text-muted">{i + 1}</td>
-                <td className={`${cell} bg-surface ${i === 0 ? "font-semibold" : "font-mono"}`}>{a}</td>
-                <td className={`${cell} bg-surface text-right ${i === 0 ? "font-semibold" : ""}`}>{b}</td>
-                <td className={`${cell} bg-surface text-right ${i === 0 ? "font-semibold" : ""}`}>{c}</td>
-                <td className="whitespace-nowrap pl-3 text-muted">← {note}</td>
+                <td className={`${cell} bg-surface ${i === 0 ? "font-semibold" : "font-mono"}`}>{t(a)}</td>
+                <td className={`${cell} bg-surface text-right ${i === 0 ? "font-semibold" : ""}`}>{t(b)}</td>
+                <td className={`${cell} bg-surface text-right ${i === 0 ? "font-semibold" : ""}`}>{t(c)}</td>
+                <td className="whitespace-nowrap pl-3 text-muted">← {t(note)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <div className="mt-2 text-xs text-muted">
-        วิชาที่รวมรหัสกัน (เช่น CP245201 กับ SC363001) ใส่แยกแถวได้ ระบบจะรวมจำนวนเข้าวิชาเดียวกันให้
+        {t("วิชาที่รวมรหัสกัน (เช่น CP245201 กับ SC363001) ใส่แยกแถวได้ ระบบจะรวมจำนวนเข้าวิชาเดียวกันให้")}
       </div>
     </div>
   );
@@ -405,8 +411,8 @@ interface RegJob {
 }
 type RegScope = "requested" | "all";
 
-const hhmm = (iso: string) =>
-  new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+const hhmm = (iso: string, intl: string) =>
+  new Date(iso).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" });
 
 
 /**
@@ -423,6 +429,7 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
   termId: string; open: boolean; counts?: ScopeCounts; onRows: (text: string) => void;
   onSections: (m: Record<string, SectionCount[]>) => void;
 }) {
+  const { t, intl } = useI18n();
   const [scope, setScope] = useState<RegScope>("requested");
   const [job, setJob] = useState<RegJob | null>(null);
   const [starting, setStarting] = useState(false);
@@ -443,13 +450,13 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
 
   useEffect(() => {
     if (job?.status !== "running") return;
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const r = await api.get<{ job: RegJob | null }>(`/terms/${termId}/reg-enrolment`);
         setJob(r.job);
       } catch { /* next tick retries */ }
     }, 1500);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [job, termId]);
 
   // Fill the rows once per finished fetch — a stopped one too: what it got
@@ -493,18 +500,17 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
   const failed = (job?.rows ?? []).filter(r => r.error);
   const pct = job && job.total ? Math.round((job.done / job.total) * 100) : 0;
   const options: Array<{ id: RegScope; title: string; note: string; n?: number }> = [
-    { id: "requested", title: "เฉพาะวิชาที่ขอ TA แล้ว", note: "แนะนำ เฉพาะวิชาที่ใช้คำนวณงบ TA ใช้เวลาไม่กี่วินาที", n: counts?.requested },
-    { id: "all", title: "ทุกวิชาในภาค", note: "ค้นแบบกลุ่ม (CP* SC* และรหัสเก่า) ทั้งภาคประมาณ 1 นาที", n: counts?.all },
+    { id: "requested", title: t("เฉพาะวิชาที่ขอ TA แล้ว"), note: t("แนะนำ เฉพาะวิชาที่ใช้คำนวณงบ TA ใช้เวลาไม่กี่วินาที"), n: counts?.requested },
+    { id: "all", title: t("ทุกวิชาในภาค"), note: t("ค้นแบบกลุ่ม (CP* SC* และรหัสเก่า) ทั้งภาคประมาณ 1 นาที"), n: counts?.all },
   ];
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted">
-        ระบบอ่านจำนวนที่ <b>ลงทะเบียนจริง</b> (คอลัมน์ &quot;ลง&quot;) ของทุกกลุ่มเรียนจาก reg.kku.ac.th
-        แยกภาคปกติกับโครงการพิเศษ วิชาที่ส่งออกแล้วจะไม่ถูกดึง
+        {t.rich("ระบบอ่านจำนวนที่ {b} (คอลัมน์ \"ลง\") ของทุกกลุ่มเรียนจาก reg.kku.ac.th แยกภาคปกติกับโครงการพิเศษ วิชาที่ส่งออกแล้วจะไม่ถูกดึง", { b: <b>{t("ลงทะเบียนจริง")}</b> })}
       </p>
 
-      <div role="radiogroup" aria-label="วิชาที่จะดึง" className="grid gap-2 sm:grid-cols-2">
+      <div role="radiogroup" aria-label={t("วิชาที่จะดึง")} className="grid gap-2 sm:grid-cols-2">
         {options.map(o => {
           const on = scope === o.id;
           return (
@@ -523,7 +529,7 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
               <div className="flex items-center gap-2">
                 <span className={"h-3.5 w-3.5 rounded-full border-2 " + (on ? "border-[var(--brand)] bg-[var(--brand)]" : "border-slate-400")} />
                 <span className="text-sm font-medium">{o.title}</span>
-                {o.n !== undefined && <span className="ml-auto text-xs text-muted tabular-nums">{o.n} วิชา</span>}
+                {o.n !== undefined && <span className="ml-auto text-xs text-muted tabular-nums">{t("{n} วิชา", { n: o.n })}</span>}
               </div>
               <div className="mt-1 pl-5.5 text-xs text-muted">
                 {o.note}
@@ -535,11 +541,11 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
 
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" onClick={start} disabled={running || starting} isPending={starting}>
-          <CloudDownload size={14} /> {job?.status === "stopped" ? "ดึงต่อ" : job?.status === "done" ? "ดึงใหม่" : "เริ่มดึงข้อมูล"}
+          <CloudDownload size={14} /> {job?.status === "stopped" ? t("ดึงต่อ") : job?.status === "done" ? t("ดึงใหม่") : t("เริ่มดึงข้อมูล")}
         </Button>
         {running && (
           <Button variant="danger-soft" onClick={stop} disabled={stopping} isPending={stopping}>
-            <Square size={13} /> หยุดดึงข้อมูล
+            <Square size={13} /> {t("หยุดดึงข้อมูล")}
           </Button>
         )}
       </div>
@@ -551,30 +557,30 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
           </div>
           <div className="mt-1 text-xs text-muted">
             {job.done === 0
-              ? "กำลังค้นหารายวิชาจากระบบทะเบียน"
-              : `กำลังดึง ${job.done}/${job.total} รหัสวิชา`}{" "}
-            ({job.scope === "all" ? "ทุกวิชา" : "เฉพาะวิชาที่ขอ TA"})
-            ปิดหน้าต่างนี้ได้ ระบบยังดึงต่อ เปิดกลับมาจะเห็นความคืบหน้า
+              ? t("กำลังค้นหารายวิชาจากระบบทะเบียน")
+              : t("กำลังดึง {done}/{total} รหัสวิชา", { done: job.done, total: job.total })}{" "}
+            ({job.scope === "all" ? t("ทุกวิชา") : t("เฉพาะวิชาที่ขอ TA")})
+            {" "}{t("ปิดหน้าต่างนี้ได้ ระบบยังดึงต่อ เปิดกลับมาจะเห็นความคืบหน้า")}
           </div>
         </div>
       )}
 
       {job?.status === "failed" && (
-        <Alert status="danger" title="ดึงข้อมูลไม่สำเร็จ" description={job.error ?? "-"} />
+        <Alert status="danger" title={t("ดึงข้อมูลไม่สำเร็จ")} description={job.error ?? "-"} />
       )}
 
       {job?.status === "stopped" && (
         <Alert
           status="warning"
-          title={`หยุดดึงแล้ว ได้ ${job.rows.length - failed.length} จาก ${job.total} รหัสวิชา`}
-          description="ใช้ตัวเลขที่ได้ตรวจสอบและบันทึกได้เลย หรือกด ดึงต่อ ระบบจะดึงเฉพาะรหัสที่ยังไม่ได้ (รหัสที่ดึงแล้วใช้ผลเดิมได้ 10 นาที)"
+          title={t("หยุดดึงแล้ว ได้ {n} จาก {total} รหัสวิชา", { n: job.rows.length - failed.length, total: job.total })}
+          description={t("ใช้ตัวเลขที่ได้ตรวจสอบและบันทึกได้เลย หรือกด ดึงต่อ ระบบจะดึงเฉพาะรหัสที่ยังไม่ได้ (รหัสที่ดึงแล้วใช้ผลเดิมได้ 10 นาที)")}
         />
       )}
       {finished && (
         <div className="text-xs text-muted">
-          ดึงเมื่อ {hhmm(job.finished_at ?? job.started_at)} ได้ {job.rows.length - failed.length} รหัสวิชา
-          {job.reused > 0 ? ` (ใช้ผลที่ดึงไว้ไม่เกิน 10 นาที ${job.reused} รหัส)` : ""}
-          {job.skipped_exported > 0 ? ` ข้ามวิชาที่ส่งออกแล้ว ${job.skipped_exported} วิชา` : ""}
+          {t("ดึงเมื่อ {time} ได้ {n} รหัสวิชา", { time: hhmm(job.finished_at ?? job.started_at, intl), n: job.rows.length - failed.length })}
+          {job.reused > 0 ? t(" (ใช้ผลที่ดึงไว้ไม่เกิน 10 นาที {n} รหัส)", { n: job.reused }) : ""}
+          {job.skipped_exported > 0 ? t(" ข้ามวิชาที่ส่งออกแล้ว {n} วิชา", { n: job.skipped_exported }) : ""}
         </div>
       )}
       {finished && (() => {
@@ -583,14 +589,14 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
       })() && (
         <Alert
           status="danger"
-          title="ทุกวิชาที่ดึงได้มีผู้ลงทะเบียน 0 คน"
-          description="ระบบทะเบียนอาจยังไม่เปิดให้ลงทะเบียนภาคนี้ ถ้าบันทึกตอนนี้ จำนวนนักศึกษาและงบของวิชาจะเป็น 0 ควรรอดึงใหม่หลังนักศึกษาลงทะเบียนแล้ว"
+          title={t("ทุกวิชาที่ดึงได้มีผู้ลงทะเบียน 0 คน")}
+          description={t("ระบบทะเบียนอาจยังไม่เปิดให้ลงทะเบียนภาคนี้ ถ้าบันทึกตอนนี้ จำนวนนักศึกษาและงบของวิชาจะเป็น 0 ควรรอดึงใหม่หลังนักศึกษาลงทะเบียนแล้ว")}
         />
       )}
       {finished && failed.length > 0 && (
         <Alert
           status="warning"
-          title={`${failed.length} รหัสวิชาดึงไม่ได้ ต้องกรอกเองในแท็บวางจาก Excel`}
+          title={t("{n} รหัสวิชาดึงไม่ได้ ต้องกรอกเองในแท็บวางจาก Excel", { n: failed.length })}
           description={failed.map(r => `${r.code}: ${r.error}`).join("\n")}
         />
       )}

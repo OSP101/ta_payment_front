@@ -6,10 +6,17 @@ import type { Audience, DocPage } from "./types";
 import { effectiveAudience, docHref, type DocPageMeta } from "./meta";
 import mediaData from "./media.json";
 import glossaryData from "./glossary.json";
+import glossaryDataEn from "./glossary.en.json";
 import { commonPages } from "./pages/common";
 import { taPages } from "./pages/ta";
 import { lecturerPages } from "./pages/lecturer";
 import { staffPages } from "./pages/staff";
+import { commonPagesEn } from "./pages-en/common";
+import { taPagesEn } from "./pages-en/ta";
+import { lecturerPagesEn } from "./pages-en/lecturer";
+import { staffPagesEnA } from "./pages-en/staff.a";
+import { staffPagesEnB } from "./pages-en/staff.b";
+import { DEFAULT_LOCALE, type Locale } from "../../app/lib/i18n/core";
 
 export interface MediaEntry {
   id: string;
@@ -34,29 +41,48 @@ export const MEDIA: Record<string, MediaEntry> = Object.fromEntries(
   (mediaData as MediaEntry[]).map((m) => [m.id, m]),
 );
 
-export const GLOSSARY: Record<string, { term: string; def: string }> = glossaryData;
+type Glossary = Record<string, { term: string; def: string }>;
 
-const ALL_PAGES: DocPage[] = [...commonPages, ...taPages, ...lecturerPages, ...staffPages];
+/** Thai glossary (kept for existing callers); use `glossaryFor(locale)`. */
+export const GLOSSARY: Glossary = glossaryData;
+const GLOSSARIES: Record<Locale, Glossary> = { th: glossaryData, en: glossaryDataEn };
 
-/** `pagesForAudience` result per audience, computed once — `ALL_PAGES` is
- *  static module data, so there's nothing to gain from re-filtering and
- *  re-sorting it on every call (registry functions below call each other
- *  and get called from every page render). */
-const BY_AUDIENCE: Record<Audience, DocPage[]> = (() => {
+export function glossaryFor(locale: Locale = DEFAULT_LOCALE): Glossary {
+  return GLOSSARIES[locale];
+}
+
+/** The whole manual per reading language. The English set is a copy of the
+ *  Thai one with the same slugs, order, routes and media ids — only the
+ *  reader-visible text differs — so links, the in-app pill and access rules
+ *  work the same whichever language is served. */
+const ALL_PAGES: Record<Locale, DocPage[]> = {
+  th: [...commonPages, ...taPages, ...lecturerPages, ...staffPages],
+  en: [...commonPagesEn, ...taPagesEn, ...lecturerPagesEn, ...staffPagesEnA, ...staffPagesEnB],
+};
+
+/** `pagesForAudience` result per language and audience, computed once —
+ *  `ALL_PAGES` is static module data, so there's nothing to gain from
+ *  re-filtering and re-sorting it on every call (registry functions below
+ *  call each other and get called from every page render). */
+const BY_AUDIENCE: Record<Locale, Record<Audience, DocPage[]>> = (() => {
   const audiences: Audience[] = ["common", "ta", "lecturer", "staff"];
-  const out = {} as Record<Audience, DocPage[]>;
-  for (const audience of audiences) {
-    out[audience] = ALL_PAGES
-      .filter((p) => p.audience === audience || p.audience === "common")
-      .sort((a, b) => a.order - b.order);
+  const out = {} as Record<Locale, Record<Audience, DocPage[]>>;
+  for (const locale of Object.keys(ALL_PAGES) as Locale[]) {
+    const per = {} as Record<Audience, DocPage[]>;
+    for (const audience of audiences) {
+      per[audience] = ALL_PAGES[locale]
+        .filter((p) => p.audience === audience || p.audience === "common")
+        .sort((a, b) => a.order - b.order);
+    }
+    out[locale] = per;
   }
   return out;
 })();
 
 /** All pages visible under a given audience switch — its own pages plus the
  *  shared "ทั่วไป" ones, which every audience folds into its own sidebar. */
-export function pagesForAudience(audience: Audience): DocPage[] {
-  return BY_AUDIENCE[audience];
+export function pagesForAudience(audience: Audience, locale: Locale = DEFAULT_LOCALE): DocPage[] {
+  return BY_AUDIENCE[locale][audience];
 }
 
 // Defined in ./meta (pure, client-safe); re-exported so server callers keep
@@ -75,8 +101,8 @@ export { effectiveAudience, docHref };
  * full manual's sidebar; a screen with none is one page, which reads fine
  * in the side drawer.
  */
-export function screenSubPages(owner: DocPage, audience: Audience): DocPage[] {
-  const section = pagesForAudience(audience).filter((p) => p.section === owner.section);
+export function screenSubPages(owner: DocPage, audience: Audience, locale: Locale = DEFAULT_LOCALE): DocPage[] {
+  const section = pagesForAudience(audience, locale).filter((p) => p.section === owner.section);
   const i = section.findIndex((p) => p.slug === owner.slug);
   if (i < 0) return [];
   const subs: DocPage[] = [];
@@ -87,19 +113,19 @@ export function screenSubPages(owner: DocPage, audience: Audience): DocPage[] {
   return subs;
 }
 
-export function findPage(audience: Audience, slug: string): DocPage | undefined {
-  return pagesForAudience(audience).find((p) => p.slug === slug);
+export function findPage(audience: Audience, slug: string, locale: Locale = DEFAULT_LOCALE): DocPage | undefined {
+  return pagesForAudience(audience, locale).find((p) => p.slug === slug);
 }
 
-export function gettingStarted(audience: Audience): DocPage[] {
-  return pagesForAudience(audience)
+export function gettingStarted(audience: Audience, locale: Locale = DEFAULT_LOCALE): DocPage[] {
+  return pagesForAudience(audience, locale)
     .filter((p) => typeof p.gettingStarted === "number")
     .sort((a, b) => (a.gettingStarted ?? 0) - (b.gettingStarted ?? 0));
 }
 
 /** Sidebar sections in the order their first page appears. */
-export function sidebarSections(audience: Audience): { section: string; pages: DocPage[] }[] {
-  const pages = pagesForAudience(audience);
+export function sidebarSections(audience: Audience, locale: Locale = DEFAULT_LOCALE): { section: string; pages: DocPage[] }[] {
+  const pages = pagesForAudience(audience, locale);
   const order: string[] = [];
   const bySection = new Map<string, DocPage[]>();
   for (const p of pages) {
@@ -109,8 +135,8 @@ export function sidebarSections(audience: Audience): { section: string; pages: D
   return order.map((section) => ({ section, pages: bySection.get(section)! }));
 }
 
-export function allPages(): DocPage[] {
-  return ALL_PAGES;
+export function allPages(locale: Locale = DEFAULT_LOCALE): DocPage[] {
+  return ALL_PAGES[locale];
 }
 
 /** Media referenced by a page — every screenshot/gif id its blocks mention. */
@@ -127,9 +153,11 @@ export function mediaForPage(page: DocPage): MediaEntry[] {
 }
 
 /** The client-safe view of `page` as listed under `viewingAs` — see
- *  `DocPageMeta`. `hasSubPages` is computed here, where the pages are. */
-export function toMeta(page: DocPage, viewingAs: Audience): DocPageMeta {
-  const subs = page.audience === "common" ? 0 : screenSubPages(page, viewingAs).length;
+ *  `DocPageMeta`. `hasSubPages` is computed here, where the pages are.
+ *  `locale` must be the language `page` came from (its section siblings are
+ *  looked up in the same set). */
+export function toMeta(page: DocPage, viewingAs: Audience, locale: Locale = DEFAULT_LOCALE): DocPageMeta {
+  const subs = page.audience === "common" ? 0 : screenSubPages(page, viewingAs, locale).length;
   return {
     slug: page.slug,
     audience: page.audience,

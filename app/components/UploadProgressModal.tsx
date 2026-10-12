@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Modal, ProgressBar } from "@heroui/react";
 import { ShieldCheck, Upload } from "lucide-react";
 import type { UploadProgress } from "../lib/api";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * Progress dialog for a file upload that is scanned server-side.
@@ -25,6 +26,7 @@ export default function UploadProgressModal({
   progress: UploadProgress | null;
   filename?: string;
 }) {
+  const { t } = useI18n();
   const open = progress !== null;
 
   // The dialog stays mounted through its exit animation, so for a few frames
@@ -58,7 +60,7 @@ export default function UploadProgressModal({
                 {scanning ? <ShieldCheck className="size-5" /> : <Upload className="size-5" />}
               </Modal.Icon>
               <Modal.Heading>
-                {scanning ? "กำลังตรวจสอบความปลอดภัยของไฟล์" : "กำลังอัปโหลดไฟล์"}
+                {scanning ? t("กำลังตรวจสอบความปลอดภัยของไฟล์") : t("กำลังอัปโหลดไฟล์")}
               </Modal.Heading>
             </Modal.Header>
             <Modal.Body>
@@ -68,20 +70,19 @@ export default function UploadProgressModal({
 
               {scanning ? (
                 <>
-                  <ProgressBar isIndeterminate aria-label="กำลังสแกนไวรัส" className="w-full">
+                  <ProgressBar isIndeterminate aria-label={t("กำลังสแกนไวรัส")} className="w-full">
                     <ProgressBar.Track>
                       <ProgressBar.Fill />
                     </ProgressBar.Track>
                   </ProgressBar>
                   <div className="text-sm text-muted mt-3">
-                    อัปโหลดครบแล้ว ระบบกำลังสแกนไวรัสและตรวจว่าเป็นไฟล์ PDF จริง
-                    ก่อนบันทึกลงระบบ ขั้นตอนนี้อาจใช้เวลาสักครู่ตามขนาดไฟล์
+                    {t("อัปโหลดครบแล้ว ระบบกำลังสแกนไวรัสและตรวจว่าเป็นไฟล์ PDF จริง ก่อนบันทึกลงระบบ ขั้นตอนนี้อาจใช้เวลาสักครู่ตามขนาดไฟล์")}
                   </div>
                 </>
               ) : (
                 <>
                   <ProgressBar
-                    aria-label="ความคืบหน้าการอัปโหลด"
+                    aria-label={t("ความคืบหน้าการอัปโหลด")}
                     value={shown?.percent ?? 0}
                     className="w-full"
                   >
@@ -97,7 +98,7 @@ export default function UploadProgressModal({
               )}
 
               <div className="text-xs text-muted mt-4 pt-3 border-t border-[var(--hairline)]">
-                กรุณาอย่าปิดหรือรีเฟรชหน้านี้จนกว่าจะเสร็จ
+                {t("กรุณาอย่าปิดหรือรีเฟรชหน้านี้จนกว่าจะเสร็จ")}
               </div>
             </Modal.Body>
           </Modal.Dialog>

@@ -6,6 +6,7 @@ import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Panel, Button, Chip, TextArea, EmptyState, Alert, SearchField, ConfirmDialog, Tip } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
+import { msg, useI18n } from "../lib/i18n/client";
 
 interface CourseRef { code: string; name_th: string; }
 // Per-ROUND physical document progress (migration 0031, fiscal_round since
@@ -45,19 +46,21 @@ interface TermProgressOverview {
 }
 
 const STAGES: { n: number; label: string; atKey: keyof TermProgress; role?: string; who: string }[] = [
-  { n: 1, label: "ผู้ช่วยสอนเซ็นครบ", atKey: "ta_signed_at", role: "ta", who: "ผู้ช่วยสอนทุกคนที่สอนในวิชานั้น" },
-  { n: 2, label: "อาจารย์เซ็นครบ", atKey: "lecturer_signed_at", role: "lecturer", who: "อาจารย์ผู้ส่งคำขอ" },
-  { n: 3, label: "ผู้รับรองเซ็นครบ", atKey: "certifier_signed_at", role: "certifier", who: "หัวหน้าสาขาวิชา" },
-  { n: 4, label: "ส่งการเงินแล้ว", atKey: "sent_finance_at", who: "เจ้าหน้าที่นำส่ง" },
-  { n: 5, label: "คณบดีลงนาม", atKey: "sent_treasury_at", who: "คณบดี" },
+  { n: 1, label: msg("ผู้ช่วยสอนเซ็นครบ"), atKey: "ta_signed_at", role: "ta", who: msg("ผู้ช่วยสอนทุกคนที่สอนในวิชานั้น") },
+  { n: 2, label: msg("อาจารย์เซ็นครบ"), atKey: "lecturer_signed_at", role: "lecturer", who: msg("อาจารย์ผู้ส่งคำขอ") },
+  { n: 3, label: msg("ผู้รับรองเซ็นครบ"), atKey: "certifier_signed_at", role: "certifier", who: msg("หัวหน้าสาขาวิชา") },
+  { n: 4, label: msg("ส่งการเงินแล้ว"), atKey: "sent_finance_at", who: msg("เจ้าหน้าที่นำส่ง") },
+  { n: 5, label: msg("คณบดีลงนาม"), atKey: "sent_treasury_at", who: msg("คณบดี") },
 ];
 
-export function fmt(iso?: string | null): string {
+/** `year` turns the CE year into the one to print — pass year() from
+ *  useI18n() (BE in Thai, CE in English); defaults to BE. */
+export function fmt(iso?: string | null, year: (ce: number) => number = ce => ce + 543): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear() + 543} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${year(d.getFullYear())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 // DocumentProgressBoard fetches every round this term has and renders tabs
@@ -80,6 +83,7 @@ export function DocumentProgressBoard({
    */
   pending?: boolean;
 }) {
+  const { t } = useI18n();
   const key = termId ? `/document-progress?term_id=${termId}` : null;
   const { data } = useSWR<TermProgressOverview>(key);
   const [activeRound, setActiveRound] = useState(1);
@@ -89,7 +93,7 @@ export function DocumentProgressBoard({
   // Same key those panels use, so SWR dedupes it into the one request.
   useSWR<SignatureItem[]>(termId ? `/document-progress/checklist?term_id=${termId}&round=${activeRound}` : null);
 
-  if (!termId && !pending) return <Panel><EmptyState title="เลือกภาคเรียนเพื่อดูความคืบหน้า" /></Panel>;
+  if (!termId && !pending) return <Panel><EmptyState title={t("เลือกภาคเรียนเพื่อดูความคืบหน้า")} /></Panel>;
   if (!data) {
     return (
       <div className="space-y-3">
@@ -126,7 +130,7 @@ export function DocumentProgressBoard({
                 (activeRound === r.round ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
               }
             >
-              {r.round_label || `รอบ ${r.round}`}
+              {r.round_label || t("รอบ {n}", { n: r.round })}
             </button>
           ))}
         </div>
@@ -134,8 +138,8 @@ export function DocumentProgressBoard({
       {lagging.length > 0 && (
         <Alert
           status="warning"
-          title={`เทอมนี้ยังเหลือ ${lagging.map(r => r.round_label || `รอบ ${r.round}`).join(", ")} ที่ยังไม่เสร็จ`}
-          description="อย่าลืมกลับมาเดินเอกสารรอบนี้ให้ครบด้วย — คลิกที่แท็บด้านบนเพื่อสลับไปดู"
+          title={t("เทอมนี้ยังเหลือ {rounds} ที่ยังไม่เสร็จ", { rounds: lagging.map(r => r.round_label || t("รอบ {n}", { n: r.round })).join(", ") })}
+          description={t("อย่าลืมกลับมาเดินเอกสารรอบนี้ให้ครบด้วย — คลิกที่แท็บด้านบนเพื่อสลับไปดู")}
         />
       )}
       {canEdit && (
@@ -184,6 +188,7 @@ interface ShareLink {
 // backend), so the button here never risks scattering two different links
 // for the same term across chat history.
 function ShareLinkPanel({ termId }: { termId: string }) {
+  const { t, year } = useI18n();
   const key = termId ? `/document-progress/${termId}/share-link` : null;
   const { data, isLoading } = useSWR<ShareLink | null>(key);
   const [busy, setBusy] = useState(false);
@@ -213,7 +218,7 @@ function ShareLinkPanel({ termId }: { termId: string }) {
     setBusy(true);
     try {
       await api.del(`/document-progress/${termId}/share-link`);
-      notify.success("ยกเลิกลิงก์แล้ว — ลิงก์เดิมใช้ดูไม่ได้อีกต่อไป");
+      notify.success(t("ยกเลิกลิงก์แล้ว — ลิงก์เดิมใช้ดูไม่ได้อีกต่อไป"));
       setConfirmRevoke(false);
       if (key) mutate(key);
     } catch (e) {
@@ -227,7 +232,7 @@ function ShareLinkPanel({ termId }: { termId: string }) {
     try {
       await navigator.clipboard.writeText(url);
     } catch {
-      window.prompt("คัดลอกลิงก์นี้", url);
+      window.prompt(t("คัดลอกลิงก์นี้"), url);
       return;
     }
     setCopied(true);
@@ -241,18 +246,19 @@ function ShareLinkPanel({ termId }: { termId: string }) {
           <Globe2 size={18} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">ลิงก์สาธารณะสำหรับเทอมนี้</div>
+          <div className="text-sm font-semibold">{t("ลิงก์สาธารณะสำหรับเทอมนี้")}</div>
           {/* The panel's frame is static; only whether a link exists waits on
               the request. Returning null here made the whole panel pop in. */}
           {isLoading ? (
             <Skel className="mt-1 h-3 w-3/4 max-w-80" />
           ) : data ? (
             <div className="text-xs text-muted truncate">
-              ใครก็เปิดดูได้โดยไม่ต้องเข้าสู่ระบบ · สร้างเมื่อ {fmt(data.created_at)}
-              {data.created_by_name ? ` โดย ${data.created_by_name}` : ""}
+              {data.created_by_name
+                ? t("ใครก็เปิดดูได้โดยไม่ต้องเข้าสู่ระบบ · สร้างเมื่อ {when} โดย {name}", { when: fmt(data.created_at, year), name: data.created_by_name })
+                : t("ใครก็เปิดดูได้โดยไม่ต้องเข้าสู่ระบบ · สร้างเมื่อ {when}", { when: fmt(data.created_at, year) })}
             </div>
           ) : (
-            <div className="text-xs text-muted">ยังไม่มีลิงก์ — สร้างแล้วนำไปประกาศให้อาจารย์และผู้ช่วยสอนดูความคืบหน้าได้</div>
+            <div className="text-xs text-muted">{t("ยังไม่มีลิงก์ — สร้างแล้วนำไปประกาศให้อาจารย์และผู้ช่วยสอนดูความคืบหน้าได้")}</div>
           )}
         </div>
         {isLoading ? (
@@ -260,15 +266,15 @@ function ShareLinkPanel({ termId }: { termId: string }) {
         ) : data ? (
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="secondary" size="sm" onClick={copy}>
-              {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}
+              {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? t("คัดลอกแล้ว") : t("คัดลอกลิงก์")}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setConfirmRevoke(true)} disabled={busy}>
-              <X size={13} /> ยกเลิกลิงก์
+              <X size={13} /> {t("ยกเลิกลิงก์")}
             </Button>
           </div>
         ) : (
           <Button variant="secondary" size="sm" className="shrink-0" onClick={create} disabled={busy}>
-            <Globe2 size={13} /> สร้างลิงก์สาธารณะ
+            <Globe2 size={13} /> {t("สร้างลิงก์สาธารณะ")}
           </Button>
         )}
       </div>
@@ -285,9 +291,9 @@ function ShareLinkPanel({ termId }: { termId: string }) {
         onConfirm={revoke}
         danger
         isPending={busy}
-        title="ยกเลิกลิงก์สาธารณะ?"
-        message="ลิงก์ที่ประกาศไปแล้วจะเปิดดูไม่ได้อีก ถ้าต้องแชร์ใหม่ต้องสร้างลิงก์ใหม่และประกาศอีกครั้ง"
-        confirmLabel="ยกเลิกลิงก์"
+        title={t("ยกเลิกลิงก์สาธารณะ?")}
+        message={t("ลิงก์ที่ประกาศไปแล้วจะเปิดดูไม่ได้อีก ถ้าต้องแชร์ใหม่ต้องสร้างลิงก์ใหม่และประกาศอีกครั้ง")}
+        confirmLabel={t("ยกเลิกลิงก์")}
       />
     </Panel>
   );
@@ -306,6 +312,7 @@ function RoundBoard({
   canEdit: boolean;
   showFinalStage: boolean;
 }) {
+  const { t, year } = useI18n();
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Target stage of a pending BACKWARD move, awaiting confirmation. Going
@@ -327,7 +334,7 @@ function RoundBoard({
     setBusy(true);
     try {
       await api.post(`/document-progress/${termId}?round=${round}`, { stage, note });
-      notify.success("อัปเดตความคืบหน้าแล้ว");
+      notify.success(t("อัปเดตความคืบหน้าแล้ว"));
       setNoteDraft(null);
       if (overviewKey) mutate(overviewKey);
     } catch (e) {
@@ -342,27 +349,26 @@ function RoundBoard({
       {/* Export readiness gate */}
       <Panel data-tour="progress-gate">
         {p.all_exported ? (
-          <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-center gap-2 text-sm text-emerald-700">
             <CheckCircle2 size={18} />
-            <span><b>ส่งออกเอกสารครบทุกวิชาแล้ว</b> ({p.exported_courses}/{p.total_courses} วิชา) เริ่มติดตามการเซ็นได้</span>
+            <span>{t.rich("{done} ({exported}/{total} วิชา) เริ่มติดตามการเซ็นได้", { done: <b>{t("ส่งออกเอกสารครบทุกวิชาแล้ว")}</b>, exported: p.exported_courses, total: p.total_courses })}</span>
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
               <AlertTriangle size={18} />
               <span>
-                <b>ยังส่งออกไม่ครบ</b> ส่งออกแล้ว {p.exported_courses}/{p.total_courses} วิชา
-                {" "}ต้องส่งออกให้ครบทุกวิชาก่อนจึงจะเริ่มติดตามการเซ็นได้
+                {t.rich("{notYet} ส่งออกแล้ว {exported}/{total} วิชา ต้องส่งออกให้ครบทุกวิชาก่อนจึงจะเริ่มติดตามการเซ็นได้", { notYet: <b>{t("ยังส่งออกไม่ครบ")}</b>, exported: p.exported_courses, total: p.total_courses })}
               </span>
             </div>
             {p.unexported_courses.length > 0 && (
               <div className="text-xs text-ink-2">
-                <span className="text-muted">วิชาที่ยังไม่ส่งออก: </span>
+                <span className="text-muted">{t("วิชาที่ยังไม่ส่งออก:")} </span>
                 {p.unexported_courses.map(c => c.code).join(", ")}
               </div>
             )}
             {/* progress bar */}
-            <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
               <div
                 className="h-full bg-amber-400"
                 style={{ width: `${p.total_courses ? Math.round((p.exported_courses / p.total_courses) * 100) : 0}%` }}
@@ -375,13 +381,13 @@ function RoundBoard({
       {/* The single term-level stepper */}
       <Panel padded={false} data-tour="progress-stepper">
         <div className="px-4 py-3 flex items-center gap-3 border-b border-hairline">
-          <div className="font-semibold">การเดินเอกสารของทั้งเทอม</div>
+          <div className="font-semibold">{t("การเดินเอกสารของทั้งเทอม")}</div>
           <div className="ml-auto">
             {done
-              ? <Chip tone="success"><Check size={12} /> เสร็จสิ้น</Chip>
+              ? <Chip tone="success"><Check size={12} /> {t("เสร็จสิ้น")}</Chip>
               : !p.all_exported
-              ? <Chip tone="neutral"><Lock size={12} /> รอส่งออกครบ</Chip>
-              : <Chip tone={displayStage === 0 ? "neutral" : "brand"}>{displayStage === 0 ? "ยังไม่เริ่ม" : `ขั้นที่ ${displayStage}/${maxStage}`}</Chip>}
+              ? <Chip tone="neutral"><Lock size={12} /> {t("รอส่งออกครบ")}</Chip>
+              : <Chip tone={displayStage === 0 ? "neutral" : "brand"}>{displayStage === 0 ? t("ยังไม่เริ่ม") : t("ขั้นที่ {n}/{max}", { n: displayStage, max: maxStage })}</Chip>}
           </div>
         </div>
 
@@ -400,14 +406,14 @@ function RoundBoard({
                 stepsEnabled && !busy && (isCurrent || (isNext && p.can_advance));
               const blockedNext = stepsEnabled && isNext && !p.can_advance;
               const title = !stepsEnabled
-                ? "ต้องส่งออกเอกสารครบทุกวิชาก่อน"
+                ? t("ต้องส่งออกเอกสารครบทุกวิชาก่อน")
                 : isCurrent
-                ? "คลิกเพื่อย้อนขั้นนี้"
+                ? t("คลิกเพื่อย้อนขั้นนี้")
                 : blockedNext
-                ? `ยังกดไม่ได้ ${st.who}ยังเซ็นไม่ครบ`
+                ? t("ยังกดไม่ได้ {who}ยังเซ็นไม่ครบ", { who: t(st.who) })
                 : isNext
-                ? "คลิกเพื่อยืนยันว่าขั้นนี้เสร็จแล้ว"
-                : "ต้องทำขั้นก่อนหน้าให้เสร็จก่อน";
+                ? t("คลิกเพื่อยืนยันว่าขั้นนี้เสร็จแล้ว")
+                : t("ต้องทำขั้นก่อนหน้าให้เสร็จก่อน");
               return (
                 <div key={st.n} className="flex-1 flex flex-col items-center relative">
                   {i > 0 && (
@@ -429,19 +435,19 @@ function RoundBoard({
                       (reached
                         ? "bg-emerald-500 text-white"
                         : blockedNext
-                        ? "bg-amber-100 text-amber-700 ring-2 ring-amber-300 dark:bg-amber-950/40 dark:text-amber-300"
+                        ? "bg-amber-100 text-amber-700 ring-2 ring-amber-300"
                         : isNext
-                        ? "bg-white text-accent ring-2 ring-accent dark:bg-slate-900"
-                        : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400") +
+                        ? "bg-white text-accent ring-2 ring-accent"
+                        : "bg-slate-200 text-slate-500") +
                       (canClick ? " cursor-pointer hover:ring-2 hover:ring-emerald-300" : " cursor-not-allowed") +
                       (isCurrent ? " ring-2 ring-emerald-400" : "")
                     }
                   >
                     {reached ? <Check size={16} strokeWidth={3} /> : <span className="text-xs font-semibold">{st.n}</span>}
                   </button></Tip>
-                  <div className={"mt-2 text-center text-xs px-1 " + (reached ? "text-ink-1 font-medium" : isNext ? "text-ink-1 font-medium" : "text-ink-3")}>{st.label}</div>
-                  <div className="text-[10px] text-muted text-center px-1">{st.who}</div>
-                  {reached && at && <div className="text-[10px] text-muted tabular mt-0.5">{fmt(at)}</div>}
+                  <div className={"mt-2 text-center text-xs px-1 " + (reached ? "text-ink-1 font-medium" : isNext ? "text-ink-1 font-medium" : "text-ink-3")}>{t(st.label)}</div>
+                  <div className="text-[10px] text-muted text-center px-1">{t(st.who)}</div>
+                  {reached && at && <div className="text-[10px] text-muted tabular mt-0.5">{fmt(at, year)}</div>}
                 </div>
               );
             })}
@@ -450,14 +456,14 @@ function RoundBoard({
         {/* The five desks do not fit a phone, so the row scrolls. Say so —
             a scroll nobody knows about is the same as steps that do not exist. */}
         <div className="px-4 -mt-3 pb-1 text-[11px] text-muted sm:hidden">
-          เลื่อนแถวขั้นตอนไปทางซ้ายเพื่อดูขั้นถัดไป
+          {t("เลื่อนแถวขั้นตอนไปทางซ้ายเพื่อดูขั้นถัดไป")}
         </div>
 
         {p.all_exported && !done && p.current_role && !p.can_advance && (p.signers_missing?.length ?? 0) > 0 && (
-          <div className="mx-4 mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-            <b>ยังไปขั้นถัดไปไม่ได้</b> เหลืออีก {p.signers_missing!.length} รายที่ยังไม่เซ็น:{" "}
+          <div className="mx-4 mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {t.rich("{blocked} เหลืออีก {n} รายที่ยังไม่เซ็น:", { blocked: <b>{t("ยังไปขั้นถัดไปไม่ได้")}</b>, n: p.signers_missing!.length })}{" "}
             {p.signers_missing!.slice(0, 4).join(" · ")}
-            {p.signers_missing!.length > 4 && ` และอีก ${p.signers_missing!.length - 4} ราย`}
+            {p.signers_missing!.length > 4 && t(" และอีก {n} ราย", { n: p.signers_missing!.length - 4 })}
           </div>
         )}
 
@@ -468,26 +474,26 @@ function RoundBoard({
             // the card.
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1">
-                <label className="block text-xs text-ink-2 mb-1">หมายเหตุ (ไม่บังคับ)</label>
+                <label className="block text-xs text-ink-2 mb-1">{t("หมายเหตุ (ไม่บังคับ)")}</label>
                 <TextArea rows={2} value={note} onChange={e => setNoteDraft(e.target.value)}
-                  placeholder="เช่น รออาจารย์ ก. เซ็น / ส่งเอกสารวันที่…" disabled={!p.all_exported} />
+                  placeholder={t("เช่น รออาจารย์ ก. เซ็น / ส่งเอกสารวันที่…")} disabled={!p.all_exported} />
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Button variant="secondary" size="sm" onClick={() => setStage(p.stage)} disabled={busy || !p.all_exported}>
-                  บันทึกหมายเหตุ
+                  {t("บันทึกหมายเหตุ")}
                 </Button>
                 {p.stage > 0 && (
                   <Button variant="ghost" size="sm" onClick={() => setConfirmBack(0)} disabled={busy}>
-                    <RotateCcw size={12} /> รีเซ็ต
+                    <RotateCcw size={12} /> {t("รีเซ็ต")}
                   </Button>
                 )}
               </div>
             </div>
           ) : (
-            p.note && <div className="text-xs text-ink-2"><span className="text-muted">หมายเหตุ: </span>{p.note}</div>
+            p.note && <div className="text-xs text-ink-2"><span className="text-muted">{t("หมายเหตุ:")} </span>{p.note}</div>
           )}
           {p.updated_by_name && p.updated_at && (
-            <div className="text-[11px] text-muted">อัปเดตล่าสุดโดย {p.updated_by_name} · {fmt(p.updated_at)}</div>
+            <div className="text-[11px] text-muted">{t("อัปเดตล่าสุดโดย {name} · {when}", { name: p.updated_by_name, when: fmt(p.updated_at, year) })}</div>
           )}
         </div>
       </Panel>
@@ -519,13 +525,13 @@ function RoundBoard({
         }}
         danger
         isPending={busy}
-        title={confirmBack === 0 ? "รีเซ็ตความคืบหน้าทั้งเทอม?" : "ย้อนกลับขั้นก่อนหน้า?"}
+        title={confirmBack === 0 ? t("รีเซ็ตความคืบหน้าทั้งเทอม?") : t("ย้อนกลับขั้นก่อนหน้า?")}
         message={
           confirmBack === 0
-            ? `ความคืบหน้าจะกลับไปเป็น “ยังไม่เริ่ม” และวันที่ของทุกขั้นที่บันทึกไว้แล้ว (${displayStage} ขั้น) จะถูกลบทิ้ง กรอกกลับเข้ามาใหม่ไม่ได้ ต้องไล่กดทีละขั้นอีกครั้ง`
-            : `ขั้น “${STAGES[(confirmBack ?? 1)]?.label ?? ""}” จะถูกยกเลิก และวันที่ที่บันทึกไว้ของขั้นนี้จะหายไป`
+            ? t("ความคืบหน้าจะกลับไปเป็น “ยังไม่เริ่ม” และวันที่ของทุกขั้นที่บันทึกไว้แล้ว ({n} ขั้น) จะถูกลบทิ้ง กรอกกลับเข้ามาใหม่ไม่ได้ ต้องไล่กดทีละขั้นอีกครั้ง", { n: displayStage })
+            : t("ขั้น “{stage}” จะถูกยกเลิก และวันที่ที่บันทึกไว้ของขั้นนี้จะหายไป", { stage: t(STAGES[(confirmBack ?? 1)]?.label ?? "") })
         }
-        confirmLabel={confirmBack === 0 ? "รีเซ็ต" : "ย้อนกลับ"}
+        confirmLabel={confirmBack === 0 ? t("รีเซ็ต") : t("ย้อนกลับ")}
       />
     </div>
   );
@@ -573,6 +579,7 @@ function SignatureChecklistPanel({
   role: string;
   allExported: boolean;
 }) {
+  const { t, year } = useI18n();
   const key = termId ? `/document-progress/checklist?term_id=${termId}&round=${round}` : null;
   const { data } = useSWR<SignatureItem[]>(key);
   const [busy, setBusy] = useState(false);
@@ -637,7 +644,7 @@ function SignatureChecklistPanel({
     setBusy(true);
     try {
       const res = await api.post<{ notified: number }>(`/document-progress/${termId}/remind?round=${round}`);
-      notify.success(`ส่งอีเมลแจ้งเตือนแล้ว ${res.notified} ท่าน`);
+      notify.success(t("ส่งอีเมลแจ้งเตือนแล้ว {n} ท่าน", { n: res.notified }));
     } catch (e) {
       notify.error(errMessage(e));
     } finally {
@@ -653,11 +660,11 @@ function SignatureChecklistPanel({
     return (
       <Panel>
         <EmptyState
-          title={stage >= 5 ? "เดินเอกสารครบทุกขั้นแล้ว" : "ขั้นนี้ไม่มีรายการให้เซ็น"}
+          title={stage >= 5 ? t("เดินเอกสารครบทุกขั้นแล้ว") : t("ขั้นนี้ไม่มีรายการให้เซ็น")}
           description={
             stage >= 5
-              ? "คณบดีลงนามแล้ว จบกระบวนการของเทอมนี้"
-              : "เป็นขั้นที่เจ้าหน้าที่ดำเนินการเอง กดที่วงกลมขั้นถัดไปเมื่อทำเสร็จ"
+              ? t("คณบดีลงนามแล้ว จบกระบวนการของเทอมนี้")
+              : t("เป็นขั้นที่เจ้าหน้าที่ดำเนินการเอง กดที่วงกลมขั้นถัดไปเมื่อทำเสร็จ")
           }
         />
       </Panel>
@@ -670,7 +677,7 @@ function SignatureChecklistPanel({
   if (items.length === 0) {
     return (
       <Panel>
-        <EmptyState title="ยังไม่มีรายวิชาที่มีผู้ช่วยสอนในเทอมนี้" description="เมื่อมีคำขอผู้ช่วยสอนที่อนุมัติแล้ว รายการรอลงนามจะแสดงที่นี่" />
+        <EmptyState title={t("ยังไม่มีรายวิชาที่มีผู้ช่วยสอนในเทอมนี้")} description={t("เมื่อมีคำขอผู้ช่วยสอนที่อนุมัติแล้ว รายการรอลงนามจะแสดงที่นี่")} />
       </Panel>
     );
   }
@@ -680,32 +687,32 @@ function SignatureChecklistPanel({
       <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-hairline">
         <div>
           <div className="font-semibold">
-            ขั้นที่ {stage + 1} · {stageInfo?.label ?? ""}
+            {t("ขั้นที่ {n} · {stage}", { n: stage + 1, stage: stageInfo ? t(stageInfo.label) : "" })}
           </div>
-          <div className="text-xs text-muted">รอ{stageInfo?.who ?? ""}ลงนาม ติ๊กทีละคนเมื่อได้ลายเซ็นแล้ว</div>
+          <div className="text-xs text-muted">{t("รอ{who}ลงนาม ติ๊กทีละคนเมื่อได้ลายเซ็นแล้ว", { who: stageInfo ? t(stageInfo.who) : "" })}</div>
         </div>
         {pendingCount > 0
-          ? <Chip tone="warn">เซ็นแล้ว {signedCount}/{items.length}</Chip>
-          : <Chip tone="success"><Check size={12} /> ครบแล้ว {items.length}/{items.length} กดขั้นถัดไปได้</Chip>}
+          ? <Chip tone="warn">{t("เซ็นแล้ว {n}/{total}", { n: signedCount, total: items.length })}</Chip>
+          : <Chip tone="success"><Check size={12} /> {t("ครบแล้ว {n}/{total} กดขั้นถัดไปได้", { n: items.length, total: items.length })}</Chip>}
         {canEdit && role === "lecturer" && (
           <Button variant="secondary" size="sm" onClick={remind} disabled={busy || pendingCount === 0}>
-            <Mail size={14} /> ส่งอีเมลเตือนอาจารย์ที่ยังไม่เซ็น
+            <Mail size={14} /> {t("ส่งอีเมลเตือนอาจารย์ที่ยังไม่เซ็น")}
           </Button>
         )}
         <div className="w-full sm:w-auto sm:ml-auto">
           <SearchField
             value={q}
             onChange={setQ}
-            ariaLabel="ค้นหารายวิชาหรือชื่อผู้ลงนาม"
-            placeholder="ค้นหารหัสวิชา ชื่อวิชา หรือชื่อผู้ลงนาม"
+            ariaLabel={t("ค้นหารายวิชาหรือชื่อผู้ลงนาม")}
+            placeholder={t("ค้นหารหัสวิชา ชื่อวิชา หรือชื่อผู้ลงนาม")}
           />
         </div>
       </div>
       {needle !== "" && (
         <div className="px-4 py-2 text-xs text-muted border-b border-hairline">
           {shown.length > 0
-            ? `พบ ${shown.length} รายการจากทั้งหมด ${items.length} รายการ`
-            : `ไม่พบรายการที่ตรงกับ “${q.trim()}”`}
+            ? t("พบ {n} รายการจากทั้งหมด {total} รายการ", { n: shown.length, total: items.length })
+            : t("ไม่พบรายการที่ตรงกับ “{q}”", { q: q.trim() })}
         </div>
       )}
       <div className="divide-y divide-hairline">
@@ -717,21 +724,21 @@ function SignatureChecklistPanel({
                 <span className="tabular">{g.code}</span>
                 <span className="text-ink-2 font-normal">{g.name_th}</span>
                 {left === 0
-                  ? <Chip tone="success"><Check size={12} /> ครบ</Chip>
-                  : <Chip tone="warn">เหลือ {left}/{g.items.length}</Chip>}
+                  ? <Chip tone="success"><Check size={12} /> {t("ครบ")}</Chip>
+                  : <Chip tone="warn">{t("เหลือ {n}/{total}", { n: left, total: g.items.length })}</Chip>}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {g.items.map(it => {
                   const signed = !!it.signed_at;
                   return (
-                    <Tip key={signatureItemKey(it)} content={[it.responsible, canEdit ? (signed ? "คลิกเพื่อยกเลิกการเซ็น" : "คลิกเพื่อทำเครื่องหมายว่าเซ็นแล้ว") : ""].filter(Boolean).join("\n")}><button
+                    <Tip key={signatureItemKey(it)} content={[it.responsible, canEdit ? (signed ? t("คลิกเพื่อยกเลิกการเซ็น") : t("คลิกเพื่อทำเครื่องหมายว่าเซ็นแล้ว")) : ""].filter(Boolean).join("\n")}><button
                       type="button"
                       disabled={!canEdit || busy}
                       onClick={() => canEdit && toggle(it, !signed)}
                       className={
                         "flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition " +
                         (signed
-                          ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30"
+                          ? "border-emerald-300 bg-emerald-50"
                           : "border-hairline bg-panel") +
                         (canEdit ? " hover:border-accent cursor-pointer" : " cursor-default")
                       }
@@ -742,7 +749,7 @@ function SignatureChecklistPanel({
                       <div className="min-w-0">
                         <div className="text-xs font-medium truncate">{it.responsible || "—"}</div>
                         <div className={"text-[11px] " + (signed ? "text-emerald-700" : "text-amber-700")}>
-                          {signed ? `เซ็นแล้ว · ${fmt(it.signed_at)}` : "ยังไม่เซ็น"}
+                          {signed ? t("เซ็นแล้ว · {when}", { when: fmt(it.signed_at, year) }) : t("ยังไม่เซ็น")}
                         </div>
                       </div>
                     </button></Tip>
@@ -765,19 +772,20 @@ function SignatureChecklistPanel({
 // ("ผศ. ดร.", "น.ส."). On a screen there is room for the whole word, and a TA
 // reading who is holding their paperwork should see the person as they would be
 // addressed. Longest key first so "ผศ." never matches inside "ผู้ช่วยศาสตราจารย์".
+// i18n-ignore-next-line — title prefixes are part of a person's name (data)
 const FULL_PREFIX: [string, string][] = [
-  ["ศ. ดร.", "ศาสตราจารย์ ดร."],
-  ["รศ. ดร.", "รองศาสตราจารย์ ดร."],
-  ["ผศ. ดร.", "ผู้ช่วยศาสตราจารย์ ดร."],
-  ["ศ.ดร.", "ศาสตราจารย์ ดร."],
-  ["รศ.ดร.", "รองศาสตราจารย์ ดร."],
-  ["ผศ.ดร.", "ผู้ช่วยศาสตราจารย์ ดร."],
-  ["ผศ.", "ผู้ช่วยศาสตราจารย์"],
-  ["รศ.", "รองศาสตราจารย์"],
-  ["ศ.", "ศาสตราจารย์"],
-  ["อ.", "อาจารย์"],
-  ["น.ส.", "นางสาว"],
-  ["นส.", "นางสาว"],
+  ["ศ. ดร.", "ศาสตราจารย์ ดร."], // i18n-ignore
+  ["รศ. ดร.", "รองศาสตราจารย์ ดร."], // i18n-ignore
+  ["ผศ. ดร.", "ผู้ช่วยศาสตราจารย์ ดร."], // i18n-ignore
+  ["ศ.ดร.", "ศาสตราจารย์ ดร."], // i18n-ignore
+  ["รศ.ดร.", "รองศาสตราจารย์ ดร."], // i18n-ignore
+  ["ผศ.ดร.", "ผู้ช่วยศาสตราจารย์ ดร."], // i18n-ignore
+  ["ผศ.", "ผู้ช่วยศาสตราจารย์"], // i18n-ignore
+  ["รศ.", "รองศาสตราจารย์"], // i18n-ignore
+  ["ศ.", "ศาสตราจารย์"], // i18n-ignore
+  ["อ.", "อาจารย์"], // i18n-ignore
+  ["น.ส.", "นางสาว"], // i18n-ignore
+  ["นส.", "นางสาว"], // i18n-ignore
 ];
 
 export function fullName(raw: string): string {
@@ -793,9 +801,9 @@ export function fullName(raw: string): string {
 // just "รายชื่อ" + STAGES[...].who verbatim — "สถานะรายชื่อ…" reads as a
 // status board, which is what a TA scanning for a stuck course actually wants.
 const STAGE_LIST_TITLE: Record<string, string> = {
-  ta: "สถานะรายชื่อผู้ช่วยสอนที่สอนในแต่ละวิชา",
-  lecturer: "สถานะรายชื่ออาจารย์ที่สอนในแต่ละวิชา",
-  certifier: "สถานะรายชื่อผู้รับรองในแต่ละวิชา",
+  ta: msg("สถานะรายชื่อผู้ช่วยสอนที่สอนในแต่ละวิชา"),
+  lecturer: msg("สถานะรายชื่ออาจารย์ที่สอนในแต่ละวิชา"),
+  certifier: msg("สถานะรายชื่อผู้รับรองในแต่ละวิชา"),
 };
 
 // Exported so the public share-link page (app/p/progress/[linkId])
@@ -809,6 +817,7 @@ export function ViewerRoundBoard({
   /** Full SWR key for this round's checklist, or null while nothing to fetch yet. */
   checklistKey: string | null;
 }) {
+  const { t, year } = useI18n();
   const visibleStages = STAGES.filter(st => showFinalStage || st.n < 5);
   const maxStage = showFinalStage ? 5 : 4;
   const displayStage = Math.min(p.stage, maxStage);
@@ -819,21 +828,21 @@ export function ViewerRoundBoard({
   // thirty TAs that turns the header into a wall of names, and the list below
   // answers it properly.
   const headline = !p.all_exported
-    ? "เจ้าหน้าที่กำลังเตรียมเอกสาร"
+    ? t("เจ้าหน้าที่กำลังเตรียมเอกสาร")
     : done
-    ? "เดินเอกสารครบทุกขั้นแล้ว"
-    : `กำลังรอ${currentStage?.who ?? ""}ลงนาม`;
+    ? t("เดินเอกสารครบทุกขั้นแล้ว")
+    : t("กำลังรอ{who}ลงนาม", { who: currentStage ? t(currentStage.who) : "" });
   const sub = !p.all_exported
-    ? `เตรียมแล้ว ${p.exported_courses} จาก ${p.total_courses} วิชา เมื่อครบทุกวิชาจึงจะเริ่มเก็บลายเซ็น`
+    ? t("เตรียมแล้ว {n} จาก {total} วิชา เมื่อครบทุกวิชาจึงจะเริ่มเก็บลายเซ็น", { n: p.exported_courses, total: p.total_courses })
     : done
-    ? "จบกระบวนการของรอบนี้แล้ว"
-    : `ขั้นที่ ${displayStage + 1} จาก ${maxStage} · ${currentStage?.label ?? ""}`;
+    ? t("จบกระบวนการของรอบนี้แล้ว")
+    : t("ขั้นที่ {n} จาก {max} · {stage}", { n: displayStage + 1, max: maxStage, stage: currentStage ? t(currentStage.label) : "" });
 
   return (
     <div className="space-y-3">
       <Panel padded={false}>
         <div className="px-4 pt-4">
-          <div className="text-xs uppercase tracking-wide text-muted">สถานะตอนนี้</div>
+          <div className="text-xs uppercase tracking-wide text-muted">{t("สถานะตอนนี้")}</div>
           <h2 className="text-lg font-semibold mt-0.5">{headline}</h2>
           <p className="text-sm text-ink-2 mt-0.5">{sub}</p>
         </div>
@@ -864,17 +873,17 @@ export function ViewerRoundBoard({
                         ? "bg-emerald-500 text-white"
                         : isCurrent
                         ? "bg-panel text-accent ring-2 ring-accent"
-                        : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400")
+                        : "bg-slate-200 text-slate-500")
                     }
                   >
                     {reached ? <Check size={16} strokeWidth={3} /> : <span className="text-xs font-semibold">{st.n}</span>}
                   </span>
                   <span className={"mt-2 text-center text-xs px-1 " + (reached || isCurrent ? "text-ink-1 font-medium" : "text-ink-3")}>
-                    {st.label}
+                    {t(st.label)}
                   </span>
-                  <span className="text-[10px] text-muted text-center px-1">{st.who}</span>
+                  <span className="text-[10px] text-muted text-center px-1">{t(st.who)}</span>
                   <span className={"text-[10px] text-center px-1 mt-0.5 " + (reached ? "text-muted tabular" : "text-ink-3")}>
-                    {reached ? fmt(at) : isCurrent ? "กำลังดำเนินการ" : ""}
+                    {reached ? fmt(at, year) : isCurrent ? t("กำลังดำเนินการ") : ""}
                   </span>
                 </li>
               );
@@ -882,19 +891,19 @@ export function ViewerRoundBoard({
           </ol>
         </div>
         <div className="px-4 -mt-3 pb-1 text-[11px] text-muted sm:hidden">
-          เลื่อนแถวขั้นตอนไปทางซ้ายเพื่อดูขั้นถัดไป
+          {t("เลื่อนแถวขั้นตอนไปทางซ้ายเพื่อดูขั้นถัดไป")}
         </div>
 
         {(p.note || (p.updated_by_name && p.updated_at)) && (
           <div className="px-4 pb-4 pt-1 space-y-1 border-t border-hairline mt-2">
             {p.note && (
               <div className="text-sm pt-2">
-                <span className="text-muted text-xs">หมายเหตุจากเจ้าหน้าที่: </span>
+                <span className="text-muted text-xs">{t("หมายเหตุจากเจ้าหน้าที่:")} </span>
                 <span className="text-ink-1">{p.note}</span>
               </div>
             )}
             {p.updated_by_name && p.updated_at && (
-              <div className="text-[11px] text-muted">อัปเดตล่าสุดโดย {p.updated_by_name} · {fmt(p.updated_at)}</div>
+              <div className="text-[11px] text-muted">{t("อัปเดตล่าสุดโดย {name} · {when}", { name: p.updated_by_name, when: fmt(p.updated_at, year) })}</div>
             )}
           </div>
         )}
@@ -923,6 +932,7 @@ function ViewerStageSigners({
   role: string;
   done: boolean;
 }) {
+  const { t, year } = useI18n();
   const { data } = useSWR<SignatureItem[]>(checklistKey);
   const [q, setQ] = useState("");
 
@@ -958,11 +968,11 @@ function ViewerStageSigners({
     return (
       <Panel>
         <EmptyState
-          title={done ? "เดินเอกสารครบทุกขั้นแล้ว" : "ขั้นนี้ไม่มีรายชื่อผู้ลงนาม"}
+          title={done ? t("เดินเอกสารครบทุกขั้นแล้ว") : t("ขั้นนี้ไม่มีรายชื่อผู้ลงนาม")}
           description={
             done
-              ? "เอกสารของรอบนี้ผ่านทุกขั้นเรียบร้อย"
-              : "เป็นขั้นที่เจ้าหน้าที่ดำเนินการเอง ไม่มีใครต้องลงนามในขั้นนี้"
+              ? t("เอกสารของรอบนี้ผ่านทุกขั้นเรียบร้อย")
+              : t("เป็นขั้นที่เจ้าหน้าที่ดำเนินการเอง ไม่มีใครต้องลงนามในขั้นนี้")
           }
         />
       </Panel>
@@ -972,7 +982,7 @@ function ViewerStageSigners({
   if (items.length === 0) {
     return (
       <Panel>
-        <EmptyState title="ยังไม่มีรายวิชาที่มีผู้ช่วยสอนในรอบนี้" description="เมื่อคำขอผู้ช่วยสอนได้รับอนุมัติ รายชื่อจะแสดงที่นี่" />
+        <EmptyState title={t("ยังไม่มีรายวิชาที่มีผู้ช่วยสอนในรอบนี้")} description={t("เมื่อคำขอผู้ช่วยสอนได้รับอนุมัติ รายชื่อจะแสดงที่นี่")} />
       </Panel>
     );
   }
@@ -986,21 +996,21 @@ function ViewerStageSigners({
     >
       <div className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline">
         <div className="min-w-0">
-          <div className="font-semibold">{STAGE_LIST_TITLE[role] ?? `สถานะรายชื่อ${stageInfo?.who ?? ""}`}</div>
-          <div className="text-xs text-muted">ลงนามแล้ว {signed} จาก {items.length} รายชื่อ</div>
+          <div className="font-semibold">{STAGE_LIST_TITLE[role] ? t(STAGE_LIST_TITLE[role]) : t("สถานะรายชื่อ{who}", { who: stageInfo ? t(stageInfo.who) : "" })}</div>
+          <div className="text-xs text-muted">{t("ลงนามแล้ว {n} จาก {total} รายชื่อ", { n: signed, total: items.length })}</div>
         </div>
         <div className="w-full sm:w-auto sm:ml-auto">
           <SearchField
             value={q}
             onChange={setQ}
-            ariaLabel="ค้นหารายวิชาหรือชื่อผู้ลงนาม"
-            placeholder="ค้นหารหัสวิชา ชื่อวิชา หรือชื่อผู้ลงนาม"
+            ariaLabel={t("ค้นหารายวิชาหรือชื่อผู้ลงนาม")}
+            placeholder={t("ค้นหารหัสวิชา ชื่อวิชา หรือชื่อผู้ลงนาม")}
           />
         </div>
       </div>
       {needle !== "" && (
         <div className="px-4 py-2 text-xs text-muted border-b border-hairline">
-          {byCourse.length > 0 ? `พบ ${byCourse.length} วิชา` : `ไม่พบรายการที่ตรงกับ “${q.trim()}”`}
+          {byCourse.length > 0 ? t("พบ {n} วิชา", { n: byCourse.length }) : t("ไม่พบรายการที่ตรงกับ “{q}”", { q: q.trim() })}
         </div>
       )}
       <div className="divide-y divide-hairline">
@@ -1013,7 +1023,7 @@ function ViewerStageSigners({
               className={
                 "px-4 py-3 border-l-4 " +
                 (incomplete
-                  ? "border-l-red-400 bg-red-50/60 dark:bg-red-950/10"
+                  ? "border-l-red-400 bg-red-50/60"
                   : "border-l-transparent")
               }
             >
@@ -1025,8 +1035,8 @@ function ViewerStageSigners({
                 {/* The whole point of this list is "which course is stuck" —
                     a TA should see that at a glance, not by counting ticks. */}
                 {incomplete
-                  ? <Chip tone="danger">ค้างอยู่ {left} คน</Chip>
-                  : <Chip tone="success"><Check size={12} /> ลงนามครบ</Chip>}
+                  ? <Chip tone="danger">{t("ค้างอยู่ {n} คน", { n: left })}</Chip>
+                  : <Chip tone="success"><Check size={12} /> {t("ลงนามครบ")}</Chip>}
               </div>
               <ul className="mt-2 space-y-1.5">
                 {g.items.map(it => (
@@ -1034,11 +1044,11 @@ function ViewerStageSigners({
                     {it.signed_at
                       ? <Check size={15} aria-hidden className="text-emerald-600 shrink-0 translate-y-0.5" />
                       : <X size={15} aria-hidden className="text-red-600 shrink-0 translate-y-0.5" />}
-                    <span className={"min-w-0 flex-1 font-medium " + (it.signed_at ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+                    <span className={"min-w-0 flex-1 font-medium " + (it.signed_at ? "text-emerald-700" : "text-red-600")}>
                       {fullName(it.responsible) || "—"}
                     </span>
-                    <span className={"text-xs shrink-0 " + (it.signed_at ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400")}>
-                      {it.signed_at ? `ลงนามแล้ว · ${fmt(it.signed_at)}` : "ยังไม่ได้ลงนาม"}
+                    <span className={"text-xs shrink-0 " + (it.signed_at ? "text-emerald-700" : "text-red-600")}>
+                      {it.signed_at ? t("ลงนามแล้ว · {when}", { when: fmt(it.signed_at, year) }) : t("ยังไม่ได้ลงนาม")}
                     </span>
                   </li>
                 ))}
@@ -1076,12 +1086,13 @@ function StepperSkeleton({ stages }: { stages: number }) {
 // One round's board while the overview is in flight: the officer's gate +
 // stepper + checklist, or the viewer's status card + stepper.
 function BoardSkeleton({ canEdit, stages }: { canEdit: boolean; stages: number }) {
+  const { t } = useI18n();
   if (!canEdit) {
     return (
       <SkelRegion className="space-y-3">
         <Panel padded={false}>
           <div className="px-4 pt-4 flex flex-col gap-2">
-            <div className="text-xs uppercase tracking-wide text-muted">สถานะตอนนี้</div>
+            <div className="text-xs uppercase tracking-wide text-muted">{t("สถานะตอนนี้")}</div>
             <Skel className="h-6 w-56" />
             <Skel className="h-4 w-72 max-w-full" />
           </div>
@@ -1097,7 +1108,7 @@ function BoardSkeleton({ canEdit, stages }: { canEdit: boolean; stages: number }
       </Panel>
       <Panel padded={false}>
         <div className="px-4 py-3 flex items-center gap-3 border-b border-hairline">
-          <div className="font-semibold">การเดินเอกสารของทั้งเทอม</div>
+          <div className="font-semibold">{t("การเดินเอกสารของทั้งเทอม")}</div>
           <Skel className="ml-auto h-6 w-24 rounded-full" />
         </div>
         <StepperSkeleton stages={stages} />

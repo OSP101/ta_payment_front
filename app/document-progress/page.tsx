@@ -5,8 +5,10 @@ import { type Term, type Me } from "../lib/api";
 import { PageHeader } from "../components/ui";
 import TermSelect from "../components/TermSelect";
 import { DocumentProgressBoard } from "../components/DocumentProgressBoard";
+import { useI18n } from "../lib/i18n/client";
 
 export default function DocumentProgressPage() {
+  const { t } = useI18n();
   const { data: terms } = useSWR<Term[]>("/terms");
   const { data: me } = useSWR<Me>("/me");
   const [termId, setTermId] = useState("");
@@ -27,8 +29,8 @@ export default function DocumentProgressPage() {
   return (
     <div className="mx-auto w-full max-w-[1000px]">
       <PageHeader
-        title="ความคืบหน้าเอกสารเบิกจ่าย"
-        description="ติดตามว่าเอกสารของแต่ละวิชาเดินทางไปถึงขั้นไหนแล้ว อัปเดตโดยเจ้าหน้าที่"
+        title={t("ความคืบหน้าเอกสารเบิกจ่าย")}
+        description={t("ติดตามว่าเอกสารของแต่ละวิชาเดินทางไปถึงขั้นไหนแล้ว อัปเดตโดยเจ้าหน้าที่")}
         actions={
           <TermSelect terms={terms} value={termId} onChange={setTermId} />
         }

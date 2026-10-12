@@ -17,13 +17,14 @@ import {
   TimePicker, Chip,
 } from "../../../components/ui";
 import { SkelValue } from "../../../components/Skeletons";
+import { msg, useI18n } from "../../../lib/i18n/client";
 // Schedule editing is intentionally NOT gated behind TA approval — the user
 // asked to unblock this page so students can lay out their timetable while
 // their documents are still under review. LockedActionButton / useTAApproval
 // still apply to worklog + document-submission flows elsewhere.
 
 // Day-of-week labels: Sun=0..Sat=6
-const DOW_LABEL = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+const DOW_LABEL = [msg("อาทิตย์"), msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์")];
 const DOW_OPTIONS = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun preferred display order
 
 const START_HR = 8;
@@ -98,11 +99,12 @@ function SaveStatus({
   savedAgo: string;
   error: string | null;
 }) {
+  const { t } = useI18n();
   if (error) {
     return (
       <TipWrap content={error} className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft rounded-md px-2 py-1">
         <CloudOff size={13} />
-        <span className="truncate max-w-[16rem]">บันทึกไม่สำเร็จ จะลองใหม่อัตโนมัติ</span>
+        <span className="truncate max-w-[16rem]">{t("บันทึกไม่สำเร็จ จะลองใหม่อัตโนมัติ")}</span>
       </TipWrap>
     );
   }
@@ -110,15 +112,15 @@ function SaveStatus({
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
         <Cloud size={13} className="animate-pulse" />
-        <span>กำลังบันทึกอัตโนมัติ…</span>
+        <span>{t("กำลังบันทึกอัตโนมัติ…")}</span>
       </span>
     );
   }
   if (dirty) {
     return (
-      <TipWrap content="ระบบจะบันทึกอัตโนมัติภายในไม่กี่วินาที" className="inline-flex items-center gap-1.5 text-xs text-muted">
+      <TipWrap content={t("ระบบจะบันทึกอัตโนมัติภายในไม่กี่วินาที")} className="inline-flex items-center gap-1.5 text-xs text-muted">
         <Cloud size={13} />
-        <span>กำลังจะบันทึกอัตโนมัติ…</span>
+        <span>{t("กำลังจะบันทึกอัตโนมัติ…")}</span>
       </TipWrap>
     );
   }
@@ -126,7 +128,7 @@ function SaveStatus({
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
         <Check size={13} className="text-success" />
-        <span>บันทึกล่าสุด {savedAgo}</span>
+        <span>{t("บันทึกล่าสุด {ago}", { ago: savedAgo })}</span>
       </span>
     );
   }
@@ -136,6 +138,7 @@ function SaveStatus({
 type EditorMode = { kind: "closed" } | { kind: "create"; draft: Partial<Block> } | { kind: "edit"; id: string };
 
 export default function TASchedulePage() {
+  const { t } = useI18n();
   const { data: me } = useSWR<Me>("/me");
   // WBA (no-regular-schedule) mode: year-4+ undergraduates, or any graduate
   // student (master/phd — they may genuinely have no class schedule of their
@@ -152,8 +155,8 @@ export default function TASchedulePage() {
   const termParam = useSearchParams().get("term_id");
   useEffect(() => {
     if (!termId && terms && terms.length) {
-      const wanted = termParam && terms.some(t => t.id === termParam) ? termParam : null;
-      setTermId(wanted ?? terms.find(t => t.is_active)?.id ?? terms[0].id);
+      const wanted = termParam && terms.some(tm => tm.id === termParam) ? termParam : null;
+      setTermId(wanted ?? terms.find(tm => tm.is_active)?.id ?? terms[0].id);
     }
   }, [terms, termId, termParam]);
 
@@ -303,7 +306,7 @@ export default function TASchedulePage() {
     markDirty();
     setLocal(result.blocks.map(b => ({ ...b, term_id: termId })));
     setImportOpen(false);
-    notify.success(`นำเข้าตารางเรียนแล้ว ${result.blocks.length} คาบ`);
+    notify.success(t("นำเข้าตารางเรียนแล้ว {n} คาบ", { n: result.blocks.length }));
   }
 
   // Turning WBA on wipes every regular block, so it goes through a dialog that
@@ -328,12 +331,12 @@ export default function TASchedulePage() {
         id: "wba-" + Date.now(),
         term_id: termId,
         course_code: "",
-        course_name: isGrad ? "ไม่มีตารางเรียนปกติ (บัณฑิตศึกษา)" : "WBA / ปี 4",
+        course_name: isGrad ? "ไม่มีตารางเรียนปกติ (บัณฑิตศึกษา)" : "WBA / ปี 4", // i18n-ignore — stored on the block (data)
         kind: "",
         sec_no: "",
         day_of_week: 0,
         start_time: "00:00", end_time: "00:00",
-        note: "ไม่มีตารางเรียนปกติ",
+        note: "ไม่มีตารางเรียนปกติ", // i18n-ignore — stored on the block (data)
         is_wba: true,
       }]);
   }
@@ -346,13 +349,13 @@ export default function TASchedulePage() {
     for (const b of local) {
       if (b.is_wba) continue;
       if (!inRange(b.start_time) || !inRange(b.end_time)) {
-        const msg = `คาบ ${fmtTime(b.start_time)}–${fmtTime(b.end_time)} อยู่นอกช่วง ${String(START_HR).padStart(2,"0")}:00–${String(END_HR).padStart(2,"0")}:00`;
+        const msg = t("คาบ {start}–{end} อยู่นอกช่วง {from}–{to}", { start: fmtTime(b.start_time), end: fmtTime(b.end_time), from: GRID_START, to: GRID_END });
         setSaveError(msg);
         if (!silent) notify.error(msg);
         return false;
       }
       if (parseHM(b.start_time) >= parseHM(b.end_time)) {
-        const msg = `คาบ ${blockTitle(b) || "คาบเรียน"} เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`;
+        const msg = t("คาบ {title} เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม", { title: blockTitle(b) || t("คาบเรียน") });
         setSaveError(msg);
         if (!silent) notify.error(msg);
         return false;
@@ -367,8 +370,8 @@ export default function TASchedulePage() {
       if (b.is_wba || !b.course_code) continue;
       const dup = seen.find(x => isDuplicateBlock(x, b));
       if (dup) {
-        const kindLabel = b.kind ? KIND_LABEL[b.kind] : "คาบเรียน";
-        const msg = `วิชา ${b.course_code} ลง${kindLabel}ซ้ำกัน 2 คาบ กรุณาลบคาบที่ซ้ำออกก่อนบันทึก`;
+        const kindLabel = b.kind ? t(KIND_LABEL[b.kind]) : t("คาบเรียน");
+        const msg = t("วิชา {code} ลง{kind}ซ้ำกัน 2 คาบ กรุณาลบคาบที่ซ้ำออกก่อนบันทึก", { code: b.course_code, kind: kindLabel });
         setSaveError(msg);
         if (!silent) notify.error(msg);
         return false;
@@ -382,17 +385,17 @@ export default function TASchedulePage() {
       setImpact(null);
       clearDirty();
       setSavedAt(Date.now());
-      if (!silent) notify.success("บันทึกตารางเรียนเรียบร้อย");
+      if (!silent) notify.success(t("บันทึกตารางเรียนเรียบร้อย"));
       mutate((k) => typeof k === "string" && k.startsWith("/me/schedule"));
       return true;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+      const msg = e instanceof Error ? e.message : t("บันทึกไม่สำเร็จ");
       // 428: the new timetable clashes with sessions of an APPROVED request.
       // The server lists what would be lost; nothing was written. Ask, even on
       // an autosave — saving silently is exactly what used to cost TAs hours.
       if (e instanceof ApiError && e.status === 428) {
         setImpact(msg);
-        setSaveError("รอยืนยันการบันทึก ตารางเรียนใหม่ตรงกับคาบสอนที่อนุมัติแล้ว");
+        setSaveError(t("รอยืนยันการบันทึก ตารางเรียนใหม่ตรงกับคาบสอนที่อนุมัติแล้ว"));
         return false;
       }
       setSaveError(msg);
@@ -408,8 +411,8 @@ export default function TASchedulePage() {
   saveRef.current = save;
   useEffect(() => {
     if (!dirty || !termId) return;
-    const t = setTimeout(() => { saveRef.current(true); }, AUTOSAVE_DELAY_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { saveRef.current(true); }, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [local, dirty, termId]);
 
   // Safety net for the debounce window: if the user closes the tab or navigates
@@ -431,19 +434,19 @@ export default function TASchedulePage() {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!savedAt) return;
-    const t = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
   }, [savedAt]);
   const savedAgoLabel = useMemo(() => {
     if (!savedAt) return "";
     const s = Math.max(0, Math.floor((now - savedAt) / 1000));
-    if (s < 10) return "เมื่อสักครู่";
-    if (s < 60) return `${s} วินาทีที่แล้ว`;
+    if (s < 10) return t("เมื่อสักครู่");
+    if (s < 60) return t("{n} วินาทีที่แล้ว", { n: s });
     const m = Math.floor(s / 60);
-    if (m < 60) return `${m} นาทีที่แล้ว`;
+    if (m < 60) return t("{n} นาทีที่แล้ว", { n: m });
     const h = Math.floor(m / 60);
-    return `${h} ชั่วโมงที่แล้ว`;
-  }, [savedAt, now]);
+    return t("{n} ชั่วโมงที่แล้ว", { n: h });
+  }, [savedAt, now, t]);
 
   const editingBlock: Block | null =
     editor.kind === "edit" ? (local.find(b => b.id === editor.id) ?? null) : null;
@@ -451,8 +454,8 @@ export default function TASchedulePage() {
   return (
     <div>
       <PageHeader
-        title="ตารางเรียนของฉัน"
-        description="บันทึกตารางเรียนต่อภาคการศึกษา เพื่อใช้ตรวจสอบไม่ให้ทับซ้อนกับตารางสอนที่อาจารย์จะมอบหมาย · ลากบนตารางหรือกดปุ่มเพิ่มคาบเพื่อกรอกข้อมูล"
+        title={t("ตารางเรียนของฉัน")}
+        description={t("บันทึกตารางเรียนต่อภาคการศึกษา เพื่อใช้ตรวจสอบไม่ให้ทับซ้อนกับตารางสอนที่อาจารย์จะมอบหมาย · ลากบนตารางหรือกดปุ่มเพิ่มคาบเพื่อกรอกข้อมูล")}
         actions={
           <>
             {!locked && (
@@ -481,26 +484,26 @@ export default function TASchedulePage() {
                 />
               )}
             >
-              <Printer size={14} /> พิมพ์ตาราง
+              <Printer size={14} /> {t("พิมพ์ตาราง")}
             </Button>
             <span data-tour="sch-ics">
               <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={frozen}>
-                <FileUp size={14} /> อัปโหลด .ics
+                <FileUp size={14} /> {t("อัปโหลด .ics")}
               </Button>
             </span>
             <span data-tour="sch-add">
               <TipWrap
                 inline
                 className="inline-flex"
-                content={isWba && !frozen ? "อยู่ในโหมดไม่มีตารางเรียนปกติ ปิดตัวเลือกในส่วน “กรณีพิเศษ” ด้านล่างก่อน จึงจะเพิ่มคาบเรียนได้" : undefined}
+                content={isWba && !frozen ? t("อยู่ในโหมดไม่มีตารางเรียนปกติ ปิดตัวเลือกในส่วน “กรณีพิเศษ” ด้านล่างก่อน จึงจะเพิ่มคาบเรียนได้") : undefined}
               >
               <Button variant="secondary" onClick={() => openCreate()} disabled={isWba || frozen}>
-                <Plus size={14} /> เพิ่มคาบเรียน
+                <Plus size={14} /> {t("เพิ่มคาบเรียน")}
               </Button>
               </TipWrap>
             </span>
             <Button variant="primary" onClick={() => save(false)} disabled={saving || !dirty || frozen}>
-              <Save size={14} /> บันทึกทันที
+              <Save size={14} /> {t("บันทึกทันที")}
             </Button>
           </>
         }
@@ -510,7 +513,7 @@ export default function TASchedulePage() {
           <Alert
             status="warning"
             icon={<Lock size={16} />}
-            title="ภาคเรียนนี้ปิดการแก้ไขแล้ว"
+            title={t("ภาคเรียนนี้ปิดการแก้ไขแล้ว")}
             description={lockReason}
           />
         </div>
@@ -526,8 +529,8 @@ export default function TASchedulePage() {
         <Panel>
           <EmptyState
             icon={<Calendar size={28} />}
-            title="โหมด WBA / นักศึกษาปี 4 ไม่มีตารางเรียนปกติ"
-            description="ระบบจะบันทึกว่าคุณไม่มีคาบเรียนประจำในภาคการศึกษานี้ ปิดสวิตช์ด้านล่างเพื่อกลับไปสร้างตารางเรียน"
+            title={t("โหมด WBA / นักศึกษาปี 4 ไม่มีตารางเรียนปกติ")}
+            description={t("ระบบจะบันทึกว่าคุณไม่มีคาบเรียนประจำในภาคการศึกษานี้ ปิดสวิตช์ด้านล่างเพื่อกลับไปสร้างตารางเรียน")}
           />
         </Panel>
       ) : (
@@ -546,7 +549,7 @@ export default function TASchedulePage() {
       )}
 
       {!isWba && regularBlocks.length > 0 && (
-        <Panel title="รายการคาบเรียน" className="mt-4" padded={false} data-tour="sch-list">
+        <Panel title={t("รายการคาบเรียน")} className="mt-4" padded={false} data-tour="sch-list">
           <div className="divide-y divide-[var(--hairline)]">
             {regularBlocks.map(b => {
                 const stacked = overlappingIds.has(b.id);
@@ -556,18 +559,18 @@ export default function TASchedulePage() {
                     {/* Day and time stack into one narrow column on a phone so
                         the course name keeps its width. */}
                     <div className="flex w-24 shrink-0 flex-col sm:w-48 sm:flex-row sm:items-center sm:gap-3">
-                      <div className="text-sm text-slate-700 sm:w-20 sm:shrink-0">{DOW_LABEL[b.day_of_week]}</div>
+                      <div className="text-sm text-slate-700 sm:w-20 sm:shrink-0">{t(DOW_LABEL[b.day_of_week])}</div>
                       <div className="text-xs tabular-nums text-slate-700 sm:w-28 sm:shrink-0 sm:text-sm">
                         {fmtTime(b.start_time)}–{fmtTime(b.end_time)}
                       </div>
                     </div>
                     <div className="flex-1 min-w-0 text-sm">
                       <div className="font-medium truncate">
-                        {heading || <span className="text-muted">(ยังไม่ระบุชื่อวิชา)</span>}
+                        {heading || <span className="text-muted">{t("(ยังไม่ระบุชื่อวิชา)")}</span>}
                       </div>
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted">
                         {b.sec_no && <span>sec {b.sec_no}</span>}
-                        {b.kind && <span>{KIND_LABEL[b.kind]}</span>}
+                        {b.kind && <span>{t(KIND_LABEL[b.kind])}</span>}
                         {b.note && (
                           <Tip content={b.note}>
                             <span className="truncate">{b.note}</span>
@@ -577,15 +580,15 @@ export default function TASchedulePage() {
                     </div>
                     {stacked && (
                       <span className="text-xs text-slate-500 inline-flex items-center gap-1">
-                        <Layers size={12} /> ซ้อน
+                        <Layers size={12} /> {t("ซ้อน")}
                       </span>
                     )}
                     {!locked && (
                       <>
-                        <IconButton variant="ghost" size="sm" onClick={() => openEdit(b.id)} label="แก้ไข">
+                        <IconButton variant="ghost" size="sm" onClick={() => openEdit(b.id)} label={t("แก้ไข")}>
                           <Pencil size={14} />
                         </IconButton>
-                        <IconButton variant="ghost" size="sm" onClick={() => setConfirmDeleteId(b.id)} label="ลบ">
+                        <IconButton variant="ghost" size="sm" onClick={() => setConfirmDeleteId(b.id)} label={t("ลบ")}>
                           <Trash2 size={14} />
                         </IconButton>
                       </>
@@ -597,7 +600,7 @@ export default function TASchedulePage() {
         </Panel>
       )}
 
-      <Panel title="กรณีพิเศษ" className="mt-4" data-tour="sch-wba">
+      <Panel title={t("กรณีพิเศษ")} className="mt-4" data-tour="sch-wba">
         <label className={"flex items-center gap-2 text-sm " + ((canWba || isWba) && !frozen ? "cursor-pointer" : "cursor-not-allowed opacity-60")}>
           <input
             type="checkbox"
@@ -605,18 +608,18 @@ export default function TASchedulePage() {
             disabled={frozen || (!canWba && !isWba)}
             onChange={e => toggleWba(e.target.checked)}
           />
-          <span>{!me ? <SkelValue className="h-3.5 w-72 max-w-full" /> : isGrad ? "ฉันไม่มีตารางเรียนปกติ (นักศึกษาระดับบัณฑิตศึกษา)" : "ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)"}</span>
+          <span>{!me ? <SkelValue className="h-3.5 w-72 max-w-full" /> : isGrad ? t("ฉันไม่มีตารางเรียนปกติ (นักศึกษาระดับบัณฑิตศึกษา)") : t("ฉันเป็นนักศึกษาปี 4 / WBA (ไม่มีตารางเรียนปกติ)")}</span>
         </label>
         <p className="text-xs text-muted mt-1">
-          เปิดตัวเลือกนี้เมื่อคุณไม่มีตารางเรียนประจำในภาคเรียนนี้ ระบบจะข้ามการตรวจสอบทับซ้อนตอนอาจารย์ยื่นคำร้อง
+          {t("เปิดตัวเลือกนี้เมื่อคุณไม่มีตารางเรียนประจำในภาคเรียนนี้ ระบบจะข้ามการตรวจสอบทับซ้อนตอนอาจารย์ยื่นคำร้อง")}
         </p>
         {/* Wait for /me: before it lands canWba is false for everyone, and
             the eligibility warning flashed at graduate students too. */}
         {me && !canWba && !isWba && (
           <p className="text-xs text-warning mt-1">
-            โหมด WBA ใช้ได้เฉพาะนักศึกษาปริญญาตรีชั้นปีที่ 4 ขึ้นไป หรือนักศึกษาระดับบัณฑิตศึกษา
+            {t("โหมด WBA ใช้ได้เฉพาะนักศึกษาปริญญาตรีชั้นปีที่ 4 ขึ้นไป หรือนักศึกษาระดับบัณฑิตศึกษา")}
             {me?.study_level === "undergrad" && (me?.study_year ?? 0) < 1
-              ? " ระบบยังคำนวณชั้นปีของคุณไม่ได้ กรุณากรอกรหัสนักศึกษาในแบบฟอร์มข้อมูลส่วนตัวก่อน"
+              ? " " + t("ระบบยังคำนวณชั้นปีของคุณไม่ได้ กรุณากรอกรหัสนักศึกษาในแบบฟอร์มข้อมูลส่วนตัวก่อน")
               : ""}
           </p>
         )}
@@ -646,9 +649,9 @@ export default function TASchedulePage() {
         onClose={() => setConfirmDeleteId(null)}
         onConfirm={() => { if (confirmDeleteId) removeBlock(confirmDeleteId); setConfirmDeleteId(null); }}
         danger
-        title="ลบคาบเรียน"
-        message="ต้องการลบคาบเรียนนี้ออกจากตารางหรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก"
-        confirmLabel="ลบ"
+        title={t("ลบคาบเรียน")}
+        message={t("ต้องการลบคาบเรียนนี้ออกจากตารางหรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก")}
+        confirmLabel={t("ลบ")}
       />
 
       <ConfirmDialog
@@ -658,27 +661,29 @@ export default function TASchedulePage() {
         danger
         size="md"
         icon={<AlertTriangle className="w-5 h-5" />}
-        title="ยืนยันว่าไม่มีตารางเรียนปกติ"
+        title={t("ยืนยันว่าไม่มีตารางเรียนปกติ")}
         message={
           <div className="space-y-2">
             <p>
-              การเลือก “{isGrad ? "ไม่มีตารางเรียนปกติ" : "นักศึกษาปี 4 / WBA"}” จะลบคาบเรียนที่กรอกไว้ทั้งหมด{" "}
-              <b>{regularBlocks.length} คาบ</b> ออกจากตารางของภาคการศึกษานี้
+              {t.rich("การเลือก “{mode}” จะลบคาบเรียนที่กรอกไว้ทั้งหมด {count} ออกจากตารางของภาคการศึกษานี้", {
+                mode: isGrad ? t("ไม่มีตารางเรียนปกติ") : t("นักศึกษาปี 4 / WBA"),
+                count: <b>{t("{n} คาบ", { n: regularBlocks.length })}</b>,
+              })}
             </p>
             <ul className="max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border text-xs">
               {regularBlocks.map(b => (
                 <li key={b.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
-                  <span className="truncate">{blockTitle(b) || "คาบเรียน"}</span>
+                  <span className="truncate">{blockTitle(b) || t("คาบเรียน")}</span>
                   <span className="shrink-0 text-muted tabular-nums">
-                    {DOW_LABEL[b.day_of_week] ?? ""} {fmtTime(b.start_time)}–{fmtTime(b.end_time)}
+                    {DOW_LABEL[b.day_of_week] ? t(DOW_LABEL[b.day_of_week]) : ""} {fmtTime(b.start_time)}–{fmtTime(b.end_time)}
                   </span>
                 </li>
               ))}
             </ul>
-            <p className="text-muted">หากต้องการกลับมาใช้ตารางเดิม จะต้องกรอกหรือนำเข้าคาบเรียนใหม่อีกครั้ง</p>
+            <p className="text-muted">{t("หากต้องการกลับมาใช้ตารางเดิม จะต้องกรอกหรือนำเข้าคาบเรียนใหม่อีกครั้ง")}</p>
           </div>
         }
-        confirmLabel="ลบวิชาและยืนยัน"
+        confirmLabel={t("ลบวิชาและยืนยัน")}
       />
 
       <ConfirmDialog
@@ -688,16 +693,16 @@ export default function TASchedulePage() {
         danger
         size="md"
         icon={<AlertTriangle className="w-5 h-5" />}
-        title="ตารางเรียนนี้ทำให้เสียคาบสอนที่อนุมัติแล้ว"
+        title={t("ตารางเรียนนี้ทำให้เสียคาบสอนที่อนุมัติแล้ว")}
         message={
           <div className="space-y-2">
             <p className="whitespace-pre-line text-sm">{impact}</p>
             <p className="text-muted text-xs">
-              หากไม่ต้องการบันทึก ให้กดยกเลิก แล้วแก้หรือลบคาบที่เพิ่ม
+              {t("หากไม่ต้องการบันทึก ให้กดยกเลิก แล้วแก้หรือลบคาบที่เพิ่ม")}
             </p>
           </div>
         }
-        confirmLabel="ยืนยันบันทึก"
+        confirmLabel={t("ยืนยันบันทึก")}
       />
 
       <IcsImportModal
@@ -712,9 +717,9 @@ export default function TASchedulePage() {
         onClose={() => setPendingTerm(null)}
         onConfirm={() => { if (pendingTerm) switchTerm(pendingTerm); }}
         danger
-        title="เปลี่ยนภาคการศึกษา"
-        message="บันทึกตารางอัตโนมัติล้มเหลว หากเปลี่ยนภาคการศึกษาตอนนี้ การแก้ไขล่าสุดจะหายไป ต้องการดำเนินการต่อหรือไม่?"
-        confirmLabel="เปลี่ยนโดยไม่บันทึก"
+        title={t("เปลี่ยนภาคการศึกษา")}
+        message={t("บันทึกตารางอัตโนมัติล้มเหลว หากเปลี่ยนภาคการศึกษาตอนนี้ การแก้ไขล่าสุดจะหายไป ต้องการดำเนินการต่อหรือไม่?")}
+        confirmLabel={t("เปลี่ยนโดยไม่บันทึก")}
       />
     </div>
   );
@@ -736,6 +741,7 @@ interface EditorProps {
 }
 
 function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOverlap, checkDuplicateCourseKind }: EditorProps) {
+  const { t } = useI18n();
   const isEdit = mode.kind === "edit";
   const isOpen = mode.kind !== "closed";
 
@@ -791,11 +797,11 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
     };
     const other = checkOverlap(candidate);
     if (other) {
-      const otherTitle = blockTitle(other) || "คาบเรียน";
+      const otherTitle = blockTitle(other) || t("คาบเรียน");
       // Informational — overlap is allowed (two sections meeting together).
-      setOverlapWarn(`จะซ้อนกับ "${otherTitle}" ${fmtTime(other.start_time)}–${fmtTime(other.end_time)} ระบบจะจัดชั้นให้ในตาราง`);
+      setOverlapWarn(t("จะซ้อนกับ \"{title}\" {start}–{end} ระบบจะจัดชั้นให้ในตาราง", { title: otherTitle, start: fmtTime(other.start_time), end: fmtTime(other.end_time) }));
     }
-  }, [isOpen, isEdit, block?.id, termId, courseCode, courseName, kind, secNo, dow, start, end, note, checkOverlap]);
+  }, [isOpen, isEdit, block?.id, termId, courseCode, courseName, kind, secNo, dow, start, end, note, checkOverlap, t]);
 
   function handleSave() {
     setError(null);
@@ -804,29 +810,29 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
     const sec = secNo.trim();
     const noteTrim = note.trim();
     if (!code && !name) {
-      setError("โปรดระบุรหัสวิชาหรือชื่อวิชาอย่างน้อยหนึ่งอย่าง");
+      setError(t("โปรดระบุรหัสวิชาหรือชื่อวิชาอย่างน้อยหนึ่งอย่าง"));
       return;
     }
     if (code && !COURSE_CODE_FORMAT.test(code)) {
-      setError("รหัสวิชาต้องเป็นตัวเลข 6 หลัก (เช่น 322201) หรือมีตัวอักษรนำหน้าแล้วตามด้วยตัวเลข 6 หลัก (เช่น SC363001)");
+      setError(t("รหัสวิชาต้องเป็นตัวเลข 6 หลัก (เช่น 322201) หรือมีตัวอักษรนำหน้าแล้วตามด้วยตัวเลข 6 หลัก (เช่น SC363001)"));
       return;
     }
     // "ตัวเลขตั้งแต่ 1 ขึ้นไป" — "01" is fine (it is 1), "0" and "00" are not.
     if (sec && (!SEC_NO_RE.test(sec) || Number(sec) < 1)) {
-      setError("Section ต้องเป็นตัวเลขตั้งแต่ 1 ขึ้นไป");
+      setError(t("Section ต้องเป็นตัวเลขตั้งแต่ 1 ขึ้นไป"));
       return;
     }
-    if (code.length > COURSE_CODE_MAX) { setError(`รหัสวิชายาวได้ไม่เกิน ${COURSE_CODE_MAX} ตัวอักษร`); return; }
-    if (name.length > COURSE_NAME_MAX) { setError(`ชื่อวิชายาวได้ไม่เกิน ${COURSE_NAME_MAX} ตัวอักษร`); return; }
-    if (sec.length > SEC_NO_MAX) { setError(`Section ยาวได้ไม่เกิน ${SEC_NO_MAX} ตัวอักษร`); return; }
-    if (noteTrim.length > NOTE_MAX) { setError(`หมายเหตุยาวได้ไม่เกิน ${NOTE_MAX} ตัวอักษร`); return; }
-    if (!start || !end) { setError("โปรดระบุเวลาเริ่มและสิ้นสุด"); return; }
+    if (code.length > COURSE_CODE_MAX) { setError(t("รหัสวิชายาวได้ไม่เกิน {n} ตัวอักษร", { n: COURSE_CODE_MAX })); return; }
+    if (name.length > COURSE_NAME_MAX) { setError(t("ชื่อวิชายาวได้ไม่เกิน {n} ตัวอักษร", { n: COURSE_NAME_MAX })); return; }
+    if (sec.length > SEC_NO_MAX) { setError(t("Section ยาวได้ไม่เกิน {n} ตัวอักษร", { n: SEC_NO_MAX })); return; }
+    if (noteTrim.length > NOTE_MAX) { setError(t("หมายเหตุยาวได้ไม่เกิน {n} ตัวอักษร", { n: NOTE_MAX })); return; }
+    if (!start || !end) { setError(t("โปรดระบุเวลาเริ่มและสิ้นสุด")); return; }
     if (!inRange(start) || !inRange(end)) {
-      setError(`เวลาต้องอยู่ในช่วง ${String(START_HR).padStart(2,"0")}:00–${String(END_HR).padStart(2,"0")}:00`);
+      setError(t("เวลาต้องอยู่ในช่วง {from}–{to}", { from: GRID_START, to: GRID_END }));
       return;
     }
     if (parseHM(start) >= parseHM(end)) {
-      setError("เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม");
+      setError(t("เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม"));
       return;
     }
     if (code) {
@@ -843,11 +849,11 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
         is_wba: false,
       });
       if (dup) {
-        const kindLabel = kind ? KIND_LABEL[kind] : "คาบเรียน";
-        setError(
-          `วิชานี้มี${kindLabel}อยู่แล้ววัน${DOW_LABEL[dup.day_of_week]} เวลา ${fmtTime(dup.start_time)}–${fmtTime(dup.end_time)} น. ` +
-          `ลงซ้ำอีกคาบไม่ได้ กรุณาแก้ไขคาบเดิมแทน`
-        );
+        const kindLabel = kind ? t(KIND_LABEL[kind]) : t("คาบเรียน");
+        setError(t(
+          "วิชานี้มี{kind}อยู่แล้ววัน{day} เวลา {start}–{end} น. ลงซ้ำอีกคาบไม่ได้ กรุณาแก้ไขคาบเดิมแทน",
+          { kind: kindLabel, day: t(DOW_LABEL[dup.day_of_week]), start: fmtTime(dup.start_time), end: fmtTime(dup.end_time) },
+        ));
         return;
       }
     }
@@ -872,7 +878,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
     <Modal
       open={isOpen}
       onClose={onClose}
-      title={isEdit ? "แก้ไขคาบเรียน" : "เพิ่มคาบเรียน"}
+      title={isEdit ? t("แก้ไขคาบเรียน") : t("เพิ่มคาบเรียน")}
       icon={<Clock size={18} />}
       size="md"
       footer={
@@ -880,13 +886,13 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
           <div>
             {isEdit && block && (
               <Button variant="danger-soft" onClick={() => setConfirmDelete(true)}>
-                <Trash2 size={14} /> ลบคาบนี้
+                <Trash2 size={14} /> {t("ลบคาบนี้")}
               </Button>
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
-            <Button variant="primary" onClick={handleSave}>บันทึก</Button>
+            <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
+            <Button variant="primary" onClick={handleSave}>{t("บันทึก")}</Button>
           </div>
         </div>
       }
@@ -895,7 +901,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
         {/* Three fields side by side leave ~100px each on a phone, which is
             not enough for a course code, let alone its hint. */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <FieldGroup label="รหัสวิชา" hint="ตัวเลข 6 หลัก หรือ อักษรนำหน้า + ตัวเลข 6 หลัก">
+          <FieldGroup label={t("รหัสวิชา")} hint={t("ตัวเลข 6 หลัก หรือ อักษรนำหน้า + ตัวเลข 6 หลัก")}>
             <TextInput
               value={courseCode}
               onChange={e => setCourseCode(sanitize(e.target.value.toUpperCase(), COURSE_CODE_RE, COURSE_CODE_MAX))}
@@ -907,7 +913,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
             />
           </FieldGroup>
           <div className="sm:col-span-2">
-            <FieldGroup label="ชื่อวิชา">
+            <FieldGroup label={t("ชื่อวิชา")}>
               <TextInput
                 value={courseName}
                 onChange={e => setCourseName(e.target.value.slice(0, COURSE_NAME_MAX))}
@@ -920,18 +926,18 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="ประเภท">
+          <FieldGroup label={t("ประเภท")}>
             <Select value={kind} onChange={e => setKind(e.target.value as BlockKind)}>
-              <option value="">— ไม่ระบุ —</option>
-              <option value="lecture">บรรยาย</option>
-              <option value="lab">ปฏิบัติการ</option>
+              <option value="">{t("— ไม่ระบุ —")}</option>
+              <option value="lecture">{t("บรรยาย")}</option>
+              <option value="lab">{t("ปฏิบัติการ")}</option>
             </Select>
           </FieldGroup>
-          <FieldGroup label="Section" hint="ตัวเลขตั้งแต่ 1 ขึ้นไป">
+          <FieldGroup label="Section" hint={t("ตัวเลขตั้งแต่ 1 ขึ้นไป")}>
             <TextInput
               value={secNo}
               onChange={e => setSecNo(sanitize(e.target.value, SEC_NO_RE, SEC_NO_MAX))}
-              placeholder="เช่น 01"
+              placeholder={t("เช่น 01")}
               inputMode="numeric"
               pattern="[0-9]*"
               autoComplete="off"
@@ -940,30 +946,30 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
           </FieldGroup>
         </div>
 
-        <FieldGroup label="วัน">
+        <FieldGroup label={t("วัน")}>
           <Select value={String(dow)} onChange={e => setDow(Number(e.target.value))}>
             {DOW_OPTIONS.map(d => (
-              <option key={d} value={d}>{DOW_LABEL[d]}</option>
+              <option key={d} value={d}>{t(DOW_LABEL[d])}</option>
             ))}
           </Select>
         </FieldGroup>
 
         <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="เริ่ม">
-            <TimePicker value={start} onChange={setStart} label="เริ่ม"
+          <FieldGroup label={t("เริ่ม")}>
+            <TimePicker value={start} onChange={setStart} label={t("เริ่ม")}
                         minValue={GRID_START} maxValue={GRID_END} />
           </FieldGroup>
-          <FieldGroup label="สิ้นสุด">
-            <TimePicker value={end} onChange={setEnd} label="สิ้นสุด"
+          <FieldGroup label={t("สิ้นสุด")}>
+            <TimePicker value={end} onChange={setEnd} label={t("สิ้นสุด")}
                         minValue={GRID_START} maxValue={GRID_END} />
           </FieldGroup>
         </div>
 
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)" hint={`ยาวได้ไม่เกิน ${NOTE_MAX} ตัวอักษร`}>
+        <FieldGroup label={t("หมายเหตุ (ระบุก็ได้)")} hint={t("ยาวได้ไม่เกิน {n} ตัวอักษร", { n: NOTE_MAX })}>
           <TextInput
             value={note}
             onChange={e => setNote(e.target.value.slice(0, NOTE_MAX))}
-            placeholder="เช่น ห้อง SC-1234"
+            placeholder={t("เช่น ห้อง SC-1234")}
             maxLength={NOTE_MAX}
             autoComplete="off"
           />
@@ -983,9 +989,9 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
       onClose={() => setConfirmDelete(false)}
       onConfirm={() => { setConfirmDelete(false); if (block) onDelete(block.id); }}
       danger
-      title="ลบคาบเรียน"
-      message="ต้องการลบคาบเรียนนี้หรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก"
-      confirmLabel="ลบ"
+      title={t("ลบคาบเรียน")}
+      message={t("ต้องการลบคาบเรียนนี้หรือไม่? การเปลี่ยนแปลงจะมีผลเมื่อกดบันทึก")}
+      confirmLabel={t("ลบ")}
     />
     </>
   );
@@ -1005,6 +1011,7 @@ interface IcsImportModalProps {
 }
 
 function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps) {
+  const { t } = useI18n();
   const [fileName, setFileName] = useState<string>("");
   const [result, setResult] = useState<IcsImportResult | null>(null);
   // Blocks whose ประเภท came from suggestKinds (a guess, not the timetable) —
@@ -1046,13 +1053,13 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
       parsed = suggested.result;
       setGuessed(suggested.guessed);
       if (parsed.eventsTotal === 0) {
-        setError("ไม่พบเหตุการณ์ในไฟล์ (VEVENT) โปรดตรวจว่าไฟล์เป็น .ics ที่ถูกต้อง");
+        setError(t("ไม่พบเหตุการณ์ในไฟล์ (VEVENT) โปรดตรวจว่าไฟล์เป็น .ics ที่ถูกต้อง"));
       } else if (parsed.blocks.length === 0) {
-        setError("อ่านไฟล์ได้แต่ไม่พบคาบเรียนที่นำเข้าได้ ทั้งหมดอาจเป็นเหตุการณ์สอบหรืออยู่นอกช่วง 08:00–20:00");
+        setError(t("อ่านไฟล์ได้แต่ไม่พบคาบเรียนที่นำเข้าได้ ทั้งหมดอาจเป็นเหตุการณ์สอบหรืออยู่นอกช่วง 08:00–20:00"));
       }
       setResult(parsed);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "อ่านไฟล์ไม่สำเร็จ");
+      setError(e instanceof Error ? e.message : t("อ่านไฟล์ไม่สำเร็จ"));
     } finally {
       setParsing(false);
     }
@@ -1085,24 +1092,24 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
     <Modal
       open={open}
       onClose={onClose}
-      title="อัปโหลดตารางเรียนจาก KKU REG (.ics)"
+      title={t("อัปโหลดตารางเรียนจาก KKU REG (.ics)")}
       icon={<FileUp size={18} />}
       size="xl"
       footer={
         <div className="flex flex-wrap items-center justify-between w-full gap-2">
           <div className="text-xs text-muted">
             {result && result.blocks.length > 0
-              ? `จะแทนที่คาบเรียนทั้งหมดในภาคการศึกษานี้ด้วย ${result.blocks.length} คาบที่นำเข้า`
+              ? t("จะแทนที่คาบเรียนทั้งหมดในภาคการศึกษานี้ด้วย {n} คาบที่นำเข้า", { n: result.blocks.length })
               : ""}
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+            <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
             <Button
               variant="primary"
               onClick={() => result && onImport(result)}
               disabled={!canImport}
             >
-              <Upload size={14} /> นำเข้า
+              <Upload size={14} /> {t("นำเข้า")}
             </Button>
           </div>
         </div>
@@ -1110,15 +1117,14 @@ function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps
     >
       <div className="flex flex-col gap-3">
         <p className="text-sm text-muted">
-          ดาวน์โหลดไฟล์ตารางเรียน (.ics) จากระบบทะเบียน (reg.kku.ac.th) แล้วเลือกไฟล์ที่นี่
-          ระบบจะดึงคาบเรียนประจำสัปดาห์ให้อัตโนมัติ
+          {t("ดาวน์โหลดไฟล์ตารางเรียน (.ics) จากระบบทะเบียน (reg.kku.ac.th) แล้วเลือกไฟล์ที่นี่ ระบบจะดึงคาบเรียนประจำสัปดาห์ให้อัตโนมัติ")}
         </p>
 
         <label className="flex flex-col gap-2 rounded-md border border-dashed border-[var(--hairline)] p-4 hover:bg-slate-50 cursor-pointer">
           <div className="flex items-center gap-2 text-sm">
             <FileUp size={16} className="text-muted" />
-            <span className="font-medium">{fileName || "เลือกไฟล์ .ics"}</span>
-            {parsing && <span className="text-xs text-muted">— กำลังอ่าน…</span>}
+            <span className="font-medium">{fileName || t("เลือกไฟล์ .ics")}</span>
+            {parsing && <span className="text-xs text-muted">— {t("กำลังอ่าน…")}</span>}
           </div>
           <input
             ref={fileRef}
@@ -1149,13 +1155,14 @@ interface IcsPreviewProps {
 }
 
 function IcsPreview({ result, guessed, duplicateIds, onKindChange }: IcsPreviewProps) {
+  const { t } = useI18n();
   const summaryBits: string[] = [];
-  if (result.blocks.length) summaryBits.push(`คาบเรียนรายสัปดาห์ ${result.blocks.length} คาบ`);
-  if (result.duplicatesCollapsed) summaryBits.push(`รวมเหตุการณ์ซ้ำ ${result.duplicatesCollapsed} รายการ`);
-  if (result.examSkipped) summaryBits.push(`ข้ามการสอบ ${result.examSkipped} รายการ`);
-  if (result.outOfRangeSkipped) summaryBits.push(`ข้ามเวลานอกช่วง ${result.outOfRangeSkipped} รายการ`);
-  if (result.malformedSkipped) summaryBits.push(`ข้ามข้อมูลไม่สมบูรณ์ ${result.malformedSkipped} รายการ`);
-  if (result.kindResolved) summaryBits.push(`ระบุประเภทให้อัตโนมัติ ${result.kindResolved} คาบ`);
+  if (result.blocks.length) summaryBits.push(t("คาบเรียนรายสัปดาห์ {n} คาบ", { n: result.blocks.length }));
+  if (result.duplicatesCollapsed) summaryBits.push(t("รวมเหตุการณ์ซ้ำ {n} รายการ", { n: result.duplicatesCollapsed }));
+  if (result.examSkipped) summaryBits.push(t("ข้ามการสอบ {n} รายการ", { n: result.examSkipped }));
+  if (result.outOfRangeSkipped) summaryBits.push(t("ข้ามเวลานอกช่วง {n} รายการ", { n: result.outOfRangeSkipped }));
+  if (result.malformedSkipped) summaryBits.push(t("ข้ามข้อมูลไม่สมบูรณ์ {n} รายการ", { n: result.malformedSkipped }));
+  if (result.kindResolved) summaryBits.push(t("ระบุประเภทให้อัตโนมัติ {n} คาบ", { n: result.kindResolved }));
   const unresolved = result.blocks.filter(b => !b.kind).length;
 
   return (
@@ -1166,33 +1173,33 @@ function IcsPreview({ result, guessed, duplicateIds, onKindChange }: IcsPreviewP
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs text-muted sticky top-0">
               <tr>
-                <th className="text-left px-3 py-2 font-medium">วัน</th>
-                <th className="text-left px-3 py-2 font-medium">เวลา</th>
-                <th className="text-left px-3 py-2 font-medium">รหัสวิชา</th>
+                <th className="text-left px-3 py-2 font-medium">{t("วัน")}</th>
+                <th className="text-left px-3 py-2 font-medium">{t("เวลา")}</th>
+                <th className="text-left px-3 py-2 font-medium">{t("รหัสวิชา")}</th>
                 <th className="text-left px-3 py-2 font-medium">Sec</th>
-                <th className="text-left px-3 py-2 font-medium">ประเภท</th>
-                <th className="text-left px-3 py-2 font-medium">ห้อง</th>
+                <th className="text-left px-3 py-2 font-medium">{t("ประเภท")}</th>
+                <th className="text-left px-3 py-2 font-medium">{t("ห้อง")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--hairline)]">
               {result.blocks.map(b => (
                 <tr key={b.id} className={duplicateIds.has(b.id) ? "bg-red-50" : undefined}>
-                  <td className="px-3 py-1.5">{DOW_LABEL[b.day_of_week]}</td>
+                  <td className="px-3 py-1.5">{t(DOW_LABEL[b.day_of_week])}</td>
                   <td className="px-3 py-1.5 tabular-nums">{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</td>
                   <td className="px-3 py-1.5 font-medium">{b.course_code}</td>
                   <td className="px-3 py-1.5 tabular-nums">{b.sec_no}</td>
                   <td className="px-3 py-1.5">
                     <div className="flex items-center gap-2">
                       <Select
-                        aria-label={`ประเภทคาบ ${b.course_code} ${DOW_LABEL[b.day_of_week]} ${fmtTime(b.start_time)}`}
+                        aria-label={t("ประเภทคาบ {code} {day} {time}", { code: b.course_code, day: t(DOW_LABEL[b.day_of_week]), time: fmtTime(b.start_time) })}
                         value={b.kind}
                         onChange={e => onKindChange(b.id, e.target.value as BlockKind)}
                       >
-                        <option value="">ไม่ระบุ</option>
-                        <option value="lecture">บรรยาย</option>
-                        <option value="lab">ปฏิบัติการ</option>
+                        <option value="">{t("ไม่ระบุ")}</option>
+                        <option value="lecture">{t("บรรยาย")}</option>
+                        <option value="lab">{t("ปฏิบัติการ")}</option>
                       </Select>
-                      {guessed.has(b.id) && <Chip tone="warn">โปรดตรวจ</Chip>}
+                      {guessed.has(b.id) && <Chip tone="warn">{t("โปรดตรวจ")}</Chip>}
                     </div>
                   </td>
                   <Tip content={b.note}>
@@ -1208,18 +1215,18 @@ function IcsPreview({ result, guessed, duplicateIds, onKindChange }: IcsPreviewP
         <Alert
           status="danger"
           icon={<AlertTriangle size={14} />}
-          title="มีวิชาที่ลงประเภทเดียวกันซ้ำ (แถวสีแดง) วิชาหนึ่งมีคาบบรรยายและคาบปฏิบัติการได้อย่างละ 1 คาบ กรุณาแก้ประเภทก่อนนำเข้า"
+          title={t("มีวิชาที่ลงประเภทเดียวกันซ้ำ (แถวสีแดง) วิชาหนึ่งมีคาบบรรยายและคาบปฏิบัติการได้อย่างละ 1 คาบ กรุณาแก้ประเภทก่อนนำเข้า")}
         />
       )}
       {guessed.size > 0 && (
         <p className="text-xs text-muted">
-          คาบที่ติดป้าย &ldquo;โปรดตรวจ&rdquo; ระบบเดาจากลำดับเวลา (วิชาเดียวกันเรียนสองคาบในวันเดียว คาบแรกเป็นบรรยาย คาบหลังเป็นปฏิบัติการ) กรุณาตรวจก่อนนำเข้า
+          {t("คาบที่ติดป้าย “โปรดตรวจ” ระบบเดาจากลำดับเวลา (วิชาเดียวกันเรียนสองคาบในวันเดียว คาบแรกเป็นบรรยาย คาบหลังเป็นปฏิบัติการ) กรุณาตรวจก่อนนำเข้า")}
         </p>
       )}
       <p className="text-xs text-muted">
         {unresolved === 0
-          ? "ระบุประเภท (บรรยาย/ปฏิบัติการ) ครบทุกคาบแล้ว แก้ไขภายหลังได้"
-          : `ไฟล์ .ics ของระบบทะเบียนไม่ได้ระบุประเภทคาบ ระบบจึงเทียบกับตารางสอนในระบบให้ ยังเหลือ ${unresolved} คาบที่ไม่ระบุประเภท เลือกได้ในตารางด้านบน หรือเว้นไว้ก็บันทึกได้`}
+          ? t("ระบุประเภท (บรรยาย/ปฏิบัติการ) ครบทุกคาบแล้ว แก้ไขภายหลังได้")
+          : t("ไฟล์ .ics ของระบบทะเบียนไม่ได้ระบุประเภทคาบ ระบบจึงเทียบกับตารางสอนในระบบให้ ยังเหลือ {n} คาบที่ไม่ระบุประเภท เลือกได้ในตารางด้านบน หรือเว้นไว้ก็บันทึกได้", { n: unresolved })}
       </p>
     </div>
   );

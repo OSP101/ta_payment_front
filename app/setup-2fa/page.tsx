@@ -19,6 +19,7 @@ import { api, errMessage, mfaEnable, mfaSetup, type Me, type MFASetupResult } fr
 import { notify } from "../lib/notify";
 import useDocumentTitle from "../lib/useDocumentTitle";
 import { Skel, SkelRegion, SkelValue } from "../components/Skeletons";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * Also reached voluntarily — AccountSettings links "เปิดใช้งาน [2FA]" straight
@@ -41,7 +42,8 @@ function mfaMandatoryFor(me: Me): boolean {
  */
 export default function Setup2FAPage() {
   const router = useRouter();
-  useDocumentTitle("ตั้งค่ายืนยันตัวตนสองขั้นตอน");
+  const { t } = useI18n();
+  useDocumentTitle(t("ตั้งค่ายืนยันตัวตนสองขั้นตอน"));
   const { data: me, error: meError } = useSWR<Me>("/me");
   const voluntary = !!me && !mfaMandatoryFor(me);
   // The sub-heading says "optional" or "required" depending on /me — hold its
@@ -67,7 +69,7 @@ export default function Setup2FAPage() {
   async function onVerify(e: React.FormEvent) {
     e.preventDefault();
     if (code.length !== 6) {
-      setCodeErr("กรอกรหัส 6 หลักจากแอปยืนยันตัวตน");
+      setCodeErr(t("กรอกรหัส 6 หลักจากแอปยืนยันตัวตน"));
       return;
     }
     setCodeErr(null);
@@ -126,16 +128,16 @@ export default function Setup2FAPage() {
             <ShieldCheck />
           </div>
           <h1 className="mt-4 text-[22px] font-semibold text-foreground">
-            {recoveryCodes ? "บันทึกรหัสสำรองของคุณ" : "ตั้งค่าการยืนยันตัวตนสองขั้นตอน"}
+            {recoveryCodes ? t("บันทึกรหัสสำรองของคุณ") : t("ตั้งค่าการยืนยันตัวตนสองขั้นตอน")}
           </h1>
           <p className="text-sm text-muted mt-1">
             {recoveryCodes
-              ? "เก็บรหัสเหล่านี้ไว้ในที่ปลอดภัย ใช้แทนแอปยืนยันตัวตนได้เมื่อทำอุปกรณ์หาย"
+              ? t("เก็บรหัสเหล่านี้ไว้ในที่ปลอดภัย ใช้แทนแอปยืนยันตัวตนได้เมื่อทำอุปกรณ์หาย")
               : !meReady
                 ? <SkelValue className="h-3.5 w-64" />
                 : voluntary
-                ? "เพิ่มความปลอดภัยให้บัญชีของคุณด้วยการยืนยันตัวตนสองขั้นตอน"
-                : "บัญชีนี้ต้องเปิดใช้งาน 2FA ก่อนใช้งานระบบต่อ"}
+                ? t("เพิ่มความปลอดภัยให้บัญชีของคุณด้วยการยืนยันตัวตนสองขั้นตอน")
+                : t("บัญชีนี้ต้องเปิดใช้งาน 2FA ก่อนใช้งานระบบต่อ")}
           </p>
         </div>
 
@@ -155,10 +157,10 @@ export default function Setup2FAPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Button variant="secondary" fullWidth onClick={copyCodes}>
-                    <Copy size={14} /> {copied ? "คัดลอกแล้ว" : "คัดลอกทั้งหมด"}
+                    <Copy size={14} /> {copied ? t("คัดลอกแล้ว") : t("คัดลอกทั้งหมด")}
                   </Button>
                   <Button variant="secondary" fullWidth onClick={downloadCodes}>
-                    <Download size={14} /> ดาวน์โหลด (.txt)
+                    <Download size={14} /> {t("ดาวน์โหลด (.txt)")}
                   </Button>
                 </div>
                 <Checkbox isSelected={savedAck} onChange={setSavedAck}>
@@ -166,11 +168,11 @@ export default function Setup2FAPage() {
                     <Checkbox.Control>
                       <Checkbox.Indicator />
                     </Checkbox.Control>
-                    ฉันได้บันทึกรหัสสำรองไว้ในที่ปลอดภัยแล้ว รหัสนี้จะไม่แสดงอีก
+                    {t("ฉันได้บันทึกรหัสสำรองไว้ในที่ปลอดภัยแล้ว รหัสนี้จะไม่แสดงอีก")}
                   </Checkbox.Content>
                 </Checkbox>
                 <Button size="lg" fullWidth isDisabled={!savedAck} onClick={finish}>
-                  <Check size={16} /> เสร็จสิ้น เข้าใช้งานระบบ
+                  <Check size={16} /> {t("เสร็จสิ้น เข้าใช้งานระบบ")}
                 </Button>
               </div>
             ) : setupErr ? (
@@ -178,12 +180,12 @@ export default function Setup2FAPage() {
                 <Alert status="danger">
                   <Alert.Indicator><ShieldAlert size={16} /></Alert.Indicator>
                   <Alert.Content>
-                    <Alert.Title>ตั้งค่า 2FA ไม่สำเร็จ</Alert.Title>
+                    <Alert.Title>{t("ตั้งค่า 2FA ไม่สำเร็จ")}</Alert.Title>
                     <Alert.Description>{setupErr}</Alert.Description>
                   </Alert.Content>
                 </Alert>
                 <Button variant="secondary" onClick={() => window.location.reload()}>
-                  ลองใหม่
+                  {t("ลองใหม่")}
                 </Button>
               </div>
             ) : !setup ? (
@@ -200,23 +202,23 @@ export default function Setup2FAPage() {
             ) : (
               <form onSubmit={onVerify} className="flex flex-col gap-4 items-center">
                 <p className="text-sm text-muted text-center">
-                  สแกน QR นี้ด้วยแอปยืนยันตัวตน แล้วกรอกรหัส 6 หลักที่แสดงขึ้น
+                  {t("สแกน QR นี้ด้วยแอปยืนยันตัวตน แล้วกรอกรหัส 6 หลักที่แสดงขึ้น")}
                 </p>
                 <div className="w-full rounded-lg border border-[var(--hairline)] bg-default/50 px-3 py-2.5">
-                  <div className="text-xs font-medium text-foreground mb-1.5">ยังไม่มีแอปยืนยันตัวตน? แนะนำ</div>
+                  <div className="text-xs font-medium text-foreground mb-1.5">{t("ยังไม่มีแอปยืนยันตัวตน? แนะนำ")}</div>
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-start gap-2 text-xs text-muted">
                       <Smartphone size={13} className="shrink-0 mt-0.5" />
                       <span>
                         <span className="text-foreground font-medium">Google Authenticator</span>{" "}
-                        — ใช้งานง่าย มีทั้ง Android และ iOS
+                        {t("— ใช้งานง่าย มีทั้ง Android และ iOS")}
                       </span>
                     </div>
                     <div className="flex items-start gap-2 text-xs text-muted">
                       <Smartphone size={13} className="shrink-0 mt-0.5" />
                       <span>
                         <span className="text-foreground font-medium">Microsoft Authenticator</span>{" "}
-                        — มี Android และ iOS เช่นกัน สำรองรหัสขึ้นคลาวด์ได้
+                        {t("— มี Android และ iOS เช่นกัน สำรองรหัสขึ้นคลาวด์ได้")}
                       </span>
                     </div>
                   </div>
@@ -224,18 +226,18 @@ export default function Setup2FAPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={setup.qr_png_base64}
-                  alt="QR code สำหรับตั้งค่าแอปยืนยันตัวตน"
+                  alt={t("QR code สำหรับตั้งค่าแอปยืนยันตัวตน")}
                   className="size-48 rounded-md border border-[var(--hairline)]"
                 />
                 <div className="w-full">
-                  <div className="text-xs text-muted mb-1 text-center">สแกนไม่ได้? กรอกรหัสนี้ในแอปแทน</div>
+                  <div className="text-xs text-muted mb-1 text-center">{t("สแกนไม่ได้? กรอกรหัสนี้ในแอปแทน")}</div>
                   <code className="block px-3 py-2 rounded-md bg-default text-sm font-mono text-center select-all break-all">
                     {setup.secret}
                   </code>
                 </div>
 
                 <div className="flex flex-col gap-2 items-center w-full">
-                  <Label>รหัสยืนยัน 6 หลัก</Label>
+                  <Label>{t("รหัสยืนยัน 6 หลัก")}</Label>
                   <InputOTP
                     maxLength={6}
                     pattern={REGEXP_ONLY_DIGITS}
@@ -257,7 +259,7 @@ export default function Setup2FAPage() {
                   </InputOTP>
                   {codeErr && <FieldError>{codeErr}</FieldError>}
                   <Description className="text-center">
-                    ยังไม่ได้เปิดใช้งาน — กรอกรหัสให้ถูกต้องก่อนจึงจะเปิดใช้งานจริง
+                    {t("ยังไม่ได้เปิดใช้งาน — กรอกรหัสให้ถูกต้องก่อนจึงจะเปิดใช้งานจริง")}
                   </Description>
                 </div>
 
@@ -268,16 +270,16 @@ export default function Setup2FAPage() {
                   <div className="flex gap-2 w-full">
                     <Link href="/account" className="flex-1">
                       <Button type="button" variant="ghost" size="lg" fullWidth isDisabled={verifying}>
-                        ยกเลิก
+                        {t("ยกเลิก")}
                       </Button>
                     </Link>
                     <Button type="submit" size="lg" className="flex-1" isPending={verifying}>
-                      {verifying ? "กำลังตรวจสอบ…" : "ยืนยันและเปิดใช้งาน"}
+                      {verifying ? t("กำลังตรวจสอบ…") : t("ยืนยันและเปิดใช้งาน")}
                     </Button>
                   </div>
                 ) : (
                   <Button type="submit" size="lg" fullWidth isPending={verifying}>
-                    {verifying ? "กำลังตรวจสอบ…" : "ยืนยันและเปิดใช้งาน"}
+                    {verifying ? t("กำลังตรวจสอบ…") : t("ยืนยันและเปิดใช้งาน")}
                   </Button>
                 )}
               </form>
@@ -292,7 +294,7 @@ export default function Setup2FAPage() {
               onClick={logout}
               className="text-sm text-muted hover:text-foreground inline-flex items-center gap-1"
             >
-              <LogOut size={13} /> ออกจากระบบ
+              <LogOut size={13} /> {t("ออกจากระบบ")}
             </button>
           </div>
         )}

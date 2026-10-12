@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import { api, type Term } from "../lib/api";
 import { requiredDocKinds } from "../lib/nationality";
+import { useI18n } from "../lib/i18n/client";
 
 /* -------------------------------------------------------------------------- */
 /* One source of truth for "has this TA finished setting up?"                 */
@@ -36,7 +37,7 @@ export interface TAOnboarding {
   /** True until every source has answered — render nothing decisive before it. */
   loading: boolean;
   docState: DocState | undefined;
-  /** Thai reason for the doc state, or undefined when there is nothing to say. */
+  /** Reason for the doc state (already translated), or undefined when there is nothing to say. */
   docLabel: string | undefined;
   /** The TA has done their part on documents (review pending still counts). */
   docsDone: boolean;
@@ -49,6 +50,7 @@ export interface TAOnboarding {
 }
 
 export function useTAOnboarding(): TAOnboarding {
+  const { t } = useI18n();
   // `.catch` on the profile: a TA who has never opened the form has no row and
   // the endpoint 404s. That is "not started", not a failure.
   const { data: profile, isLoading: pLoading } = useSWR<Profile | undefined>(
@@ -80,13 +82,13 @@ export function useTAOnboarding(): TAOnboarding {
         && profile.status !== "pending" && profile.status !== "";
       if (rejected > 0) {
         docState = "rejected";
-        docLabel = `มีเอกสารถูกตีกลับ ${rejected} รายการ`;
+        docLabel = t("มีเอกสารถูกตีกลับ {n} รายการ", { n: rejected });
       } else if (sent < REQUIRED_DOC_COUNT || !profileSubmitted) {
         docState = "not_sent";
-        docLabel = `ยังไม่ได้ส่ง ${Math.max(1, REQUIRED_DOC_COUNT - sent)} รายการ`;
+        docLabel = t("ยังไม่ได้ส่ง {n} รายการ", { n: Math.max(1, REQUIRED_DOC_COUNT - sent) });
       } else if (approved < REQUIRED_DOC_COUNT || profile?.status !== "approved") {
         docState = "pending_review";
-        docLabel = "ส่งครบแล้ว รอเจ้าหน้าที่ตรวจ";
+        docLabel = t("ส่งครบแล้ว รอเจ้าหน้าที่ตรวจ");
       } else {
         docState = "approved";
       }
@@ -97,7 +99,7 @@ export function useTAOnboarding(): TAOnboarding {
 
     const scheduleDone = (sched?.blocks.length ?? 0) > 0;
     const scheduleLabel = sched && !scheduleDone
-      ? "ยังไม่ได้สร้างตารางเรียนของภาคเรียนนี้"
+      ? t("ยังไม่ได้สร้างตารางเรียนของภาคเรียนนี้")
       : undefined;
 
     const doneCount = (docsDone ? 1 : 0) + (scheduleDone ? 1 : 0);
@@ -107,5 +109,5 @@ export function useTAOnboarding(): TAOnboarding {
       scheduleDone, scheduleLabel,
       doneCount, total: 2, allDone: doneCount === 2,
     };
-  }, [profile, docs, terms, activeTerm, sched, pLoading, dLoading]);
+  }, [profile, docs, terms, activeTerm, sched, pLoading, dLoading, t]);
 }

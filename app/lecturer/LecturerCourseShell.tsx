@@ -2,6 +2,7 @@
 import useSWR from "swr";
 import { LayoutDashboard, Calculator, Send, ClipboardCheck, Settings, ArrowLeft, Megaphone, Bell, ShieldAlert, CalendarOff, IdCard } from "lucide-react";
 import type { Me } from "../lib/api";
+import { msg, useI18n } from "../lib/i18n/client";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
 import LecturerTourLauncher from "./tours/TourLauncher";
@@ -25,6 +26,7 @@ export default function LecturerCourseShell({
   courseName?: string;
   children: React.ReactNode;
 }) {
+  const { t } = useI18n();
   // คาบที่ตกวันหยุดและยังไม่กำหนดวันชดเชย — ถ้าไม่ทำ ระบบจะข้ามวันนั้น
   // และ TA ลงเวลาไม่ได้ (= เบิกเงินไม่ได้) จึงติดตัวนับไว้ที่เมนูให้เห็นทุกหน้า
   const { data: courseInfo } = useSWR<CourseInfo>(
@@ -48,38 +50,38 @@ export default function LecturerCourseShell({
   const missingSchedule = courseInfo?.has_missing_schedule === true;
   const missingStudents = courseInfo !== undefined && (courseInfo.num_students ?? 0) === 0;
   const settingsIssue = missingSchedule
-    ? "ยังไม่ระบุเวลาเรียน (WBA) ส่งคำขอ TA ไม่ได้จนกว่าจะกรอกตารางเรียน"
+    ? msg("ยังไม่ระบุเวลาเรียน (WBA) ส่งคำขอ TA ไม่ได้จนกว่าจะกรอกตารางเรียน")
     : missingStudents
-      ? "ยังไม่ได้กรอกจำนวนนักศึกษา คำนวณงบและเบิกจ่ายไม่ได้"
+      ? msg("ยังไม่ได้กรอกจำนวนนักศึกษา คำนวณงบและเบิกจ่ายไม่ได้")
       : undefined;
 
   const nav: NavSection[] = [
     {
       items: [
-        { label: "กลับหน้ารายวิชา", href: "/lecturer", icon: ArrowLeft, exact: true },
+        { label: msg("กลับหน้ารายวิชา"), href: "/lecturer", icon: ArrowLeft, exact: true },
       ],
     },
     {
-      title: "จัดการวิชา",
+      title: msg("จัดการวิชา"),
       items: [
-        { label: "ภาพรวมวิชา", href: `/lecturer/courses/${tcId}`, icon: LayoutDashboard, exact: true },
-        { label: "ส่งคำขอ TA", href: `/lecturer/courses/${tcId}/request`, icon: Send },
+        { label: msg("ภาพรวมวิชา"), href: `/lecturer/courses/${tcId}`, icon: LayoutDashboard, exact: true },
+        { label: msg("ส่งคำขอ TA"), href: `/lecturer/courses/${tcId}/request`, icon: Send },
         {
-          label: "อนุมัติรายงาน TA",
+          label: msg("อนุมัติรายงาน TA"),
           href: `/lecturer/courses/${tcId}/reports`,
           icon: ClipboardCheck,
           badge: pendingReports,
-          badgeLabel: "รออนุมัติ",
+          badgeLabel: msg("รออนุมัติ"),
         },
         {
-          label: "วันหยุดและวันชดเชย",
+          label: msg("วันหยุดและวันชดเชย"),
           href: `/lecturer/courses/${tcId}/holidays`,
           icon: CalendarOff,
           badge: pendingMakeups,
-          badgeLabel: "รอกำหนดวันชดเชย",
+          badgeLabel: msg("รอกำหนดวันชดเชย"),
         },
         {
-          label: "ตั้งค่ารายวิชา",
+          label: msg("ตั้งค่ารายวิชา"),
           href: `/lecturer/courses/${tcId}/settings`,
           icon: Settings,
           status: settingsIssue ? "warn" : undefined,
@@ -88,18 +90,18 @@ export default function LecturerCourseShell({
       ],
     },
     {
-      title: "อื่น ๆ",
+      title: msg("อื่น ๆ"),
       items: [
-        { label: "คำนวณงบ", href: `/lecturer/courses/${tcId}/budget`, icon: Calculator },
+        { label: msg("คำนวณงบ"), href: `/lecturer/courses/${tcId}/budget`, icon: Calculator },
       ],
     },
   ];
 
   const brandTitle = "COCO TAS";
   const userMenuItems: UserMenuItem[] = [
-    { id: "account",  label: "ตั้งค่าบัญชี", href: "/account",     icon: IdCard },
-    { id: "announce", label: "ประกาศ",   href: "/announcements",  icon: Megaphone },
-    { id: "notif",    label: "การเตือน", href: "/notifications",  icon: Bell },
+    { id: "account",  label: msg("ตั้งค่าบัญชี"), href: "/account",     icon: IdCard },
+    { id: "announce", label: msg("ประกาศ"),   href: "/announcements",  icon: Megaphone },
+    { id: "notif",    label: msg("การเตือน"), href: "/notifications",  icon: Bell },
   ];
 
   // Staff can jump into a lecturer's course view from the staff teaching page
@@ -133,8 +135,8 @@ export default function LecturerCourseShell({
           <Alert
             status="warning"
             icon={<ShieldAlert size={16} />}
-            title="กำลังเข้าใช้งานด้วยสิทธิ์เจ้าหน้าที่/ผู้ดูแลระบบ"
-            description="คุณเข้ามาในหน้ามุมมองของอาจารย์เพื่อจัดการแทน การกระทำใด ๆ จะถูกบันทึกในนามผู้ใช้ปัจจุบัน"
+            title={t("กำลังเข้าใช้งานด้วยสิทธิ์เจ้าหน้าที่/ผู้ดูแลระบบ")}
+            description={t("คุณเข้ามาในหน้ามุมมองของอาจารย์เพื่อจัดการแทน การกระทำใด ๆ จะถูกบันทึกในนามผู้ใช้ปัจจุบัน")}
           />
         </div>
       )}

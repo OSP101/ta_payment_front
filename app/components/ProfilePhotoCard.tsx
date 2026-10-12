@@ -7,6 +7,7 @@ import type { Me } from "../lib/api";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Button, ConfirmDialog, Panel, Tip } from "./ui";
+import { useI18n } from "../lib/i18n/client";
 import UserAvatar from "./UserAvatar";
 import AvatarCropper from "./AvatarCropper";
 
@@ -24,6 +25,7 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const { t } = useI18n();
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -34,11 +36,11 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
   function pick(f: File | undefined | null) {
     if (!f) return;
     if (!ACCEPT.split(",").includes(f.type)) {
-      notify.error("รองรับเฉพาะไฟล์ JPEG, PNG หรือ WebP");
+      notify.error(t("รองรับเฉพาะไฟล์ JPEG, PNG หรือ WebP"));
       return;
     }
     if (f.size > MAX_PICK_BYTES) {
-      notify.error("ไฟล์ใหญ่เกิน 12MB กรุณาเลือกไฟล์ที่เล็กกว่านี้");
+      notify.error(t("ไฟล์ใหญ่เกิน 12MB กรุณาเลือกไฟล์ที่เล็กกว่านี้"));
       return;
     }
     setFile(f);
@@ -59,7 +61,7 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
       const res = await api.upload<{ avatar_url: string; size: number }>("/me/avatar", form);
       await refreshEverywhere();
       setFile(null);
-      notify.success(`บันทึกรูปโปรไฟล์แล้ว (${Math.max(1, Math.round((res?.size ?? blob.size) / 1024))} KB)`);
+      notify.success(t("บันทึกรูปโปรไฟล์แล้ว ({kb} KB)", { kb: Math.max(1, Math.round((res?.size ?? blob.size) / 1024)) }));
     } catch (e) {
       notify.error(e);
     } finally {
@@ -73,7 +75,7 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
       await api.del("/me/avatar");
       await refreshEverywhere();
       setConfirmDelete(false);
-      notify.success("ลบรูปโปรไฟล์แล้ว");
+      notify.success(t("ลบรูปโปรไฟล์แล้ว"));
     } catch (e) {
       notify.error(e);
     } finally {
@@ -83,8 +85,8 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
 
   return (
     <Panel
-      title="รูปโปรไฟล์"
-      description="รูปโปรไฟล์ของคุณในระบบ"
+      title={t("รูปโปรไฟล์")}
+      description={t("รูปโปรไฟล์ของคุณในระบบ")}
       className="mb-4"
     >
       <div
@@ -106,10 +108,10 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
             src={me.avatar_url}
             className="size-32 text-3xl"
           />
-          <Tip content={hasPhoto ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}><button
+          <Tip content={hasPhoto ? t("เปลี่ยนรูปโปรไฟล์") : t("เพิ่มรูปโปรไฟล์")}><button
             type="button"
             onClick={() => inputRef.current?.click()}
-            aria-label={hasPhoto ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
+            aria-label={hasPhoto ? t("เปลี่ยนรูปโปรไฟล์") : t("เพิ่มรูปโปรไฟล์")}
             className="absolute bottom-0 -end-0.5 size-9 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <Camera size={16} />
@@ -118,19 +120,19 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
 
         <div className="min-w-0 flex-1 text-center sm:text-start">
           <div className="text-sm text-foreground">
-            {hasPhoto ? "คุณตั้งรูปโปรไฟล์ไว้แล้ว" : "ยังไม่มีรูปโปรไฟล์"}
+            {hasPhoto ? t("คุณตั้งรูปโปรไฟล์ไว้แล้ว") : t("ยังไม่มีรูปโปรไฟล์")}
           </div>
           <div className="text-xs text-muted mt-0.5">
-            ลากไฟล์มาวางที่นี่ หรือเลือกไฟล์ รองรับ JPEG, PNG, WebP ขนาดไม่เกิน 12MB
+            {t("ลากไฟล์มาวางที่นี่ หรือเลือกไฟล์ รองรับ JPEG, PNG, WebP ขนาดไม่เกิน 12MB")}
           </div>
           <div className="flex flex-wrap gap-2 justify-center sm:justify-start mt-3">
             <Button variant="primary" size="sm" onPress={() => inputRef.current?.click()}>
               {hasPhoto ? <ImageUp size={14} /> : <UploadCloud size={14} />}
-              {hasPhoto ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+              {hasPhoto ? t("เปลี่ยนรูป") : t("อัปโหลดรูป")}
             </Button>
             {hasPhoto && (
               <Button variant="tertiary" size="sm" onPress={() => setConfirmDelete(true)}>
-                <Trash2 size={14} /> ลบรูป
+                <Trash2 size={14} /> {t("ลบรูป")}
               </Button>
             )}
           </div>
@@ -159,9 +161,9 @@ export default function ProfilePhotoCard({ me }: { me: Me }) {
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         onConfirm={remove}
-        title="ลบรูปโปรไฟล์"
-        message="ระบบจะกลับไปแสดงอักษรย่อของชื่อคุณแทน คุณอัปโหลดรูปใหม่ได้ทุกเมื่อ"
-        confirmLabel="ลบรูป"
+        title={t("ลบรูปโปรไฟล์")}
+        message={t("ระบบจะกลับไปแสดงอักษรย่อของชื่อคุณแทน คุณอัปโหลดรูปใหม่ได้ทุกเมื่อ")}
+        confirmLabel={t("ลบรูป")}
         danger
         isPending={deleting}
         icon={<Trash2 size={18} />}

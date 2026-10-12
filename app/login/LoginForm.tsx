@@ -32,6 +32,8 @@ import { sameOriginPath } from "../lib/safePath";
 import { rememberLoginMethod } from "./loginMethod";
 import LoginNoticeCards, { hasLoginNotices, type LoginNotices } from "./LoginNotices";
 import useDocumentTitle from "../lib/useDocumentTitle";
+import LanguageSwitch from "../components/LanguageSwitch";
+import { msg, useI18n } from "../lib/i18n/client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const THAI_RE = /[฀-๿]/;
@@ -52,28 +54,28 @@ const REASON_INFO: Record<
 > = {
   session_idle: {
     status: "warning", icon: <Clock size={16} />,
-    title: "ออกจากระบบอัตโนมัติ",
-    description: "เนื่องจากไม่มีการใช้งานเกิน 15 นาที เพื่อความปลอดภัยของบัญชีคุณ",
+    title: msg("ออกจากระบบอัตโนมัติ"),
+    description: msg("เนื่องจากไม่มีการใช้งานเกิน 15 นาที เพื่อความปลอดภัยของบัญชีคุณ"),
   },
   session_superseded: {
     status: "warning", icon: <MonitorSmartphone size={16} />,
-    title: "เข้าสู่ระบบจากอุปกรณ์อื่น",
-    description: "บัญชีนี้ใช้งานได้ครั้งละ 1 เครื่องเท่านั้น การเข้าสู่ระบบที่นี่จึงสิ้นสุดลง",
+    title: msg("เข้าสู่ระบบจากอุปกรณ์อื่น"),
+    description: msg("บัญชีนี้ใช้งานได้ครั้งละ 1 เครื่องเท่านั้น การเข้าสู่ระบบที่นี่จึงสิ้นสุดลง"),
   },
   session_revoked: {
     status: "accent", icon: <LogOut size={16} />,
-    title: "เซสชันสิ้นสุดแล้ว",
-    description: "กรุณาเข้าสู่ระบบอีกครั้ง",
+    title: msg("เซสชันสิ้นสุดแล้ว"),
+    description: msg("กรุณาเข้าสู่ระบบอีกครั้ง"),
   },
   signed_out: {
     status: "success", icon: <CheckCircle2 size={16} />,
-    title: "ออกจากระบบเรียบร้อยแล้ว",
-    description: "ข้อมูลการเข้าสู่ระบบในเครื่องนี้ถูกล้างแล้ว หากใช้เครื่องสาธารณะ อย่าลืมออกจากระบบ KKU ด้วย",
+    title: msg("ออกจากระบบเรียบร้อยแล้ว"),
+    description: msg("ข้อมูลการเข้าสู่ระบบในเครื่องนี้ถูกล้างแล้ว หากใช้เครื่องสาธารณะ อย่าลืมออกจากระบบ KKU ด้วย"),
   },
   password_changed: {
     status: "success", icon: <CheckCircle2 size={16} />,
-    title: "ตั้งรหัสผ่านใหม่สำเร็จ",
-    description: "กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่ของคุณ",
+    title: msg("ตั้งรหัสผ่านใหม่สำเร็จ"),
+    description: msg("กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่ของคุณ"),
   },
 };
 
@@ -84,6 +86,7 @@ const REASON_INFO: Record<
  * gave two tab stops for one action.
  */
 function KkuSsoButton({ href, children }: { href: string; children: React.ReactNode }) {
+  const { t } = useI18n();
   return (
     <a
       href={href}
@@ -94,7 +97,7 @@ function KkuSsoButton({ href, children }: { href: string; children: React.ReactN
       </span>
       <span className="flex-1 min-w-0 text-left">
         <span className="block font-medium text-[15px] leading-tight">{children}</span>
-        <span className="block text-xs text-muted leading-tight mt-0.5">ใช้บัญชีเดียวกับระบบของมหาวิทยาลัยขอนแก่น</span>
+        <span className="block text-xs text-muted leading-tight mt-0.5">{t("ใช้บัญชีเดียวกับระบบของมหาวิทยาลัยขอนแก่น")}</span>
       </span>
       <ArrowRight className="size-4 text-muted transition group-hover:translate-x-0.5 group-hover:text-foreground" />
     </a>
@@ -133,6 +136,7 @@ export default function LoginForm({
   notices?: LoginNotices | null;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -165,7 +169,7 @@ export default function LoginForm({
   // the in-flight challenge) or, on a tab that once visited /demo, resolve
   // the code POST against a stale demo slot instead of production.
   const [challenge, setChallenge] = useState<string | null>(null);
-  useDocumentTitle(challenge ? "ยืนยันตัวตนสองขั้นตอน" : "เข้าสู่ระบบ");
+  useDocumentTitle(challenge ? t("ยืนยันตัวตนสองขั้นตอน") : t("เข้าสู่ระบบ"));
   const [code, setCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
@@ -275,22 +279,22 @@ export default function LoginForm({
   const fieldErrors = useMemo(() => {
     const e: { email?: string; password?: string } = {};
     const trimmed = email.trim();
-    if (!trimmed) e.email = "กรุณากรอกอีเมล";
-    else if (!EMAIL_RE.test(trimmed)) e.email = "รูปแบบอีเมลไม่ถูกต้อง";
-    if (!password) e.password = "กรุณากรอกรหัสผ่าน";
+    if (!trimmed) e.email = t("กรุณากรอกอีเมล");
+    else if (!EMAIL_RE.test(trimmed)) e.email = t("รูปแบบอีเมลไม่ถูกต้อง");
+    if (!password) e.password = t("กรุณากรอกรหัสผ่าน");
     return e;
-  }, [email, password]);
+  }, [email, password, t]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     if (fieldErrors.email || fieldErrors.password) {
       setShowErrors(true);
-      const missing = [
-        fieldErrors.email ? "อีเมล" : null,
-        fieldErrors.password ? "รหัสผ่าน" : null,
-      ].filter(Boolean).join(" และ ");
-      notify.warning(missing ? `กรุณากรอก${missing}ให้ครบก่อนเข้าสู่ระบบ` : "กรุณาตรวจสอบข้อมูลที่กรอก");
+      notify.warning(
+        fieldErrors.email && fieldErrors.password ? t("กรุณากรอกอีเมลและรหัสผ่านให้ครบก่อนเข้าสู่ระบบ")
+          : fieldErrors.email ? t("กรุณากรอกอีเมลให้ครบก่อนเข้าสู่ระบบ")
+          : fieldErrors.password ? t("กรุณากรอกรหัสผ่านให้ครบก่อนเข้าสู่ระบบ")
+          : t("กรุณาตรวจสอบข้อมูลที่กรอก"));
       return;
     }
 
@@ -335,7 +339,7 @@ export default function LoginForm({
     e.preventDefault();
     if (!challenge) return;
     if (!code.trim()) {
-      setCodeError(useRecoveryCode ? "กรุณากรอกรหัสสำรอง" : "กรุณากรอกรหัส 6 หลัก");
+      setCodeError(useRecoveryCode ? t("กรุณากรอกรหัสสำรอง") : t("กรุณากรอกรหัส 6 หลัก"));
       return;
     }
     setCodeError(null);
@@ -371,7 +375,7 @@ export default function LoginForm({
           onBlur={() => setTouched(t => ({ ...t, email: true }))}
           isInvalid={(touched.email || showErrors) && !!fieldErrors.email}
         >
-          <Label>อีเมล</Label>
+          <Label>{t("อีเมล")}</Label>
           <InputGroup variant={emailInCard ? "secondary" : undefined}>
             <InputGroup.Input
               placeholder="you@kkumail.com"
@@ -384,7 +388,7 @@ export default function LoginForm({
           )}
           {THAI_RE.test(email) && (
             <p className="text-xs text-warning mt-1">
-              ตรวจพบอักษรไทย กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN
+              {t("ตรวจพบอักษรไทย กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN")}
             </p>
           )}
         </TextField>
@@ -397,7 +401,7 @@ export default function LoginForm({
           onBlur={() => setTouched(t => ({ ...t, password: true }))}
           isInvalid={(touched.password || showErrors) && !!fieldErrors.password}
         >
-          <Label>รหัสผ่าน</Label>
+          <Label>{t("รหัสผ่าน")}</Label>
           <InputGroup variant={emailInCard ? "secondary" : undefined}>
             <InputGroup.Input
               type={showPw ? "text" : "password"}
@@ -408,7 +412,7 @@ export default function LoginForm({
               <IconButton
                 size="sm"
                 variant="ghost"
-                label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
                 onPress={() => setShowPw(!showPw)}
               >
                 {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -420,7 +424,7 @@ export default function LoginForm({
           )}
           {THAI_RE.test(password) && (
             <p className="text-xs text-warning mt-1">
-              ตรวจพบอักษรไทยในรหัสผ่าน กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN
+              {t("ตรวจพบอักษรไทยในรหัสผ่าน กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN")}
             </p>
           )}
         </TextField>
@@ -429,12 +433,12 @@ export default function LoginForm({
           second way in rather than competing with it. */}
       <Button type="submit" size="lg" fullWidth isPending={loading} variant={emailInCard ? "outline" : "primary"}>
           {loading ? <Spinner color="current" size="sm" /> : <LogIn />}
-          {loading ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}
+          {loading ? t("กำลังเข้าสู่ระบบ…") : t("เข้าสู่ระบบ")}
         </Button>
       </form>
 
       <p className="text-center text-xs text-muted">
-        ลืมรหัสผ่าน? กรุณาติดต่อเจ้าหน้าที่วิทยาลัยการคอมพิวเตอร์เพื่อรีเซ็ตรหัสผ่าน
+        {t("ลืมรหัสผ่าน? กรุณาติดต่อเจ้าหน้าที่วิทยาลัยการคอมพิวเตอร์เพื่อรีเซ็ตรหัสผ่าน")}
       </p>
     </>
   );
@@ -447,12 +451,12 @@ export default function LoginForm({
           photo is portrait (3:4), close to the panel's own shape, so it just
           covers it; the focal point keeps the sign in view when a narrow
           window crops the sides. */}
-      <aside className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-neutral-900 text-white px-10 py-8">
+      <aside className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-[#171717] text-white px-10 py-8">
         {/* Static import, so the build knows the size and inlines a tiny
             blurred copy that paints at once while the real photo loads. */}
         <Image
           src={loginPhoto}
-          alt="ป้ายวิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น"
+          alt={t("ป้ายวิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น")}
           fill
           sizes="46vw"
           placeholder="blur"
@@ -491,30 +495,34 @@ export default function LoginForm({
           <Image src="/images/logo-cp-1.png" alt="" width={28} height={28} priority className="size-7 object-contain" />
           <div className="font-semibold text-[15px] text-foreground">COCO TAS</div>
           <BetaBadge onClick={() => setBetaOpen(true)} />
+          <div className="ml-auto"><LanguageSwitch signedIn={false} /></div>
         </header>
+        <div className="hidden lg:flex justify-end gap-2 px-8 pt-5">
+          <LanguageSwitch signedIn={false} />
+        </div>
 
         <div className="flex-1 flex items-center justify-center px-4 sm:px-8 py-10">
         <div className="w-full max-w-[400px]">
           <div className="mb-7">
             <h1 className="text-[26px] leading-tight font-semibold text-foreground">
               {challenge
-                ? "ยืนยันตัวตนสองขั้นตอน"
+                ? t("ยืนยันตัวตนสองขั้นตอน")
                 : sso?.status === "confirm"
-                  ? "ยืนยันบัญชีของคุณ"
+                  ? t("ยืนยันบัญชีของคุณ")
                   : sso
-                    ? "เข้าสู่ระบบด้วย KKU Account"
-                    : "เข้าสู่ระบบ COCO TAS"}
+                    ? t("เข้าสู่ระบบด้วย KKU Account")
+                    : t("เข้าสู่ระบบ COCO TAS")}
             </h1>
             <p className="text-sm text-muted mt-1.5">
               {challenge
                 ? (useRecoveryCode
-                  ? "กรอกรหัสสำรองหนึ่งชุดที่คุณบันทึกไว้ตอนตั้งค่า 2FA"
-                  : "กรอกรหัส 6 หลักจากแอปยืนยันตัวตนของคุณ")
+                  ? t("กรอกรหัสสำรองหนึ่งชุดที่คุณบันทึกไว้ตอนตั้งค่า 2FA")
+                  : t("กรอกรหัส 6 หลักจากแอปยืนยันตัวตนของคุณ"))
                 : sso?.status === "confirm"
-                  ? "ตรวจสอบชื่อและอีเมลให้ถูกต้องก่อนเข้าสู่ระบบ"
+                  ? t("ตรวจสอบชื่อและอีเมลให้ถูกต้องก่อนเข้าสู่ระบบ")
                   : sso
-                    ? "ตรวจสอบบัญชีที่กำลังจะเข้าสู่ระบบก่อนดำเนินการต่อ"
-                  : "ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน วิทยาลัยการคอมพิวเตอร์"}
+                    ? t("ตรวจสอบบัญชีที่กำลังจะเข้าสู่ระบบก่อนดำเนินการต่อ")
+                  : t("ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน วิทยาลัยการคอมพิวเตอร์")}
             </p>
           </div>
 
@@ -523,8 +531,8 @@ export default function LoginForm({
               <Alert
                 status={REASON_INFO[reason].status}
                 icon={REASON_INFO[reason].icon}
-                title={REASON_INFO[reason].title}
-                description={REASON_INFO[reason].description}
+                title={t(REASON_INFO[reason].title)}
+                description={t(REASON_INFO[reason].description)}
               />
             </div>
           )}
@@ -533,7 +541,7 @@ export default function LoginForm({
               {challenge ? (
               <form onSubmit={onSubmit2FA} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2 items-center">
-                  <Label>{useRecoveryCode ? "รหัสสำรอง" : "รหัสยืนยันตัวตน"}</Label>
+                  <Label>{useRecoveryCode ? t("รหัสสำรอง") : t("รหัสยืนยันตัวตน")}</Label>
                   {useRecoveryCode ? (
                     <TextField
                       name="recovery-code"
@@ -572,14 +580,14 @@ export default function LoginForm({
                   {codeError && <FieldError>{codeError}</FieldError>}
                   <Description className="text-center">
                     {useRecoveryCode
-                      ? "แต่ละรหัสสำรองใช้ได้เพียงครั้งเดียว"
-                      : "เปิดแอปยืนยันตัวตน (เช่น Google Authenticator) เพื่อดูรหัส"}
+                      ? t("แต่ละรหัสสำรองใช้ได้เพียงครั้งเดียว")
+                      : t("เปิดแอปยืนยันตัวตน (เช่น Google Authenticator) เพื่อดูรหัส")}
                   </Description>
                 </div>
 
                 <Button type="submit" size="lg" fullWidth isPending={loading}>
                   {loading ? <Spinner color="current" size="sm" /> : <ShieldCheck />}
-                  {loading ? "กำลังตรวจสอบ…" : "ยืนยัน"}
+                  {loading ? t("กำลังตรวจสอบ…") : t("ยืนยัน")}
                 </Button>
 
                 <div className="flex items-center justify-center gap-4">
@@ -587,13 +595,13 @@ export default function LoginForm({
                     className="text-sm cursor-pointer"
                     onPress={() => { setUseRecoveryCode(u => !u); setCode(""); setCodeError(null); }}
                   >
-                    {useRecoveryCode ? "ใช้รหัสจากแอปยืนยันตัวตนแทน" : "ใช้รหัสสำรองแทน"}
+                    {useRecoveryCode ? t("ใช้รหัสจากแอปยืนยันตัวตนแทน") : t("ใช้รหัสสำรองแทน")}
                   </Link>
                   <Link
                     className="text-sm cursor-pointer text-muted"
                     onPress={() => { setChallenge(null); setCode(""); setCodeError(null); setPassword(""); setSso(null); }}
                   >
-                    ยกเลิก
+                    {t("ยกเลิก")}
                   </Link>
                 </div>
               </form>
@@ -604,7 +612,7 @@ export default function LoginForm({
                   // does not jump when the exchange lands.
                   <div className="rounded-2xl border border-border bg-surface shadow-sm">
                     <div className="flex items-center gap-2 px-4 h-12 border-b border-border text-sm text-muted">
-                      <Spinner size="sm" /> กำลังตรวจสอบบัญชี KKU ของคุณ…
+                      <Spinner size="sm" /> {t("กำลังตรวจสอบบัญชี KKU ของคุณ…")}
                     </div>
                     <div className="flex flex-col items-center gap-3 px-5 py-6">
                       <Skeleton className="size-16 rounded-full" />
@@ -615,9 +623,9 @@ export default function LoginForm({
                 )}
                 {sso.status === "error" && (
                   <>
-                    <Alert status="danger" title="เข้าสู่ระบบด้วย KKU ไม่สำเร็จ" description={sso.message} />
+                    <Alert status="danger" title={t("เข้าสู่ระบบด้วย KKU ไม่สำเร็จ")} description={sso.message} />
                     {ssoUrl && !sso.wrongAccount && (
-                      <KkuSsoButton href={ssoUrl}>ลองเข้าสู่ระบบด้วย KKU อีกครั้ง</KkuSsoButton>
+                      <KkuSsoButton href={ssoUrl}>{t("ลองเข้าสู่ระบบด้วย KKU อีกครั้ง")}</KkuSsoButton>
                     )}
                   </>
                 )}
@@ -635,7 +643,7 @@ export default function LoginForm({
                           <span className="text-sm font-medium text-foreground">KKU Account</span>
                           <Chip color="success" variant="soft" size="sm" className="ml-auto">
                             <BadgeCheck className="size-3.5" />
-                            <Chip.Label>ยืนยันตัวตนแล้ว</Chip.Label>
+                            <Chip.Label>{t("ยืนยันตัวตนแล้ว")}</Chip.Label>
                           </Chip>
                         </div>
                         <div className="flex flex-col items-center text-center px-5 pt-6 pb-5">
@@ -654,15 +662,15 @@ export default function LoginForm({
                         <div className="flex items-center gap-2 px-4 py-3 border-t border-border bg-default/40 text-xs text-muted">
                           <ArrowRight className="size-3.5 shrink-0" />
                           <span>
-                            กำลังเข้าสู่ <span className="font-medium text-foreground">COCO TAS</span> ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน
+                            {t.rich("กำลังเข้าสู่ {app} ระบบเบิกจ่ายค่าตอบแทนผู้ช่วยสอน", { app: <span className="font-medium text-foreground">COCO TAS</span> })}
                           </span>
                         </div>
                       </div>
                       <Button size="lg" fullWidth isPending={loading} onPress={onConfirmSSO}>
                         {loading ? <Spinner color="current" size="sm" /> : <LogIn />}
                         {loading
-                          ? "กำลังเข้าสู่ระบบ…"
-                          : first_name ? `เข้าสู่ระบบในชื่อ ${first_name}` : "ยืนยันและเข้าสู่ระบบ"}
+                          ? t("กำลังเข้าสู่ระบบ…")
+                          : first_name ? t("เข้าสู่ระบบในชื่อ {name}", { name: first_name }) : t("ยืนยันและเข้าสู่ระบบ")}
                       </Button>
                     </>
                   );
@@ -671,7 +679,7 @@ export default function LoginForm({
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-3">
                       <Separator className="flex-1" />
-                      <span className="text-xs text-muted">ไม่ใช่บัญชีของคุณ?</span>
+                      <span className="text-xs text-muted">{t("ไม่ใช่บัญชีของคุณ?")}</span>
                       <Separator className="flex-1" />
                     </div>
                     {/* Switching person must end the KKU session (it returns
@@ -683,10 +691,10 @@ export default function LoginForm({
                       className="flex items-center justify-center gap-2 w-full h-11 rounded-xl border border-border bg-surface text-sm font-medium text-foreground transition hover:bg-default/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     >
                       <UserRoundCog className="size-4 text-muted" />
-                      ใช้บัญชี KKU อื่น
+                      {t("ใช้บัญชี KKU อื่น")}
                     </a>
                     <p className="text-center text-xs text-muted">
-                      ระบบจะออกจากบัญชี KKU นี้ให้ก่อน แล้วค่อยเข้าสู่ระบบใหม่
+                      {t("ระบบจะออกจากบัญชี KKU นี้ให้ก่อน แล้วค่อยเข้าสู่ระบบใหม่")}
                     </p>
                   </div>
                 )}
@@ -694,7 +702,7 @@ export default function LoginForm({
                   <div className="flex items-center justify-center">
                     <Link className="text-sm cursor-pointer text-muted" href="/login">
                       <ArrowLeft className="size-3.5 inline mr-1" />
-                      กลับไปหน้าเข้าสู่ระบบ
+                      {t("กลับไปหน้าเข้าสู่ระบบ")}
                     </Link>
                   </div>
                 )}
@@ -704,11 +712,11 @@ export default function LoginForm({
               {emailInCard ? (
                 <>
                   {ssoUrl
-                    ? <KkuSsoButton href={ssoUrl}>เข้าสู่ระบบด้วย KKU Account</KkuSsoButton>
+                    ? <KkuSsoButton href={ssoUrl}>{t("เข้าสู่ระบบด้วย KKU Account")}</KkuSsoButton>
                     : <Skeleton className="h-14 w-full rounded-xl" />}
                   <div className="flex items-center gap-3">
                     <Separator className="flex-1" />
-                    <span className="text-xs text-muted">หรือ</span>
+                    <span className="text-xs text-muted">{t("หรือ")}</span>
                     <Separator className="flex-1" />
                   </div>
                 <Disclosure
@@ -718,7 +726,7 @@ export default function LoginForm({
                 >
                   <Disclosure.Heading>
                     <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 px-4 h-12 text-sm font-medium text-foreground">
-                      เข้าสู่ระบบด้วยอีเมลและรหัสผ่าน
+                      {t("เข้าสู่ระบบด้วยอีเมลและรหัสผ่าน")}
                       <Disclosure.Indicator />
                     </Disclosure.Trigger>
                   </Disclosure.Heading>

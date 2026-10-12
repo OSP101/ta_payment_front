@@ -10,6 +10,7 @@ import {
 import { notify } from "../../lib/notify";
 import { PageHeader, Panel, Button, Alert, Chip, StatusChip, TabLabel, TextArea, Modal } from "../../components/ui";
 import { SkelList } from "../../components/Skeletons";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 type Bucket = "pending" | "approved" | "rejected";
 
@@ -17,9 +18,9 @@ type Bucket = "pending" | "approved" | "rejected";
 // this is the codebase's established look for "a status-bucketed admin queue",
 // not the ad-hoc chip row this page started with.
 const BUCKETS: { id: Bucket; label: string; icon: React.ReactNode }[] = [
-  { id: "pending",  label: "รอตรวจ",      icon: <Clock size={14} /> },
-  { id: "approved", label: "อนุมัติแล้ว", icon: <CheckCircle2 size={14} /> },
-  { id: "rejected", label: "ปฏิเสธแล้ว",  icon: <XCircle size={14} /> },
+  { id: "pending",  label: msg("รอตรวจ"),      icon: <Clock size={14} /> },
+  { id: "approved", label: msg("อนุมัติแล้ว"), icon: <CheckCircle2 size={14} /> },
+  { id: "rejected", label: msg("ปฏิเสธแล้ว"),  icon: <XCircle size={14} /> },
 ];
 
 /**
@@ -30,6 +31,7 @@ const BUCKETS: { id: Bucket; label: string; icon: React.ReactNode }[] = [
  * staff/users/page.tsx's canReset2FA/canUnlock pattern.
  */
 export default function DataDeletionRequestsPage() {
+  const { t } = useI18n();
   const { data: me } = useSWR<Me>("/me");
   const isAdmin = (me?.roles ?? []).includes("admin");
   const [bucket, setBucket] = useState<Bucket>("pending");
@@ -55,8 +57,8 @@ export default function DataDeletionRequestsPage() {
   if (me && !isAdmin) {
     return (
       <div>
-        <PageHeader title="คำขอลบข้อมูล (PDPA)" />
-        <Alert status="warning" title="เฉพาะผู้ดูแลระบบเท่านั้น" description="หน้านี้เข้าถึงได้เฉพาะบัญชีผู้ดูแลระบบ (admin)" />
+        <PageHeader title={t("คำขอลบข้อมูล (PDPA)")} />
+        <Alert status="warning" title={t("เฉพาะผู้ดูแลระบบเท่านั้น")} description={t("หน้านี้เข้าถึงได้เฉพาะบัญชีผู้ดูแลระบบ (admin)")} />
       </div>
     );
   }
@@ -64,17 +66,17 @@ export default function DataDeletionRequestsPage() {
   return (
     <div>
       <PageHeader
-        title="คำขอลบข้อมูล (PDPA)"
-        description="พิจารณาคำขอให้ลบข้อมูลส่วนบุคคลจาก TA — อนุมัติจะปิดใช้งานบัญชีและลบข้อมูลที่ไม่จำเป็นทันที ส่วนข้อมูลที่มีผลทางการเงินจะยังคงถูกเก็บไว้หากมีประวัติเบิกจ่าย"
+        title={t("คำขอลบข้อมูล (PDPA)")}
+        description={t("พิจารณาคำขอให้ลบข้อมูลส่วนบุคคลจาก TA — อนุมัติจะปิดใช้งานบัญชีและลบข้อมูลที่ไม่จำเป็นทันที ส่วนข้อมูลที่มีผลทางการเงินจะยังคงถูกเก็บไว้หากมีประวัติเบิกจ่าย")}
       />
 
       <Tabs variant="secondary" selectedKey={bucket} onSelectionChange={k => setBucket(String(k) as Bucket)}>
         <Tabs.ListContainer>
-          <Tabs.List aria-label="สถานะคำขอลบข้อมูล">
+          <Tabs.List aria-label={t("สถานะคำขอลบข้อมูล")}>
             {BUCKETS.map(b => (
               <Tabs.Tab key={b.id} id={b.id}>
                 <TabLabel icon={b.icon} count={counts[b.id]} active={bucket === b.id}>
-                  {b.label}
+                  {t(b.label)}
                 </TabLabel>
                 <Tabs.Indicator />
               </Tabs.Tab>
@@ -111,9 +113,10 @@ export default function DataDeletionRequestsPage() {
 function RequestList({
   data, error, onReview,
 }: { data?: DataDeletionRequestForReview[]; error?: unknown; onReview: (r: DataDeletionRequestForReview) => void }) {
-  if (error) return <Alert status="danger" title="โหลดข้อมูลไม่สำเร็จ" description={errMessage(error)} />;
+  const { t, intl } = useI18n();
+  if (error) return <Alert status="danger" title={t("โหลดข้อมูลไม่สำเร็จ")} description={errMessage(error)} />;
   if (!data) return <SkelList items={3} icon={false} className="p-4" />;
-  if (data.length === 0) return <div className="text-sm text-muted p-4">ไม่มีคำขอในสถานะนี้</div>;
+  if (data.length === 0) return <div className="text-sm text-muted p-4">{t("ไม่มีคำขอในสถานะนี้")}</div>;
 
   return (
     <div className="flex flex-col divide-y divide-[var(--hairline)]">
@@ -122,12 +125,12 @@ function RequestList({
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-foreground">{r.requester_name}</div>
             <div className="text-xs text-muted">{r.requester_email}</div>
-            {r.reason && <div className="text-xs text-muted mt-1">เหตุผล: {r.reason}</div>}
+            {r.reason && <div className="text-xs text-muted mt-1">{t("เหตุผล: {reason}", { reason: r.reason })}</div>}
             <div className="text-xs text-muted mt-1">
-              ส่งคำขอเมื่อ {new Date(r.requested_at).toLocaleString("th-TH")}
+              {t("ส่งคำขอเมื่อ {at}", { at: new Date(r.requested_at).toLocaleString(intl) })}
             </div>
             {r.review_note && (
-              <div className="text-xs text-muted mt-1">หมายเหตุการพิจารณา: {r.review_note}</div>
+              <div className="text-xs text-muted mt-1">{t("หมายเหตุการพิจารณา: {note}", { note: r.review_note })}</div>
             )}
             {/* PDPA-01: status=approved does not mean the files are actually
                 gone yet — scrub_completed_at is the real signal. The
@@ -135,21 +138,21 @@ function RequestList({
                 request that has been stuck for a while. */}
             {r.status === "approved" && !r.scrub_completed_at && (
               <div className="text-xs text-danger mt-1">
-                ⚠ ลบไฟล์เอกสาร/รูปโปรไฟล์ยังไม่สำเร็จ — ระบบจะลองใหม่อัตโนมัติ
+                {t("⚠ ลบไฟล์เอกสาร/รูปโปรไฟล์ยังไม่สำเร็จ — ระบบจะลองใหม่อัตโนมัติ")}
                 {r.scrub_error && <> ({r.scrub_error})</>}
               </div>
             )}
           </div>
           <Chip tone={r.has_payment_history ? "warn" : "neutral"}>
-            {r.has_payment_history ? "มีประวัติจ่ายเงินแล้ว" : "ไม่มีประวัติจ่ายเงิน"}
+            {r.has_payment_history ? t("มีประวัติจ่ายเงินแล้ว") : t("ไม่มีประวัติจ่ายเงิน")}
           </Chip>
           {r.status === "approved" && !r.scrub_completed_at && (
-            <Chip tone="danger">ลบไฟล์ค้าง</Chip>
+            <Chip tone="danger">{t("ลบไฟล์ค้าง")}</Chip>
           )}
           <StatusChip status={r.status} />
           {r.status === "pending" && (
             <Button variant="secondary" size="sm" onClick={() => onReview(r)}>
-              พิจารณา
+              {t("พิจารณา")}
             </Button>
           )}
         </div>
@@ -161,18 +164,19 @@ function RequestList({
 function ReviewModal({
   req, onClose, onDone,
 }: { req: DataDeletionRequestForReview; onClose: () => void; onDone: () => void }) {
+  const { t } = useI18n();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
 
   async function decide(approve: boolean) {
     if (!approve && !note.trim()) {
-      notify.error("กรุณาระบุเหตุผลที่ปฏิเสธคำขอ");
+      notify.error(t("กรุณาระบุเหตุผลที่ปฏิเสธคำขอ"));
       return;
     }
     setBusy(approve ? "approve" : "reject");
     try {
       await reviewDeletionRequest(req.id, approve, note);
-      notify.success(approve ? "อนุมัติคำขอแล้ว" : "ปฏิเสธคำขอแล้ว");
+      notify.success(approve ? t("อนุมัติคำขอแล้ว") : t("ปฏิเสธคำขอแล้ว"));
       onDone();
     } catch (e) {
       notify.error(e);
@@ -182,31 +186,31 @@ function ReviewModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="พิจารณาคำขอลบข้อมูล" size="md">
+    <Modal open onClose={onClose} title={t("พิจารณาคำขอลบข้อมูล")} size="md">
       <div className="flex flex-col gap-3">
         <div className="text-sm text-muted">{req.requester_name} ({req.requester_email})</div>
 
         <Alert
           status={req.has_payment_history ? "warning" : "default"}
-          title={req.has_payment_history ? "มีประวัติจ่ายเงินแล้ว — จะลบบางส่วน" : "ไม่มีประวัติจ่ายเงิน — จะลบข้อมูลทั้งหมดที่ทำได้"}
+          title={req.has_payment_history ? t("มีประวัติจ่ายเงินแล้ว — จะลบบางส่วน") : t("ไม่มีประวัติจ่ายเงิน — จะลบข้อมูลทั้งหมดที่ทำได้")}
           description={
             req.has_payment_history
-              ? "หากอนุมัติ: ปิดใช้งานบัญชี ลบ 2FA/รูปโปรไฟล์/เซสชัน/เอกสารที่อัปโหลด — เลขบัตรประชาชนและประวัติชั่วโมงสอนยังคงถูกเก็บไว้ตามข้อบังคับทางบัญชี/ภาษี"
-              : "หากอนุมัติ: ปิดใช้งานบัญชี ลบ 2FA/รูปโปรไฟล์/เซสชัน/เอกสารที่อัปโหลด รวมถึงเลขบัตรประชาชนที่จัดเก็บไว้"
+              ? t("หากอนุมัติ: ปิดใช้งานบัญชี ลบ 2FA/รูปโปรไฟล์/เซสชัน/เอกสารที่อัปโหลด — เลขบัตรประชาชนและประวัติชั่วโมงสอนยังคงถูกเก็บไว้ตามข้อบังคับทางบัญชี/ภาษี")
+              : t("หากอนุมัติ: ปิดใช้งานบัญชี ลบ 2FA/รูปโปรไฟล์/เซสชัน/เอกสารที่อัปโหลด รวมถึงเลขบัตรประชาชนที่จัดเก็บไว้")
           }
         />
 
-        <TextArea value={note} onChange={e => setNote(e.target.value)} placeholder="หมายเหตุ (บังคับหากปฏิเสธ)" rows={3} />
+        <TextArea value={note} onChange={e => setNote(e.target.value)} placeholder={t("หมายเหตุ (บังคับหากปฏิเสธ)")} rows={3} />
 
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={() => decide(true)} disabled={!!busy} isPending={busy === "approve"}>
-            <Check size={14} /> อนุมัติ
+            <Check size={14} /> {t("อนุมัติ")}
           </Button>
           <Button variant="danger" onClick={() => decide(false)} disabled={!!busy} isPending={busy === "reject"}>
-            <X size={14} /> ปฏิเสธ
+            <X size={14} /> {t("ปฏิเสธ")}
           </Button>
           <Button variant="ghost" onClick={onClose} disabled={!!busy}>
-            ยกเลิก
+            {t("ยกเลิก")}
           </Button>
         </div>
       </div>

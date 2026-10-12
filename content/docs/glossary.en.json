@@ -1,0 +1,12 @@
+{
+  "section": { "term": "Section", "def": "A class group of a course (e.g. Sec 1, Sec 2). Each section has its own teaching schedule and number of students. A TA may look after several sections at once." },
+  "งวดเดือน": { "term": "Billing month", "def": "One monthly disbursement round, with its own opening and closing dates, set in Settings → Term calendar." },
+  "ล็อก": { "term": "Locked", "def": "A state in which nothing can be edited any more. It happens once staff have downloaded the disbursement documents for that month, so the data cannot change after the real documents have gone out. Only an administrator can unlock it." },
+  "WBA": { "term": "WBA", "def": "No regular class schedule. Available to undergraduate TAs in year 4 or above and to master's or doctoral TAs. Tick this box on the class schedule page instead of drawing a schedule, and the system skips the time-clash check." },
+  "ปะหน้า": { "term": "Direct-payment transfer cover sheet (ปะหน้าจ่ายตรง)", "def": "A payment summary sheet attached to the front of the disbursement documents sent to finance. It is created on the budget summary and transfer cover sheet page." },
+  "รักษาการแทน": { "term": "Acting on behalf (รักษาการแทน)", "def": "Wording the system prints on official documents automatically when the chosen signer does not hold the position that should sign directly (for example, not the actual dean or head of department)." },
+  "TDBM": { "term": "TDBM", "def": "The college's central data system, from which COCO TAS automatically syncs public holidays and make-up teaching days every hour." },
+  "แบบแจ้งเจ้าหนี้": { "term": "Creditor form", "def": "One of the 3 documents a TA must submit before they can be paid. The system fills in the PDF form automatically from your profile." },
+  "2FA": { "term": "2FA / OTP", "def": "Two-factor authentication with an authenticator app. Required for staff, administrators and executives." },
+  "เพดานงบ": { "term": "Budget cap", "def": "The maximum amount per course set in the system. If approved hours go over the cap, the system automatically spreads the money when exporting." }
+}

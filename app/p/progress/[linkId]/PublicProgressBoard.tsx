@@ -6,6 +6,7 @@ import { Skel, SkelList, SkelRegion } from "../../../components/Skeletons";
 import { ViewerRoundBoard, type TermProgress } from "../../../components/DocumentProgressBoard";
 import { useState } from "react";
 import { ApiError } from "../../../lib/api";
+import { msg, useI18n, type TFn } from "../../../lib/i18n/client";
 
 interface PublicOverview {
   term_id: string;
@@ -14,15 +15,16 @@ interface PublicOverview {
 }
 
 const SEMESTER_LABELS: Record<string, string> = {
-  "1": "ภาคต้น",
-  "2": "ภาคปลาย",
-  "3": "ภาคฤดูร้อน",
+  "1": msg("ภาคต้น"),
+  "2": msg("ภาคปลาย"),
+  "3": msg("ภาคฤดูร้อน"),
 };
 
-function termHeading(label: string): string {
+function termHeading(t: TFn, label: string): string {
   const [year, sem] = label.split("/");
   if (!year || !sem) return label;
-  return `${SEMESTER_LABELS[sem] ?? `ภาคเรียนที่ ${sem}`} ปีการศึกษา ${year}`;
+  const semester = SEMESTER_LABELS[sem] ? t(SEMESTER_LABELS[sem]) : t("ภาคเรียนที่ {sem}", { sem });
+  return t("{semester} ปีการศึกษา {year}", { semester, year });
 }
 
 /**
@@ -42,6 +44,7 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
     refreshInterval: 60_000,
   });
   const [activeRound, setActiveRound] = useState(1);
+  const { t } = useI18n();
 
   // The term heading, the stage route and the checklist all come from this
   // one response (and a bad link must end on the "not found" panel), so the
@@ -54,11 +57,11 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
       <Panel>
         <EmptyState
           icon={<FileWarning size={28} />}
-          title={notFound ? "ไม่พบลิงก์นี้" : "โหลดข้อมูลไม่สำเร็จ"}
+          title={notFound ? t("ไม่พบลิงก์นี้") : t("โหลดข้อมูลไม่สำเร็จ")}
           description={
             notFound
-              ? "ลิงก์นี้อาจถูกยกเลิกแล้ว หรือพิมพ์ที่อยู่ไม่ถูกต้อง กรุณาติดต่อเจ้าหน้าที่เพื่อขอลิงก์ใหม่"
-              : "กรุณาลองใหม่อีกครั้ง"
+              ? t("ลิงก์นี้อาจถูกยกเลิกแล้ว หรือพิมพ์ที่อยู่ไม่ถูกต้อง กรุณาติดต่อเจ้าหน้าที่เพื่อขอลิงก์ใหม่")
+              : t("กรุณาลองใหม่อีกครั้ง")
           }
         />
       </Panel>
@@ -72,8 +75,8 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
   return (
     <div className="space-y-3">
       <div>
-        <h1 className="text-lg font-bold text-ink-1">{termHeading(data.term_label)}</h1>
-        <p className="text-sm text-ink-2 mt-0.5">ความคืบหน้าการเดินเอกสารเบิกจ่ายผู้ช่วยสอน</p>
+        <h1 className="text-lg font-bold text-ink-1">{termHeading(t, data.term_label)}</h1>
+        <p className="text-sm text-ink-2 mt-0.5">{t("ความคืบหน้าการเดินเอกสารเบิกจ่ายผู้ช่วยสอน")}</p>
       </div>
       {showTabs && (
         <div className="inline-flex rounded-lg border border-border p-0.5">
@@ -87,7 +90,7 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
                 (activeRound === r.round ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
               }
             >
-              {r.round_label || `รอบ ${r.round}`}
+              {r.round_label || t("รอบ {n}", { n: r.round })}
             </button>
           ))}
         </div>

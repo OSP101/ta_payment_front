@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { LogIn, ShieldAlert } from "lucide-react";
 import { sameOriginPath } from "../../lib/safePath";
+import { useI18n } from "../../lib/i18n/client";
 
 /**
  * What the manual drawer's frame (/docs-embed) shows instead of redirecting.
@@ -12,6 +13,7 @@ import { sameOriginPath } from "../../lib/safePath";
  * to the page the reader was actually on.
  */
 export default function EmbedNotice({ kind, audience }: { kind: "expired" | "forbidden"; audience: string }) {
+  const { t } = useI18n();
   const fallback = `/docs/${audience}`;
   const [next, setNext] = useState(fallback);
 
@@ -37,21 +39,21 @@ export default function EmbedNotice({ kind, audience }: { kind: "expired" | "for
     return (
       <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted">
         <ShieldAlert size={28} className="text-slate-400" />
-        <div className="font-medium text-foreground">คุณไม่มีสิทธิ์อ่านคู่มือส่วนนี้</div>
+        <div className="font-medium text-foreground">{t("คุณไม่มีสิทธิ์อ่านคู่มือส่วนนี้")}</div>
       </div>
     );
   }
   return (
     <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted">
       <LogIn size={28} className="text-slate-400" />
-      <div className="font-medium text-foreground">เซสชันหมดอายุ</div>
-      <div>กรุณาเข้าสู่ระบบอีกครั้งเพื่ออ่านคู่มือ</div>
+      <div className="font-medium text-foreground">{t("เซสชันหมดอายุ")}</div>
+      <div>{t("กรุณาเข้าสู่ระบบอีกครั้งเพื่ออ่านคู่มือ")}</div>
       <a
         href={`/login?next=${encodeURIComponent(next)}`}
         target="_top"
         className="inline-flex items-center gap-1.5 rounded-lg bg-(--brand) px-3.5 py-2 text-sm font-medium text-white hover:opacity-90"
       >
-        เข้าสู่ระบบอีกครั้ง
+        {t("เข้าสู่ระบบอีกครั้ง")}
       </a>
     </div>
   );

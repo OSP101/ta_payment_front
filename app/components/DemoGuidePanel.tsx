@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 import { isDemoMode, type DemoScenarioEvent, type DemoProblemEvent, type DemoActorRole, type DemoSubStep } from "../lib/api";
 import { useScenarioEngine, type RunState } from "../lib/useScenarioEngine";
-import { STEP_GUIDES, DEMO_ACCOUNT_LABELS } from "../lib/demoStepGuides";
+import { STEP_GUIDES, DEMO_ACCOUNT_LABELS, guideText, type GuideLine } from "../lib/demoStepGuides";
+import { msg, useI18n } from "../lib/i18n/client";
 import { ConfirmDialog, Tip } from "./ui";
 import DemoPresentationButton from "./DemoPresentationButton";
 import { Skel, SkelRegion, SkelValue } from "./Skeletons";
@@ -38,8 +39,8 @@ const EXPANDED_W = 384; // px — matches Tailwind's w-96, kept numeric for the 
 const COLLAPSED_W = 44;
 
 const ACTOR_LABEL: Record<DemoActorRole, string> = {
-  staff: "เจ้าหน้าที่",
-  lecturer: "อาจารย์",
+  staff: msg("เจ้าหน้าที่"),
+  lecturer: msg("อาจารย์"),
   ta: "TA",
 };
 const ACTOR_ICON: Record<DemoActorRole, typeof Users> = {
@@ -64,13 +65,14 @@ const ACTOR_ICON: Record<DemoActorRole, typeof Users> = {
  *  since every record there is done from the same staff login. */
 function SubStepRow({ sub, lines, expanded, onToggle, currentEmail, onGoTo, onSwitchAndGo }: {
   sub: DemoSubStep;
-  lines: string[];
+  lines: GuideLine[];
   expanded: boolean;
   onToggle: () => void;
   currentEmail?: string;
   onGoTo: (path: string) => void;
   onSwitchAndGo: (email: string, path: string) => void;
 }) {
+  const { t } = useI18n();
   const path = sub.actor_path;
   const isCurrentActor = !!sub.actor && sub.actor === currentEmail;
   return (
@@ -96,7 +98,7 @@ function SubStepRow({ sub, lines, expanded, onToggle, currentEmail, onGoTo, onSw
         <div className="flex flex-col gap-2 px-2.5 pb-2.5">
           <ol className="flex flex-col gap-1 pl-5 text-xs text-muted list-decimal">
             {lines.map((line, i) => (
-              <li key={i}>{line}</li>
+              <li key={i}>{guideText(t, line)}</li>
             ))}
           </ol>
           {sub.actor && path && (
@@ -107,7 +109,7 @@ function SubStepRow({ sub, lines, expanded, onToggle, currentEmail, onGoTo, onSw
                 onPress={() => (isCurrentActor ? onGoTo(path) : onSwitchAndGo(sub.actor!, path))}
               >
                 {isCurrentActor ? <MousePointerClick size={13} /> : <ArrowRightLeft size={13} />}
-                {isCurrentActor ? "ไปทำเอง" : `สลับไปเป็น ${DEMO_ACCOUNT_LABELS[sub.actor] ?? sub.actor} แล้วไปทำเอง`}
+                {isCurrentActor ? t("ไปทำเอง") : t("สลับไปเป็น {account} แล้วไปทำเอง", { account: DEMO_ACCOUNT_LABELS[sub.actor] ? t(DEMO_ACCOUNT_LABELS[sub.actor]) : sub.actor })}
               </Button>
             </div>
           )}
@@ -183,6 +185,7 @@ function StepBody({
   onSwitchAndGo: (email: string, path: string) => void;
   onRecheck: () => void;
 }) {
+  const { t } = useI18n();
   const done = "done" in item && item.done;
   const subSteps = "sub_steps" in item ? item.sub_steps : undefined;
   const eventActorPath = "actor_path" in item ? item.actor_path : undefined;
@@ -209,14 +212,15 @@ function StepBody({
         <div className="flex items-start gap-1.5 text-xs text-muted bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
           <ActorIcon size={13} className="shrink-0 mt-0.5" />
           <span>
-            ขั้นตอนของ<span className="font-medium text-foreground">{ACTOR_LABEL[actorRole]}</span> — ไม่ใช่ขั้นตอนของ
-            บัญชีนี้ <span className="font-medium text-foreground">ไม่ต้องทำเอง</span> กดปุ่มด้านล่างให้ระบบทำแทน
-            แล้วจะไปขั้นตอนถัดไปให้อัตโนมัติ
+            {t.rich("ขั้นตอนของ{actor} — ไม่ใช่ขั้นตอนของ บัญชีนี้ {noNeed} กดปุ่มด้านล่างให้ระบบทำแทน แล้วจะไปขั้นตอนถัดไปให้อัตโนมัติ", {
+              actor: <span className="font-medium text-foreground">{t(ACTOR_LABEL[actorRole])}</span>,
+              noNeed: <span className="font-medium text-foreground">{t("ไม่ต้องทำเอง")}</span>,
+            })}
           </span>
         </div>
         <Button size="md" fullWidth variant="primary" isPending={state.status === "running"} onPress={onRun}>
           {state.status === "running" ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-          กดให้ระบบทำขั้นตอนนี้แทน
+          {t("กดให้ระบบทำขั้นตอนนี้แทน")}
         </Button>
         {state.status === "done" && state.message && (
           <div className="flex items-start gap-1.5 text-sm text-success">
@@ -241,8 +245,9 @@ function StepBody({
         <div className="flex items-start gap-1.5 text-xs text-muted bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
           <ActorIcon size={13} className="shrink-0 mt-0.5" />
           <span>
-            ขั้นตอนของ<span className="font-medium text-foreground">{ACTOR_LABEL[actorRole]}</span> —
-            ทำงานได้ตามปกติ แต่บัญชีนี้เข้าหน้าจริงของขั้นตอนนี้ไม่ได้ จึงไม่พาไปหน้า
+            {t.rich("ขั้นตอนของ{actor} — ทำงานได้ตามปกติ แต่บัญชีนี้เข้าหน้าจริงของขั้นตอนนี้ไม่ได้ จึงไม่พาไปหน้า", {
+              actor: <span className="font-medium text-foreground">{t(ACTOR_LABEL[actorRole])}</span>,
+            })}
           </span>
         </div>
       )}
@@ -253,12 +258,12 @@ function StepBody({
             {!hasPerSubActor && canAct && (
               <Button size="sm" variant="primary" onPress={onGoToStep}>
                 <MousePointerClick size={14} />
-                ไปทำเอง
+                {t("ไปทำเอง")}
               </Button>
             )}
             <Button size="sm" variant="tertiary" isPending={state.status === "running"} onPress={onRun}>
               {state.status === "running" ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-              ให้ระบบทำส่วนที่เหลือให้อัตโนมัติ
+              {t("ให้ระบบทำส่วนที่เหลือให้อัตโนมัติ")}
             </Button>
           </div>
 
@@ -279,7 +284,7 @@ function StepBody({
               {done && guide._after && (
                 <div className="flex flex-col gap-1 text-xs text-warning bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
                   {guide._after.map((line, i) => (
-                    <span key={i}>{line}</span>
+                    <span key={i}>{guideText(t, line)}</span>
                   ))}
                 </div>
               )}
@@ -287,7 +292,7 @@ function StepBody({
           ) : (
             <ol className="flex flex-col gap-1 pl-4 text-xs text-muted list-decimal">
               {(guide._flat ?? []).map((line, i) => (
-                <li key={i}>{line}</li>
+                <li key={i}>{guideText(t, line)}</li>
               ))}
             </ol>
           )}
@@ -298,7 +303,7 @@ function StepBody({
             className="inline-flex w-fit items-center gap-1 text-xs text-muted hover:text-foreground"
           >
             <RotateCw size={12} />
-            ตรวจสอบอีกครั้ง
+            {t("ตรวจสอบอีกครั้ง")}
           </button>
         </>
       ) : (
@@ -310,7 +315,7 @@ function StepBody({
             onPress={onRun}
           >
             {state.status === "running" ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-            {state.status === "done" ? "ทำอีกครั้ง" : "ทำขั้นตอนนี้"}
+            {state.status === "done" ? t("ทำอีกครั้ง") : t("ทำขั้นตอนนี้")}
           </Button>
         </div>
       )}
@@ -332,7 +337,7 @@ function StepBody({
           href={relatedPath}
           className="inline-flex w-fit items-center gap-1 text-sm font-medium text-accent hover:underline"
         >
-          ดูผลจริงที่หน้านี้
+          {t("ดูผลจริงที่หน้านี้")}
           <ArrowUpRight size={13} />
         </Link>
       )}
@@ -362,6 +367,7 @@ function StepBody({
  * pattern as DemoBanner — see that file's doc comment for why.
  */
 export default function DemoGuidePanel() {
+  const { t, intl } = useI18n();
   const [active, setActive] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -555,24 +561,24 @@ export default function DemoGuidePanel() {
             type="button"
             onClick={() => setCollapsedPersistent(false)}
             className="flex flex-1 flex-col items-center gap-3 py-4 text-muted hover:text-foreground"
-            aria-label="เปิดแผงเครื่องจำลองเหตุการณ์"
+            aria-label={t("เปิดแผงเครื่องจำลองเหตุการณ์")}
           >
             <PanelRightOpen size={18} />
             <span className="text-[11px] font-medium tabular-nums">
               {engine.events ? `${doneCount}/${total}` : <SkelValue className="h-3 w-6" />}
             </span>
-            <span className="[writing-mode:vertical-rl] text-xs font-medium">เครื่องจำลองเหตุการณ์</span>
+            <span className="[writing-mode:vertical-rl] text-xs font-medium">{t("เครื่องจำลองเหตุการณ์")}</span>
           </button>
         ) : (
           <>
             <div className="flex items-center gap-2 border-b border-border px-4 h-14 shrink-0">
               <FlaskConical size={17} className="text-accent shrink-0" />
-              <div className="font-semibold text-sm text-foreground truncate">เครื่องจำลองเหตุการณ์</div>
-              <Tip content="ย่อแผงเครื่องจำลองเหตุการณ์"><button
+              <div className="font-semibold text-sm text-foreground truncate">{t("เครื่องจำลองเหตุการณ์")}</div>
+              <Tip content={t("ย่อแผงเครื่องจำลองเหตุการณ์")}><button
                 type="button"
                 onClick={() => setCollapsedPersistent(true)}
                 className="ml-auto shrink-0 text-muted hover:text-foreground"
-                aria-label="ย่อแผงเครื่องจำลองเหตุการณ์"
+                aria-label={t("ย่อแผงเครื่องจำลองเหตุการณ์")}
               >
                 <PanelRightClose size={18} />
               </button></Tip>
@@ -581,10 +587,10 @@ export default function DemoGuidePanel() {
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
               <div>
                 <div className="flex items-center justify-between text-xs text-muted mb-1">
-                  <span>ความคืบหน้าเส้นทางหลัก</span>
+                  <span>{t("ความคืบหน้าเส้นทางหลัก")}</span>
                   <span className="tabular-nums">{engine.events ? `${doneCount}/${total}` : <SkelValue className="h-3 w-8" />}</span>
                 </div>
-                <ProgressBar aria-label="ความคืบหน้า" value={progressPct} className="w-full">
+                <ProgressBar aria-label={t("ความคืบหน้า")} value={progressPct} className="w-full">
                   <ProgressBar.Track>
                     <ProgressBar.Fill />
                   </ProgressBar.Track>
@@ -593,13 +599,13 @@ export default function DemoGuidePanel() {
 
               <Tabs>
                 <Tabs.ListContainer>
-                  <Tabs.List aria-label="ประเภทเหตุการณ์จำลอง">
+                  <Tabs.List aria-label={t("ประเภทเหตุการณ์จำลอง")}>
                     <Tabs.Tab id="path">
-                      เส้นทางหลัก
+                      {t("เส้นทางหลัก")}
                       <Tabs.Indicator />
                     </Tabs.Tab>
                     <Tabs.Tab id="problems">
-                      เคสที่ต้องรับมือ
+                      {t("เคสที่ต้องรับมือ")}
                       <Tabs.Indicator />
                     </Tabs.Tab>
                   </Tabs.List>
@@ -610,7 +616,7 @@ export default function DemoGuidePanel() {
                 </Tabs.Panel>
                 <Tabs.Panel id="problems" className="pt-3">
                   <p className="text-xs text-muted mb-3">
-                    เคสเหล่านี้จำลองสิ่งที่ผิดพลาดจริง เพื่อดูว่าระบบปฏิเสธถูกต้องหรือไม่ — กดซ้ำได้เสมอ ไม่ต้องเรียงลำดับ
+                    {t("เคสเหล่านี้จำลองสิ่งที่ผิดพลาดจริง เพื่อดูว่าระบบปฏิเสธถูกต้องหรือไม่ — กดซ้ำได้เสมอ ไม่ต้องเรียงลำดับ")}
                   </p>
                   {renderList(engine.problems, engine.runProblem)}
                 </Tabs.Panel>
@@ -621,7 +627,7 @@ export default function DemoGuidePanel() {
               <div className="border-t border-border pt-4 flex flex-col gap-2">
                 <Button size="sm" variant="tertiary" fullWidth isPending={engine.savingCheckpoint} onPress={engine.saveCheckpoint}>
                   <Bookmark size={14} />
-                  บันทึกจุดตรวจสอบ
+                  {t("บันทึกจุดตรวจสอบ")}
                 </Button>
                 <Button
                   size="sm"
@@ -631,12 +637,11 @@ export default function DemoGuidePanel() {
                   onPress={() => setConfirmRestore(true)}
                 >
                   <History size={14} />
-                  ย้อนกลับไปจุดตรวจสอบ
+                  {t("ย้อนกลับไปจุดตรวจสอบ")}
                 </Button>
                 {engine.checkpointSavedAt && (
                   <p className="text-[11px] text-muted">
-                    บันทึกล่าสุด:{" "}
-                    {new Date(engine.checkpointSavedAt).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                    {t("บันทึกล่าสุด: {when}", { when: new Date(engine.checkpointSavedAt).toLocaleString(intl, { dateStyle: "short", timeStyle: "short" }) })}
                   </p>
                 )}
               </div>
@@ -644,7 +649,7 @@ export default function DemoGuidePanel() {
               <div className="border-t border-border pt-4">
                 <Button size="sm" variant="tertiary" fullWidth onPress={() => setConfirmReset(true)}>
                   <RotateCcw size={14} />
-                  เริ่มห้องทดลองใหม่
+                  {t("เริ่มห้องทดลองใหม่")}
                 </Button>
               </div>
             </div>
@@ -656,9 +661,9 @@ export default function DemoGuidePanel() {
         open={confirmReset}
         onClose={() => setConfirmReset(false)}
         onConfirm={engine.resetWorkspace}
-        title="เริ่มห้องทดลองใหม่ทั้งหมด?"
-        message="ข้อมูลทั้งหมดที่จำลองไว้ในห้องนี้ (ปีการศึกษา รายวิชา คำขอ TA เอกสาร บันทึกเวลา ฯลฯ) จะถูกลบและสร้างใหม่ตั้งแต่ต้น การกระทำนี้ย้อนกลับไม่ได้"
-        confirmLabel="เริ่มใหม่"
+        title={t("เริ่มห้องทดลองใหม่ทั้งหมด?")}
+        message={t("ข้อมูลทั้งหมดที่จำลองไว้ในห้องนี้ (ปีการศึกษา รายวิชา คำขอ TA เอกสาร บันทึกเวลา ฯลฯ) จะถูกลบและสร้างใหม่ตั้งแต่ต้น การกระทำนี้ย้อนกลับไม่ได้")}
+        confirmLabel={t("เริ่มใหม่")}
         danger
         isPending={engine.resetting}
         icon={<RotateCcw size={18} />}
@@ -668,9 +673,9 @@ export default function DemoGuidePanel() {
         open={confirmRestore}
         onClose={() => setConfirmRestore(false)}
         onConfirm={() => { engine.restoreCheckpoint(); setConfirmRestore(false); }}
-        title="ย้อนกลับไปจุดตรวจสอบ?"
-        message="ข้อมูลทั้งหมดในห้องนี้จะกลับไปเป็นแบบตอนที่บันทึกจุดตรวจสอบไว้ล่าสุด สิ่งที่ทำเพิ่มหลังจากนั้นจะหายไป"
-        confirmLabel="ย้อนกลับ"
+        title={t("ย้อนกลับไปจุดตรวจสอบ?")}
+        message={t("ข้อมูลทั้งหมดในห้องนี้จะกลับไปเป็นแบบตอนที่บันทึกจุดตรวจสอบไว้ล่าสุด สิ่งที่ทำเพิ่มหลังจากนั้นจะหายไป")}
+        confirmLabel={t("ย้อนกลับ")}
         danger
         isPending={engine.restoringCheckpoint}
         icon={<History size={18} />}

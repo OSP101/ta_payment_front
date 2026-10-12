@@ -13,6 +13,7 @@ import { useTerm } from "../../TermContext";
 import { ReviewGrid } from "./ReviewGrid";
 import { courseCodeLabel } from "../../../lib/courseCode";
 import { useTitleScope } from "../../../components/Shell";
+import { useI18n } from "../../../lib/i18n/client";
 
 /**
  * One course, top to bottom: check the months, then send the package.
@@ -50,6 +51,7 @@ interface ExportBatch {
 
 export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
+  const { t } = useI18n();
   const { termId } = useTerm();
   const { data: tc } = useSWR<TC>(`/teaching-courses/${tcId}`);
   useTitleScope(tc ? `${courseCodeLabel(tc)} ${tc.name_th}` : undefined);
@@ -81,18 +83,18 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
         href="/staff/payouts"
         className="mb-2 inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-[var(--brand)]"
       >
-        <ArrowLeft size={16} /> กลับไปรายการวิชา
+        <ArrowLeft size={16} /> {t("กลับไปรายการวิชา")}
       </Link>
 
       <PageHeader
         title={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : <SkelValue className="h-7 w-72 max-w-full" />}
-        description="ตรวจรายเดือนด้านบน แล้วส่งออกด้านล่าง"
+        description={t("ตรวจรายเดือนด้านบน แล้วส่งออกด้านล่าง")}
       />
 
       <Panel
         data-tour="payout-grid"
-        title="ตรวจรายเดือน"
-        description="แต่ละช่องคือ TA หนึ่งคนในหนึ่งเดือน กดปุ่ม “ดู” เพื่อเปิดรายการรายวัน"
+        title={t("ตรวจรายเดือน")}
+        description={t("แต่ละช่องคือ TA หนึ่งคนในหนึ่งเดือน กดปุ่ม “ดู” เพื่อเปิดรายการรายวัน")}
         className="mb-3"
       >
         <ReviewGrid tcId={tcId} onChanged={revalidateAll} />
@@ -104,10 +106,10 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
 
       <div data-tour="payout-extras" className="mt-3 flex flex-wrap gap-2">
         <Button variant="ghost" size="sm" onPress={() => setShowEditor(v => !v)}>
-          <ClipboardEdit size={14} /> {showEditor ? "ซ่อนบันทึกเวลา" : "ดู/แก้ไขบันทึกเวลา"}
+          <ClipboardEdit size={14} /> {showEditor ? t("ซ่อนบันทึกเวลา") : t("ดู/แก้ไขบันทึกเวลา")}
         </Button>
         <Button variant="ghost" size="sm" onPress={() => setShowHistory(true)}>
-          <History size={14} /> ประวัติการส่งออก
+          <History size={14} /> {t("ประวัติการส่งออก")}
         </Button>
       </div>
 
@@ -123,6 +125,7 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
 }
 
 function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void }) {
+  const { t } = useI18n();
   const { data } = useSWR<ExportBatch[]>(`/exports/course/${tcId}/history`);
   const [downloading, setDownloading] = useState<string | null>(null);
 
@@ -139,7 +142,7 @@ function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void })
       el.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      notify.error(e, "ดาวน์โหลดไม่สำเร็จ");
+      notify.error(e, t("ดาวน์โหลดไม่สำเร็จ"));
     } finally {
       setDownloading(null);
     }
@@ -149,25 +152,25 @@ function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void })
     <Modal
       open
       onClose={onClose}
-      title="ประวัติการส่งออก"
+      title={t("ประวัติการส่งออก")}
       icon={<History size={20} />}
       size="xl"
-      footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
+      footer={<Button variant="ghost" onClick={onClose}>{t("ปิด")}</Button>}
     >
       {!data ? (
         <SkelRows rows={4} columns={5} />
       ) : data.length === 0 ? (
-        <p className="text-sm text-muted">ยังไม่เคยส่งออกวิชานี้</p>
+        <p className="text-sm text-muted">{t("ยังไม่เคยส่งออกวิชานี้")}</p>
       ) : (
         <div className="max-h-[28rem] overflow-y-auto overflow-x-auto rounded-lg border border-border">
           <table className="data-table w-full text-sm">
             <thead className="sticky top-0 bg-surface-secondary text-ink-2">
               <tr>
-                <th className="px-3 py-2 text-left">เวลา</th>
-                <th className="px-3 py-2 text-left">ผู้ส่งออก</th>
-                <th className="px-3 py-2 text-left">ฉบับ</th>
-                <th className="px-3 py-2 text-right">จำนวน TA</th>
-                <th className="px-3 py-2 text-right">ยอดรวม</th>
+                <th className="px-3 py-2 text-left">{t("เวลา")}</th>
+                <th className="px-3 py-2 text-left">{t("ผู้ส่งออก")}</th>
+                <th className="px-3 py-2 text-left">{t("ฉบับ")}</th>
+                <th className="px-3 py-2 text-right">{t("จำนวน TA")}</th>
+                <th className="px-3 py-2 text-right">{t("ยอดรวม")}</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -179,13 +182,13 @@ function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void })
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap items-center gap-1">
                       {(b.version ?? 1) > 1 ? (
-                        <Chip tone="info">ฉบับแก้ไข ครั้งที่ {(b.version ?? 1) - 1}</Chip>
+                        <Chip tone="info">{t("ฉบับแก้ไข ครั้งที่ {n}", { n: (b.version ?? 1) - 1 })}</Chip>
                       ) : (
-                        <Chip tone="neutral">ฉบับแรก</Chip>
+                        <Chip tone="neutral">{t("ฉบับแรก")}</Chip>
                       )}
                       {b.superseded_by && (
-                        <Tip content="เดือนในเอกสารนี้ถูกส่งกลับแก้ไขและออกฉบับใหม่แทนแล้ว ใช้ฉบับใหม่ในการเบิกจ่าย">
-                          <span><Chip tone="warn">ถูกแทนที่แล้ว</Chip></span>
+                        <Tip content={t("เดือนในเอกสารนี้ถูกส่งกลับแก้ไขและออกฉบับใหม่แทนแล้ว ใช้ฉบับใหม่ในการเบิกจ่าย")}>
+                          <span><Chip tone="warn">{t("ถูกแทนที่แล้ว")}</Chip></span>
                         </Tip>
                       )}
                     </div>
@@ -204,7 +207,7 @@ function HistoryDialog({ tcId, onClose }: { tcId: string; onClose: () => void })
                       className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
                     >
                       <Download size={12} />
-                      {downloading === b.id ? "กำลังดาวน์โหลด…" : "ดาวน์โหลด"}
+                      {downloading === b.id ? t("กำลังดาวน์โหลด…") : t("ดาวน์โหลด")}
                     </button>
                   </td>
                 </tr>

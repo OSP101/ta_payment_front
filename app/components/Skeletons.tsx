@@ -1,6 +1,7 @@
 "use client";
 import type React from "react";
 import { Card } from "@heroui/react";
+import { msg, useI18n } from "../lib/i18n/client";
 
 /*
  * Shared loading placeholders.
@@ -33,12 +34,13 @@ export function SkelValue({ className = "h-[1em] w-16" }: { className?: string }
 }
 
 /** Announces the loading region once to screen readers; children are the visual placeholder. */
-export function SkelRegion({ label = "กำลังโหลด", className = "", children }: {
+export function SkelRegion({ label = msg("กำลังโหลด"), className = "", children }: {
   label?: string; className?: string; children: React.ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div role="status" aria-live="polite" aria-busy="true" className={className}>
-      <span className="sr-only">{label}</span>
+      <span className="sr-only">{t(label)}</span>
       {children}
     </div>
   );

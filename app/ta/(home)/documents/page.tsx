@@ -23,6 +23,7 @@ import {
   SelectField, Tip,
 } from "../../../components/ui";
 import { Skel, SkelForm, SkelList, SkelRegion, SkelValue } from "../../../components/Skeletons";
+import { msg, useI18n, type TFn } from "../../../lib/i18n/client";
 /* -------------------------------------------------------------------------- */
 /* Upload constraints — enforced in the browser so users get instant feedback  */
 /* and again on the server (see maxDocBytes / kind checks) for real safety.    */
@@ -41,10 +42,10 @@ const ACCEPT_ATTR = ".pdf,application/pdf";
 // Returns null if OK, otherwise a Thai reason describing why the file is
 // rejected. Matches the server-side kinds/limits so the user never uploads
 // something the server will reject anyway.
-function validateUploadFile(f: File): string | null {
+function validateUploadFile(f: File, t: TFn): string | null {
   if (f.size > MAX_UPLOAD_BYTES) {
     const mb = (f.size / (1024 * 1024)).toFixed(2);
-    return `ไฟล์ใหญ่เกิน ${MAX_UPLOAD_MB} MB (${mb} MB) โปรดย่อขนาดก่อนอัปโหลด`;
+    return t("ไฟล์ใหญ่เกิน {max} MB ({mb} MB) โปรดย่อขนาดก่อนอัปโหลด", { max: MAX_UPLOAD_MB, mb });
   }
   // Some browsers omit type for uncommon files; fall back to extension.
   const ext = f.name.toLowerCase().split(".").pop() ?? "";
@@ -52,9 +53,9 @@ function validateUploadFile(f: File): string | null {
   if (!looksPDF) {
     // Name the likely cause: a phone photo is what people actually try first.
     if (["jpg", "jpeg", "png", "heic", "heif", "webp"].includes(ext)) {
-      return "ตอนนี้รับเฉพาะไฟล์ PDF ถ้าถ่ายรูปมา ให้แปลงเป็น PDF ก่อน (แอปกล้อง/สแกนบนมือถือส่วนใหญ่บันทึกเป็น PDF ได้)";
+      return t("ตอนนี้รับเฉพาะไฟล์ PDF ถ้าถ่ายรูปมา ให้แปลงเป็น PDF ก่อน (แอปกล้อง/สแกนบนมือถือส่วนใหญ่บันทึกเป็น PDF ได้)");
     }
-    return "รองรับเฉพาะไฟล์ PDF เท่านั้น";
+    return t("รองรับเฉพาะไฟล์ PDF เท่านั้น");
   }
   return null;
 }
@@ -70,6 +71,7 @@ function PdfDropZone({
   disabled?: boolean;
   label: string;
 }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   // dragenter/dragleave fire for every child the pointer crosses; a counter
   // keeps the highlight from flickering off while still over the box.
@@ -78,7 +80,7 @@ function PdfDropZone({
 
   function take(f: File | undefined) {
     if (!f || disabled) return;
-    const err = validateUploadFile(f);
+    const err = validateUploadFile(f, t);
     if (err) { notify.error(err); return; }
     onPick(f);
   }
@@ -90,7 +92,7 @@ function PdfDropZone({
         role="button"
         tabIndex={disabled ? -1 : 0}
         aria-disabled={disabled || undefined}
-        aria-label={`${label}: ลากไฟล์ PDF มาวาง หรือกดเพื่อเลือกไฟล์`}
+        aria-label={t("{label}: ลากไฟล์ PDF มาวาง หรือกดเพื่อเลือกไฟล์", { label })}
         onClick={() => !disabled && inputRef.current?.click()}
         onKeyDown={e => {
           if (!disabled && (e.key === "Enter" || e.key === " ")) {
@@ -103,7 +105,7 @@ function PdfDropZone({
         onDrop={e => {
           e.preventDefault();
           depth.current = 0; setOver(false);
-          if (e.dataTransfer.files.length > 1) notify.error("วางได้ครั้งละ 1 ไฟล์");
+          if (e.dataTransfer.files.length > 1) notify.error(t("วางได้ครั้งละ 1 ไฟล์"));
           take(e.dataTransfer.files?.[0]);
         }}
         className={
@@ -123,29 +125,29 @@ function PdfDropZone({
         </div>
         <div className="min-w-0 flex-1">
           {over ? (
-            <div className="text-sm font-medium text-[var(--brand)]">ปล่อยเพื่อเลือกไฟล์นี้</div>
+            <div className="text-sm font-medium text-[var(--brand)]">{t("ปล่อยเพื่อเลือกไฟล์นี้")}</div>
           ) : file ? (
             <>
               <div className="truncate text-sm font-medium">{file.name}</div>
               <div className="text-xs text-muted">
-                {(file.size / 1024).toFixed(0)} KB · กดหรือลากไฟล์อื่นมาวางเพื่อเปลี่ยน
+                {t("{kb} KB · กดหรือลากไฟล์อื่นมาวางเพื่อเปลี่ยน", { kb: (file.size / 1024).toFixed(0) })}
               </div>
             </>
           ) : (
             <>
               <div className="text-sm font-medium">
-                ลากไฟล์ PDF มาวางที่นี่ หรือ <span className="text-[var(--brand)] underline underline-offset-2">คลิกเพื่อเลือกไฟล์</span>
+                {t.rich("ลากไฟล์ PDF มาวางที่นี่ หรือ {pick}", { pick: <span className="text-[var(--brand)] underline underline-offset-2">{t("คลิกเพื่อเลือกไฟล์")}</span> })}
               </div>
-              <div className="text-xs text-muted">รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน {MAX_UPLOAD_MB} MB</div>
+              <div className="text-xs text-muted">{t("รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน {max} MB", { max: MAX_UPLOAD_MB })}</div>
             </>
           )}
         </div>
         {file && !disabled && (
-          <Tip content="เอาไฟล์ที่เลือกออก"><button
+          <Tip content={t("เอาไฟล์ที่เลือกออก")}><button
             type="button"
             onClick={e => { e.stopPropagation(); onPick(null); }}
             className="shrink-0 rounded-md p-1 text-muted hover:bg-surface-secondary hover:text-foreground"
-            aria-label="เอาไฟล์ที่เลือกออก"
+            aria-label={t("เอาไฟล์ที่เลือกออก")}
           >
             <XCircle size={18} />
           </button></Tip>
@@ -221,14 +223,14 @@ type StepMeta = {
 // Every step either nationality can have, in page order. `n` is assigned by
 // stepsFor once the list is filtered.
 const ALL_STEPS: Array<Omit<StepMeta, "n"> & { only?: "thai" | "foreign" }> = [
-  { id: "profile",       title: "ข้อมูลส่วนตัว + บัญชี + ลายเซ็น", subtitle: "รหัสนักศึกษา, เลขบัตรประชาชน, บัญชีรับเงิน, ลายเซ็น",         icon: IdCard, only: "thai" },
-  { id: "profile",       title: "ข้อมูลส่วนตัว + บัญชี + ลายเซ็น", subtitle: "รหัสนักศึกษา, เลข Passport, บัญชีรับเงิน, ลายเซ็น",           icon: IdCard, only: "foreign" },
-  { id: "creditor_form", title: "แบบแจ้งเจ้าหนี้ (PDF)",           subtitle: "ตรวจฟอร์มที่ระบบกรอกจากข้อมูลขั้นตอนที่ 1 แล้วยืนยัน",       icon: FileSignature },
-  { id: "national_id",   title: "สำเนาบัตรประชาชน",                subtitle: "รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อบนสำเนา ก่อนอัปโหลด",          icon: CreditCard, only: "thai" },
+  { id: "profile",       title: msg("ข้อมูลส่วนตัว + บัญชี + ลายเซ็น"), subtitle: msg("รหัสนักศึกษา, เลขบัตรประชาชน, บัญชีรับเงิน, ลายเซ็น"),         icon: IdCard, only: "thai" },
+  { id: "profile",       title: msg("ข้อมูลส่วนตัว + บัญชี + ลายเซ็น"), subtitle: msg("รหัสนักศึกษา, เลข Passport, บัญชีรับเงิน, ลายเซ็น"),           icon: IdCard, only: "foreign" },
+  { id: "creditor_form", title: msg("แบบแจ้งเจ้าหนี้ (PDF)"),           subtitle: msg("ตรวจฟอร์มที่ระบบกรอกจากข้อมูลขั้นตอนที่ 1 แล้วยืนยัน"),       icon: FileSignature },
+  { id: "national_id",   title: msg("สำเนาบัตรประชาชน"),                subtitle: msg("รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อบนสำเนา ก่อนอัปโหลด"),          icon: CreditCard, only: "thai" },
   // ชาวต่างชาติ: สำเนา Passport แทนสำเนาบัตรประชาชน (เจ้าหน้าที่, 06/10/2026)
-  { id: "passport",      title: "สำเนา Passport",                  subtitle: "หน้าที่มีรูปถ่ายและข้อมูลส่วนตัว รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อ", icon: IdCard, only: "foreign" },
-  { id: "bank_book",     title: "หน้าสมุดบัญชี",                    subtitle: "หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลขบัตร ปชช.", icon: BookOpen, only: "thai" },
-  { id: "bank_book",     title: "หน้าสมุดบัญชี",                    subtitle: "หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลข Passport", icon: BookOpen, only: "foreign" },
+  { id: "passport",      title: msg("สำเนา Passport"),                  subtitle: msg("หน้าที่มีรูปถ่ายและข้อมูลส่วนตัว รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อ"), icon: IdCard, only: "foreign" },
+  { id: "bank_book",     title: msg("หน้าสมุดบัญชี"),                    subtitle: msg("หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลขบัตร ปชช."), icon: BookOpen, only: "thai" },
+  { id: "bank_book",     title: msg("หน้าสมุดบัญชี"),                    subtitle: msg("หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลข Passport"), icon: BookOpen, only: "foreign" },
 ];
 
 /** The steps this TA works through, numbered. Mirrors ta_required_doc_kinds. */
@@ -274,67 +276,67 @@ function isValidThaiID(id: string): boolean {
 // Returns null when the profile is submittable, otherwise the reason (Thai).
 // Kept as a single function so the Save button and the "step done" indicator
 // use identical rules — otherwise we'd have UX drift between the two.
-function validateProfile(p: Profile): string | null {
+function validateProfile(p: Profile, t: TFn): string | null {
   const foreign = isForeign(p.nationality);
   const sid = (p.student_id ?? "").trim();
   if (!STUDENT_ID_PATTERN.test(sid)) {
-    return "รหัสนักศึกษาต้องอยู่ในรูป XXXXXXXXX-X (11 อักษรรวมขีด)";
+    return t("รหัสนักศึกษาต้องอยู่ในรูป XXXXXXXXX-X (11 อักษรรวมขีด)");
   }
   if (!isThaiPrefix(p.prefix)) {
-    return "โปรดเลือกคำนำหน้าชื่อ (นาย / นาง / นางสาว)";
+    return t("โปรดเลือกคำนำหน้าชื่อ (นาย / นาง / นางสาว)");
   }
   const phone = (p.phone ?? "").replace(/[^0-9]/g, "");
   if (foreign ? phone.length < 9 || phone.length > 15 : phone.length !== 9 && phone.length !== 10) {
-    return foreign ? "เบอร์โทรศัพท์ต้องมี 9-15 หลัก" : "เบอร์โทรศัพท์ต้องมี 9-10 หลัก";
+    return foreign ? t("เบอร์โทรศัพท์ต้องมี 9-15 หลัก") : t("เบอร์โทรศัพท์ต้องมี 9-10 หลัก");
   }
   if (foreign) {
     const ppErr = passportError(p.national_id);
-    if (ppErr) return ppErr;
+    if (ppErr) return t(ppErr);
   }
   const nid = normalizeNationalID(p.national_id);
   if (!foreign && nid.length !== 13) {
-    return "เลขบัตรประชาชนต้องมี 13 หลัก";
+    return t("เลขบัตรประชาชนต้องมี 13 หลัก");
   }
   // The backend refuses a check-digit mismatch (validateProfileInput), so the
   // form must too — a soft warning here promised a save the server rejects.
   // A foreign TA gives a passport number instead (validateIDNumber).
   if (!foreign && !isValidThaiID(nid)) {
-    return "เลขบัตรประชาชนไม่ถูกต้อง (หลักตรวจสอบไม่ตรง) กรุณาตรวจสอบอีกครั้ง";
+    return t("เลขบัตรประชาชนไม่ถูกต้อง (หลักตรวจสอบไม่ตรง) กรุณาตรวจสอบอีกครั้ง");
   }
   const line = (p.address_line ?? "").trim();
   if (!line) {
-    return "โปรดกรอกบ้านเลขที่";
+    return t("โปรดกรอกบ้านเลขที่");
   }
   if (line.length > 200) {
-    return "บ้านเลขที่ หมู่ ถนน ยาวเกิน 200 ตัวอักษร";
+    return t("บ้านเลขที่ หมู่ ถนน ยาวเกิน 200 ตัวอักษร");
   }
   if (!p.sub_district_id) {
-    return "โปรดเลือกจังหวัด อำเภอ และตำบล";
+    return t("โปรดเลือกจังหวัด อำเภอ และตำบล");
   }
   if ((p.postal_code ?? "").replace(/[^0-9]/g, "").length !== 5) {
-    return "รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก";
+    return t("รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก");
   }
   const bank = findBank(p.bank_name);
   if (!bank) {
-    return "โปรดเลือกธนาคารจากรายการ";
+    return t("โปรดเลือกธนาคารจากรายการ");
   }
   if (!p.bank_branch.trim()) {
-    return "โปรดกรอกสาขาของธนาคาร";
+    return t("โปรดกรอกสาขาของธนาคาร");
   }
   const branchCode = (p.branch_code ?? "").replace(/[^0-9]/g, "");
   if (branchCode.length !== 4) {
-    return "รหัสสาขาต้องเป็นตัวเลข 4 หลัก";
+    return t("รหัสสาขาต้องเป็นตัวเลข 4 หลัก");
   }
   const acct = normalizeAccountNo(p.account_no);
   if (!bank.accountLen.includes(acct.length)) {
-    const expected = bank.accountLen.join(" หรือ ");
-    return `เลขที่บัญชี${bank.name} ต้องมี ${expected} หลัก (กรอกมา ${acct.length} หลัก)`;
+    const expected = bank.accountLen.join(" " + t("หรือ") + " ");
+    return t("เลขที่บัญชี{bank} ต้องมี {expected} หลัก (กรอกมา {got} หลัก)", { bank: bank.name, expected, got: acct.length });
   }
   if (!p.account_name.trim()) {
-    return "โปรดกรอกชื่อบัญชี";
+    return t("โปรดกรอกชื่อบัญชี");
   }
   if (!p.signature_svg) {
-    return "โปรดวาดลายเซ็นก่อนบันทึก";
+    return t("โปรดวาดลายเซ็นก่อนบันทึก");
   }
   return null;
 }
@@ -385,6 +387,7 @@ function formatNationalID(s: string): string {
 }
 
 export default function ProfilePage() {
+  const { t } = useI18n();
   const { data } = useSWR<Profile>(
     "/me/profile",
     (p: string) => api.get<Profile>(p).catch(() => emptyProfile),
@@ -499,8 +502,8 @@ export default function ProfilePage() {
   return (
     <div>
       <PageHeader
-        title="เอกสารสำหรับการเบิกจ่าย"
-        description="กรอกข้อมูลบัญชี ลายเซ็น และอัปโหลดเอกสารประกอบให้ครบตามลำดับ"
+        title={t("เอกสารสำหรับการเบิกจ่าย")}
+        description={t("กรอกข้อมูลบัญชี ลายเซ็น และอัปโหลดเอกสารประกอบให้ครบตามลำดับ")}
         actions={data?.status ? <ProfileStatusBadge status={data.status} /> : undefined}
       />
 
@@ -509,8 +512,8 @@ export default function ProfilePage() {
           <Alert
             status="danger"
             icon={<AlertTriangle size={18} />}
-            title="ไม่ผ่านการตรวจสอบ กรุณาแก้ไขและส่งใหม่"
-            description={`เหตุผล: ${data.reject_reason ?? "-"}\nแก้ไขข้อมูล/อัปโหลดไฟล์ที่ถูกตีกลับ แล้วกด “บันทึกและทำขั้นตอนถัดไป” เพื่อส่งอีกครั้ง ประวัติการส่งเดิมยังเก็บไว้ให้เจ้าหน้าที่ตรวจสอบย้อนหลังได้`}
+            title={t("ไม่ผ่านการตรวจสอบ กรุณาแก้ไขและส่งใหม่")}
+            description={t("เหตุผล: {reason}\nแก้ไขข้อมูล/อัปโหลดไฟล์ที่ถูกตีกลับ แล้วกด “บันทึกและทำขั้นตอนถัดไป” เพื่อส่งอีกครั้ง ประวัติการส่งเดิมยังเก็บไว้ให้เจ้าหน้าที่ตรวจสอบย้อนหลังได้", { reason: data.reject_reason ?? "-" })}
           />
         </div>
       )}
@@ -524,9 +527,9 @@ export default function ProfilePage() {
           <Alert
             status="warning"
             icon={<AlertTriangle size={18} />}
-            title={`เจ้าหน้าที่ขอให้แก้ไข ${rejectedDocs.length} รายการ เฉพาะรายการที่ระบุ ส่วนอื่นที่ผ่านแล้วไม่ต้องทำใหม่`}
+            title={t("เจ้าหน้าที่ขอให้แก้ไข {n} รายการ เฉพาะรายการที่ระบุ ส่วนอื่นที่ผ่านแล้วไม่ต้องทำใหม่", { n: rejectedDocs.length })}
             description={rejectedDocs
-              .map(d => `• ${DOC_LABEL[d.kind] ?? d.kind}: ${d.reject_reason ?? "-"}`)
+              .map(d => `• ${DOC_LABEL[d.kind] ? t(DOC_LABEL[d.kind]) : d.kind}: ${d.reject_reason ?? "-"}`)
               .join("\n")}
           />
         </div>
@@ -538,7 +541,7 @@ export default function ProfilePage() {
           <div className="flex-1">
             <div className="flex items-baseline justify-between mb-2">
               <div className="text-sm font-semibold text-foreground">
-                ขั้นตอนการเริ่มต้นสำหรับ TA
+                {t("ขั้นตอนการเริ่มต้นสำหรับ TA")}
               </div>
               <div className="text-sm tabular text-muted">
                 {loaded ? `${doneCount}/${total}` : <SkelValue className="h-4 w-8" />}
@@ -552,10 +555,10 @@ export default function ProfilePage() {
             </div>
             <div className="mt-2 text-xs text-muted">
               {!loaded ? <SkelValue className="h-3 w-72 max-w-full" /> : anyNeedsFix
-                ? "มีบางขั้นตอนถูกตีกลับให้แก้ไข โปรดตรวจสอบและส่งใหม่"
+                ? t("มีบางขั้นตอนถูกตีกลับให้แก้ไข โปรดตรวจสอบและส่งใหม่")
                 : allDone
-                  ? "ครบทุกขั้นตอนแล้ว รอเจ้าหน้าที่ตรวจสอบและอนุมัติ"
-                  : "ทำแต่ละขั้นตอนตามลำดับ เมื่อครบทั้งหมด เจ้าหน้าที่จะตรวจสอบและอนุมัติภายในภายหลัง"}
+                  ? t("ครบทุกขั้นตอนแล้ว รอเจ้าหน้าที่ตรวจสอบและอนุมัติ")
+                  : t("ทำแต่ละขั้นตอนตามลำดับ เมื่อครบทั้งหมด เจ้าหน้าที่จะตรวจสอบและอนุมัติภายในภายหลัง")}
             </div>
           </div>
         </div>
@@ -575,8 +578,8 @@ export default function ProfilePage() {
               <Accordion.Trigger className="hover:bg-surface-secondary">
                 <StepHead
                   n={step.n}
-                  title={step.title}
-                  subtitle={step.subtitle}
+                  title={t(step.title)}
+                  subtitle={t(step.subtitle)}
                   done={doneMap[step.id as keyof typeof doneMap]}
                   needsFix={needsFixMap[step.id as keyof typeof needsFixMap]}
                   loading={!loaded}
@@ -616,7 +619,7 @@ export default function ProfilePage() {
                   <CreditorFormStep
                     form={form}
                     doc={findDoc(docs, "creditor_form")}
-                    profileReady={validateProfile(form) === null}
+                    profileReady={validateProfile(form, t) === null}
                     onDone={() => {
                       const next = STEP_META.find(s => s.n === step.n + 1)?.id;
                       if (next) setExpanded(new Set([next]));
@@ -643,8 +646,8 @@ export default function ProfilePage() {
         <Alert
           status="success"
           icon={<CheckCircle2 size={18} />}
-          title="ส่งเอกสารครบแล้ว รอเจ้าหน้าที่ตรวจสอบ"
-          description="ระบบจะปลดล็อกเมนูอื่น ๆ ให้อัตโนมัติเมื่อเจ้าหน้าที่กด “อนุมัติ”"
+          title={t("ส่งเอกสารครบแล้ว รอเจ้าหน้าที่ตรวจสอบ")}
+          description={t("ระบบจะปลดล็อกเมนูอื่น ๆ ให้อัตโนมัติเมื่อเจ้าหน้าที่กด “อนุมัติ”")}
         />
       )}
     </div>
@@ -658,6 +661,7 @@ export default function ProfilePage() {
 function StepHead({
   n, title, subtitle, done, needsFix, isNext, loading,
 }: { n: number; title: string; subtitle: string; done: boolean; needsFix: boolean; isNext: boolean; loading?: boolean }) {
+  const { t } = useI18n();
   if (loading) {
     // Title and subtitle are static; only the verdict circle and chip wait.
     return (
@@ -691,9 +695,9 @@ function StepHead({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="font-medium text-sm text-foreground">{title}</div>
-          {needsFix && <Chip tone="danger">ต้องแก้ไข</Chip>}
-          {!needsFix && done && <Chip tone="success">เสร็จแล้ว</Chip>}
-          {!needsFix && !done && isNext && <Chip tone="brand">ถัดไป</Chip>}
+          {needsFix && <Chip tone="danger">{t("ต้องแก้ไข")}</Chip>}
+          {!needsFix && done && <Chip tone="success">{t("เสร็จแล้ว")}</Chip>}
+          {!needsFix && !done && isNext && <Chip tone="brand">{t("ถัดไป")}</Chip>}
         </div>
         <div className="text-xs text-muted mt-0.5">{subtitle}</div>
       </div>
@@ -718,6 +722,7 @@ function ProfileStep({
   pdpaConsented: boolean | undefined;
   onPdpaAccepted: () => void;
 }) {
+  const { t } = useI18n();
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
@@ -725,7 +730,7 @@ function ProfileStep({
   const acctDigits = useMemo(() => normalizeAccountNo(form.account_no), [form.account_no]);
   const nidDigits  = useMemo(() => normalizeNationalID(form.national_id), [form.national_id]);
   const phoneDigits = useMemo(() => (form.phone ?? "").replace(/[^0-9]/g, ""), [form.phone]);
-  const formErr    = useMemo(() => validateProfile(form), [form]);
+  const formErr    = useMemo(() => validateProfile(form, t), [form, t]);
   const foreign = isForeign(form.nationality);
   const phoneMax = foreign ? 15 : 10;
 
@@ -733,37 +738,37 @@ function ProfileStep({
   // field — new-form users shouldn't see red before they've typed anything.
   const sidErr =
     touched.student_id && form.student_id && !STUDENT_ID_PATTERN.test(form.student_id.trim())
-      ? "รูปแบบต้องเป็น XXXXXXXXX-X (11 อักษรรวมขีด)"
+      ? t("รูปแบบต้องเป็น XXXXXXXXX-X (11 อักษรรวมขีด)")
       : undefined;
   const phoneErr =
     touched.phone && phoneDigits.length > 0 && (foreign
       ? phoneDigits.length < 9 || phoneDigits.length > 15
       : phoneDigits.length !== 9 && phoneDigits.length !== 10)
-      ? `กรอก ${phoneDigits.length} หลัก (ต้องมี ${foreign ? "9-15" : "9-10"} หลัก)`
+      ? t("กรอก {n} หลัก (ต้องมี {range} หลัก)", { n: phoneDigits.length, range: foreign ? "9-15" : "9-10" })
       : undefined;
   // Both are hard errors: the backend rejects a mod-11 mismatch as well as a
   // wrong length.
   const nidErr = foreign
-    ? (touched.national_id && form.national_id ? passportError(form.national_id) ?? undefined : undefined)
+    ? (touched.national_id && form.national_id ? (passportError(form.national_id) ? t(passportError(form.national_id)!) : undefined) : undefined)
     : touched.national_id && nidDigits.length > 0 && nidDigits.length !== 13
-      ? `กรอก ${nidDigits.length}/13 หลัก`
+      ? t("กรอก {n}/13 หลัก", { n: nidDigits.length })
       : touched.national_id && nidDigits.length === 13 && !isValidThaiID(nidDigits)
-        ? "หลักสุดท้าย (หลักตรวจสอบ) ไม่ตรงกับ 12 หลักแรก โปรดตรวจว่าพิมพ์ถูกทุกหลัก"
+        ? t("หลักสุดท้าย (หลักตรวจสอบ) ไม่ตรงกับ 12 หลักแรก โปรดตรวจว่าพิมพ์ถูกทุกหลัก")
         : undefined;
   const branchCodeErr =
     touched.branch_code && form.branch_code.length > 0 && form.branch_code.length !== 4
-      ? `กรอก ${form.branch_code.length}/4 หลัก`
+      ? t("กรอก {n}/4 หลัก", { n: form.branch_code.length })
       : undefined;
   const addressErr =
-    touched.address_line && !form.address_line.trim() ? "โปรดกรอกบ้านเลขที่" : undefined;
-  const placeErr = touched.sub_district_id && !form.sub_district_id ? "โปรดเลือกให้ครบ" : undefined;
+    touched.address_line && !form.address_line.trim() ? t("โปรดกรอกบ้านเลขที่") : undefined;
+  const placeErr = touched.sub_district_id && !form.sub_district_id ? t("โปรดเลือกให้ครบ") : undefined;
   const postalErr =
     touched.postal_code && form.postal_code.length > 0 && form.postal_code.length !== 5
-      ? `กรอก ${form.postal_code.length}/5 หลัก`
+      ? t("กรอก {n}/5 หลัก", { n: form.postal_code.length })
       : undefined;
   const acctErr =
     touched.account_no && bank && acctDigits.length > 0 && !bank.accountLen.includes(acctDigits.length)
-      ? `${bank.name}ต้องมี ${bank.accountLen.join(" หรือ ")} หลัก (กรอก ${acctDigits.length})`
+      ? t("{bank}ต้องมี {expected} หลัก (กรอก {got})", { bank: bank.name, expected: bank.accountLen.join(" " + t("หรือ") + " "), got: acctDigits.length })
       : undefined;
 
   async function save() {
@@ -780,7 +785,7 @@ function ProfileStep({
     setSaving(true);
     try {
       await api.put("/me/profile", form);
-      notify.success("บันทึกข้อมูลเรียบร้อย");
+      notify.success(t("บันทึกข้อมูลเรียบร้อย"));
       await mutate("/me/profile");
       onSaved();
     } catch (e) { notify.error(e); }
@@ -812,76 +817,76 @@ function ProfileStep({
   return (
     <div>
       <p className="mb-3 text-xs text-muted">
-        ช่องที่มีเครื่องหมาย <span className="text-danger">*</span> ต้องกรอกทุกช่อง
+        {t.rich("ช่องที่มีเครื่องหมาย {star} ต้องกรอกทุกช่อง", { star: <span className="text-danger">*</span> })}
       </p>
       <div className="grid md:grid-cols-2 gap-3">
-        <FieldGroup required label="คำนำหน้าชื่อ" hint="ระบบใช้ค่านี้วงกลมในแบบแจ้งเจ้าหนี้อัตโนมัติ">
+        <FieldGroup required label={t("คำนำหน้าชื่อ")} hint={t("ระบบใช้ค่านี้วงกลมในแบบแจ้งเจ้าหนี้อัตโนมัติ")}>
           <SelectField
-            placeholder="— เลือกคำนำหน้า —"
+            placeholder={t("— เลือกคำนำหน้า —")}
             value={form.prefix}
             onChange={v => setForm({ ...form, prefix: v })}
             options={prefixOptions}
           />
         </FieldGroup>
-        <FieldGroup required label="รหัสนักศึกษา" hint="รูปแบบ XXXXXXXXX-X (เช่น 653020123-4)" error={sidErr}>
+        <FieldGroup required label={t("รหัสนักศึกษา")} hint={t("รูปแบบ XXXXXXXXX-X (เช่น 653020123-4)")} error={sidErr}>
           <TextInput value={form.student_id}
             onChange={e => setForm({ ...form, student_id: formatStudentID(e.target.value) })}
-            onBlur={() => setTouched(t => ({ ...t, student_id: true }))}
+            onBlur={() => setTouched(prev => ({ ...prev, student_id: true }))}
             inputMode="numeric"
             maxLength={11}
-            placeholder="เช่น 653020123-4" />
+            placeholder={t("เช่น 653020123-4")} />
         </FieldGroup>
-        <FieldGroup required label="เบอร์โทรศัพท์"
+        <FieldGroup required label={t("เบอร์โทรศัพท์")}
           hint={foreign
-            ? "9-15 หลัก ใส่รหัสประเทศได้ ไม่ต้องใส่ + (ใช้กรอกในแบบแจ้งเจ้าหนี้)"
-            : "9-10 หลัก (ใช้กรอกในแบบแจ้งเจ้าหนี้)"}
+            ? t("9-15 หลัก ใส่รหัสประเทศได้ ไม่ต้องใส่ + (ใช้กรอกในแบบแจ้งเจ้าหนี้)")
+            : t("9-10 หลัก (ใช้กรอกในแบบแจ้งเจ้าหนี้)")}
           error={phoneErr}>
           <TextInput value={form.phone}
             onChange={e => setForm({ ...form, phone: onlyDigits(e.target.value).slice(0, phoneMax) })}
-            onBlur={() => setTouched(t => ({ ...t, phone: true }))}
+            onBlur={() => setTouched(prev => ({ ...prev, phone: true }))}
             inputMode="tel"
             maxLength={phoneMax}
-            placeholder="เช่น 0812345678" />
+            placeholder={t("เช่น 0812345678")} />
         </FieldGroup>
         {foreign ? (
           <FieldGroup required
-            label="เลข Passport"
-            hint="ตามหน้าข้อมูลใน Passport ใช้พิมพ์ลงแบบฟอร์มเจ้าหนี้และเป็นเลขพร้อมเพย์สำหรับรับเงิน ระบบจัดเก็บแบบเข้ารหัส"
+            label={t("เลข Passport")}
+            hint={t("ตามหน้าข้อมูลใน Passport ใช้พิมพ์ลงแบบฟอร์มเจ้าหนี้และเป็นเลขพร้อมเพย์สำหรับรับเงิน ระบบจัดเก็บแบบเข้ารหัส")}
             error={nidErr}
           >
             <TextInput value={form.national_id}
               onChange={e => setForm({ ...form, national_id: passportNumber(e.target.value) })}
-              onBlur={() => setTouched(t => ({ ...t, national_id: true }))}
+              onBlur={() => setTouched(prev => ({ ...prev, national_id: true }))}
               autoCapitalize="characters"
               maxLength={12}
-              placeholder="เช่น AB1234567" />
+              placeholder={t("เช่น AB1234567")} />
           </FieldGroup>
         ) : (
           <FieldGroup required
-            label="เลขบัตรประชาชน (13 หลัก)"
+            label={t("เลขบัตรประชาชน (13 หลัก)")}
             hint={
               nidDigits.length > 0 && !nidErr
-                ? `กรอกครบ ${nidDigits.length}/13`
-                : "ระบบจัดเก็บเลขบัตรนี้แบบเข้ารหัส ใช้เพื่อพิมพ์ลงแบบฟอร์มเจ้าหนี้และยืนยันตัวตนกับธนาคารเท่านั้น"
+                ? t("กรอกครบ {n}/13", { n: nidDigits.length })
+                : t("ระบบจัดเก็บเลขบัตรนี้แบบเข้ารหัส ใช้เพื่อพิมพ์ลงแบบฟอร์มเจ้าหนี้และยืนยันตัวตนกับธนาคารเท่านั้น")
             }
             error={nidErr}
           >
             <TextInput value={form.national_id}
               onChange={e => setForm({ ...form, national_id: formatNationalID(e.target.value) })}
-              onBlur={() => setTouched(t => ({ ...t, national_id: true }))}
+              onBlur={() => setTouched(prev => ({ ...prev, national_id: true }))}
               inputMode="numeric"
               maxLength={17}
               placeholder="X-XXXX-XXXXX-XX-X" />
           </FieldGroup>
         )}
-        <FieldGroup required label="ที่อยู่ปัจจุบัน (บ้านเลขที่ หมู่ ซอย ถนน)"
-          hint="ใช้ลงทะเบียนผู้รับเงินกับการเงิน ระบบจัดเก็บแบบเข้ารหัส"
+        <FieldGroup required label={t("ที่อยู่ปัจจุบัน (บ้านเลขที่ หมู่ ซอย ถนน)")}
+          hint={t("ใช้ลงทะเบียนผู้รับเงินกับการเงิน ระบบจัดเก็บแบบเข้ารหัส")}
           error={addressErr}>
           <TextInput value={form.address_line}
             onChange={e => setForm({ ...form, address_line: e.target.value.slice(0, 200) })}
-            onBlur={() => setTouched(t => ({ ...t, address_line: true }))}
+            onBlur={() => setTouched(prev => ({ ...prev, address_line: true }))}
             maxLength={200}
-            placeholder="เช่น 123 ม.4 ซ.มิตรภาพ 5 ถ.มิตรภาพ" />
+            placeholder={t("เช่น 123 ม.4 ซ.มิตรภาพ 5 ถ.มิตรภาพ")} />
         </FieldGroup>
         <ThaiAddressPicker
           subDistrictId={form.sub_district_id}
@@ -895,59 +900,59 @@ function ProfileStep({
           onZip={zip => setForm(f => ({ ...f, postal_code: zip }))}
           error={placeErr}
         />
-        <FieldGroup required label="รหัสไปรษณีย์" hint="เติมให้เมื่อเลือกตำบล แก้ได้ถ้าไม่ตรง" error={postalErr}>
+        <FieldGroup required label={t("รหัสไปรษณีย์")} hint={t("เติมให้เมื่อเลือกตำบล แก้ได้ถ้าไม่ตรง")} error={postalErr}>
           <TextInput value={form.postal_code}
             onChange={e => setForm({ ...form, postal_code: onlyDigits(e.target.value).slice(0, 5) })}
-            onBlur={() => setTouched(t => ({ ...t, postal_code: true }))}
+            onBlur={() => setTouched(prev => ({ ...prev, postal_code: true }))}
             inputMode="numeric"
             maxLength={5}
-            placeholder="เช่น 40002" />
+            placeholder={t("เช่น 40002")} />
         </FieldGroup>
-        <FieldGroup required label="ชื่อบัญชี" hint="ตัวอักษรและช่องว่างเท่านั้น (ห้ามใส่ตัวเลข)">
+        <FieldGroup required label={t("ชื่อบัญชี")} hint={t("ตัวอักษรและช่องว่างเท่านั้น (ห้ามใส่ตัวเลข)")}>
           <TextInput value={form.account_name}
             onChange={e => setForm({ ...form, account_name: onlyLetters(e.target.value) })}
-            onBlur={() => setTouched(t => ({ ...t, account_name: true }))}
-            placeholder={foreign ? "เช่น MR. JOHN SMITH (ตามหน้าสมุดบัญชี)" : "เช่น นายสมชาย ใจดี"} />
+            onBlur={() => setTouched(prev => ({ ...prev, account_name: true }))}
+            placeholder={foreign ? t("เช่น MR. JOHN SMITH (ตามหน้าสมุดบัญชี)") : t("เช่น นายสมชาย ใจดี")} />
         </FieldGroup>
         <FieldGroup required
-          label="ธนาคาร"
-          hint={bank ? `เลขที่บัญชีของ${bank.name}ต้องมี ${bank.accountLen.join(" หรือ ")} หลัก` : "เลือกจากรายการ เพื่อให้ระบบตรวจสอบความยาวเลขที่บัญชีให้อัตโนมัติ"}
+          label={t("ธนาคาร")}
+          hint={bank ? t("เลขที่บัญชีของ{bank}ต้องมี {expected} หลัก", { bank: bank.name, expected: bank.accountLen.join(" " + t("หรือ") + " ") }) : t("เลือกจากรายการ เพื่อให้ระบบตรวจสอบความยาวเลขที่บัญชีให้อัตโนมัติ")}
         >
           <SelectField
-            placeholder="— เลือกธนาคาร —"
+            placeholder={t("— เลือกธนาคาร —")}
             value={form.bank_name}
             onChange={v => setForm({ ...form, bank_name: v })}
             options={bankOptions}
           />
         </FieldGroup>
-        <FieldGroup required label="สาขา" hint="สาขาของธนาคารที่ไปเปิดบัญชี">
+        <FieldGroup required label={t("สาขา")} hint={t("สาขาของธนาคารที่ไปเปิดบัญชี")}>
           <TextInput value={form.bank_branch}
             onChange={e => setForm({ ...form, bank_branch: e.target.value })}
-            placeholder="เช่น ขอนแก่น" />
+            placeholder={t("เช่น ขอนแก่น")} />
         </FieldGroup>
-        <FieldGroup required label="รหัสสาขา" hint="ตัวเลข 4 หลัก" error={branchCodeErr}>
+        <FieldGroup required label={t("รหัสสาขา")} hint={t("ตัวเลข 4 หลัก")} error={branchCodeErr}>
           <TextInput value={form.branch_code}
             onChange={e => setForm({ ...form, branch_code: onlyDigits(e.target.value).slice(0, 4) })}
-            onBlur={() => setTouched(t => ({ ...t, branch_code: true }))}
+            onBlur={() => setTouched(prev => ({ ...prev, branch_code: true }))}
             inputMode="numeric"
             maxLength={4}
-            placeholder="เช่น 0555" />
+            placeholder={t("เช่น 0555")} />
         </FieldGroup>
         <FieldGroup required
-          label="เลขที่บัญชี"
+          label={t("เลขที่บัญชี")}
           hint={bank
             ? (acctDigits.length && !acctErr
-                ? `กรอกครบ ${acctDigits.length}/${Math.max(...bank.accountLen)}`
-                : `${bank.accountLen.join(" หรือ ")} หลัก (ไม่ต้องใส่ขีด)`)
-            : "โปรดเลือกธนาคารก่อน"}
+                ? t("กรอกครบ {n}/{max}", { n: acctDigits.length, max: Math.max(...bank.accountLen) })
+                : t("{expected} หลัก (ไม่ต้องใส่ขีด)", { expected: bank.accountLen.join(" " + t("หรือ") + " ") }))
+            : t("โปรดเลือกธนาคารก่อน")}
           error={acctErr}
         >
           <TextInput value={form.account_no}
             onChange={e => setForm({ ...form, account_no: onlyDigits(e.target.value) })}
-            onBlur={() => setTouched(t => ({ ...t, account_no: true }))}
+            onBlur={() => setTouched(prev => ({ ...prev, account_no: true }))}
             inputMode="numeric"
             maxLength={bank ? Math.max(...bank.accountLen) : 16}
-            placeholder="เฉพาะตัวเลข" />
+            placeholder={t("เฉพาะตัวเลข")} />
         </FieldGroup>
       </div>
 
@@ -958,13 +963,13 @@ function ProfileStep({
           status="warning"
           icon={<Wallet size={16} />}
           title={foreign
-            ? "บัญชีที่แนบต้องผูกพร้อมเพย์กับเลข Passport ที่กรอก"
-            : "บัญชีที่แนบต้องผูกพร้อมเพย์กับเลขบัตรประชาชน 13 หลักที่กรอก"}
+            ? t("บัญชีที่แนบต้องผูกพร้อมเพย์กับเลข Passport ที่กรอก")
+            : t("บัญชีที่แนบต้องผูกพร้อมเพย์กับเลขบัตรประชาชน 13 หลักที่กรอก")}
         />
       </div>
 
       <div className="mt-5">
-        <FieldGroup required label="ลายเซ็น">
+        <FieldGroup required label={t("ลายเซ็น")}>
           <Signature
             value={form.signature_svg}
             onChange={(svg, png) => setForm({ ...form, signature_svg: svg, signature_png_b64: png })}
@@ -980,7 +985,7 @@ function ProfileStep({
           <Alert
             status="danger"
             icon={<AlertTriangle size={16} />}
-            title="กรอกข้อมูลไม่ครบถ้วน"
+            title={t("กรอกข้อมูลไม่ครบถ้วน")}
             description={formErr}
           />
         </div>
@@ -988,7 +993,7 @@ function ProfileStep({
 
       <div className="flex flex-wrap gap-2 items-center mt-4 pt-4 border-t border-[var(--hairline)]">
         <Button variant="primary" onClick={save} disabled={saving} isPending={saving}>
-          <Save size={14} /> {saving ? "กำลังบันทึก…" : "บันทึกและทำขั้นตอนถัดไป"}
+          <Save size={14} /> {saving ? t("กำลังบันทึก…") : t("บันทึกและทำขั้นตอนถัดไป")}
         </Button>
       </div>
     </div>
@@ -1008,6 +1013,7 @@ function ProfileStep({
 function CreditorFormStep({
   form, doc, profileReady, onDone,
 }: { form: Profile; doc: Doc | undefined; profileReady: boolean; onDone: () => void }) {
+  const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -1037,7 +1043,7 @@ function CreditorFormStep({
         url = URL.createObjectURL(blob);
         setPreviewURL(url);
       } catch (e) {
-        if (!cancelled) setPreviewErr(e instanceof Error ? e.message : "สร้างตัวอย่างไม่สำเร็จ");
+        if (!cancelled) setPreviewErr(e instanceof Error ? e.message : t("สร้างตัวอย่างไม่สำเร็จ"));
       }
     })();
     return () => {
@@ -1051,7 +1057,7 @@ function CreditorFormStep({
     setConfirming(true);
     try {
       await api.post("/me/creditor-form/confirm", form);
-      notify.success("บันทึกเอกสารที่ระบบสร้างเรียบร้อย");
+      notify.success(t("บันทึกเอกสารที่ระบบสร้างเรียบร้อย"));
       await mutate("/me/documents");
       onDone();
     } catch (e) {
@@ -1072,7 +1078,7 @@ function CreditorFormStep({
       fd.append("file", file);
       await api.uploadWithProgress("/me/documents", fd, setUploadProgress);
       setFile(null);
-      notify.success(`อัปโหลด ${name} เรียบร้อย ไฟล์ผ่านการสแกนไวรัสแล้ว`);
+      notify.success(t("อัปโหลด {name} เรียบร้อย ไฟล์ผ่านการสแกนไวรัสแล้ว", { name }));
       await mutate("/me/documents");
       onDone();
     } catch (e) {
@@ -1088,10 +1094,10 @@ function CreditorFormStep({
       <Alert
         status="warning"
         icon={<AlertTriangle size={16} />}
-        title={doc ? "กรอกข้อมูลขั้นตอนที่ 1 อีกครั้งเพื่อสร้างฟอร์มใหม่" : "กรอกข้อมูลในขั้นตอนที่ 1 ให้ครบก่อน"}
+        title={doc ? t("กรอกข้อมูลขั้นตอนที่ 1 อีกครั้งเพื่อสร้างฟอร์มใหม่") : t("กรอกข้อมูลในขั้นตอนที่ 1 ให้ครบก่อน")}
         description={doc
-          ? "ระบบจัดเก็บเฉพาะเลขบัตรประชาชน (หรือเลข Passport) แบบเข้ารหัส ส่วนข้อมูลธนาคารและลายเซ็นไม่ถูกบันทึกไว้ในฐานข้อมูล (PDPA) ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง"
-          : "ระบบจะสร้างฟอร์มจากข้อมูลที่กรอก โดยข้อมูลธนาคารและลายเซ็นจะไม่ถูกบันทึกลงฐานข้อมูล"}
+          ? t("ระบบจัดเก็บเฉพาะเลขบัตรประชาชน (หรือเลข Passport) แบบเข้ารหัส ส่วนข้อมูลธนาคารและลายเซ็นไม่ถูกบันทึกไว้ในฐานข้อมูล (PDPA) ไฟล์ที่สร้างไว้แล้วยังใช้ได้ตามปกติ หากต้องการสร้างใหม่ต้องกรอกข้อมูลอีกครั้ง")
+          : t("ระบบจะสร้างฟอร์มจากข้อมูลที่กรอก โดยข้อมูลธนาคารและลายเซ็นจะไม่ถูกบันทึกลงฐานข้อมูล")}
       />
     );
   }
@@ -1101,15 +1107,16 @@ function CreditorFormStep({
       <div className="mb-3">
         <div className="flex items-center gap-2 mb-2">
           <div className="text-sm text-muted flex-1">
-            ตรวจดูฟอร์มที่ระบบกรอกให้ล่วงหน้าด้านล่าง หากถูกต้อง กด{" "}
-            <span className="font-medium">“ยืนยันและบันทึกเอกสารนี้”</span>
+            {t.rich("ตรวจดูฟอร์มที่ระบบกรอกให้ล่วงหน้าด้านล่าง หากถูกต้อง กด {button}", {
+              button: <span className="font-medium">“{t("ยืนยันและบันทึกเอกสารนี้")}”</span>,
+            })}
           </div>
           <button
             type="button"
             onClick={() => setShowGrid(g => !g)}
             className="text-xs text-slate-500 hover:text-slate-800"
           >
-            {showGrid ? "ซ่อนตาราง" : "ตาราง (debug)"}
+            {showGrid ? t("ซ่อนตาราง") : t("ตาราง (debug)")}
           </button>
         </div>
         <div className="border border-[var(--hairline)] rounded-md overflow-hidden bg-slate-100">
@@ -1118,11 +1125,11 @@ function CreditorFormStep({
           ) : previewURL ? (
             <PdfFrame
               src={previewURL}
-              title="แบบแจ้งข้อมูลเจ้าหนี้บุคลากร (ล่วงหน้า)"
+              title={t("แบบแจ้งข้อมูลเจ้าหนี้บุคลากร (ล่วงหน้า)")}
             />
           ) : (
             // Same A4 box PdfFrame will occupy, so the page below doesn't jump.
-            <SkelRegion label="กำลังสร้างตัวอย่าง">
+            <SkelRegion label={t("กำลังสร้างตัวอย่าง")}>
               <Skel className="aspect-[210/297] w-full rounded-none" />
             </SkelRegion>
           )}
@@ -1133,7 +1140,7 @@ function CreditorFormStep({
 
       <div className="flex flex-wrap gap-2 items-center">
         <Button variant="primary" onClick={confirm} disabled={confirming}>
-          <CheckCircle2 size={14} /> {confirming ? "กำลังบันทึก…" : "ยืนยันและบันทึกเอกสารนี้"}
+          <CheckCircle2 size={14} /> {confirming ? t("กำลังบันทึก…") : t("ยืนยันและบันทึกเอกสารนี้")}
         </Button>
         {/* The button IS the anchor. Nested inside one, the press handler eats
             the click and target="_blank" never applies — the PDF would replace
@@ -1149,23 +1156,23 @@ function CreditorFormStep({
             />
           )}
         >
-          <Download size={14} /> ดาวน์โหลดฟอร์มเปล่า
+          <Download size={14} /> {t("ดาวน์โหลดฟอร์มเปล่า")}
         </Button>
       </div>
 
       <div className="mt-4 pt-4 border-t border-[var(--hairline)]">
         <div className="text-xs text-muted mb-2">
-          หากระบบกรอกไม่ตรง คุณกรอกลงในฟอร์มเปล่าเอง แล้วสแกนเป็นไฟล์ PDF มาแนบที่นี่แทนได้
+          {t("หากระบบกรอกไม่ตรง คุณกรอกลงในฟอร์มเปล่าเอง แล้วสแกนเป็นไฟล์ PDF มาแนบที่นี่แทนได้")}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
           <PdfDropZone
-            label={doc ? "อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)" : "ไฟล์ที่กรอกเอง"}
+            label={doc ? t("อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)") : t("ไฟล์ที่กรอกเอง")}
             file={file}
             onPick={setFile}
             disabled={uploading}
           />
           <Button variant="secondary" onClick={upload} disabled={!file || uploading} isPending={uploading}>
-            <Upload size={14} /> {uploading ? "กำลังอัปโหลด…" : "อัปโหลดไฟล์ที่กรอกเอง"}
+            <Upload size={14} /> {uploading ? t("กำลังอัปโหลด…") : t("อัปโหลดไฟล์ที่กรอกเอง")}
           </Button>
         </div>
       </div>
@@ -1182,6 +1189,7 @@ function CreditorFormStep({
 function DocStep({
   kind, doc, onUploaded,
 }: { kind: DocKind; doc: Doc | undefined; onUploaded: () => void }) {
+  const { t } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -1212,7 +1220,7 @@ function DocStep({
       fd.append("file", file);
       await api.uploadWithProgress("/me/documents", fd, setUploadProgress);
       setChosen(null);
-      notify.success(`อัปโหลด ${name} เรียบร้อย ไฟล์ผ่านการสแกนไวรัสแล้ว`);
+      notify.success(t("อัปโหลด {name} เรียบร้อย ไฟล์ผ่านการสแกนไวรัสแล้ว", { name }));
       await mutate("/me/documents");
       onUploaded();
     } catch (e) {
@@ -1227,19 +1235,19 @@ function DocStep({
         <SubmittedDoc doc={doc} />
       ) : (
         <div className="flex items-center gap-2 mb-3 text-sm text-muted">
-          <Circle size={14} /> ยังไม่ได้อัปโหลด
+          <Circle size={14} /> {t("ยังไม่ได้อัปโหลด")}
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
         <PdfDropZone
-          label={doc ? "อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)" : "เลือกไฟล์"}
+          label={doc ? t("อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)") : t("เลือกไฟล์")}
           file={file}
           onPick={setChosen}
           disabled={uploading}
         />
         <Button variant="primary" onClick={upload} disabled={!file || uploading} isPending={uploading}>
-          <Upload size={14} /> {uploading ? "กำลังอัปโหลด…" : "อัปโหลด"}
+          <Upload size={14} /> {uploading ? t("กำลังอัปโหลด…") : t("อัปโหลด")}
         </Button>
       </div>
 
@@ -1250,7 +1258,7 @@ function DocStep({
         <div className="mt-3 rounded-lg border border-[var(--hairline)] overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hairline)] bg-surface-secondary px-3 py-2">
             <FileText size={14} className="text-muted" />
-            <span className="text-xs font-medium">ตรวจก่อนอัปโหลด</span>
+            <span className="text-xs font-medium">{t("ตรวจก่อนอัปโหลด")}</span>
             <span className="truncate text-xs text-muted">{file.name}</span>
             <span className="text-xs text-muted">
               · {(file.size / 1024).toFixed(0)} KB
@@ -1260,16 +1268,15 @@ function DocStep({
               onClick={() => setChosen(null)}
               className="ml-auto text-xs text-muted underline underline-offset-2 hover:text-foreground"
             >
-              เลือกไฟล์ใหม่
+              {t("เลือกไฟล์ใหม่")}
             </button>
           </div>
           <PdfFrame
             src={previewURL}
-            title={`ตรวจก่อนอัปโหลด ${file.name}`}
+            title={t("ตรวจก่อนอัปโหลด {name}", { name: file.name })}
           />
           <p className="border-t border-[var(--hairline)] px-3 py-2 text-xs text-muted">
-            ตรวจว่าเป็นเอกสารที่ถูกต้องและอ่านออกชัดเจน ถ้าอัปผิดไฟล์
-            เจ้าหน้าที่จะตีกลับและต้องส่งใหม่
+            {t("ตรวจว่าเป็นเอกสารที่ถูกต้องและอ่านออกชัดเจน ถ้าอัปผิดไฟล์ เจ้าหน้าที่จะตีกลับและต้องส่งใหม่")}
           </p>
         </div>
       )}
@@ -1283,8 +1290,8 @@ function DocStep({
 /* The file already sent, with a way to look at it again                      */
 /* -------------------------------------------------------------------------- */
 
-const thaiDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+const shortDate = (iso: string, intl: string) =>
+  new Date(iso).toLocaleDateString(intl, { day: "numeric", month: "short", year: "numeric" });
 
 /**
  * The current file of one step, and "ดูไฟล์ที่ส่ง" to open it again.
@@ -1299,6 +1306,7 @@ const thaiDate = (iso: string) =>
  * revoked on close and unmount so the ID card does not stay in memory.
  */
 function SubmittedDoc({ doc }: { doc: Doc }) {
+  const { t, intl } = useI18n();
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const removed = !!doc.file_deleted_at;
@@ -1326,31 +1334,31 @@ function SubmittedDoc({ doc }: { doc: Doc }) {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{doc.filename}</div>
           {doc.uploaded_at && (
-            <div className="text-xs text-muted mt-0.5">ส่งเมื่อ {thaiDate(doc.uploaded_at)}</div>
+            <div className="text-xs text-muted mt-0.5">{t("ส่งเมื่อ {date}", { date: shortDate(doc.uploaded_at, intl) })}</div>
           )}
           {doc.reject_reason && (
-            <div className="text-xs text-danger mt-0.5">เหตุผล: {doc.reject_reason}</div>
+            <div className="text-xs text-danger mt-0.5">{t("เหตุผล: {reason}", { reason: doc.reject_reason })}</div>
           )}
           {removed && (
             <div className="text-xs text-muted mt-0.5">
-              ไฟล์ถูกลบตามนโยบายเก็บรักษา 7 วันหลังอนุมัติแล้ว
+              {t("ไฟล์ถูกลบตามนโยบายเก็บรักษา 7 วันหลังอนุมัติแล้ว")}
             </div>
           )}
         </div>
         {!removed && (
           <Button variant="secondary" size="sm" onClick={toggle} disabled={loading} isPending={loading}>
-            {url ? <EyeOff size={14} /> : <Eye size={14} />} {url ? "ปิดไฟล์" : "ดูไฟล์ที่ส่ง"}
+            {url ? <EyeOff size={14} /> : <Eye size={14} />} {url ? t("ปิดไฟล์") : t("ดูไฟล์ที่ส่ง")}
           </Button>
         )}
         <StatusChip status={doc.status} />
       </div>
       {url && (
         <div className="border-t border-[var(--hairline)]">
-          <PdfFrame src={url} title={`ไฟล์ที่ส่ง ${doc.filename}`} />
+          <PdfFrame src={url} title={t("ไฟล์ที่ส่ง {name}", { name: doc.filename })} />
           <p className="border-t border-[var(--hairline)] px-3 py-2 text-xs text-muted">
             {doc.status === "approved"
-              ? "ไฟล์นี้ผ่านการตรวจสอบแล้ว"
-              : "ถ้าพบว่าส่งผิดไฟล์หรืออ่านไม่ชัด อัปโหลดไฟล์ใหม่ด้านล่างแทนได้เลย ไม่ต้องรอเจ้าหน้าที่ตีกลับ"}
+              ? t("ไฟล์นี้ผ่านการตรวจสอบแล้ว")
+              : t("ถ้าพบว่าส่งผิดไฟล์หรืออ่านไม่ชัด อัปโหลดไฟล์ใหม่ด้านล่างแทนได้เลย ไม่ต้องรอเจ้าหน้าที่ตีกลับ")}
           </p>
         </div>
       )}
@@ -1362,6 +1370,7 @@ function SubmittedDoc({ doc }: { doc: Doc }) {
  *  so a TA can tell at a glance where their documents stand. Same tones as
  *  StatusChip; the wording is the TA's point of view. */
 function ProfileStatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
   // A plain span, not HeroUI Chip: Chip pins its label to 12px, and the point
   // here is to be bigger than every other chip on the page. Colours are the
   // soft-chip pair (soft bg + *-soft-foreground) so contrast matches Chip.
@@ -1370,11 +1379,11 @@ function ProfileStatusBadge({ status }: { status: string }) {
     icon: React.ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
     label: string;
   }> = {
-    approved:  { cls: "bg-success-soft text-[var(--success-soft-foreground)]", icon: CheckCircle2,  label: "อนุมัติแล้ว" },
-    submitted: { cls: "bg-accent-soft text-[var(--accent-soft-foreground)]",   icon: Clock3,        label: "รอเจ้าหน้าที่ตรวจ" },
-    pending:   { cls: "bg-warning-soft text-[var(--warning-soft-foreground)]", icon: Circle,        label: "ยังไม่ส่งเอกสาร" },
-    needs_fix: { cls: "bg-warning-soft text-[var(--warning-soft-foreground)]", icon: AlertTriangle, label: "ต้องแก้ไข" },
-    rejected:  { cls: "bg-danger-soft text-[var(--danger-soft-foreground)]",   icon: XCircle,       label: "ไม่ผ่าน" },
+    approved:  { cls: "bg-success-soft text-[var(--success-soft-foreground)]", icon: CheckCircle2,  label: msg("อนุมัติแล้ว") },
+    submitted: { cls: "bg-accent-soft text-[var(--accent-soft-foreground)]",   icon: Clock3,        label: msg("รอเจ้าหน้าที่ตรวจ") },
+    pending:   { cls: "bg-warning-soft text-[var(--warning-soft-foreground)]", icon: Circle,        label: msg("ยังไม่ส่งเอกสาร") },
+    needs_fix: { cls: "bg-warning-soft text-[var(--warning-soft-foreground)]", icon: AlertTriangle, label: msg("ต้องแก้ไข") },
+    rejected:  { cls: "bg-danger-soft text-[var(--danger-soft-foreground)]",   icon: XCircle,       label: msg("ไม่ผ่าน") },
   };
   const m = map[status] ?? { cls: "bg-default text-foreground", icon: Circle, label: status };
   const Icon = m.icon;
@@ -1384,7 +1393,7 @@ function ProfileStatusBadge({ status }: { status: string }) {
       className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-base font-semibold ${m.cls}`}
     >
       <Icon size={20} className="shrink-0" aria-hidden />
-      <span><span className="sr-only">สถานะเอกสาร: </span>{m.label}</span>
+      <span><span className="sr-only">{t("สถานะเอกสาร:")} </span>{t(m.label)}</span>
     </span>
   );
 }

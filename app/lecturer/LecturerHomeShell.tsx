@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Route, Megaphone, Bell, IdCard, ChartColumnBig,
 } from "lucide-react";
 import type { Me } from "../lib/api";
+import { msg } from "../lib/i18n/client";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
 import LecturerTourLauncher from "./tours/TourLauncher";
@@ -20,7 +21,7 @@ interface PendingReport { teaching_course_id: string }
 
 const buildNav = (pendingCourses: number, isExecutive: boolean): NavSection[] => [
   {
-    title: "ภาพรวม",
+    title: msg("ภาพรวม"),
     items: [
       // Approving TA hours has no page of its own — it happens inside a course —
       // so the count rides on the link to the course list, which is where the
@@ -28,35 +29,35 @@ const buildNav = (pendingCourses: number, isExecutive: boolean): NavSection[] =>
       // the bottleneck of the whole payout, so it must be visible from the
       // pages below too, not only from the home page itself.
       {
-        label: "หน้าหลัก",
+        label: msg("หน้าหลัก"),
         href: "/lecturer",
         icon: LayoutDashboard,
         exact: true,
         badge: pendingCourses,
-        badgeLabel: "วิชาที่มีบันทึกเวลารออนุมัติ",
+        badgeLabel: msg("วิชาที่มีบันทึกเวลารออนุมัติ"),
       },
       // The management team are lecturers whose accounts staff ticked the
       // executive flag on — the read-only budget analytics lives one click
       // from where they already work.
       ...(isExecutive
-        ? [{ label: "มุมมองผู้บริหาร", href: "/executive", icon: ChartColumnBig }]
+        ? [{ label: msg("มุมมองผู้บริหาร"), href: "/executive", icon: ChartColumnBig }]
         : []),
     ],
   },
   {
-    title: "ของฉัน",
+    title: msg("ของฉัน"),
     items: [
       // /account carries the profile picture, personal details, sign-in and
       // security — "โปรไฟล์และบัญชี" says both halves, because a label of just
       // "โปรไฟล์" hides where the password is changed.
-      { label: "โปรไฟล์และบัญชี", href: "/account", icon: IdCard },
+      { label: msg("โปรไฟล์และบัญชี"), href: "/account", icon: IdCard },
     ],
   },
   {
-    title: "ติดตาม",
+    title: msg("ติดตาม"),
     items: [
-      { label: "ความคืบหน้าเอกสาร", href: "/document-progress", icon: Route },
-      { label: "ประกาศ", href: "/announcements", icon: Megaphone },
+      { label: msg("ความคืบหน้าเอกสาร"), href: "/document-progress", icon: Route },
+      { label: msg("ประกาศ"), href: "/announcements", icon: Megaphone },
     ],
   },
 ];
@@ -64,7 +65,7 @@ const buildNav = (pendingCourses: number, isExecutive: boolean): NavSection[] =>
 // Account settings moved to the sidebar above, so the dropdown keeps only what
 // has no home there. Two identical links on one screen is one too many.
 const userMenuItems: UserMenuItem[] = [
-  { id: "notif", label: "การเตือน", href: "/notifications", icon: Bell },
+  { id: "notif", label: msg("การเตือน"), href: "/notifications", icon: Bell },
 ];
 
 export default function LecturerHomeShell({

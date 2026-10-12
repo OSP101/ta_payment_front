@@ -12,6 +12,7 @@ import {
   PageHeader, Panel, Button, Select, Chip, DatePicker, EmptyState, Tip, TipWrap, ConfirmDialog,
 } from "../../components/ui";
 import { Skel, SkelList, SkelRegion } from "../../components/Skeletons";
+import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 /**
  * ใบแต่งตั้งทีเอ (คำสั่ง) — its own section since 31/07/2026.
@@ -37,11 +38,12 @@ import { Skel, SkelList, SkelRegion } from "../../components/Skeletons";
 
 export default function AppointmentsPage() {
   const { termId, loaded } = useTerm();
+  const { t } = useI18n();
   return (
     <div>
       <PageHeader
-        title="ใบแต่งตั้งทีเอ"
-        description="ออกคำสั่งแต่งตั้ง TA ตามรอบที่ยื่นขอ พร้อมประวัติการออกคำสั่งและปุ่มดาวน์โหลดฉบับเดิม"
+        title={t("ใบแต่งตั้งทีเอ")}
+        description={t("ออกคำสั่งแต่งตั้ง TA ตามรอบที่ยื่นขอ พร้อมประวัติการออกคำสั่งและปุ่มดาวน์โหลดฉบับเดิม")}
       />
       {/* Mounted while /terms is still loading too (its keys stay null until a
           term is known), so the form and panel frames draw at once and the
@@ -66,9 +68,10 @@ interface AdminOfficer {
   can_sign_for_dean?: boolean;
 }
 
+// The printed order is Thai; these preview its wording, so they stay Thai.
 const THAI_MONTHS = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", // i18n-ignore
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม", // i18n-ignore
 ];
 // Preview how the backend will render an ISO date in Thai government style
 // (day + Thai month + Buddhist-era year). withEra adds "พ.ศ.".
@@ -78,7 +81,7 @@ function thaiDatePreview(iso: string, withEra: boolean): string {
   const [, y, mo, d] = m;
   const month = THAI_MONTHS[Number(mo) - 1];
   const beYear = Number(y) + 543;
-  return `${Number(d)} ${month} ${withEra ? "พ.ศ. " : ""}${beYear}`;
+  return `${Number(d)} ${month} ${withEra ? "พ.ศ. " : ""}${beYear}`; // i18n-ignore
 }
 
 /** Membership of the next คำสั่งแต่งตั้ง round, from the preview endpoint. */
@@ -114,9 +117,12 @@ interface RemindResult { sent: string[]; skipped: { name: string; reason: string
 // button, the server still decides.
 const REMIND_GAP_MS = 24 * 60 * 60 * 1000;
 
-function shortThaiDateTime(iso: string): string {
+function shortDateTime(iso: string, t: TFn, monthName: (m: number) => string): string {
   const d = new Date(iso);
-  return `${d.getDate()} ${THAI_MONTHS[d.getMonth()].slice(0, 3)} ${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")} น.`;
+  return t("{day} {month} {hh}.{mm} น.", {
+    day: d.getDate(), month: monthName(d.getMonth() + 1),
+    hh: String(d.getHours()).padStart(2, "0"), mm: String(d.getMinutes()).padStart(2, "0"),
+  });
 }
 
 interface AppointmentRound {
@@ -177,6 +183,7 @@ function HeldBackPanel({
   skipped: AppointmentPreview["skipped"];
   previewKey: string | null;
 }) {
+  const { t, monthName } = useI18n();
   const [busy, setBusy] = useState<string | null>(null); // course code, or "all"
   const [showAll, setShowAll] = useState(false);
   const now = Date.now();
@@ -198,14 +205,14 @@ function HeldBackPanel({
         ta_ids: taIds ?? [],
       });
       if (res.sent.length) {
-        notify.success(`ส่งแจ้งเตือนถึง ${res.sent.join(", ")} แล้ว`);
+        notify.success(t("ส่งแจ้งเตือนถึง {names} แล้ว", { names: res.sent.join(", ") }));
       }
       if (res.skipped.length) {
-        notify.warning(res.skipped.map(s => `${s.name}: ${s.reason}`).join("\n"));
+        notify.warning(res.skipped.map(s => `${s.name}: ${t(s.reason)}`).join("\n"));
       }
       if (previewKey) await mutate(previewKey);
     } catch (e) {
-      notify.error(e, "ส่งแจ้งเตือนไม่สำเร็จ");
+      notify.error(e, t("ส่งแจ้งเตือนไม่สำเร็จ"));
     } finally {
       setBusy(null);
     }
@@ -216,15 +223,15 @@ function HeldBackPanel({
       title={
         <span className="inline-flex items-center gap-2 text-amber-900">
           <AlertTriangle size={16} className="text-amber-600" />
-          ยังไม่พร้อมออกคำสั่ง {skipped.length} วิชา
+          {t("ยังไม่พร้อมออกคำสั่ง {n} วิชา", { n: skipped.length })}
         </span>
       }
       description={
         waiting.size > 0
-          ? `รอผู้ช่วยสอน ${waiting.size} คนบันทึกตารางเรียน วิชาเหล่านี้จะไปอยู่ในคำสั่งรอบถัดไป (รอบล่าช้า)`
-          : "วิชาเหล่านี้จะไปอยู่ในคำสั่งรอบถัดไป (รอบล่าช้า)"
+          ? t("รอผู้ช่วยสอน {n} คนบันทึกตารางเรียน วิชาเหล่านี้จะไปอยู่ในคำสั่งรอบถัดไป (รอบล่าช้า)", { n: waiting.size })
+          : t("วิชาเหล่านี้จะไปอยู่ในคำสั่งรอบถัดไป (รอบล่าช้า)")
       }
-      info="กดเตือนเพื่อส่งอีเมลและแจ้งเตือนในระบบให้ผู้ช่วยสอนบันทึกตารางเรียน เตือนคนเดิมซ้ำได้เมื่อครบ 24 ชั่วโมง ผู้ช่วยสอนที่มีเครื่องหมายถูกคือเพิ่งได้รับการเตือนไปแล้ว"
+      info={t("กดเตือนเพื่อส่งอีเมลและแจ้งเตือนในระบบให้ผู้ช่วยสอนบันทึกตารางเรียน เตือนคนเดิมซ้ำได้เมื่อครบ 24 ชั่วโมง ผู้ช่วยสอนที่มีเครื่องหมายถูกคือเพิ่งได้รับการเตือนไปแล้ว")}
       className="border-amber-200 bg-amber-50/40"
       padded={false}
       actions={
@@ -236,7 +243,7 @@ function HeldBackPanel({
             disabled={busy !== null || remindable === 0}
             isPending={busy === "all"}
           >
-            <BellRing size={14} /> เตือนทุกคน ({remindable})
+            <BellRing size={14} /> {t("เตือนทุกคน ({n})", { n: remindable })}
           </Button>
         )
       }
@@ -259,7 +266,7 @@ function HeldBackPanel({
               </div>
               <div className="min-w-0 text-xs leading-relaxed text-ink-2">
                 {list.length === 0 ? (
-                  <span className="text-amber-800">{s.reason}</span>
+                  <span className="text-amber-800">{t(s.reason)}</span>
                 ) : (
                   // Each name stays on one line; the comma after it, outside
                   // the no-wrap span, is where a long list breaks.
@@ -267,7 +274,7 @@ function HeldBackPanel({
                     <Fragment key={w.ta_id}>
                       <span className="whitespace-nowrap">
                         {remindedRecently(w.reminded_at) && (
-                          <Check size={12} className="me-0.5 inline align-[-1px] text-emerald-600" aria-label="เตือนแล้ว" />
+                          <Check size={12} className="me-0.5 inline align-[-1px] text-emerald-600" aria-label={t("เตือนแล้ว")} />
                         )}
                         {w.name}
                       </span>
@@ -280,19 +287,19 @@ function HeldBackPanel({
                 <div className="flex items-center justify-end gap-2">
                   {last && (
                     <span className="hidden text-[11px] text-ink-4 md:inline">
-                      เตือนล่าสุด {shortThaiDateTime(last)}
+                      {t("เตือนล่าสุด {at}", { at: shortDateTime(last, t, monthName) })}
                     </span>
                   )}
-                  <Tip content={due.length === 0 ? "เตือนทุกคนในวิชานี้ไปแล้วภายใน 24 ชั่วโมง" : undefined}>
+                  <Tip content={due.length === 0 ? t("เตือนทุกคนในวิชานี้ไปแล้วภายใน 24 ชั่วโมง") : undefined}>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => remind(due.map(w => w.ta_id), s.course_code)}
                       disabled={busy !== null || due.length === 0}
                       isPending={busy === s.course_code}
-                      aria-label={`เตือนผู้ช่วยสอนวิชา ${s.course_code} ให้บันทึกตารางเรียน`}
+                      aria-label={t("เตือนผู้ช่วยสอนวิชา {code} ให้บันทึกตารางเรียน", { code: s.course_code })}
                     >
-                      <BellRing size={12} /> {due.length === 0 ? "เตือนแล้ว" : `เตือน ${due.length} คน`}
+                      <BellRing size={12} /> {due.length === 0 ? t("เตือนแล้ว") : t("เตือน {n} คน", { n: due.length })}
                     </Button>
                   </Tip>
                 </div>
@@ -304,7 +311,7 @@ function HeldBackPanel({
       {skipped.length > HELD_BACK_PREVIEW && (
         <div className="border-t border-amber-200/60 px-5 py-2 text-center">
           <Button variant="ghost" size="sm" onClick={() => setShowAll(v => !v)}>
-            {showAll ? "ย่อรายการ" : `แสดงอีก ${hidden} วิชา`}
+            {showAll ? t("ย่อรายการ") : t("แสดงอีก {n} วิชา", { n: hidden })}
           </Button>
         </div>
       )}
@@ -313,6 +320,7 @@ function HeldBackPanel({
 }
 
 function AppointmentSection({ termId }: { termId: string }) {
+  const { t, fmtDate } = useI18n();
   const { data: officers } = useSWR<AdminOfficer[]>("/settings/admin-officers");
   // Who this round would appoint, and what it leaves behind. Printing is a
   // paper act that cannot be recalled, so staff see it before committing.
@@ -341,7 +349,8 @@ function AppointmentSection({ termId }: { termId: string }) {
   // paper is generated, not after someone notices on the printout.
   const signer = deans.find(o => o.id === signerId);
   const acting = signer && !signer.is_dean;
-  const deanSeat = deans.find(o => o.is_dean)?.title ?? "คณบดีวิทยาลัยการคอมพิวเตอร์";
+  // Part of the printed signature block preview — stays Thai like the paper.
+  const deanSeat = deans.find(o => o.is_dean)?.title ?? "คณบดีวิทยาลัยการคอมพิวเตอร์"; // i18n-ignore
 
   const pending = preview?.include.length ?? 0;
 
@@ -361,10 +370,10 @@ function AppointmentSection({ termId }: { termId: string }) {
   // What is still missing, named — a disabled button with no reason is a dead
   // end, and the toast that used to say it only appeared after a click.
   const missing = [
-    !orderNoNum.trim() || !orderNoYear.trim() ? "เลขที่คำสั่ง" : null,
-    !signerId ? "ผู้ลงนาม" : null,
-    !orderDate ? "วันที่สั่ง" : null,
-    !effectiveDate ? "วันที่มีผล" : null,
+    !orderNoNum.trim() || !orderNoYear.trim() ? msg("เลขที่คำสั่ง") : null,
+    !signerId ? msg("ผู้ลงนาม") : null,
+    !orderDate ? msg("วันที่สั่ง") : null,
+    !effectiveDate ? msg("วันที่มีผล") : null,
   ].filter(Boolean) as string[];
   const canGenerate = missing.length === 0 && pending > 0 && !busy;
 
@@ -386,7 +395,7 @@ function AppointmentSection({ termId }: { termId: string }) {
       a.download = `appointment-order-${r.order_no.replace("/", "-")}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-      notify.success(`ดาวน์โหลดคำสั่งที่ ${r.order_no} (ฉบับเดิม) แล้ว`);
+      notify.success(t("ดาวน์โหลดคำสั่งที่ {no} (ฉบับเดิม) แล้ว", { no: r.order_no }));
     } catch (e) {
       notify.error(errMessage(e));
     } finally {
@@ -411,7 +420,7 @@ function AppointmentSection({ termId }: { termId: string }) {
       a.download = `appointment-order-${orderNoNum.trim()}-${orderNoYear.trim()}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-      notify.success("สร้างไฟล์คำสั่งแล้ว กำลังส่งอีเมลแจ้งอาจารย์ผู้ขอ");
+      notify.success(t("สร้างไฟล์คำสั่งแล้ว กำลังส่งอีเมลแจ้งอาจารย์ผู้ขอ"));
       // The round is now on the ledger — refresh so the next preview shows the
       // reduced membership rather than offering the same names again.
       if (previewKey) void mutate(previewKey);
@@ -449,7 +458,7 @@ function AppointmentSection({ termId }: { termId: string }) {
             <div className="text-lg font-semibold text-ink-1">
               {!preview
                 ? <Skel className="h-7 w-64 max-w-full" />
-                : pending > 0 ? `TA ${pending} คน รอออกคำสั่งแต่งตั้ง` : "ออกคำสั่งครบทุกคนแล้ว"}
+                : pending > 0 ? t("TA {n} คน รอออกคำสั่งแต่งตั้ง", { n: pending }) : t("ออกคำสั่งครบทุกคนแล้ว")}
             </div>
             {/* No "·" separators: they wrap onto the next line on a phone and
                 sit there as a stray dot. Spacing alone does the job. */}
@@ -457,12 +466,12 @@ function AppointmentSection({ termId }: { termId: string }) {
               {!preview && <Skel className="h-5 w-48" />}
               {preview && (
                 <>
-                  <span>คำสั่งรอบที่ {preview.next_round}</span>
+                  <span>{t("คำสั่งรอบที่ {n}", { n: preview.next_round })}</span>
                   {preview.is_late
-                    ? <Chip tone="warn">รอบล่าช้า</Chip>
-                    : <Chip tone="success">รอบแรก (ทันกำหนด)</Chip>}
+                    ? <Chip tone="warn">{t("รอบล่าช้า")}</Chip>
+                    : <Chip tone="success">{t("รอบแรก (ทันกำหนด)")}</Chip>}
                   {preview.already_issued > 0 && (
-                    <span>ออกคำสั่งไปแล้ว {preview.already_issued} คน</span>
+                    <span>{t("ออกคำสั่งไปแล้ว {n} คน", { n: preview.already_issued })}</span>
                   )}
                 </>
               )}
@@ -486,8 +495,8 @@ function AppointmentSection({ termId }: { termId: string }) {
                   <span className="font-semibold text-ink-1">{c.code}</span>
                   <span className="min-w-0 truncate text-ink-3">{c.name}</span>
                   <span className="ms-auto flex flex-wrap justify-end gap-1">
-                    {c.tas.map(t => (
-                      <span key={t} className="chip chip-brand !text-[11px]">{t}</span>
+                    {c.tas.map(ta => (
+                      <span key={ta} className="chip chip-brand !text-[11px]">{ta}</span>
                     ))}
                   </span>
                 </li>
@@ -503,14 +512,14 @@ function AppointmentSection({ termId }: { termId: string }) {
               <li key={`${s.teaching_course_id}-${s.ta_id}`} className="flex flex-wrap items-baseline gap-x-2">
                 <span className="font-semibold text-ink-1">{s.course_code}</span>
                 <span className="text-ink-2">{s.ta_name}</span>
-                <span className="ms-auto text-xs text-amber-800">{s.reason}</span>
+                <span className="ms-auto text-xs text-amber-800">{t(s.reason)}</span>
               </li>
             ))}
           </ul>
         )}
         {preview && pending === 0 && (
           <div className="px-5 py-3 text-sm text-ink-3">
-            TA ที่อนุมัติแล้วได้รับคำสั่งแต่งตั้งครบทุกคน เมื่ออนุมัติคำขอใหม่ รายชื่อจะมาแสดงที่นี่
+            {t("TA ที่อนุมัติแล้วได้รับคำสั่งแต่งตั้งครบทุกคน เมื่ออนุมัติคำขอใหม่ รายชื่อจะมาแสดงที่นี่")}
           </div>
         )}
       </div>
@@ -523,20 +532,20 @@ function AppointmentSection({ termId }: { termId: string }) {
       {/* ── Form + history ─────────────────────────────────────────────── */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel
-          title="ข้อมูลคำสั่ง"
-          description="ระบบจัดกลุ่มรายชื่อตามระดับการศึกษาและรายวิชา (บัญชีแนบท้าย) ตามรูปแบบคำสั่งของวิทยาลัย"
+          title={t("ข้อมูลคำสั่ง")}
+          description={t("ระบบจัดกลุ่มรายชื่อตามระดับการศึกษาและรายวิชา (บัญชีแนบท้าย) ตามรูปแบบคำสั่งของวิทยาลัย")}
           className="lg:col-span-2"
           data-tour="appt-form"
         >
           <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
-            <Field label="คำสั่งที่ (เลขที่คำสั่ง)" icon={<Hash size={13} className="text-ink-4" />}>
+            <Field label={t("คำสั่งที่ (เลขที่คำสั่ง)")} icon={<Hash size={13} className="text-ink-4" />}>
               <div className="flex h-9 items-center rounded-lg border border-border bg-surface px-2 transition-colors focus-within:border-brand">
                 <input
                   value={orderNoNum}
                   onChange={e => setOrderNoNum(e.target.value.replace(/\D/g, ""))}
                   placeholder="6"
                   inputMode="numeric"
-                  aria-label="เลขที่คำสั่ง"
+                  aria-label={t("เลขที่คำสั่ง")}
                   className="w-14 bg-transparent text-center text-sm outline-none"
                 />
                 <span className="px-1 text-ink-3">/</span>
@@ -546,20 +555,20 @@ function AppointmentSection({ termId }: { termId: string }) {
                   placeholder="2569"
                   inputMode="numeric"
                   maxLength={4}
-                  aria-label="ปี พ.ศ. ของคำสั่ง"
+                  aria-label={t("ปี พ.ศ. ของคำสั่ง")}
                   className="min-w-0 flex-1 bg-transparent text-sm outline-none"
                 />
               </div>
             </Field>
 
-            <Field label="ผู้ลงนาม (คณบดี หรือผู้รักษาการแทน)" icon={<PenLine size={13} className="text-ink-4" />}>
+            <Field label={t("ผู้ลงนาม (คณบดี หรือผู้รักษาการแทน)")} icon={<PenLine size={13} className="text-ink-4" />}>
               <Select
                 value={signerId}
                 onChange={e => setSignerId(e.target.value)}
                 className="w-full"
                 disabled={deans.length === 0}
               >
-                <option value="">เลือกผู้ลงนาม</option>
+                <option value="">{t("เลือกผู้ลงนาม")}</option>
                 {deans.map(o => (
                   <option key={o.id} value={o.id}>
                     {(o.academic_prefix ?? "")}{o.full_name} · {o.title}
@@ -569,19 +578,19 @@ function AppointmentSection({ termId }: { termId: string }) {
             </Field>
 
             <Field
-              label="วันที่สั่ง"
+              label={t("วันที่สั่ง")}
               icon={<CalendarDays size={13} className="text-ink-4" />}
               hint={orderDate && thaiDatePreview(orderDate, true)}
             >
-              <DatePicker value={orderDate} onChange={setOrderDate} label="วันที่สั่ง" className="w-full" />
+              <DatePicker value={orderDate} onChange={setOrderDate} label={t("วันที่สั่ง")} className="w-full" />
             </Field>
 
             <Field
-              label="มีผลตั้งแต่วันที่"
+              label={t("มีผลตั้งแต่วันที่")}
               icon={<CalendarDays size={13} className="text-ink-4" />}
               hint={effectiveDate && thaiDatePreview(effectiveDate, false)}
             >
-              <DatePicker value={effectiveDate} onChange={setEffectiveDate} label="มีผลตั้งแต่วันที่" className="w-full" />
+              <DatePicker value={effectiveDate} onChange={setEffectiveDate} label={t("มีผลตั้งแต่วันที่")} className="w-full" />
             </Field>
           </div>
 
@@ -592,11 +601,12 @@ function AppointmentSection({ termId }: { termId: string }) {
           {acting && (
             <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
               <div className="flex items-center gap-1.5 text-xs font-medium text-amber-900">
-                <AlertTriangle size={13} /> ผู้ลงนามไม่ใช่คณบดี จะพิมพ์เป็น “รักษาการแทน”
+                <AlertTriangle size={13} /> {t("ผู้ลงนามไม่ใช่คณบดี จะพิมพ์เป็น “รักษาการแทน”")}
               </div>
               <div className="mt-1 text-center text-xs leading-relaxed text-amber-900/90">
                 <div>({signer!.academic_prefix ?? ""}{signer!.full_name})</div>
-                <div>{signer!.title} รักษาการแทน</div>
+                {/* i18n-ignore-next-line — preview of the printed Thai signature block */}
+                <div>{signer!.title} {"รักษาการแทน" /* i18n-ignore */}</div>
                 <div>{deanSeat}</div>
               </div>
             </div>
@@ -607,10 +617,13 @@ function AppointmentSection({ termId }: { termId: string }) {
               missing setup. Say it here, with the way out. */}
           {officers && deans.length === 0 && (
             <p className="mt-1 text-xs text-amber-700">
-              ยังไม่มีรายชื่อผู้ลงนามในระบบ เพิ่มได้ที่{" "}
-              <a href="/staff/settings?tab=admins" className="underline underline-offset-2">
-                ตั้งค่า › ฝ่ายบริหาร
-              </a>
+              {t.rich("ยังไม่มีรายชื่อผู้ลงนามในระบบ เพิ่มได้ที่ {link}", {
+                link: (
+                  <a href="/staff/settings?tab=admins" className="underline underline-offset-2">
+                    {t("ตั้งค่า › ฝ่ายบริหาร")}
+                  </a>
+                ),
+              })}
             </p>
           )}
 
@@ -622,13 +635,13 @@ function AppointmentSection({ termId }: { termId: string }) {
               {!preview
                 ? ""
                 : pending === 0
-                ? "ไม่มีรายชื่อค้าง จึงยังไม่ต้องออกคำสั่งรอบใหม่"
+                ? t("ไม่มีรายชื่อค้าง จึงยังไม่ต้องออกคำสั่งรอบใหม่")
                 : missing.length > 0
-                  ? `กรอกให้ครบก่อน: ${missing.join(" · ")}`
-                  : `จะได้ไฟล์ Word 1 ไฟล์ สำหรับ TA ${pending} คน และระบบจะอีเมลแจ้งอาจารย์ผู้ขอพร้อมแนบไฟล์คำสั่ง`}
+                  ? t("กรอกให้ครบก่อน: {fields}", { fields: missing.map(m => t(m)).join(" · ") })
+                  : t("จะได้ไฟล์ Word 1 ไฟล์ สำหรับ TA {n} คน และระบบจะอีเมลแจ้งอาจารย์ผู้ขอพร้อมแนบไฟล์คำสั่ง", { n: pending })}
             </span>
             <Button variant="primary" onClick={() => setConfirmGenerate(true)} disabled={!canGenerate}>
-              <FileSignature size={14} /> {busy ? "กำลังสร้าง…" : "สร้างไฟล์คำสั่ง (.docx)"}
+              <FileSignature size={14} /> {busy ? t("กำลังสร้าง…") : t("สร้างไฟล์คำสั่ง (.docx)")}
             </Button>
           </div>
           <ConfirmDialog
@@ -637,15 +650,15 @@ function AppointmentSection({ termId }: { termId: string }) {
             onConfirm={generate}
             isPending={busy}
             icon={<FileSignature size={18} />}
-            title={`ออกคำสั่งที่ ${orderNo}?`}
-            message={`ระบบจะบันทึกคำสั่งรอบนี้สำหรับ TA ${pending} คนไว้ถาวร รายชื่อเหล่านี้จะไม่อยู่ในรายการค้างอีก และจะส่งอีเมลแจ้งอาจารย์ผู้ขอพร้อมแนบไฟล์ทันที ตรวจเลขที่คำสั่ง วันที่ และผู้ลงนามให้ถูกต้องก่อนยืนยัน`}
-            confirmLabel="สร้างไฟล์และส่งอีเมล"
+            title={t("ออกคำสั่งที่ {no}?", { no: orderNo })}
+            message={t("ระบบจะบันทึกคำสั่งรอบนี้สำหรับ TA {n} คนไว้ถาวร รายชื่อเหล่านี้จะไม่อยู่ในรายการค้างอีก และจะส่งอีเมลแจ้งอาจารย์ผู้ขอพร้อมแนบไฟล์ทันที ตรวจเลขที่คำสั่ง วันที่ และผู้ลงนามให้ถูกต้องก่อนยืนยัน", { n: pending })}
+            confirmLabel={t("สร้างไฟล์และส่งอีเมล")}
           />
         </Panel>
 
         <Panel
-          title="ประวัติการออกคำสั่ง"
-          description={rounds?.items?.length ? `ออกไปแล้ว ${rounds.items.length} รอบ` : undefined}
+          title={t("ประวัติการออกคำสั่ง")}
+          description={rounds?.items?.length ? t("ออกไปแล้ว {n} รอบ", { n: rounds.items.length }) : undefined}
           data-tour="appt-history"
           padded={!rounds?.items?.length}
         >
@@ -654,16 +667,16 @@ function AppointmentSection({ termId }: { termId: string }) {
           ) : !rounds.items?.length ? (
             <EmptyState
               icon={<FileText size={26} />}
-              title="ยังไม่เคยออกคำสั่ง"
-              description="คำสั่งที่ออกแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม"
+              title={t("ยังไม่เคยออกคำสั่ง")}
+              description={t("คำสั่งที่ออกแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม")}
             />
           ) : (
             <ul className="divide-y divide-hairline">
               {rounds.items.map(r => (
                 <li key={r.id} className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <Chip tone={r.is_late ? "warn" : "neutral"}>รอบ {r.round_no}</Chip>
-                    <span className="text-sm font-medium text-ink-1">คำสั่งที่ {r.order_no}</span>
+                    <Chip tone={r.is_late ? "warn" : "neutral"}>{t("รอบ {n}", { n: r.round_no })}</Chip>
+                    <span className="text-sm font-medium text-ink-1">{t("คำสั่งที่ {no}", { no: r.order_no })}</span>
                     <span className="ms-auto inline-flex items-center gap-1 text-xs text-ink-3">
                       <Users size={12} />{r.ta_count}
                     </span>
@@ -672,8 +685,8 @@ function AppointmentSection({ termId }: { termId: string }) {
                       printed document converts it, so the history must too —
                       2026 next to a 2569 order number invites a double-take. */}
                   <div className="mt-1 text-xs text-ink-3">
-                    {thaiDatePreview(r.order_date, false) || r.order_date}
-                    {r.generated_by && ` · โดย ${r.generated_by}`}
+                    {fmtDate(r.order_date, { long: true })}
+                    {r.generated_by && " · " + t("โดย {name}", { name: r.generated_by })}
                   </div>
                   <div className="mt-1.5">
                     {r.can_reprint ? (
@@ -684,12 +697,13 @@ function AppointmentSection({ termId }: { termId: string }) {
                         className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
                       >
                         <Download size={12} />
-                        {reprinting === r.id ? "กำลังดาวน์โหลด…" : "ดาวน์โหลดฉบับเดิม"}
+                        {reprinting === r.id ? t("กำลังดาวน์โหลด…") : t("ดาวน์โหลดฉบับเดิม")}
                       </button>
                     ) : (
                       // Not a disabled button: nothing the user can do will ever
                       // enable it, and a greyed control invites them to try.
-                      <span className="text-xs text-ink-4">ออกก่อนระบบเก็บสำเนา ดาวน์โหลดซ้ำไม่ได้</span>
+                      <span className="text-xs text-ink-4">{t("ออกก่อนระบบเก็บสำเนา ดาวน์โหลดซ้ำไม่ได้")}</span>
+
                     )}
                   </div>
                 </li>

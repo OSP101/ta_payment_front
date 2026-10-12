@@ -7,6 +7,7 @@ import {
 import { Button, EmptyState } from "../../components/ui";
 import { SkelList } from "../../components/Skeletons";
 import { RowBadges } from "./RowBadges";
+import { useI18n } from "../../lib/i18n/client";
 import {
   ROLE_LABEL, changePhrase, clock, dayHeading, dayKey, headline, subjectText,
   type Row,
@@ -54,12 +55,13 @@ export function Timeline({
   onOpen: (r: Row) => void;
   onOpenBurst: (r: Row) => void;
 }) {
+  const { t, intl } = useI18n();
   if (error) {
     return (
       <EmptyState
-        title="โหลดบันทึกไม่สำเร็จ"
-        description="ตรวจการเชื่อมต่อแล้วลองอีกครั้ง"
-        action={<Button variant="secondary" size="sm" onPress={onRetry}>ลองใหม่</Button>}
+        title={t("โหลดบันทึกไม่สำเร็จ")}
+        description={t("ตรวจการเชื่อมต่อแล้วลองอีกครั้ง")}
+        action={<Button variant="secondary" size="sm" onPress={onRetry}>{t("ลองใหม่")}</Button>}
       />
     );
   }
@@ -67,8 +69,8 @@ export function Timeline({
   if (rows.length === 0) {
     return (
       <EmptyState
-        title="ไม่พบเหตุการณ์ในช่วงเวลานี้"
-        description="ลองขยายช่วงเวลา เปลี่ยนหมวด หรือล้างคำค้น"
+        title={t("ไม่พบเหตุการณ์ในช่วงเวลานี้")}
+        description={t("ลองขยายช่วงเวลา เปลี่ยนหมวด หรือล้างคำค้น")}
       />
     );
   }
@@ -79,7 +81,7 @@ export function Timeline({
     const key = dayKey(r.at);
     const last = groups[groups.length - 1];
     if (last && last.key === key) last.rows.push(r);
-    else groups.push({ key, heading: dayHeading(r.at), rows: [r] });
+    else groups.push({ key, heading: dayHeading(r.at, t, intl), rows: [r] });
   }
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -104,19 +106,22 @@ export function Timeline({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-(--border) pt-3 text-xs text-(--ink-3) sm:text-sm">
         <span>
-          {first.toLocaleString("th-TH")}–{Math.min(first + rows.length - 1, total).toLocaleString("th-TH")} จาก{" "}
-          {total.toLocaleString("th-TH")} เหตุการณ์
+          {t("{from}–{to} จาก {total} เหตุการณ์", {
+            from: first.toLocaleString(intl),
+            to: Math.min(first + rows.length - 1, total).toLocaleString(intl),
+            total: total.toLocaleString(intl),
+          })}
         </span>
         {pages > 1 && (
           <span className="flex items-center gap-2">
             <Button variant="outline" size="sm" isDisabled={page <= 1} onPress={() => onPage(page - 1)}
-              aria-label="หน้าก่อนหน้า">
-              <ChevronLeft size={14} /> ใหม่กว่า
+              aria-label={t("หน้าก่อนหน้า")}>
+              <ChevronLeft size={14} /> {t("ใหม่กว่า")}
             </Button>
-            <span className="tabular-nums">หน้า {page} / {pages}</span>
+            <span className="tabular-nums">{t("หน้า {page} / {pages}", { page, pages })}</span>
             <Button variant="outline" size="sm" isDisabled={page >= pages} onPress={() => onPage(page + 1)}
-              aria-label="หน้าถัดไป">
-              เก่ากว่า <ChevronRight size={14} />
+              aria-label={t("หน้าถัดไป")}>
+              {t("เก่ากว่า")} <ChevronRight size={14} />
             </Button>
           </span>
         )}
@@ -132,21 +137,22 @@ function TimelineRow({
   onOpen: (r: Row) => void;
   onOpenBurst: (r: Row) => void;
 }) {
+  const { t, intl } = useI18n();
   const Icon = categoryIcon(row.category);
-  const { who, what } = headline(row);
+  const { who, what } = headline(row, t);
   const subject = subjectText(row);
   const folded = row.count > 1;
 
   // The line under the headline: the reason, then what changed. Kept short —
   // the detail view has the whole list.
-  const changes = (row.changes ?? []).slice(0, 3).map(changePhrase);
+  const changes = (row.changes ?? []).slice(0, 3).map(c => changePhrase(c, t));
   const more = (row.changes?.length ?? 0) - changes.length;
   const second = [...(folded ? [] : row.details ?? []), ...(folded ? [] : changes)];
-  if (!folded && more > 0) second.push(`และอีก ${more} รายการ`);
+  if (!folded && more > 0) second.push(t("และอีก {n} รายการ", { n: more }));
 
   const meta = [
-    row.actor_role && !row.automatic ? ROLE_LABEL[row.actor_role] ?? row.actor_role : "",
-    row.automatic && row.actor_kind === "user" && row.actor_name ? `เริ่มจากการสั่งงานของ ${row.actor_name}` : "",
+    row.actor_role && !row.automatic ? (ROLE_LABEL[row.actor_role] ? t(ROLE_LABEL[row.actor_role]) : row.actor_role) : "",
+    row.automatic && row.actor_kind === "user" && row.actor_name ? t("เริ่มจากการสั่งงานของ {name}", { name: row.actor_name }) : "",
     // The browser belongs to whoever set the job off, not to the system.
     row.automatic ? "" : row.device ?? "",
   ].filter(Boolean);
@@ -160,7 +166,7 @@ function TimelineRow({
     <li>
       <div className="flex items-start gap-3 py-2.5">
         <time dateTime={row.at} className="w-11 shrink-0 pt-0.5 text-xs tabular-nums text-(--ink-3)">
-          {clock(row.at)}
+          {clock(row.at, intl)}
         </time>
         <Icon size={16} className={`mt-0.5 shrink-0 ${tone}`} aria-hidden />
         <button
@@ -176,14 +182,14 @@ function TimelineRow({
             </span>
             {folded && (
               <span className="inline-flex items-center gap-1 rounded-full bg-(--surface-2) px-2 py-0.5 text-xs font-medium text-(--ink-2)">
-                <Layers size={12} /> {row.count.toLocaleString("th-TH")} รายการ
+                <Layers size={12} /> {t("{n} รายการ", { n: row.count.toLocaleString(intl) })}
               </span>
             )}
             <RowBadges row={row} />
           </span>
           {folded && (
             <span className="mt-0.5 block text-xs text-(--ink-3)">
-              เกิดขึ้นพร้อมกันในคราวเดียว กดเพื่อดูทีละรายการ
+              {t("เกิดขึ้นพร้อมกันในคราวเดียว กดเพื่อดูทีละรายการ")}
             </span>
           )}
           {second.length > 0 && (

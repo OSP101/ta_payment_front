@@ -19,6 +19,7 @@ import {
 } from "../lib/api";
 import { notify } from "../lib/notify";
 import useDocumentTitle from "../lib/useDocumentTitle";
+import { msg, useI18n } from "../lib/i18n/client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -39,10 +40,10 @@ function homeFor(roles: string[]): string {
 // unrelated to AccountsForTier's actual access-control filtering on the
 // backend, which already decided which accounts even appear here.
 const ROLE_GROUPS: { key: string; title: string; icon: typeof Shield }[] = [
-  { key: "admin", title: "ผู้ดูแลระบบ", icon: Shield },
-  { key: "staff", title: "เจ้าหน้าที่", icon: Users },
-  { key: "lecturer", title: "อาจารย์ผู้สอน", icon: GraduationCap },
-  { key: "ta", title: "ผู้ช่วยสอน (TA)", icon: UserRound },
+  { key: "admin", title: msg("ผู้ดูแลระบบ"), icon: Shield },
+  { key: "staff", title: msg("เจ้าหน้าที่"), icon: Users },
+  { key: "lecturer", title: msg("อาจารย์ผู้สอน"), icon: GraduationCap },
+  { key: "ta", title: msg("ผู้ช่วยสอน (TA)"), icon: UserRound },
 ];
 function primaryRoleKey(roles: string[]): string {
   return ROLE_GROUPS.find(g => roles.includes(g.key))?.key ?? "ta";
@@ -52,32 +53,33 @@ function primaryRoleKey(roles: string[]): string {
 // `tier` field names, shown so a tester can see WHY they're offered the
 // accounts they're offered, not just the account list itself.
 const TIER_INFO: Record<DemoEnterResult["tier"], { label: string; detail: string }> = {
-  staff: { label: "เจ้าหน้าที่", detail: "ทดลองได้ทุกบทบาท (ผู้ดูแลระบบ / เจ้าหน้าที่ / อาจารย์ / TA)" },
-  lecturer: { label: "อาจารย์", detail: "ทดลองได้เฉพาะบทบาทอาจารย์และ TA" },
-  ta: { label: "TA", detail: "ทดลองได้เฉพาะบทบาท TA" },
+  staff: { label: msg("เจ้าหน้าที่"), detail: msg("ทดลองได้ทุกบทบาท (ผู้ดูแลระบบ / เจ้าหน้าที่ / อาจารย์ / TA)") },
+  lecturer: { label: msg("อาจารย์"), detail: msg("ทดลองได้เฉพาะบทบาทอาจารย์และ TA") },
+  ta: { label: "TA", detail: msg("ทดลองได้เฉพาะบทบาท TA") },
 };
 
 const REASON_INFO: Record<string, { icon: React.ReactNode; title: string; description: string }> = {
   session_idle: {
     icon: <Clock size={16} />,
-    title: "ออกจากระบบอัตโนมัติ",
-    description: "ไม่มีการใช้งานเกิน 15 นาที กรุณาเลือกบทบาทเพื่อเข้าใช้งานห้องทดลองของคุณอีกครั้ง",
+    title: msg("ออกจากระบบอัตโนมัติ"),
+    description: msg("ไม่มีการใช้งานเกิน 15 นาที กรุณาเลือกบทบาทเพื่อเข้าใช้งานห้องทดลองของคุณอีกครั้ง"),
   },
   session_superseded: {
     icon: <MonitorSmartphone size={16} />,
-    title: "เข้าสู่ระบบจากอุปกรณ์อื่น",
-    description: "บทบาทนี้ถูกใช้งานจากที่อื่นพร้อมกัน กรุณาเลือกบทบาทอีกครั้ง",
+    title: msg("เข้าสู่ระบบจากอุปกรณ์อื่น"),
+    description: msg("บทบาทนี้ถูกใช้งานจากที่อื่นพร้อมกัน กรุณาเลือกบทบาทอีกครั้ง"),
   },
   session_revoked: {
     icon: <LogOut size={16} />,
-    title: "เซสชันทดลองสิ้นสุดแล้ว",
-    description: "กรุณาเลือกบทบาทเพื่อเข้าใช้งานอีกครั้ง",
+    title: msg("เซสชันทดลองสิ้นสุดแล้ว"),
+    description: msg("กรุณาเลือกบทบาทเพื่อเข้าใช้งานอีกครั้ง"),
   },
 };
 
 export default function DemoEntryPage() {
+  const { t } = useI18n();
   const router = useRouter();
-  useDocumentTitle("ห้องทดลองใช้งาน (BETA)");
+  useDocumentTitle(msg("ห้องทดลองใช้งาน (BETA)"));
   const [email, setEmail] = useState("");
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -90,7 +92,7 @@ export default function DemoEntryPage() {
     setReason(new URLSearchParams(window.location.search).get("reason"));
   }, []);
 
-  const emailError = !EMAIL_RE.test(email.trim()) ? "กรุณากรอกอีเมลที่ใช้งานจริงของคุณ" : undefined;
+  const emailError = !EMAIL_RE.test(email.trim()) ? t("กรุณากรอกอีเมลที่ใช้งานจริงของคุณ") : undefined;
 
   // Grouped by role for display — see ROLE_GROUPS' own doc comment. Only
   // groups that actually have a card in them show up (a lecturer-tier
@@ -155,23 +157,21 @@ export default function DemoEntryPage() {
               <Modal.Icon className="bg-warning-soft text-warning-soft-foreground">
                 <FlaskConical className="size-5" />
               </Modal.Icon>
-              <Modal.Heading>คุณกำลังเข้าสู่ห้องทดลอง (Sandbox)</Modal.Heading>
+              <Modal.Heading>{t("คุณกำลังเข้าสู่ห้องทดลอง (Sandbox)")}</Modal.Heading>
             </Modal.Header>
             <Modal.Body className="flex flex-col gap-2 text-sm">
               <p>
-                หน้านี้เป็นห้องทดลองที่แยกต่างหากจากระบบจริงทั้งหมด ข้อมูลที่คุณกรอกหรือสร้างขึ้นในห้องนี้
-                <span className="font-medium text-foreground"> จะไม่ถูกเก็บบันทึกจริง </span>
-                และจะไม่ถูกนำไปใช้กับข้อมูลจริงของมหาวิทยาลัยแต่อย่างใด
+                {t.rich("หน้านี้เป็นห้องทดลองที่แยกต่างหากจากระบบจริงทั้งหมด ข้อมูลที่คุณกรอกหรือสร้างขึ้นในห้องนี้ {notSaved} และจะไม่ถูกนำไปใช้กับข้อมูลจริงของมหาวิทยาลัยแต่อย่างใด", {
+                  notSaved: <span className="font-medium text-foreground">{t("จะไม่ถูกเก็บบันทึกจริง")}</span>,
+                })}
               </p>
               <p>
-                เราอยากให้คุณลองใช้งานเครื่องมือต่าง ๆ ตามขั้นตอนที่ระบบแนะนำ เพื่อให้คุ้นเคยกับระบบก่อนใช้งานจริง
-                และช่วยเราหาจุดบกพร่องในช่วงเปิดทดลองใช้งาน (BETA) — หากพบปัญหาหรือมีข้อเสนอแนะระหว่างเล่น
-                รบกวนส่งฟีดแบ็คกลับมาให้เราด้วย จะเป็นประโยชน์มากในการปรับปรุงระบบ
+                {t("เราอยากให้คุณลองใช้งานเครื่องมือต่าง ๆ ตามขั้นตอนที่ระบบแนะนำ เพื่อให้คุ้นเคยกับระบบก่อนใช้งานจริง และช่วยเราหาจุดบกพร่องในช่วงเปิดทดลองใช้งาน (BETA) — หากพบปัญหาหรือมีข้อเสนอแนะระหว่างเล่น รบกวนส่งฟีดแบ็คกลับมาให้เราด้วย จะเป็นประโยชน์มากในการปรับปรุงระบบ")}
               </p>
             </Modal.Body>
             <Modal.Footer>
               <Button className="w-full" slot="close">
-                เข้าใจแล้ว เริ่มทดลองใช้งาน
+                {t("เข้าใจแล้ว เริ่มทดลองใช้งาน")}
               </Button>
             </Modal.Footer>
           </Modal.Dialog>
@@ -181,7 +181,7 @@ export default function DemoEntryPage() {
       <header className="border-b border-warning-soft-border bg-warning-soft px-6 h-14 flex items-center gap-2">
         <FlaskConical size={18} className="text-warning-soft-foreground" />
         <div className="font-semibold text-[15px] text-warning-soft-foreground">
-          ห้องทดลองใช้งาน COCO TAS (BETA)
+          {t("ห้องทดลองใช้งาน COCO TAS (BETA)")}
         </div>
       </header>
 
@@ -189,19 +189,19 @@ export default function DemoEntryPage() {
         <div className={`w-full ${workspace ? "max-w-lg" : "max-w-md"}`}>
           <div className="text-center mb-6">
             <h1 className="text-[22px] font-semibold text-foreground">
-              {workspace ? "เลือกบทบาทที่ต้องการทดลอง" : "เริ่มทดลองใช้งาน"}
+              {workspace ? t("เลือกบทบาทที่ต้องการทดลอง") : t("เริ่มทดลองใช้งาน")}
             </h1>
             <p className="text-sm text-muted mt-1">
               {workspace
-                ? "ข้อมูลในห้องนี้เป็นของคุณคนเดียว แยกจากคนอื่นและจากระบบจริงทั้งหมด"
-                : "จำลองการทำงานทุกขั้นตอนโดยไม่ต้องรอข้อมูลจากอาจารย์หรือ TA จริง"}
+                ? t("ข้อมูลในห้องนี้เป็นของคุณคนเดียว แยกจากคนอื่นและจากระบบจริงทั้งหมด")
+                : t("จำลองการทำงานทุกขั้นตอนโดยไม่ต้องรอข้อมูลจากอาจารย์หรือ TA จริง")}
             </p>
           </div>
 
           {reason && REASON_INFO[reason] && (
             <div className="mb-4">
               <Alert status="warning" icon={REASON_INFO[reason].icon}
-                title={REASON_INFO[reason].title} description={REASON_INFO[reason].description} />
+                title={t(REASON_INFO[reason].title)} description={t(REASON_INFO[reason].description)} />
             </div>
           )}
 
@@ -210,14 +210,14 @@ export default function DemoEntryPage() {
               <FlaskConical size={18} className="text-warning-soft-foreground shrink-0 mt-0.5" />
               <div className="text-sm min-w-0">
                 <div className="font-medium text-warning-soft-foreground">
-                  ห้องทดลองของ {email.trim()}
+                  {t("ห้องทดลองของ {email}", { email: email.trim() })}
                 </div>
                 <div className="text-warning-soft-foreground/80 text-xs mt-0.5">
-                  ระดับสิทธิ์: <span className="font-medium">{TIER_INFO[workspace.tier].label}</span>
-                  {" — "}{TIER_INFO[workspace.tier].detail}
+                  {t.rich("ระดับสิทธิ์: {tier}", { tier: <span className="font-medium">{t(TIER_INFO[workspace.tier].label)}</span> })}
+                  {" — "}{t(TIER_INFO[workspace.tier].detail)}
                 </div>
                 <div className="text-warning-soft-foreground/70 text-xs mt-1">
-                  ข้อมูลทั้งหมดที่นี่เป็นข้อมูลจำลอง ไม่ใช่ข้อมูลจริง และแยกขาดจากระบบจริงทั้งหมด
+                  {t("ข้อมูลทั้งหมดที่นี่เป็นข้อมูลจำลอง ไม่ใช่ข้อมูลจริง และแยกขาดจากระบบจริงทั้งหมด")}
                 </div>
               </div>
             </div>
@@ -233,18 +233,18 @@ export default function DemoEntryPage() {
                     onBlur={() => setTouched(true)}
                     isInvalid={touched && !!emailError}
                   >
-                    <Label>อีเมลของคุณ</Label>
+                    <Label>{t("อีเมลของคุณ")}</Label>
                     <InputGroup>
                       <InputGroup.Input placeholder="you@kkumail.com" autoComplete="email" lang="en" />
                     </InputGroup>
                     {touched && emailError && <FieldError>{emailError}</FieldError>}
                   </TextField>
                   <p className="text-xs text-muted -mt-2">
-                    ใช้แค่แยกห้องทดลองของคุณจากคนอื่น — ไม่ต้องยืนยันอีเมล และไม่ผูกกับบัญชีจริงของคุณ
+                    {t("ใช้แค่แยกห้องทดลองของคุณจากคนอื่น — ไม่ต้องยืนยันอีเมล และไม่ผูกกับบัญชีจริงของคุณ")}
                   </p>
                   <Button type="submit" size="lg" fullWidth isPending={loading}>
                     <LogIn />
-                    เข้าห้องทดลอง
+                    {t("เข้าห้องทดลอง")}
                   </Button>
                 </form>
               </Card.Content>
@@ -255,7 +255,7 @@ export default function DemoEntryPage() {
                 <div key={group.key}>
                   <div className="flex items-center gap-1.5 text-xs font-medium text-muted uppercase tracking-wide mb-2 px-0.5">
                     <group.icon size={13} />
-                    {group.title}
+                    {t(group.title)}
                   </div>
                   <div className="flex flex-col gap-2">
                     {group.accounts.map(acc => (
@@ -277,8 +277,8 @@ export default function DemoEntryPage() {
                             </span>
                           </span>
                           <span className="shrink-0 text-xs text-muted flex items-center gap-1">
-                            {entering === acc.email ? "กำลังเข้าสู่ระบบ…" : (
-                              <>เข้าใช้งาน <ArrowRight size={13} /></>
+                            {entering === acc.email ? t("กำลังเข้าสู่ระบบ…") : (
+                              <>{t("เข้าใช้งาน")} <ArrowRight size={13} /></>
                             )}
                           </span>
                         </button>
@@ -288,7 +288,7 @@ export default function DemoEntryPage() {
                 </div>
               ))}
               <Button variant="ghost" size="sm" onPress={() => setWorkspace(null)} className="self-center mt-1">
-                กลับไปกรอกอีเมลใหม่
+                {t("กลับไปกรอกอีเมลใหม่")}
               </Button>
             </div>
           )}

@@ -18,6 +18,7 @@ import {
   ConfirmDialog, EmptyState, DatePicker, TimePicker, TipWrap,
 } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
+import { msg, useI18n } from "../lib/i18n/client";
 // The TA-actor makeup/remind endpoints (assertMakeupManager +
 // RequireApprovedTAProfile — see router.go's `/teaching-courses/:id/makeup/...`
 // and `/holiday-impacts/.../remind`) reject an unapproved TA the same way the
@@ -91,17 +92,13 @@ interface TC {
   lecturers?: { id: string }[];
 }
 
-const MONTH_TH = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-];
-const DOW_TH = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
-const KIND_LABEL: Record<string, string> = { lecture: "บรรยาย", lab: "ปฏิบัติการ" };
+const DOW_TH = [msg("อาทิตย์"), msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์")];
+const KIND_LABEL: Record<string, string> = { lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ") };
 
-function formatThaiDate(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return iso;
-  return `${d.getDate()} ${MONTH_TH[d.getMonth()]} ${d.getFullYear() + 543}`;
+/** Long-month date in the reader's language ("24 ตุลาคม 2569" / "24 October 2026"). */
+function useLongDate(): (iso: string) => string {
+  const { fmtDate } = useI18n();
+  return (iso: string) => fmtDate(iso, { long: true });
 }
 
 /** "08:00–12:00" for a partial closure, null when the day is closed outright.
@@ -122,6 +119,8 @@ type Viewer = "lecturer" | "ta";
 
 export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer }) {
   const isTA = viewer === "ta";
+  const { t } = useI18n();
+  const formatThaiDate = useLongDate();
   const { approved } = useTAApproval();
   const taLocked = isTA && !approved;
   const { data: course } = useSWR<TC>(`/teaching-courses/${tcId}`);
@@ -175,7 +174,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
     setDeleting(true);
     try {
       await api.del(`/teaching-courses/${tcId}/makeup/${deletingMakeup.sectionId}/${deletingMakeup.makeupId}`);
-      notify.success(deletingMakeup.waived ? "ยกเลิกการไม่มีการชดเชยแล้ว" : "ลบวันชดเชยแล้ว");
+      notify.success(deletingMakeup.waived ? t("ยกเลิกการไม่มีการชดเชยแล้ว") : t("ลบวันชดเชยแล้ว"));
       await refresh();
     } catch (e) {
       notify.error(e);
@@ -190,19 +189,19 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
   return (
     <div>
       <PageHeader
-        title="วันหยุดและวันชดเชย"
+        title={t("วันหยุดและวันชดเชย")}
         description={isTA
           // The TA can now file the makeup themselves, so lead with that —
           // but say plainly that it is still the lecturer's call, otherwise a
           // TA who guesses a date has effectively rescheduled the class.
-          ? "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ วันชดเชยกำหนดโดยอาจารย์ผู้สอนหรือดึงจากระบบ TDBM ถ้ายังไม่มีวันชดเชยจะลงเวลาปฏิบัติงานของคาบนั้นไม่ได้ กด “แจ้งเตือนอาจารย์” เพื่อให้อาจารย์กำหนด"
-          : "วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ และสถานะการกำหนดวันชดเชย TA จะลงชั่วโมงคาบที่ตกวันหยุดไม่ได้จนกว่าจะมีการกำหนดวันชดเชย"}
+          ? t("วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ วันชดเชยกำหนดโดยอาจารย์ผู้สอนหรือดึงจากระบบ TDBM ถ้ายังไม่มีวันชดเชยจะลงเวลาปฏิบัติงานของคาบนั้นไม่ได้ กด “แจ้งเตือนอาจารย์” เพื่อให้อาจารย์กำหนด")
+          : t("วันหยุดที่ตรงกับคาบเรียนของรายวิชานี้ และสถานะการกำหนดวันชดเชย TA จะลงชั่วโมงคาบที่ตกวันหยุดไม่ได้จนกว่าจะมีการกำหนดวันชดเชย")}
         actions={
           // Makeups are the course's call; the API refuses every makeup
           // write from a TA.
           readOnly ? undefined : (
             <LockedActionButton variant="secondary" onClick={() => setManualOpen(true)} disabled={!course?.sections?.length}>
-              <Plus size={14} /> เพิ่มวันชดเชย (กรณีอื่น)
+              <Plus size={14} /> {t("เพิ่มวันชดเชย (กรณีอื่น)")}
             </LockedActionButton>
           )
         }
@@ -214,19 +213,17 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
         <Alert
           status="danger"
           icon={<AlertTriangle size={16} />}
-          title={`ต้องดำเนินการ: ${unresolvedCount} คาบยังไม่ได้กำหนดวันชดเชย`}
+          title={t("ต้องดำเนินการ: {n} คาบยังไม่ได้กำหนดวันชดเชย", { n: unresolvedCount })}
           description={isTA ? (
-            <>
-              คาบเหล่านี้ตรงกับวันหยุด ระบบจะ<b>ข้ามวันนั้นในบันทึกเวลา</b>
-              {" "}<b>คุณจะลงเวลาและเบิกค่าตอบแทนของคาบนั้นไม่ได้</b>
-              {" "}จนกว่าจะมีวันชดเชย กด “แจ้งเตือนอาจารย์” ให้อาจารย์กำหนด
-            </>
+            t.rich("คาบเหล่านี้ตรงกับวันหยุด ระบบจะ{skip} {cannot} จนกว่าจะมีวันชดเชย กด “แจ้งเตือนอาจารย์” ให้อาจารย์กำหนด", {
+              skip: <b>{t("ข้ามวันนั้นในบันทึกเวลา")}</b>,
+              cannot: <b>{t("คุณจะลงเวลาและเบิกค่าตอบแทนของคาบนั้นไม่ได้")}</b>,
+            })
           ) : (
-            <>
-              คาบเหล่านี้ตรงกับวันหยุด ระบบจะ<b>ข้ามวันนั้นในบันทึกเวลา</b>
-              {" "}<b>TA จะลงเวลาไม่ได้ และเบิกค่าตอบแทนของคาบนั้นไม่ได้</b>
-              {" "}จนกว่าจะกดปุ่ม “กำหนดวันชดเชย” ในทุกคาบด้านล่าง
-            </>
+            t.rich("คาบเหล่านี้ตรงกับวันหยุด ระบบจะ{skip} {cannot} จนกว่าจะกดปุ่ม “กำหนดวันชดเชย” ในทุกคาบด้านล่าง", {
+              skip: <b>{t("ข้ามวันนั้นในบันทึกเวลา")}</b>,
+              cannot: <b>{t("TA จะลงเวลาไม่ได้ และเบิกค่าตอบแทนของคาบนั้นไม่ได้")}</b>,
+            })
           )}
         />
       )}
@@ -261,8 +258,8 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
           <Panel>
             <EmptyState
               icon={<CheckCircle2 size={28} />}
-              title="ไม่มีวันหยุดที่ตรงกับคาบเรียน"
-              description="ตารางเทอมนี้ไม่มีวันหยุดที่กระทบคาบเรียนของรายวิชานี้"
+              title={t("ไม่มีวันหยุดที่ตรงกับคาบเรียน")}
+              description={t("ตารางเทอมนี้ไม่มีวันหยุดที่กระทบคาบเรียนของรายวิชานี้")}
             />
           </Panel>
         ) : (
@@ -275,7 +272,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                   title={
                     <span className="flex items-center gap-2 flex-wrap">
                       <span className="text-base">{formatThaiDate(imp.original_date)}</span>
-                      <span className="text-xs text-muted">({DOW_TH[imp.day_of_week]})</span>
+                      <span className="text-xs text-muted">({t(DOW_TH[imp.day_of_week])})</span>
                       <Chip tone="danger">{imp.holiday_name_th}</Chip>
                       {holidayWindowLabel(imp) && <Chip tone="info">🕒 {holidayWindowLabel(imp)}</Chip>}
                     </span>
@@ -284,14 +281,14 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                     // Say what is NOT cancelled too: with a partial closure the
                     // cheapest fix is often a slot later the same day, and
                     // nothing else on the page would tell them that is legal.
-                    ? `หยุดเฉพาะช่วง ${holidayWindowLabel(imp)} · มี ${imp.affected_sections.length} คาบที่คาบเกี่ยวกับช่วงนี้ คาบนอกช่วงยังเรียนตามปกติ และกำหนดเป็นเวลาชดเชยในวันเดียวกันได้`
-                    : `มี ${imp.affected_sections.length} คาบที่ได้รับผลกระทบ`}
+                    ? t("หยุดเฉพาะช่วง {window} · มี {n} คาบที่คาบเกี่ยวกับช่วงนี้ คาบนอกช่วงยังเรียนตามปกติ และกำหนดเป็นเวลาชดเชยในวันเดียวกันได้", { window: holidayWindowLabel(imp), n: imp.affected_sections.length })
+                    : t("มี {n} คาบที่ได้รับผลกระทบ", { n: imp.affected_sections.length })}
                   actions={
                     // The nudge is the TA's only action here: makeup dates are
                     // the lecturer's (or TDBM's), so the TA asks for one.
                     isTA && unresolvedHere > 0 ? (
                       <LockedActionButton variant="secondary" size="sm" onClick={() => setRemindTarget(imp)}>
-                        <Bell size={13} /> แจ้งเตือนอาจารย์
+                        <Bell size={13} /> {t("แจ้งเตือนอาจารย์")}
                       </LockedActionButton>
                     ) : undefined
                   }
@@ -312,7 +309,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             }>
                               sec {sec.sec_no}
                             </span>
-                            <Chip tone={sec.kind === "lab" ? "warn" : "info"}>{KIND_LABEL[sec.kind]}</Chip>
+                            <Chip tone={sec.kind === "lab" ? "warn" : "info"}>{t(KIND_LABEL[sec.kind])}</Chip>
                           </div>
                           <div className="text-xs text-muted mt-1 flex items-center gap-1 tabular-nums">
                             {sec.start_time.slice(0, 5)}–{sec.end_time.slice(0, 5)}
@@ -323,7 +320,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                           {sec.makeup?.waived ? (
                             <div className="flex items-center gap-2 flex-wrap">
                               <Ban size={16} className="text-muted" />
-                              <span className="text-sm font-medium text-muted">ไม่มีการชดเชย</span>
+                              <span className="text-sm font-medium text-muted">{t("ไม่มีการชดเชย")}</span>
                               {sec.makeup.note && (
                                 <span className="text-xs text-muted">— {sec.makeup.note}</span>
                               )}
@@ -332,7 +329,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             <div className="flex items-center gap-2 flex-wrap">
                               <CheckCircle2 size={16} className="text-success" />
                               <span className="text-sm font-medium">
-                                ชดเชย: {formatThaiDate(sec.makeup.makeup_date!)}
+                                {t("ชดเชย: {date}", { date: formatThaiDate(sec.makeup.makeup_date!) })}
                               </span>
                               {sec.makeup.start_time && sec.makeup.end_time && (
                                 <span className="text-xs text-muted tabular-nums">
@@ -347,7 +344,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             <div className="flex items-center gap-2">
                               <AlertTriangle size={16} className="text-warning" />
                               <span className="text-sm text-warning-soft-foreground">
-                                {isTA ? "ยังไม่ได้กำหนดวันชดเชย คุณจะลงเวลาคาบนี้ไม่ได้" : "ยังไม่ได้กำหนดวันชดเชย"}
+                                {isTA ? t("ยังไม่ได้กำหนดวันชดเชย คุณจะลงเวลาคาบนี้ไม่ได้") : t("ยังไม่ได้กำหนดวันชดเชย")}
                               </span>
                             </div>
                           )}
@@ -358,15 +355,15 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                                 disabled (see LockedActionButton's doc comment),
                                 so the lock reason needs its own wrapping span. */}
                             {!sec.makeup.waived && (
-                              <TipWrap content={taLocked ? "รอเจ้าหน้าที่อนุมัติเอกสาร" : undefined} className="inline-flex">
-                                <IconButton label="แก้ไข" variant="ghost" size="sm" disabled={taLocked} onClick={() => setEditingSlot({ impact: imp, section: sec })}>
+                              <TipWrap content={taLocked ? t("รอเจ้าหน้าที่อนุมัติเอกสาร") : undefined} className="inline-flex">
+                                <IconButton label={t("แก้ไข")} variant="ghost" size="sm" disabled={taLocked} onClick={() => setEditingSlot({ impact: imp, section: sec })}>
                                   <Pencil size={14} />
                                 </IconButton>
                               </TipWrap>
                             )}
-                            <TipWrap content={taLocked ? "รอเจ้าหน้าที่อนุมัติเอกสาร" : (sec.makeup.waived ? "ยกเลิกการไม่มีการชดเชย" : "ลบ")} className="inline-flex">
+                            <TipWrap content={taLocked ? t("รอเจ้าหน้าที่อนุมัติเอกสาร") : (sec.makeup.waived ? t("ยกเลิกการไม่มีการชดเชย") : t("ลบ"))} className="inline-flex">
                               <IconButton
-                                label={sec.makeup.waived ? "ยกเลิก" : "ลบ"}
+                                label={sec.makeup.waived ? t("ยกเลิก") : t("ลบ")}
                                 variant="ghost" size="sm"
                                 disabled={taLocked}
                                 onClick={() => setDeletingMakeup({
@@ -383,13 +380,13 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                         ) : (
                           <div className="flex items-center gap-1">
                             <LockedActionButton variant="primary" size="sm" onClick={() => setEditingSlot({ impact: imp, section: sec })}>
-                              <Plus size={14} /> กำหนดวันชดเชย
+                              <Plus size={14} /> {t("กำหนดวันชดเชย")}
                             </LockedActionButton>
                             <LockedActionButton
                               variant="secondary" size="sm"
                               onClick={() => setWaivingSlot({ impact: imp, section: sec })}
                             >
-                              <Ban size={14} /> ไม่มีการชดเชย
+                              <Ban size={14} /> {t("ไม่มีการชดเชย")}
                             </LockedActionButton>
                           </div>
                         )}
@@ -406,8 +403,8 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
       {manualMakeups.length > 0 && (
         <Panel
           className="mt-4"
-          title="วันชดเชยที่กำหนดเอง (กรณีอื่น)"
-          description="วันชดเชยของคาบที่งดด้วยเหตุอื่นนอกจากวันหยุดราชการ"
+          title={t("วันชดเชยที่กำหนดเอง (กรณีอื่น)")}
+          description={t("วันชดเชยของคาบที่งดด้วยเหตุอื่นนอกจากวันหยุดราชการ")}
           padded={false}
         >
           <div className="divide-y divide-(--hairline)">
@@ -422,10 +419,12 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                   </span>
                 </div>
                 <div className="flex-1 min-w-0 text-sm">
-                  <span className="text-muted">งดวันที่ </span>
-                  <span className="font-medium">{formatThaiDate(makeup.original_date)}</span>
-                  <span className="text-muted"> → ชดเชย </span>
-                  <span className="font-medium text-success">{formatThaiDate(makeup.makeup_date)}</span>
+                  <span className="text-muted">
+                    {t.rich("งดวันที่ {off} → ชดเชย {on}", {
+                      off: <span className="font-medium text-foreground">{formatThaiDate(makeup.original_date)}</span>,
+                      on: <span className="font-medium text-success">{formatThaiDate(makeup.makeup_date)}</span>,
+                    })}
+                  </span>
                   {makeup.start_time && makeup.end_time && (
                     <span className="text-xs text-muted tabular-nums"> · {makeup.start_time.slice(0, 5)}–{makeup.end_time.slice(0, 5)}</span>
                   )}
@@ -433,7 +432,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                 </div>
                 {!readOnly && (
                   <IconButton
-                    label="ลบ"
+                    label={t("ลบ")}
                     variant="ghost" size="sm"
                     onClick={() => setDeletingMakeup({ sectionId: section.id, makeupId: makeup.id, date: makeup.makeup_date, waived: false })}
                   >
@@ -482,12 +481,12 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
         onConfirm={handleDeleteMakeup}
         isPending={deleting}
         danger
-        title={deletingMakeup?.waived ? "ยกเลิกการไม่มีการชดเชย" : "ลบวันชดเชย"}
-        confirmLabel={deletingMakeup?.waived ? "ยกเลิก" : "ลบ"}
+        title={deletingMakeup?.waived ? t("ยกเลิกการไม่มีการชดเชย") : t("ลบวันชดเชย")}
+        confirmLabel={deletingMakeup?.waived ? t("ยกเลิก") : t("ลบ")}
         message={deletingMakeup
           ? (deletingMakeup.waived
-              ? "ต้องการยกเลิกสถานะ 'ไม่มีการชดเชย' หรือไม่? คาบนี้จะกลับไปเป็นสถานะยังไม่ได้กำหนดวันชดเชยอีกครั้ง"
-              : `ต้องการลบวันชดเชย ${formatThaiDate(deletingMakeup.date)} หรือไม่? รายการชั่วโมง (ร่าง) ของ TA ในวันนี้จะถูกลบด้วย ระบบจะปฏิเสธการลบถ้ามีชั่วโมงที่ส่งอนุมัติแล้ว`)
+              ? t("ต้องการยกเลิกสถานะ 'ไม่มีการชดเชย' หรือไม่? คาบนี้จะกลับไปเป็นสถานะยังไม่ได้กำหนดวันชดเชยอีกครั้ง")
+              : t("ต้องการลบวันชดเชย {date} หรือไม่? รายการชั่วโมง (ร่าง) ของ TA ในวันนี้จะถูกลบด้วย ระบบจะปฏิเสธการลบถ้ามีชั่วโมงที่ส่งอนุมัติแล้ว", { date: formatThaiDate(deletingMakeup.date) }))
           : ""}
       />
 
@@ -508,12 +507,13 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
  *  class is the lecturer's to move, and the row is not marked as "theirs" —
  *  anyone on the course sees and can change it. */
 function TAAgreementNotice() {
+  const { t } = useI18n();
   return (
     <Alert
       status="warning"
       icon={<AlertTriangle size={14} />}
-      title="กรุณาตกลงวันกับอาจารย์ก่อนบันทึก"
-      description="วันที่คุณบันทึกจะมีผลกับทุกคนในรายวิชานี้ทันที และอาจารย์แก้ไขหรือลบภายหลังได้"
+      title={t("กรุณาตกลงวันกับอาจารย์ก่อนบันทึก")}
+      description={t("วันที่คุณบันทึกจะมีผลกับทุกคนในรายวิชานี้ทันที และอาจารย์แก้ไขหรือลบภายหลังได้")}
     />
   );
 }
@@ -541,6 +541,8 @@ function MakeupFormModal({
   onSaved: () => void | Promise<void>;
 }) {
   const isReplace = !!section.makeup;
+  const { t } = useI18n();
+  const formatThaiDate = useLongDate();
   const [date, setDate] = useState(section.makeup?.makeup_date ?? "");
   // Default the times to the original class times — the common case is
   // "hold the same lesson on a different day".
@@ -555,13 +557,13 @@ function MakeupFormModal({
   const [armed, setArmed] = useState(false);
   const oldMakeupDate = section.makeup && !section.makeup.waived ? section.makeup.makeup_date ?? null : null;
 
-  const original = useMemo(() => formatThaiDate(impact.original_date), [impact.original_date]);
+  const original = formatThaiDate(impact.original_date);
   const closedWindow = holidayWindowLabel(impact);
 
   async function handleSave() {
     setError(null);
-    if (!date) { setError("กรุณาระบุวันชดเชย"); return; }
-    if (!start || !end) { setError("กรุณาระบุเวลาเริ่มและเวลาสิ้นสุด"); return; }
+    if (!date) { setError(t("กรุณาระบุวันชดเชย")); return; }
+    if (!start || !end) { setError(t("กรุณาระบุเวลาเริ่มและเวลาสิ้นสุด")); return; }
     if (oldMakeupDate && !armed) { setArmed(true); return; }
     setSaving(true);
     try {
@@ -583,7 +585,7 @@ function MakeupFormModal({
       } else {
         await api.post(`/teaching-courses/${tcId}/makeup/${section.section_id}`, body);
       }
-      notify.success(isReplace ? "แก้ไขวันชดเชยแล้ว" : "กำหนดวันชดเชยแล้ว");
+      notify.success(isReplace ? t("แก้ไขวันชดเชยแล้ว") : t("กำหนดวันชดเชยแล้ว"));
       await onSaved();
     } catch (e) {
       notify.error(e);
@@ -596,14 +598,14 @@ function MakeupFormModal({
     <Modal
       open
       onClose={onClose}
-      title={isReplace ? "แก้ไขวันชดเชย" : "กำหนดวันชดเชย"}
+      title={isReplace ? t("แก้ไขวันชดเชย") : t("กำหนดวันชดเชย")}
       icon={<CalendarOff size={18} />}
       size="md"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant={armed ? "danger" : "primary"} onClick={handleSave} isPending={saving} disabled={saving}>
-            {armed ? "ยืนยันแก้ไขวันชดเชย" : "บันทึก"}
+            {armed ? t("ยืนยันแก้ไขวันชดเชย") : t("บันทึก")}
           </Button>
         </div>
       }
@@ -611,19 +613,21 @@ function MakeupFormModal({
       <div className="flex flex-col gap-3">
         {armed && oldMakeupDate && (
           <div role="alert" className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-sm text-danger">
-            รายการชั่วโมงฉบับร่างของ TA ในวันชดเชยเดิม ({formatThaiDate(oldMakeupDate)}) จะถูกลบ
-            กด <b>ยืนยันแก้ไขวันชดเชย</b> อีกครั้งเพื่อบันทึก ระบบจะไม่ยอมแก้ถ้ามีชั่วโมงที่ส่งอนุมัติแล้ว
+            {t.rich("รายการชั่วโมงฉบับร่างของ TA ในวันชดเชยเดิม ({date}) จะถูกลบ กด {confirm} อีกครั้งเพื่อบันทึก ระบบจะไม่ยอมแก้ถ้ามีชั่วโมงที่ส่งอนุมัติแล้ว", {
+              date: formatThaiDate(oldMakeupDate),
+              confirm: <b>{t("ยืนยันแก้ไขวันชดเชย")}</b>,
+            })}
           </div>
         )}
         <div className="rounded-lg bg-surface-secondary border border-(--hairline) px-3 py-2 text-xs text-muted flex flex-col gap-0.5">
           <div>
-            <span>วันเดิม: </span>
+            <span>{t("วันเดิม:")} </span>
             <span className="font-semibold text-foreground">{original}</span>
-            <span className="ml-2">({impact.holiday_name_th}{closedWindow ? ` · หยุด ${closedWindow}` : ""})</span>
+            <span className="ml-2">({impact.holiday_name_th}{closedWindow ? " · " + t("หยุด {window}", { window: closedWindow }) : ""})</span>
           </div>
           <div>
             <span>section {section.sec_no} · </span>
-            <span>{KIND_LABEL[section.kind]}</span>
+            <span>{t(KIND_LABEL[section.kind])}</span>
             <span> · {section.start_time.slice(0, 5)}–{section.end_time.slice(0, 5)}</span>
           </div>
         </div>
@@ -637,26 +641,26 @@ function MakeupFormModal({
           <Alert
             status="accent"
             icon={<CalendarOff size={14} />}
-            title={`วันนี้หยุดเฉพาะช่วง ${closedWindow}`}
-            description="ชดเชยในวันเดิมได้ ถ้าเลือกเวลาที่ไม่คาบเกี่ยวกับช่วงที่หยุด หรือจะเลือกวันอื่นก็ได้"
+            title={t("วันนี้หยุดเฉพาะช่วง {window}", { window: closedWindow })}
+            description={t("ชดเชยในวันเดิมได้ ถ้าเลือกเวลาที่ไม่คาบเกี่ยวกับช่วงที่หยุด หรือจะเลือกวันอื่นก็ได้")}
           />
         )}
 
-        <FieldGroup label="วันที่ชดเชย">
-          <DatePicker value={date} onChange={setDate} label="วันที่ชดเชย" autoFocus />
+        <FieldGroup label={t("วันที่ชดเชย")}>
+          <DatePicker value={date} onChange={setDate} label={t("วันที่ชดเชย")} autoFocus />
         </FieldGroup>
 
         <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="เวลาเริ่ม">
-            <TimePicker value={start} onChange={setStart} label="เวลาเริ่ม" />
+          <FieldGroup label={t("เวลาเริ่ม")}>
+            <TimePicker value={start} onChange={setStart} label={t("เวลาเริ่ม")} />
           </FieldGroup>
-          <FieldGroup label="เวลาสิ้นสุด">
-            <TimePicker value={end} onChange={setEnd} label="เวลาสิ้นสุด" />
+          <FieldGroup label={t("เวลาสิ้นสุด")}>
+            <TimePicker value={end} onChange={setEnd} label={t("เวลาสิ้นสุด")} />
           </FieldGroup>
         </div>
 
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
-          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น เลื่อนไปเรียนวันเสาร์" />
+        <FieldGroup label={t("หมายเหตุ (ระบุก็ได้)")}>
+          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder={t("เช่น เลื่อนไปเรียนวันเสาร์")} />
         </FieldGroup>
 
         {error && <Alert status="danger" title={error} icon={<AlertTriangle size={14} />} />}
@@ -680,6 +684,8 @@ function WaiveConfirmModal({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const { t } = useI18n();
+  const formatThaiDate = useLongDate();
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -693,7 +699,7 @@ function WaiveConfirmModal({
         kind: section.kind,
         note: note || null,
       });
-      notify.success("บันทึก 'ไม่มีการชดเชย' แล้ว");
+      notify.success(t("บันทึก 'ไม่มีการชดเชย' แล้ว"));
       await onSaved();
     } catch (e) {
       if (e instanceof ApiError) setError(e.message);
@@ -707,26 +713,26 @@ function WaiveConfirmModal({
     <Modal
       open
       onClose={onClose}
-      title="ไม่มีการชดเชย"
+      title={t("ไม่มีการชดเชย")}
       icon={<Ban size={18} />}
       size="md"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving}>ยืนยัน</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
+          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving}>{t("ยืนยัน")}</Button>
         </div>
       }
     >
       <div className="flex flex-col gap-3">
         <div className="rounded-lg bg-surface-secondary border border-(--hairline) px-3 py-2 text-xs text-muted flex flex-col gap-0.5">
           <div>
-            <span>วันเดิม: </span>
+            <span>{t("วันเดิม:")} </span>
             <span className="font-semibold text-foreground">{formatThaiDate(impact.original_date)}</span>
             <span className="ml-2">({impact.holiday_name_th})</span>
           </div>
           <div>
             <span>section {section.sec_no} · </span>
-            <span>{KIND_LABEL[section.kind]}</span>
+            <span>{t(KIND_LABEL[section.kind])}</span>
             <span> · {section.start_time.slice(0, 5)}–{section.end_time.slice(0, 5)}</span>
           </div>
         </div>
@@ -734,12 +740,12 @@ function WaiveConfirmModal({
         <Alert
           status="warning"
           icon={<AlertTriangle size={14} />}
-          title="ยืนยันว่าคาบนี้หยุดจริง ไม่มีการสอนชดเชย"
-          description="ระบบจะถือว่าคาบนี้แก้ไขเรียบร้อยแล้ว (เหมือนกำหนดวันชดเชย) และจะไม่แจ้งเตือนอีก"
+          title={t("ยืนยันว่าคาบนี้หยุดจริง ไม่มีการสอนชดเชย")}
+          description={t("ระบบจะถือว่าคาบนี้แก้ไขเรียบร้อยแล้ว (เหมือนกำหนดวันชดเชย) และจะไม่แจ้งเตือนอีก")}
         />
 
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
-          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น หยุดจริงตามประกาศคณะ ไม่ต้องชดเชย" />
+        <FieldGroup label={t("หมายเหตุ (ระบุก็ได้)")}>
+          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder={t("เช่น หยุดจริงตามประกาศคณะ ไม่ต้องชดเชย")} />
         </FieldGroup>
 
         {error && <Alert status="danger" title={error} icon={<AlertTriangle size={14} />} />}
@@ -763,6 +769,7 @@ function ManualMakeupModal({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const { t } = useI18n();
   const [sectionId, setSectionId] = useState(sections[0]?.id ?? "");
   const [originalDate, setOriginalDate] = useState("");
   const [kind, setKind] = useState<"lecture" | "lab" | "">("");
@@ -797,17 +804,17 @@ function ManualMakeupModal({
 
   async function handleSave() {
     setError(null);
-    if (!sectionId) { setError("กรุณาเลือก section"); return; }
-    if (!originalDate) { setError("กรุณาระบุวันเดิมที่งดสอน"); return; }
+    if (!sectionId) { setError(t("กรุณาเลือก section")); return; }
+    if (!originalDate) { setError(t("กรุณาระบุวันเดิมที่งดสอน")); return; }
     if (periods.length === 0) {
-      setError("กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก ตรวจสอบวันเดิมที่งดสอนอีกครั้ง");
+      setError(t("กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก ตรวจสอบวันเดิมที่งดสอนอีกครั้ง"));
       return;
     }
-    if (!kind) { setError("กรุณาเลือกคาบที่ต้องการชดเชย"); return; }
-    if (!date) { setError("กรุณาระบุวันชดเชย"); return; }
+    if (!kind) { setError(t("กรุณาเลือกคาบที่ต้องการชดเชย")); return; }
+    if (!date) { setError(t("กรุณาระบุวันชดเชย")); return; }
     const st = start || defaultSlot?.start_time?.slice(0, 5) || "";
     const et = end || defaultSlot?.end_time?.slice(0, 5) || "";
-    if (!st || !et) { setError("กรุณาระบุเวลาเริ่มและเวลาสิ้นสุด"); return; }
+    if (!st || !et) { setError(t("กรุณาระบุเวลาเริ่มและเวลาสิ้นสุด")); return; }
     setSaving(true);
     try {
       await api.post(`/teaching-courses/${tcId}/makeup/${sectionId}`, {
@@ -818,7 +825,7 @@ function ManualMakeupModal({
         end_time: et,
         note: note || null,
       });
-      notify.success("เพิ่มวันชดเชยแล้ว");
+      notify.success(t("เพิ่มวันชดเชยแล้ว"));
       await onSaved();
     } catch (e) {
       notify.error(e);
@@ -831,19 +838,19 @@ function ManualMakeupModal({
     <Modal
       open
       onClose={onClose}
-      title="เพิ่มวันชดเชย (กรณีอื่น)"
+      title={t("เพิ่มวันชดเชย (กรณีอื่น)")}
       icon={<CalendarOff size={18} />}
       size="md"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving}>บันทึก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
+          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving}>{t("บันทึก")}</Button>
         </div>
       }
     >
       <div className="flex flex-col gap-3">
         <p className="text-xs text-muted">
-          สำหรับคาบที่งดด้วยเหตุอื่นนอกจากวันหยุดราชการ (เช่น ลา/ประชุม). เมื่อกำหนดแล้ว TA จะลงเวลาปฏิบัติงานในวันชดเชยได้
+          {t("สำหรับคาบที่งดด้วยเหตุอื่นนอกจากวันหยุดราชการ (เช่น ลา/ประชุม). เมื่อกำหนดแล้ว TA จะลงเวลาปฏิบัติงานในวันชดเชยได้")}
         </p>
 
         {viewer === "ta" && <TAAgreementNotice />}
@@ -856,24 +863,24 @@ function ManualMakeupModal({
           >
             {sections.map(s => (
               <option key={s.id} value={s.id}>
-                sec {s.sec_no} ({s.track === "special" ? "พิเศษ" : "ปกติ"})
+                sec {s.sec_no} ({s.track === "special" ? t("พิเศษ") : t("ปกติ")})
               </option>
             ))}
           </select>
         </FieldGroup>
 
-        <FieldGroup label="วันเดิมที่งดสอน">
-          <DatePicker value={originalDate} onChange={setOriginalDate} label="วันเดิมที่งดสอน" />
+        <FieldGroup label={t("วันเดิมที่งดสอน")}>
+          <DatePicker value={originalDate} onChange={setOriginalDate} label={t("วันเดิมที่งดสอน")} />
         </FieldGroup>
 
         {/* One makeup per period. A section that teaches บรรยาย and ปฏิบัติการ on
             the same day needs one for each, at their own times. */}
         <FieldGroup
-          label="คาบที่ชดเชย"
+          label={t("คาบที่ชดเชย")}
           hint={originalDate && periods.length === 0
-            ? "กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก"
+            ? t("กลุ่มนี้ไม่มีคาบเรียนในวันที่เลือก")
             : periods.length > 1
-              ? "วันนั้นมีหลายคาบ เลือกคาบที่งด (คาบอื่นกำหนดแยกได้)"
+              ? t("วันนั้นมีหลายคาบ เลือกคาบที่งด (คาบอื่นกำหนดแยกได้)")
               : undefined}
         >
           <select
@@ -882,38 +889,38 @@ function ManualMakeupModal({
             onChange={e => setKind(e.target.value as "lecture" | "lab" | "")}
             disabled={!originalDate || periods.length === 0}
           >
-            <option value="">{originalDate ? "— เลือกคาบ —" : "— เลือกวันเดิมก่อน —"}</option>
+            <option value="">{originalDate ? t("— เลือกคาบ —") : t("— เลือกวันเดิมก่อน —")}</option>
             {periods.map(p => (
               <option key={p.id} value={p.kind}>
-                {KIND_LABEL[p.kind]} {p.start_time.slice(0, 5)}–{p.end_time.slice(0, 5)}
+                {t(KIND_LABEL[p.kind])} {p.start_time.slice(0, 5)}–{p.end_time.slice(0, 5)}
               </option>
             ))}
           </select>
         </FieldGroup>
 
-        <FieldGroup label="วันที่ชดเชย">
-          <DatePicker value={date} onChange={setDate} label="วันที่ชดเชย" />
+        <FieldGroup label={t("วันที่ชดเชย")}>
+          <DatePicker value={date} onChange={setDate} label={t("วันที่ชดเชย")} />
         </FieldGroup>
 
         <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="เวลาเริ่ม">
+          <FieldGroup label={t("เวลาเริ่ม")}>
             <TimePicker
               value={start || defaultSlot?.start_time?.slice(0, 5) || ""}
               onChange={setStart}
-              label="เวลาเริ่ม"
+              label={t("เวลาเริ่ม")}
             />
           </FieldGroup>
-          <FieldGroup label="เวลาสิ้นสุด">
+          <FieldGroup label={t("เวลาสิ้นสุด")}>
             <TimePicker
               value={end || defaultSlot?.end_time?.slice(0, 5) || ""}
               onChange={setEnd}
-              label="เวลาสิ้นสุด"
+              label={t("เวลาสิ้นสุด")}
             />
           </FieldGroup>
         </div>
 
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
-          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น อาจารย์ลาประชุม เลื่อนไปเรียนวันเสาร์" />
+        <FieldGroup label={t("หมายเหตุ (ระบุก็ได้)")}>
+          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder={t("เช่น อาจารย์ลาประชุม เลื่อนไปเรียนวันเสาร์")} />
         </FieldGroup>
 
         {error && <Alert status="danger" title={error} icon={<AlertTriangle size={14} />} />}
@@ -937,10 +944,11 @@ function RemindModal({
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const label = useMemo(() => {
-    const win = holidayWindowLabel(impact);
-    return `${formatThaiDate(impact.original_date)} (${impact.holiday_name_th}${win ? ` · หยุด ${win}` : ""})`;
-  }, [impact]);
+  const { t } = useI18n();
+  const formatThaiDate = useLongDate();
+  const win = holidayWindowLabel(impact);
+  const label = formatThaiDate(impact.original_date) + " (" + impact.holiday_name_th
+    + (win ? " · " + t("หยุด {window}", { window: win }) : "") + ")";
 
   async function handleSend() {
     setError(null);
@@ -949,7 +957,7 @@ function RemindModal({
       await api.post(`/teaching-courses/${tcId}/holiday-impacts/${impact.original_date}/remind`, {
         note: note.trim(),
       });
-      notify.success("ส่งการแจ้งเตือนให้อาจารย์แล้ว");
+      notify.success(t("ส่งการแจ้งเตือนให้อาจารย์แล้ว"));
       await onSent();
     } catch (e) {
       // Backend returns a Thai-message 400 when the throttle rejects — surface
@@ -969,29 +977,29 @@ function RemindModal({
     <Modal
       open
       onClose={onClose}
-      title="แจ้งเตือนอาจารย์ให้กำหนดวันชดเชย"
+      title={t("แจ้งเตือนอาจารย์ให้กำหนดวันชดเชย")}
       icon={<Bell size={18} />}
       size="md"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={sending}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={sending}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={handleSend} isPending={sending} disabled={sending}>
-            <Send size={14} /> ส่งการแจ้งเตือน
+            <Send size={14} /> {t("ส่งการแจ้งเตือน")}
           </Button>
         </div>
       }
     >
       <div className="flex flex-col gap-3">
         <div className="rounded-lg bg-surface-secondary border border-(--hairline) px-3 py-2 text-sm">
-          <div className="text-xs text-muted">วันหยุดที่จะแจ้ง</div>
+          <div className="text-xs text-muted">{t("วันหยุดที่จะแจ้ง")}</div>
           <div className="font-semibold text-foreground mt-0.5">{label}</div>
         </div>
 
-        <FieldGroup label="ข้อความเพิ่มเติม (ระบุก็ได้)" hint="ระบบจะรวมข้อความนี้ไว้ในการแจ้งเตือน">
+        <FieldGroup label={t("ข้อความเพิ่มเติม (ระบุก็ได้)")} hint={t("ระบบจะรวมข้อความนี้ไว้ในการแจ้งเตือน")}>
           <TextInput
             value={note}
             onChange={e => setNote(e.target.value)}
-            placeholder="เช่น รบกวนอาจารย์ระบุวันชดเชยด้วยครับ"
+            placeholder={t("เช่น รบกวนอาจารย์ระบุวันชดเชยด้วยครับ")}
             autoFocus
           />
         </FieldGroup>
@@ -1001,8 +1009,8 @@ function RemindModal({
         <Alert
           status="default"
           icon={<CalendarOff size={14} />}
-          title="ระบบจะแจ้งได้ครั้งเดียวต่อ 24 ชั่วโมง / วันหยุด"
-          description="เพื่อไม่ให้อาจารย์ได้รับการแจ้งเตือนซ้ำ ๆ กรุณาอย่าลืมตรวจสอบผ่านทางอื่นด้วย"
+          title={t("ระบบจะแจ้งได้ครั้งเดียวต่อ 24 ชั่วโมง / วันหยุด")}
+          description={t("เพื่อไม่ให้อาจารย์ได้รับการแจ้งเตือนซ้ำ ๆ กรุณาอย่าลืมตรวจสอบผ่านทางอื่นด้วย")}
         />
       </div>
     </Modal>

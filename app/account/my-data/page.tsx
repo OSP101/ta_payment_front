@@ -11,6 +11,7 @@ import {
 import { notify } from "../../lib/notify";
 import { PageHeader, Panel, Button, IconButton, TextArea, Alert, Chip, StatusChip, Tip } from "../../components/ui";
 import { Skel, SkelList, SkelRegion, SkelRows, SkelValue } from "../../components/Skeletons";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 /**
  * PDPA self-service data access — "what do you have on me" (export/view) and
@@ -23,15 +24,16 @@ export default function MyDataPage() {
   const { data: me } = useSWR<Me>("/me");
   const { data: exp, error, mutate: revalidate } = useSWR<MyDataExport>("/me/data-export");
   const isTA = !!me?.roles?.includes("ta");
+  const { t } = useI18n();
 
   return (
     <div className="mx-auto w-full max-w-[900px]">
       <PageHeader
-        title="ข้อมูลของฉัน"
-        description="ดูข้อมูลส่วนบุคคลทั้งหมดที่ระบบจัดเก็บไว้ ดาวน์โหลด หรือขอให้ลบข้อมูล ตามสิทธิของเจ้าของข้อมูลภายใต้ PDPA"
+        title={t("ข้อมูลของฉัน")}
+        description={t("ดูข้อมูลส่วนบุคคลทั้งหมดที่ระบบจัดเก็บไว้ ดาวน์โหลด หรือขอให้ลบข้อมูล ตามสิทธิของเจ้าของข้อมูลภายใต้ PDPA")}
       />
 
-      {error && <Alert status="danger" title="โหลดข้อมูลไม่สำเร็จ" description={errMessage(error)} />}
+      {error && <Alert status="danger" title={t("โหลดข้อมูลไม่สำเร็จ")} description={errMessage(error)} />}
 
       {/* Panels render straight away with their own placeholders; only a
           failed load (nothing to show, the alert above says why) hides them. */}
@@ -48,7 +50,7 @@ export default function MyDataPage() {
 
       <div className="mt-2">
         <Button variant="ghost" size="sm" onClick={() => revalidate()}>
-          รีเฟรชข้อมูล
+          {t("รีเฟรชข้อมูล")}
         </Button>
       </div>
     </div>
@@ -57,15 +59,16 @@ export default function MyDataPage() {
 
 function ProfileSection({ exp }: { exp: MyDataExport | undefined }) {
   const p = exp?.profile;
+  const { t } = useI18n();
   return (
-    <Panel title="ข้อมูลส่วนตัว" className="mb-4">
+    <Panel title={t("ข้อมูลส่วนตัว")} className="mb-4">
       <div className="grid md:grid-cols-2 gap-3 text-sm">
-        <Field label="อีเมล" value={p?.email} />
-        <Field label="ชื่อ-นามสกุล" value={p && `${p.title ?? ""} ${p.first_name} ${p.last_name}`.trim()} />
-        <Field label="เบอร์โทรศัพท์" value={p && (p.phone ?? "—")} />
-        <Field label="รหัสนักศึกษา" value={p && (p.student_id ?? "—")} />
-        <Field label="หน่วยงาน" value={p && (p.department ?? "—")} />
-        <Field label="บทบาท" value={p && (p.roles.join(", ") || "—")} />
+        <Field label={t("อีเมล")} value={p?.email} />
+        <Field label={t("ชื่อ-นามสกุล")} value={p && `${p.title ?? ""} ${p.first_name} ${p.last_name}`.trim()} />
+        <Field label={t("เบอร์โทรศัพท์")} value={p && (p.phone ?? "—")} />
+        <Field label={t("รหัสนักศึกษา")} value={p && (p.student_id ?? "—")} />
+        <Field label={t("หน่วยงาน")} value={p && (p.department ?? "—")} />
+        <Field label={t("บทบาท")} value={p && (p.roles.join(", ") || "—")} />
       </div>
     </Panel>
   );
@@ -90,10 +93,11 @@ function CitizenIdSection() {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const { t } = useI18n();
 
   async function reveal() {
     if (!password) {
-      setErr("กรุณากรอกรหัสผ่าน");
+      setErr(t("กรุณากรอกรหัสผ่าน"));
       return;
     }
     setPending(true);
@@ -111,8 +115,8 @@ function CitizenIdSection() {
 
   return (
     <Panel
-      title="เลขบัตรประชาชน"
-      description="จัดเก็บแบบเข้ารหัส การเปิดดูเลขเต็มทุกครั้งจะถูกบันทึกเป็นหลักฐาน (audit log)"
+      title={t("เลขบัตรประชาชน")}
+      description={t("จัดเก็บแบบเข้ารหัส การเปิดดูเลขเต็มทุกครั้งจะถูกบันทึกเป็นหลักฐาน (audit log)")}
       className="mb-4"
     >
       <div className="flex items-center gap-3">
@@ -124,7 +128,7 @@ function CitizenIdSection() {
         </div>
         {revealed && (
           <Button variant="ghost" size="sm" onClick={() => setRevealed(null)}>
-            ซ่อน
+            {t("ซ่อน")}
           </Button>
         )}
       </div>
@@ -132,14 +136,14 @@ function CitizenIdSection() {
       {!revealed && (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
           <TextField name="reveal-password" value={password} onChange={v => { setPassword(v); setErr(null); }} className="flex-1">
-            <Label className="text-xs">รหัสผ่านปัจจุบัน</Label>
+            <Label className="text-xs">{t("รหัสผ่านปัจจุบัน")}</Label>
             <InputGroup>
               <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="current-password" lang="en" />
               <InputGroup.Suffix className="pr-0">
                 <IconButton
                   size="sm"
                   variant="ghost"
-                  label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                  label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
                   onPress={() => setShowPw(!showPw)}
                 >
                   {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -148,34 +152,35 @@ function CitizenIdSection() {
             </InputGroup>
           </TextField>
           <Button variant="secondary" className="w-full sm:w-auto" onClick={reveal} disabled={pending} isPending={pending}>
-            แสดงเลขบัตรเต็ม
+            {t("แสดงเลขบัตรเต็ม")}
           </Button>
         </div>
       )}
-      {err && <div className="mt-2"><Alert status="danger" title="เปิดดูไม่สำเร็จ" description={err} /></div>}
+      {err && <div className="mt-2"><Alert status="danger" title={t("เปิดดูไม่สำเร็จ")} description={err} /></div>}
     </Panel>
   );
 }
 
 function DocumentsSection({ exp }: { exp: MyDataExport | undefined }) {
+  const { t, intl } = useI18n();
   const DOC_LABEL: Record<string, string> = {
-    creditor_form: "แบบแจ้งเจ้าหนี้", national_id: "สำเนาบัตรประชาชน", bank_book: "หน้าสมุดบัญชี",
-    passport: "สำเนา Passport",
+    creditor_form: msg("แบบแจ้งเจ้าหนี้"), national_id: msg("สำเนาบัตรประชาชน"), bank_book: msg("หน้าสมุดบัญชี"),
+    passport: msg("สำเนา Passport"),
   };
   return (
-    <Panel title="เอกสาร" className="mb-4">
+    <Panel title={t("เอกสาร")} className="mb-4">
       {!exp ? (
         <SkelList items={3} icon={false} />
       ) : exp.documents.length === 0 ? (
-        <div className="text-sm text-muted">ยังไม่มีเอกสารที่อัปโหลด</div>
+        <div className="text-sm text-muted">{t("ยังไม่มีเอกสารที่อัปโหลด")}</div>
       ) : (
         <div className="flex flex-col divide-y divide-[var(--hairline)] -my-1">
           {exp.documents.map((d, i) => (
             <div key={i} className="flex items-center gap-3 py-2">
               <FileText size={16} className="text-muted shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-foreground truncate">{DOC_LABEL[d.kind] ?? d.kind}</div>
-                <div className="text-xs text-muted">{new Date(d.uploaded_at).toLocaleString("th-TH")}</div>
+                <div className="text-sm text-foreground truncate">{DOC_LABEL[d.kind] ? t(DOC_LABEL[d.kind]) : d.kind}</div>
+                <div className="text-xs text-muted">{new Date(d.uploaded_at).toLocaleString(intl)}</div>
               </div>
               <StatusChip status={d.status} />
             </div>
@@ -187,50 +192,51 @@ function DocumentsSection({ exp }: { exp: MyDataExport | undefined }) {
 }
 
 function SecuritySection({ exp }: { exp: MyDataExport | undefined }) {
+  const { t, intl } = useI18n();
   if (!exp) {
     return (
-      <Panel title="ความปลอดภัยและการเข้าสู่ระบบ" className="mb-4">
+      <Panel title={t("ความปลอดภัยและการเข้าสู่ระบบ")} className="mb-4">
         <SkelRegion className="flex items-center gap-3 mb-3">
           <Skel className="size-4 rounded-full" />
           <Skel className="h-3.5 w-40" />
         </SkelRegion>
-        <div className="text-xs text-muted mb-2">ประวัติการเข้าสู่ระบบล่าสุด</div>
+        <div className="text-xs text-muted mb-2">{t("ประวัติการเข้าสู่ระบบล่าสุด")}</div>
         <SkelRows rows={4} columns={4} />
       </Panel>
     );
   }
   return (
-    <Panel title="ความปลอดภัยและการเข้าสู่ระบบ" className="mb-4">
+    <Panel title={t("ความปลอดภัยและการเข้าสู่ระบบ")} className="mb-4">
       <div className="flex items-center gap-3 mb-3">
         <ShieldCheck size={16} className={exp.profile.totp_enabled ? "text-success" : "text-muted"} />
         <div className="text-sm text-foreground">
-          2FA: {exp.profile.totp_enabled ? "เปิดใช้งานแล้ว" : "ยังไม่เปิดใช้งาน"}
+          2FA: {exp.profile.totp_enabled ? t("เปิดใช้งานแล้ว") : t("ยังไม่เปิดใช้งาน")}
         </div>
       </div>
       {exp.pdpa_consent && (
         <div className="text-xs text-muted mb-3">
-          ยอมรับข้อตกลง PDPA เมื่อ {new Date(exp.pdpa_consent.consented_at).toLocaleString("th-TH")}
+          {t("ยอมรับข้อตกลง PDPA เมื่อ {at}", { at: new Date(exp.pdpa_consent.consented_at).toLocaleString(intl) })}
         </div>
       )}
-      <div className="text-xs text-muted mb-2">ประวัติการเข้าสู่ระบบล่าสุด</div>
+      <div className="text-xs text-muted mb-2">{t("ประวัติการเข้าสู่ระบบล่าสุด")}</div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="text-muted text-left">
             <tr>
-              <th className="font-normal pb-1 pr-3">เวลา</th>
+              <th className="font-normal pb-1 pr-3">{t("เวลา")}</th>
               <th className="font-normal pb-1 pr-3">IP</th>
-              <th className="font-normal pb-1 pr-3">อุปกรณ์</th>
-              <th className="font-normal pb-1">สถานะ</th>
+              <th className="font-normal pb-1 pr-3">{t("อุปกรณ์")}</th>
+              <th className="font-normal pb-1">{t("สถานะ")}</th>
             </tr>
           </thead>
           <tbody>
             {exp.sessions.map(s => (
               <tr key={s.id} className="border-t border-[var(--hairline)]">
-                <td className="py-1.5 pr-3 whitespace-nowrap">{new Date(s.created_at).toLocaleString("th-TH")}</td>
+                <td className="py-1.5 pr-3 whitespace-nowrap">{new Date(s.created_at).toLocaleString(intl)}</td>
                 <td className="py-1.5 pr-3 font-mono">{s.ip ?? "—"}</td>
                 <Tip content={s.user_agent}><td className="py-1.5 pr-3 truncate max-w-[240px]">{s.user_agent ?? "—"}</td></Tip>
                 <td className="py-1.5">
-                  {s.revoked_at ? <Chip tone="neutral">สิ้นสุดแล้ว</Chip> : <Chip tone="success">ใช้งานอยู่</Chip>}
+                  {s.revoked_at ? <Chip tone="neutral">{t("สิ้นสุดแล้ว")}</Chip> : <Chip tone="success">{t("ใช้งานอยู่")}</Chip>}
                 </td>
               </tr>
             ))}
@@ -238,7 +244,7 @@ function SecuritySection({ exp }: { exp: MyDataExport | undefined }) {
         </table>
       </div>
       <div className="mt-2 text-xs text-muted">
-        กิจกรรมล่าสุดของคุณ {exp.recent_activity.length} รายการ (ดูเพิ่มเติมได้จากไฟล์ที่ดาวน์โหลดด้านล่าง)
+        {t("กิจกรรมล่าสุดของคุณ {n} รายการ (ดูเพิ่มเติมได้จากไฟล์ที่ดาวน์โหลดด้านล่าง)", { n: exp.recent_activity.length })}
       </div>
     </Panel>
   );
@@ -246,6 +252,7 @@ function SecuritySection({ exp }: { exp: MyDataExport | undefined }) {
 
 function ExportSection() {
   const [downloading, setDownloading] = useState(false);
+  const { t } = useI18n();
 
   async function download() {
     setDownloading(true);
@@ -266,12 +273,12 @@ function ExportSection() {
   }
 
   return (
-    <Panel title="ดาวน์โหลดข้อมูลของฉัน" className="mb-4">
+    <Panel title={t("ดาวน์โหลดข้อมูลของฉัน")} className="mb-4">
       <p className="text-sm text-muted mb-3">
-        ดาวน์โหลดสำเนาข้อมูลทั้งหมดที่ระบบมีเกี่ยวกับคุณในรูปแบบไฟล์ JSON
+        {t("ดาวน์โหลดสำเนาข้อมูลทั้งหมดที่ระบบมีเกี่ยวกับคุณในรูปแบบไฟล์ JSON")}
       </p>
       <Button variant="secondary" onClick={download} disabled={downloading} isPending={downloading}>
-        <Download size={14} /> ดาวน์โหลดข้อมูลของฉัน (JSON)
+        <Download size={14} /> {t("ดาวน์โหลดข้อมูลของฉัน (JSON)")}
       </Button>
     </Panel>
   );
@@ -283,12 +290,13 @@ function DeletionRequestSection() {
   const [reason, setReason] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { t, intl } = useI18n();
 
   async function submit() {
     setSubmitting(true);
     try {
       await requestDataDeletion(reason);
-      notify.success("ส่งคำขอลบข้อมูลเรียบร้อย เจ้าหน้าที่จะตรวจสอบและแจ้งผลกลับ");
+      notify.success(t("ส่งคำขอลบข้อมูลเรียบร้อย เจ้าหน้าที่จะตรวจสอบและแจ้งผลกลับ"));
       setReason("");
       setConfirming(false);
       revalidate();
@@ -300,7 +308,7 @@ function DeletionRequestSection() {
   }
 
   return (
-    <Panel title="ขอให้ลบข้อมูลของฉัน" className="mb-4">
+    <Panel title={t("ขอให้ลบข้อมูลของฉัน")} className="mb-4">
       {/* The request button must not show before we know whether a request is
           already pending — it would flip into the "pending" alert a moment later. */}
       {isLoading ? (
@@ -313,46 +321,43 @@ function DeletionRequestSection() {
       ) : req && req.status === "pending" ? (
         <Alert
           status="warning"
-          title="คำขออยู่ระหว่างการพิจารณา"
-          description={`ส่งคำขอเมื่อ ${new Date(req.requested_at).toLocaleString("th-TH")} รอเจ้าหน้าที่ตรวจสอบและแจ้งผล`}
+          title={t("คำขออยู่ระหว่างการพิจารณา")}
+          description={t("ส่งคำขอเมื่อ {at} รอเจ้าหน้าที่ตรวจสอบและแจ้งผล", { at: new Date(req.requested_at).toLocaleString(intl) })}
         />
       ) : req && req.status === "approved" ? (
         <Alert
           status="success"
-          title="คำขอได้รับการอนุมัติแล้ว"
-          description={req.review_note || "บัญชีถูกปิดใช้งานและข้อมูลที่ไม่จำเป็นถูกลบแล้ว ข้อมูลที่มีผลทางการเงิน (หากมี) ยังคงถูกเก็บไว้ตามข้อบังคับทางบัญชี/ภาษี"}
+          title={t("คำขอได้รับการอนุมัติแล้ว")}
+          description={req.review_note || t("บัญชีถูกปิดใช้งานและข้อมูลที่ไม่จำเป็นถูกลบแล้ว ข้อมูลที่มีผลทางการเงิน (หากมี) ยังคงถูกเก็บไว้ตามข้อบังคับทางบัญชี/ภาษี")}
         />
       ) : (
         <>
           {req && req.status === "rejected" && (
             <div className="mb-3">
-              <Alert status="danger" title="คำขอก่อนหน้าถูกปฏิเสธ" description={req.review_note || "-"} />
+              <Alert status="danger" title={t("คำขอก่อนหน้าถูกปฏิเสธ")} description={req.review_note || "-"} />
             </div>
           )}
           <p className="text-sm text-muted mb-3">
-            คุณสามารถขอให้ลบข้อมูลส่วนบุคคลของคุณได้ ระบบจะปิดใช้งานบัญชีและลบข้อมูลที่ไม่จำเป็นทันที
-            (การยืนยันตัวตนสองขั้นตอน รูปโปรไฟล์ ประวัติการเข้าสู่ระบบ เอกสารที่อัปโหลด) ส่วนข้อมูลที่มีผลทาง
-            การเงิน เช่น เลขบัตรประชาชนและประวัติชั่วโมงสอนที่เคยเบิกจ่ายแล้ว จะยังถูกเก็บไว้ตามที่กฎหมาย
-            บัญชี/ภาษีกำหนด หากไม่มีประวัติการเบิกจ่าย ระบบจะลบเลขบัตรประชาชนออกด้วย
+            {t("คุณสามารถขอให้ลบข้อมูลส่วนบุคคลของคุณได้ ระบบจะปิดใช้งานบัญชีและลบข้อมูลที่ไม่จำเป็นทันที (การยืนยันตัวตนสองขั้นตอน รูปโปรไฟล์ ประวัติการเข้าสู่ระบบ เอกสารที่อัปโหลด) ส่วนข้อมูลที่มีผลทางการเงิน เช่น เลขบัตรประชาชนและประวัติชั่วโมงสอนที่เคยเบิกจ่ายแล้ว จะยังถูกเก็บไว้ตามที่กฎหมายบัญชี/ภาษีกำหนด หากไม่มีประวัติการเบิกจ่าย ระบบจะลบเลขบัตรประชาชนออกด้วย")}
           </p>
           {!confirming ? (
             <Button variant="danger" size="sm" onClick={() => setConfirming(true)}>
-              <Trash2 size={14} /> ขอให้ลบข้อมูลของฉัน
+              <Trash2 size={14} /> {t("ขอให้ลบข้อมูลของฉัน")}
             </Button>
           ) : (
             <div className="flex flex-col gap-2">
               <TextArea
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                placeholder="เหตุผล (ไม่บังคับ)"
+                placeholder={t("เหตุผล (ไม่บังคับ)")}
                 rows={3}
               />
               <div className="flex gap-2">
                 <Button variant="danger" size="sm" onClick={submit} disabled={submitting} isPending={submitting}>
-                  ยืนยันส่งคำขอ
+                  {t("ยืนยันส่งคำขอ")}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-                  ยกเลิก
+                  {t("ยกเลิก")}
                 </Button>
               </div>
             </div>

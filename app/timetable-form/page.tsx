@@ -8,6 +8,7 @@ import { Skel, SkelValue } from "../components/Skeletons";
 import useDocumentTitle from "../lib/useDocumentTitle";
 import { thaiDate } from "../lib/dates";
 import { apiUrl } from "../lib/api";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * The faculty's signed form — "ตารางเรียนและตารางปฏิบัติงาน (TA)".
@@ -24,6 +25,10 @@ import { apiUrl } from "../lib/api";
  *
  * Printing is the point of the document, so the layout is built for paper first:
  * see the @media print rules at the bottom.
+ *
+ * Interface language: the printed form matches the server-generated Thai PDF and
+ * stays Thai (marked i18n-ignore). Only the on-screen controls and notices
+ * (toolbar, alerts, document title) follow the reader's language.
  */
 
 interface Block {
@@ -68,9 +73,9 @@ const LAST_HOUR = 21;
 const HOURS = Array.from({ length: LAST_HOUR - FIRST_HOUR }, (_, i) => FIRST_HOUR + i);
 
 const DAYS = [
-  { dow: 1, label: "จันทร์" }, { dow: 2, label: "อังคาร" }, { dow: 3, label: "พุธ" },
-  { dow: 4, label: "พฤหัส" }, { dow: 5, label: "ศุกร์" },
-  { dow: 6, label: "เสาร์" }, { dow: 0, label: "อาทิตย์" },
+  { dow: 1, label: "จันทร์" }, { dow: 2, label: "อังคาร" }, { dow: 3, label: "พุธ" }, // i18n-ignore
+  { dow: 4, label: "พฤหัส" }, { dow: 5, label: "ศุกร์" }, // i18n-ignore
+  { dow: 6, label: "เสาร์" }, { dow: 0, label: "อาทิตย์" }, // i18n-ignore
 ];
 
 /**
@@ -85,14 +90,14 @@ const DAYS = [
  * a black-and-white copy colour alone says nothing.
  */
 const STYLE: Record<Block["kind"], { bg: string; fg: string; tag: string }> = {
-  own_class: { bg: "#FEE9D9", fg: "#7A3A16", tag: "เรียน" },
-  lecture:   { bg: "#D8E4BD", fg: "#3B5323", tag: "บรรยาย" },
-  lab:       { bg: "#CFE2F3", fg: "#12456E", tag: "ปฏิบัติการ" },
-  review:    { bg: "#E4D9F3", fg: "#442A70", tag: "ตรวจงาน" },
+  own_class: { bg: "#FEE9D9", fg: "#7A3A16", tag: "เรียน" }, // i18n-ignore
+  lecture:   { bg: "#D8E4BD", fg: "#3B5323", tag: "บรรยาย" }, // i18n-ignore
+  lab:       { bg: "#CFE2F3", fg: "#12456E", tag: "ปฏิบัติการ" }, // i18n-ignore
+  review:    { bg: "#E4D9F3", fg: "#442A70", tag: "ตรวจงาน" }, // i18n-ignore
 };
 
 const ACTIVITY_LABEL: Record<string, string> = {
-  lecture: "บรรยาย", lab: "ปฏิบัติการ", review: "ตรวจงาน", makeup: "ชดเชย", other: "อื่นๆ",
+  lecture: "บรรยาย", lab: "ปฏิบัติการ", review: "ตรวจงาน", makeup: "ชดเชย", other: "อื่นๆ", // i18n-ignore
 };
 
 /** Minutes since midnight, for placing a block on the hour grid. */
@@ -118,7 +123,8 @@ export default function TimetableFormPage() {
 }
 
 function TimetableFormInner() {
-  useDocumentTitle("ตารางเรียนและตารางปฏิบัติงาน");
+  const { t } = useI18n();
+  useDocumentTitle(t("ตารางเรียนและตารางปฏิบัติงาน"));
   const q = useSearchParams();
   const termId = q.get("term_id");
   const userId = q.get("user_id");
@@ -131,10 +137,10 @@ function TimetableFormInner() {
     : null;
   const { data, error } = useSWR<FormData>(key);
 
-  if (!termId) return <div className="p-6"><Alert status="danger" title="ต้องระบุภาคการศึกษา (term_id)" /></div>;
+  if (!termId) return <div className="p-6"><Alert status="danger" title={t("ต้องระบุภาคการศึกษา (term_id)")} /></div>;
   // Checked before the loading state: it used to come after `!data`, so a
   // failed load kept the spinner up forever and this alert never showed.
-  if (error && !data) return <div className="p-6"><Alert status="danger" title="โหลดฟอร์มไม่สำเร็จ" /></div>;
+  if (error && !data) return <div className="p-6"><Alert status="danger" title={t("โหลดฟอร์มไม่สำเร็จ")} /></div>;
 
   return <FormView data={data} formKey={key} yearMonth={yearMonth} />;
 }
@@ -149,6 +155,7 @@ function TimetableFormInner() {
 function FormView({ data, formKey: key, yearMonth }: {
   data: FormData | undefined; formKey: string | null; yearMonth: string | null;
 }) {
+  const { t } = useI18n();
   // Weekend rows only when something actually falls there — otherwise two of the
   // seven rows are permanently blank and the grid loses a fifth of its width to
   // nothing. Makeups and grading slots legitimately land on Saturday.
@@ -180,17 +187,17 @@ function FormView({ data, formKey: key, yearMonth }: {
 
       <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm text-muted">
-          พิมพ์แนวนอน A4 ช่องลายเซ็นอยู่ท้ายฟอร์ม
+          {t("พิมพ์แนวนอน A4 ช่องลายเซ็นอยู่ท้ายฟอร์ม")}
         </div>
         <div className="flex gap-2">
           {/* Two ways out on purpose. Browser print is instant and lays the grid
               out exactly as seen; the server PDF is the one that can be filed,
               emailed, or pulled from the payout zip without a browser. */}
           <Button variant="outline" disabled={!key} onClick={() => window.open(apiUrl(`${key}`).replace("/timetable-form?", "/timetable-form.pdf?"), "_blank", "noopener")}>
-            <FileDown size={14} /> ดาวน์โหลด PDF
+            <FileDown size={14} /> {t("ดาวน์โหลด PDF")}
           </Button>
           <Button disabled={!data} onClick={() => window.print()}>
-            <Printer size={14} /> พิมพ์ฟอร์ม
+            <Printer size={14} /> {t("พิมพ์ฟอร์ม")}
           </Button>
         </div>
       </div>
@@ -199,8 +206,8 @@ function FormView({ data, formKey: key, yearMonth }: {
         <div className="no-print mb-3">
           <Alert
             status="warning"
-            title="ยังไม่มีตารางเรียนของนักศึกษา"
-            description="ครึ่งบนของแต่ละวันจะว่าง ฟอร์มนี้ต้องมีตารางเรียนจึงจะตรวจการทับซ้อนได้ตามแบบของคณะ"
+            title={t("ยังไม่มีตารางเรียนของนักศึกษา")}
+            description={t("ครึ่งบนของแต่ละวันจะว่าง ฟอร์มนี้ต้องมีตารางเรียนจึงจะตรวจการทับซ้อนได้ตามแบบของคณะ")}
           />
         </div>
       )}
@@ -209,30 +216,30 @@ function FormView({ data, formKey: key, yearMonth }: {
         <div className="mb-3">
           <Alert
             status="warning"
-            title={`มี ${unplaceable.length} คาบที่อยู่นอกช่วง 08.00–21.00 น. จึงวาดในตารางไม่ได้`}
+            title={t("มี {n} คาบที่อยู่นอกช่วง 08.00–21.00 น. จึงวาดในตารางไม่ได้", { n: unplaceable.length })}
             description={unplaceable
-              .map(b => `${b.course_code}${b.sec_no ? ` Sec.${b.sec_no}` : ""} ${DAYS.find(d => d.dow === b.day_of_week)?.label ?? ""} ${b.start_time}–${b.end_time}`)
+              .map(b => `${b.course_code}${b.sec_no ? ` Sec.${b.sec_no}` : ""} ${t(DAYS.find(d => d.dow === b.day_of_week)?.label ?? "")} ${b.start_time}–${b.end_time}`)
               .join(" · ")}
           />
         </div>
       )}
 
       <div className="text-center">
-        <div className="text-base font-semibold">ตารางเรียนและตารางปฏิบัติงาน (TA)</div>
+        <div className="text-base font-semibold">ตารางเรียนและตารางปฏิบัติงาน (TA){/* i18n-ignore — printed form */}</div>
         <div className="text-sm">
           {data
-            ? <>ภาคการศึกษา {data.term_label}{data.year_month ? ` · เดือน ${data.year_month}` : ""}</>
+            ? <>ภาคการศึกษา {data.term_label}{data.year_month ? ` · เดือน ${data.year_month}` : ""}</> // i18n-ignore
             : <SkelValue className="h-3.5 w-48" />}
         </div>
       </div>
       <div className="mt-2 text-sm">
         {data ? (
           <>
-            ชื่อ <b>{data.ta_name}</b>
-            {data.student_id ? <>　รหัสนักศึกษา <b>{data.student_id}</b></> : null}
+            ชื่อ <b>{data.ta_name}</b>{/* i18n-ignore */}
+            {data.student_id ? <>　รหัสนักศึกษา <b>{data.student_id}</b></> : null}{/* i18n-ignore */}
           </>
         ) : (
-          <>ชื่อ <SkelValue className="h-3.5 w-64" /></>
+          <>ชื่อ <SkelValue className="h-3.5 w-64" /></> // i18n-ignore
         )}
       </div>
 
@@ -240,7 +247,7 @@ function FormView({ data, formKey: key, yearMonth }: {
         {(["own_class", "lecture", "lab", "review"] as const).map(k => (
           <span key={k} className="inline-flex items-center gap-1.5">
             <span className="inline-block h-3 w-3 rounded-sm border border-black/20" style={{ background: STYLE[k].bg }} />
-            {k === "own_class" ? "คาบเรียนของนักศึกษา" : `งาน TA ${STYLE[k].tag}`}
+            {k === "own_class" ? "คาบเรียนของนักศึกษา" : `งาน TA ${STYLE[k].tag}`}{/* i18n-ignore */}
           </span>
         ))}
       </div>
@@ -252,7 +259,7 @@ function FormView({ data, formKey: key, yearMonth }: {
             className="grid gap-px border border-black/30 bg-black/20 text-center text-[10px]"
             style={{ gridTemplateColumns: `64px repeat(${HOURS.length}, minmax(0,1fr))` }}
           >
-            <div className="bg-white px-1 py-1 font-medium">วัน / เวลา</div>
+            <div className="bg-white px-1 py-1 font-medium">วัน / เวลา</div>{/* i18n-ignore */}
             {HOURS.map(h => (
               <div key={h} className="bg-white px-0.5 py-1">
                 {String(h).padStart(2, "0")}.00–{String(h + 1).padStart(2, "0")}.00
@@ -272,14 +279,14 @@ function FormView({ data, formKey: key, yearMonth }: {
       {monthView && (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <OutTable
-            title={manualOut ? `TA เพิ่มเอง (${manualOut.length})` : "TA เพิ่มเอง"}
-            hint="ไม่ตรงช่องใดในตาราง และเป็นรายการที่พิมพ์เอง"
+            title={manualOut ? `TA เพิ่มเอง (${manualOut.length})` : "TA เพิ่มเอง"} // i18n-ignore
+            hint="ไม่ตรงช่องใดในตาราง และเป็นรายการที่พิมพ์เอง" // i18n-ignore
             rows={manualOut}
             highlight
           />
           <OutTable
-            title={autoOut ? `นอกตาราง แต่ระบบสร้าง (${autoOut.length})` : "นอกตาราง แต่ระบบสร้าง"}
-            hint="ส่วนใหญ่คือคาบชดเชยที่ย้ายวัน"
+            title={autoOut ? `นอกตาราง แต่ระบบสร้าง (${autoOut.length})` : "นอกตาราง แต่ระบบสร้าง"} // i18n-ignore
+            hint="ส่วนใหญ่คือคาบชดเชยที่ย้ายวัน" // i18n-ignore
             rows={autoOut}
           />
         </div>
@@ -288,12 +295,12 @@ function FormView({ data, formKey: key, yearMonth }: {
       {/* Signature blocks, grouped by lecturer exactly as the paper form does —
           one lecturer covering two of the TA's courses signs once. */}
       <div className="mt-8 grid gap-8 md:grid-cols-2">
-        <SignBlock name={data?.ta_name} role="นักศึกษา" />
+        <SignBlock name={data?.ta_name} role="นักศึกษา" />{/* i18n-ignore */}
         {data?.signers.map(s => (
           <SignBlock
             key={s.lecturer_id}
             name={s.lecturer_name}
-            role={`อาจารย์ประจำวิชา ${s.courses.join(" และ ")}`}
+            role={`อาจารย์ประจำวิชา ${s.courses.join(" และ ")}`} // i18n-ignore
             detail={s.course_names}
           />
         ))}
@@ -348,7 +355,7 @@ function BlockLane({ blocks, seed = 0 }: { blocks: Block[] | undefined; seed?: n
           >
             <span className="font-medium">{b.course_code}</span>
             {b.sec_no ? ` Sec.${b.sec_no}` : ""} {st.tag}
-            {b.track ? ` (${b.track === "special" ? "พิเศษ" : "ปกติ"})` : ""}
+            {b.track ? ` (${b.track === "special" ? "พิเศษ" : "ปกติ"})` : ""}{/* i18n-ignore */}
             {b.expected ? <span className="ml-1 font-medium">· {b.logged ?? 0}/{b.expected}</span> : null}
           </div></Tip>
         );
@@ -369,7 +376,7 @@ function OutTable({
       {!rows ? (
         <div className="px-3 py-2"><Skel className="h-3 w-2/3" /></div>
       ) : rows.length === 0 ? (
-        <div className="px-3 py-1.5 text-[11px] text-muted">ไม่มี</div>
+        <div className="px-3 py-1.5 text-[11px] text-muted">ไม่มี</div> // i18n-ignore
       ) : (
         <table className="w-full text-[11px]">
           <tbody>
@@ -394,7 +401,8 @@ function OutTable({
 function SignBlock({ name, role, detail }: { name: string | undefined; role: string; detail?: string[] }) {
   return (
     <div className="text-center text-sm">
-      <div className="mb-6">ลงชื่อ .................................................</div>
+      <div className="mb-6">ลงชื่อ .................................................</div>{/* i18n-ignore */}
+
       <div>( {name ?? <SkelValue className="h-3.5 w-40" />} )</div>
       <div className="text-xs text-muted">{role}</div>
       {detail?.map((d, i) => (

@@ -10,6 +10,13 @@
 // needs longer than the estimate can still keep it open.
 import { toast as heroToast } from "@heroui/react";
 import type { ReactNode } from "react";
+import { tc } from "./i18n/client";
+
+// Plain-string messages are run through the dictionary here, so a call site
+// that forgot t() still shows English to an English reader.
+const tx = (m: ReactNode): ReactNode => (typeof m === "string" ? tc(m) : m);
+const txo = <O extends { description?: ReactNode } | undefined>(o: O): O =>
+  o && typeof o.description === "string" ? { ...o, description: tc(o.description) } : o;
 
 type Opts = NonNullable<Parameters<typeof heroToast.success>[1]>;
 type Variant = "default" | "success" | "info" | "warning" | "danger";
@@ -46,12 +53,12 @@ function withTimeout(variant: Variant, message: ReactNode, opts?: Opts): Opts {
 
 export const toast = Object.assign(
   (message: ReactNode, opts?: Parameters<typeof heroToast>[1]) =>
-    heroToast(message, { ...opts, timeout: opts?.timeout ?? readingTimeout(message, opts?.description) }),
+    heroToast(tx(message), { ...txo(opts), timeout: opts?.timeout ?? readingTimeout(message, opts?.description) }),
   {
-    success: (message: ReactNode, opts?: Opts) => heroToast.success(message, withTimeout("success", message, opts)),
-    info: (message: ReactNode, opts?: Opts) => heroToast.info(message, withTimeout("info", message, opts)),
-    warning: (message: ReactNode, opts?: Opts) => heroToast.warning(message, withTimeout("warning", message, opts)),
-    danger: (message: ReactNode, opts?: Opts) => heroToast.danger(message, withTimeout("danger", message, opts)),
+    success: (message: ReactNode, opts?: Opts) => heroToast.success(tx(message), withTimeout("success", message, txo(opts))),
+    info: (message: ReactNode, opts?: Opts) => heroToast.info(tx(message), withTimeout("info", message, txo(opts))),
+    warning: (message: ReactNode, opts?: Opts) => heroToast.warning(tx(message), withTimeout("warning", message, txo(opts))),
+    danger: (message: ReactNode, opts?: Opts) => heroToast.danger(tx(message), withTimeout("danger", message, txo(opts))),
     promise: heroToast.promise,
     close: heroToast.close,
     clear: heroToast.clear,

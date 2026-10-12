@@ -5,6 +5,7 @@ import { Check, Download, ImagePlus, Moon, Sun, Trash2, Wand2 } from "lucide-rea
 import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import { Button, ConfirmDialog, FieldGroup, Modal, TextArea, TextInput, Tip } from "../../components/ui";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 /**
  * Cover maker: type the words of a notice onto a branded background and use
@@ -33,7 +34,8 @@ interface Background {
 }
 
 const BUILTIN: Background = {
-  id: "builtin", name: "มาตรฐานวิทยาลัย", url: "/images/cp-template.png", text_tone: "dark",
+  // Translated where shown; staff-added backgrounds carry their own names (data).
+  id: "builtin", name: msg("มาตรฐานวิทยาลัย"), url: "/images/cp-template.png", text_tone: "dark",
 };
 
 export interface CoverText {
@@ -47,7 +49,8 @@ export interface CoverText {
 }
 
 export const defaultCoverText = (title: string): CoverText => ({
-  kicker: "ประกาศ",
+  // Default words drawn on the image (staff edit them), not interface text.
+  kicker: "ประกาศ", // i18n-ignore
   headline: title,
   detail: "",
   note: "",
@@ -218,7 +221,8 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("โหลดรูปพื้นหลังไม่สำเร็จ"));
+    // Thai key on purpose: errMessage() passes only Thai messages through; translated where shown.
+    img.onerror = () => reject(new Error(msg("โหลดรูปพื้นหลังไม่สำเร็จ")));
     img.src = url;
   });
 }
@@ -237,6 +241,7 @@ export default function CoverMaker({
   /** Receives the finished 1600×900 image. */
   onUse: (file: File) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [family, setFamily] = useState<string | null>(null);
   const [bgImg, setBgImg] = useState<HTMLImageElement | null>(null);
@@ -251,7 +256,7 @@ export default function CoverMaker({
   useEffect(() => {
     if (!open || family) return;
     const f = kanitFamily();
-    Promise.all([400, 500, 600].map(w => document.fonts.load(`${w} 64px ${f}`, "ประกาศ")))
+    Promise.all([400, 500, 600].map(w => document.fonts.load(`${w} 64px ${f}`, "ประกาศ"))) // i18n-ignore — glyph sample for the font loader
       .catch(() => undefined)
       .finally(() => setFamily(f));
   }, [open, family]);
@@ -275,7 +280,7 @@ export default function CoverMaker({
 
   function toBlob(type: string, quality?: number): Promise<Blob> {
     return new Promise((resolve, reject) => {
-      canvasRef.current?.toBlob(b => (b ? resolve(b) : reject(new Error("สร้างรูปไม่สำเร็จ"))), type, quality);
+      canvasRef.current?.toBlob(b => (b ? resolve(b) : reject(new Error(msg("สร้างรูปไม่สำเร็จ")))), type, quality);
     });
   }
 
@@ -286,7 +291,7 @@ export default function CoverMaker({
       await onUse(new File([blob], `cover-${Date.now()}.webp`, { type: "image/webp" }));
       onClose();
     } catch (e) {
-      toast.danger(errMessage(e));
+      toast.danger(t(errMessage(e)));
     } finally {
       setUsing(false);
     }
@@ -298,11 +303,11 @@ export default function CoverMaker({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(value.headline || value.kicker || "ประกาศ").slice(0, 40)}.png`;
+      a.download = (value.headline || value.kicker || t("ประกาศ")).slice(0, 40) + ".png";
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
-      toast.danger(errMessage(e));
+      toast.danger(t(errMessage(e)));
     }
   }
 
@@ -310,21 +315,21 @@ export default function CoverMaker({
     <Modal
       open={open}
       onClose={() => { if (!using) onClose(); }}
-      title="สร้างรูปหน้าปกจากแม่แบบ"
+      title={t("สร้างรูปหน้าปกจากแม่แบบ")}
       icon={<Wand2 size={18} />}
       size="3xl"
       placement="center"
       footer={
         <div className="flex w-full flex-wrap items-center justify-end gap-2">
-          <Tip content="บันทึกรูป PNG ลงเครื่อง ไว้ใช้โพสต์ที่อื่น">
+          <Tip content={t("บันทึกรูป PNG ลงเครื่อง ไว้ใช้โพสต์ที่อื่น")}>
             <Button variant="ghost" onPress={download} disabled={!family}>
-              <Download size={14} /> ดาวน์โหลดรูป
+              <Download size={14} /> {t("ดาวน์โหลดรูป")}
             </Button>
           </Tip>
           <span className="flex-1" />
-          <Button variant="tertiary" onPress={onClose} disabled={using}>ปิด</Button>
+          <Button variant="tertiary" onPress={onClose} disabled={using}>{t("ปิด")}</Button>
           <Button variant="primary" onPress={use} isPending={using} disabled={using || !family}>
-            <Check size={14} /> ใช้เป็นรูปหน้าปก
+            <Check size={14} /> {t("ใช้เป็นรูปหน้าปก")}
           </Button>
         </div>
       }
@@ -336,9 +341,9 @@ export default function CoverMaker({
             width={COVER_W}
             height={COVER_H}
             className="aspect-video w-full rounded-lg border border-border bg-surface-secondary"
-            aria-label="ตัวอย่างรูปหน้าปก"
+            aria-label={t("ตัวอย่างรูปหน้าปก")}
           />
-          {bgError && <div className="text-xs text-danger">{bgError}</div>}
+          {bgError && <div className="text-xs text-danger">{t(bgError)}</div>}
           <BackgroundPicker
             items={backgrounds}
             selected={bg.id}
@@ -347,29 +352,29 @@ export default function CoverMaker({
         </div>
 
         <div className="min-w-0 space-y-3">
-          <FieldGroup label="หัวเรื่องใหญ่">
-            <TextInput value={value.kicker} maxLength={30} onChange={e => set("kicker", e.target.value)} placeholder="ประกาศ" aria-label="หัวเรื่องใหญ่" />
+          <FieldGroup label={t("หัวเรื่องใหญ่")}>
+            <TextInput value={value.kicker} maxLength={30} onChange={e => set("kicker", e.target.value)} placeholder={t("ประกาศ")} aria-label={t("หัวเรื่องใหญ่")} />
           </FieldGroup>
-          <FieldGroup label="หัวข้อ" hint="ยาวได้ 2 บรรทัด ระบบย่อขนาดให้พอดีเอง">
-            <TextArea rows={2} value={value.headline} maxLength={120} onChange={e => set("headline", e.target.value)} placeholder="รายชื่อนักศึกษา" aria-label="หัวข้อ" />
+          <FieldGroup label={t("หัวข้อ")} hint={t("ยาวได้ 2 บรรทัด ระบบย่อขนาดให้พอดีเอง")}>
+            <TextArea rows={2} value={value.headline} maxLength={120} onChange={e => set("headline", e.target.value)} placeholder={t("รายชื่อนักศึกษา")} aria-label={t("หัวข้อ")} />
           </FieldGroup>
-          <FieldGroup label="รายละเอียด">
-            <TextArea rows={2} value={value.detail} maxLength={160} onChange={e => set("detail", e.target.value)} placeholder="สำหรับการสอบกลางภาค ประจำภาคการศึกษาต้น ปีการศึกษา 2569" aria-label="รายละเอียด" />
+          <FieldGroup label={t("รายละเอียด")}>
+            <TextArea rows={2} value={value.detail} maxLength={160} onChange={e => set("detail", e.target.value)} placeholder={t("สำหรับการสอบกลางภาค ประจำภาคการศึกษาต้น ปีการศึกษา 2569")} aria-label={t("รายละเอียด")} />
           </FieldGroup>
-          <FieldGroup label="หมายเหตุ" hint="แสดงสีส้มใต้เส้นคั่น ขึ้นบรรทัดใหม่ได้ (สูงสุด 4 บรรทัด)">
-            <TextArea rows={3} value={value.note} maxLength={300} onChange={e => set("note", e.target.value)} placeholder="หมายเหตุ : …" aria-label="หมายเหตุ" />
+          <FieldGroup label={t("หมายเหตุ")} hint={t("แสดงสีส้มใต้เส้นคั่น ขึ้นบรรทัดใหม่ได้ (สูงสุด 4 บรรทัด)")}>
+            <TextArea rows={3} value={value.note} maxLength={300} onChange={e => set("note", e.target.value)} placeholder={t("หมายเหตุ : …")} aria-label={t("หมายเหตุ")} />
           </FieldGroup>
-          <FieldGroup label={`ขนาดตัวอักษร ${value.scale}%`}>
+          <FieldGroup label={t("ขนาดตัวอักษร {n}%", { n: value.scale })}>
             <input
               type="range" min={70} max={120} step={5} value={value.scale}
               onChange={e => set("scale", Number(e.target.value))}
-              aria-label="ขนาดตัวอักษร"
+              aria-label={t("ขนาดตัวอักษร")}
               className="w-full accent-[var(--brand)]"
             />
           </FieldGroup>
-          <FieldGroup label="สีตัวอักษร">
+          <FieldGroup label={t("สีตัวอักษร")}>
             <div className="flex gap-1.5">
-              {([["dark", "เข้ม (พื้นสว่าง)", <Sun key="s" size={12} />], ["light", "ขาว (พื้นเข้ม)", <Moon key="m" size={12} />]] as const).map(([v, label, icon]) => (
+              {([["dark", msg("เข้ม (พื้นสว่าง)"), <Sun key="s" size={12} />], ["light", msg("ขาว (พื้นเข้ม)"), <Moon key="m" size={12} />]] as const).map(([v, label, icon]) => (
                 <button
                   key={v}
                   type="button"
@@ -377,7 +382,7 @@ export default function CoverMaker({
                   onClick={() => set("tone", v)}
                   className={`chip inline-flex cursor-pointer items-center gap-1 transition ${value.tone === v ? "chip-brand" : "chip-neutral"}`}
                 >
-                  {icon}{label}
+                  {icon}{t(label)}
                 </button>
               ))}
             </div>
@@ -399,6 +404,7 @@ function BackgroundPicker({
   selected: string;
   onPick: (b: Background) => void;
 }) {
+  const { t } = useI18n();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [pending, setPending] = useState<{ file: File; url: string; name: string; tone: "dark" | "light"; size: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -410,11 +416,11 @@ function BackgroundPicker({
   async function pick(file: File) {
     setError(null);
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      setError("รองรับเฉพาะ PNG, JPEG หรือ WebP");
+      setError(t("รองรับเฉพาะ PNG, JPEG หรือ WebP"));
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      setError("ไฟล์ใหญ่เกิน 8MB");
+      setError(t("ไฟล์ใหญ่เกิน 8MB"));
       return;
     }
     try {
@@ -423,11 +429,11 @@ function BackgroundPicker({
       bmp.close();
       const off = Math.abs(w / h - 16 / 9) / (16 / 9);
       if (w < COVER_W || h < COVER_H) {
-        setError(`รูปพื้นหลังต้องมีขนาดอย่างน้อย 1600×900 พิกเซล (รูปนี้ ${w}×${h})`);
+        setError(t("รูปพื้นหลังต้องมีขนาดอย่างน้อย 1600×900 พิกเซล (รูปนี้ {w}×{h})", { w, h }));
         return;
       }
       if (off > 0.01) {
-        setError(`รูปพื้นหลังต้องเป็นสัดส่วน 16:9 เช่น 1600×900 หรือ 1920×1080 (รูปนี้ ${w}×${h})`);
+        setError(t("รูปพื้นหลังต้องเป็นสัดส่วน 16:9 เช่น 1600×900 หรือ 1920×1080 (รูปนี้ {w}×{h})", { w, h }));
         return;
       }
       setPending({
@@ -435,7 +441,7 @@ function BackgroundPicker({
         name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), tone: "dark",
       });
     } catch {
-      setError("อ่านรูปไม่ได้ ไฟล์อาจเสีย");
+      setError(t("อ่านรูปไม่ได้ ไฟล์อาจเสีย"));
     }
   }
 
@@ -452,7 +458,7 @@ function BackgroundPicker({
       URL.revokeObjectURL(pending.url);
       setPending(null);
       onPick(b);
-      toast.success("เพิ่มพื้นหลังแล้ว");
+      toast.success(t("เพิ่มพื้นหลังแล้ว"));
     } catch (e) {
       setError(errMessage(e));
     } finally {
@@ -467,7 +473,7 @@ function BackgroundPicker({
       await api.del(`/announcements/backgrounds/${remove.id}`);
       await mutate("/announcements/backgrounds");
       if (remove.id === selected) onPick(BUILTIN);
-      toast.success("ลบพื้นหลังแล้ว");
+      toast.success(t("ลบพื้นหลังแล้ว"));
       setRemove(null);
     } catch (e) {
       toast.danger(errMessage(e));
@@ -479,8 +485,8 @@ function BackgroundPicker({
   return (
     <div>
       <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 text-sm">
-        <span className="font-medium text-foreground">พื้นหลัง</span>
-        <span className="text-xs text-muted">เพิ่มได้เอง: PNG, JPEG หรือ WebP สัดส่วน 16:9 อย่างน้อย 1600×900 พิกเซล ไม่เกิน 8MB</span>
+        <span className="font-medium text-foreground">{t("พื้นหลัง")}</span>
+        <span className="text-xs text-muted">{t("เพิ่มได้เอง: PNG, JPEG หรือ WebP สัดส่วน 16:9 อย่างน้อย 1600×900 พิกเซล ไม่เกิน 8MB")}</span>
       </div>
       <div className="flex flex-wrap gap-2">
         {items.map(b => (
@@ -489,7 +495,7 @@ function BackgroundPicker({
               type="button"
               onClick={() => onPick(b)}
               aria-pressed={b.id === selected}
-              aria-label={`พื้นหลัง ${b.name}`}
+              aria-label={t("พื้นหลัง {name}", { name: t(b.name) })}
               className={
                 "block w-32 overflow-hidden rounded-md border-2 transition " +
                 (b.id === selected ? "border-[var(--brand)]" : "border-transparent hover:border-border")
@@ -497,13 +503,13 @@ function BackgroundPicker({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={b.url} alt="" className="aspect-video w-full object-cover" loading="lazy" />
-              <span className="block truncate bg-surface px-1.5 py-0.5 text-start text-[11px] text-ink-2">{b.name}</span>
+              <span className="block truncate bg-surface px-1.5 py-0.5 text-start text-[11px] text-ink-2">{t(b.name)}</span>
             </button>
             {b.id !== BUILTIN.id && (
-              <Tip content={`ลบพื้นหลัง ${b.name}`}>
+              <Tip content={t("ลบพื้นหลัง {name}", { name: b.name })}>
                 <button
                   type="button"
-                  aria-label={`ลบพื้นหลัง ${b.name}`}
+                  aria-label={t("ลบพื้นหลัง {name}", { name: b.name })}
                   onClick={() => setRemove(b)}
                   className="absolute end-1 top-1 flex size-6 items-center justify-center rounded-md bg-surface/90 text-danger opacity-100 shadow-sm transition-opacity pointer-fine:opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                 >
@@ -518,7 +524,7 @@ function BackgroundPicker({
           onClick={() => fileRef.current?.click()}
           className="flex aspect-video w-32 flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-xs text-muted transition-colors hover:border-brand hover:text-brand"
         >
-          <ImagePlus size={16} /> เพิ่มพื้นหลัง
+          <ImagePlus size={16} /> {t("เพิ่มพื้นหลัง")}
         </button>
         <input
           ref={fileRef}
@@ -535,10 +541,10 @@ function BackgroundPicker({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={pending.url} alt="" className="aspect-video w-32 rounded object-cover" />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="text-xs text-muted">{pending.size} พิกเซล</div>
-            <TextInput value={pending.name} maxLength={100} onChange={e => setPending(p => (p ? { ...p, name: e.target.value } : p))} aria-label="ชื่อพื้นหลัง" placeholder="ชื่อพื้นหลัง" />
+            <div className="text-xs text-muted">{t("{size} พิกเซล", { size: pending.size })}</div>
+            <TextInput value={pending.name} maxLength={100} onChange={e => setPending(p => (p ? { ...p, name: e.target.value } : p))} aria-label={t("ชื่อพื้นหลัง")} placeholder={t("ชื่อพื้นหลัง")} />
             <div className="flex flex-wrap gap-1.5">
-              {([["dark", "พื้นสว่าง ใช้ตัวอักษรเข้ม"], ["light", "พื้นเข้ม ใช้ตัวอักษรขาว"]] as const).map(([v, label]) => (
+              {([["dark", msg("พื้นสว่าง ใช้ตัวอักษรเข้ม")], ["light", msg("พื้นเข้ม ใช้ตัวอักษรขาว")]] as const).map(([v, label]) => (
                 <button
                   key={v}
                   type="button"
@@ -546,15 +552,15 @@ function BackgroundPicker({
                   onClick={() => setPending(p => (p ? { ...p, tone: v } : p))}
                   className={`chip cursor-pointer transition ${pending.tone === v ? "chip-brand" : "chip-neutral"}`}
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="tertiary" size="sm" onPress={() => { URL.revokeObjectURL(pending.url); setPending(null); }} disabled={uploading}>ยกเลิก</Button>
+            <Button variant="tertiary" size="sm" onPress={() => { URL.revokeObjectURL(pending.url); setPending(null); }} disabled={uploading}>{t("ยกเลิก")}</Button>
             <Button variant="primary" size="sm" onPress={upload} isPending={uploading} disabled={uploading || !pending.name.trim()}>
-              เพิ่มพื้นหลัง
+              {t("เพิ่มพื้นหลัง")}
             </Button>
           </div>
         </div>
@@ -567,9 +573,10 @@ function BackgroundPicker({
         isPending={removing}
         danger
         icon={<Trash2 size={18} />}
-        title="ลบพื้นหลัง?"
-        message={`ลบ “${remove?.name ?? ""}” ออกจากรายการพื้นหลัง และนำกลับมาไม่ได้ รูปหน้าปกที่สร้างไปแล้วจะไม่ได้รับผลกระทบ`}
-        confirmLabel="ลบ"
+        title={t("ลบพื้นหลัง?")}
+        message={t("ลบ “{name}” ออกจากรายการพื้นหลัง และนำกลับมาไม่ได้ รูปหน้าปกที่สร้างไปแล้วจะไม่ได้รับผลกระทบ", { name: remove?.name ?? "" })}
+        confirmLabel={t("ลบ")}
+
       />
     </div>
   );

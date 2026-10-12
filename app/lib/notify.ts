@@ -4,6 +4,7 @@
 // SWRProvider. HeroUI toasts are announced via aria-live and auto-dismiss.
 import { toast } from "./toast";
 import { errMessage } from "./api";
+import { tc } from "./i18n/client";
 
 export const notify = {
   success(message: string) {
@@ -11,7 +12,7 @@ export const notify = {
   },
   error(e: unknown, fallback?: string) {
     const msg = typeof e === "string" ? e : errMessage(e);
-    toast.danger(msg || fallback || "เกิดข้อผิดพลาด กรุณาลองใหม่");
+    toast.danger(msg || fallback || tc("เกิดข้อผิดพลาด กรุณาลองใหม่"));
   },
   info(message: string) {
     toast.info(message);
