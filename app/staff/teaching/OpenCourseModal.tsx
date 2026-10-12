@@ -14,6 +14,7 @@ import { courseCodeLabel, courseCodes, pickPrimaryCode } from "../../lib/courseC
 import {
   Modal, Button, FieldGroup, TextInput, Alert, Chip, Select, Tip,
 } from "../../components/ui";
+import { useI18n } from "../../lib/i18n/client";
 
 // Clamp a typed section count to a whole number in [0, 99] — blocks decimals,
 // NaN, and out-of-range values that would otherwise reach the backend.
@@ -178,6 +179,7 @@ export default function OpenCourseModal({
   pickLecturers?: boolean;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { data: lecturerData } = useSWR<{ items: LecturerUser[] }>(
     open && pickLecturers ? "/users?role=lecturer&limit=200" : null,
   );
@@ -200,10 +202,10 @@ export default function OpenCourseModal({
   const curriculumOptions = useMemo(() => {
     const rows = (curriculaData ?? []).filter(c => c.level === "undergrad");
     return [
-      { id: "", label: "ยังไม่ระบุ" },
+      { id: "", label: t("ยังไม่ระบุ") },
       ...rows.map(c => ({ id: c.code, label: `${c.full_name_th} (${c.code})` })),
     ];
-  }, [curriculaData]);
+  }, [curriculaData, t]);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -277,8 +279,8 @@ export default function OpenCourseModal({
   const codeDuplicate = codeValid && existingCodes.has(draft.code);
   const codeError =
     draft.code === "" ? null
-    : !codeValid ? "รูปแบบรหัสไม่ถูกต้อง ต้องเป็นตัวเลข 6 หลัก (เช่น 342233) หรือตัวอักษรพิมพ์ใหญ่ 2 ตัวตามด้วยตัวเลข 6 หลัก (เช่น CP353201)"
-    : codeDuplicate ? "วิชารหัสนี้เปิดอยู่แล้วในเทอมนี้ เปิดซ้ำไม่ได้" : null;
+    : !codeValid ? t("รูปแบบรหัสไม่ถูกต้อง ต้องเป็นตัวเลข 6 หลัก (เช่น 342233) หรือตัวอักษรพิมพ์ใหญ่ 2 ตัวตามด้วยตัวเลข 6 หลัก (เช่น CP353201)")
+    : codeDuplicate ? t("วิชารหัสนี้เปิดอยู่แล้วในเทอมนี้ เปิดซ้ำไม่ได้") : null;
 
   // Progressive reveal gates: each step unlocks the next only when its
   // required fields are filled cleanly. When pickLecturers is on, an extra
@@ -315,8 +317,8 @@ export default function OpenCourseModal({
           ),
         });
         await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
-        toast.success("รวมรหัสวิชาแล้ว", {
-          description: `${draft.code} รวมเข้ากับ ${courseCodeLabel(mergeTarget)} ${mergeTarget.name_th}`,
+        toast.success(t("รวมรหัสวิชาแล้ว"), {
+          description: t("{code} รวมเข้ากับ {target} {name}", { code: draft.code, target: courseCodeLabel(mergeTarget), name: mergeTarget.name_th }),
         });
         onClose();
         router.push(`${redirectBase}/${mergeTarget.id}`);
@@ -344,15 +346,15 @@ export default function OpenCourseModal({
       };
       const res = await api.post<{ id: string }>("/teaching-courses", body);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
-      toast.success("เปิดรายวิชาเรียบร้อยแล้ว", {
-        description: `${draft.code} ${draft.name_en.trim() || "(ไม่ระบุชื่อ)"}`,
+      toast.success(t("เปิดรายวิชาเรียบร้อยแล้ว"), {
+        description: [draft.code, draft.name_en.trim() || t("(ไม่ระบุชื่อ)")].join(" "),
       });
       onClose();
       router.push(`${redirectBase}/${res.id}`);
     } catch (e) {
       // e.g. this faculty course is already opened for the term — surface the
       // backend's (Thai) reason both inline and as a toast.
-      setErr((e as Error).message || "เปิดรายวิชาไม่สำเร็จ");
+      setErr((e as Error).message || t("เปิดรายวิชาไม่สำเร็จ"));
       notify.error(e);
     } finally {
       setSaving(false);
@@ -365,14 +367,14 @@ export default function OpenCourseModal({
       onClose={onClose}
       size="xl"
       icon={<BookPlus size={20} />}
-      title={<span>เปิดรายวิชาใหม่ · <span className="text-muted font-normal">{termLabel}</span></span>}
+      title={<span>{t.rich("เปิดรายวิชาใหม่ · {term}", { term: <span className="text-muted font-normal">{termLabel}</span> })}</span>}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={submit} disabled={!canSubmit} isPending={saving}>
             {mergeTarget
-              ? <><GitMerge size={14} />รวมเข้ากับ {mergeTarget.code}</>
-              : <><BookPlus size={14} />เปิดรายวิชา</>}
+              ? <><GitMerge size={14} />{t("รวมเข้ากับ {code}", { code: mergeTarget.code })}</>
+              : <><BookPlus size={14} />{t("เปิดรายวิชา")}</>}
           </Button>
         </>
       }
@@ -380,16 +382,16 @@ export default function OpenCourseModal({
       <div className="space-y-3">
         {/* Step 1 — always visible. Manual course entry (reserve courses not in
             the imported registrar file). */}
-        <StepCard n={1} title="ข้อมูลวิชา" done={step1Done}>
+        <StepCard n={1} title={t("ข้อมูลวิชา")} done={step1Done}>
           <div className="text-xs text-muted mb-3">
-            สำหรับวิชาที่ไม่มีในไฟล์นำเข้า กรอกรหัสและข้อมูลหน่วยกิตเอง
+            {t("สำหรับวิชาที่ไม่มีในไฟล์นำเข้า กรอกรหัสและข้อมูลหน่วยกิตเอง")}
           </div>
           {/* Code : name = 1/3 : 2/3 — the code is short and fixed-format,
               the name is the field that actually needs the room. */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <FieldGroup
-              label="รหัสวิชา"
-              hint={codeError ? undefined : "ตัวเลข 6 หลัก หรือ ตัวอักษรใหญ่ 2 ตัว + ตัวเลข 6 หลัก เช่น CP353201"}
+              label={t("รหัสวิชา")}
+              hint={codeError ? undefined : t("ตัวเลข 6 หลัก หรือ ตัวอักษรใหญ่ 2 ตัว + ตัวเลข 6 หลัก เช่น CP353201")}
               error={codeError}
             >
               <TextInput
@@ -400,7 +402,7 @@ export default function OpenCourseModal({
               />
             </FieldGroup>
             <div className="md:col-span-2">
-              <FieldGroup label="ชื่อวิชา (อังกฤษ)">
+              <FieldGroup label={t("ชื่อวิชา (อังกฤษ)")}>
                 <TextInput
                   value={draft.name_en}
                   onChange={e => setDraft(d => ({ ...d, name_en: e.target.value }))}
@@ -414,34 +416,35 @@ export default function OpenCourseModal({
               {mergeLocked ? (
                 <Alert
                   status="warning"
-                  title={`มีวิชาชื่อนี้เปิดอยู่แล้ว: ${courseCodeLabel(sameNameCourse)} ${sameNameCourse.name_th}`}
-                  description="วิชานั้นส่งออกไฟล์แล้ว รวมรหัสเพิ่มไม่ได้ วิชานี้จะเปิดแยก"
+                  title={t("มีวิชาชื่อนี้เปิดอยู่แล้ว: {code} {name}", { code: courseCodeLabel(sameNameCourse), name: sameNameCourse.name_th })}
+                  description={t("วิชานั้นส่งออกไฟล์แล้ว รวมรหัสเพิ่มไม่ได้ วิชานี้จะเปิดแยก")}
                 />
               ) : (
-                <div className="rounded-lg border border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20 p-3 text-sm">
+                <div className="rounded-lg border border-sky-200 bg-sky-50/50 p-3 text-sm">
                   <p className="font-medium inline-flex items-center gap-1.5">
                     <GitMerge size={14} />
-                    มีวิชาชื่อนี้เปิดอยู่แล้ว: <span className="tabular">{courseCodeLabel(sameNameCourse)}</span> {sameNameCourse.name_th}
+                    {t.rich("มีวิชาชื่อนี้เปิดอยู่แล้ว: {code} {name}", { code: <span className="tabular">{courseCodeLabel(sameNameCourse)}</span>, name: sameNameCourse.name_th })}
                     {sameNameCourse.lecturer_names && <span className="text-muted font-normal">· {sameNameCourse.lecturer_names}</span>}
                   </p>
-                  <p className="text-xs text-muted mt-0.5">วิชาเดียวกันคนละรหัสใช่ไหม</p>
+                  <p className="text-xs text-muted mt-0.5">{t("วิชาเดียวกันคนละรหัสใช่ไหม")}</p>
                   <div className="mt-2 flex flex-col gap-1.5">
                     <label className="inline-flex items-start gap-2 cursor-pointer">
                       <input type="radio" name="merge-choice" className="mt-1" checked={mergeChoice === "merge"} onChange={() => setMergeChoice("merge")} />
                       <span>
-                        <b>ใช่ รวมเป็นวิชาเดียว</b>
+                        <b>{t("ใช่ รวมเป็นวิชาเดียว")}</b>
                         <span className="block text-xs text-muted">
-                          เพิ่ม {draft.code} เป็นอีกรหัสของวิชานี้ นับนักศึกษารวมกัน คิดงบก้อนเดียว ใช้ระดับ หน่วยกิต และอาจารย์ตามวิชาเดิม
-                          section ที่เลขและประเภทตรงกันจะรวมเป็น section เดียว (บวกจำนวนนักศึกษา ใช้ตารางเรียนของวิชาเดิม)
-                          · เอกสารจะพิมพ์รหัส {mergedCodesLabel([...courseCodes(sameNameCourse), draft.code])}
+                          {t("เพิ่ม {code} เป็นอีกรหัสของวิชานี้ นับนักศึกษารวมกัน คิดงบก้อนเดียว ใช้ระดับ หน่วยกิต และอาจารย์ตามวิชาเดิม section ที่เลขและประเภทตรงกันจะรวมเป็น section เดียว (บวกจำนวนนักศึกษา ใช้ตารางเรียนของวิชาเดิม) · เอกสารจะพิมพ์รหัส {codes}", {
+                            code: draft.code,
+                            codes: mergedCodesLabel([...courseCodes(sameNameCourse), draft.code]),
+                          })}
                         </span>
                       </span>
                     </label>
                     <label className="inline-flex items-start gap-2 cursor-pointer">
                       <input type="radio" name="merge-choice" className="mt-1" checked={mergeChoice === "separate"} onChange={() => setMergeChoice("separate")} />
                       <span>
-                        <b>ไม่ใช่ เปิดแยกเป็นวิชาใหม่</b>
-                        <span className="block text-xs text-muted">คนละวิชา คนละงบ</span>
+                        <b>{t("ไม่ใช่ เปิดแยกเป็นวิชาใหม่")}</b>
+                        <span className="block text-xs text-muted">{t("คนละวิชา คนละงบ")}</span>
                       </span>
                     </label>
                   </div>
@@ -451,16 +454,16 @@ export default function OpenCourseModal({
           )}
           {!mergeTarget && <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-            <FieldGroup label="ระดับ">
+            <FieldGroup label={t("ระดับ")}>
               <Select
                 value={draft.level}
                 onChange={e => setDraft(d => ({ ...d, level: e.target.value as Draft["level"] }))}
               >
-                <option value="undergrad">ปริญญาตรี</option>
-                <option value="graduate">บัณฑิตศึกษา</option>
+                <option value="undergrad">{t("ปริญญาตรี")}</option>
+                <option value="graduate">{t("บัณฑิตศึกษา")}</option>
               </Select>
             </FieldGroup>
-            <FieldGroup label="หลักสูตร" hint="ใช้กับทุก section ของวิชานี้ แก้ทีหลังได้ที่หน้าตั้งค่ารายวิชา">
+            <FieldGroup label={t("หลักสูตร")} hint={t("ใช้กับทุก section ของวิชานี้ แก้ทีหลังได้ที่หน้าตั้งค่ารายวิชา")}>
               <Select
                 value={draft.curriculum}
                 onChange={e => setDraft(d => ({ ...d, curriculum: e.target.value }))}
@@ -472,19 +475,19 @@ export default function OpenCourseModal({
             </FieldGroup>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-            <FieldGroup label="หน่วยกิต">
+            <FieldGroup label={t("หน่วยกิต")}>
               <TextInput type="number" min={0} max={30} step={1} value={draft.credits}
                 onChange={e => setDraft(d => ({ ...d, credits: clampHrs(e.target.value) }))} />
             </FieldGroup>
-            <FieldGroup label="ชม.บรรยาย" hint="lecture">
+            <FieldGroup label={t("ชม.บรรยาย")} hint="lecture">
               <TextInput type="number" min={0} max={30} step={1} value={draft.lecture_hrs}
                 onChange={e => setDraft(d => ({ ...d, lecture_hrs: clampHrs(e.target.value) }))} />
             </FieldGroup>
-            <FieldGroup label="ชม.ปฏิบัติ" hint="lab">
+            <FieldGroup label={t("ชม.ปฏิบัติ")} hint="lab">
               <TextInput type="number" min={0} max={30} step={1} value={draft.lab_hrs}
                 onChange={e => setDraft(d => ({ ...d, lab_hrs: clampHrs(e.target.value) }))} />
             </FieldGroup>
-            <FieldGroup label="ชม.ศึกษาเอง" hint="self">
+            <FieldGroup label={t("ชม.ศึกษาเอง")} hint="self">
               <TextInput type="number" min={0} max={30} step={1} value={draft.self_hrs}
                 onChange={e => setDraft(d => ({ ...d, self_hrs: clampHrs(e.target.value) }))} />
             </FieldGroup>
@@ -495,9 +498,9 @@ export default function OpenCourseModal({
         {/* Lecturer step — staff-only. A lecturer opening their own course is
             auto-assigned server-side and never sees this. */}
         {askLecturers && step1Done && (
-          <StepCard n={2} title="อาจารย์ผู้สอน" done={lecturersDone}>
+          <StepCard n={2} title={t("อาจารย์ผู้สอน")} done={lecturersDone}>
             <div className="text-xs text-muted mb-2">
-              เลือกอาจารย์ผู้สอนของรายวิชานี้ (เลือกได้มากกว่า 1 คน)
+              {t("เลือกอาจารย์ผู้สอนของรายวิชานี้ (เลือกได้มากกว่า 1 คน)")}
             </div>
             <LecturerPicker
               lecturers={lecturers}
@@ -511,14 +514,14 @@ export default function OpenCourseModal({
             side-by-side: regular on the left is primary; the right column is
             either the "+ เปิดภาคพิเศษ" opt-in or the special input once on. */}
         {sectionsReady && (
-          <StepCard n={secStepNo} title="กลุ่มเรียน (section)" done={sectionsDone}>
+          <StepCard n={secStepNo} title={t("กลุ่มเรียน (section)")} done={sectionsDone}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <FieldGroup
-                label={<span className="inline-flex items-center gap-2">ภาคปกติ <Chip tone="brand">regular</Chip></span>}
+                label={<span className="inline-flex items-center gap-2">{t("ภาคปกติ")} <Chip tone="brand">regular</Chip></span>}
                 hint={
                   draft.regular_sections > 0
-                    ? `จะสร้าง sec ${regularSecNos(draft.regular_sections).map(n => secLabel(n)).join(", ")}`
-                    : "ยังไม่เปิด section ภาคปกติ"
+                    ? t("จะสร้าง sec {secs}", { secs: regularSecNos(draft.regular_sections).map(n => secLabel(n)).join(", ") })
+                    : t("ยังไม่เปิด section ภาคปกติ")
                 }
               >
                 <TextInput
@@ -538,13 +541,13 @@ export default function OpenCourseModal({
                   }}
                   className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border text-xs font-medium text-muted hover:text-accent hover:border-accent min-h-19"
                 >
-                  <Plus size={14} />เปิด section ภาคพิเศษด้วย
+                  <Plus size={14} />{t("เปิด section ภาคพิเศษด้วย")}
                 </button>
               ) : (
                 <FieldGroup
                   label={
                     <span className="inline-flex items-center gap-2 w-full">
-                      ภาคพิเศษ <Chip tone="warn">special</Chip>
+                      {t("ภาคพิเศษ")} <Chip tone="warn">special</Chip>
                       <button
                         type="button"
                         onClick={() => {
@@ -552,16 +555,16 @@ export default function OpenCourseModal({
                           setDraft(d => ({ ...d, special_sections: 0 }));
                         }}
                         className="ms-auto inline-flex items-center gap-1 text-xs text-muted hover:text-danger"
-                        aria-label="ยกเลิกภาคพิเศษ"
+                        aria-label={t("ยกเลิกภาคพิเศษ")}
                       >
-                        <X size={12} />ยกเลิก
+                        <X size={12} />{t("ยกเลิก")}
                       </button>
                     </span>
                   }
                   hint={
                     draft.special_sections > 0
-                      ? `จะสร้าง sec ${specialSecNos(draft.special_sections, draft.regular_sections).map(n => secLabel(n)).join(", ")}`
-                      : "ยังไม่กำหนดจำนวน"
+                      ? t("จะสร้าง sec {secs}", { secs: specialSecNos(draft.special_sections, draft.regular_sections).map(n => secLabel(n)).join(", ") })
+                      : t("ยังไม่กำหนดจำนวน")
                   }
                 >
                   <TextInput
@@ -576,7 +579,7 @@ export default function OpenCourseModal({
 
             {totalSections > 0 && (
               <div className="text-xs text-muted mt-3 pt-3 border-t border-border">
-                รวมทั้งหมด <b className="tabular">{totalSections}</b> section
+                {t.rich("รวมทั้งหมด {n} section", { n: <b className="tabular">{totalSections}</b> })}
               </div>
             )}
           </StepCard>
@@ -585,9 +588,9 @@ export default function OpenCourseModal({
         {/* Schedule + enrolment — schedule is required (TA time-clock reads it);
             per-section student count drives the budget estimate. */}
         {sectionsDone && (
-          <StepCard n={schedStepNo} title="จำนวนนักศึกษา + ตารางเรียนต่อ section" done={step3Done}>
+          <StepCard n={schedStepNo} title={t("จำนวนนักศึกษา + ตารางเรียนต่อ section")} done={step3Done}>
             <div className="text-xs text-muted mb-2">
-              กรอกจำนวนนักศึกษาของแต่ละ section (จำเป็น) แล้วกดที่ section เพื่อกำหนดวัน-เวลาเรียน (ต้องมีตารางครบทุก section)
+              {t("กรอกจำนวนนักศึกษาของแต่ละ section (จำเป็น) แล้วกดที่ section เพื่อกำหนดวัน-เวลาเรียน (ต้องมีตารางครบทุก section)")}
             </div>
             <SectionSchedulesPanel
               regularSecs={regularSecNos(draft.regular_sections)}
@@ -603,25 +606,25 @@ export default function OpenCourseModal({
               }
             />
             <div className="flex items-center gap-3 text-xs mt-3 pt-3 border-t border-border">
-              <span className="text-muted">รวมนักศึกษา</span>
-              <Chip tone="brand">ปกติ {totalRegularStudents} คน</Chip>
+              <span className="text-muted">{t("รวมนักศึกษา")}</span>
+              <Chip tone="brand">{t("ปกติ {n} คน", { n: totalRegularStudents })}</Chip>
               {draft.special_sections > 0 && (
-                <Chip tone="warn">พิเศษ {totalSpecialStudents} คน</Chip>
+                <Chip tone="warn">{t("พิเศษ {n} คน", { n: totalSpecialStudents })}</Chip>
               )}
               <span className="ms-auto font-medium tabular">
-                รวม {totalRegularStudents + totalSpecialStudents} คน
+                {t("รวม {n} คน", { n: totalRegularStudents + totalSpecialStudents })}
               </span>
             </div>
             {!studentsComplete && (
               <div className="text-xs text-warning font-medium mt-2">
-                ⚠ กรุณากรอกจำนวนนักศึกษาให้ครบทุก section (อย่างน้อย 1 คน) ก่อนเปิดรายวิชา
+                ⚠ {t("กรุณากรอกจำนวนนักศึกษาให้ครบทุก section (อย่างน้อย 1 คน) ก่อนเปิดรายวิชา")}
               </div>
             )}
           </StepCard>
         )}
 
         {err && (
-          <Alert status="danger" icon={<CircleAlert size={16} />} title="เปิดรายวิชาไม่สำเร็จ" description={err} />
+          <Alert status="danger" icon={<CircleAlert size={16} />} title={t("เปิดรายวิชาไม่สำเร็จ")} description={err} />
         )}
       </div>
     </Modal>
@@ -643,6 +646,7 @@ function SectionSchedulesPanel({
     ...regularSecs.map(n => ({ sec: n, track: "regular" as const })),
     ...specialSecs.map(n => ({ sec: n, track: "special" as const })),
   ];
+  const { t } = useI18n();
   const [openSec, setOpenSec] = useState<string | null>(null);
 
   return (
@@ -661,13 +665,13 @@ function SectionSchedulesPanel({
                   <Clock size={13} className="text-muted shrink-0" />
                   <span className="text-sm font-medium tabular">Sec {sec}</span>
                   <Chip tone={track === "special" ? "warn" : "brand"}>
-                    {track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
+                    {track === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ")}
                   </Chip>
                 </button>
                 {/* Per-section enrolment — stops row toggle from firing. */}
                 <label className="ms-auto flex items-center gap-1.5 text-xs"
                        onClick={e => e.stopPropagation()}>
-                  <span className={(students[sec] ?? 0) < 1 ? "text-warning font-medium" : "text-muted"}>นศ.</span>
+                  <span className={(students[sec] ?? 0) < 1 ? "text-warning font-medium" : "text-muted"}>{t("นศ.")}</span>
                   <TextInput
                     type="number" min={0} max={999} step={1}
                     value={students[sec] ?? 0}
@@ -683,7 +687,7 @@ function SectionSchedulesPanel({
                     (rows.length > 0 ? "text-muted" : "text-warning font-medium")
                   }
                 >
-                  {rows.length > 0 ? `${rows.length} คาบ` : "ต้องกำหนดตาราง"}
+                  {rows.length > 0 ? t("{n} คาบ", { n: rows.length }) : t("ต้องกำหนดตาราง")}
                 </button>
               </div>
               {isOpen && (
@@ -741,6 +745,7 @@ function LecturerPicker({
   selected: string[];
   onChange: (ids: string[]) => void;
 }) {
+  const { t } = useI18n();
   const byId = useMemo(() => new Map(lecturers.map(u => [u.id, u])), [lecturers]);
   const available = lecturers.filter(u => !selected.includes(u.id));
   return (
@@ -758,11 +763,11 @@ function LecturerPicker({
             return (
               <Chip key={id} tone="brand">
                 {u ? lecturerName(u) : id}
-                <Tip content="เอาออก"><button
+                <Tip content={t("เอาออก")}><button
                   type="button"
                   onClick={() => onChange(selected.filter(x => x !== id))}
                   className="ms-1 inline-flex hover:text-danger"
-                  aria-label="เอาออก"
+                  aria-label={t("เอาออก")}
                 >
                   <X size={11} />
                 </button></Tip>
@@ -771,7 +776,7 @@ function LecturerPicker({
           })}
         </div>
       ) : (
-        <div className="text-xs text-warning font-medium mt-2">ยังไม่ได้เลือกอาจารย์ ต้องเลือกอย่างน้อย 1 คน</div>
+        <div className="text-xs text-warning font-medium mt-2">{t("ยังไม่ได้เลือกอาจารย์ ต้องเลือกอย่างน้อย 1 คน")}</div>
       )}
     </div>
   );
@@ -783,16 +788,17 @@ export function LecturerAutocomplete({
   items: LecturerUser[];
   onPick: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const { contains } = useFilter({ sensitivity: "base" });
   return (
     <Autocomplete
       className="w-full"
-      placeholder="พิมพ์ค้นหาอาจารย์…"
+      placeholder={t("พิมพ์ค้นหาอาจารย์…")}
       selectionMode="single"
       value={null}
       onChange={(k: Key | Key[] | null) => onPick(String(k ?? ""))}
     >
-      <Label className="sr-only">อาจารย์ผู้สอน</Label>
+      <Label className="sr-only">{t("อาจารย์ผู้สอน")}</Label>
       <Autocomplete.Trigger>
         <Autocomplete.Value />
         <Autocomplete.ClearButton />
@@ -803,13 +809,13 @@ export function LecturerAutocomplete({
           <SearchField autoFocus name="search" variant="secondary">
             <SearchField.Group>
               <SearchField.SearchIcon />
-              <SearchField.Input placeholder="ค้นหาอาจารย์…" />
+              <SearchField.Input placeholder={t("ค้นหาอาจารย์…")} />
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
           <ListBox
             className="max-h-[280px] overflow-y-auto"
-            renderEmptyState={() => <EmptyState>ไม่พบอาจารย์</EmptyState>}
+            renderEmptyState={() => <EmptyState>{t("ไม่พบอาจารย์")}</EmptyState>}
           >
             {items.map(u => (
               <ListBox.Item key={u.id} id={u.id} textValue={`${lecturerName(u)} ${u.email}`}>

@@ -1,6 +1,7 @@
 "use client";
 import { FileText, Play } from "lucide-react";
 import { apiUrl } from "../lib/api";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * How an announcement's files are shown to a reader.
@@ -45,6 +46,7 @@ export default function AttachmentGallery({
   items: Attachment[];
   publicMode?: boolean;
 }) {
+  const { t } = useI18n();
   if (!items?.length) return null;
 
   const images = items.filter(a => a.kind === "image");
@@ -75,7 +77,7 @@ export default function AttachmentGallery({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={attachmentSrc(a, publicMode)}
-                alt={a.filename || `รูปที่ ${i + 1}`}
+                alt={a.filename || t("รูปที่ {n}", { n: i + 1 })}
                 loading="lazy"
                 className={images.length === 1
                   ? "max-h-[520px] w-full object-contain"
@@ -96,7 +98,7 @@ export default function AttachmentGallery({
           <source src={attachmentSrc(a, publicMode)} type={a.mime} />
           {/* A browser that cannot play the format still gets the file. */}
           <a href={attachmentSrc(a, publicMode)} className="text-sm underline">
-            <Play size={14} className="inline" /> เปิดวิดีโอ {a.filename}
+            <Play size={14} className="inline" /> {t("เปิดวิดีโอ {name}", { name: a.filename })}
           </a>
         </video>
       ))}

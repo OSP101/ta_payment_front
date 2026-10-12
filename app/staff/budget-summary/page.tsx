@@ -21,6 +21,7 @@ import {
   MonthChips, monthLabels, monthsQuery, suggestMonths,
   type MonthCoverage, type TermMonth,
 } from "../../components/monthScope";
+import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 /**
  * สรุปงบและปะหน้าจ่ายตรง — everything about the term's TWO payout documents
@@ -49,6 +50,7 @@ type PreviewTab = "course_summary" | "transfer_cover";
 // strip) and PageHeader's own row has no visibility into which tab is
 // selected below it otherwise.
 export default function BudgetSummaryPage() {
+  const { t } = useI18n();
   const { termId, term, loaded: termsLoaded } = useTerm();
   const termLabel = term ? `${term.academic_year}/${term.semester}` : "";
   // The tab lives in ?tab= so a reload lands back on it. replace, not push:
@@ -71,8 +73,8 @@ export default function BudgetSummaryPage() {
   return (
     <div>
       <PageHeader
-        title="สรุปงบและปะหน้าจ่ายตรง"
-        description="ตรวจตัวเลขสรุปรายวิชาที่ขอใช้ TA และปะหน้าจ่ายตรงบนหน้าจอ ก่อนดาวน์โหลดเป็นไฟล์ Excel พร้อมตรวจสอบรหัสวิชาคู่"
+        title={t("สรุปงบและปะหน้าจ่ายตรง")}
+        description={t("ตรวจตัวเลขสรุปรายวิชาที่ขอใช้ TA และปะหน้าจ่ายตรงบนหน้าจอ ก่อนดาวน์โหลดเป็นไฟล์ Excel พร้อมตรวจสอบรหัสวิชาคู่")}
         actions={
           termId ? (
             tab === "course_summary" ? (
@@ -118,6 +120,7 @@ function PreviewSection({
   selectedMonths: string[] | null; setSelectedMonths: (v: string[] | null) => void;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { data: rounds, isLoading: roundsLoading } = useSWR<{ items: { id: string }[] }>(
     `/exports/appointment-order/rounds?term_id=${termId}`
   );
@@ -134,11 +137,11 @@ function PreviewSection({
   const noRoundsNotice = (
     <EmptyState
       icon={<FileSignature size={26} />}
-      title="ยังไม่เคยออกคำสั่งแต่งตั้ง TA"
-      description="ต้องออกคำสั่งแต่งตั้งอย่างน้อย 1 ครั้งก่อน จึงจะแสดงสรุปงบและปะหน้าจ่ายตรงได้ เนื่องจากคำสั่งแต่งตั้งเป็นสิ่งยืนยันว่ารายชื่อ TA ที่ใช้งานจริงคือใคร"
+      title={t("ยังไม่เคยออกคำสั่งแต่งตั้ง TA")}
+      description={t("ต้องออกคำสั่งแต่งตั้งอย่างน้อย 1 ครั้งก่อน จึงจะแสดงสรุปงบและปะหน้าจ่ายตรงได้ เนื่องจากคำสั่งแต่งตั้งเป็นสิ่งยืนยันว่ารายชื่อ TA ที่ใช้งานจริงคือใคร")}
       action={
         <Button variant="primary" onClick={() => router.push("/staff/appointments")}>
-          <FileSignature size={16} /> ไปออกคำสั่งแต่งตั้ง
+          <FileSignature size={16} /> {t("ไปออกคำสั่งแต่งตั้ง")}
         </Button>
       }
     />
@@ -148,16 +151,16 @@ function PreviewSection({
     <div>
       <Tabs variant="secondary" selectedKey={tab} onSelectionChange={k => setTab(String(k) as PreviewTab)}>
         <Tabs.ListContainer>
-          <Tabs.List aria-label="เลือกเอกสารที่จะดูสรุป">
+          <Tabs.List aria-label={t("เลือกเอกสารที่จะดูสรุป")}>
             <Tabs.Tab id="course_summary">
               <TabLabel icon={<FileDown size={14} />} active={tab === "course_summary"}>
-                สรุปรายวิชาที่ขอใช้ TA
+                {t("สรุปรายวิชาที่ขอใช้ TA")}
               </TabLabel>
               <Tabs.Indicator />
             </Tabs.Tab>
             <Tabs.Tab id="transfer_cover">
               <TabLabel icon={<FileDown size={14} />} active={tab === "transfer_cover"}>
-                ปะหน้าจ่ายตรง
+                {t("ปะหน้าจ่ายตรง")}
               </TabLabel>
               <Tabs.Indicator />
             </Tabs.Tab>
@@ -222,7 +225,7 @@ function PreviewTableSkeleton() {
   );
 }
 
-const fmtBaht = (n: number) => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtBaht = (n: number, intl: string) => n.toLocaleString(intl, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // CourseSummaryMonthAmount is one course's เบิกจ่ายเดือน figure for ONE month
 // — never summed with any other month (11/09/2026: staff asked to see each
@@ -314,21 +317,23 @@ const TA_STACK_VISIBLE = 4;
 /** "ปกติ / พิเศษ" on one line (tables keep rows to one line); the tooltip
  *  spells both out. A negative amount (overspent) is red. */
 function MoneyPair({ regular, special }: { regular: number; special: number }) {
+  const { t, intl } = useI18n();
   const cls = (n: number) => (n < 0 ? "font-medium text-danger" : "");
   return (
-    <Tip content={`ภาคปกติ ${fmtBaht(regular)} บาท\nภาคพิเศษ ${fmtBaht(special)} บาท`}>
+    <Tip content={t("ภาคปกติ {regular} บาท\nภาคพิเศษ {special} บาท", { regular: fmtBaht(regular, intl), special: fmtBaht(special, intl) })}>
       <span className="tabular-nums">
-        <span className={cls(regular)}>{fmtBaht(regular)}</span>
+        <span className={cls(regular)}>{fmtBaht(regular, intl)}</span>
         <span className="text-ink-4"> / </span>
-        <span className={special < 0 ? cls(special) : "text-ink-4"}>{fmtBaht(special)}</span>
+        <span className={special < 0 ? cls(special) : "text-ink-4"}>{fmtBaht(special, intl)}</span>
       </span>
     </Tip>
   );
 }
 
 function TAAvatarStack({ tas }: { tas: TAInfo[] }) {
+  const { t } = useI18n();
   if (tas.length === 0) {
-    return <span className="text-xs text-ink-4">ยังไม่มี TA ที่อนุมัติ</span>;
+    return <span className="text-xs text-ink-4">{t("ยังไม่มี TA ที่อนุมัติ")}</span>;
   }
   const visible = tas.slice(0, TA_STACK_VISIBLE);
   const overflow = tas.length - visible.length;
@@ -348,7 +353,7 @@ function TAAvatarStack({ tas }: { tas: TAInfo[] }) {
         );
       })}
       {overflow > 0 && (
-        <TipWrap content={tas.slice(TA_STACK_VISIBLE).map(t => t.name).join("\n")}>
+        <TipWrap content={tas.slice(TA_STACK_VISIBLE).map(x => x.name).join("\n")}>
           <Avatar size="sm" color="accent" className="ring-2 ring-surface">
             <Avatar.Fallback className="text-[10px]">+{overflow}</Avatar.Fallback>
           </Avatar>
@@ -365,11 +370,12 @@ function TAAvatarStack({ tas }: { tas: TAInfo[] }) {
 // column set itself depends on how many months are currently selected.
 function buildCourseSummaryColumns(
   monthMeta: { year_month: string; label: string }[],
+  t: TFn,
 ): DataColumn<CourseSummaryDisplayRow>[] {
   const monthCols: DataColumn<CourseSummaryDisplayRow>[] = monthMeta.map(m => ({
     id: `paid_${m.year_month}`,
     width: 160,
-    label: `เบิกจ่ายเดือน ${m.label} ปกติ / พิเศษ (บาท)`,
+    label: t("เบิกจ่ายเดือน {month} ปกติ / พิเศษ (บาท)", { month: m.label }),
     className: "text-right whitespace-nowrap",
     hideOnMobile: true,
     sortable: true,
@@ -385,35 +391,35 @@ function buildCourseSummaryColumns(
 
   return [
     {
-      id: "course_code", width: 130, label: "รหัสวิชา", isRowHeader: true, sortable: true,
+      id: "course_code", width: 130, label: t("รหัสวิชา"), isRowHeader: true, sortable: true,
       sortValue: r => r.course_code, render: r => <span className="font-medium tabular-nums">{r.course_code}</span>,
     },
     {
-      id: "course_name_th", width: 260, label: "ชื่อวิชา", sortable: true,
+      id: "course_name_th", width: 260, label: t("ชื่อวิชา"), sortable: true,
       sortValue: r => r.course_name_th, render: r => r.course_name_th,
     },
-    { id: "credit_text", width: 100, label: "หน่วยกิต", className: "whitespace-nowrap", hideOnMobile: true, render: r => r.credit_text },
+    { id: "credit_text", width: 100, label: t("หน่วยกิต"), className: "whitespace-nowrap", hideOnMobile: true, render: r => r.credit_text },
     {
-      id: "lecturer", width: 200, label: "อาจารย์ผู้สอน", sortable: true,
+      id: "lecturer", width: 200, label: t("อาจารย์ผู้สอน"), sortable: true,
       sortValue: r => r.lecturer, render: r => r.lecturer,
     },
     {
-      id: "claim_kind", width: 120, label: "ประเภทเบิก", hideOnMobile: true,
+      id: "claim_kind", width: 120, label: t("ประเภทเบิก"), hideOnMobile: true,
       render: r => r.claim_kind ? <Chip tone="info">{r.claim_kind}</Chip> : null,
     },
     {
       id: "ta", width: 170, label: "TA", sortable: true,
-      sortValue: r => r.tas.length ? r.tas.map(t => t.name).join(", ") : "~",
+      sortValue: r => r.tas.length ? r.tas.map(x => x.name).join(", ") : "~",
       render: r => <TAAvatarStack tas={r.tas} />,
     },
     {
-      id: "num", width: 150, label: "จำนวนนักศึกษา (ปกติ/พิเศษ)", className: "text-right whitespace-nowrap", hideOnMobile: true,
+      id: "num", width: 150, label: t("จำนวนนักศึกษา (ปกติ/พิเศษ)"), className: "text-right whitespace-nowrap", hideOnMobile: true,
       render: r => `${r.num_regular} / ${r.num_special}`,
     },
     // The budget the course is allotted, per track — what L:M reports in the
     // .xlsx.
     {
-      id: "apply", width: 170, label: "ขออนุมัติเบิกจ่าย ปกติ / พิเศษ (บาท)", className: "text-right whitespace-nowrap", sortable: true,
+      id: "apply", width: 170, label: t("ขออนุมัติเบิกจ่าย ปกติ / พิเศษ (บาท)"), className: "text-right whitespace-nowrap", sortable: true,
       sortValue: r => r.apply_regular + r.apply_special,
       render: r => <MoneyPair regular={r.apply_regular} special={r.apply_special} />,
     },
@@ -423,7 +429,7 @@ function buildCourseSummaryColumns(
     // every visible month column, same arithmetic the .xlsx formula uses, so
     // the screen and the file can never disagree.
     {
-      id: "remaining", width: 140, label: "คงเหลือ ปกติ / พิเศษ (บาท)", className: "text-right whitespace-nowrap", sortable: true,
+      id: "remaining", width: 140, label: t("คงเหลือ ปกติ / พิเศษ (บาท)"), className: "text-right whitespace-nowrap", sortable: true,
       sortValue: r => {
         const paidReg = r.paid_by_month.reduce((s, p) => s + p.regular, 0);
         const paidSpec = r.paid_by_month.reduce((s, p) => s + p.special, 0);
@@ -445,6 +451,7 @@ function CourseSummaryPreviewPanel({
 }: {
   termId: string; selectedMonths: string[] | null; setSelectedMonths: (v: string[] | null) => void;
 }) {
+  const { t } = useI18n();
   const { data: monthsData } = useSWR<{ months: TermMonth[] }>(`/exports/terms/${termId}/course-summary/months`);
   const allMonths = monthsData?.months ?? [];
   // MonthChips wants TermMonthStatus (TermMonth + issued) — this document has
@@ -464,20 +471,20 @@ function CourseSummaryPreviewPanel({
   });
   const sheets = data?.sheets ?? [];
   const monthMeta = (data?.months ?? []).map(ym => ({ year_month: ym, label: data?.month_labels?.[ym] ?? ym }));
-  const columns = buildCourseSummaryColumns(monthMeta);
+  const columns = buildCourseSummaryColumns(monthMeta, t);
 
   return (
     <div className="space-y-8">
       {!monthsData ? (
         <div className="space-y-1.5">
-          <div className="text-sm font-medium text-ink-2">เลือกเดือนที่จะแสดงเบิกจ่ายเดือน</div>
+          <div className="text-sm font-medium text-ink-2">{t("เลือกเดือนที่จะแสดงเบิกจ่ายเดือน")}</div>
           <div className="flex flex-wrap gap-1.5">
             {[0, 1, 2, 3, 4].map(i => <Skel key={i} className="h-7 w-20 rounded-full" />)}
           </div>
         </div>
       ) : allMonths.length > 0 && (
         <div className="space-y-1.5">
-          <div className="text-sm font-medium text-ink-2">เลือกเดือนที่จะแสดงเบิกจ่ายเดือน</div>
+          <div className="text-sm font-medium text-ink-2">{t("เลือกเดือนที่จะแสดงเบิกจ่ายเดือน")}</div>
           <MonthChips months={monthChipsData} selected={effectiveSelected} onChange={setSelectedMonths} />
         </div>
       )}
@@ -485,7 +492,7 @@ function CourseSummaryPreviewPanel({
         <div className="flex items-start gap-2 text-xs text-amber-800">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <div>
-            <div className="font-medium">มีรายการที่ควรตรวจสอบ {data.warnings.length} รายการ</div>
+            <div className="font-medium">{t("มีรายการที่ควรตรวจสอบ {n} รายการ", { n: data.warnings.length })}</div>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
               {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
             </ul>
@@ -497,15 +504,15 @@ function CourseSummaryPreviewPanel({
       ) : error && !data ? (
         <Alert
           status="danger"
-          title="โหลดข้อมูลไม่สำเร็จ"
-          description={error instanceof Error ? error.message : "กรุณาลองใหม่อีกครั้ง"}
-          action={<Button variant="secondary" onClick={() => void retry()}>ลองใหม่</Button>}
+          title={t("โหลดข้อมูลไม่สำเร็จ")}
+          description={error instanceof Error ? error.message : t("กรุณาลองใหม่อีกครั้ง")}
+          action={<Button variant="secondary" onClick={() => void retry()}>{t("ลองใหม่")}</Button>}
         />
       ) : sheets.length === 0 ? (
         <EmptyState
           icon={<GraduationCap size={26} />}
-          title="ยังไม่มีวิชาที่ขอใช้ TA"
-          description="เมื่อมีคำขอ TA ที่อนุมัติแล้วในเทอมนี้ สรุปจะมาแสดงที่นี่ แยกตามหลักสูตร"
+          title={t("ยังไม่มีวิชาที่ขอใช้ TA")}
+          description={t("เมื่อมีคำขอ TA ที่อนุมัติแล้วในเทอมนี้ สรุปจะมาแสดงที่นี่ แยกตามหลักสูตร")}
         />
       ) : (
         sheets.map((sheet, i) => {
@@ -514,15 +521,15 @@ function CourseSummaryPreviewPanel({
             <div key={sheet.curriculum_code} className={i > 0 ? "pt-8 border-t border-hairline" : ""}>
               <div className="mb-3">
                 <div className="text-[15px] font-semibold text-foreground">{sheet.sheet}</div>
-                <div className="text-xs text-muted mt-0.5">{courseRows.length} รายวิชา</div>
+                <div className="text-xs text-muted mt-0.5">{t("{n} รายวิชา", { n: courseRows.length })}</div>
               </div>
               <DataTable
-                ariaLabel={`สรุปรายวิชาที่ขอใช้ TA — ${sheet.sheet}`}
+                ariaLabel={t("สรุปรายวิชาที่ขอใช้ TA — {sheet}", { sheet: sheet.sheet })}
                 columns={columns}
                 rows={courseRows}
                 rowKey={r => r.course_code}
-                searchFn={r => `${r.course_code} ${r.course_name_th} ${r.lecturer} ${r.tas.map(t => t.name).join(" ")}`}
-                searchPlaceholder="ค้นหารหัสวิชา ชื่อวิชา อาจารย์ หรือ TA"
+                searchFn={r => `${r.course_code} ${r.course_name_th} ${r.lecturer} ${r.tas.map(x => x.name).join(" ")}`}
+                searchPlaceholder={t("ค้นหารหัสวิชา ชื่อวิชา อาจารย์ หรือ TA")}
                 initialSort={{ column: "course_code", direction: "ascending" }}
                 // Grows with how many เบิกจ่ายเดือน columns are on screen —
                 // one money-pair column per selected month, plus ขออนุมัติ
@@ -532,7 +539,7 @@ function CourseSummaryPreviewPanel({
                 loading={isLoading}
                 error={error}
                 onRetry={() => void retry()}
-                emptyTitle="ไม่มีวิชาในหลักสูตรนี้"
+                emptyTitle={t("ไม่มีวิชาในหลักสูตรนี้")}
               />
             </div>
           );
@@ -556,31 +563,44 @@ interface TransferCoverPreviewSheet {
   total_baht: number;
 }
 
-const transferCoverColumns: DataColumn<TransferCoverPreviewRow>[] = [
+const buildTransferCoverColumns = (t: TFn, intl: string): DataColumn<TransferCoverPreviewRow>[] => [
   {
-    id: "name", width: 240, label: "ชื่อ-สกุล", isRowHeader: true, sortable: true,
+    id: "name", width: 240, label: t("ชื่อ-สกุล"), isRowHeader: true, sortable: true,
     sortValue: r => r.name, render: r => r.name,
   },
-  { id: "courses", width: 260, label: "รายวิชา", render: r => r.courses },
+  { id: "courses", width: 260, label: t("รายวิชา"), render: r => r.courses },
   {
-    id: "seniority", width: 160, label: "หมายเหตุ", className: "whitespace-nowrap",
-    render: r => (
-      <Tip content={r.seniority === "ใหม่" ? "เป็น TA ครั้งแรกในภาคเรียนนี้" : r.seniority === "เก่า" ? "เคยเป็น TA ในภาคเรียนก่อนหน้า" : undefined}>
-        <span className="inline-flex"><Chip tone={r.seniority === "ใหม่" ? "info" : "neutral"}>{r.seniority}</Chip></span>
-      </Tip>
-    ),
+    id: "seniority", width: 160, label: t("หมายเหตุ"), className: "whitespace-nowrap",
+    render: r => {
+      // "ใหม่"/"เก่า" are the backend's seniority values (data).
+      const isNew = r.seniority === "ใหม่"; // i18n-ignore
+      const isOld = r.seniority === "เก่า"; // i18n-ignore
+      return (
+        <Tip content={isNew ? t("เป็น TA ครั้งแรกในภาคเรียนนี้") : isOld ? t("เคยเป็น TA ในภาคเรียนก่อนหน้า") : undefined}>
+          <span className="inline-flex"><Chip tone={isNew ? "info" : "neutral"}>{seniorityLabel(t, r.seniority)}</Chip></span>
+        </Tip>
+      );
+    },
   },
   {
-    id: "baht", width: 160, label: "จำนวนเงิน (บาท)", className: "text-right whitespace-nowrap", sortable: true,
-    sortValue: r => r.baht, render: r => <span className="tabular-nums">{fmtBaht(r.baht)}</span>,
+    id: "baht", width: 160, label: t("จำนวนเงิน (บาท)"), className: "text-right whitespace-nowrap", sortable: true,
+    sortValue: r => r.baht, render: r => <span className="tabular-nums">{fmtBaht(r.baht, intl)}</span>,
   },
 ];
+
+// The backend sends the seniority as Thai ("ใหม่" / "เก่า"); translate the two
+// known values for display and show anything else as sent.
+function seniorityLabel(t: TFn, v: string): string {
+  if (v === "ใหม่") return t("ใหม่"); // i18n-ignore
+  if (v === "เก่า") return t("เก่า"); // i18n-ignore
+  return v;
+}
 
 /** "undergrad" | "graduate" — the level split (12/08/2026): ป.ตรี กับ
  *  บัณฑิตศึกษาทำเบิกไม่เหมือนกัน จึงเป็นคนละไฟล์เสมอ ไม่มีตัวเลือก "ทั้งสองระดับ". */
 type TransferCoverLevel = "undergrad" | "graduate";
 const transferCoverLevelLabel: Record<TransferCoverLevel, string> = {
-  undergrad: "ป.ตรี", graduate: "บัณฑิตศึกษา",
+  undergrad: msg("ป.ตรี"), graduate: msg("บัณฑิตศึกษา"),
 };
 
 // transferCoverQuery builds the query string every transfer-cover endpoint
@@ -597,6 +617,7 @@ function transferCoverQuery(level: TransferCoverLevel, months?: string[]) {
 // switch is a fresh screen, not a filter on one shared table: the two files
 // have entirely different rosters and month-coverage histories.
 function TransferCoverPreviewSection({ termId }: { termId: string }) {
+  const { t } = useI18n();
   const [level, setLevel] = useState<TransferCoverLevel>("undergrad");
   return (
     <div className="space-y-8">
@@ -617,7 +638,7 @@ function TransferCoverPreviewSection({ termId }: { termId: string }) {
                 (level === l ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
               }
             >
-              {transferCoverLevelLabel[l]}
+              {t(transferCoverLevelLabel[l])}
             </button>
           ))}
         </div>
@@ -638,13 +659,14 @@ function TransferCoverPreviewSection({ termId }: { termId: string }) {
 // inside TransferCoverPreviewSection's own boxed cluster, alongside the level
 // toggle — not from TransferCoverPreviewPanel below, which stays flat.
 function TransferCoverCoveragePanel({ termId, level }: { termId: string; level: TransferCoverLevel }) {
+  const { t } = useI18n();
   const { data, error } = useSWR<MonthCoverage>(
     `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery(level)}`,
   );
   if (!data && !error) {
     return (
       <div>
-        <div className="mb-2 text-xs font-medium text-ink-1">สถานะการออกเอกสารรายเดือน</div>
+        <div className="mb-2 text-xs font-medium text-ink-1">{t("สถานะการออกเอกสารรายเดือน")}</div>
         <div className="flex flex-wrap gap-1.5">
           {[0, 1, 2, 3, 4].map(i => <Skel key={i} className="h-6 w-20 rounded-full" />)}
         </div>
@@ -656,14 +678,14 @@ function TransferCoverCoveragePanel({ termId, level }: { termId: string; level: 
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-        <span className="font-medium text-ink-1">สถานะการออกเอกสารรายเดือน</span>
+        <span className="font-medium text-ink-1">{t("สถานะการออกเอกสารรายเดือน")}</span>
         {data.fiscal_split.crosses && (
-          <Chip tone="warn">ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ ต้องแยกเอกสาร</Chip>
+          <Chip tone="warn">{t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ ต้องแยกเอกสาร")}</Chip>
         )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {data.months.map(m => (
-          <Tip key={m.year_month} content={m.issued ? "ออกเอกสารเดือนนี้แล้ว" : "ยังไม่ได้ออกเอกสารเดือนนี้"}>
+          <Tip key={m.year_month} content={m.issued ? t("ออกเอกสารเดือนนี้แล้ว") : t("ยังไม่ได้ออกเอกสารเดือนนี้")}>
             <span
               className={
                 "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs " +
@@ -680,7 +702,7 @@ function TransferCoverCoveragePanel({ termId, level }: { termId: string; level: 
       </div>
       {pending.length > 0 && (
         <p className="mt-2 text-xs text-ink-3">
-          ยังไม่ได้ออกเอกสาร {pending.length} เดือน: {pending.map(m => m.label).join(", ")}
+          {t("ยังไม่ได้ออกเอกสาร {n} เดือน: {months}", { n: pending.length, months: pending.map(m => m.label).join(", ") })}
         </p>
       )}
     </div>
@@ -691,6 +713,8 @@ function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: T
   const { data, error, isLoading, mutate: retry } = useSWR<{ sheets: TransferCoverPreviewSheet[]; warnings: string[] }>(
     `/exports/terms/${termId}/transfer-cover/preview${transferCoverQuery(level)}`
   );
+  const { t, intl } = useI18n();
+  const transferCoverColumns = useMemo(() => buildTransferCoverColumns(t, intl), [t, intl]);
   const sheets = data?.sheets ?? [];
   return (
     <div className="space-y-8">
@@ -698,7 +722,7 @@ function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: T
         <div className="flex items-start gap-2 text-xs text-amber-800">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <div>
-            <div className="font-medium">มีรายการที่ควรตรวจสอบ {data.warnings.length} รายการ</div>
+            <div className="font-medium">{t("มีรายการที่ควรตรวจสอบ {n} รายการ", { n: data.warnings.length })}</div>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
               {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
             </ul>
@@ -710,15 +734,15 @@ function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: T
       ) : error && !data ? (
         <Alert
           status="danger"
-          title="โหลดข้อมูลไม่สำเร็จ"
-          description={error instanceof Error ? error.message : "กรุณาลองใหม่อีกครั้ง"}
-          action={<Button variant="secondary" onClick={() => void retry()}>ลองใหม่</Button>}
+          title={t("โหลดข้อมูลไม่สำเร็จ")}
+          description={error instanceof Error ? error.message : t("กรุณาลองใหม่อีกครั้ง")}
+          action={<Button variant="secondary" onClick={() => void retry()}>{t("ลองใหม่")}</Button>}
         />
       ) : sheets.length === 0 ? (
         <EmptyState
           icon={<Users size={26} />}
-          title="ยังไม่มีข้อมูลปะหน้าจ่ายตรง"
-          description="เมื่อวิชาในเทอมนี้มีบันทึกเวลาที่คิดเงินแล้ว สรุปจะมาแสดงที่นี่ แยกตามหลักสูตร"
+          title={t("ยังไม่มีข้อมูลปะหน้าจ่ายตรง")}
+          description={t("เมื่อวิชาในเทอมนี้มีบันทึกเวลาที่คิดเงินแล้ว สรุปจะมาแสดงที่นี่ แยกตามหลักสูตร")}
         />
       ) : (
         sheets.map((sheet, i) => (
@@ -729,22 +753,22 @@ function TransferCoverPreviewPanel({ termId, level }: { termId: string; level: T
             <div className="mb-3">
               <div className="text-[15px] font-semibold text-foreground">{sheet.sheet_name}</div>
               <div className="text-xs text-muted mt-0.5">
-                {sheet.track_th} · {sheet.rows.length} รายการ · รวม {fmtBaht(sheet.total_baht)} บาท
+                {t("{track} · {n} รายการ · รวม {total} บาท", { track: sheet.track_th, n: sheet.rows.length, total: fmtBaht(sheet.total_baht, intl) })}
               </div>
             </div>
             <DataTable
-              ariaLabel={`ปะหน้าจ่ายตรง — ${sheet.sheet_name} (${sheet.track_th})`}
+              ariaLabel={t("ปะหน้าจ่ายตรง — {sheet} ({track})", { sheet: sheet.sheet_name, track: sheet.track_th })}
               columns={transferCoverColumns}
               rows={sheet.rows}
               rowKey={r => `${sheet.rows.indexOf(r)}-${r.name}`}
               searchFn={r => `${r.name} ${r.courses}`}
-              searchPlaceholder="ค้นหาชื่อหรือรายวิชา"
+              searchPlaceholder={t("ค้นหาชื่อหรือรายวิชา")}
               initialSort={{ column: "name", direction: "ascending" }}
               minWidth="40rem"
               loading={isLoading}
               error={error}
               onRetry={() => void retry()}
-              emptyTitle="ไม่มีรายชื่อในหลักสูตรนี้"
+              emptyTitle={t("ไม่มีรายชื่อในหลักสูตรนี้")}
             />
           </div>
         ))
@@ -768,6 +792,7 @@ function CourseSummaryDownloadButton({
 }: {
   termId: string; termLabel: string; selectedMonths: string[] | null;
 }) {
+  const { t } = useI18n();
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [warnings, setWarnings] = useState<string[] | null>(null);
@@ -793,7 +818,7 @@ function CourseSummaryDownloadButton({
       // history modal if it happens to be showing this term already.
       void mutate(`/exports/terms/${termId}/course-summary/history`);
     } catch (e) {
-      toast.danger("ดาวน์โหลดไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger(t("ดาวน์โหลดไม่สำเร็จ"), { description: (e as Error).message });
     } finally {
       setDownloading(false);
     }
@@ -809,7 +834,7 @@ function CourseSummaryDownloadButton({
         await downloadNow();
       }
     } catch (e) {
-      toast.danger("ตรวจสอบไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger(t("ตรวจสอบไม่สำเร็จ"), { description: (e as Error).message });
     } finally {
       setChecking(false);
     }
@@ -823,13 +848,13 @@ function CourseSummaryDownloadButton({
   return (
     <>
       <Button variant="secondary" disabled={!termId} isPending={checking || groupGate.checking} onClick={start}>
-        <FileDown size={16} /> สรุปรายวิชาที่ขอใช้ TA
+        <FileDown size={16} /> {t("สรุปรายวิชาที่ขอใช้ TA")}
       </Button>
       {/* variant="secondary" to match its neighbour — IconButton defaults to
           "primary" (a solid-fill circle), which next to outlined buttons in
           the same row would read as a mismatched style. */}
       <IconButton
-        label="ประวัติการสร้างเอกสาร"
+        label={t("ประวัติการสร้างเอกสาร")}
         variant="secondary"
         disabled={!termId}
         onClick={() => setHistoryOpen(true)}
@@ -842,12 +867,12 @@ function CourseSummaryDownloadButton({
         onConfirm={() => { setWarnings(null); void downloadNow(); }}
         isPending={downloading}
         icon={<FileDown size={20} />}
-        title="มีรายการที่ควรตรวจสอบก่อนดาวน์โหลด"
-        confirmLabel="ดาวน์โหลดต่อ"
+        title={t("มีรายการที่ควรตรวจสอบก่อนดาวน์โหลด")}
+        confirmLabel={t("ดาวน์โหลดต่อ")}
         message={
           <div className="space-y-2 text-sm">
             <p className="text-muted">
-              ไฟล์นี้เป็นเอกสารประมาณการ ดาวน์โหลดได้ตามปกติ แต่ตัวเลขต่อไปนี้ยังไม่ครบ:
+              {t("ไฟล์นี้เป็นเอกสารประมาณการ ดาวน์โหลดได้ตามปกติ แต่ตัวเลขต่อไปนี้ยังไม่ครบ:")}
             </p>
             <ul className="list-disc pl-5 space-y-1">
               {(warnings ?? []).map((w, i) => <li key={i}>{w}</li>)}
@@ -873,6 +898,7 @@ function CourseSummaryHistoryModal({
 }: {
   termId: string; onClose: () => void;
 }) {
+  const { t, intl } = useI18n();
   const { data: history } = useSWR<CourseSummaryExportSummary[]>(
     `/exports/terms/${termId}/course-summary/history`
   );
@@ -889,7 +915,7 @@ function CourseSummaryHistoryModal({
       el.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      toast.danger("ดาวน์โหลดไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger(t("ดาวน์โหลดไม่สำเร็จ"), { description: (e as Error).message });
     } finally {
       setReprinting(null);
     }
@@ -899,18 +925,18 @@ function CourseSummaryHistoryModal({
     <Modal
       open
       onClose={onClose}
-      title="ประวัติการสร้างเอกสารสรุปรายวิชาที่ขอใช้ TA"
+      title={t("ประวัติการสร้างเอกสารสรุปรายวิชาที่ขอใช้ TA")}
       icon={<History size={20} />}
       size="xl"
-      footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
+      footer={<Button variant="ghost" onClick={onClose}>{t("ปิด")}</Button>}
     >
       {!history ? (
         <SkelList items={3} icon={false} />
       ) : !history.length ? (
         <EmptyState
           icon={<FileText size={26} />}
-          title="ยังไม่เคยสร้างเอกสาร"
-          description="เอกสารที่สร้างแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม"
+          title={t("ยังไม่เคยสร้างเอกสาร")}
+          description={t("เอกสารที่สร้างแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม")}
         />
       ) : (
         <ul className="divide-y divide-hairline">
@@ -918,14 +944,14 @@ function CourseSummaryHistoryModal({
             <li key={h.id} className="py-3 flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-ink-1">
-                  {new Date(h.generated_at).toLocaleString("th-TH", {
+                  {new Date(h.generated_at).toLocaleString(intl, {
                     dateStyle: "medium", timeStyle: "short",
                   })}
                 </div>
                 <div className="text-xs text-ink-3">
-                  {h.course_count} วิชา
-                  {h.month_label && ` · เบิกจ่ายเดือน ${h.month_label}`}
-                  {h.generated_by && ` · โดย ${h.generated_by}`}
+                  {t("{n} วิชา", { n: h.course_count })}
+                  {h.month_label && t(" · เบิกจ่ายเดือน {month}", { month: h.month_label })}
+                  {h.generated_by && t(" · โดย {name}", { name: h.generated_by })}
                 </div>
               </div>
               <button
@@ -935,7 +961,7 @@ function CourseSummaryHistoryModal({
                 className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
               >
                 <Download size={12} />
-                {reprinting === h.id ? "กำลังดาวน์โหลด…" : "ดาวน์โหลดฉบับเดิม"}
+                {reprinting === h.id ? t("กำลังดาวน์โหลด…") : t("ดาวน์โหลดฉบับเดิม")}
               </button>
             </li>
           ))}
@@ -1020,13 +1046,13 @@ function mergeCoverage(a?: MonthCoverage, b?: MonthCoverage): MonthCoverage | un
 
 // blockerLine is one pending item as staff read it — shared by the picker's
 // "nothing ready" state and the both-levels-blocked modal.
-function blockerLine(b: TransferCoverBlocker): string {
+function blockerLine(t: TFn, b: TransferCoverBlocker): string {
   const who = b.course_code ? `[${b.course_code}] ${b.ta_name}` : b.ta_name;
   const months = b.months.join(", ");
   switch (b.kind) {
-    case "waiting_ta": return `${who} ยังไม่ส่งบันทึกเวลา (${months})`;
-    case "waiting_lecturer": return `${who} รออาจารย์อนุมัติ (${months})`;
-    case "not_exported": return `${who} ตรวจสอบแล้วแต่ยังไม่ได้ส่งออกใบเบิกจ่าย (${months})`;
+    case "waiting_ta": return t("{who} ยังไม่ส่งบันทึกเวลา ({months})", { who, months });
+    case "waiting_lecturer": return t("{who} รออาจารย์อนุมัติ ({months})", { who, months });
+    case "not_exported": return t("{who} ตรวจสอบแล้วแต่ยังไม่ได้ส่งออกใบเบิกจ่าย ({months})", { who, months });
     default: return `${who} (${months})`;
   }
 }
@@ -1040,6 +1066,7 @@ function TransferCoverMonthModal({
   isPending: boolean;
   error?: string | null;
 }) {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const { data: ugData, isLoading: ugLoading } = useSWR<MonthCoverage>(
     `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("undergrad")}`
@@ -1079,19 +1106,19 @@ function TransferCoverMonthModal({
     <Modal
       open
       onClose={onClose}
-      title="เลือกเดือนที่จะออกเอกสาร"
+      title={t("เลือกเดือนที่จะออกเอกสาร")}
       icon={<CalendarRange size={20} />}
       size="xl"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
           <Button
             variant="primary"
             isPending={isPending}
             disabled={months.length === 0 || straddles || password === ""}
             onClick={() => onConfirm(months, password)}
           >
-            <Banknote size={14} /> ตรวจสอบและดาวน์โหลด
+            <Banknote size={14} /> {t("ตรวจสอบและดาวน์โหลด")}
           </Button>
         </>
       }
@@ -1105,24 +1132,25 @@ function TransferCoverMonthModal({
         <div className="space-y-4 text-sm">
           <EmptyState
             icon={<CalendarRange size={26} />}
-            title="ยังออกเอกสารไม่ได้"
-            description="ยังไม่มีเดือนใดที่ส่งออกใบเบิกจ่ายครบ ทั้ง ป.ตรี และบัณฑิตศึกษา ตรวจและส่งออกเอกสารของเดือนนั้นให้ครบอย่างน้อยหนึ่งเดือนก่อน แล้วจึงกลับมาออกเอกสาร"
+            title={t("ยังออกเอกสารไม่ได้")}
+            description={t("ยังไม่มีเดือนใดที่ส่งออกใบเบิกจ่ายครบ ทั้ง ป.ตรี และบัณฑิตศึกษา ตรวจและส่งออกเอกสารของเดือนนั้นให้ครบอย่างน้อยหนึ่งเดือนก่อน แล้วจึงกลับมาออกเอกสาร")}
           />
           <PendingBlockers termId={termId} />
         </div>
       ) : all.length === 0 ? (
         <EmptyState
           icon={<CalendarRange size={26} />}
-          title="ยังไม่ได้ตั้งรอบส่งบันทึกเวลา"
-          description="เอกสารนี้อ้างอิงรอบรายเดือนของภาคเรียน ตั้งรอบที่เมนูตั้งค่าก่อน แล้วจึงกลับมาออกเอกสาร"
+          title={t("ยังไม่ได้ตั้งรอบส่งบันทึกเวลา")}
+          description={t("เอกสารนี้อ้างอิงรอบรายเดือนของภาคเรียน ตั้งรอบที่เมนูตั้งค่าก่อน แล้วจึงกลับมาออกเอกสาร")}
         />
       ) : (
         <div className="space-y-4 text-sm">
           {split?.crosses && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
-              ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — เดือน{" "}
-              {monthLabels(all, split.after).join(", ")} ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสารจาก{" "}
-              {monthLabels(all, split.before).join(", ")}
+              {t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — เดือน {after} ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสารจาก {before}", {
+                after: monthLabels(all, split.after).join(", "),
+                before: monthLabels(all, split.before).join(", "),
+              })}
             </div>
           )}
 
@@ -1134,14 +1162,14 @@ function TransferCoverMonthModal({
                   disabled={readyOf(split.before).length === 0}
                   onClick={() => setSelected(readyOf(split.before))}
                 >
-                  งบปีเก่า ({readyOf(split.before).length} เดือน)
+                  {t("งบปีเก่า ({n} เดือน)", { n: readyOf(split.before).length })}
                 </Button>
                 <Button
                   variant="secondary" size="sm"
                   disabled={readyOf(split.after).length === 0}
                   onClick={() => setSelected(readyOf(split.after))}
                 >
-                  งบปีใหม่ ({readyOf(split.after).length} เดือน)
+                  {t("งบปีใหม่ ({n} เดือน)", { n: readyOf(split.after).length })}
                 </Button>
               </>
             )}
@@ -1153,16 +1181,16 @@ function TransferCoverMonthModal({
                 disabled={readyOf(all.map(m => m.year_month)).length === 0}
                 onClick={() => setSelected(readyOf(all.map(m => m.year_month)))}
               >
-                ทั้งภาคเรียน
+                {t("ทั้งภาคเรียน")}
               </Button>
             )}
           </div>
 
           {notReady.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
-              <b>เดือน {notReady.map(m => m.label).join(", ")} ยังเลือกไม่ได้</b> —
-              ต้องให้อาจารย์อนุมัติบันทึกเวลา เจ้าหน้าที่ตรวจ และส่งออกใบเบิกจ่ายให้ครบก่อน
-              เพราะการเงินคีย์ตัวเลขจากเอกสารนี้เข้าระบบ ERP โดยตรง ยอดจึงต้องนิ่งแล้ว
+              {t.rich("{head} — ต้องให้อาจารย์อนุมัติบันทึกเวลา เจ้าหน้าที่ตรวจ และส่งออกใบเบิกจ่ายให้ครบก่อน เพราะการเงินคีย์ตัวเลขจากเอกสารนี้เข้าระบบ ERP โดยตรง ยอดจึงต้องนิ่งแล้ว", {
+                head: <b>{t("เดือน {months} ยังเลือกไม่ได้", { months: notReady.map(m => m.label).join(", ") })}</b>,
+              })}
             </div>
           )}
 
@@ -1170,20 +1198,19 @@ function TransferCoverMonthModal({
 
           {straddles && (
             <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900">
-              <b>เลือกข้ามปีงบประมาณในฉบับเดียวไม่ได้</b> — เดือนที่เลือกอยู่คร่อมวันที่ 30 ก.ย.
-              ต้องออกเป็นคนละฉบับ เพราะการเงินคีย์เข้าระบบ ERP ต่อหนึ่งฉบับได้เพียงปีงบเดียว
-              กดปุ่ม “งบปีเก่า” หรือ “งบปีใหม่” ด้านบนเพื่อเลือกให้ถูกชุด
+              {t.rich("{head} — เดือนที่เลือกอยู่คร่อมวันที่ 30 ก.ย. ต้องออกเป็นคนละฉบับ เพราะการเงินคีย์เข้าระบบ ERP ต่อหนึ่งฉบับได้เพียงปีงบเดียว กดปุ่ม “งบปีเก่า” หรือ “งบปีใหม่” ด้านบนเพื่อเลือกให้ถูกชุด", {
+                head: <b>{t("เลือกข้ามปีงบประมาณในฉบับเดียวไม่ได้")}</b>,
+              })}
             </div>
           )}
           {reissuing.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
-              เดือน {monthLabels(all, reissuing).join(", ")} เคยออกเอกสารไปแล้ว
-              การออกซ้ำจะได้ยอดเดิมอีกฉบับ ตรวจสอบก่อนว่าตั้งใจออกใหม่เพื่อแก้ไขฉบับเดิม
+              {t("เดือน {months} เคยออกเอกสารไปแล้ว การออกซ้ำจะได้ยอดเดิมอีกฉบับ ตรวจสอบก่อนว่าตั้งใจออกใหม่เพื่อแก้ไขฉบับเดิม", { months: monthLabels(all, reissuing).join(", ") })}
             </div>
           )}
           {notCovered.length > 0 && (
             <p className="text-xs text-ink-3">
-              ยังไม่ได้ออกเอกสารของเดือน {notCovered.map(m => m.label).join(", ")} — อย่าลืมกลับมาออกให้ครบ
+              {t("ยังไม่ได้ออกเอกสารของเดือน {months} — อย่าลืมกลับมาออกให้ครบ", { months: notCovered.map(m => m.label).join(", ") })}
             </p>
           )}
 
@@ -1214,15 +1241,16 @@ function StepUpPasswordField({
   error?: string | null;
   onEnter?: () => void;
 }) {
+  const { t } = useI18n();
   const [show, setShow] = useState(false);
   return (
     <div className="rounded-lg border border-border bg-surface px-3 py-3">
       <div className="mb-2 flex items-start gap-2 text-xs text-ink-2">
         <ShieldCheck size={14} className="mt-0.5 shrink-0 text-brand" />
-        <span>ไฟล์นี้มีเลขบัตรประชาชนของผู้รับเงิน กรอกรหัสผ่านของคุณอีกครั้งเพื่อยืนยันก่อนดาวน์โหลด การดาวน์โหลดทุกครั้งถูกบันทึกไว้</span>
+        <span>{t("ไฟล์นี้มีเลขบัตรประชาชนของผู้รับเงิน กรอกรหัสผ่านของคุณอีกครั้งเพื่อยืนยันก่อนดาวน์โหลด การดาวน์โหลดทุกครั้งถูกบันทึกไว้")}</span>
       </div>
       <TextField name="stepup-password" value={value} onChange={onChange}>
-        <Label className="text-xs">รหัสผ่านของคุณ</Label>
+        <Label className="text-xs">{t("รหัสผ่านของคุณ")}</Label>
         <InputGroup>
           <InputGroup.Input
             type={show ? "text" : "password"}
@@ -1234,7 +1262,7 @@ function StepUpPasswordField({
             <IconButton
               size="sm"
               variant="ghost"
-              label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+              label={show ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
               onPress={() => setShow(!show)}
             >
               {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -1251,6 +1279,7 @@ function StepUpPasswordField({
 // picker names the course and TA to chase instead of leaving staff to guess
 // (the bare message read as though the fiscal-year split were the cause).
 function PendingBlockers({ termId }: { termId: string }) {
+  const { t } = useI18n();
   const { data: ug } = useSWR<{ blockers: TransferCoverBlocker[] }>(
     `/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("undergrad")}`
   );
@@ -1258,17 +1287,17 @@ function PendingBlockers({ termId }: { termId: string }) {
     `/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("graduate")}`
   );
   if (!ug || !grad) return <SkelRegion><Skel className="h-16 w-full" /></SkelRegion>;
-  const groups = ([["ป.ตรี", ug.blockers], ["บัณฑิตศึกษา", grad.blockers]] as const)
+  const groups = ([[transferCoverLevelLabel.undergrad, ug.blockers], [transferCoverLevelLabel.graduate, grad.blockers]] as const)
     .filter(([, list]) => list.length > 0);
   if (groups.length === 0) return null;
   return (
     <div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
-      <div className="font-medium">รายการที่ยังค้าง</div>
+      <div className="font-medium">{t("รายการที่ยังค้าง")}</div>
       {groups.map(([label, list]) => (
         <div key={label}>
-          <div className="mb-1 font-medium">{label}</div>
+          <div className="mb-1 font-medium">{t(label)}</div>
           <ul className="list-disc space-y-1 pl-5">
-            {list.map((b, i) => <li key={i}>{blockerLine(b)}</li>)}
+            {list.map((b, i) => <li key={i}>{blockerLine(t, b)}</li>)}
           </ul>
         </div>
       ))}
@@ -1288,6 +1317,7 @@ function PendingBlockers({ termId }: { termId: string }) {
 // document: the server refuses outright while a level's every course has not
 // reached finance_sent — see ExportService.TermExportBlockers.
 function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; termLabel: string }) {
+  const { t } = useI18n();
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [blockers, setBlockers] = useState<{ undergrad: TransferCoverBlocker[]; graduate: TransferCoverBlocker[] } | null>(null);
@@ -1318,8 +1348,8 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
       }
       if (skippedLevel) {
         const gotLevel: TransferCoverLevel = skippedLevel === "undergrad" ? "graduate" : "undergrad";
-        toast.warning(`ได้เฉพาะไฟล์${transferCoverLevelLabel[gotLevel]}`, {
-          description: `ไฟล์${transferCoverLevelLabel[skippedLevel]}ยังไม่พร้อม กดปุ่มนี้อีกครั้งเพื่อดูรายการค้าง`,
+        toast.warning(t("ได้เฉพาะไฟล์{level}", { level: t(transferCoverLevelLabel[gotLevel]) }), {
+          description: t("ไฟล์{level}ยังไม่พร้อม กดปุ่มนี้อีกครั้งเพื่อดูรายการค้าง", { level: t(transferCoverLevelLabel[skippedLevel]) }),
         });
       }
     } finally {
@@ -1364,13 +1394,13 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
         isPending={groupGate.checking}
         onClick={() => void groupGate.guard(() => { setPickerError(null); setPickerOpen(true); })}
       >
-        <Banknote size={16} /> ปะหน้าจ่ายตรง
+        <Banknote size={16} /> {t("ปะหน้าจ่ายตรง")}
       </Button>
       {/* variant="secondary" to match its neighbour — IconButton defaults to
           "primary" (a solid-fill circle), which next to outlined buttons in
           the same row would read as a mismatched style. */}
       <IconButton
-        label="ประวัติการสร้างเอกสาร"
+        label={t("ประวัติการสร้างเอกสาร")}
         variant="secondary"
         disabled={!termId}
         onClick={() => setHistoryOpen(true)}
@@ -1381,18 +1411,18 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
       <Modal
         open={blockers !== null}
         onClose={() => setBlockers(null)}
-        title="ยังสร้างเอกสารไม่ได้เลยสักไฟล์"
+        title={t("ยังสร้างเอกสารไม่ได้เลยสักไฟล์")}
         icon={<FileDown size={20} />}
-        footer={<Button variant="primary" onClick={() => setBlockers(null)}>ปิด</Button>}
+        footer={<Button variant="primary" onClick={() => setBlockers(null)}>{t("ปิด")}</Button>}
       >
         <div className="space-y-3 text-sm">
-          <p className="text-muted">ทั้งไฟล์ ป.ตรี และบัณฑิตยังไม่พร้อม ยังมีรายการค้างดังนี้:</p>
-          {blockers && ([["ป.ตรี", blockers.undergrad], ["บัณฑิตศึกษา", blockers.graduate]] as const).map(([label, list]) => (
+          <p className="text-muted">{t("ทั้งไฟล์ ป.ตรี และบัณฑิตยังไม่พร้อม ยังมีรายการค้างดังนี้:")}</p>
+          {blockers && ([[transferCoverLevelLabel.undergrad, blockers.undergrad], [transferCoverLevelLabel.graduate, blockers.graduate]] as const).map(([label, list]) => (
             list.length > 0 && (
               <div key={label}>
-                <div className="text-xs font-medium text-ink-2 mb-1">{label}</div>
+                <div className="text-xs font-medium text-ink-2 mb-1">{t(label)}</div>
                 <ul className="list-disc pl-5 space-y-1">
-                  {list.map((b, i) => <li key={i}>{blockerLine(b)}</li>)}
+                  {list.map((b, i) => <li key={i}>{blockerLine(t, b)}</li>)}
                 </ul>
               </div>
             )
@@ -1431,6 +1461,7 @@ function TransferCoverHistoryModal({
   // The download button is one button now, but the two documents' generation
   // histories are still separate ledgers (each level is gated and re-issued
   // independently) — a small toggle inside the modal instead of two modals.
+  const { t, intl } = useI18n();
   const [level, setLevel] = useState<TransferCoverLevel>("undergrad");
   const { data: history } = useSWR<TransferCoverExportSummary[]>(
     `/exports/terms/${termId}/transfer-cover/history${transferCoverQuery(level)}`
@@ -1474,10 +1505,10 @@ function TransferCoverHistoryModal({
     <Modal
       open
       onClose={onClose}
-      title="ประวัติการสร้างเอกสารปะหน้าจ่ายตรง"
+      title={t("ประวัติการสร้างเอกสารปะหน้าจ่ายตรง")}
       icon={<History size={20} />}
       size="xl"
-      footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
+      footer={<Button variant="ghost" onClick={onClose}>{t("ปิด")}</Button>}
     >
       <div className="mb-3 inline-flex rounded-lg border border-border p-0.5">
         {(["undergrad", "graduate"] as const).map(l => (
@@ -1490,7 +1521,7 @@ function TransferCoverHistoryModal({
               (level === l ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
             }
           >
-            {transferCoverLevelLabel[l]}
+            {t(transferCoverLevelLabel[l])}
           </button>
         ))}
       </div>
@@ -1499,8 +1530,8 @@ function TransferCoverHistoryModal({
       ) : !history.length ? (
         <EmptyState
           icon={<FileText size={26} />}
-          title="ยังไม่เคยสร้างเอกสาร"
-          description="เอกสารที่สร้างแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม"
+          title={t("ยังไม่เคยสร้างเอกสาร")}
+          description={t("เอกสารที่สร้างแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม")}
         />
       ) : (
         <ul className="divide-y divide-hairline">
@@ -1508,26 +1539,27 @@ function TransferCoverHistoryModal({
             <li key={h.id} className="py-3 flex flex-wrap items-center gap-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-ink-1 flex flex-wrap items-center gap-1.5">
-                  {new Date(h.generated_at).toLocaleString("th-TH", {
+                  {new Date(h.generated_at).toLocaleString(intl, {
                     dateStyle: "medium", timeStyle: "short",
                   })}
                   {/* Pre-level-split rows (12/08/2026) covered both files at
                       once — flag that explicitly rather than silently
                       claiming this was already a level-scoped generation. */}
-                  {!h.level && <Chip tone="neutral">ก่อนแยกไฟล์ — ครอบคลุมทั้งสองระดับ</Chip>}
+                  {!h.level && <Chip tone="neutral">{t("ก่อนแยกไฟล์ — ครอบคลุมทั้งสองระดับ")}</Chip>}
                 </div>
                 {/* Which slice this file was. Two files for one term now differ
                     only by their months, so without this the history reads as
                     the same document generated twice. */}
                 <div className="text-xs text-ink-2">
                   {h.months?.length
-                    ? `เดือน ${h.months[0]}${h.months.length > 1 ? ` – ${h.months[h.months.length - 1]}` : ""}`
-                    : "ทั้งภาคเรียน"}
+                    ? (h.months.length > 1
+                      ? t("เดือน {from} – {to}", { from: h.months[0], to: h.months[h.months.length - 1] })
+                      : t("เดือน {month}", { month: h.months[0] }))
+                    : t("ทั้งภาคเรียน")}
                 </div>
                 <div className="text-xs text-ink-3">
-                  {h.total_baht.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท ·{" "}
-                  {h.sheet_count} ชีต
-                  {h.generated_by && ` · โดย ${h.generated_by}`}
+                  {t("{amount} บาท · {n} ชีต", { amount: h.total_baht.toLocaleString(intl, { minimumFractionDigits: 2 }), n: h.sheet_count })}
+                  {h.generated_by && t(" · โดย {name}", { name: h.generated_by })}
                 </div>
               </div>
               <button
@@ -1537,7 +1569,7 @@ function TransferCoverHistoryModal({
                 className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
               >
                 <Download size={12} />
-                {reprinting === h.id ? "กำลังดาวน์โหลด…" : "ดาวน์โหลดฉบับเดิม"}
+                {reprinting === h.id ? t("กำลังดาวน์โหลด…") : t("ดาวน์โหลดฉบับเดิม")}
               </button>
             </li>
           ))}
@@ -1547,19 +1579,19 @@ function TransferCoverHistoryModal({
         <Modal
           open
           onClose={() => setConfirming(null)}
-          title="ยืนยันตัวตนก่อนดาวน์โหลด"
+          title={t("ยืนยันตัวตนก่อนดาวน์โหลด")}
           icon={<ShieldCheck size={20} />}
           size="md"
           footer={
             <>
-              <Button variant="ghost" onClick={() => setConfirming(null)}>ยกเลิก</Button>
+              <Button variant="ghost" onClick={() => setConfirming(null)}>{t("ยกเลิก")}</Button>
               <Button
                 variant="primary"
                 isPending={reprinting !== null}
                 disabled={password === ""}
                 onClick={() => void reprint()}
               >
-                <Download size={14} /> ดาวน์โหลดฉบับเดิม
+                <Download size={14} /> {t("ดาวน์โหลดฉบับเดิม")}
               </Button>
             </>
           }
@@ -1601,6 +1633,7 @@ interface CurriculumLite {
 // opens and proceed is held until staff dismiss it (merge everything, merge
 // some and continue, or continue without merging).
 function useCourseGroupGate(termId: string) {
+  const { t } = useI18n();
   const [checking, setChecking] = useState(false);
   const [open, setOpen] = useState(false);
   const proceedRef = useRef<(() => void) | null>(null);
@@ -1622,7 +1655,7 @@ function useCourseGroupGate(termId: string) {
         proceed();
       }
     } catch (e) {
-      toast.danger("ตรวจสอบรหัสวิชาคู่ไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger(t("ตรวจสอบรหัสวิชาคู่ไม่สำเร็จ"), { description: (e as Error).message });
     } finally {
       setChecking(false);
     }
@@ -1659,6 +1692,7 @@ function CourseGroupGateModal({
 }: {
   termId: string; onClose: () => void; onContinue: () => void;
 }) {
+  const { t } = useI18n();
   const candidatesKey = `/terms/${termId}/course-groups/candidates`;
   const { data: candidates } = useSWR<CourseGroupCandidate[]>(candidatesKey);
   const { data: curricula } = useSWR<CurriculumLite[]>("/curricula");
@@ -1694,7 +1728,7 @@ function CourseGroupGateModal({
   async function confirm(idx: number, c: CourseGroupCandidate) {
     const choice = choiceFor(idx, c);
     if (!choice.curriculumCode) {
-      toast.danger("กรุณาเลือกหลักสูตรก่อนยืนยัน");
+      toast.danger(t("กรุณาเลือกหลักสูตรก่อนยืนยัน"));
       return;
     }
     setConfirmingIdx(idx);
@@ -1704,10 +1738,10 @@ function CourseGroupGateModal({
         primary_course_id: choice.primaryId,
         curriculum_code: choice.curriculumCode,
       });
-      toast.success(`รวมวิชา ${c.courses.map(x => x.code).join("/")} แล้ว`);
+      toast.success(t("รวมวิชา {codes} แล้ว", { codes: c.courses.map(x => x.code).join("/") }));
       void mutate(candidatesKey);
     } catch (e) {
-      toast.danger("ยืนยันไม่สำเร็จ", { description: (e as Error).message });
+      toast.danger(t("ยืนยันไม่สำเร็จ"), { description: (e as Error).message });
     } finally {
       setConfirmingIdx(null);
     }
@@ -1719,26 +1753,23 @@ function CourseGroupGateModal({
       onClose={onClose}
       title={
         candidates?.length
-          ? `พบวิชาที่อาจเป็นรหัสคู่กัน (${candidates.length} รายการ)`
-          : "พบวิชาที่อาจเป็นรหัสคู่กัน"
+          ? t("พบวิชาที่อาจเป็นรหัสคู่กัน ({n} รายการ)", { n: candidates.length })
+          : t("พบวิชาที่อาจเป็นรหัสคู่กัน")
       }
       icon={<Merge size={20} />}
       size="xl"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>ยกเลิกการดาวน์โหลด</Button>
-          <Button variant="primary" onClick={onContinue}>ดาวน์โหลดต่อโดยไม่รวมที่เหลือ</Button>
+          <Button variant="ghost" onClick={onClose}>{t("ยกเลิกการดาวน์โหลด")}</Button>
+          <Button variant="primary" onClick={onContinue}>{t("ดาวน์โหลดต่อโดยไม่รวมที่เหลือ")}</Button>
         </>
       }
     >
       <p className="text-sm text-muted mb-3">
-        ระบบพบวิชาที่ชื่อ ผู้สอน และตารางสอนตรงกัน ซึ่งอาจเป็นวิชาเดียวกันที่มีสองรหัส
-        (เช่นช่วงเปลี่ยนผ่านหลักสูตรที่รหัสเก่ายังต้องเปิดให้นักศึกษาที่ยังไม่จบ) เลือกรวมรหัส
-        ด้านล่างเพื่อให้เอกสารพิมพ์เป็นแถวเดียว โดยนำรหัสวิชามาต่อกันและรวมจำนวนนักศึกษาเข้าด้วยกัน
-        หรือกดดาวน์โหลดต่อเพื่อพิมพ์แยกกันตามเดิม
+        {t("ระบบพบวิชาที่ชื่อ ผู้สอน และตารางสอนตรงกัน ซึ่งอาจเป็นวิชาเดียวกันที่มีสองรหัส (เช่นช่วงเปลี่ยนผ่านหลักสูตรที่รหัสเก่ายังต้องเปิดให้นักศึกษาที่ยังไม่จบ) เลือกรวมรหัสด้านล่างเพื่อให้เอกสารพิมพ์เป็นแถวเดียว โดยนำรหัสวิชามาต่อกันและรวมจำนวนนักศึกษาเข้าด้วยกัน หรือกดดาวน์โหลดต่อเพื่อพิมพ์แยกกันตามเดิม")}
       </p>
       {!candidates?.length ? (
-        <div className="py-6 text-center text-sm text-muted">กำลังตรวจสอบ…</div>
+        <div className="py-6 text-center text-sm text-muted">{t("กำลังตรวจสอบ…")}</div>
       ) : (
         <div className="relative">
           <ScrollShadow
@@ -1771,7 +1802,7 @@ function CourseGroupGateModal({
                     onChange={e => setChoice(idx, { ...choice, curriculumCode: e.target.value })}
                     className="max-w-[16rem]"
                   >
-                    <option value="">เลือกหลักสูตรที่จะลงชีต</option>
+                    <option value="">{t("เลือกหลักสูตรที่จะลงชีต")}</option>
                     {(curricula ?? []).map(cur => (
                       <option key={cur.code} value={cur.code}>{cur.sheet_name}</option>
                     ))}
@@ -1781,7 +1812,7 @@ function CourseGroupGateModal({
                     isPending={confirmingIdx === idx}
                     onClick={() => void confirm(idx, c)}
                   >
-                    <Merge size={14} /> ยืนยันรวมวิชา
+                    <Merge size={14} /> {t("ยืนยันรวมวิชา")}
                   </Button>
                 </div>
               </div>
@@ -1791,7 +1822,7 @@ function CourseGroupGateModal({
           {moreBelow && (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-1">
               <span className="flex items-center gap-1 rounded-full bg-ink-1 px-2.5 py-1 text-[11px] font-medium text-white shadow-md">
-                เลื่อนลงเพื่อดูวิชาที่เหลือ <ChevronDown size={12} className="animate-bounce" />
+                {t("เลื่อนลงเพื่อดูวิชาที่เหลือ")} <ChevronDown size={12} className="animate-bounce" />
               </span>
             </div>
           )}

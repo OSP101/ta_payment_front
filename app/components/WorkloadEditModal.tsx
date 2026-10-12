@@ -7,6 +7,7 @@ import { api, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Modal, Button, Spinner, FieldGroup, Chip, EmptyState } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
+import { msg, useI18n } from "../lib/i18n/client";
 
 /**
  * The correction path that didn't exist before: TARequestService.Cancel
@@ -45,7 +46,7 @@ interface AssignmentWorkload {
 }
 
 const LEVEL_TH: Record<string, string> = {
-  undergrad: "ปริญญาตรี", master: "ปริญญาโท", phd: "ปริญญาเอก",
+  undergrad: msg("ปริญญาตรี"), master: msg("ปริญญาโท"), phd: msg("ปริญญาเอก"),
 };
 
 function Hrs({
@@ -79,6 +80,7 @@ function AssignmentCard({
   // Only the hour VALUES are editable here — the bug this fixes is always
   // about a wrong number, never the free-text description — so the *_desc
   // fields ride along unchanged from what was originally declared.
+  const { t } = useI18n();
   const [w, setW] = useState<WorkloadFields>(a.workload);
   const [busy, setBusy] = useState(false);
   const isGrad = a.level === "master" || a.level === "phd";
@@ -90,7 +92,7 @@ function AssignmentCard({
     setBusy(true);
     try {
       await api.patch(`/assignments/${a.assignment_id}/workload`, w);
-      notify.success(`บันทึกภาระงาน Sec ${a.section_no} แล้ว`);
+      notify.success(t("บันทึกภาระงาน Sec {sec} แล้ว", { sec: a.section_no }));
       onSaved();
     } catch (e) {
       notify.error(errMessage(e));
@@ -103,40 +105,40 @@ function AssignmentCard({
     <div className="rounded-md border border-[var(--hairline)] p-3 space-y-3">
       <div className="flex items-center gap-2">
         <Chip tone="neutral">Sec {a.section_no}</Chip>
-        <Chip tone={isGrad ? "brand" : "neutral"}>{LEVEL_TH[a.level] ?? a.level}</Chip>
+        <Chip tone={isGrad ? "brand" : "neutral"}>{LEVEL_TH[a.level] ? t(LEVEL_TH[a.level]) : a.level}</Chip>
         <span className="flex-1" />
-        <span className="text-xs text-muted">รวม {total.toFixed(1)} ชม./สัปดาห์</span>
+        <span className="text-xs text-muted">{t("รวม {h} ชม./สัปดาห์", { h: total.toFixed(1) })}</span>
       </div>
 
       {isGrad ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Hrs label="ช่วยสอน" value={w.help_teach_hrs}
+          <Hrs label={t("ช่วยสอน")} value={w.help_teach_hrs}
             onChange={v => setW(s => ({ ...s, help_teach_hrs: v }))} />
-          <Hrs label="ตรวจการบ้าน (ไม่เกิน 2 ชม./สัปดาห์)" value={w.grade_hrs}
+          <Hrs label={t("ตรวจการบ้าน (ไม่เกิน 2 ชม./สัปดาห์)")} value={w.grade_hrs}
             onChange={v => setW(s => ({ ...s, grade_hrs: v }))} />
-          <Hrs label="เตรียมการสอน" value={w.prep_hrs}
+          <Hrs label={t("เตรียมการสอน")} value={w.prep_hrs}
             onChange={v => setW(s => ({ ...s, prep_hrs: v }))} />
-          <Hrs label="อื่น ๆ ระบุ" value={w.other_hrs}
+          <Hrs label={t("อื่น ๆ ระบุ")} value={w.other_hrs}
             onChange={v => setW(s => ({ ...s, other_hrs: v }))} />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Hrs label="ช่วยตรวจงาน" value={w.check_work_hrs}
+          <Hrs label={t("ช่วยตรวจงาน")} value={w.check_work_hrs}
             onChange={v => setW(s => ({ ...s, check_work_hrs: v }))} />
-          <Hrs label="เช็คชื่อ/เก็บใบงาน" value={w.attendance_hrs}
+          <Hrs label={t("เช็คชื่อ/เก็บใบงาน")} value={w.attendance_hrs}
             onChange={v => setW(s => ({ ...s, attendance_hrs: v }))} />
-          <Hrs label="อื่น ๆ (บรรยาย)" value={w.ug_other_hrs}
+          <Hrs label={t("อื่น ๆ (บรรยาย)")} value={w.ug_other_hrs}
             onChange={v => setW(s => ({ ...s, ug_other_hrs: v }))} />
-          <Hrs label="ปฏิบัติการ" value={w.lab_hrs}
+          <Hrs label={t("ปฏิบัติการ")} value={w.lab_hrs}
             onChange={v => setW(s => ({ ...s, lab_hrs: v }))} />
-          <Hrs label="อื่น ๆ (ปฏิบัติการ)" value={w.lab_other_hrs}
+          <Hrs label={t("อื่น ๆ (ปฏิบัติการ)")} value={w.lab_other_hrs}
             onChange={v => setW(s => ({ ...s, lab_other_hrs: v }))} />
         </div>
       )}
 
       <div className="flex justify-end">
         <Button size="sm" isDisabled={busy} onPress={save}>
-          {busy ? <Spinner size="sm" /> : <Save size={14} />} บันทึก Sec {a.section_no}
+          {busy ? <Spinner size="sm" /> : <Save size={14} />} {t("บันทึก Sec {sec}", { sec: a.section_no })}
         </Button>
       </div>
     </div>
@@ -154,14 +156,14 @@ export function WorkloadEditModal({
 }) {
   const key = open ? `/teaching-courses/${tcId}/ta/${taId}/workload` : null;
   const { data, isLoading, mutate: refresh } = useSWR<AssignmentWorkload[]>(key);
+  const { t } = useI18n();
 
   return (
     <Modal open={open} onClose={onClose} size="lg" icon={<Settings2 size={16} />}
-      title={`แก้ไขภาระงาน · ${taName}`}>
+      title={t("แก้ไขภาระงาน · {name}", { name: taName })}>
       <div className="space-y-3">
         <p className="text-xs text-muted">
-          แก้ไขชั่วโมงที่ประกาศไว้สำหรับ TA คนนี้ — ไม่กระทบบันทึกเวลาที่มีอยู่แล้ว
-          มีผลกับการสร้างบันทึกเวลาและการตรวจสอบโควตาครั้งถัดไปเท่านั้น
+          {t("แก้ไขชั่วโมงที่ประกาศไว้สำหรับ TA คนนี้ — ไม่กระทบบันทึกเวลาที่มีอยู่แล้ว มีผลกับการสร้างบันทึกเวลาและการตรวจสอบโควตาครั้งถัดไปเท่านั้น")}
         </p>
         {isLoading ? (
           // One AssignmentCard's outline: chip row, a 2-column grid of hour
@@ -182,7 +184,7 @@ export function WorkloadEditModal({
             <div className="flex justify-end"><Skel className="h-8 w-28 rounded-lg" /></div>
           </SkelRegion>
         ) : !data || data.length === 0 ? (
-          <EmptyState title="ไม่พบภาระงาน" description="TA คนนี้ไม่มี assignment ในวิชานี้" />
+          <EmptyState title={t("ไม่พบภาระงาน")} description={t("TA คนนี้ไม่มี assignment ในวิชานี้")} />
         ) : (
           <div className="space-y-3">
             {data.map(a => (

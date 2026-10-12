@@ -6,6 +6,7 @@ import type { Me } from "../../lib/api";
 import { canViewAudience } from "../../lib/docs/audience";
 import DocBlocks, { stepEntries } from "./Blocks";
 import OnThisPage from "./OnThisPage";
+import { getT } from "../../lib/i18n/server";
 
 /**
  * One doc page's body — title, badges, blocks, related links, prev/next —
@@ -15,7 +16,7 @@ import OnThisPage from "./OnThisPage";
  * must stay inside whichever of the two the reader is in, so a related page
  * clicked inside the drawer opens inside the drawer.
  */
-export default function DocArticle({
+export default async function DocArticle({
   page,
   audience,
   me,
@@ -27,8 +28,11 @@ export default function DocArticle({
   linkBase: "/docs" | "/docs-embed";
 }) {
   const href = (p: DocPage) => `${linkBase}/${effectiveAudience(p, audience)}/${p.slug}`;
+  // `page` came from the same language set (the route looked it up with
+  // this locale), so siblings and related pages are looked up in it too.
+  const { t, locale } = await getT();
 
-  const siblings = pagesForAudience(audience).filter((p) => p.section === page.section);
+  const siblings = pagesForAudience(audience, locale).filter((p) => p.section === page.section);
   const idx = siblings.findIndex((p) => p.slug === page.slug);
   const prev = idx > 0 ? siblings[idx - 1] : undefined;
   const next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : undefined;
@@ -39,7 +43,7 @@ export default function DocArticle({
   const relatedPages = (page.related ?? [])
     .map((r) => {
       const [aud, s] = r.includes(":") ? r.split(":") : [audience, r];
-      return findPage(aud as Audience, s);
+      return findPage(aud as Audience, s, locale);
     })
     .filter((p): p is NonNullable<typeof p> => !!p)
     .filter((p) => !!me && canViewAudience(me, p.audience));
@@ -53,8 +57,8 @@ export default function DocArticle({
   return (
     <div className="xl:flex xl:gap-10">
     <article className="min-w-0 flex-1">
-      <nav aria-label="ตำแหน่งหน้า" className="mb-3 flex flex-wrap items-center gap-1 text-xs text-muted">
-        <Link href={`${linkBase}/${audience}`} className="hover:text-foreground">{linkBase === "/docs" ? "คู่มือการใช้งาน" : AUDIENCE_LABEL[audience]}</Link>
+      <nav aria-label={t("ตำแหน่งหน้า")} className="mb-3 flex flex-wrap items-center gap-1 text-xs text-muted">
+        <Link href={`${linkBase}/${audience}`} className="hover:text-foreground">{linkBase === "/docs" ? t("คู่มือการใช้งาน") : t(AUDIENCE_LABEL[audience])}</Link>
         {sectionFirst && (
           <>
             <ChevronRight size={12} className="text-slate-300" />
@@ -69,7 +73,7 @@ export default function DocArticle({
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] text-slate-500">
-          ตรงกับระบบเวอร์ชัน {page.since}
+          {t("ตรงกับระบบเวอร์ชัน {version}", { version: page.since })}
         </span>
         {/* page.routes are for the in-app docs button, not for readers: a
             path like /lecturer/courses/[tcId]/reports means nothing to them */}
@@ -81,7 +85,7 @@ export default function DocArticle({
 
       {relatedPages.length > 0 && (
         <div className="mt-10 border-t border-border pt-5">
-          <h2 className="text-sm font-semibold text-foreground mb-2">อ่านเพิ่ม</h2>
+          <h2 className="text-sm font-semibold text-foreground mb-2">{t("อ่านเพิ่ม")}</h2>
           <ul className="flex flex-wrap gap-2">
             {relatedPages.map((p) => (
               <li key={`${p.audience}:${p.slug}`}>
@@ -91,7 +95,7 @@ export default function DocArticle({
                 >
                   {p.title}
                   {/* another role's page: say whose, or two "เริ่มใช้งานครั้งแรก" chips look identical */}
-                  {p.audience !== "common" && p.audience !== audience && ` (${AUDIENCE_LABEL[p.audience]})`}
+                  {p.audience !== "common" && p.audience !== audience && ` (${t(AUDIENCE_LABEL[p.audience])})`}
                 </Link>
               </li>
             ))}
@@ -103,12 +107,12 @@ export default function DocArticle({
         {prev ? (
           <Link href={href(prev)} className="flex items-center gap-2 rounded-lg border border-border px-3.5 py-2.5 text-sm hover:border-(--brand) transition-colors">
             <ArrowLeft size={15} className="text-slate-400 shrink-0" />
-            <span className="min-w-0"><span className="block text-[11px] text-muted">ก่อนหน้า</span><span className="truncate block font-medium">{prev.title}</span></span>
+            <span className="min-w-0"><span className="block text-[11px] text-muted">{t("ก่อนหน้า")}</span><span className="truncate block font-medium">{prev.title}</span></span>
           </Link>
         ) : <span />}
         {next ? (
           <Link href={href(next)} className="flex items-center justify-end gap-2 rounded-lg border border-border px-3.5 py-2.5 text-sm text-end hover:border-(--brand) transition-colors">
-            <span className="min-w-0"><span className="block text-[11px] text-muted">ถัดไป</span><span className="truncate block font-medium">{next.title}</span></span>
+            <span className="min-w-0"><span className="block text-[11px] text-muted">{t("ถัดไป")}</span><span className="truncate block font-medium">{next.title}</span></span>
             <ArrowRight size={15} className="text-slate-400 shrink-0" />
           </Link>
         ) : <span />}

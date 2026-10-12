@@ -10,6 +10,14 @@ import type {
   TermAnalytics, CourseStaffing, StaffingStatus, PipelineKey, CourseSpendStat, MonthFlow,
   DocStatusCounts,
 } from "../types";
+import { msg, type Vars } from "../../lib/i18n/core";
+import type { I18n } from "../../lib/i18n/client";
+
+// Text here is built in the reader's language: the sentence builders take the
+// page's useI18n() (or just its t), and labels in the tables below are msg()
+// keys translated where they are shown.
+export type T = (key: string, vars?: Vars) => string;
+export type Tr = Pick<I18n, "t" | "monthName" | "intl">;
 
 /* -------------------------------------------------------------------------- */
 /* Rules — every judgement line on the page, in one place (26/09/2026)        */
@@ -65,56 +73,63 @@ export type Tone = "good" | "info" | "warn" | "danger" | "muted";
 export const STAFFING_META: Record<StaffingStatus, {
   label: string; short: string; tone: Tone; color: string; ink: string; rank: number;
 }> = {
-  over_ceiling: { label: "เกินเพดานต่อนักศึกษา", short: "เกินเพดาน", tone: "danger", color: "#dc2626", ink: "#b91c1c", rank: 0 },
-  above_guide:  { label: "ขอมากกว่าที่แนะนำ",     short: "เกินแนะนำ", tone: "warn",   color: "#d97706", ink: "#92400e", rank: 1 },
-  no_students:  { label: "ยังไม่มีจำนวนนักศึกษา",   short: "ไม่มีจำนวน นศ.", tone: "warn", color: "#a16207", ink: "#854d0e", rank: 2 },
-  under:        { label: "ขอน้อยกว่าที่แนะนำ",      short: "น้อยกว่าแนะนำ", tone: "info", color: "#0ea5e9", ink: "#0369a1", rank: 3 },
-  match:        { label: "ตามที่แนะนำ",           short: "ตามแนะนำ",   tone: "good",   color: "#16a34a", ink: "#15803d", rank: 4 },
-  no_request:   { label: "ยังไม่ขอ TA",           short: "ไม่ขอ TA",   tone: "muted",  color: "#94a3b8", ink: "#475569", rank: 5 },
+  over_ceiling: { label: msg("เกินเพดานต่อนักศึกษา"), short: msg("เกินเพดาน"), tone: "danger", color: "#dc2626", ink: "var(--tone-danger-ink)", rank: 0 },
+  above_guide:  { label: msg("ขอมากกว่าที่แนะนำ"),     short: msg("เกินแนะนำ"), tone: "warn",   color: "#d97706", ink: "var(--tone-warn-ink)", rank: 1 },
+  no_students:  { label: msg("ยังไม่มีจำนวนนักศึกษา"),   short: msg("ไม่มีจำนวน นศ."), tone: "warn", color: "#a16207", ink: "var(--tone-warn-ink)", rank: 2 },
+  under:        { label: msg("ขอน้อยกว่าที่แนะนำ"),      short: msg("น้อยกว่าแนะนำ"), tone: "info", color: "#0ea5e9", ink: "var(--tone-info-ink)", rank: 3 },
+  match:        { label: msg("ตามที่แนะนำ"),           short: msg("ตามแนะนำ"),   tone: "good",   color: "#16a34a", ink: "var(--tone-good-ink)", rank: 4 },
+  no_request:   { label: msg("ยังไม่ขอ TA"),           short: msg("ไม่ขอ TA"),   tone: "muted",  color: "#94a3b8", ink: "var(--tone-muted-ink)", rank: 5 },
 };
 
 export const PIPELINE_META: Record<PipelineKey, { label: string; who: string; href: string; step: string }> = {
-  requests:      { label: "คำขอแต่งตั้ง",      who: "รอเจ้าหน้าที่อนุมัติคำขอ TA",          href: "/staff/approvals",    step: "1" },
-  documents:     { label: "เอกสาร TA",        who: "TA ส่งเอกสารครบ รอเจ้าหน้าที่ตรวจ",     href: "/staff/review",       step: "2" },
-  appointments:  { label: "รอออกคำสั่งแต่งตั้ง", who: "อนุมัติแล้ว ยังไม่อยู่ในคำสั่งรอบใด",     href: "/staff/appointments", step: "3" },
-  payout_review: { label: "ตรวจเบิกจ่าย",      who: "อาจารย์อนุมัติชั่วโมงแล้ว รอเจ้าหน้าที่ตรวจ", href: "/staff/payouts",      step: "4" },
-  export:        { label: "รอส่งออก",          who: "ตรวจแล้ว รอสร้างเอกสารเบิกจ่าย",         href: "/staff/payouts",      step: "5" },
+  requests:      { label: msg("คำขอแต่งตั้ง"),      who: msg("รอเจ้าหน้าที่อนุมัติคำขอ TA"),          href: "/staff/approvals",    step: "1" },
+  documents:     { label: msg("เอกสาร TA"),        who: msg("TA ส่งเอกสารครบ รอเจ้าหน้าที่ตรวจ"),     href: "/staff/review",       step: "2" },
+  appointments:  { label: msg("รอออกคำสั่งแต่งตั้ง"), who: msg("อนุมัติแล้ว ยังไม่อยู่ในคำสั่งรอบใด"),     href: "/staff/appointments", step: "3" },
+  payout_review: { label: msg("ตรวจเบิกจ่าย"),      who: msg("อาจารย์อนุมัติชั่วโมงแล้ว รอเจ้าหน้าที่ตรวจ"), href: "/staff/payouts",      step: "4" },
+  export:        { label: msg("รอส่งออก"),          who: msg("ตรวจแล้ว รอสร้างเอกสารเบิกจ่าย"),         href: "/staff/payouts",      step: "5" },
 };
 
 /** Who holds a claim month — the MonthFlow buckets, in workflow order.
  *  `phrase` completes "มี n รายการ…" in the one-sentence view. */
 export const FLOW_BUCKETS = [
-  { key: "with_ta",           label: "TA ยังไม่ส่ง / ต้องแก้", phrase: "ที่ TA ยังไม่ส่งหรือต้องแก้",  color: "#f59e0b", done: false },
-  { key: "with_lecturer",     label: "รออาจารย์อนุมัติ",       phrase: "ที่รออาจารย์อนุมัติ",         color: "#a855f7", done: false },
-  { key: "await_appointment", label: "รอคำสั่งแต่งตั้ง",        phrase: "ที่ค้างขั้นรอคำสั่งแต่งตั้ง",    color: "#f43f5e", done: false },
-  { key: "staff_review",      label: "รอเจ้าหน้าที่ตรวจ",       phrase: "ที่รอเจ้าหน้าที่ตรวจ",         color: "#0ea5e9", done: false },
-  { key: "ready_export",      label: "รอส่งออก",              phrase: "ที่ตรวจแล้วรอส่งออก",         color: "#6366f1", done: false },
-  { key: "exported",          label: "ส่งออกแล้ว",            phrase: "ที่ส่งออกแล้ว",              color: "#16a34a", done: true },
-  { key: "finance_sent",      label: "ส่งการเงินแล้ว",         phrase: "ที่ส่งการเงินแล้ว",           color: "#15803d", done: true },
+  { key: "with_ta",           label: msg("TA ยังไม่ส่ง / ต้องแก้"), phrase: msg("ที่ TA ยังไม่ส่งหรือต้องแก้"),  color: "#f59e0b", done: false },
+  { key: "with_lecturer",     label: msg("รออาจารย์อนุมัติ"),       phrase: msg("ที่รออาจารย์อนุมัติ"),         color: "#a855f7", done: false },
+  { key: "await_appointment", label: msg("รอคำสั่งแต่งตั้ง"),        phrase: msg("ที่ค้างขั้นรอคำสั่งแต่งตั้ง"),    color: "#f43f5e", done: false },
+  { key: "staff_review",      label: msg("รอเจ้าหน้าที่ตรวจ"),       phrase: msg("ที่รอเจ้าหน้าที่ตรวจ"),         color: "#0ea5e9", done: false },
+  { key: "ready_export",      label: msg("รอส่งออก"),              phrase: msg("ที่ตรวจแล้วรอส่งออก"),         color: "#6366f1", done: false },
+  { key: "exported",          label: msg("ส่งออกแล้ว"),            phrase: msg("ที่ส่งออกแล้ว"),              color: "#16a34a", done: true },
+  { key: "finance_sent",      label: msg("ส่งการเงินแล้ว"),         phrase: msg("ที่ส่งการเงินแล้ว"),           color: "#15803d", done: true },
 ] as const;
 
 /* -------------------------------------------------------------------------- */
 /* Formatting — one formatter for every money figure on the page              */
 /* -------------------------------------------------------------------------- */
 
-export const baht = (v: number) => Math.round(v).toLocaleString("th-TH");
-/** Every money figure a reader sees: "32,959 บาท". */
-export const money = (v: number) => `${baht(v)} บาท`;
-export const num1 = (v: number) => v.toLocaleString("th-TH", { maximumFractionDigits: 1 });
+// Digit grouping is the same in Thai and English, so the plain number
+// formatters keep one locale; only words around them are translated.
+export const baht = (v: number) => Math.round(v).toLocaleString("en-GB");
+/** Every money figure a reader sees: "32,959 บาท" / "32,959 baht". */
+export const money = (v: number, t: T) => t("{n} บาท", { n: baht(v) });
+export const num1 = (v: number) => v.toLocaleString("en-GB", { maximumFractionDigits: 1 });
 export const pct0 = (v: number) => `${Math.round(v)}%`;
 
-const TH_MONTHS = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-/** "2026-06" or "2569-06" → "มิ.ย." */
-export const thMonth = (ym: string) => TH_MONTHS[Number(ym.slice(5, 7))] ?? ym;
+/** "2026-06" or "2569-06" → "มิ.ย." / "Jun" (monthName from useI18n). */
+export const thMonth = (ym: string, monthName: (m: number) => string) => {
+  const m = Number(ym.slice(5, 7));
+  return m >= 1 && m <= 12 ? monthName(m) : ym;
+};
 
-export function thDate(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
+/** `intl` from useI18n: "th-TH" writes a 2-digit BE year, "en-GB" a CE one. */
+export function thDate(iso: string, intl: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(intl, { day: "numeric", month: "short", year: "2-digit" });
 }
 
 /** "CP1, CP2, CP3 และอีก 2 วิชา" */
-export function namedCourses(codes: string[]) {
+export function namedCourses(codes: string[], t: T) {
   const shown = codes.slice(0, RULES.maxNamedCourses).join(", ");
-  return codes.length > RULES.maxNamedCourses ? `${shown} และอีก ${codes.length - RULES.maxNamedCourses} วิชา` : shown;
+  return codes.length > RULES.maxNamedCourses
+    ? t("{shown} และอีก {n} วิชา", { shown, n: codes.length - RULES.maxNamedCourses })
+    : shown;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -132,10 +147,10 @@ export function capState(r: Pick<CourseStaffing, "cap_baht" | "forecast_baht" | 
 }
 
 export const CAP_META: Record<CapState, { label: string; ink: string; color: string }> = {
-  over: { label: "ชนเพดานงบ", ink: "#b91c1c", color: "#dc2626" },
-  near: { label: "ใกล้เพดานงบ", ink: "#92400e", color: "#d97706" },
-  ok:   { label: "ปกติ", ink: "#334155", color: "#0776BC" },
-  none: { label: "–", ink: "#64748b", color: "#94a3b8" },
+  over: { label: msg("ชนเพดานงบ"), ink: "var(--tone-danger-ink)", color: "#dc2626" },
+  near: { label: msg("ใกล้เพดานงบ"), ink: "var(--tone-warn-ink)", color: "#d97706" },
+  ok:   { label: msg("ปกติ"), ink: "var(--tone-muted-ink)", color: "#0776BC" },
+  none: { label: "–", ink: "var(--tone-muted-ink)", color: "#94a3b8" },
 };
 
 export interface CourseRef { id: string; code: string }
@@ -217,18 +232,19 @@ export interface Answer { tone: Tone; text: string; courses?: CourseRef[] }
 /** Q1's answer. Money cannot move between courses, so the term total alone
  *  says almost nothing: a course at its cap is checked FIRST, and the term
  *  can only be "good" when no course is over or near its cap either. */
-export function budgetAnswer(b: BudgetView, risk: CourseRisk): Answer {
-  if (b.base <= 0) return { tone: "muted", text: "ยังไม่มีวิชาที่ส่งคำขอ TA จึงยังไม่มีงบรวมให้เทียบ" };
+export function budgetAnswer(b: BudgetView, risk: CourseRisk, t: T): Answer {
+  if (b.base <= 0) return { tone: "muted", text: t("ยังไม่มีวิชาที่ส่งคำขอ TA จึงยังไม่มีงบรวมให้เทียบ") };
   const nearPct = pct0(risk.ratio * 100);
-  const time = b.elapsedPct != null ? ` เทอมผ่านไป ${pct0(b.elapsedPct)}` : "";
-  const overTail = risk.over.length > 0
-    ? ` ${risk.over.length} วิชาชนเพดานแล้ว ({courses}) มีงาน ${money(risk.unfunded)}ที่ยังจ่ายไม่ได้`
-    : "";
+  // {courses} is left in the text on purpose: the page swaps it for buttons.
+  const over = { n: risk.over.length, unfunded: money(risk.unfunded, t) };
 
   if (b.verdict === "over") {
+    const v = { projected: money(b.projectedHigh, t), excess: money(b.projectedHigh - b.base, t), ...over };
     return {
       tone: "danger",
-      text: `งบรวมอาจไม่พอ ถ้าใช้ในอัตรานี้จะใช้ถึง ${money(b.projectedHigh)} เกินงบรวม ${money(b.projectedHigh - b.base)}${overTail ? ` และ${overTail}` : ""}`,
+      text: risk.over.length > 0
+        ? t("งบรวมอาจไม่พอ ถ้าใช้ในอัตรานี้จะใช้ถึง {projected} เกินงบรวม {excess} และ {n} วิชาชนเพดานแล้ว ({courses}) มีงาน {unfunded}ที่ยังจ่ายไม่ได้", v)
+        : t("งบรวมอาจไม่พอ ถ้าใช้ในอัตรานี้จะใช้ถึง {projected} เกินงบรวม {excess}", v),
       courses: refs(risk.over),
     };
   }
@@ -239,24 +255,29 @@ export function budgetAnswer(b: BudgetView, risk: CourseRisk): Answer {
     // would promise something the system cannot do.
     return {
       tone: "danger",
-      text: `งบรวมยังเหลือ ${pct0(100 - b.usedPct)} แต่${overTail} ต้องตัดสินใจ`,
+      text: t("งบรวมยังเหลือ {left} แต่ {n} วิชาชนเพดานแล้ว ({courses}) มีงาน {unfunded}ที่ยังจ่ายไม่ได้ ต้องตัดสินใจ", { left: pct0(100 - b.usedPct), ...over }),
       courses: refs(risk.over),
     };
   }
   if (risk.near.length > 0) {
     return {
       tone: "warn",
-      text: `งบรวมยังพอ แต่ ${risk.near.length} วิชาใช้ถึง ${nearPct} ของเพดานวิชาแล้ว ({courses}) งานที่เพิ่มเข้ามาอาจจ่ายไม่ได้`,
+      text: t("งบรวมยังพอ แต่ {n} วิชาใช้ถึง {pct} ของเพดานวิชาแล้ว ({courses}) งานที่เพิ่มเข้ามาอาจจ่ายไม่ได้", { n: risk.near.length, pct: nearPct }),
       courses: refs(risk.near),
     };
   }
   if (b.verdict === "tight") {
-    return { tone: "warn", text: `งบรวมตึง คาดว่าสิ้นเทอมใช้ ${money(b.projectedHigh)} (${pct0((b.projectedHigh / b.base) * 100)} ของงบรวม)` };
+    return { tone: "warn", text: t("งบรวมตึง คาดว่าสิ้นเทอมใช้ {projected} ({pct} ของงบรวม)", { projected: money(b.projectedHigh, t), pct: pct0((b.projectedHigh / b.base) * 100) }) };
   }
   if (b.paceGap != null && b.paceGap > RULES.paceAheadPts) {
-    return { tone: "warn", text: `ใช้งบเร็วกว่าเวลา ใช้ไป ${pct0(b.usedPct)} ขณะที่เทอมผ่านไป ${pct0(b.elapsedPct!)}` };
+    return { tone: "warn", text: t("ใช้งบเร็วกว่าเวลา ใช้ไป {used} ขณะที่เทอมผ่านไป {elapsed}", { used: pct0(b.usedPct), elapsed: pct0(b.elapsedPct!) }) };
   }
-  return { tone: "good", text: `งบพอทุกวิชา ใช้ไป ${pct0(b.usedPct)} ของงบรวม${time} ไม่มีวิชาใดใช้ถึง ${nearPct} ของเพดาน` };
+  return {
+    tone: "good",
+    text: b.elapsedPct != null
+      ? t("งบพอทุกวิชา ใช้ไป {used} ของงบรวม เทอมผ่านไป {elapsed} ไม่มีวิชาใดใช้ถึง {near} ของเพดาน", { used: pct0(b.usedPct), elapsed: pct0(b.elapsedPct), near: nearPct })
+      : t("งบพอทุกวิชา ใช้ไป {used} ของงบรวม ไม่มีวิชาใดใช้ถึง {near} ของเพดาน", { used: pct0(b.usedPct), near: nearPct }),
+  };
 }
 
 /** Pareto: how few courses take most of the money. */
@@ -320,40 +341,46 @@ export function staffingStats(rows: CourseStaffing[]) {
   };
 }
 
-export function staffingAnswer(s: ReturnType<typeof staffingStats>, perTA: number): Answer {
-  if (s.withReq === 0) return { tone: "muted", text: "ภาคเรียนนี้ยังไม่มีวิชาที่ส่งคำขอ TA" };
+export function staffingAnswer(s: ReturnType<typeof staffingStats>, perTA: number, t: T): Answer {
+  if (s.withReq === 0) return { tone: "muted", text: t("ภาคเรียนนี้ยังไม่มีวิชาที่ส่งคำขอ TA") };
   const over = s.counts.over_ceiling, above = s.counts.above_guide;
-  const ratio = s.ratio > 0 ? ` ภาพรวม ${num1(s.ratio)} คนต่อ TA (เกณฑ์ ${perTA})` : "";
+  // A closing sentence of its own, so it can follow any of the three answers.
+  const ratio = s.ratio > 0 ? " " + t("ภาพรวม {r} คนต่อ TA (เกณฑ์ {perTA})", { r: num1(s.ratio), perTA }) : "";
   if (over > 0) {
-    return { tone: "danger", text: `${over} วิชาขอ TA เกินเพดานต่อจำนวนนักศึกษา${above ? ` และอีก ${above} วิชาขอมากกว่าที่แนะนำ` : ""}${ratio}` };
+    return { tone: "danger", text: (above
+      ? t("{over} วิชาขอ TA เกินเพดานต่อจำนวนนักศึกษา และอีก {above} วิชาขอมากกว่าที่แนะนำ", { over, above })
+      : t("{over} วิชาขอ TA เกินเพดานต่อจำนวนนักศึกษา", { over })) + ratio };
   }
   if (above > 0) {
-    return { tone: "warn", text: `${above} วิชาขอ TA มากกว่าที่ระบบแนะนำ แต่ยังไม่เกินเพดาน รวมเกินแนะนำ ${s.excess} คน${ratio}` };
+    return { tone: "warn", text: t("{above} วิชาขอ TA มากกว่าที่ระบบแนะนำ แต่ยังไม่เกินเพดาน รวมเกินแนะนำ {excess} คน", { above, excess: s.excess }) + ratio };
   }
-  return { tone: "good", text: `ไม่มีวิชาใดขอ TA เกินที่แนะนำ${s.counts.under ? ` มี ${s.counts.under} วิชาขอน้อยกว่าที่แนะนำ` : ""}${ratio}` };
+  return { tone: "good", text: (s.counts.under
+    ? t("ไม่มีวิชาใดขอ TA เกินที่แนะนำ มี {n} วิชาขอน้อยกว่าที่แนะนำ", { n: s.counts.under })
+    : t("ไม่มีวิชาใดขอ TA เกินที่แนะนำ")) + ratio };
 }
 
 /* -------------------------------------------------------------------------- */
 /* Q3 — งานค้างอยู่ขั้นไหน                                                      */
 /* -------------------------------------------------------------------------- */
 
-export function pipelineAnswer(a: TermAnalytics): Answer & { bottleneck?: PipelineKey } {
+export function pipelineAnswer(a: TermAnalytics, i: Tr): Answer & { bottleneck?: PipelineKey } {
+  const { t } = i;
   const p = a.pipeline;
-  if (!p) return { tone: "muted", text: "ยังไม่มีข้อมูล" };
+  if (!p) return { tone: "muted", text: t("ยังไม่มีข้อมูล") };
   const total = p.stages.reduce((s, x) => s + x.count, 0);
   const top = [...p.stages].sort((x, y) => y.count - x.count)[0];
   const dl = a.deadline;
   const due = dl
     ? dl.days_left === 0
-      ? ` วันนี้ปิดรอบส่งบันทึกเวลา (${dl.labels.join(", ")})`
-      : ` ปิดรอบส่งบันทึกเวลาอีก ${dl.days_left} วัน (${thDate(dl.due_date)})`
+      ? " " + t("วันนี้ปิดรอบส่งบันทึกเวลา ({labels})", { labels: dl.labels.join(", ") })
+      : " " + t("ปิดรอบส่งบันทึกเวลาอีก {n} วัน ({date})", { n: dl.days_left, date: thDate(dl.due_date, i.intl) })
     : "";
-  if (total === 0) return { tone: "good", text: `ไม่มีงานค้างในขั้นตอนของเจ้าหน้าที่${due}` };
+  if (total === 0) return { tone: "good", text: t("ไม่มีงานค้างในขั้นตอนของเจ้าหน้าที่") + due };
   const stale = p.stages.some(x => x.count > 0 && (x.oldest_days ?? 0) >= RULES.staleDays);
   return {
     // Items in a queue are normal work; only an item past staleDays is a warning.
     tone: stale ? "warn" : "info",
-    text: `ค้างรวม ${total} รายการ มากที่สุดที่ขั้น “${PIPELINE_META[top.key].label}” ${top.count} รายการ${due}`,
+    text: t("ค้างรวม {total} รายการ มากที่สุดที่ขั้น “{stage}” {n} รายการ", { total, stage: t(PIPELINE_META[top.key].label), n: top.count }) + due,
     bottleneck: top.key,
   };
 }
@@ -378,7 +405,8 @@ export function flowShape(flow: MonthFlow[]) {
 
 /** One line per bucket for months too uniform to chart:
  *  "ทุกเดือน (5 เดือน) มี 1 รายการค้างที่ขั้นรอคำสั่งแต่งตั้ง (CP410872)". */
-export function flowSentences(months: MonthFlow[]) {
+export function flowSentences(months: MonthFlow[], i: Tr) {
+  const { t } = i;
   const out: { key: string; color: string; done: boolean; text: string }[] = [];
   for (const bk of FLOW_BUCKETS) {
     const counts = months.map(f => f[bk.key as FlowKey] as number);
@@ -386,38 +414,46 @@ export function flowSentences(months: MonthFlow[]) {
     const codes = [...new Set(months.flatMap(f => f.codes?.[bk.key] ?? []))].sort();
     const lo = Math.min(...counts), hi = Math.max(...counts);
     const when = months.length === 1
-      ? `เดือน${thMonth(months[0].year_month)}`
-      : counts.every(c => c > 0) ? `ทุกเดือน (${months.length} เดือน)` : `${counts.filter(c => c > 0).length} จาก ${months.length} เดือน`;
+      ? t("เดือน{m}", { m: thMonth(months[0].year_month, i.monthName) })
+      : counts.every(c => c > 0)
+        ? t("ทุกเดือน ({n} เดือน)", { n: months.length })
+        : t("{k} จาก {n} เดือน", { k: counts.filter(c => c > 0).length, n: months.length });
     // Same count every month: "ทุกเดือน มี 1 รายการที่…"; otherwise a range per month.
     const same = lo === hi;
     const n = same || counts.some(c => c === 0) ? `${hi}` : `${lo}–${hi}`;
-    const perMonth = months.length > 1 && !same ? "ต่อเดือน" : "";
+    const perMonth = months.length > 1 && !same;
+    const v = { when, n, phrase: t(bk.phrase), codes: codes.length ? ` (${namedCourses(codes, t)})` : "" };
     out.push({
       key: bk.key, color: bk.color, done: bk.done,
-      text: `${when} มี ${n} รายการ${perMonth}${bk.phrase}${codes.length ? ` (${namedCourses(codes)})` : ""}`,
+      text: perMonth ? t("{when} มี {n} รายการต่อเดือน{phrase}{codes}", v) : t("{when} มี {n} รายการ{phrase}{codes}", v),
     });
   }
   return out;
 }
 
 export const DOC_PARTS = [
-  { key: "approved", label: "ตรวจผ่าน", color: "#16a34a" },
-  { key: "submitted", label: "รอตรวจ", color: "#0ea5e9" },
-  { key: "needs_fix", label: "ต้องแก้ไข", color: "#f59e0b" },
-  { key: "rejected", label: "ไม่ผ่าน", color: "#dc2626" },
-  { key: "not_submitted", label: "ยังไม่ส่ง / ไม่ครบ", color: "#cbd5e1" },
+  { key: "approved", label: msg("ตรวจผ่าน"), color: "#16a34a" },
+  { key: "submitted", label: msg("รอตรวจ"), color: "#0ea5e9" },
+  { key: "needs_fix", label: msg("ต้องแก้ไข"), color: "#f59e0b" },
+  { key: "rejected", label: msg("ไม่ผ่าน"), color: "#dc2626" },
+  { key: "not_submitted", label: msg("ยังไม่ส่ง / ไม่ครบ"), color: "#cbd5e1" },
 ] as const;
 
-export function docsShape(d: DocStatusCounts) {
+export function docsShape(d: DocStatusCounts, t: T) {
   const parts = DOC_PARTS.map(p => ({ ...p, value: d[p.key] as number }));
   const nonzero = parts.filter(p => p.value > 0);
   const chart = d.total >= RULES.donutMinPeople && nonzero.length >= RULES.donutMinStatuses;
   let sentence = "";
-  if (d.total === 0) sentence = "ยังไม่มี TA ในภาคเรียนนี้";
+  if (d.total === 0) sentence = t("ยังไม่มี TA ในภาคเรียนนี้");
   else if (nonzero.length === 1) {
     const only = nonzero[0];
-    sentence = only.key === "approved" ? `เอกสาร TA ตรวจผ่านครบทั้ง ${d.total} คน` : `เอกสาร TA ทั้ง ${d.total} คน: ${only.label}`;
-  } else sentence = `เอกสาร TA ${d.total} คน: ${nonzero.map(p => `${p.label} ${p.value} คน`).join(" · ")}`;
+    sentence = only.key === "approved"
+      ? t("เอกสาร TA ตรวจผ่านครบทั้ง {n} คน", { n: d.total })
+      : t("เอกสาร TA ทั้ง {n} คน: {status}", { n: d.total, status: t(only.label) });
+  } else {
+    const list = nonzero.map(p => t("{label} {n} คน", { label: t(p.label), n: p.value })).join(" · ");
+    sentence = t("เอกสาร TA {n} คน: {list}", { n: d.total, list });
+  }
   return { parts, chart, sentence };
 }
 
@@ -435,7 +471,7 @@ export interface Insight {
 
 /** Only things that need a decision or a follow-up. "All is well" is each
  *  question's own answer; repeating it here would say the same thing twice. */
-export function buildInsights(a: TermAnalytics): Insight[] {
+export function buildInsights(a: TermAnalytics, t: T): Insight[] {
   const out: Insight[] = [];
   const b = budgetView(a);
   const risk = courseRisk(a);
@@ -446,54 +482,56 @@ export function buildInsights(a: TermAnalytics): Insight[] {
   // Money — the same capState and verdict budgetAnswer uses.
   if (risk.over.length > 0) {
     out.push({ tone: "danger", target: "budget",
-      title: `${namedCourses(risk.over.map(r => r.code))} ชนเพดานวิชา งานที่ยังจ่ายไม่ได้ ${money(risk.unfunded)}`,
-      detail: "ชั่วโมงส่วนนี้จะไม่ได้รับค่าตอบแทน เงินย้ายข้ามวิชาไม่ได้" });
+      title: t("{courses} ชนเพดานวิชา งานที่ยังจ่ายไม่ได้ {amount}", { courses: namedCourses(risk.over.map(r => r.code), t), amount: money(risk.unfunded, t) }),
+      detail: t("ชั่วโมงส่วนนี้จะไม่ได้รับค่าตอบแทน เงินย้ายข้ามวิชาไม่ได้") });
   }
   if (b.verdict === "over") {
-    out.push({ tone: "danger", target: "budget", title: `งบรวมอาจไม่พอ คาดว่าจะเกิน ${money(b.projectedHigh - b.base)}`,
-      detail: b.runRate ? `ถ้าใช้ในอัตราเดิมจนสิ้นเทอมจะใช้ถึง ${money(b.runRate)}` : undefined });
+    out.push({ tone: "danger", target: "budget", title: t("งบรวมอาจไม่พอ คาดว่าจะเกิน {amount}", { amount: money(b.projectedHigh - b.base, t) }),
+      detail: b.runRate ? t("ถ้าใช้ในอัตราเดิมจนสิ้นเทอมจะใช้ถึง {amount}", { amount: money(b.runRate, t) }) : undefined });
   }
   if (risk.near.length > 0) {
     out.push({ tone: "warn", target: "budget",
-      title: `${risk.near.length} วิชาใช้ถึง ${nearPct} ของเพดานวิชาแล้ว`,
-      detail: namedCourses(risk.near.map(r => r.code)) });
+      title: t("{n} วิชาใช้ถึง {pct} ของเพดานวิชาแล้ว", { n: risk.near.length, pct: nearPct }),
+      detail: namedCourses(risk.near.map(r => r.code), t) });
   }
   if (b.verdict === "tight") {
-    out.push({ tone: "warn", target: "budget", title: `งบรวมตึง คาดว่าสิ้นเทอมใช้ ${pct0((b.projectedHigh / b.base) * 100)} ของงบรวม` });
+    out.push({ tone: "warn", target: "budget", title: t("งบรวมตึง คาดว่าสิ้นเทอมใช้ {pct} ของงบรวม", { pct: pct0((b.projectedHigh / b.base) * 100) }) });
   } else if (b.verdict !== "over" && b.paceGap != null && b.paceGap > RULES.paceAheadPts) {
-    out.push({ tone: "warn", target: "budget", title: `ใช้งบเร็วกว่าเวลา ${Math.round(b.paceGap)} จุด`,
-      detail: `ใช้ไป ${pct0(b.usedPct)} ขณะที่เทอมผ่านไป ${pct0(b.elapsedPct!)}` });
+    out.push({ tone: "warn", target: "budget", title: t("ใช้งบเร็วกว่าเวลา {n} จุด", { n: Math.round(b.paceGap) }),
+      detail: t("ใช้ไป {used} ขณะที่เทอมผ่านไป {elapsed}", { used: pct0(b.usedPct), elapsed: pct0(b.elapsedPct!) }) });
   }
   const conc = concentration(a.courses ?? []);
   if (conc && conc.n <= Math.max(1, Math.ceil(conc.of * 0.3))) {
-    out.push({ tone: "info", target: "courses", title: `${conc.n} จาก ${conc.of} วิชาใช้เงิน ${pct0(conc.share)} ของยอดเบิก`,
-      detail: `สูงสุดคือ ${conc.top.code} (${pct0(conc.topShare)})` });
+    out.push({ tone: "info", target: "courses", title: t("{n} จาก {of} วิชาใช้เงิน {share} ของยอดเบิก", { n: conc.n, of: conc.of, share: pct0(conc.share) }),
+      detail: t("สูงสุดคือ {code} ({share})", { code: conc.top.code, share: pct0(conc.topShare) }) });
   }
   const cps = costPerStudent(rows);
   if (cps.outliers.length > 0) {
     const o = cps.outliers[0];
-    out.push({ tone: "info", target: "courses", title: `${o.row.code} ใช้เงินต่อนักศึกษาสูงกว่าค่ากลาง ${num1(o.x)} เท่า`,
-      detail: `${money(o.v)}ต่อคน เทียบค่ากลาง ${money(cps.median)}${cps.outliers.length > 1 ? ` (และอีก ${cps.outliers.length - 1} วิชา)` : ""}` });
+    out.push({ tone: "info", target: "courses", title: t("{code} ใช้เงินต่อนักศึกษาสูงกว่าค่ากลาง {x} เท่า", { code: o.row.code, x: num1(o.x) }),
+      detail: cps.outliers.length > 1
+        ? t("{amount}ต่อคน เทียบค่ากลาง {median} (และอีก {n} วิชา)", { amount: money(o.v, t), median: money(cps.median, t), n: cps.outliers.length - 1 })
+        : t("{amount}ต่อคน เทียบค่ากลาง {median}", { amount: money(o.v, t), median: money(cps.median, t) }) });
   }
 
   // Staffing
   if (s.counts.over_ceiling > 0) {
     const r = s.review[0];
-    out.push({ tone: "danger", target: "staffing", title: `${s.counts.over_ceiling} วิชาขอ TA เกินเพดาน 1 ต่อ ${a.plan.min_students_per_ta} คน`,
-      detail: `เช่น ${r.code} นักศึกษา ${r.students} คน ขอ ${r.requested} คน (แนะนำ ${r.recommended})` });
+    out.push({ tone: "danger", target: "staffing", title: t("{n} วิชาขอ TA เกินเพดาน 1 ต่อ {per} คน", { n: s.counts.over_ceiling, per: a.plan.min_students_per_ta }),
+      detail: t("เช่น {code} นักศึกษา {students} คน ขอ {requested} คน (แนะนำ {recommended})", { code: r.code, students: r.students, requested: r.requested, recommended: r.recommended }) });
   } else if (s.counts.above_guide > 0) {
-    out.push({ tone: "warn", target: "staffing", title: `${s.counts.above_guide} วิชาขอ TA มากกว่าที่แนะนำ`,
-      detail: `รวมเกินแนะนำ ${s.excess} คน ยังอยู่ในเพดาน` });
+    out.push({ tone: "warn", target: "staffing", title: t("{n} วิชาขอ TA มากกว่าที่แนะนำ", { n: s.counts.above_guide }),
+      detail: t("รวมเกินแนะนำ {n} คน ยังอยู่ในเพดาน", { n: s.excess }) });
   }
   if (s.counts.under > 0) {
-    out.push({ tone: "info", target: "staffing", title: `${s.counts.under} วิชามี TA น้อยกว่าที่แนะนำ รวมขาด ${s.shortfall} คน`,
-      detail: `เช่น ${s.under[0].code} นักศึกษา ${s.under[0].students} คน มี TA ${s.under[0].requested} คน` });
+    out.push({ tone: "info", target: "staffing", title: t("{n} วิชามี TA น้อยกว่าที่แนะนำ รวมขาด {short} คน", { n: s.counts.under, short: s.shortfall }),
+      detail: t("เช่น {code} นักศึกษา {students} คน มี TA {requested} คน", { code: s.under[0].code, students: s.under[0].students, requested: s.under[0].requested }) });
   }
   if (s.bigNoTA.length > 0) {
     const big = s.bigNoTA.filter(r => r.students >= a.plan.students_per_ta * 2);
     if (big.length > 0) {
-      out.push({ tone: "info", target: "staffing", title: `${big.length} วิชาขนาดใหญ่ยังไม่ขอ TA`,
-        detail: big.slice(0, 3).map(r => `${r.code} (${r.students} คน)`).join(", ") });
+      out.push({ tone: "info", target: "staffing", title: t("{n} วิชาขนาดใหญ่ยังไม่ขอ TA", { n: big.length }),
+        detail: big.slice(0, 3).map(r => t("{code} ({n} คน)", { code: r.code, n: r.students })).join(", ") });
     }
   }
 
@@ -502,30 +540,30 @@ export function buildInsights(a: TermAnalytics): Insight[] {
   if (p) {
     const dl = a.deadline;
     if (dl && dl.days_left <= Math.max(dl.remind_days, 3) && dl.not_sent > 0) {
-      out.push({ tone: "warn", target: "work", title: `อีก ${dl.days_left} วันปิดรอบ ยังมี ${dl.not_sent} รายการที่ TA ยังไม่ส่ง`,
-        detail: `${dl.labels.join(", ")} ระบบส่งการแจ้งเตือนอัตโนมัติล่วงหน้า ${dl.remind_days} วัน` });
+      out.push({ tone: "warn", target: "work", title: t("อีก {days} วันปิดรอบ ยังมี {n} รายการที่ TA ยังไม่ส่ง", { days: dl.days_left, n: dl.not_sent }),
+        detail: t("{labels} ระบบส่งการแจ้งเตือนอัตโนมัติล่วงหน้า {days} วัน", { labels: dl.labels.join(", "), days: dl.remind_days }) });
     }
     const appt = p.stages.find(x => x.key === "appointments");
     if (appt && appt.count > 0) {
-      out.push({ tone: "warn", target: "work", title: `${appt.count} รายชื่อรอออกคำสั่งแต่งตั้ง`,
-        detail: "TA ที่ยังไม่อยู่ในคำสั่งแต่งตั้งจะผ่านขั้นตรวจเบิกจ่ายไม่ได้" });
+      out.push({ tone: "warn", target: "work", title: t("{n} รายชื่อรอออกคำสั่งแต่งตั้ง", { n: appt.count }),
+        detail: t("TA ที่ยังไม่อยู่ในคำสั่งแต่งตั้งจะผ่านขั้นตรวจเบิกจ่ายไม่ได้") });
     }
     const oldest = p.stages.filter(x => x.count > 0 && (x.oldest_days ?? 0) >= RULES.staleDays)
       .sort((x, y) => (y.oldest_days ?? 0) - (x.oldest_days ?? 0))[0];
     if (oldest) {
-      out.push({ tone: "warn", target: "work", title: `${PIPELINE_META[oldest.key].label} มีรายการรอนาน ${oldest.oldest_days} วัน` });
+      out.push({ tone: "warn", target: "work", title: t("{stage} มีรายการรอนาน {days} วัน", { stage: t(PIPELINE_META[oldest.key].label), days: oldest.oldest_days }) });
     }
     const returned = p.docs_returned + p.months_sent_back + p.worklogs_rejected;
     if (returned > 0) {
-      out.push({ tone: "info", target: "work", title: `${returned} รายการถูกตีกลับให้แก้ไข`,
-        detail: [p.docs_returned && `เอกสาร TA ${p.docs_returned}`, p.months_sent_back && `รอบเบิก ${p.months_sent_back}`,
-          p.worklogs_rejected && `บันทึกเวลา ${p.worklogs_rejected}`].filter(Boolean).join(", ") });
+      out.push({ tone: "info", target: "work", title: t("{n} รายการถูกตีกลับให้แก้ไข", { n: returned }),
+        detail: [p.docs_returned && t("เอกสาร TA {n}", { n: p.docs_returned }), p.months_sent_back && t("รอบเบิก {n}", { n: p.months_sent_back }),
+          p.worklogs_rejected && t("บันทึกเวลา {n}", { n: p.worklogs_rejected })].filter(Boolean).join(", ") });
     }
     if (p.unresolved_makeups > 0) {
-      out.push({ tone: "info", target: "work", title: `${p.unresolved_makeups} คาบตรงวันหยุดที่อาจารย์ยังไม่กำหนดวันชดเชย` });
+      out.push({ tone: "info", target: "work", title: t("{n} คาบตรงวันหยุดที่อาจารย์ยังไม่กำหนดวันชดเชย", { n: p.unresolved_makeups }) });
     }
     if (p.missing_students > 0) {
-      out.push({ tone: "danger", target: "courses", title: `${p.missing_students} วิชายังไม่มีจำนวนนักศึกษา`, detail: "งบและคำแนะนำจำนวน TA คำนวณไม่ได้ และส่งออกเอกสารไม่ได้" });
+      out.push({ tone: "danger", target: "courses", title: t("{n} วิชายังไม่มีจำนวนนักศึกษา", { n: p.missing_students }), detail: t("งบและคำแนะนำจำนวน TA คำนวณไม่ได้ และส่งออกเอกสารไม่ได้") });
     }
   }
 

@@ -6,6 +6,7 @@ import { api, errMessage } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { Select } from "../../components/ui";
 import { Skel } from "../../components/Skeletons";
+import { useI18n } from "../../lib/i18n/client";
 
 /**
  * Who signs the ผู้รับรอง block on this term's claim forms.
@@ -43,6 +44,7 @@ interface Certifier {
 }
 
 export function CertifierPicker({ termId }: { termId: string }) {
+  const { t } = useI18n();
   const key = `/exports/terms/${termId}/certifier`;
   const { data: current, error: currentError } = useSWR<Certifier>(key);
   const { data: officers } = useSWR<Officer[]>("/settings/admin-officers");
@@ -56,7 +58,7 @@ export function CertifierPicker({ termId }: { termId: string }) {
     try {
       const next: Certifier = await api.put(key, { officer_id: officerId });
       await mutate(key, next, { revalidate: false });
-      notify.success("บันทึกผู้รับรองแล้ว");
+      notify.success(t("บันทึกผู้รับรองแล้ว"));
     } catch (e) {
       notify.error(errMessage(e));
     } finally {
@@ -70,7 +72,7 @@ export function CertifierPicker({ termId }: { termId: string }) {
     return (
       <div className="w-full sm:w-[22rem]">
         <label className="mb-1 flex items-center gap-1 text-xs text-ink-2">
-          <BadgeCheck size={12} /> ผู้รับรองในเอกสารเบิกจ่าย
+          <BadgeCheck size={12} /> {t("ผู้รับรองในเอกสารเบิกจ่าย")}
         </label>
         <Skel className="h-9 w-full rounded-lg" />
       </div>
@@ -80,7 +82,7 @@ export function CertifierPicker({ termId }: { termId: string }) {
   return (
     <div data-tour="payouts-certifier" className="w-full sm:w-[22rem]">
       <label className="mb-1 flex items-center gap-1 text-xs text-ink-2">
-        <BadgeCheck size={12} /> ผู้รับรองในเอกสารเบิกจ่าย
+        <BadgeCheck size={12} /> {t("ผู้รับรองในเอกสารเบิกจ่าย")}
       </label>
       <Select
         value={current?.officer_id ?? ""}
@@ -92,8 +94,8 @@ export function CertifierPicker({ termId }: { termId: string }) {
             the sane default and must stay reachable after a manual choice. */}
         <option value="">
           {headSeat
-            ? `ตามตำแหน่ง ${headSeat.academic_prefix ?? ""}${headSeat.full_name}`
-            : "ตามตำแหน่งหัวหน้าสาขา (ยังไม่มีในระบบ)"}
+            ? t("ตามตำแหน่ง {name}", { name: `${headSeat.academic_prefix ?? ""}${headSeat.full_name}` })
+            : t("ตามตำแหน่งหัวหน้าสาขา (ยังไม่มีในระบบ)")}
         </option>
         {active.map(o => (
           <option key={o.id} value={o.id}>
@@ -105,20 +107,20 @@ export function CertifierPicker({ termId }: { termId: string }) {
       {current?.resolved && current.acting_for && (
         <div className="mt-1 rounded-md border border-amber-200 bg-amber-50/60 px-2 py-1.5 text-[11px] leading-tight text-amber-900">
           <div className="flex items-center gap-1 font-medium">
-            <AlertTriangle size={11} /> ไม่ใช่หัวหน้าสาขา จะพิมพ์เป็น “รักษาการแทน”
+            <AlertTriangle size={11} /> {t("ไม่ใช่หัวหน้าสาขา จะพิมพ์เป็น “รักษาการแทน”")}
           </div>
           {/* Shown as the form will print it, so the claim about authority can
               be checked before it is signed. */}
           <div className="mt-0.5 text-center">
             <div>({current.name})</div>
-            <div>ตำแหน่ง {current.title_line} {current.acting_for}</div>
+            <div>ตำแหน่ง {current.title_line} {current.acting_for}</div>{/* i18n-ignore — printed-form preview, stays Thai */}
           </div>
         </div>
       )}
 
       {current && !current.resolved && (
         <p className="mt-1 text-[11px] text-amber-700">
-          ยังไม่มีหัวหน้าสาขาในระบบ ช่องผู้รับรองในเอกสารจะเว้นว่างไว้ให้เซ็นเอง
+          {t("ยังไม่มีหัวหน้าสาขาในระบบ ช่องผู้รับรองในเอกสารจะเว้นว่างไว้ให้เซ็นเอง")}
         </p>
       )}
     </div>

@@ -5,6 +5,7 @@ import {
   IdCard, CalendarDays, FileText, Bell, Megaphone, CalendarClock,
 } from "lucide-react";
 import type { Me } from "../lib/api";
+import { msg, useI18n } from "../lib/i18n/client";
 import Shell, { type NavSection, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
 import TaTourLauncher from "./tours/TourLauncher";
@@ -26,6 +27,7 @@ export default function TACourseShell({
   courseName?: string;
   children: React.ReactNode;
 }) {
+  const { t } = useI18n();
   // Rows the TA can still SEND, summed across every section they hold on this
   // course. A TA assisting two sections has two separate piles and can only see
   // one of them at a time on the worklog screen, so the count that matters is
@@ -50,38 +52,38 @@ export default function TACourseShell({
   const nav: NavSection[] = [
     {
       items: [
-        { label: "กลับหน้ารายวิชา", href: "/ta", icon: ArrowLeft, exact: true },
+        { label: msg("กลับหน้ารายวิชา"), href: "/ta", icon: ArrowLeft, exact: true },
       ],
     },
     {
-      title: courseCode ? `รายวิชา ${courseCode}` : "รายวิชา",
+      title: courseCode ? t("รายวิชา {code}", { code: courseCode }) : msg("รายวิชา"),
       items: [
-        { label: "ภาพรวม", href: `/ta/courses/${tcId}`, icon: LayoutDashboard, exact: true },
+        { label: msg("ภาพรวม"), href: `/ta/courses/${tcId}`, icon: LayoutDashboard, exact: true },
         {
-          label: "ลงเวลาปฏิบัติงาน",
+          label: msg("ลงเวลาปฏิบัติงาน"),
           href: `/ta/courses/${tcId}/worklog`,
           icon: Clock,
           badge: unsentTotal,
-          badgeLabel: "ยังไม่ได้ส่งอนุมัติ",
+          badgeLabel: msg("ยังไม่ได้ส่งอนุมัติ"),
         },
         {
-          label: "วันหยุดและวันชดเชย",
+          label: msg("วันหยุดและวันชดเชย"),
           href: `/ta/courses/${tcId}/holidays`,
           icon: CalendarOff,
           badge: pendingMakeups,
-          badgeLabel: "รอกำหนดวันชดเชย",
+          badgeLabel: msg("รอกำหนดวันชดเชย"),
         },
       ],
     },
   ];
 
   const userMenuItems: UserMenuItem[] = [
-    { id: "profile",   label: "โปรไฟล์และบัญชี",     href: "/account",          icon: IdCard },
-    { id: "schedule",  label: "ตารางเรียนของฉัน",   href: "/ta/schedule",      icon: CalendarDays },
-    { id: "docs",      label: "เอกสารของฉัน",       href: "/ta/documents",     icon: FileText },
-    { id: "reminders", label: "สถานะการเบิกจ่าย",   href: "/ta/reminders",     icon: CalendarClock },
-    { id: "announce",  label: "ประกาศ",              href: "/announcements",    icon: Megaphone },
-    { id: "notif",     label: "การเตือน",           href: "/ta/notifications", icon: Bell },
+    { id: "profile",   label: msg("โปรไฟล์และบัญชี"),     href: "/account",          icon: IdCard },
+    { id: "schedule",  label: msg("ตารางเรียนของฉัน"),   href: "/ta/schedule",      icon: CalendarDays },
+    { id: "docs",      label: msg("เอกสารของฉัน"),       href: "/ta/documents",     icon: FileText },
+    { id: "reminders", label: msg("สถานะการเบิกจ่าย"),   href: "/ta/reminders",     icon: CalendarClock },
+    { id: "announce",  label: msg("ประกาศ"),              href: "/announcements",    icon: Megaphone },
+    { id: "notif",     label: msg("การเตือน"),           href: "/ta/notifications", icon: Bell },
   ];
 
   return (

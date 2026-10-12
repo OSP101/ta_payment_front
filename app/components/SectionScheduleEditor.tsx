@@ -3,6 +3,7 @@ import { Plus, Trash2, Clock, AlertTriangle } from "lucide-react";
 import { TimeField, type TimeValue } from "@heroui/react";
 import { Time } from "@internationalized/date";
 import { Button, IconButton, Select, Alert } from "./ui";
+import { msg, useI18n } from "../lib/i18n/client";
 
 // Parse "HH:MM" or "HH:MM:SS" into a TimeValue; empty/malformed → null.
 function parseHM(s: string): TimeValue | null {
@@ -58,7 +59,7 @@ export interface SectionScheduleRow {
   room?: string | null;
 }
 
-const DOW_LABEL = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+const DOW_LABEL = [msg("อาทิตย์"), msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์")];
 // Mon..Sun display order — matches the TA schedule page.
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
@@ -146,6 +147,7 @@ export default function SectionScheduleEditor({
   // Omit or pass [] to allow both — kept optional for backward compat.
   allowedKinds?: ("lecture" | "lab")[];
 }) {
+  const { t } = useI18n();
   const errors = validateRows(value);
 
   const kinds: ("lecture" | "lab")[] =
@@ -176,14 +178,14 @@ export default function SectionScheduleEditor({
           <div className="text-xs text-muted inline-flex items-center gap-1.5">
             <Clock size={12} />
             {value.length === 0
-              ? "ยังไม่มีคาบเรียน"
-              : <>ทั้งหมด <b className="tabular">{value.length}</b> คาบ / สัปดาห์</>}
+              ? t("ยังไม่มีคาบเรียน")
+              : t.rich("ทั้งหมด {n} คาบ / สัปดาห์", { n: <b className="tabular">{value.length}</b> })}
           </div>
           {/* Hidden rather than disabled when read-only: a greyed "เพิ่มคาบ"
               next to a greyed trash icon reads as "broken", not "view only". */}
           {!disabled && (
             <Button variant="ghost" size="sm" onClick={addRow} disabled={!canAddMore}>
-              <Plus size={13} />เพิ่มคาบ
+              <Plus size={13} />{t("เพิ่มคาบ")}
             </Button>
           )}
         </div>
@@ -192,8 +194,8 @@ export default function SectionScheduleEditor({
       {value.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted">
           {disabled
-            ? "ยังไม่มีคาบเรียน"
-            : <>ยังไม่มีคาบเรียน กด &quot;เพิ่มคาบ&quot; เพื่อกำหนดวัน-เวลา</>}
+            ? t("ยังไม่มีคาบเรียน")
+            : t("ยังไม่มีคาบเรียน กด \"เพิ่มคาบ\" เพื่อกำหนดวัน-เวลา")}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -222,7 +224,7 @@ export default function SectionScheduleEditor({
                     const usedByOther = value.some((r, idx) => idx !== i && r.kind === k);
                     return (
                       <option key={k} value={k} disabled={usedByOther}>
-                        {k === "lab" ? "ปฏิบัติการ" : "บรรยาย"}
+                        {k === "lab" ? t("ปฏิบัติการ") : t("บรรยาย")}
                       </option>
                     );
                   })}
@@ -233,12 +235,12 @@ export default function SectionScheduleEditor({
                   disabled={disabled}
                 >
                   {DOW_ORDER.map(d => (
-                    <option key={d} value={d}>{DOW_LABEL[d]}</option>
+                    <option key={d} value={d}>{t(DOW_LABEL[d])}</option>
                   ))}
                 </Select>
                 {!disabled && (
                   <IconButton
-                    label="ลบคาบ"
+                    label={t("ลบคาบ")}
                     variant="danger-soft" size="sm"
                     className="sm:order-last"
                     onClick={() => removeRow(i)}
@@ -251,13 +253,13 @@ export default function SectionScheduleEditor({
                     value={normalizeHM(row.start_time)}
                     onChange={v => updateRow(i, { start_time: v })}
                     disabled={disabled}
-                    ariaLabel="เวลาเริ่ม"
+                    ariaLabel={t("เวลาเริ่ม")}
                   />
                   <Hour24TimeInput
                     value={normalizeHM(row.end_time)}
                     onChange={v => updateRow(i, { end_time: v })}
                     disabled={disabled}
-                    ariaLabel="เวลาสิ้นสุด"
+                    ariaLabel={t("เวลาสิ้นสุด")}
                   />
                 </div>
               </div>
@@ -269,7 +271,7 @@ export default function SectionScheduleEditor({
       {compact && canAddMore && !disabled && (
         <div className="pt-1">
           <Button variant="ghost" size="sm" onClick={addRow}>
-            <Plus size={13} />เพิ่มคาบ
+            <Plus size={13} />{t("เพิ่มคาบ")}
           </Button>
         </div>
       )}
@@ -278,32 +280,32 @@ export default function SectionScheduleEditor({
         <Alert
           status="danger"
           icon={<AlertTriangle size={14} />}
-          title="รูปแบบคาบซ้ำ"
-          description="แต่ละ section มีบรรยาย/ปฏิบัติการอย่างละ 1 คาบเท่านั้น"
+          title={t("รูปแบบคาบซ้ำ")}
+          description={t("แต่ละ section มีบรรยาย/ปฏิบัติการอย่างละ 1 คาบเท่านั้น")}
         />
       )}
       {errors.invalidIdx.length > 0 && (
         <Alert
           status="danger"
           icon={<AlertTriangle size={14} />}
-          title="เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม"
-          description="ตรวจสอบคาบที่มีขอบสีแดง"
+          title={t("เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม")}
+          description={t("ตรวจสอบคาบที่มีขอบสีแดง")}
         />
       )}
       {errors.overlapIdx.length > 0 && (
         <Alert
           status="danger"
           icon={<AlertTriangle size={14} />}
-          title="คาบใน section นี้ทับซ้อนกัน"
+          title={t("คาบใน section นี้ทับซ้อนกัน")}
           description={
             <>
-              <div>ตรวจดู AM/PM ให้ตรง คาบที่ชนกัน:</div>
+              <div>{t("ตรวจดู AM/PM ให้ตรง คาบที่ชนกัน:")}</div>
               <ul className="mt-1 list-disc ps-5 space-y-0.5">
                 {errors.overlapIdx.map(i => {
                   const r = value[i];
                   return (
                     <li key={i} className="tabular">
-                      {r.kind === "lab" ? "ปฏิบัติการ" : "บรรยาย"} · {DOW_LABEL[r.day_of_week]}{" "}
+                      {r.kind === "lab" ? t("ปฏิบัติการ") : t("บรรยาย")} · {t(DOW_LABEL[r.day_of_week])}{" "}
                       {normalizeHM(r.start_time)}–{normalizeHM(r.end_time)}
                     </li>
                   );
@@ -331,7 +333,7 @@ export function toApiPayload(rows: SectionScheduleRow[]): {
   }));
 }
 
-const SHORT_DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+const SHORT_DOW = [msg("อา."), msg("จ."), msg("อ."), msg("พ."), msg("พฤ."), msg("ศ."), msg("ส.")];
 
 function sortedForDisplay(rows: SectionScheduleRow[]): SectionScheduleRow[] {
   return [...rows].sort((a, b) => {
@@ -343,6 +345,7 @@ function sortedForDisplay(rows: SectionScheduleRow[]): SectionScheduleRow[] {
 // Rendered summary for tables — each block shows kind (colored) + day + time,
 // so lecturers can tell บรรยาย vs ปฏิบัติการ apart at a glance.
 export function ScheduleSummary({ rows }: { rows: SectionScheduleRow[] }) {
+  const { t } = useI18n();
   if (!rows.length) return null;
   return (
     <div className="inline-flex flex-wrap gap-1">
@@ -359,9 +362,9 @@ export function ScheduleSummary({ rows }: { rows: SectionScheduleRow[] }) {
               : "bg-accent-soft text-accent-soft-foreground")
           }
         >
-          <span className="font-medium">{r.kind === "lab" ? "ปฏิบัติการ" : "บรรยาย"}</span>
+          <span className="font-medium">{r.kind === "lab" ? t("ปฏิบัติการ") : t("บรรยาย")}</span>
           <span className="tabular">
-            {SHORT_DOW[r.day_of_week]}. {normalizeHM(r.start_time)}–{normalizeHM(r.end_time)}
+            {t(SHORT_DOW[r.day_of_week])} {normalizeHM(r.start_time)}–{normalizeHM(r.end_time)}
           </span>
         </span>
       ))}
@@ -370,12 +373,13 @@ export function ScheduleSummary({ rows }: { rows: SectionScheduleRow[] }) {
 }
 
 // Legacy plain-string helper — retained for callers that need a title/aria label.
-export function summarizeSchedule(rows: SectionScheduleRow[]): string {
+// Pass the caller's t() to get the reader's language; without it the Thai is kept.
+export function summarizeSchedule(rows: SectionScheduleRow[], t: (key: string) => string = k => k): string {
   if (!rows.length) return "";
   return sortedForDisplay(rows)
     .map(r => {
-      const kind = r.kind === "lab" ? "ป." : "บ.";
-      return `${kind} ${SHORT_DOW[r.day_of_week]}. ${normalizeHM(r.start_time)}–${normalizeHM(r.end_time)}`;
+      const kind = r.kind === "lab" ? t(msg("ป.")) : t(msg("บ.@lecture"));
+      return `${kind} ${t(SHORT_DOW[r.day_of_week])} ${normalizeHM(r.start_time)}–${normalizeHM(r.end_time)}`;
     })
     .join(" · ");
 }

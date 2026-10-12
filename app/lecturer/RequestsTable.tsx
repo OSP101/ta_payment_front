@@ -8,6 +8,7 @@ import { DataTable, type DataColumn } from "../components/DataTable";
 import { Skel, SkelList } from "../components/Skeletons";
 import { api } from "../lib/api";
 import { notify } from "../lib/notify";
+import { msg, useI18n, type TFn } from "../lib/i18n/client";
 
 export interface TARequestRow {
   id: string;
@@ -49,81 +50,84 @@ interface RequestDetail extends TARequestRow {
 }
 
 const STATUS_MAP: Record<string, { tone: "success" | "warn" | "danger" | "info" | "neutral"; label: string }> = {
-  approved:  { tone: "success", label: "อนุมัติแล้ว" },
-  submitted: { tone: "info",    label: "รอ TA บันทึกตารางเรียน" },
-  pending:   { tone: "warn",    label: "รอดำเนินการ" },
-  draft:     { tone: "neutral", label: "ฉบับร่าง" },
-  rejected:  { tone: "danger",  label: "ปฏิเสธ" },
-  cancelled: { tone: "neutral", label: "ยกเลิก" },
+  approved:  { tone: "success", label: msg("อนุมัติแล้ว") },
+  submitted: { tone: "info",    label: msg("รอ TA บันทึกตารางเรียน") },
+  pending:   { tone: "warn",    label: msg("รอดำเนินการ") },
+  draft:     { tone: "neutral", label: msg("ฉบับร่าง") },
+  rejected:  { tone: "danger",  label: msg("ปฏิเสธ@status") },
+  cancelled: { tone: "neutral", label: msg("ยกเลิก@status") },
 };
 const STATUS_LABEL: Record<string, string> = Object.fromEntries(
   Object.entries(STATUS_MAP).map(([k, v]) => [k, v.label]),
 );
 
 export function RequestStatusChip({ status }: { status: string }) {
+  const { t } = useI18n();
   const m = STATUS_MAP[status] ?? { tone: "neutral" as const, label: status };
-  return <Chip tone={m.tone}>{m.label}</Chip>;
+  return <Chip tone={m.tone}>{t(m.label)}</Chip>;
 }
 
-function thDate(iso?: string): string {
+function thDate(iso: string | undefined, intl: string): string {
   return iso
-    ? new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })
+    ? new Date(iso).toLocaleDateString(intl, { day: "numeric", month: "short", year: "numeric" })
     : "-";
 }
 
 function buildColumns(
+  t: TFn,
+  intl: string,
   onDetail: (id: string) => void,
   onCancel: (id: string) => void,
 ): DataColumn<TARequestRow>[] { return [
   {
-    id: "submitted_at", width: 150, label: "วันที่ยื่นคำขอ", sortable: true, isRowHeader: true,
+    id: "submitted_at", width: 150, label: t("วันที่ยื่นคำขอ"), sortable: true, isRowHeader: true,
     sortValue: r => r.submitted_at ?? "",
     className: "whitespace-nowrap",
     render: r => (
       <span className="inline-flex flex-col">
-        <span>{thDate(r.submitted_at)}</span>
+        <span>{thDate(r.submitted_at, intl)}</span>
         {r.submitted_by_name && (
-          <span className="text-xs text-muted">ส่งแทนโดย {r.submitted_by_name}</span>
+          <span className="text-xs text-muted">{t("ส่งแทนโดย {name}", { name: r.submitted_by_name })}</span>
         )}
       </span>
     ),
   },
   {
     // Each row is one TA's own verdict, so the name is what tells rows apart.
-    id: "ta_names", width: 200, label: "ผู้ช่วยสอน", sortable: true,
+    id: "ta_names", width: 200, label: t("ผู้ช่วยสอน"), sortable: true,
     sortValue: r => r.ta_names ?? "",
     render: r => r.ta_names
       ? <span className="text-ink-1">{r.ta_names}</span>
-      : <Chip tone="brand">{r.ta_count ?? 0} คน</Chip>,
+      : <Chip tone="brand">{t("{n} คน", { n: r.ta_count ?? 0 })}</Chip>,
   },
   {
-    id: "status", width: 150, label: "สถานะ", sortable: true,
-    sortValue: r => STATUS_LABEL[r.status] ?? r.status,
+    id: "status", width: 150, label: t("สถานะ"), sortable: true,
+    sortValue: r => (STATUS_LABEL[r.status] ? t(STATUS_LABEL[r.status]) : r.status),
     render: r => (
       <div className="flex flex-wrap items-center gap-1.5">
         <RequestStatusChip status={r.status} />
         {/* การส่งมี 2 แบบเท่านั้น — ทันเวลา หรือ ช้า (ช้า = เบิกจ่ายช้าตาม) */}
         {r.is_late
-          ? <Chip tone="warn">ส่งช้า</Chip>
-          : <Chip tone="success">ส่งทันเวลา</Chip>}
+          ? <Chip tone="warn">{t("ส่งช้า")}</Chip>
+          : <Chip tone="success">{t("ส่งทันเวลา")}</Chip>}
         {/* "อนุมัติแล้ว" on its own would hide the fact that the TA's own
             timetable removed some sessions. Say it on the row. */}
         {(r.trimmed_count ?? 0) > 0 && (
-          <Chip tone="warn">ตัดบางคาบ {r.trimmed_count} กลุ่ม</Chip>
+          <Chip tone="warn">{t("ตัดบางคาบ {n} กลุ่ม", { n: r.trimmed_count })}</Chip>
         )}
         {(r.dropped_count ?? 0) > 0 && (
-          <Chip tone="danger">ตัดออก {r.dropped_count} กลุ่ม</Chip>
+          <Chip tone="danger">{t("ตัดออก {n} กลุ่ม", { n: r.dropped_count })}</Chip>
         )}
       </div>
     ),
   },
   {
-    id: "decided_at", width: 150, label: "วันที่พิจารณา",
+    id: "decided_at", width: 150, label: t("วันที่พิจารณา"),
     className: "whitespace-nowrap text-muted",
-    render: r => thDate(r.decided_at),
+    render: r => thDate(r.decided_at, intl),
   },
   {
-    id: "reason", width: 260, label: "หมายเหตุ",
+    id: "reason", width: 260, label: t("หมายเหตุ"),
     className: "w-16 text-center",
     render: r => r.reject_reason
       ? (
@@ -132,7 +136,7 @@ function buildColumns(
             isIconOnly
             variant="tertiary"
             size="sm"
-            aria-label="ดูเหตุผล"
+            aria-label={t("ดูเหตุผล")}
             className="text-red-600 hover:bg-red-50"
           >
             <AlertCircle size={16} />
@@ -150,23 +154,23 @@ function buildColumns(
       <div className="flex items-center justify-center gap-1">
         <Tooltip delay={0}>
           <Button
-            isIconOnly variant="tertiary" size="sm" aria-label="ดูรายละเอียด"
+            isIconOnly variant="tertiary" size="sm" aria-label={t("ดูรายละเอียด")}
             onPress={() => onDetail(r.id)}
           >
             <Eye size={16} />
           </Button>
-          <Tooltip.Content className="text-xs">ดูรายละเอียด — ใครถูกส่งไปในรอบนี้บ้าง</Tooltip.Content>
+          <Tooltip.Content className="text-xs">{t("ดูรายละเอียด — ใครถูกส่งไปในรอบนี้บ้าง")}</Tooltip.Content>
         </Tooltip>
         {r.can_cancel && (
           <Tooltip delay={0}>
             <Button
-              isIconOnly variant="tertiary" size="sm" aria-label="ยกเลิกคำขอ"
+              isIconOnly variant="tertiary" size="sm" aria-label={t("ยกเลิกคำขอ")}
               className="text-red-600 hover:bg-red-50"
               onPress={() => onCancel(r.id)}
             >
               <Ban size={16} />
             </Button>
-            <Tooltip.Content className="text-xs">ยกเลิกคำขอนี้</Tooltip.Content>
+            <Tooltip.Content className="text-xs">{t("ยกเลิกคำขอนี้")}</Tooltip.Content>
           </Tooltip>
         )}
       </div>
@@ -175,13 +179,13 @@ function buildColumns(
 ]; }
 
 const LEVEL_LABEL: Record<string, string> = {
-  undergrad: "ปริญญาตรี", master: "ปริญญาโท", phd: "ปริญญาเอก",
+  undergrad: msg("ปริญญาตรี"), master: msg("ปริญญาโท"), phd: msg("ปริญญาเอก"),
 };
 
 const STATE_LABEL: Record<string, { tone: "success" | "warn" | "danger"; label: string }> = {
-  active:  { tone: "success", label: "ทำงานได้ตามปกติ" },
-  trimmed: { tone: "warn",    label: "ตัดบางคาบ" },
-  dropped: { tone: "danger",  label: "ตัดออกทั้งกลุ่ม" },
+  active:  { tone: "success", label: msg("ทำงานได้ตามปกติ") },
+  trimmed: { tone: "warn",    label: msg("ตัดบางคาบ") },
+  dropped: { tone: "danger",  label: msg("ตัดออกทั้งกลุ่ม") },
 };
 
 /** One TA plus every section they were sent on, grouped from the flat per-section rows. */
@@ -208,10 +212,11 @@ function groupByTa(list: RequestAssignmentDetail[]): GroupedAssignment[] {
 
 /** Who was actually sent in this round — opened from the history table. */
 function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const { t, intl } = useI18n();
   const { data: d } = useSWR<RequestDetail>(id ? `/ta-requests/${id}` : null);
   const grouped = d?.assignments?.length ? groupByTa(d.assignments) : [];
   return (
-    <Modal open={!!id} onClose={onClose} title="รายละเอียดคำขอ" icon={<Eye size={18} />} size="lg">
+    <Modal open={!!id} onClose={onClose} title={t("รายละเอียดคำขอ")} icon={<Eye size={18} />} size="lg">
       {!d ? (
         // Shaped like the loaded body: status line, then one card per TA.
         <div className="space-y-3">
@@ -225,7 +230,7 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
         <div className="space-y-3 text-sm">
           <div className="flex flex-wrap items-center gap-1.5">
             <RequestStatusChip status={d.status} />
-            <span className="text-muted">{thDate(d.submitted_at)}</span>
+            <span className="text-muted">{thDate(d.submitted_at, intl)}</span>
           </div>
           {d.reject_reason && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-800 whitespace-pre-line">
@@ -233,14 +238,14 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
             </div>
           )}
           {!grouped.length ? (
-            <div className="text-xs text-muted text-center py-6">ไม่มีรายชื่อ TA ในคำขอนี้</div>
+            <div className="text-xs text-muted text-center py-6">{t("ไม่มีรายชื่อ TA ในคำขอนี้")}</div>
           ) : (
             <ul className="space-y-2">
               {grouped.map((g, i) => (
                 <li key={i} className="rounded-lg border border-hairline p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="font-medium text-ink-1">{g.ta_name}</div>
-                    <Chip tone="neutral">{LEVEL_LABEL[g.level] ?? g.level}</Chip>
+                    <Chip tone="neutral">{LEVEL_LABEL[g.level] ? t(LEVEL_LABEL[g.level]) : g.level}</Chip>
                   </div>
                   <div className="text-xs text-muted mt-0.5">{g.email}</div>
                   <ul className="mt-2 space-y-1.5">
@@ -250,9 +255,9 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
                         <li key={j} className="rounded-md bg-slate-50 border border-hairline px-2.5 py-1.5">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="text-xs text-ink-2">
-                              กลุ่ม {a.section_no} · {a.total_hrs.toFixed(1)} ชม./สัปดาห์
+                              {t("กลุ่ม {sec} · {hrs} ชม./สัปดาห์", { sec: a.section_no, hrs: a.total_hrs.toFixed(1) })}
                             </span>
-                            {st && <Chip tone={st.tone}>{st.label}</Chip>}
+                            {st && <Chip tone={st.tone}>{t(st.label)}</Chip>}
                           </div>
                           {a.state_reason && (
                             <div className="text-xs text-amber-700 mt-1">{a.state_reason}</div>
@@ -272,12 +277,13 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
 }
 
 export function RequestsTable({
-  rows, loading, emptyDescription = "เริ่มจากปุ่ม 'ส่งคำขอ TA'",
+  rows, loading, emptyDescription = msg("เริ่มจากปุ่ม 'ส่งคำขอ TA'"),
 }: {
   rows: TARequestRow[] | undefined;
   loading?: boolean;
   emptyDescription?: string;
 }) {
+  const { t, intl } = useI18n();
   const [detailId, setDetailId] = useState<string | null>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -287,7 +293,7 @@ export function RequestsTable({
     setCancelling(true);
     try {
       await api.post(`/ta-requests/${cancelId}/cancel`);
-      notify.success("ยกเลิกคำขอเรียบร้อยแล้ว");
+      notify.success(t("ยกเลิกคำขอเรียบร้อยแล้ว"));
       mutate("/ta-requests");
       mutate(`/ta-requests/${cancelId}`);
       // Cancelling frees the TA's slot on this course — the candidates list
@@ -307,37 +313,37 @@ export function RequestsTable({
   return (
     <>
       <DataTable
-        ariaLabel="ประวัติคำขอ TA"
+        ariaLabel={t("ประวัติคำขอ TA")}
         rows={rows}
         loading={loading}
         rowKey={r => r.id}
-        searchFn={r => `${r.ta_names ?? ""} ${STATUS_LABEL[r.status] ?? r.status} ${r.reject_reason ?? ""}`}
-        searchPlaceholder="ค้นหาชื่อ TA / สถานะ / เหตุผล…"
+        searchFn={r => `${r.ta_names ?? ""} ${STATUS_LABEL[r.status] ? t(STATUS_LABEL[r.status]) : r.status} ${r.reject_reason ?? ""}`}
+        searchPlaceholder={t("ค้นหาชื่อ TA / สถานะ / เหตุผล…")}
         filters={[{
           id: "status",
-          placeholder: "ทุกสถานะ",
+          placeholder: t("ทุกสถานะ"),
           // Derive from the full STATUS_MAP so every status (incl. cancelled /
           // pending) is filterable — not just a hardcoded subset.
           options: [
-            { id: "", label: "ทุกสถานะ" },
-            ...Object.entries(STATUS_MAP).map(([id, v]) => ({ id, label: v.label })),
+            { id: "", label: t("ทุกสถานะ") },
+            ...Object.entries(STATUS_MAP).map(([id, v]) => ({ id, label: t(v.label) })),
           ],
           predicate: (r, v) => r.status === v,
         }]}
         initialSort={{ column: "submitted_at", direction: "descending" }}
         pageSize={10}
-        emptyTitle="ยังไม่มีคำขอ"
-        emptyDescription={emptyDescription}
-        columns={buildColumns(setDetailId, setCancelId)}
+        emptyTitle={t("ยังไม่มีคำขอ")}
+        emptyDescription={t(emptyDescription)}
+        columns={buildColumns(t, intl, setDetailId, setCancelId)}
       />
       <RequestDetailModal id={detailId} onClose={() => setDetailId(null)} />
       <ConfirmDialog
         open={!!cancelId}
         onClose={() => { if (!cancelling) setCancelId(null); }}
         onConfirm={doCancel}
-        title="ยกเลิกคำขอ TA นี้?"
-        message="โควตาของ TA ในคำขอนี้จะถูกคืน และคำขอนี้จะยกเลิกถาวร (TA คนอื่นที่ส่งพร้อมกันไม่ถูกยกเลิกด้วย) หากต้องการ TA คนเดิมอีกครั้ง ต้องส่งคำขอใหม่"
-        confirmLabel="ยืนยันยกเลิก"
+        title={t("ยกเลิกคำขอ TA นี้?")}
+        message={t("โควตาของ TA ในคำขอนี้จะถูกคืน และคำขอนี้จะยกเลิกถาวร (TA คนอื่นที่ส่งพร้อมกันไม่ถูกยกเลิกด้วย) หากต้องการ TA คนเดิมอีกครั้ง ต้องส่งคำขอใหม่")}
+        confirmLabel={t("ยืนยันยกเลิก")}
         danger
         isPending={cancelling}
       />

@@ -7,6 +7,8 @@ import ShareButtons from "../../../components/ShareButtons";
 import AttachmentGallery, { type Attachment } from "../../../components/AttachmentGallery";
 import RichText from "../../../components/RichText";
 import { backendURL, siteURL } from "../../../lib/site";
+import { msg } from "../../../lib/i18n/core";
+import { getT } from "../../../lib/i18n/server";
 
 /**
  * The public face of one announcement: no login, no sidebar, no feed.
@@ -46,14 +48,14 @@ interface PublicAnn {
 }
 
 const CAT_META: Record<Category, { label: string; icon: React.ReactNode; className: string }> = {
-  info:    { label: "ข้อมูลทั่วไป",      icon: <Info size={14} />,          className: "bg-sky-50 text-sky-700 border-sky-200" },
-  news:    { label: "ข่าวประชาสัมพันธ์", icon: <Newspaper size={14} />,     className: "bg-blue-50 text-blue-700 border-blue-200" },
-  event:   { label: "กิจกรรม",           icon: <PartyPopper size={14} />,   className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  warning: { label: "แจ้งเตือน",          icon: <AlertTriangle size={14} />, className: "bg-amber-50 text-amber-800 border-amber-200" },
-  urgent:  { label: "ด่วน",               icon: <Radio size={14} />,         className: "bg-red-50 text-red-700 border-red-200" },
+  info:    { label: msg("ข้อมูลทั่วไป"),      icon: <Info size={14} />,          className: "bg-sky-50 text-sky-700 border-sky-200" },
+  news:    { label: msg("ข่าวประชาสัมพันธ์"), icon: <Newspaper size={14} />,     className: "bg-blue-50 text-blue-700 border-blue-200" },
+  event:   { label: msg("กิจกรรม"),           icon: <PartyPopper size={14} />,   className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  warning: { label: msg("แจ้งเตือน"),          icon: <AlertTriangle size={14} />, className: "bg-amber-50 text-amber-800 border-amber-200" },
+  urgent:  { label: msg("ด่วน"),               icon: <Radio size={14} />,         className: "bg-red-50 text-red-700 border-red-200" },
 };
 
-const SITE_NAME = "COCO TAS · วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น";
+const SITE_NAME = msg("COCO TAS · วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น");
 
 async function getAnnouncement(id: string): Promise<PublicAnn | null> {
   try {
@@ -94,13 +96,14 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { id } = await params;
   const a = await getAnnouncement(id);
+  const { t } = await getT();
   if (!a) {
     // Nothing to describe, and nothing that should end up in a search index.
-    return { title: "ไม่พบประกาศ", robots: { index: false, follow: false } };
+    return { title: t("ไม่พบประกาศ"), robots: { index: false, follow: false } };
   }
 
   const url = `${siteURL()}/p/announcements/${a.id}`;
-  const description = a.excerpt || SITE_NAME;
+  const description = a.excerpt || t(SITE_NAME);
   const image = previewImage(a);
 
   return {
@@ -109,7 +112,7 @@ export async function generateMetadata(
     alternates: { canonical: url },
     openGraph: {
       type: "article",
-      siteName: SITE_NAME,
+      siteName: t(SITE_NAME),
       title: a.title,
       description,
       url,
@@ -135,6 +138,7 @@ export default async function PublicAnnouncementPage(
 ) {
   const { id } = await params;
   const a = await getAnnouncement(id);
+  const { t, intl } = await getT();
 
   return (
     <div className="min-h-screen bg-[var(--page-bg)]">
@@ -150,38 +154,40 @@ export default async function PublicAnnouncementPage(
                 Beta
               </span>
             </div>
-            <div className="text-[11px] text-ink-3">วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น</div>
+            <div className="text-[11px] text-ink-3">{t("วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น")}</div>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-[760px] px-5 py-6">
-        {a ? <Article a={a} base={siteURL()} /> : (
+        {a ? <Article a={a} base={siteURL()} t={t} intl={intl} /> : (
           <div className="rounded-xl border border-border bg-white px-6 py-12 text-center">
             <Megaphone size={30} className="mx-auto mb-3 text-ink-4" />
-            <div className="text-base font-semibold text-ink-1">ไม่พบประกาศนี้</div>
+            <div className="text-base font-semibold text-ink-1">{t("ไม่พบประกาศนี้")}</div>
             <p className="mx-auto mt-1.5 max-w-md text-sm text-ink-3">
-              ประกาศอาจถูกถอนออก หมดอายุแล้ว หรือไม่ได้เปิดให้อ่านแบบสาธารณะ
-              หากคุณเป็นบุคลากรหรือนักศึกษา ให้เข้าสู่ระบบเพื่ออ่านประกาศทั้งหมด
+              {t("ประกาศอาจถูกถอนออก หมดอายุแล้ว หรือไม่ได้เปิดให้อ่านแบบสาธารณะ หากคุณเป็นบุคลากรหรือนักศึกษา ให้เข้าสู่ระบบเพื่ออ่านประกาศทั้งหมด")}
             </p>
             <a
               href="/login"
               className="mt-4 inline-flex rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:bg-brand-hover"
             >
-              เข้าสู่ระบบ
+              {t("เข้าสู่ระบบ")}
             </a>
           </div>
         )}
       </main>
 
       <footer className="mx-auto max-w-[760px] px-5 pb-10 text-center text-xs text-ink-4">
-        ประกาศจากระบบ COCO TAS วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น
+        {t("ประกาศจากระบบ COCO TAS วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น")}
       </footer>
     </div>
   );
 }
 
-function Article({ a, base }: { a: PublicAnn; base: string }) {
+function Article({ a, base, t, intl }: {
+  a: PublicAnn; base: string;
+  t: (key: string, vars?: Record<string, string | number>) => string; intl: string;
+}) {
   const meta = CAT_META[a.category] ?? CAT_META.info;
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-white">
@@ -196,11 +202,11 @@ function Article({ a, base }: { a: PublicAnn; base: string }) {
       <div className="px-6 py-5">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${meta.className}`}>
-            {meta.icon}{meta.label}
+            {meta.icon}{t(meta.label)}
           </span>
           {a.published_at && (
             <span className="text-xs text-ink-3">
-              {new Date(a.published_at).toLocaleDateString("th-TH", {
+              {new Date(a.published_at).toLocaleDateString(intl, {
                 day: "numeric", month: "long", year: "numeric",
               })}
             </span>
@@ -208,9 +214,9 @@ function Article({ a, base }: { a: PublicAnn; base: string }) {
           {a.expires_at && (
             <span className="inline-flex items-center gap-1 text-xs text-ink-4">
               <CalendarClock size={11} />
-              ถึง {new Date(a.expires_at).toLocaleDateString("th-TH", {
+              {t("ถึง {date}", { date: new Date(a.expires_at).toLocaleDateString(intl, {
                 day: "numeric", month: "short", year: "numeric",
-              })}
+              }) })}
             </span>
           )}
         </div>
@@ -228,7 +234,7 @@ function Article({ a, base }: { a: PublicAnn; base: string }) {
         )}
 
         <div className="mt-6 border-t border-hairline pt-4">
-          <div className="mb-2 text-xs font-medium text-ink-3">แชร์ประกาศนี้</div>
+          <div className="mb-2 text-xs font-medium text-ink-3">{t("แชร์ประกาศนี้")}</div>
           {/* base: this page is server-rendered, so the buttons cannot read the
               origin off `window` the way they do on the in-app pages. */}
           <ShareButtons id={a.id} title={a.title} isPublic size="sm" baseURL={base} />

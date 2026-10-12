@@ -5,6 +5,7 @@ import { PageHeader, Select } from "../components/ui";
 import type { Term } from "../lib/api";
 import TermDashboard from "../staff/insights/TermDashboard";
 import { Skel, SkelRegion } from "../components/Skeletons";
+import { useI18n } from "../lib/i18n/client";
 
 // มุมมองผู้บริหาร — the same TermDashboard the staff dashboard embeds,
 // standing alone. Read-only by construction: the only endpoints this page
@@ -16,26 +17,27 @@ import { Skel, SkelRegion } from "../components/Skeletons";
 // last year's numbers should not be changing anyone's working state.
 export default function ExecutivePage() {
   const { data: terms } = useSWR<Term[]>("/terms");
+  const { t } = useI18n();
   const [picked, setPicked] = useState("");
   const termId = useMemo(() => {
     const list = terms ?? [];
-    if (picked && list.some(t => t.id === picked)) return picked;
-    return (list.find(t => t.is_active) ?? list[0])?.id ?? "";
+    if (picked && list.some(x => x.id === picked)) return picked;
+    return (list.find(x => x.is_active) ?? list[0])?.id ?? "";
   }, [terms, picked]);
 
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
-          title="มุมมองผู้บริหาร"
-          description="งบพอไหม แต่ละวิชาขอ TA เหมาะสมไหม และงานค้างอยู่ขั้นไหน สรุปจากข้อมูลล่าสุดของระบบ"
+          title={t("มุมมองผู้บริหาร")}
+          description={t("งบพอไหม แต่ละวิชาขอ TA เหมาะสมไหม และงานค้างอยู่ขั้นไหน สรุปจากข้อมูลล่าสุดของระบบ")}
         />
         {(terms ?? []).length > 1 && (
-          <Select aria-label="เลือกปีการศึกษา" value={termId}
+          <Select aria-label={t("เลือกปีการศึกษา")} value={termId}
                   onChange={e => setPicked(e.target.value)}>
-            {(terms ?? []).map(t => (
-              <option key={t.id} value={t.id}>
-                {t.academic_year}/{t.semester}{t.is_active ? " (ปัจจุบัน)" : ""}
+            {(terms ?? []).map(term => (
+              <option key={term.id} value={term.id}>
+                {term.academic_year}/{term.semester}{term.is_active ? t(" (ปัจจุบัน)") : ""}
               </option>
             ))}
           </Select>

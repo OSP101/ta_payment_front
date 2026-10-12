@@ -5,6 +5,7 @@ import { allowedAudiences, canViewAudience, defaultHomeRoute } from "../../lib/d
 import { sidebarSections, toMeta } from "../../../content/docs/registry";
 import type { Audience } from "../../../content/docs/types";
 import DocsShell from "../../components/docs/DocsShell";
+import { getLocale } from "../../lib/i18n/server";
 
 const VALID: Audience[] = ["staff", "lecturer", "ta"];
 
@@ -38,14 +39,15 @@ export default async function AudienceLayout({
     redirect(`/login?next=${encodeURIComponent(back)}`);
   }
   if (!canViewAudience(me, audience)) redirect("/403");
+  const locale = await getLocale();
 
   return (
     <DocsShell
       audience={audience}
       allowedAudiences={allowedAudiences(me)}
-      sections={sidebarSections(audience).map(({ section, pages }) => ({
+      sections={sidebarSections(audience, locale).map(({ section, pages }) => ({
         section,
-        pages: pages.map((p) => toMeta(p, audience)),
+        pages: pages.map((p) => toMeta(p, audience, locale)),
       }))}
       homeHref={defaultHomeRoute(me)}
     >

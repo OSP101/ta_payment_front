@@ -20,6 +20,7 @@ import {
   DOC_KIND_LABEL, DOC_KIND_PRINT_ORDER, byPrintOrder, REJECT_PRESETS, OTHER_PRESET,
   type Pending, type Doc, type Profile,
 } from "./types";
+import { useI18n, type TFn } from "../../lib/i18n/client";
 
 /**
  * Full-screen review workspace — the layout the 24/07/2026 meeting asked for,
@@ -122,6 +123,7 @@ export function ReviewWorkspace({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [selected, setSelected] = useState<string | null>(initialUserId);
   const [sort, setSort] = useState<SortMode>("status");
 
@@ -196,7 +198,7 @@ export function ReviewWorkspace({
     <HModal>
       <HModal.Backdrop isOpen={open} onOpenChange={o => { if (!o) onClose(); }}>
         <HModal.Container size="full" scroll="inside">
-          <HModal.Dialog aria-label="ตรวจสอบแบบฟอร์มใบแจ้งหนี้">
+          <HModal.Dialog aria-label={t("ตรวจสอบแบบฟอร์มใบแจ้งหนี้")}>
             <div className="flex h-full min-h-0 flex-col">
               <WorkspaceHeader
                 current={current}
@@ -222,7 +224,7 @@ export function ReviewWorkspace({
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-sm text-muted">
-                      ไม่มีรายการให้ตรวจ
+                      {t("ไม่มีรายการให้ตรวจ")}
                     </div>
                   )}
                 </div>
@@ -246,17 +248,18 @@ function WorkspaceHeader({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--hairline)] px-4 py-2.5">
-      <span className="text-sm font-semibold">ตรวจสอบแบบฟอร์มใบแจ้งหนี้</span>
+      <span className="text-sm font-semibold">{t("ตรวจสอบแบบฟอร์มใบแจ้งหนี้")}</span>
       {current && <span className="hidden sm:inline-flex"><Chip tone="neutral">{current.full_name}</Chip></span>}
       <div className="ml-auto flex items-center gap-2">
         <DownloadAllButton approvedHere={approvedHere} />
         <SuppliersButton />
-        <Tip content="ปิด"><button
+        <Tip content={t("ปิด")}><button
           type="button"
           onClick={onClose}
-          aria-label="ปิด"
+          aria-label={t("ปิด")}
           className="rounded-lg p-1.5 text-muted hover:bg-surface-secondary hover:text-foreground"
         >
           <X size={18} />
@@ -279,11 +282,12 @@ function SubmitterRail({
   onSort: (s: SortMode) => void;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const STATUS_LABEL: Record<string, string> = {
-    submitted: "รอตรวจ",
-    needs_fix: "ส่งกลับให้แก้",
-    approved: "อนุมัติแล้ว",
-    rejected: "ไม่อนุมัติ",
+    submitted: t("รอตรวจ"),
+    needs_fix: t("ส่งกลับให้แก้"),
+    approved: t("อนุมัติแล้ว"),
+    rejected: t("ไม่อนุมัติ"),
   };
 
   // Group headers only make sense when sorting by status.
@@ -293,17 +297,17 @@ function SubmitterRail({
     <aside className="flex max-h-[35dvh] w-full shrink-0 flex-col border-b border-[var(--hairline)] md:max-h-none md:w-64 md:border-b-0 md:border-r lg:w-72">
       <div className="shrink-0 border-b border-[var(--hairline)] px-3 py-2.5">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <Users size={16} /> ผู้ส่งทั้งหมด
+          <Users size={16} /> {t("ผู้ส่งทั้งหมด")}
           <span className="ml-auto text-xs text-muted">{people.length}</span>
         </div>
         <div className="mt-2">
           <Select
             value={sort}
             onChange={e => onSort(e.target.value as SortMode)}
-            aria-label="เรียงลำดับ"
+            aria-label={t("เรียงลำดับ")}
           >
-            <option value="status">เรียงตามสถานะ</option>
-            <option value="name">เรียงตามชื่อ</option>
+            <option value="status">{t("เรียงตามสถานะ")}</option>
+            <option value="name">{t("เรียงตามชื่อ")}</option>
           </Select>
         </div>
       </div>
@@ -339,7 +343,7 @@ function SubmitterRail({
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-sm">{p.full_name}</span>
                     {arrivedIds.includes(p.user_id) && (
-                      <Chip tone="brand">ใหม่!</Chip>
+                      <Chip tone="brand">{t("ใหม่!")}</Chip>
                     )}
                   </span>
                   <span className="block truncate text-[11px] text-muted">{p.email}</span>
@@ -356,6 +360,7 @@ function SubmitterRail({
 
 /** Main pane — the selected person's documents, all previewed inline. */
 function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => void }) {
+  const { t } = useI18n();
   const key = `/ta-review/${person.user_id}/docs`;
   const { data, isLoading } = useSWR<DetailResp>(key);
 
@@ -374,8 +379,8 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
       <h2 className="text-xl font-semibold flex items-center gap-2">
         {person.full_name}
         {person.foreign && (
-          <Tip content="ตรวจเลข Passport และชื่อในแบบฟอร์มเจ้าหนี้กับสำเนา Passport">
-            <span className="inline-flex"><Chip tone="info">ต่างชาติ</Chip></span>
+          <Tip content={t("ตรวจเลข Passport และชื่อในแบบฟอร์มเจ้าหนี้กับสำเนา Passport")}>
+            <span className="inline-flex"><Chip tone="info">{t("ต่างชาติ")}</Chip></span>
           </Tip>
         )}
       </h2>
@@ -383,12 +388,12 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
         <span>{person.email}</span>
         <span>·</span>
         <span>
-          อนุมัติแล้ว {data ? approved : <SkelValue className="h-3.5 w-4" />}/{REQUIRED_KINDS.length} ไฟล์
+          {t.rich("อนุมัติแล้ว {done}/{total} ไฟล์", { done: data ? approved : <SkelValue className="h-3.5 w-4" />, total: REQUIRED_KINDS.length })}
         </span>
       </div>
 
       <p className="mt-2 text-xs italic text-muted">
-        เอกสารทุกหน้ามีลายน้ำระบุตัวเจ้าหน้าที่และเวลาที่เปิด
+        {t("เอกสารทุกหน้ามีลายน้ำระบุตัวเจ้าหน้าที่และเวลาที่เปิด")}
       </p>
 
       {/* Jumping between documents must not depend on the mouse wheel. Each
@@ -412,7 +417,7 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
                   : "border-[var(--hairline)] bg-surface hover:bg-surface-secondary")
               }
             >
-              {DOC_KIND_LABEL[d.kind] ?? d.kind}
+              {DOC_KIND_LABEL[d.kind] ? t(DOC_KIND_LABEL[d.kind]) : d.kind}
               {d.status === "approved" && " ✓"}
               {d.status === "rejected" && " ✕"}
             </button>
@@ -423,7 +428,7 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
       {isLoading ? (
         // Shaped like the DocPanel stack below: a header strip over a tall
         // preview area, one per required document.
-        <SkelRegion label="กำลังโหลดเอกสาร" className="mt-4 space-y-4">
+        <SkelRegion label={t("กำลังโหลดเอกสาร")} className="mt-4 space-y-4">
           {REQUIRED_KINDS.map(k => (
             <div key={k} className="overflow-hidden rounded-xl border border-[var(--hairline)] bg-surface">
               <div className="flex items-center gap-2 border-b border-[var(--hairline)] px-4 py-2.5">
@@ -436,7 +441,7 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
         </SkelRegion>
       ) : docs.length === 0 ? (
         <div className="py-16 text-center text-sm text-muted">
-          ยังไม่มีเอกสารที่ส่งเข้ามา
+          {t("ยังไม่มีเอกสารที่ส่งเข้ามา")}
         </div>
       ) : (
         <div className="mt-4 space-y-4">
@@ -462,9 +467,10 @@ function DocPanel({
   doc: Doc;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [rejecting, setRejecting] = useState(false);
-  const [preset, setPreset] = useState(REJECT_PRESETS[0]);
+  const [preset, setPreset] = useState<string>(REJECT_PRESETS[0]);
   const [other, setOther] = useState("");
 
   const reason = preset === OTHER_PRESET ? other.trim() : preset;
@@ -479,7 +485,7 @@ function DocPanel({
     setBusy(true);
     try {
       await api.post(`/ta-review/docs/${doc.id}`, { approve: true, reason: "" });
-      notify.success("อนุมัติเอกสารแล้ว");
+      notify.success(t("อนุมัติเอกสารแล้ว"));
       onChanged();
     } catch (e) {
       notify.error(e);
@@ -495,7 +501,7 @@ function DocPanel({
       await api.post(`/ta-review/${userId}/reject-batch`, {
         items: [{ doc_id: doc.id, reason }],
       });
-      notify.success("ตีกลับเอกสารเรียบร้อยแล้ว");
+      notify.success(t("ตีกลับเอกสารเรียบร้อยแล้ว"));
       setRejecting(false);
       onChanged();
     } catch (e) {
@@ -513,13 +519,13 @@ function DocPanel({
       <header className="flex flex-wrap items-center gap-2 border-b border-[var(--hairline)] px-4 py-2.5">
         <FileText size={15} className="text-muted" />
         <span className="text-sm font-medium">
-          {DOC_KIND_LABEL[doc.kind] ?? doc.kind}
+          {DOC_KIND_LABEL[doc.kind] ? t(DOC_KIND_LABEL[doc.kind]) : doc.kind}
         </span>
         <Tip content={doc.filename}>
           <span className="truncate text-xs text-muted">{doc.filename}</span>
         </Tip>
-        {doc.status === "approved" && <Chip tone="success">อนุมัติแล้ว</Chip>}
-        {doc.status === "rejected" && <Chip tone="danger">ตีกลับแล้ว</Chip>}
+        {doc.status === "approved" && <Chip tone="success">{t("อนุมัติแล้ว")}</Chip>}
+        {doc.status === "rejected" && <Chip tone="danger">{t("ตีกลับแล้ว")}</Chip>}
 
         {!decided && !deleted && (
           <div className="ml-auto flex items-center gap-2">
@@ -529,10 +535,10 @@ function DocPanel({
               isDisabled={busy}
               onPress={() => setRejecting(v => !v)}
             >
-              <X size={14} /> ตีกลับ
+              <X size={14} /> {t("ตีกลับ")}
             </Button>
             <Button size="sm" isDisabled={busy} onPress={approve}>
-              <Check size={14} /> อนุมัติ
+              <Check size={14} /> {t("อนุมัติ")}
             </Button>
           </div>
         )}
@@ -540,15 +546,15 @@ function DocPanel({
 
       {doc.status === "rejected" && doc.reject_reason && (
         <div className="border-b border-[var(--hairline)] bg-danger-soft/30 px-4 py-2 text-xs text-danger">
-          เหตุผล: {doc.reject_reason}
+          {t("เหตุผล: {reason}", { reason: doc.reject_reason })}
         </div>
       )}
 
       {rejecting && !decided && (
         <div className="space-y-2 border-b border-[var(--hairline)] bg-danger-soft/20 px-4 py-3">
-          <FieldGroup label="เหตุผลที่ตีกลับ">
+          <FieldGroup label={t("เหตุผลที่ตีกลับ")}>
             <Select value={preset} onChange={e => setPreset(e.target.value)}>
-              {REJECT_PRESETS.map(r => <option key={r} value={r}>{r}</option>)}
+              {REJECT_PRESETS.map(r => <option key={r} value={r}>{t(r)}</option>)}
             </Select>
           </FieldGroup>
           {preset === OTHER_PRESET && (
@@ -556,12 +562,12 @@ function DocPanel({
               value={other}
               onChange={e => setOther(e.target.value)}
               rows={2}
-              placeholder="ระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร"
+              placeholder={t("ระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร")}
             />
           )}
           <div className="flex justify-end gap-2">
             <Button variant="tertiary" size="sm" onPress={() => setRejecting(false)}>
-              ยกเลิก
+              {t("ยกเลิก")}
             </Button>
             <Button
               variant="danger"
@@ -569,7 +575,7 @@ function DocPanel({
               isDisabled={busy || reason.length === 0}
               onPress={reject}
             >
-              ยืนยันตีกลับ
+              {t("ยืนยันตีกลับ")}
             </Button>
           </div>
         </div>
@@ -580,7 +586,7 @@ function DocPanel({
       <div className="flex min-h-[62vh] items-center justify-center bg-slate-50">
         {deleted ? (
           <div className="flex items-center gap-2 p-8 text-sm text-muted">
-            <AlertTriangle size={16} /> ไฟล์ถูกลบตามนโยบายเก็บรักษา 7 วันแล้ว
+            <AlertTriangle size={16} /> {t("ไฟล์ถูกลบตามนโยบายเก็บรักษา 7 วันแล้ว")}
           </div>
         ) : isImage ? (
           // Images keep the capped height: object-contain already fits the
@@ -613,10 +619,10 @@ function DocPanel({
 // downloadAllReason explains why the button is enabled or locked. TipWrap is the
 // carrier, on the wrapper rather than the button, because a disabled button emits
 // no hover events of its own — the same arrangement LockedActionButton uses.
-function downloadAllReason(approvedCount: number): string {
+function downloadAllReason(approvedCount: number, t: TFn): string {
   return approvedCount === 0
-    ? "ยังไม่มีใครในรายชื่อนี้ที่อนุมัติเอกสารครบทุกไฟล์ ต้องอนุมัติอย่างน้อย 1 คนก่อน"
-    : `อนุมัติแล้ว ${approvedCount} คนในรอบนี้`;
+    ? t("ยังไม่มีใครในรายชื่อนี้ที่อนุมัติเอกสารครบทุกไฟล์ ต้องอนุมัติอย่างน้อย 1 คนก่อน")
+    : t("อนุมัติแล้ว {n} คนในรอบนี้", { n: approvedCount });
 }
 
 function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
@@ -625,6 +631,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
   // live before the officer had approved anything, stayed live in a session where
   // they approved nobody, AND produced a file containing TAs who were never on
   // the screen. The same list now gates the button and defines the contents.
+  const { t } = useI18n();
   const approvedCount = approvedHere.length;
 
   const [confirming, setConfirming] = useState(false);
@@ -644,12 +651,12 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
       window.location.assign(
         apiUrl(`/ta-review/download-all.zip?token=${encodeURIComponent(res.zip_token)}`),
       );
-      notify.success(`กำลังดาวน์โหลดเอกสารของ ${res.ta_count} คน…`);
+      notify.success(t("กำลังดาวน์โหลดเอกสารของ {n} คน…", { n: res.ta_count }));
       setConfirming(false);
     } catch (e) {
       // Inline, not a toast: focus is in the password field, and a toast at the
       // top of a full-screen modal is easy to miss.
-      setErr(e instanceof Error ? e.message : "ดาวน์โหลดไม่สำเร็จ");
+      setErr(e instanceof Error ? e.message : t("ดาวน์โหลดไม่สำเร็จ"));
     } finally {
       setBusy(false);
     }
@@ -662,44 +669,44 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
           download" error, and a button whose only outcome is an error should
           not be pressable. The tooltip carries the reason, because a disabled
           button with no explanation is the same dead end. */}
-      <TipWrap content={downloadAllReason(approvedCount)} className="inline-flex">
+      <TipWrap content={downloadAllReason(approvedCount, t)} className="inline-flex">
         <Button
           size="sm"
           isDisabled={approvedCount === 0}
           onPress={() => { setPassword(""); setErr(null); setConfirming(true); }}
         >
-          <Download size={14} /> ดาวน์โหลดเอกสารทั้งหมด
+          <Download size={14} /> {t("ดาวน์โหลดเอกสารทั้งหมด")}
         </Button>
       </TipWrap>
 
       <Modal
         open={confirming}
         onClose={() => { if (!busy) setConfirming(false); }}
-        title="ดาวน์โหลดเอกสารทั้งหมด"
+        title={t("ดาวน์โหลดเอกสารทั้งหมด")}
         icon={<Download size={18} />}
         size="sm"
         footer={
           <>
             <Button variant="ghost" onPress={() => setConfirming(false)} isDisabled={busy}>
-              ยกเลิก
+              {t("ยกเลิก")}
             </Button>
             <Button onPress={submit} isDisabled={busy || !password} isPending={busy}>
-              <Download size={14} /> ยืนยันและดาวน์โหลด
+              <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
-          {/* Name them. "ทุกคนที่อนุมัติแล้ว" was ambiguous enough to hide a bug —
+          {/* Name them. t("ทุกคนที่อนุมัติแล้ว") was ambiguous enough to hide a bug —
               the file was including people approved weeks earlier who were never
               on this screen, and nothing here would have shown that. A list the
               officer can check against the rail makes the contents verifiable
               before the download rather than after. */}
           <div>
             <p className="text-sm text-muted">
-              ระบบจะรวมเอกสารของ{" "}
-              <b className="text-foreground">{approvedCount} คนที่คุณอนุมัติในรอบนี้</b>{" "}
-              เป็น PDF เล่มเดียว เรียงตามรหัสนักศึกษา
+              {t.rich("ระบบจะรวมเอกสารของ {people} เป็น PDF เล่มเดียว เรียงตามรหัสนักศึกษา", {
+                people: <b className="text-foreground">{t("{n} คนที่คุณอนุมัติในรอบนี้", { n: approvedCount })}</b>,
+              })}
             </p>
             <ul className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-[var(--hairline)] divide-y divide-[var(--hairline)]">
               {approvedHere.map(p => (
@@ -715,10 +722,9 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
             <div className="flex items-start gap-2">
               <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
               <div className="space-y-1">
-                <p className="font-medium text-foreground">ไฟล์จะถูกลบอัตโนมัติภายใน 7 วัน</p>
+                <p className="font-medium text-foreground">{t("ไฟล์จะถูกลบอัตโนมัติภายใน 7 วัน")}</p>
                 <p className="text-xs text-muted">
-                  ตามนโยบายคุ้มครองข้อมูลส่วนบุคคล กรุณาบันทึกไฟล์เก็บไว้ในระบบของหน่วยงาน
-                  ก่อนถึงกำหนด
+                  {t("ตามนโยบายคุ้มครองข้อมูลส่วนบุคคล กรุณาบันทึกไฟล์เก็บไว้ในระบบของหน่วยงาน ก่อนถึงกำหนด")}
                 </p>
               </div>
             </div>
@@ -731,15 +737,14 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
             onChange={v => { setPassword(v); if (err) setErr(null); }}
             isInvalid={!!err}
           >
-            <Label>รหัสผ่านของคุณ</Label>
+            <Label>{t("รหัสผ่านของคุณ")}</Label>
             <InputGroup>
               <InputGroup.Input type="password" autoComplete="current-password" autoFocus />
             </InputGroup>
             {err && <FieldError>{err}</FieldError>}
           </TextField>
           <p className="text-xs text-muted">
-            ไฟล์นี้รวมข้อมูลส่วนบุคคลของหลายคนไว้ด้วยกัน จึงต้องยืนยันรหัสผ่านทุกครั้ง
-            และระบบบันทึกไว้ว่าใครดาวน์โหลด และมีใครอยู่ในไฟล์
+            {t("ไฟล์นี้รวมข้อมูลส่วนบุคคลของหลายคนไว้ด้วยกัน จึงต้องยืนยันรหัสผ่านทุกครั้ง และระบบบันทึกไว้ว่าใครดาวน์โหลด และมีใครอยู่ในไฟล์")}
           </p>
         </div>
       </Modal>

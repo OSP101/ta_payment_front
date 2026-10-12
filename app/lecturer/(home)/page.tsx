@@ -16,6 +16,7 @@ import {
 } from "../../components/ui";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 import { Skel, SkelCards } from "../../components/Skeletons";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 interface TC {
   id: string; code: string; alt_codes?: string[]; name_th: string;
@@ -70,13 +71,14 @@ interface TARequestRow {
 }
 
 const SEMESTER_LABELS: Record<number, string> = {
-  1: "ภาคต้น",
-  2: "ภาคปลาย",
-  3: "ภาคฤดูร้อน",
+  1: msg("ภาคต้น"),
+  2: msg("ภาคปลาย"),
+  3: msg("ภาคฤดูร้อน"),
 };
 
 export default function LecturerHome() {
   const router = useRouter();
+  const { t } = useI18n();
   const params = useSearchParams();
   const yearParam = params.get("year");
   const termParam = params.get("term");
@@ -98,7 +100,7 @@ export default function LecturerHome() {
     id: String(y),
     label: (
       <span className="inline-flex items-center gap-2">
-        <span className="tabular">ปีการศึกษา {y}</span>
+        <span className="tabular">{t("ปีการศึกษา {y}", { y })}</span>
         {list.some(t => t.is_active) && <Chip tone="success">active</Chip>}
       </span>
     ),
@@ -118,15 +120,15 @@ export default function LecturerHome() {
     return byYear.find(([yr]) => yr === y)?.[1] ?? [];
   }, [byYear, defaultYear]);
 
-  const termOptions: SelectOption[] = yearTerms.map(t => ({
-    id: t.id,
+  const termOptions: SelectOption[] = yearTerms.map(tm => ({
+    id: tm.id,
     label: (
       <span className="inline-flex items-center gap-2">
-        <span>{SEMESTER_LABELS[t.semester] ?? `ภาค ${t.semester}`}</span>
-        {t.is_active && <Chip tone="success">active</Chip>}
+        <span>{SEMESTER_LABELS[tm.semester] ? t(SEMESTER_LABELS[tm.semester]) : t("ภาค {n}", { n: tm.semester })}</span>
+        {tm.is_active && <Chip tone="success">active</Chip>}
       </span>
     ),
-    textValue: SEMESTER_LABELS[t.semester] ?? `ภาค ${t.semester}`,
+    textValue: SEMESTER_LABELS[tm.semester] ? t(SEMESTER_LABELS[tm.semester]) : t("ภาค {n}", { n: tm.semester }),
   }));
 
   const defaultTerm = useMemo(() => {
@@ -216,23 +218,23 @@ export default function LecturerHome() {
   const withTA = (courses ?? []).filter(c => (overviewById.get(c.id)?.ta_count ?? 0) > 0);
   const withoutTA = (courses ?? []).filter(c => (overviewById.get(c.id)?.ta_count ?? 0) === 0);
 
-  const pageDesc = "รายวิชาที่คุณรับผิดชอบ และสิ่งที่ต้องดำเนินการในภาคเรียนนี้";
+  const pageDesc = t("รายวิชาที่คุณรับผิดชอบ และสิ่งที่ต้องดำเนินการในภาคเรียนนี้");
 
   // Terms failed to load — show a real error (with retry) instead of the
   // misleading "ยังไม่มีภาคเรียน" empty state.
   if (termsError && terms === undefined) {
     return (
       <div>
-        <PageHeader title="หน้าหลักของฉัน" description={pageDesc} />
+        <PageHeader title={t("หน้าหลักของฉัน")} description={pageDesc} />
         <Panel>
           <Alert
             status="danger"
             icon={<CircleAlert size={16} />}
-            title="โหลดข้อมูลภาคเรียนไม่สำเร็จ"
-            description={(termsError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+            title={t("โหลดข้อมูลภาคเรียนไม่สำเร็จ")}
+            description={(termsError as Error).message || t("กรุณาลองใหม่อีกครั้ง")}
             action={
               <Button variant="secondary" size="sm" onPress={() => mutate("/terms")}>
-                ลองใหม่
+                {t("ลองใหม่")}
               </Button>
             }
           />
@@ -248,13 +250,13 @@ export default function LecturerHome() {
   return (
     <div>
       <PageHeader
-        title="หน้าหลักของฉัน"
+        title={t("หน้าหลักของฉัน")}
         description={pageDesc}
         actions={
           noTerms ? null : (
             <div data-tour="home-term" className="flex gap-2 items-end flex-wrap">
               <SelectField
-                label="ปีการศึกษา"
+                label={t("ปีการศึกษา")}
                 value={defaultYear}
                 onChange={setYear}
                 options={yearOptions}
@@ -262,7 +264,7 @@ export default function LecturerHome() {
                 className="min-w-[180px]"
               />
               <SelectField
-                label="ภาคเรียน"
+                label={t("ภาคเรียน")}
                 value={defaultTerm}
                 onChange={setTerm}
                 options={termOptions}
@@ -278,16 +280,16 @@ export default function LecturerHome() {
         <Panel>
           <EmptyState
             icon={<CalendarX2 size={28} />}
-            title="ยังไม่มีปีการศึกษา / ภาคเรียนในระบบ"
-            description="กรุณาแจ้งเจ้าหน้าที่เพื่อสร้างปีการศึกษาและภาคเรียนก่อน จึงจะแสดงรายวิชาที่คุณรับผิดชอบได้"
+            title={t("ยังไม่มีปีการศึกษา / ภาคเรียนในระบบ")}
+            description={t("กรุณาแจ้งเจ้าหน้าที่เพื่อสร้างปีการศึกษาและภาคเรียนก่อน จึงจะแสดงรายวิชาที่คุณรับผิดชอบได้")}
           />
         </Panel>
       ) : termsLoaded && yearTerms.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<CalendarClock size={28} />}
-            title="ไม่มีภาคเรียนในปีการศึกษานี้"
-            description="ลองเลือกปีการศึกษาอื่น หรือติดต่อเจ้าหน้าที่เพื่อเพิ่มภาคเรียน"
+            title={t("ไม่มีภาคเรียนในปีการศึกษานี้")}
+            description={t("ลองเลือกปีการศึกษาอื่น หรือติดต่อเจ้าหน้าที่เพื่อเพิ่มภาคเรียน")}
           />
         </Panel>
       ) : (
@@ -299,12 +301,12 @@ export default function LecturerHome() {
               <Alert
                 status="danger"
                 icon={<CircleAlert size={16} />}
-                title="โหลดรายวิชาไม่สำเร็จ"
-                description={(coursesError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+                title={t("โหลดรายวิชาไม่สำเร็จ")}
+                description={(coursesError as Error).message || t("กรุณาลองใหม่อีกครั้ง")}
                 action={
                   coursesKey && (
                     <Button variant="secondary" size="sm" onPress={() => mutate(coursesKey)}>
-                      ลองใหม่
+                      {t("ลองใหม่")}
                     </Button>
                   )
                 }
@@ -314,7 +316,7 @@ export default function LecturerHome() {
             <>
               <CollapsibleSection
                 id="announcements"
-                title="ประชาสัมพันธ์"
+                title={t("ประชาสัมพันธ์")}
                 // Same SWR key AnnouncementFeed uses, so this costs no extra
                 // request — it just lets the heading say how many there are and
                 // fold itself away while there are none.
@@ -325,7 +327,7 @@ export default function LecturerHome() {
                     href="/announcements"
                     className="text-xs font-medium text-muted underline underline-offset-2 hover:text-foreground"
                   >
-                    ดูทั้งหมด
+                    {t("ดูทั้งหมด")}
                   </Link>
                 }
               >
@@ -335,24 +337,24 @@ export default function LecturerHome() {
               </CollapsibleSection>
 
               {courses === undefined ? (
-                <CollapsibleSection id="all" title="รายวิชาในภาคเรียนนี้">
+                <CollapsibleSection id="all" title={t("รายวิชาในภาคเรียนนี้")}>
                   <Panel padded={false}>
                     <CardGridSkeleton />
                   </Panel>
                 </CollapsibleSection>
               ) : courses.length === 0 ? (
-                <CollapsibleSection id="all" title="รายวิชาในภาคเรียนนี้">
+                <CollapsibleSection id="all" title={t("รายวิชาในภาคเรียนนี้")}>
                   <Panel padded={false}>
                     <EmptyState
                       icon={<BookOpen size={28} />}
-                      title="ยังไม่มีวิชาในภาคเรียนนี้"
-                      description="ติดต่อเจ้าหน้าที่เพื่อเพิ่มวิชาที่คุณรับผิดชอบในภาคเรียนนี้"
+                      title={t("ยังไม่มีวิชาในภาคเรียนนี้")}
+                      description={t("ติดต่อเจ้าหน้าที่เพื่อเพิ่มวิชาที่คุณรับผิดชอบในภาคเรียนนี้")}
                     />
                   </Panel>
                 </CollapsibleSection>
               ) : !canSplit ? (
                 // Overview still in flight — same cards, just not yet grouped.
-                <CollapsibleSection id="all" title="รายวิชาในภาคเรียนนี้">
+                <CollapsibleSection id="all" title={t("รายวิชาในภาคเรียนนี้")}>
                   <CourseGrid
                     courses={courses}
                     overviewById={overviewById}
@@ -366,9 +368,9 @@ export default function LecturerHome() {
                   {withTA.length > 0 && (
                     <CollapsibleSection
                       id="with-ta"
-                      title="มี TA แล้ว"
+                      title={t("มี TA แล้ว")}
                       count={withTA.length}
-                      hint="คำขอผ่านแล้วและ TA เริ่มลงเวลาได้ งานหลักคืออนุมัติบันทึกเวลาให้ทัน"
+                      hint={t("คำขอผ่านแล้วและ TA เริ่มลงเวลาได้ งานหลักคืออนุมัติบันทึกเวลาให้ทัน")}
                     >
                       <CourseGrid
                         courses={withTA}
@@ -383,9 +385,9 @@ export default function LecturerHome() {
                   {withoutTA.length > 0 && (
                     <CollapsibleSection
                       id="without-ta"
-                      title="ยังไม่มี TA"
+                      title={t("ยังไม่มี TA")}
                       count={withoutTA.length}
-                      hint="วิชาที่ยังไม่มี TA ที่อนุมัติแล้ว ป้ายบนการ์ดบอกว่าส่งคำขอไปหรือยัง"
+                      hint={t("วิชาที่ยังไม่มี TA ที่อนุมัติแล้ว ป้ายบนการ์ดบอกว่าส่งคำขอไปหรือยัง")}
                     >
                       <CourseGrid
                         courses={withoutTA}
@@ -549,6 +551,7 @@ function AlertsSection({
   courses?: TC[];
   overviewById: Map<string, LecturerCourseStatus>;
 }) {
+  const { t } = useI18n();
   const list = courses ?? [];
   const wba = list.filter(c => c.has_missing_schedule);
   const makeups = list.filter(c => (c.unresolved_makeups ?? 0) > 0);
@@ -558,16 +561,16 @@ function AlertsSection({
 
   return (
     <>
-      <SectionHeading>ต้องดำเนินการ</SectionHeading>
+      <SectionHeading>{t("ต้องดำเนินการ")}</SectionHeading>
       <div data-tour="home-alerts" className="space-y-2">
         {wba.length > 0 && (
           <Alert
             status="danger"
             icon={<CalendarOff size={16} />}
-            title={`ยังไม่ระบุเวลาเรียน (WBA) ${wba.length} วิชา`}
+            title={t("ยังไม่ระบุเวลาเรียน (WBA) {n} วิชา", { n: wba.length })}
             description={
               <>
-                ต้องกรอกตารางเรียนในหน้า “ตั้งค่ารายวิชา” ก่อน จึงจะส่งคำขอ TA ได้
+                {t("ต้องกรอกตารางเรียนในหน้า “ตั้งค่ารายวิชา” ก่อน จึงจะส่งคำขอ TA ได้")}
                 <CourseLinks
                   items={wba.map(c => ({
                     id: c.id,
@@ -583,16 +586,15 @@ function AlertsSection({
           <Alert
             status="danger"
             icon={<CalendarOff size={16} />}
-            title="ต้องกำหนดวันชดเชย"
+            title={t("ต้องกำหนดวันชดเชย")}
             description={
               <>
-                มีคาบที่ตรงกับวันหยุดและยังไม่ได้กำหนดวันชดเชย ถ้าไม่ทำ ระบบจะข้ามวันนั้น
-                และ TA จะลงเวลาและเบิกค่าตอบแทนของวันนั้นไม่ได้
+                {t("มีคาบที่ตรงกับวันหยุดและยังไม่ได้กำหนดวันชดเชย ถ้าไม่ทำ ระบบจะข้ามวันนั้น และ TA จะลงเวลาและเบิกค่าตอบแทนของวันนั้นไม่ได้")}
                 <CourseLinks
                   items={makeups.map(c => ({
                     id: c.id,
                     href: `/lecturer/courses/${c.id}/holidays`,
-                    label: `${c.code} ค้าง ${c.unresolved_makeups} คาบ`,
+                    label: t("{code} ค้าง {n} คาบ", { code: c.code, n: c.unresolved_makeups }),
                   }))}
                 />
               </>
@@ -603,17 +605,17 @@ function AlertsSection({
           <Alert
             status="warning"
             icon={<ClipboardCheck size={16} />}
-            title={`มีบันทึกเวลาของ TA รออนุมัติ ${toApprove.length} วิชา`}
+            title={t("มีบันทึกเวลาของ TA รออนุมัติ {n} วิชา", { n: toApprove.length })}
             description={
               <>
-                เจ้าหน้าที่ตรวจและส่งเบิกต่อไม่ได้จนกว่าคุณจะอนุมัติ
+                {t("เจ้าหน้าที่ตรวจและส่งเบิกต่อไม่ได้จนกว่าคุณจะอนุมัติ")}
                 <CourseLinks
                   items={toApprove.map(c => {
                     const ov = overviewById.get(c.id)!;
                     return {
                       id: c.id,
                       href: `/lecturer/courses/${c.id}/reports`,
-                      label: `${c.code} ${ov.ta_pending_count} คน (${hoursSplitText(ov.hours_pending_regular, ov.hours_pending_special)})`,
+                      label: t("{code} {n} คน ({hours})", { code: c.code, n: ov.ta_pending_count, hours: hoursSplitText(ov.hours_pending_regular, ov.hours_pending_special) }),
                     };
                   })}
                 />
@@ -678,13 +680,13 @@ function CourseGrid({
 /** What a course with no approved TA is actually waiting on. */
 function requestBadge(r?: TARequestRow): { label: string; tone: ChipTone } {
   switch (r?.status) {
-    case "submitted": return { label: "ส่งคำขอแล้ว · รอเจ้าหน้าที่", tone: "info" };
-    case "rejected":  return { label: "คำขอถูกปฏิเสธ", tone: "danger" };
-    case "cancelled": return { label: "คำขอถูกยกเลิก", tone: "neutral" };
-    case "draft":     return { label: "ฉบับร่าง ยังไม่ได้ส่ง", tone: "warn" };
+    case "submitted": return { label: msg("ส่งคำขอแล้ว · รอเจ้าหน้าที่"), tone: "info" };
+    case "rejected":  return { label: msg("คำขอถูกปฏิเสธ"), tone: "danger" };
+    case "cancelled": return { label: msg("คำขอถูกยกเลิก"), tone: "neutral" };
+    case "draft":     return { label: msg("ฉบับร่าง ยังไม่ได้ส่ง"), tone: "warn" };
     // 'approved' with no assignment left, and no request at all, land here: in
     // both cases what the lecturer has to do next is send one.
-    default:          return { label: "ยังไม่ได้ส่งคำขอ TA", tone: "warn" };
+    default:          return { label: msg("ยังไม่ได้ส่งคำขอ TA"), tone: "warn" };
   }
 }
 
@@ -700,6 +702,7 @@ function CourseCard({
   ov?: LecturerCourseStatus;
   request?: TARequestRow;
 }) {
+  const { t, intl } = useI18n();
   const hasTA = (ov?.ta_count ?? 0) > 0;
   const hasBudget = !!ov && ov.budget_max > 0;
   const pctRaw = hasBudget ? (ov!.budget_used / ov!.budget_max) * 100 : 0;
@@ -738,12 +741,12 @@ function CourseCard({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-        <span>นักศึกษา {c.num_students} คน</span>
-        {c.num_students_regular > 0 && <span>· ปกติ {c.num_students_regular}</span>}
-        {c.num_students_special > 0 && <span>· พิเศษ {c.num_students_special}</span>}
+        <span>{t("นักศึกษา {n} คน", { n: c.num_students })}</span>
+        {c.num_students_regular > 0 && <span>· {t("ปกติ {n}", { n: c.num_students_regular })}</span>}
+        {c.num_students_special > 0 && <span>· {t("พิเศษ {n}", { n: c.num_students_special })}</span>}
         {(ov?.recommended_tas ?? 0) > 0 && (
-          <Tip content={`ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน ไม่ควรเกิน ${ov!.ceiling_tas} คน`}><span>
-            · แนะนำ TA {ov!.recommended_tas} คน
+          <Tip content={t("ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน ไม่ควรเกิน {n} คน", { n: ov!.ceiling_tas })}><span>
+            · {t("แนะนำ TA {n} คน", { n: ov!.recommended_tas })}
           </span></Tip>
         )}
       </div>
@@ -756,21 +759,21 @@ function CourseCard({
         ) : hasTA ? (
           <>
             <span className="inline-flex items-center gap-1 font-medium text-foreground">
-              <Users size={12} /> TA {ov!.ta_count} คน
+              <Users size={12} /> {t("TA {n} คน", { n: ov!.ta_count })}
             </span>
             {(ov!.ceiling_tas ?? 0) > 0 && ov!.ta_count > ov!.ceiling_tas! ? (
-              <span className="rounded bg-danger-soft px-1.5 text-[10.5px] text-danger-soft-foreground">เกินเพดานต่อนักศึกษา</span>
+              <span className="rounded bg-danger-soft px-1.5 text-[10.5px] text-danger-soft-foreground">{t("เกินเพดานต่อนักศึกษา")}</span>
             ) : (ov!.recommended_tas ?? 0) > 0 && ov!.ta_count > ov!.recommended_tas! ? (
-              <span className="rounded bg-warning-soft px-1.5 text-[10.5px] text-warning-soft-foreground">มากกว่าที่แนะนำ {ov!.ta_count - ov!.recommended_tas!} คน</span>
+              <span className="rounded bg-warning-soft px-1.5 text-[10.5px] text-warning-soft-foreground">{t("มากกว่าที่แนะนำ {n} คน", { n: ov!.ta_count - ov!.recommended_tas! })}</span>
             ) : null}
-            <span className="text-muted">· อนุมัติแล้ว {hoursSplitText(ov!.hours_approved_regular, ov!.hours_approved_special)}</span>
+            <span className="text-muted">· {t("อนุมัติแล้ว {hours}", { hours: hoursSplitText(ov!.hours_approved_regular, ov!.hours_approved_special) })}</span>
             {ov!.hours_pending_approval > 0 && (
-              <span className="text-muted">· รอตรวจ {hoursSplitText(ov!.hours_pending_regular, ov!.hours_pending_special)}</span>
+              <span className="text-muted">· {t("รอตรวจ {hours}", { hours: hoursSplitText(ov!.hours_pending_regular, ov!.hours_pending_special) })}</span>
             )}
           </>
         ) : (
           <span className="inline-flex items-center gap-1 text-muted">
-            <UserPlus size={12} /> ยังไม่มี TA ในวิชานี้
+            <UserPlus size={12} /> {t("ยังไม่มี TA ในวิชานี้")}
           </span>
         )}
       </div>
@@ -791,10 +794,10 @@ function CourseCard({
           <>
             <div className="mb-1 flex items-center justify-between text-[11px]">
               <span className="inline-flex items-center gap-1 text-muted">
-                <Wallet size={11} /> ใช้งบโดยประมาณ
+                <Wallet size={11} /> {t("ใช้งบโดยประมาณ")}
               </span>
               <span className={`tabular font-medium ${barText}`}>
-                {over ? `เกิน ${pct - 100}%` : `${pct}%`}
+                {over ? t("เกิน {pct}%", { pct: pct - 100 }) : `${pct}%`}
               </span>
             </div>
             {/* Segmented by pool instead of one flat fill — the % and the
@@ -802,13 +805,13 @@ function CourseCard({
                 bar itself now also answers "okay using which pool's money?" */}
             <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
               {ov!.budget_used_regular > 0.5 && (
-                <Tip content={`ภาคปกติ ${Math.round(ov!.budget_used_regular).toLocaleString("th-TH")} บ.`}><div
+                <Tip content={t("ภาคปกติ {amount} บ.", { amount: Math.round(ov!.budget_used_regular).toLocaleString(intl) })}><div
                   className={TRACK_BAR_COLOR.regular}
                   style={{ width: `${Math.min(100, (ov!.budget_used_regular / ov!.budget_max) * 100)}%` }}
                 /></Tip>
               )}
               {ov!.budget_used_special > 0.5 && (
-                <Tip content={`ภาคพิเศษ ${Math.round(ov!.budget_used_special).toLocaleString("th-TH")} บ.`}><div
+                <Tip content={t("ภาคพิเศษ {amount} บ.", { amount: Math.round(ov!.budget_used_special).toLocaleString(intl) })}><div
                   className={TRACK_BAR_COLOR.special}
                   style={{ width: `${Math.min(100, (ov!.budget_used_special / ov!.budget_max) * 100)}%` }}
                 /></Tip>
@@ -818,7 +821,7 @@ function CourseCard({
         ) : (
           <div className="text-[11px] text-muted">
             <span className="inline-flex items-center gap-1">
-              <Wallet size={11} /> รอเจ้าหน้าที่กรอกจำนวนนักศึกษา จึงจะคำนวณงบได้
+              <Wallet size={11} /> {t("รอเจ้าหน้าที่กรอกจำนวนนักศึกษา จึงจะคำนวณงบได้")}
             </span>
           </div>
         )}
@@ -828,14 +831,14 @@ function CourseCard({
         {c.has_missing_schedule && (
           <Chip tone="danger">
             <span className="inline-flex items-center gap-1">
-              <CalendarOff size={12} /> ยังไม่ระบุเวลาเรียน
+              <CalendarOff size={12} /> {t("ยังไม่ระบุเวลาเรียน")}
             </span>
           </Chip>
         )}
         {!!c.unresolved_makeups && c.unresolved_makeups > 0 && (
           <Chip tone="danger">
             <span className="inline-flex items-center gap-1">
-              <CalendarOff size={12} /> ต้องกำหนดวันชดเชย {c.unresolved_makeups} คาบ
+              <CalendarOff size={12} /> {t("ต้องกำหนดวันชดเชย {n} คาบ", { n: c.unresolved_makeups })}
             </span>
           </Chip>
         )}
@@ -845,20 +848,20 @@ function CourseCard({
           pendingPeople > 0 ? (
             <Chip tone="warn">
               <span className="inline-flex items-center gap-1">
-                <ClipboardCheck size={12} /> รออนุมัติ {pendingPeople} คน
+                <ClipboardCheck size={12} /> {t("รออนุมัติ {n} คน", { n: pendingPeople })}
               </span>
             </Chip>
           ) : (
             <Chip tone="success">
               <span className="inline-flex items-center gap-1">
-                <ClipboardCheck size={12} /> อนุมัติครบแล้ว
+                <ClipboardCheck size={12} /> {t("อนุมัติครบแล้ว")}
               </span>
             </Chip>
           )
         ) : (
           <Chip tone={requestBadge(request).tone}>
             <span className="inline-flex items-center gap-1">
-              <Send size={12} /> {requestBadge(request).label}
+              <Send size={12} /> {t(requestBadge(request).label)}
             </span>
           </Chip>
         )}

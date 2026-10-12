@@ -1,5 +1,7 @@
 "use client";
 import { Tip } from "./ui";
+import { useI18n } from "../lib/i18n/client";
+import { monthName as coreMonthName } from "../lib/i18n/core";
 /**
  * Shared vocabulary for the fiscal-year month split (10/08/2026).
  *
@@ -49,9 +51,6 @@ export const monthsQuery = (months: string[], prefix = "?") =>
 export const monthLabels = (all: TermMonth[], yms: string[]) =>
   yms.map(ym => all.find(m => m.year_month === ym)?.label ?? ym);
 
-const MONTH_TH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-
 /**
  * Names a fiscal round by the span it covers — "มิ.ย.–ก.ย.", or "ต.ค." when the
  * round is a single month.
@@ -62,9 +61,17 @@ const MONTH_TH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "�
  * everything. Lives beside the split it describes so the several screens that
  * now speak about rounds cannot drift on how a round is named.
  */
-export function roundRangeLabel(yms: string[]): string {
+export function roundRangeLabel(
+  yms: string[],
+  /** Short month name, 1-based — pass useI18n().monthName so the label
+   *  follows the reader's language. Defaults to Thai. */
+  monthName: (m: number) => string = m => coreMonthName("th", m),
+): string {
   if (!yms.length) return "";
-  const name = (ym: string) => MONTH_TH_SHORT[Number(ym.split("-")[1]) - 1] ?? ym;
+  const name = (ym: string) => {
+    const m = Number(ym.split("-")[1]);
+    return m >= 1 && m <= 12 ? monthName(m) : ym;
+  };
   const first = name(yms[0]);
   const last = name(yms[yms.length - 1]);
   return first === last ? first : `${first}–${last}`;
@@ -97,6 +104,7 @@ export function MonthChips({
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
+  const { t } = useI18n();
   function toggle(ym: string) {
     onChange(selected.includes(ym) ? selected.filter(m => m !== ym) : [...selected, ym]);
   }
@@ -109,7 +117,7 @@ export function MonthChips({
         // it would only be refused on press, which is a worse way to find out.
         const blocked = m.ready === false;
         return (
-          <Tip key={m.year_month} content={blocked ? "ยังอนุมัติ/ส่งออกใบเบิกจ่ายไม่ครบ จึงยังออกเอกสารเดือนนี้ไม่ได้" : undefined}><button
+          <Tip key={m.year_month} content={blocked ? t("ยังอนุมัติ/ส่งออกใบเบิกจ่ายไม่ครบ จึงยังออกเอกสารเดือนนี้ไม่ได้") : undefined}><button
             type="button"
             disabled={blocked}
             onClick={() => toggle(m.year_month)}
@@ -123,11 +131,11 @@ export function MonthChips({
                   : "border-border text-ink-2 hover:border-accent")
             }
           >
-            {m.label}
-            {blocked && <span className="text-[10px] text-ink-4">ยังไม่พร้อม</span>}
+            {m.label /* month label from the API */}
+            {blocked && <span className="text-[10px] text-ink-4">{t("ยังไม่พร้อม")}</span>}
             {/* An already-issued month is not forbidden — reissuing to correct a
                 file is normal — but it must never be picked by accident. */}
-            {m.issued && <span className="text-[10px] text-ink-4">ออกแล้ว</span>}
+            {m.issued && <span className="text-[10px] text-ink-4">{t("ออกแล้ว")}</span>}
           </button></Tip>
         );
       })}

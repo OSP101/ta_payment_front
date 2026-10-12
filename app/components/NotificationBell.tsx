@@ -10,6 +10,7 @@ import { isSameOrigin, sameOriginPath } from "../lib/safePath";
 import { IconButton } from "./ui";
 import { Skel, SkelRegion } from "./Skeletons";
 import useUnreadCount from "../lib/useUnreadCount";
+import { useI18n } from "../lib/i18n/client";
 
 interface Notif {
   id: string;
@@ -29,6 +30,7 @@ export default function NotificationBell({
   seeAllHref?: string;
 }) {
   const router = useRouter();
+  const { t, intl } = useI18n();
   const { data, error } = useSWR<Notif[]>("/me/notifications?limit=10");
   const list = data ?? [];
 
@@ -49,7 +51,7 @@ export default function NotificationBell({
     try {
       await api.post(`/me/notifications/read-all`);
       mutate((k) => typeof k === "string" && k.startsWith("/me/notifications"));
-      notify.success("ทำเครื่องหมายอ่านทั้งหมดแล้ว");
+      notify.success(t("ทำเครื่องหมายอ่านทั้งหมดแล้ว"));
     } catch (e) {
       notify.error(e);
     }
@@ -60,7 +62,7 @@ export default function NotificationBell({
       <IconButton
         variant="ghost"
         size="sm"
-        label={show ? `การเตือน ${unreadCount} รายการ` : "การเตือน"}
+        label={show ? t("การเตือน {n} รายการ", { n: unreadCount }) : t("การเตือน")}
         className="relative"
       >
         {show ? <BellRing size={18} /> : <Bell size={18} />}
@@ -76,7 +78,7 @@ export default function NotificationBell({
 
       <Dropdown.Popover className="w-[calc(100vw-1.5rem)] max-w-[380px] sm:w-auto sm:min-w-[320px]">
         <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
-          <div className="text-sm font-semibold text-foreground">การเตือน</div>
+          <div className="text-sm font-semibold text-foreground">{t("การเตือน")}</div>
           <div className="flex items-center gap-1">
             {show && (
               <button
@@ -84,11 +86,11 @@ export default function NotificationBell({
                 onClick={markAll}
                 className="text-xs text-accent hover:underline inline-flex items-center gap-1"
               >
-                <Check size={11} /> อ่านทั้งหมด
+                <Check size={11} /> {t("อ่านทั้งหมด")}
               </button>
             )}
             <Link href={seeAllHref} className="text-xs text-accent hover:underline ms-2">
-              ดูทั้งหมด
+              {t("ดูทั้งหมด")}
             </Link>
           </div>
         </div>
@@ -109,7 +111,7 @@ export default function NotificationBell({
               ))}
             </SkelRegion>
           ) : list.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-muted">ยังไม่มีการเตือน</div>
+            <div className="px-3 py-6 text-center text-xs text-muted">{t("ยังไม่มีการเตือน")}</div>
           ) : (
             list.map(n => (
               <button
@@ -141,7 +143,7 @@ export default function NotificationBell({
                     </div>
                     <div className="text-xs text-muted mt-0.5 line-clamp-2">{n.body}</div>
                     <div className="text-[10px] text-muted mt-1">
-                      {new Date(n.created_at).toLocaleString("th-TH", {
+                      {new Date(n.created_at).toLocaleString(intl, {
                         day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
                       })}
                     </div>

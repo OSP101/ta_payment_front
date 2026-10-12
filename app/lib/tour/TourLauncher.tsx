@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { GraduationCap } from "lucide-react";
 import { startTour, type TourStep } from "./engine";
 import { Tip } from "../../components/ui";
+import { useI18n } from "../i18n/client";
 
 export type TourDef = {
   /** Unique key — also used for the "seen" flag in localStorage. */
@@ -35,6 +36,7 @@ export default function TourLauncher({
   /** Override to keep pre-existing "seen" flags valid (staff shipped first). */
   seenPrefix?: string;
 }) {
+  const { t } = useI18n();
   const pathname = usePathname();
   const tour = tours.find((t) => t.match(pathname ?? ""));
   const [unseen, setUnseen] = useState(false);
@@ -75,7 +77,7 @@ export default function TourLauncher({
   if (!tour) return null;
 
   return (
-    <Tip content="ดูคำแนะนำการใช้งานของหน้านี้"><button
+    <Tip content={t("ดูคำแนะนำการใช้งานของหน้านี้")}><button
       type="button"
       data-tour="tour-button"
       onClick={launch}
@@ -85,7 +87,7 @@ export default function TourLauncher({
       className="relative hidden h-9 shrink-0 items-center gap-1.5 rounded-lg border border-(--border) bg-(--panel-bg) px-2.5 text-sm font-medium text-(--ink-2) transition-colors hover:bg-(--sidebar-hover) hover:text-(--ink-1) sm:inline-flex"
     >
       <GraduationCap size={16} />
-      <span className="hidden lg:inline">สอนการใช้งาน</span>
+      <span className="hidden lg:inline">{t("สอนการใช้งาน")}</span>
       {unseen && (
         <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--brand) opacity-60" />

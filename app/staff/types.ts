@@ -1,3 +1,4 @@
+import { msg } from "../lib/i18n/core";
 /** GET /dashboard/executive — the staff/admin summary for one term.
  *
  * Shared between the dashboard page and StaffShell: the sidebar badges and the
@@ -188,14 +189,15 @@ export interface DocStatusCounts {
 
 /** Must say the same words as the backend's CurriculumTH (analytics xlsx). */
 export const CURRICULUM_TH: Record<string, string> = {
-  CS: "วิทยาการคอมพิวเตอร์",
-  IT: "เทคโนโลยีสารสนเทศ",
-  GIS: "ภูมิสารสนเทศศาสตร์",
-  AI: "ปัญญาประดิษฐ์",
-  CY: "ความมั่นคงปลอดภัยไซเบอร์",
-  OTHER: "คณะอื่น ๆ",
+  CS: msg("วิทยาการคอมพิวเตอร์"),
+  IT: msg("เทคโนโลยีสารสนเทศ"),
+  GIS: msg("ภูมิสารสนเทศศาสตร์"),
+  AI: msg("ปัญญาประดิษฐ์"),
+  CY: msg("ความมั่นคงปลอดภัยไซเบอร์"),
+  OTHER: msg("คณะอื่น ๆ"),
 };
-export const curriculumTH = (code: string) => CURRICULUM_TH[code] ?? "ยังไม่ระบุ";
+// Returns a Thai key (msg); callers translate with t(curriculumTH(code)).
+export const curriculumTH = (code: string) => CURRICULUM_TH[code] ?? msg("ยังไม่ระบุ");
 
 export const emptyExecutive: Executive = {
   term_id: null,

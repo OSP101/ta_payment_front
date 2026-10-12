@@ -11,6 +11,7 @@ import {
   SubmissionTimeline,
   type SubmissionTimelineData,
 } from "./SubmissionTimeline";
+import { msg, useI18n, type TFn } from "../lib/i18n/client";
 
 // One (TA × period) row on the course-level submission-timeline endpoint.
 type Row = SubmissionTimelineData;
@@ -18,10 +19,10 @@ type Row = SubmissionTimelineData;
 type ActionKind = "finance-send";
 
 const STATUS_LABEL: Record<Row["status"], string> = {
-  pending:      "รอดำเนินการ",
-  exported:     "ส่งออกแล้ว รอส่งการเงิน",
-  finance_sent: "ส่งการเงินแล้ว",
-  skipped:      "ข้าม",
+  pending:      msg("รอดำเนินการ"),
+  exported:     msg("ส่งออกแล้ว รอส่งการเงิน"),
+  finance_sent: msg("ส่งการเงินแล้ว"),
+  skipped:      msg("ข้าม"),
 };
 type Tone = "brand" | "warn" | "success" | "neutral" | "info";
 const STATUS_TONE: Record<Row["status"], Tone> = {
@@ -34,15 +35,15 @@ const STATUS_TONE: Record<Row["status"], Tone> = {
 // statusBadge folds the daily-approval readiness into the pending status so the
 // staff/lecturer view shows "รอเจ้าหน้าที่ส่งออก" vs "รออาจารย์อนุมัติงาน"
 // without expanding the row.
-function statusBadge(row: Row): { label: string; tone: Tone } {
+function statusBadge(row: Row, t: TFn): { label: string; tone: Tone } {
   if (row.status !== "pending") {
-    return { label: STATUS_LABEL[row.status], tone: STATUS_TONE[row.status] };
+    return { label: t(STATUS_LABEL[row.status]), tone: STATUS_TONE[row.status] };
   }
   const total = row.worklog_total ?? 0;
   const unapproved = row.worklog_unapproved ?? 0;
-  if (total === 0)      return { label: "ไม่มีรายการเดือนนี้", tone: "neutral" };
-  if (unapproved > 0)   return { label: `รออาจารย์อนุมัติงาน ${unapproved} รายการ`, tone: "warn" };
-  return { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
+  if (total === 0)      return { label: t("ไม่มีรายการเดือนนี้"), tone: "neutral" };
+  if (unapproved > 0)   return { label: t("รออาจารย์อนุมัติงาน {n} รายการ", { n: unapproved }), tone: "warn" };
+  return { label: t("รอเจ้าหน้าที่ส่งออก"), tone: "info" };
 }
 
 // Which action a viewer can take on a row. There are no signatures anymore:
@@ -54,7 +55,7 @@ function nextActionFor(
   role: "lecturer" | "staff",
 ): { kind: ActionKind; label: string } | null {
   if (row.status === "exported" && role === "staff") {
-    return { kind: "finance-send", label: "ส่งการเงิน" };
+    return { kind: "finance-send", label: msg("ส่งการเงิน") };
   }
   return null;
 }
@@ -69,7 +70,7 @@ function sendBackTargetFor(row: Row, role: "lecturer" | "staff"): Row["status"] 
 export function CourseSubmissionPanel({
   tcId,
   role,
-  title = "สถานะเบิกจ่ายรายเดือน",
+  title: titleKey = msg("สถานะเบิกจ่ายรายเดือน"),
   onDataChange,
 }: {
   tcId: string;
@@ -80,6 +81,9 @@ export function CourseSubmissionPanel({
   // preview). Send-back unlocks a month; without this those views stay stale.
   onDataChange?: () => void;
 }) {
+  const { t } = useI18n();
+  // Callers may pass a Thai key or an already-translated title; t() is safe on both.
+  const title = t(titleKey);
   const key = `/teaching-courses/${tcId}/submission-timeline`;
   const { data, error, isLoading } = useSWR<Row[]>(key);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -113,7 +117,7 @@ export function CourseSubmissionPanel({
     try {
       const path = `/submission-periods/${row.period_id}/courses/${tcId}/tas/${row.ta_id}/${kind}`;
       await api.post(path, { comment });
-      notify.success(`ส่งการเงินของ ${row.ta_name ?? "ผู้ช่วยสอน"} แล้ว`);
+      notify.success(t("ส่งการเงินของ {name} แล้ว", { name: row.ta_name ?? t("ผู้ช่วยสอน") }));
       setCommentDraft(x => ({ ...x, [k]: "" }));
       await mutate(key);
       onDataChange?.();
@@ -128,14 +132,14 @@ export function CourseSubmissionPanel({
     const k = rowKey(row);
     const reason = (sendBackDraft[k] ?? "").trim();
     if (!reason) {
-      notify.error("ต้องระบุเหตุผลการตีกลับ");
+      notify.error(t("ต้องระบุเหตุผลการตีกลับ"));
       return;
     }
     setPendingKey(k);
     try {
       const path = `/submission-periods/${row.period_id}/courses/${tcId}/tas/${row.ta_id}/send-back`;
       await api.post(path, { to_status: toStatus, reason });
-      notify.success(`ตีกลับของ ${row.ta_name ?? "ผู้ช่วยสอน"} แล้ว`);
+      notify.success(t("ตีกลับของ {name} แล้ว", { name: row.ta_name ?? t("ผู้ช่วยสอน") }));
       setSendBackDraft(x => ({ ...x, [k]: "" }));
       setSendBackOpen(x => ({ ...x, [k]: false }));
       await mutate(key);
@@ -150,7 +154,7 @@ export function CourseSubmissionPanel({
   if (error) {
     return (
       <Panel title={title}>
-        <div className="text-sm text-danger py-4">โหลดสถานะไม่สำเร็จ</div>
+        <div className="text-sm text-danger py-4">{t("โหลดสถานะไม่สำเร็จ")}</div>
       </Panel>
     );
   }
@@ -172,7 +176,7 @@ export function CourseSubmissionPanel({
   }
   if (data.length === 0) {
     return (
-      <Panel title={title} description="ยังไม่มีรอบเบิกจ่ายในเทอมนี้ (หรือยังไม่มี TA ที่อนุมัติแล้ว)">
+      <Panel title={title} description={t("ยังไม่มีรอบเบิกจ่ายในเทอมนี้ (หรือยังไม่มี TA ที่อนุมัติแล้ว)")}>
         <div />
       </Panel>
     );
@@ -192,8 +196,8 @@ export function CourseSubmissionPanel({
                   <Tip content={g.taName}>
                     <span tabIndex={-1} className="font-medium text-ink-1 truncate">{g.taName}</span>
                   </Tip>
-                  <Chip tone="neutral">{g.rows.length} งวด</Chip>
-                  {actionable > 0 && <Chip tone="warn">{actionable} รอดำเนินการ</Chip>}
+                  <Chip tone="neutral">{t("{n} งวด", { n: g.rows.length })}</Chip>
+                  {actionable > 0 && <Chip tone="warn">{t("{n} รอดำเนินการ", { n: actionable })}</Chip>}
                   <Accordion.Indicator className="ml-auto" />
                 </Accordion.Trigger>
               </Accordion.Heading>
@@ -204,9 +208,9 @@ export function CourseSubmissionPanel({
                       <thead className="bg-slate-50 text-ink-2">
                         <tr>
                           <th className="w-8 px-2 py-2"></th>
-                          <th className="text-left px-3 py-2">งวด</th>
-                          <th className="text-left px-3 py-2">สถานะ</th>
-                          <th className="text-right px-3 py-2 pr-4">การดำเนินการ</th>
+                          <th className="text-left px-3 py-2">{t("งวด")}</th>
+                          <th className="text-left px-3 py-2">{t("สถานะ")}</th>
+                          <th className="text-right px-3 py-2 pr-4">{t("การดำเนินการ")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -222,7 +226,7 @@ export function CourseSubmissionPanel({
                                 <td className="px-2 py-2">
                                   <button
                                     type="button"
-                                    aria-label={isOpen ? "ซ่อนขั้นตอน" : "ดูขั้นตอน"}
+                                    aria-label={isOpen ? t("ซ่อนขั้นตอน") : t("ดูขั้นตอน")}
                                     onClick={() => setExpanded(x => ({ ...x, [k]: !x[k] }))}
                                     className="p-1 text-ink-2 hover:text-ink-1"
                                   >
@@ -232,7 +236,7 @@ export function CourseSubmissionPanel({
                                 <td className="px-3 py-2">{row.period_label}</td>
                                 <td className="px-3 py-2">
                                   {(() => {
-                                    const b = statusBadge(row);
+                                    const b = statusBadge(row, t);
                                     return <Chip tone={b.tone}>{b.label}</Chip>;
                                   })()}
                                 </td>
@@ -248,7 +252,7 @@ export function CourseSubmissionPanel({
                                         }}
                                         disabled={busy}
                                       >
-                                        <Undo2 size={12} /> ตีกลับ
+                                        <Undo2 size={12} /> {t("ตีกลับ")}
                                       </Button>
                                     )}
                                     {nextAction && (
@@ -258,7 +262,7 @@ export function CourseSubmissionPanel({
                                         onClick={() => setExpanded(x => ({ ...x, [k]: true }))}
                                         disabled={busy}
                                       >
-                                        <Send size={12} /> {nextAction.label}
+                                        <Send size={12} /> {t(nextAction.label)}
                                       </Button>
                                     )}
                                   </div>
@@ -268,14 +272,14 @@ export function CourseSubmissionPanel({
                                 <tr className="border-t border-hairline bg-slate-50/40">
                                   <td colSpan={4} className="px-3 py-3">
                                     <div className="grid gap-3 md:grid-cols-2">
-                                      <SubmissionTimeline data={row} title="สถานะการอนุมัติ" />
+                                      <SubmissionTimeline data={row} title={t("สถานะการอนุมัติ")} />
                                       {sendBackTo && sendBackOpen[k] && (
-                                        <div className="rounded-xl border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/30 p-3">
+                                        <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-3">
                                           <div className="text-sm font-medium text-ink-1 mb-2">
-                                            ตีกลับไปขั้น &ldquo;{STATUS_LABEL[sendBackTo]}&rdquo;
+                                            {t("ตีกลับไปขั้น “{status}”", { status: t(STATUS_LABEL[sendBackTo]) })}
                                           </div>
                                           <TextArea
-                                            placeholder="เหตุผลการตีกลับ (บังคับ)"
+                                            placeholder={t("เหตุผลการตีกลับ (บังคับ)")}
                                             rows={3}
                                             value={sendBackDraft[k] ?? ""}
                                             onChange={e =>
@@ -289,7 +293,7 @@ export function CourseSubmissionPanel({
                                               onClick={() => setSendBackOpen(x => ({ ...x, [k]: false }))}
                                               disabled={busy}
                                             >
-                                              ยกเลิก
+                                              {t("ยกเลิก")}
                                             </Button>
                                             <Button
                                               variant="primary"
@@ -297,18 +301,18 @@ export function CourseSubmissionPanel({
                                               onClick={() => sendBack(row, sendBackTo)}
                                               disabled={busy || !(sendBackDraft[k] ?? "").trim()}
                                             >
-                                              {busy ? "กำลังบันทึก…" : "ยืนยันตีกลับ"}
+                                              {busy ? t("กำลังบันทึก…") : t("ยืนยันตีกลับ")}
                                             </Button>
                                           </div>
                                         </div>
                                       )}
                                       {nextAction && (
-                                        <div className="rounded-xl border border-hairline bg-white/60 dark:bg-slate-900/40 p-3">
+                                        <div className="rounded-xl border border-hairline bg-surface/60 p-3">
                                           <div className="text-sm font-medium text-ink-1 mb-2">
-                                            {nextAction.label}
+                                            {t(nextAction.label)}
                                           </div>
                                           <TextArea
-                                            placeholder="ความคิดเห็น (ไม่บังคับ)"
+                                            placeholder={t("ความคิดเห็น (ไม่บังคับ)")}
                                             rows={3}
                                             value={commentDraft[k] ?? ""}
                                             onChange={e =>
@@ -322,7 +326,7 @@ export function CourseSubmissionPanel({
                                               onClick={() => act(row, nextAction.kind)}
                                               disabled={busy}
                                             >
-                                              {busy ? "กำลังบันทึก…" : `ยืนยัน ${nextAction.label}`}
+                                              {busy ? t("กำลังบันทึก…") : t("ยืนยัน {action}", { action: t(nextAction.label) })}
                                             </Button>
                                           </div>
                                         </div>

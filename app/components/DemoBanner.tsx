@@ -6,6 +6,7 @@ import { FlaskConical } from "lucide-react";
 import { Button } from "@heroui/react";
 import { api, isDemoMode, setDemoApiPrefix, setDemoPassword, type Me } from "../lib/api";
 import { DEMO_ACCOUNT_LABELS } from "../lib/demoStepGuides";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * CSS variable Shell.tsx's fixed/sticky chrome (sidebar, mobile drawer,
@@ -42,6 +43,7 @@ const BANNER_HEIGHT_VAR = "--demo-banner-h";
  * changing on every route push is what gives this a reason to look again.
  */
 export default function DemoBanner() {
+  const { t } = useI18n();
   const [active, setActive] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -114,15 +116,15 @@ export default function DemoBanner() {
       >
         <FlaskConical size={14} className="shrink-0" />
         <span>
-          โหมดทดลอง — ข้อมูลทั้งหมดในหน้านี้เป็นข้อมูลจำลอง ไม่ใช่ข้อมูลจริง
+          {t("โหมดทดลอง — ข้อมูลทั้งหมดในหน้านี้เป็นข้อมูลจำลอง ไม่ใช่ข้อมูลจริง")}
         </span>
         {me && (
           <span className="text-warning-soft-foreground/70">
-            · กำลังใช้งานเป็น: <span className="font-semibold">{DEMO_ACCOUNT_LABELS[me.email] ?? me.email}</span>
+            {t.rich("· กำลังใช้งานเป็น: {account}", { account: <span className="font-semibold">{DEMO_ACCOUNT_LABELS[me.email] ? t(DEMO_ACCOUNT_LABELS[me.email]) : me.email}</span> })}
           </span>
         )}
         <Button size="sm" variant="ghost" onPress={exit} className="h-6 px-2 text-xs">
-          ออกจากโหมดทดลอง
+          {t("ออกจากโหมดทดลอง")}
         </Button>
       </div>
     </>

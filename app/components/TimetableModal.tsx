@@ -6,6 +6,7 @@ import { Modal, Button, Alert, Tip } from "./ui";
 import { apiUrl } from "../lib/api";
 import { Skel, SkelRegion } from "./Skeletons";
 import { packLanes, parseTime } from "./ScheduleGrid";
+import { msg, useI18n } from "../lib/i18n/client";
 
 /**
  * The TA's week, for reading on a screen.
@@ -57,10 +58,10 @@ interface FormData {
  * reader moving between the two is never re-learning anything.
  */
 const STYLE: Record<Block["kind"], { bg: string; fg: string; tag: string; label: string }> = {
-  own_class: { bg: "#F5C4B3", fg: "#4A1B0C", tag: "เรียน", label: "คาบเรียนของเขา" },
-  lecture:   { bg: "#C0DD97", fg: "#173404", tag: "บรรยาย", label: "บรรยาย" },
-  lab:       { bg: "#B5D4F4", fg: "#042C53", tag: "ปฏิบัติการ", label: "ปฏิบัติการ" },
-  review:    { bg: "#CECBF6", fg: "#26215C", tag: "ตรวจงาน", label: "ตรวจงาน" },
+  own_class: { bg: "#F5C4B3", fg: "#4A1B0C", tag: msg("เรียน"), label: msg("คาบเรียนของเขา") },
+  lecture:   { bg: "#C0DD97", fg: "#173404", tag: msg("บรรยาย"), label: msg("บรรยาย") },
+  lab:       { bg: "#B5D4F4", fg: "#042C53", tag: msg("ปฏิบัติการ"), label: msg("ปฏิบัติการ") },
+  review:    { bg: "#CECBF6", fg: "#26215C", tag: msg("ตรวจงาน"), label: msg("ตรวจงาน") },
 };
 
 // Same window as the paper form: evening grading really does run to 21:00.
@@ -71,9 +72,9 @@ const ROW_MIN_PX = 34;
 const LANE_PX = 22;
 
 const DAYS = [
-  { dow: 1, label: "จันทร์" }, { dow: 2, label: "อังคาร" }, { dow: 3, label: "พุธ" },
-  { dow: 4, label: "พฤหัส" }, { dow: 5, label: "ศุกร์" },
-  { dow: 6, label: "เสาร์" }, { dow: 0, label: "อาทิตย์" },
+  { dow: 1, label: msg("จันทร์") }, { dow: 2, label: msg("อังคาร") }, { dow: 3, label: msg("พุธ") },
+  { dow: 4, label: msg("พฤหัส") }, { dow: 5, label: msg("ศุกร์") },
+  { dow: 6, label: msg("เสาร์") }, { dow: 0, label: msg("อาทิตย์") },
 ];
 
 const pct = (n: number) => `${(n * 100).toFixed(3)}%`;
@@ -84,6 +85,7 @@ export function TimetableModal({
   open: boolean; onClose: () => void;
   termId: string | null; taId: string | null; taName?: string;
 }) {
+  const { t } = useI18n();
   const key = open && termId && taId
     ? `/timetable-form?term_id=${termId}&user_id=${taId}`
     : null;
@@ -102,7 +104,7 @@ export function TimetableModal({
       onClose={onClose}
       size="3xl"
       icon={<CalendarDays size={18} />}
-      title={data ? `ตารางเรียนและตารางปฏิบัติงาน ${data.ta_name}` : (taName ?? "ตารางเรียน")}
+      title={data ? t("ตารางเรียนและตารางปฏิบัติงาน {name}", { name: data.ta_name }) : (taName ?? t("ตารางเรียน"))}
     >
       {isLoading || !data ? (
         // The PDF/print links depend only on the props, so they are live
@@ -115,7 +117,7 @@ export function TimetableModal({
               <Download size={14} /> PDF
             </Button>
             <Button variant="secondary" size="sm" onPress={() => window.open(printHref, "_blank", "noopener")}>
-              <Printer size={14} /> พิมพ์ฟอร์ม
+              <Printer size={14} /> {t("พิมพ์ฟอร์ม")}
             </Button>
           </div>
           <Skel className="h-3 w-80 max-w-full" />
@@ -125,22 +127,22 @@ export function TimetableModal({
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-xs text-muted">
-              {data.student_id ? `รหัส ${data.student_id} · ` : ""}ภาคการศึกษา {data.term_label}
+              {data.student_id ? t("รหัส {id} · ภาคการศึกษา {term}", { id: data.student_id, term: data.term_label }) : t("ภาคการศึกษา {term}", { term: data.term_label })}
             </span>
             <span className="flex-1" />
             <Button variant="secondary" size="sm" onPress={() => window.open(pdfHref, "_blank", "noopener")}>
               <Download size={14} /> PDF
             </Button>
             <Button variant="secondary" size="sm" onPress={() => window.open(printHref, "_blank", "noopener")}>
-              <Printer size={14} /> พิมพ์ฟอร์ม
+              <Printer size={14} /> {t("พิมพ์ฟอร์ม")}
             </Button>
           </div>
 
           {!data.has_own_classes && (
             <Alert
               status="warning"
-              title="ยังไม่มีตารางเรียนของนักศึกษา"
-              description="ตรวจการทับซ้อนกับเวลาเรียนไม่ได้จนกว่าเขาจะกรอกตารางเรียนของตัวเอง"
+              title={t("ยังไม่มีตารางเรียนของนักศึกษา")}
+              description={t("ตรวจการทับซ้อนกับเวลาเรียนไม่ได้จนกว่าเขาจะกรอกตารางเรียนของตัวเอง")}
             />
           )}
 
@@ -148,7 +150,7 @@ export function TimetableModal({
             {(Object.keys(STYLE) as Block["kind"][]).map(k => (
               <span key={k} className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: STYLE[k].bg }} />
-                {STYLE[k].label}
+                {t(STYLE[k].label)}
               </span>
             ))}
           </div>
@@ -157,8 +159,7 @@ export function TimetableModal({
 
           {data.signers.length > 0 && (
             <p className="text-xs text-muted">
-              อาจารย์ผู้ลงนาม:{" "}
-              {data.signers.map(s => `${s.lecturer_name} (${s.courses.join(", ")})`).join(" · ")}
+              {t("อาจารย์ผู้ลงนาม: {names}", { names: data.signers.map(s => `${s.lecturer_name} (${s.courses.join(", ")})`).join(" · ") })}
             </p>
           )}
         </div>
@@ -173,6 +174,7 @@ export function TimetableModal({
  * which the fixed-column layout could not express at all.
  */
 function Timeline({ blocks }: { blocks: Block[] }) {
+  const { t } = useI18n();
   const byDay = useMemo(() => {
     const m = new Map<number, { block: Block; lane: number; laneCount: number }[]>();
     for (const d of DAYS) {
@@ -193,7 +195,7 @@ function Timeline({ blocks }: { blocks: Block[] }) {
     <div className="overflow-x-auto rounded-lg border border-[var(--hairline)] bg-surface">
       <div className="min-w-[760px]">
         <div className="flex border-b border-[var(--hairline)] bg-surface-secondary">
-          <div className="w-16 shrink-0 px-2 py-1.5 text-[11px] text-muted">เวลา →</div>
+          <div className="w-16 shrink-0 px-2 py-1.5 text-[11px] text-muted">{t("เวลา →")}</div>
           <div className="relative flex-1" style={{ height: 24 }}>
             {hours.map((h, i) => {
               // The first and last labels sit ON the edges, so centring them
@@ -226,7 +228,7 @@ function Timeline({ blocks }: { blocks: Block[] }) {
                 className="flex w-16 shrink-0 items-center justify-center bg-surface-secondary text-xs font-medium"
                 style={{ minHeight: rowH }}
               >
-                {d.label}
+                {t(d.label)}
               </div>
               <div className="relative flex-1" style={{ height: rowH }}>
                 {/* Hour gridlines — the only thing that makes a block's position
@@ -245,11 +247,11 @@ function Timeline({ blocks }: { blocks: Block[] }) {
                   if (e <= s) return null;
                   const st = STYLE[b.kind] ?? STYLE.review;
                   const label =
-                    `${b.course_code}${b.sec_no ? ` sec ${b.sec_no}` : ""} ${st.tag}` +
-                    (b.track === "special" ? " (พิเศษ)" : b.track === "regular" ? " (ปกติ)" : "");
+                    `${b.course_code}${b.sec_no ? ` sec ${b.sec_no}` : ""} ${t(st.tag)}` +
+                    (b.track === "special" ? " " + t("(พิเศษ)") : b.track === "regular" ? " " + t("(ปกติ)") : "");
                   const counts = b.expected ? ` · ${b.logged ?? 0}/${b.expected}` : "";
                   return (
-                    <Tip key={i} content={`${b.course_code} ${b.course_name ?? ""} · ${st.tag} · ${b.start_time.slice(0, 5)}–${b.end_time.slice(0, 5)}${counts}`}><div
+                    <Tip key={i} content={`${b.course_code} ${b.course_name ?? ""} · ${t(st.tag)} · ${b.start_time.slice(0, 5)}–${b.end_time.slice(0, 5)}${counts}`}><div
                       className="absolute overflow-hidden rounded-md px-1.5 text-[11px] leading-[18px] whitespace-nowrap"
                       style={{
                         left: pct(s / TOTAL_MIN),

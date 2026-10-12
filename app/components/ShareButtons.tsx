@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Check, Link2, MessageCircle, Send, Share2 } from "lucide-react";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * Share an announcement to the places people actually forward things.
@@ -71,6 +72,7 @@ export default function ShareButtons({
   /** Origin to build the link on. Required wherever this is server-rendered. */
   baseURL?: string;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const url = isPublic
     ? publicAnnouncementURL(id, baseURL)
@@ -82,7 +84,7 @@ export default function ShareButtons({
     } catch {
       // Clipboard is blocked outside a secure context; fall back to a prompt
       // so the officer can still get the link out.
-      window.prompt("คัดลอกลิงก์นี้", url);
+      window.prompt(t("คัดลอกลิงก์นี้"), url);
       return;
     }
     setCopied(true);
@@ -119,12 +121,12 @@ export default function ShareButtons({
 
       <button type="button" onClick={copy} className={btn}>
         {copied ? <Check size={icon} className="text-emerald-600" /> : <Link2 size={icon} />}
-        {copied ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}
+        {copied ? t("คัดลอกแล้ว") : t("คัดลอกลิงก์")}
       </button>
 
       {!isPublic && (
         <span className="text-xs text-ink-3">
-          ประกาศนี้ยังไม่ได้เปิดสาธารณะ ผู้รับลิงก์ต้องเข้าสู่ระบบก่อนจึงจะอ่านได้
+          {t("ประกาศนี้ยังไม่ได้เปิดสาธารณะ ผู้รับลิงก์ต้องเข้าสู่ระบบก่อนจึงจะอ่านได้")}
         </span>
       )}
     </div>

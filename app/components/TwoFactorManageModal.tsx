@@ -6,6 +6,7 @@ import { InputGroup, Label, TextField } from "@heroui/react";
 import { errMessage, mfaDisable, mfaRegenerateRecoveryCodes } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Alert, Button, IconButton, Modal } from "./ui";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * The two things a user with 2FA already enabled can do to it — both live in
@@ -15,8 +16,9 @@ import { Alert, Button, IconButton, Modal } from "./ui";
  * proving both factors to remove either.
  */
 export default function TwoFactorManageModal({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
   return (
-    <Modal open onClose={onClose} title="จัดการการยืนยันตัวตนสองขั้นตอน" size="md">
+    <Modal open onClose={onClose} title={t("จัดการการยืนยันตัวตนสองขั้นตอน")} size="md">
       <div className="flex flex-col gap-6">
         <RegenerateSection />
         <div className="border-t border-[var(--hairline)]" />
@@ -27,6 +29,7 @@ export default function TwoFactorManageModal({ onClose }: { onClose: () => void 
 }
 
 function RegenerateSection() {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [pending, setPending] = useState(false);
@@ -35,7 +38,7 @@ function RegenerateSection() {
 
   async function submit() {
     if (!password) {
-      setErr("กรุณากรอกรหัสผ่าน");
+      setErr(t("กรุณากรอกรหัสผ่าน"));
       return;
     }
     setPending(true);
@@ -45,7 +48,7 @@ function RegenerateSection() {
       setCodes(res.recovery_codes);
       setPassword("");
       mutate("/me");
-      notify.success("สร้างรหัสสำรองชุดใหม่แล้ว รหัสชุดเดิมใช้ไม่ได้อีกต่อไป");
+      notify.success(t("สร้างรหัสสำรองชุดใหม่แล้ว รหัสชุดเดิมใช้ไม่ได้อีกต่อไป"));
     } catch (e) {
       setErr(errMessage(e));
     } finally {
@@ -56,10 +59,10 @@ function RegenerateSection() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <RefreshCw size={15} /> สร้างรหัสสำรองใหม่
+        <RefreshCw size={15} /> {t("สร้างรหัสสำรองใหม่")}
       </div>
       <p className="text-xs text-muted">
-        ใช้เมื่อรหัสสำรองเดิมใกล้หมด รหัสชุดเดิมทั้งหมดจะใช้ไม่ได้ทันที
+        {t("ใช้เมื่อรหัสสำรองเดิมใกล้หมด รหัสชุดเดิมทั้งหมดจะใช้ไม่ได้ทันที")}
       </p>
 
       {codes ? (
@@ -73,14 +76,14 @@ function RegenerateSection() {
       ) : (
         <div className="flex items-end gap-2">
           <TextField name="regen-password" value={password} onChange={v => { setPassword(v); setErr(null); }} className="flex-1">
-            <Label className="text-xs">รหัสผ่านปัจจุบัน</Label>
+            <Label className="text-xs">{t("รหัสผ่านปัจจุบัน")}</Label>
             <InputGroup>
               <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="current-password" lang="en" />
               <InputGroup.Suffix className="pr-0">
                 <IconButton
                   size="sm"
                   variant="ghost"
-                  label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                  label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
                   onPress={() => setShowPw(!showPw)}
                 >
                   {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -89,16 +92,17 @@ function RegenerateSection() {
             </InputGroup>
           </TextField>
           <Button variant="secondary" onClick={submit} disabled={pending} isPending={pending}>
-            สร้างใหม่
+            {t("สร้างใหม่")}
           </Button>
         </div>
       )}
-      {err && <Alert status="danger" title="สร้างรหัสสำรองไม่สำเร็จ" description={err} />}
+      {err && <Alert status="danger" title={t("สร้างรหัสสำรองไม่สำเร็จ")} description={err} />}
     </div>
   );
 }
 
 function DisableSection({ onDisabled }: { onDisabled: () => void }) {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -107,7 +111,7 @@ function DisableSection({ onDisabled }: { onDisabled: () => void }) {
 
   async function submit() {
     if (!password || !code) {
-      setErr("กรอกรหัสผ่านและรหัสยืนยันให้ครบ");
+      setErr(t("กรอกรหัสผ่านและรหัสยืนยันให้ครบ"));
       return;
     }
     setPending(true);
@@ -115,7 +119,7 @@ function DisableSection({ onDisabled }: { onDisabled: () => void }) {
     try {
       await mfaDisable(password, code);
       mutate("/me");
-      notify.success("ปิดใช้งาน 2FA แล้ว");
+      notify.success(t("ปิดใช้งาน 2FA แล้ว"));
       onDisabled();
     } catch (e) {
       setErr(errMessage(e));
@@ -127,20 +131,20 @@ function DisableSection({ onDisabled }: { onDisabled: () => void }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 text-sm font-medium text-danger">
-        <ShieldOff size={15} /> ปิดใช้งาน 2FA
+        <ShieldOff size={15} /> {t("ปิดใช้งาน 2FA")}
       </div>
       <p className="text-xs text-muted">
-        บัญชีจะเข้าสู่ระบบด้วยรหัสผ่านเพียงอย่างเดียวหลังจากนี้
+        {t("บัญชีจะเข้าสู่ระบบด้วยรหัสผ่านเพียงอย่างเดียวหลังจากนี้")}
       </p>
       <TextField name="disable-password" value={password} onChange={v => { setPassword(v); setErr(null); }}>
-        <Label className="text-xs">รหัสผ่านปัจจุบัน</Label>
+        <Label className="text-xs">{t("รหัสผ่านปัจจุบัน")}</Label>
         <InputGroup>
           <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="current-password" lang="en" />
           <InputGroup.Suffix className="pr-0">
             <IconButton
               size="sm"
               variant="ghost"
-              label={showPw ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+              label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
               onPress={() => setShowPw(!showPw)}
             >
               {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -149,14 +153,14 @@ function DisableSection({ onDisabled }: { onDisabled: () => void }) {
         </InputGroup>
       </TextField>
       <TextField name="disable-code" value={code} onChange={v => { setCode(v); setErr(null); }}>
-        <Label className="text-xs">รหัสยืนยัน 6 หลัก หรือรหัสสำรอง</Label>
+        <Label className="text-xs">{t("รหัสยืนยัน 6 หลัก หรือรหัสสำรอง")}</Label>
         <InputGroup>
           <InputGroup.Input placeholder="123456" autoComplete="one-time-code" lang="en" />
         </InputGroup>
       </TextField>
-      {err && <Alert status="danger" title="ปิดใช้งาน 2FA ไม่สำเร็จ" description={err} />}
+      {err && <Alert status="danger" title={t("ปิดใช้งาน 2FA ไม่สำเร็จ")} description={err} />}
       <Button variant="danger" onClick={submit} disabled={pending} isPending={pending}>
-        <KeyRound size={14} /> ปิดใช้งาน 2FA
+        <KeyRound size={14} /> {t("ปิดใช้งาน 2FA")}
       </Button>
     </div>
   );

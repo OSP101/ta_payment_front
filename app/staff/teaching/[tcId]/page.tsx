@@ -19,6 +19,7 @@ import { useTitleScope } from "../../../components/Shell";
 import { Skel, SkelRegion } from "../../../components/Skeletons";
 import LecturerPanel from "./LecturerPanel";
 import { budgetConfirmMessage } from "../budgetConfirm";
+import { msg, useI18n } from "../../../lib/i18n/client";
 
 interface SectionRow {
   id: string;
@@ -35,13 +36,13 @@ interface SectionRow {
 }
 
 const CURRICULUM_OPTIONS = [
-  { id: "", label: "ยังไม่ระบุ" },
-  { id: "CS", label: "วิทยาการคอมพิวเตอร์ (CS)" },
-  { id: "IT", label: "เทคโนโลยีสารสนเทศ (IT)" },
-  { id: "GIS", label: "ภูมิสารสนเทศศาสตร์ (GIS)" },
-  { id: "AI", label: "ปัญญาประดิษฐ์ (AI)" },
-  { id: "CY", label: "ความมั่นคงปลอดภัยไซเบอร์ (CY)" },
-  { id: "OTHER", label: "คณะอื่น ๆ" },
+  { id: "", label: msg("ยังไม่ระบุ") },
+  { id: "CS", label: msg("วิทยาการคอมพิวเตอร์ (CS)") },
+  { id: "IT", label: msg("เทคโนโลยีสารสนเทศ (IT)") },
+  { id: "GIS", label: msg("ภูมิสารสนเทศศาสตร์ (GIS)") },
+  { id: "AI", label: msg("ปัญญาประดิษฐ์ (AI)") },
+  { id: "CY", label: msg("ความมั่นคงปลอดภัยไซเบอร์ (CY)") },
+  { id: "OTHER", label: msg("คณะอื่น ๆ") },
 ];
 
 interface TC {
@@ -67,6 +68,7 @@ interface TC {
 export default function StaffTeachingCoursePage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
   const router = useRouter();
+  const { t, intl } = useI18n();
   const { data: tc } = useSWR<TC>(`/teaching-courses/${tcId}`);
   useTitleScope(tc ? `${courseCodeLabel(tc)} ${tc.name_th}` : undefined);
   const locked = !!tc?.exported_at;
@@ -83,7 +85,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
     try {
       await api.del(`/teaching-courses/${tcId}`);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
-      toast.success("ลบรายวิชาแล้ว");
+      toast.success(t("ลบรายวิชาแล้ว"));
       router.push("/staff/teaching");
     } catch (e) {
       // Backend returns a clear Thai reason when the course has data.
@@ -107,17 +109,25 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         href="/staff/teaching"
         className="mb-2 inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-[var(--brand)]"
       >
-        <ArrowLeft size={16} /> กลับไปรายการวิชา
+        <ArrowLeft size={16} /> {t("กลับไปรายการวิชา")}
       </Link>
 
       {tc ? (
         <PageHeader
           title={`${courseCodeLabel(tc)} — ${tc.name_th}`}
-          description={`${tc.alt_codes?.length ? `เปิดภายใต้ ${tc.alt_codes.length + 1} รหัส งบและจำนวนนักศึกษารวมกัน · ` : ""}${tc.credits} (${tc.lecture_hrs}-${tc.lab_hrs}-${tc.self_hrs}) · นักศึกษา ${tc.num_students} คน (ปกติ ${tc.num_students_regular} · พิเศษ ${tc.num_students_special})`}
+          description={tc.alt_codes?.length
+            ? t("เปิดภายใต้ {codes} รหัส งบและจำนวนนักศึกษารวมกัน · {credits} ({lec}-{lab}-{self}) · นักศึกษา {n} คน (ปกติ {reg} · พิเศษ {spc})", {
+                codes: tc.alt_codes.length + 1, credits: tc.credits, lec: tc.lecture_hrs, lab: tc.lab_hrs, self: tc.self_hrs,
+                n: tc.num_students, reg: tc.num_students_regular, spc: tc.num_students_special,
+              })
+            : t("{credits} ({lec}-{lab}-{self}) · นักศึกษา {n} คน (ปกติ {reg} · พิเศษ {spc})", {
+                credits: tc.credits, lec: tc.lecture_hrs, lab: tc.lab_hrs, self: tc.self_hrs,
+                n: tc.num_students, reg: tc.num_students_regular, spc: tc.num_students_special,
+              })}
           actions={
             !locked && (
               <Button variant="secondary" size="sm" onClick={() => setInfoOpen(true)}>
-                <Pencil size={14} />แก้ไขข้อมูลรายวิชา
+                <Pencil size={14} />{t("แก้ไขข้อมูลรายวิชา")}
               </Button>
             )
           }
@@ -138,8 +148,8 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
           <Alert
             status="warning"
             icon={<Lock size={16} />}
-            title="รายวิชานี้ถูกล็อกแล้ว"
-            description={`ส่งออกไฟล์เมื่อ ${formatExportedAt(tc?.exported_at)} ไม่สามารถแก้ไข section หรือตารางเวลาได้อีก`}
+            title={t("รายวิชานี้ถูกล็อกแล้ว")}
+            description={t("ส่งออกไฟล์เมื่อ {at} ไม่สามารถแก้ไข section หรือตารางเวลาได้อีก", { at: formatExportedAt(tc?.exported_at, intl) })}
           />
         </div>
       )}
@@ -151,13 +161,13 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
       </div>
 
       <Panel
-        title="Section และตารางเวลาเรียน"
+        title={t("Section และตารางเวลาเรียน")}
         data-tour="course-sections"
-        description="รายชื่อ section ปกติมาจากไฟล์ทะเบียน เพิ่มเองเมื่อไฟล์ตกหล่น อาจารย์แก้ส่วนนี้ไม่ได้"
+        description={t("รายชื่อ section ปกติมาจากไฟล์ทะเบียน เพิ่มเองเมื่อไฟล์ตกหล่น อาจารย์แก้ส่วนนี้ไม่ได้")}
         actions={
           !locked && (
             <Button variant="primary" size="sm" onClick={() => setAddOpen(true)}>
-              <Plus size={14} />เพิ่ม section
+              <Plus size={14} />{t("เพิ่ม section")}
             </Button>
           )
         }
@@ -175,8 +185,8 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         ) : sortedSecs.length === 0 ? (
           <EmptyState
             icon={<Clock size={28} />}
-            title="ยังไม่มี section"
-            description={locked ? "" : "กด 'เพิ่ม section' เพื่อเพิ่มเอง หรือนำเข้าไฟล์ทะเบียนอีกครั้ง"}
+            title={t("ยังไม่มี section")}
+            description={locked ? "" : t("กด 'เพิ่ม section' เพื่อเพิ่มเอง หรือนำเข้าไฟล์ทะเบียนอีกครั้ง")}
           />
         ) : (
           <div className="divide-y divide-border">
@@ -230,9 +240,9 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
       <div data-tour="course-danger" className="mt-6 rounded-lg border border-danger/30 bg-danger/5 p-4">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-danger">ลบรายวิชานี้</div>
+            <div className="text-sm font-semibold text-danger">{t("ลบรายวิชานี้")}</div>
             <div className="text-xs text-muted mt-0.5">
-              ลบได้เฉพาะวิชาที่เปิดผิด/ยังไม่มีข้อมูล ถ้ามี TA, บันทึกเวลา หรือส่งออกแล้ว ระบบจะไม่ให้ลบ
+              {t("ลบได้เฉพาะวิชาที่เปิดผิด/ยังไม่มีข้อมูล ถ้ามี TA, บันทึกเวลา หรือส่งออกแล้ว ระบบจะไม่ให้ลบ")}
             </div>
           </div>
           <Button
@@ -241,7 +251,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
             onClick={() => setConfirmDelete(true)}
             disabled={deleting}
           >
-            <Trash2 size={14} /> ลบรายวิชา
+            <Trash2 size={14} /> {t("ลบรายวิชา")}
           </Button>
         </div>
       </div>
@@ -262,17 +272,18 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         isPending={deleting}
         danger
         icon={<Trash2 size={20} />}
-        title="ยืนยันการลบรายวิชา"
-        confirmLabel="ลบรายวิชา"
+        title={t("ยืนยันการลบรายวิชา")}
+        confirmLabel={t("ลบรายวิชา")}
         message={
           <p className="text-sm text-muted">
-            จะลบรายวิชา <b>{tc ? `${courseCodeLabel(tc)} ${tc.name_th}` : ""}</b> พร้อม section และตารางเวลาทั้งหมด
-            การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
+            {t.rich("จะลบรายวิชา {course} พร้อม section และตารางเวลาทั้งหมด การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)", {
+              course: <b>{tc ? `${courseCodeLabel(tc)} ${tc.name_th}` : ""}</b>,
+            })}
           </p>
         }
         requireTyped={tc ? [
-          { label: "พิมพ์รหัสและชื่อวิชาเพื่อยืนยัน", expected: `${tc.code} ${tc.name_th}` },
-          { label: 'พิมพ์ "Delete this subject" เพื่อยืนยัน', expected: "Delete this subject" },
+          { label: t("พิมพ์รหัสและชื่อวิชาเพื่อยืนยัน"), expected: `${tc.code} ${tc.name_th}` },
+          { label: t('พิมพ์ "Delete this subject" เพื่อยืนยัน'), expected: "Delete this subject" },
         ] : undefined}
       />
     </div>
@@ -290,6 +301,7 @@ function SectionScheduleBlock({
   /** Present only for a merged code's section still on its own. */
   onFold?: () => void;
 }) {
+  const { t } = useI18n();
   const initial = section.schedules ?? [];
   const [rows, setRows] = useState<SectionScheduleRow[]>(initial);
   const [saving, setSaving] = useState(false);
@@ -329,9 +341,9 @@ function SectionScheduleBlock({
       // that follows adopts the server copy instead of being treated as dirty.
       syncedRef.current = JSON.stringify(toApiPayload(rows));
       await mutate(`/teaching-courses/${tcId}`);
-      toast.success(`บันทึกตารางเวลา Sec ${section.sec_no} เรียบร้อยแล้ว`);
+      toast.success(t("บันทึกตารางเวลา Sec {sec} เรียบร้อยแล้ว", { sec: section.sec_no }));
     } catch (e) {
-      setErr((e as Error).message || "บันทึกไม่สำเร็จ");
+      setErr((e as Error).message || t("บันทึกไม่สำเร็จ"));
     } finally {
       setSaving(false);
     }
@@ -342,17 +354,17 @@ function SectionScheduleBlock({
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-base font-semibold tabular">Sec {section.sec_no}</span>
         <Chip tone={section.track === "special" ? "warn" : "brand"}>
-          {section.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}
+          {section.track === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ")}
         </Chip>
         {section.curriculum && (
           <Chip tone="neutral">
-            {CURRICULUM_OPTIONS.find(c => c.id === section.curriculum)?.label ?? section.curriculum}
+            {t(CURRICULUM_OPTIONS.find(c => c.id === section.curriculum)?.label ?? section.curriculum)}
           </Chip>
         )}
-        <span className="text-xs text-muted">{section.num_students} คน</span>
+        <span className="text-xs text-muted">{t("{n} คน", { n: section.num_students })}</span>
         {section.course_code && (
-          <Tip content={`section ของรหัส ${section.course_code} ที่ระบบหา section คู่ (เลขและประเภทเดียวกัน) ไม่เจอ ถ้าเรียนด้วยกัน ให้กดรวมเข้ากับ section นั้น`}>
-            <span className="inline-flex"><Chip tone="warn">ยังไม่รวม</Chip></span>
+          <Tip content={t("section ของรหัส {code} ที่ระบบหา section คู่ (เลขและประเภทเดียวกัน) ไม่เจอ ถ้าเรียนด้วยกัน ให้กดรวมเข้ากับ section นั้น", { code: section.course_code })}>
+            <span className="inline-flex"><Chip tone="warn">{t("ยังไม่รวม")}</Chip></span>
           </Tip>
         )}
         {!dirty && rows.length > 0 && (
@@ -366,24 +378,24 @@ function SectionScheduleBlock({
               variant={dirty ? "primary" : "ghost"} size="sm"
               onClick={save} disabled={!canSave} isPending={saving}
             >
-              <Save size={13} />บันทึก
+              <Save size={13} />{t("บันทึก")}
             </Button>
-            <IconButton label={`แก้ไข Sec ${section.sec_no}`} variant="ghost" size="sm" onClick={onEdit}>
+            <IconButton label={t("แก้ไข Sec {sec}", { sec: section.sec_no })} variant="ghost" size="sm" onClick={onEdit}>
               <Pencil size={13} />
             </IconButton>
             {onFold && (
               <Button variant="secondary" size="sm" onClick={onFold}>
-                <GitMerge size={13} />รวมเข้ากับ sec…
+                <GitMerge size={13} />{t("รวมเข้ากับ sec…")}
               </Button>
             )}
-            <IconButton label={`ลบ Sec ${section.sec_no}`} variant="danger-soft" size="sm" onClick={onDelete}>
+            <IconButton label={t("ลบ Sec {sec}", { sec: section.sec_no })} variant="danger-soft" size="sm" onClick={onDelete}>
               <Trash2 size={13} />
             </IconButton>
           </div>
         )}
       </div>
       <SectionScheduleEditor value={rows} onChange={setRows} disabled={locked} />
-      {err && <Alert status="danger" icon={<CircleAlert size={14} />} title="บันทึกไม่สำเร็จ" description={err} />}
+      {err && <Alert status="danger" icon={<CircleAlert size={14} />} title={t("บันทึกไม่สำเร็จ")} description={err} />}
     </div>
   );
 }
@@ -405,6 +417,7 @@ function SectionFormModal({
   section?: SectionRow;
   existingSecNos: string[];
 }) {
+  const { t } = useI18n();
   const editing = !!section;
   const [secNo, setSecNo] = useState("");
   const [track, setTrack] = useState<"regular" | "special">("regular");
@@ -451,13 +464,15 @@ function SectionFormModal({
         });
       }
       await mutate(`/teaching-courses/${tcId}`);
-      toast.success(`${editing ? "แก้ไข" : "เพิ่ม"} Sec ${secNo.trim()} เรียบร้อยแล้ว`);
+      toast.success(editing
+        ? t("แก้ไข Sec {sec} เรียบร้อยแล้ว", { sec: secNo.trim() })
+        : t("เพิ่ม Sec {sec} เรียบร้อยแล้ว", { sec: secNo.trim() }));
       setBudgetPrompt(null);
       onClose();
     } catch (e) {
       const preview = budgetConfirmMessage(e);
       if (preview) setBudgetPrompt(preview);
-      else setErr((e as Error).message || "บันทึกไม่สำเร็จ");
+      else setErr((e as Error).message || t("บันทึกไม่สำเร็จ"));
     } finally {
       setSaving(false);
     }
@@ -470,15 +485,15 @@ function SectionFormModal({
       title={
         <span className="inline-flex items-center gap-2">
           {editing ? <Pencil size={18} /> : <Plus size={18} />}
-          {editing ? `แก้ไข Sec ${section!.sec_no}` : "เพิ่ม Section"}
+          {editing ? t("แก้ไข Sec {sec}", { sec: section!.sec_no }) : t("เพิ่ม Section")}
         </span>
       }
       size="md"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={() => save()} disabled={!canSave} isPending={saving}>
-            <Save size={14} />บันทึก
+            <Save size={14} />{t("บันทึก")}
           </Button>
         </>
       }
@@ -492,9 +507,9 @@ function SectionFormModal({
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup
-            label="เลข Section"
-            hint="ตัวเลขเท่านั้น เช่น 1, 2, 3"
-            error={duplicate ? `เลข ${secNo.trim()} มีอยู่แล้วในรายวิชา` : undefined}
+            label={t("เลข Section")}
+            hint={t("ตัวเลขเท่านั้น เช่น 1, 2, 3")}
+            error={duplicate ? t("เลข {sec} มีอยู่แล้วในรายวิชา", { sec: secNo.trim() }) : undefined}
           >
             <TextInput
               value={secNo}
@@ -503,10 +518,10 @@ function SectionFormModal({
               autoComplete="off"
               maxLength={4}
               autoFocus
-              placeholder="เช่น 1"
+              placeholder={t("เช่น 1")}
             />
           </FieldGroup>
-          <FieldGroup label="จำนวนนักศึกษา" hint="ใช้คำนวณงบและเพดานชั่วโมง TA">
+          <FieldGroup label={t("จำนวนนักศึกษา")} hint={t("ใช้คำนวณงบและเพดานชั่วโมง TA")}>
             <TextInput
               value={students}
               onChange={e => setStudents(e.target.value.replace(/\D+/g, ""))}
@@ -519,31 +534,32 @@ function SectionFormModal({
 
         {editing && (
           <SelectField
-            label="หลักสูตรของกลุ่มเรียน"
+            label={t("หลักสูตรของกลุ่มเรียน")}
             value={curriculum}
             onChange={setCurriculum}
-            options={CURRICULUM_OPTIONS}
+            options={CURRICULUM_OPTIONS.map(o => ({ ...o, label: t(o.label) }))}
           />
         )}
 
         {editing ? (
           <div className="text-xs text-muted">
-            ประเภทเป็น <b>{track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"}</b>
-            เปลี่ยนไม่ได้หลังสร้างแล้ว หากผิดให้ลบ section นี้แล้วเพิ่มใหม่
+            {t.rich("ประเภทเป็น {track} เปลี่ยนไม่ได้หลังสร้างแล้ว หากผิดให้ลบ section นี้แล้วเพิ่มใหม่", {
+              track: <b>{track === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ")}</b>,
+            })}
           </div>
         ) : (
           <SelectField
-            label="ประเภท"
+            label={t("ประเภท")}
             value={track}
             onChange={v => setTrack(v === "special" ? "special" : "regular")}
             options={[
-              { id: "regular", label: "ภาคปกติ" },
-              { id: "special", label: "ภาคพิเศษ" },
+              { id: "regular", label: t("ภาคปกติ") },
+              { id: "special", label: t("ภาคพิเศษ") },
             ]}
           />
         )}
 
-        {err && <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={err} />}
+        {err && <Alert status="danger" icon={<CircleAlert size={16} />} title={t("บันทึกไม่สำเร็จ")} description={err} />}
       </div>
     </Modal>
   );
@@ -563,6 +579,7 @@ function FoldSectionModal({
   candidates: SectionRow[];
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [into, setInto] = useState(candidates[0]?.id ?? "");
   const [pending, setPending] = useState(false);
 
@@ -572,7 +589,7 @@ function FoldSectionModal({
     try {
       await api.post(`/teaching-courses/${tcId}/sections/${section.id}/fold`, { into_section_id: into });
       await mutate((k: unknown) => typeof k === "string" && k.startsWith("/teaching-courses"));
-      toast.success(`รวม Sec ${section.sec_no} แล้ว`);
+      toast.success(t("รวม Sec {sec} แล้ว", { sec: section.sec_no }));
       onClose();
     } catch (e) {
       notify.error(e);
@@ -587,27 +604,26 @@ function FoldSectionModal({
       onClose={() => { if (!pending) onClose(); }}
       size="sm"
       icon={<GitMerge size={18} />}
-      title={`รวม Sec ${section.sec_no}`}
+      title={t("รวม Sec {sec}", { sec: section.sec_no })}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
-          <Button variant="primary" onClick={fold} disabled={!into || pending} isPending={pending}>รวม section</Button>
+          <Button variant="ghost" onClick={onClose} disabled={pending}>{t("ยกเลิก")}</Button>
+          <Button variant="primary" onClick={fold} disabled={!into || pending} isPending={pending}>{t("รวม section")}</Button>
         </>
       }
     >
       {candidates.length === 0 ? (
-        <Alert status="warning" title="ไม่มี section ให้รวม"
-          description={`วิชานี้ไม่มี section ${section.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"} ของรหัสหลัก รวมได้เฉพาะ section ประเภทเดียวกัน`} />
+        <Alert status="warning" title={t("ไม่มี section ให้รวม")}
+          description={t("วิชานี้ไม่มี section {track} ของรหัสหลัก รวมได้เฉพาะ section ประเภทเดียวกัน", { track: section.track === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ") })} />
       ) : (
         <div className="space-y-3">
-          <FieldGroup label="เรียนด้วยกันกับ">
+          <FieldGroup label={t("เรียนด้วยกันกับ")}>
             <Select value={into} onChange={e => setInto(e.target.value)}>
-              {candidates.map(c => <option key={c.id} value={c.id}>Sec {c.sec_no} ({c.num_students} คน)</option>)}
+              {candidates.map(c => <option key={c.id} value={c.id}>{t("Sec {sec} ({n} คน)", { sec: c.sec_no, n: c.num_students })}</option>)}
             </Select>
           </FieldGroup>
           <p className="text-xs text-muted">
-            นักศึกษา {section.num_students} คนจะรวมเข้า section ที่เลือก และใช้ตารางเรียนของ section นั้น
-            คำขอ TA บันทึกเวลา และวันชดเชยของ Sec {section.sec_no} จะย้ายตามไปด้วย ย้อนกลับไม่ได้
+            {t("นักศึกษา {n} คนจะรวมเข้า section ที่เลือก และใช้ตารางเรียนของ section นั้น คำขอ TA บันทึกเวลา และวันชดเชยของ Sec {sec} จะย้ายตามไปด้วย ย้อนกลับไม่ได้", { n: section.num_students, sec: section.sec_no })}
           </p>
         </div>
       )}
@@ -623,6 +639,7 @@ function DeleteSectionDialog({
   onClose: () => void;
 }) {
   const [deleting, setDeleting] = useState(false);
+  const { t } = useI18n();
 
   async function doDelete() {
     if (!target) return;
@@ -630,7 +647,7 @@ function DeleteSectionDialog({
     try {
       await api.del(`/teaching-courses/${tcId}/sections/${target.id}`);
       await mutate(`/teaching-courses/${tcId}`);
-      toast.success(`ลบ Sec ${target.sec_no} เรียบร้อยแล้ว`);
+      toast.success(t("ลบ Sec {sec} เรียบร้อยแล้ว", { sec: target.sec_no }));
       onClose();
     } catch (e) {
       // The server refuses when a TA request or work log still points here.
@@ -648,16 +665,18 @@ function DeleteSectionDialog({
       isPending={deleting}
       danger
       icon={<Trash2 size={20} />}
-      title="ยืนยันลบ section"
-      confirmLabel="ลบ section"
+      title={t("ยืนยันลบ section")}
+      confirmLabel={t("ลบ section")}
       message={
         <div className="space-y-2">
           <p className="text-sm">
-            จะลบ <b>Sec {target?.sec_no}</b> ({target?.track === "special" ? "ภาคพิเศษ" : "ภาคปกติ"})
-            พร้อมตารางเวลาของ section นี้ ย้อนกลับไม่ได้
+            {t.rich("จะลบ {sec} ({track}) พร้อมตารางเวลาของ section นี้ ย้อนกลับไม่ได้", {
+              sec: <b>Sec {target?.sec_no}</b>,
+              track: target?.track === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ"),
+            })}
           </p>
           <p className="text-xs text-muted">
-            ถ้ามีคำขอ TA หรือบันทึกเวลาที่อ้างอิง section นี้อยู่ ระบบจะไม่ให้ลบ
+            {t("ถ้ามีคำขอ TA หรือบันทึกเวลาที่อ้างอิง section นี้อยู่ ระบบจะไม่ให้ลบ")}
           </p>
         </div>
       }
@@ -665,11 +684,11 @@ function DeleteSectionDialog({
   );
 }
 
-function formatExportedAt(iso?: string): string {
+function formatExportedAt(iso: string | undefined, intl: string): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+  return d.toLocaleString(intl, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -701,6 +720,7 @@ const COURSE_CODE_RE = /^(?:[A-Z]{2}[0-9]{6}|[0-9]{6})$/;
 function CourseInfoModal({
   open, tcId, tc, onClose,
 }: { open: boolean; tcId: string; tc: TC; onClose: () => void }) {
+  const { t } = useI18n();
   const [code, setCode] = useState(tc.code);
   const [nameTH, setNameTH] = useState(tc.name_th);
   const [nameEN, setNameEN] = useState(tc.name_en ?? "");
@@ -758,13 +778,13 @@ function CourseInfoModal({
       });
       await mutate(`/teaching-courses/${tcId}`);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
-      toast.success("บันทึกข้อมูลรายวิชาแล้ว");
+      toast.success(t("บันทึกข้อมูลรายวิชาแล้ว"));
       setBudgetPrompt(null);
       onClose();
     } catch (e) {
       const preview = budgetConfirmMessage(e);
       if (preview) setBudgetPrompt(preview);
-      else setErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      else setErr(e instanceof Error ? e.message : t("บันทึกไม่สำเร็จ"));
     } finally {
       setSaving(false);
     }
@@ -774,13 +794,13 @@ function CourseInfoModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={<span className="inline-flex items-center gap-2"><Pencil size={18} />แก้ไขข้อมูลรายวิชา</span>}
+      title={<span className="inline-flex items-center gap-2"><Pencil size={18} />{t("แก้ไขข้อมูลรายวิชา")}</span>}
       size="md"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={() => save()} disabled={!canSave} isPending={saving}>
-            <Save size={14} />บันทึก
+            <Save size={14} />{t("บันทึก")}
           </Button>
         </>
       }
@@ -792,13 +812,13 @@ function CourseInfoModal({
         onConfirm={() => save(true)}
       />
       <div className="space-y-4">
-        {err && <Alert status="danger" icon={<CircleAlert size={16} />} title="บันทึกไม่สำเร็จ" description={err} />}
+        {err && <Alert status="danger" icon={<CircleAlert size={16} />} title={t("บันทึกไม่สำเร็จ")} description={err} />}
 
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup
-            label={tc.alt_codes?.length ? "รหัสวิชาหลัก" : "รหัสวิชา"}
-            hint={tc.alt_codes?.length ? `รหัสที่รวมอยู่ด้วย: ${tc.alt_codes.join(", ")}` : "ตัวเลข 6 หลัก หรืออักษร 2 ตัวตามด้วยตัวเลข 6 หลัก"}
-            error={codeBad ? "รูปแบบรหัสวิชาไม่ถูกต้อง เช่น CP353201 หรือ 342233" : undefined}
+            label={tc.alt_codes?.length ? t("รหัสวิชาหลัก") : t("รหัสวิชา")}
+            hint={tc.alt_codes?.length ? t("รหัสที่รวมอยู่ด้วย: {codes}", { codes: tc.alt_codes.join(", ") }) : t("ตัวเลข 6 หลัก หรืออักษร 2 ตัวตามด้วยตัวเลข 6 หลัก")}
+            error={codeBad ? t("รูปแบบรหัสวิชาไม่ถูกต้อง เช่น CP353201 หรือ 342233") : undefined}
           >
             <TextInput
               value={code}
@@ -807,7 +827,7 @@ function CourseInfoModal({
               maxLength={8}
             />
           </FieldGroup>
-          <FieldGroup label="หน่วยกิต">
+          <FieldGroup label={t("หน่วยกิต")}>
             <TextInput
               value={credits}
               onChange={e => setCredits(e.target.value.replace(/\D+/g, ""))}
@@ -818,43 +838,42 @@ function CourseInfoModal({
         </div>
 
         <FieldGroup
-          label="ชื่อวิชา (ไทย)"
-          error={nameBad ? "ชื่อวิชาต้องไม่ว่าง" : undefined}
+          label={t("ชื่อวิชา (ไทย)")}
+          error={nameBad ? t("ชื่อวิชาต้องไม่ว่าง") : undefined}
         >
           <TextInput value={nameTH} onChange={e => setNameTH(e.target.value)} autoComplete="off" />
         </FieldGroup>
 
-        <FieldGroup label="ชื่อวิชา (อังกฤษ)" hint="เว้นว่างได้">
+        <FieldGroup label={t("ชื่อวิชา (อังกฤษ)")} hint={t("เว้นว่างได้")}>
           <TextInput value={nameEN} onChange={e => setNameEN(e.target.value)} autoComplete="off" />
         </FieldGroup>
 
         <div>
-          <div className="mb-1.5 text-sm font-medium">ชั่วโมงต่อสัปดาห์</div>
+          <div className="mb-1.5 text-sm font-medium">{t("ชั่วโมงต่อสัปดาห์")}</div>
           <div className="grid grid-cols-3 items-end gap-2 sm:gap-3">
-            <FieldGroup label="บรรยาย">
+            <FieldGroup label={t("บรรยาย")}>
               <TextInput value={lec} onChange={e => setLec(e.target.value.replace(/\D+/g, ""))} inputMode="numeric" maxLength={2} />
             </FieldGroup>
-            <FieldGroup label="ปฏิบัติการ">
+            <FieldGroup label={t("ปฏิบัติการ")}>
               <TextInput value={lab} onChange={e => setLab(e.target.value.replace(/\D+/g, ""))} inputMode="numeric" maxLength={2} />
             </FieldGroup>
-            <FieldGroup label="ศึกษาด้วยตนเอง">
+            <FieldGroup label={t("ศึกษาด้วยตนเอง")}>
               <TextInput value={self} onChange={e => setSelf(e.target.value.replace(/\D+/g, ""))} inputMode="numeric" maxLength={2} />
             </FieldGroup>
           </div>
           <p className="mt-1 text-xs text-muted">
-            แสดงเป็น {num(credits)} ({num(lec)}-{num(lab)}-{num(self)}) · ชั่วโมงบรรยาย/ปฏิบัติการกำหนดว่ากลุ่มเรียนลงตารางแบบใดได้
+            {t("แสดงเป็น {credits} ({lec}-{lab}-{self}) · ชั่วโมงบรรยาย/ปฏิบัติการกำหนดว่ากลุ่มเรียนลงตารางแบบใดได้", { credits: num(credits), lec: num(lec), lab: num(lab), self: num(self) })}
           </p>
         </div>
 
         <SelectField
-          label="หลักสูตร (ใช้กับทุกกลุ่มเรียน)"
+          label={t("หลักสูตร (ใช้กับทุกกลุ่มเรียน)")}
           value={curriculum}
           onChange={setCurriculum}
-          options={[{ id: "", label: "ไม่เปลี่ยน" }, ...CURRICULUM_OPTIONS.slice(1)]}
+          options={[{ id: "", label: t("ไม่เปลี่ยน") }, ...CURRICULUM_OPTIONS.slice(1).map(o => ({ ...o, label: t(o.label) }))]}
         />
         <p className="-mt-2 text-xs text-muted">
-          เลือกแล้วจะเขียนทับหลักสูตรของทุกกลุ่มเรียนในรายวิชานี้
-          หากต้องการกำหนดต่างกันรายกลุ่ม ให้แก้ที่แต่ละ section
+          {t("เลือกแล้วจะเขียนทับหลักสูตรของทุกกลุ่มเรียนในรายวิชานี้ หากต้องการกำหนดต่างกันรายกลุ่ม ให้แก้ที่แต่ละ section")}
         </p>
       </div>
     </Modal>
@@ -871,14 +890,15 @@ function CourseInfoModal({
 function BudgetChangeConfirm({
   message, pending, onCancel, onConfirm,
 }: { message: string | null; pending: boolean; onCancel: () => void; onConfirm: () => void }) {
+  const { t } = useI18n();
   return (
     <ConfirmDialog
       open={message !== null}
       onClose={onCancel}
       onConfirm={onConfirm}
-      title="ยืนยันการเปลี่ยนงบประมาณรายวิชา"
+      title={t("ยืนยันการเปลี่ยนงบประมาณรายวิชา")}
       message={<span className="whitespace-pre-line">{message}</span>}
-      confirmLabel="ยืนยันการเปลี่ยนงบ"
+      confirmLabel={t("ยืนยันการเปลี่ยนงบ")}
       danger
       isPending={pending}
       size="md"

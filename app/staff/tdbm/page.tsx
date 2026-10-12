@@ -8,6 +8,7 @@ import { PageHeader, Panel, Button, Chip, Alert, Tip, type ChipTone } from "../.
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 import { useTerm } from "../TermContext";
 import { Skel, SkelValue } from "../../components/Skeletons";
+import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 interface Holiday {
   id: string;
@@ -19,7 +20,7 @@ interface Holiday {
 }
 
 const HOLIDAY_SOURCE_LABEL: Record<Holiday["source"], string> = {
-  national: "ราชการ", university: "มหาวิทยาลัย", faculty: "คณะ", custom: "อื่นๆ", tdbm: "TDBM",
+  national: msg("ราชการ"), university: msg("มหาวิทยาลัย"), faculty: msg("คณะ"), custom: msg("อื่นๆ"), tdbm: "TDBM",
 };
 const HOLIDAY_SOURCE_TONE: Record<Holiday["source"], ChipTone> = {
   national: "danger", university: "warn", faculty: "brand", custom: "neutral", tdbm: "info",
@@ -60,32 +61,25 @@ interface TDBMSyncLogEntry {
   finished_at?: string;
 }
 
-// "2026-10-24" -> "24 ต.ค. 2569" — short form, this table has a lot of rows.
-const MONTH_TH_SHORT = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-];
-function formatDateShort(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return iso;
-  return `${d.getDate()} ${MONTH_TH_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
-}
+// "2026-10-24" -> "24 ต.ค. 2569" / "24 Oct 2026" — short form, this table has
+// a lot of rows. Dates go through fmtDate() from useI18n().
 
 // "2026-09-18T14:59:56" (already Bangkok local time — the backend formats it
 // with TO_CHAR, no timezone suffix) -> "18 ก.ย. 2569 เวลา 14:59 น." — the raw
 // ISO-ish string this replaces reads as a technical log line, not something
 // non-technical staff can glance at and know "was that just now, or last week".
-function formatDateTimeThai(isoLocal: string): string {
+function formatDateTimeThai(t: TFn, fmtDate: (iso: string) => string, isoLocal: string): string {
   const d = new Date(isoLocal);
   if (Number.isNaN(d.getTime())) return isoLocal;
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${d.getDate()} ${MONTH_TH_SHORT[d.getMonth()]} ${d.getFullYear() + 543} เวลา ${hh}:${mm} น.`;
+  const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return t("{date} เวลา {time} น.", { date: fmtDate(ymd), time: `${hh}:${mm}` });
 }
 
 // "09:00–12:00" or "ทั้งวัน" — same rendering as /staff/holidays.
-function holidayWindowLabel(h: Holiday): string {
-  if (!h.start_time || !h.end_time) return "ทั้งวัน";
+function holidayWindowLabel(t: TFn, h: Holiday): string {
+  if (!h.start_time || !h.end_time) return t("ทั้งวัน");
   return `${h.start_time.slice(0, 5)}–${h.end_time.slice(0, 5)}`;
 }
 
@@ -98,6 +92,8 @@ function isMatched(r: TDBMExtraTeaching) {
 
 export default function StaffTDBMPage() {
   const { term, loaded } = useTerm();
+  const { t, fmtDate } = useI18n();
+  const formatDateShort = (iso: string) => fmtDate(iso);
   const [syncing, setSyncing] = useState(false);
 
   const listKey = term ? `/tdbm/extra-teachings?academic_year=${term.academic_year}&semester=${term.semester}` : null;
@@ -137,7 +133,7 @@ export default function StaffTDBMPage() {
     setSyncing(true);
     try {
       await api.post("/tdbm/sync-now");
-      notify.success("ซิงก์จาก TDBM เรียบร้อยแล้ว");
+      notify.success(t("ซิงก์จาก TDBM เรียบร้อยแล้ว"));
       await Promise.all([mutate(listKey), mutate("/tdbm/sync-log?limit=10")]);
     } catch (e) {
       notify.error(e);
@@ -148,7 +144,7 @@ export default function StaffTDBMPage() {
 
   const columns: DataColumn<TDBMExtraTeaching>[] = [
     {
-      id: "class_date", width: 150, label: "วันที่สอนชดเชย", sortable: true, isRowHeader: true,
+      id: "class_date", width: 150, label: t("วันที่สอนชดเชย"), sortable: true, isRowHeader: true,
       sortValue: r => r.class_date,
       render: r => (
         <span className="whitespace-nowrap">
@@ -160,7 +156,7 @@ export default function StaffTDBMPage() {
       ),
     },
     {
-      id: "original_holiday", width: 160, label: "ตรงกับวันหยุด", sortable: true,
+      id: "original_holiday", width: 160, label: t("ตรงกับวันหยุด"), sortable: true,
       sortValue: r => r.original_holiday_date ?? "",
       render: r =>
         r.original_holiday_date ? (
@@ -169,11 +165,11 @@ export default function StaffTDBMPage() {
             {r.original_holiday_name && <span className="ml-1.5 text-muted">({r.original_holiday_name})</span>}
           </span>
         ) : (
-          <span className="text-muted">ยังไม่ทราบ</span>
+          <span className="text-muted">{t("ยังไม่ทราบ")}</span>
         ),
     },
     {
-      id: "course", width: 260, label: "วิชา / กลุ่ม", sortable: true,
+      id: "course", width: 260, label: t("วิชา / กลุ่ม"), sortable: true,
       sortValue: r => r.course_code ?? "",
       // One line: our match, then its name. TDBM's own raw text — the proof
       // the sync fetched real data, whether or not we could match it — is in
@@ -184,32 +180,32 @@ export default function StaffTDBMPage() {
             <span className="font-medium">
               {r.matched_course_code ?? r.course_code ?? <span className="text-muted">—</span>}
             </span>
-            {r.matched_sec_no && <span className="text-muted"> กลุ่ม {r.matched_sec_no}</span>}
+            {r.matched_sec_no && <span className="text-muted"> {t("กลุ่ม {n}", { n: r.matched_sec_no })}</span>}
             {r.matched_course_name && <span className="ms-2 text-xs text-muted">{r.matched_course_name}</span>}
           </span>
         </Tip>
       ),
     },
     {
-      id: "teacher", width: 200, label: "อาจารย์ (เจ้าของวิชา)",
+      id: "teacher", width: 200, label: t("อาจารย์ (เจ้าของวิชา)"),
       render: r => r.owner_teacher_name ?? <span className="text-muted">—</span>,
     },
     {
-      id: "duration", width: 100, label: "ชั่วโมง", sortable: true, className: "text-right", hideOnMobile: true,
+      id: "duration", width: 100, label: t("ชั่วโมง"), sortable: true, className: "text-right", hideOnMobile: true,
       sortValue: r => r.duration_minutes,
       render: r => <span className="tabular-nums">{(r.duration_minutes / 60).toFixed(1)}</span>,
     },
     {
-      id: "match", width: 150, label: "สถานะจับคู่", sortable: true,
+      id: "match", width: 150, label: t("สถานะจับคู่"), sortable: true,
       sortValue: r => (isMatched(r) ? 1 : 0),
       render: r =>
         isMatched(r) ? (
           <span className="inline-flex items-center gap-1 text-success">
-            <CheckCircle2 size={16} /> จับคู่กับระบบ TA PAY แล้ว
+            <CheckCircle2 size={16} /> {t("จับคู่กับระบบ TA PAY แล้ว")}
           </span>
         ) : (
           <span className="inline-flex items-center gap-1 text-danger">
-            <XCircle size={16} /> ยังไม่จับคู่
+            <XCircle size={16} /> {t("ยังไม่จับคู่")}
           </span>
         ),
     },
@@ -217,11 +213,11 @@ export default function StaffTDBMPage() {
 
   const filters: DataFilter<TDBMExtraTeaching>[] = [
     {
-      id: "match", placeholder: "สถานะจับคู่",
+      id: "match", placeholder: t("สถานะจับคู่"),
       options: [
-        { id: "", label: "ทุกรายการ" },
-        { id: "matched", label: "จับคู่กับระบบ TA PAY แล้ว" },
-        { id: "unmatched", label: "ยังไม่จับคู่" },
+        { id: "", label: t("ทุกรายการ") },
+        { id: "matched", label: t("จับคู่กับระบบ TA PAY แล้ว") },
+        { id: "unmatched", label: t("ยังไม่จับคู่") },
       ],
       predicate: (r, v) => (v === "matched" ? isMatched(r) : !isMatched(r)),
     },
@@ -229,61 +225,63 @@ export default function StaffTDBMPage() {
 
   const holidayColumns: DataColumn<Holiday>[] = [
     {
-      id: "date", width: 150, label: "วันที่", sortable: true, isRowHeader: true,
+      id: "date", width: 150, label: t("วันที่"), sortable: true, isRowHeader: true,
       sortValue: h => h.holiday_date,
       render: h => <span className="whitespace-nowrap">{formatDateShort(h.holiday_date)}</span>,
     },
-    { id: "name", width: 260, label: "ชื่อวันหยุด", sortable: true, sortValue: h => h.name_th, render: h => h.name_th },
+    { id: "name", width: 260, label: t("ชื่อวันหยุด"), sortable: true, sortValue: h => h.name_th, render: h => h.name_th },
     {
-      id: "source", width: 140, label: "ประเภท", hideOnMobile: true,
-      render: h => <Chip tone={HOLIDAY_SOURCE_TONE[h.source]}>{HOLIDAY_SOURCE_LABEL[h.source]}</Chip>,
+      id: "source", width: 140, label: t("ประเภท"), hideOnMobile: true,
+      render: h => <Chip tone={HOLIDAY_SOURCE_TONE[h.source]}>{t(HOLIDAY_SOURCE_LABEL[h.source])}</Chip>,
     },
-    { id: "window", width: 180, label: "ช่วงเวลา", hideOnMobile: true, render: h => holidayWindowLabel(h) },
+    { id: "window", width: 180, label: t("ช่วงเวลา"), hideOnMobile: true, render: h => holidayWindowLabel(t, h) },
   ];
 
   return (
     <div>
       <PageHeader
-        title="ข้อมูลจาก TDBM"
-        description="รายการวันสอนชดเชยที่ระบบดึงมาจาก TDBM (ระบบลงเวลาชดเชยของอาจารย์) จริง — หน้านี้ไว้ตรวจสอบว่าซิงก์สำเร็จ ไม่ใช่หน้าจัดการ การแก้ไข/อนุมัติยังทำในระบบ TDBM เอง"
+        title={t("ข้อมูลจาก TDBM")}
+        description={t("รายการวันสอนชดเชยที่ระบบดึงมาจาก TDBM (ระบบลงเวลาชดเชยของอาจารย์) จริง — หน้านี้ไว้ตรวจสอบว่าซิงก์สำเร็จ ไม่ใช่หน้าจัดการ การแก้ไข/อนุมัติยังทำในระบบ TDBM เอง")}
         actions={
           <Button variant="secondary" onClick={handleSyncNow} isPending={syncing} disabled={syncing}>
-            <RefreshCw size={14} /> ซิงก์ตอนนี้
+            <RefreshCw size={14} /> {t("ซิงก์ตอนนี้")}
           </Button>
         }
       />
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Panel className="p-4">
-          <div className="text-xs text-muted">ภาคเรียนที่ดู</div>
+          <div className="text-xs text-muted">{t("ภาคเรียนที่ดู")}</div>
           <div className="mt-1 text-lg font-semibold tabular-nums">
             {!loaded ? <SkelValue className="h-6 w-16" /> : term ? `${term.academic_year}/${term.semester}` : "—"}
           </div>
         </Panel>
         <Panel className="p-4">
-          <div className="text-xs text-muted">รายการวันสอนชดเชยที่ดึงมาได้</div>
+          <div className="text-xs text-muted">{t("รายการวันสอนชดเชยที่ดึงมาได้")}</div>
           <div className="mt-1 text-lg font-semibold tabular-nums">
-            {rows ? `${rows.length} รายการ` : (listKey || !loaded) && !error ? <SkelValue className="h-6 w-24" /> : "—"}
+            {rows ? t("{n} รายการ", { n: rows.length }) : (listKey || !loaded) && !error ? <SkelValue className="h-6 w-24" /> : "—"}
             {rows && rows.length > 0 && (
-              <span className="ml-2 text-sm font-normal text-muted">จับคู่กลุ่มเรียนได้ {matchedCount} รายการ</span>
+              <span className="ml-2 text-sm font-normal text-muted">{t("จับคู่กลุ่มเรียนได้ {n} รายการ", { n: matchedCount })}</span>
             )}
           </div>
         </Panel>
         <Panel className="p-4">
-          <div className="text-xs text-muted">ซิงก์ล่าสุด (วันสอนชดเชย)</div>
+          <div className="text-xs text-muted">{t("ซิงก์ล่าสุด (วันสอนชดเชย)")}</div>
           <div className="mt-1 text-sm">
             {!syncLog ? (
               <Skel className="h-5 w-3/4" />
             ) : lastExtra ? (
               <>
-                <span>{formatDateTimeThai(lastExtra.finished_at ?? lastExtra.started_at)}</span>{" "}
+                <span>{formatDateTimeThai(t, formatDateShort, lastExtra.finished_at ?? lastExtra.started_at)}</span>{" "}
                 <span className="text-muted">
-                  ({lastExtra.trigger_kind === "webhook" ? "TDBM แจ้งมา" : lastExtra.trigger_kind === "scheduler" ? "อัตโนมัติ" : "กดเอง"},{" "}
-                  ดึงมา {lastExtra.fetched} รายการ)
+                  {t("({how}, ดึงมา {n} รายการ)", {
+                    how: lastExtra.trigger_kind === "webhook" ? t("TDBM แจ้งมา") : lastExtra.trigger_kind === "scheduler" ? t("อัตโนมัติ") : t("กดเอง"),
+                    n: lastExtra.fetched,
+                  })}
                 </span>
               </>
             ) : (
-              <span className="text-muted">ยังไม่เคยซิงก์</span>
+              <span className="text-muted">{t("ยังไม่เคยซิงก์")}</span>
             )}
           </div>
         </Panel>
@@ -293,20 +291,20 @@ export default function StaffTDBMPage() {
         <div className="mt-4">
           <Alert
             status="warning"
-            title="ยังไม่มีข้อมูลวันสอนชดเชยสำหรับภาคเรียนนี้"
-            description="อาจเป็นเพราะยังไม่มีอาจารย์ยื่นคำขอในภาคเรียนนี้ใน TDBM หรือยังไม่เคยซิงก์สำเร็จ — ลองกด “ซิงก์ตอนนี้” ด้านบน"
+            title={t("ยังไม่มีข้อมูลวันสอนชดเชยสำหรับภาคเรียนนี้")}
+            description={t("อาจเป็นเพราะยังไม่มีอาจารย์ยื่นคำขอในภาคเรียนนี้ใน TDBM หรือยังไม่เคยซิงก์สำเร็จ — ลองกด “ซิงก์ตอนนี้” ด้านบน")}
           />
         </div>
       )}
 
       {lastHolidays?.error && (
         <div className="mt-4">
-          <Alert status="danger" title="ซิงก์วันหยุดล่าสุดล้มเหลว" description={lastHolidays.error} />
+          <Alert status="danger" title={t("ซิงก์วันหยุดล่าสุดล้มเหลว")} description={lastHolidays.error} />
         </div>
       )}
       {lastExtra?.error && (
         <div className="mt-4">
-          <Alert status="danger" title="ซิงก์วันสอนชดเชยล่าสุดล้มเหลว" description={lastExtra.error} />
+          <Alert status="danger" title={t("ซิงก์วันสอนชดเชยล่าสุดล้มเหลว")} description={lastExtra.error} />
         </div>
       )}
 
@@ -314,14 +312,14 @@ export default function StaffTDBMPage() {
          needed covering" before "what got filed", the actual comparison. */}
       <div className="mt-6">
         <h2 className="text-sm font-semibold">
-          วันหยุดในภาคเรียนนี้ {holidays && <span className="font-normal text-muted">({holidays.length} วัน)</span>}
+          {t("วันหยุดในภาคเรียนนี้")} {holidays && <span className="font-normal text-muted">{t("({n} วัน)", { n: holidays.length })}</span>}
         </h2>
         <p className="mt-0.5 text-xs text-muted">
-          วันหยุดทั้งหมดในช่วงวันที่ของภาคเรียนนี้ (ไม่ใช่แค่ที่มาจาก TDBM) — ไว้เทียบกับรายการวันสอนชดเชยด้านล่างว่าวันไหนยังไม่มีใครยื่นชดเชย
+          {t("วันหยุดทั้งหมดในช่วงวันที่ของภาคเรียนนี้ (ไม่ใช่แค่ที่มาจาก TDBM) — ไว้เทียบกับรายการวันสอนชดเชยด้านล่างว่าวันไหนยังไม่มีใครยื่นชดเชย")}
         </p>
         <div className="mt-2">
           <DataTable
-            ariaLabel="วันหยุดในภาคเรียนนี้"
+            ariaLabel={t("วันหยุดในภาคเรียนนี้")}
             columns={holidayColumns}
             rows={holidays}
             rowKey={h => h.id}
@@ -330,35 +328,35 @@ export default function StaffTDBMPage() {
             loading={(!loaded || !allHolidays) && !holidaysError}
             pageSize={50}
             initialSort={{ column: "date", direction: "ascending" }}
-            emptyTitle="ไม่มีวันหยุดในภาคเรียนนี้"
-            emptyDescription="ยังไม่มีวันหยุดถูกบันทึกในช่วงวันที่ของภาคเรียนที่เลือก"
+            emptyTitle={t("ไม่มีวันหยุดในภาคเรียนนี้")}
+            emptyDescription={t("ยังไม่มีวันหยุดถูกบันทึกในช่วงวันที่ของภาคเรียนที่เลือก")}
           />
         </div>
       </div>
 
       <div className="mt-6">
-        <h2 className="text-sm font-semibold">วันสอนชดเชยที่ TDBM ส่งมา</h2>
+        <h2 className="text-sm font-semibold">{t("วันสอนชดเชยที่ TDBM ส่งมา")}</h2>
         <div className="mt-2">
           <DataTable
-            ariaLabel="รายการวันสอนชดเชยจาก TDBM"
+            ariaLabel={t("รายการวันสอนชดเชยจาก TDBM")}
             columns={columns}
             rows={rows}
             rowKey={r => r.extra_class_id}
             searchFn={r => `${r.course_code ?? ""} ${r.matched_course_code ?? ""} ${r.matched_course_name ?? ""} ${r.owner_teacher_name ?? ""}`}
-            searchPlaceholder="ค้นหารหัสวิชา หรือชื่ออาจารย์…"
+            searchPlaceholder={t("ค้นหารหัสวิชา หรือชื่ออาจารย์…")}
             filters={filters}
             pageSize={20}
             initialSort={{ column: "class_date", direction: "descending" }}
             loading={isLoading || !loaded}
             error={error}
-            emptyTitle="ไม่มีข้อมูล"
-            emptyDescription="ยังไม่มีรายการวันสอนชดเชยสำหรับภาคเรียนที่เลือก"
+            emptyTitle={t("ไม่มีข้อมูล")}
+            emptyDescription={t("ยังไม่มีรายการวันสอนชดเชยสำหรับภาคเรียนที่เลือก")}
           />
         </div>
       </div>
 
       <div className="mt-6 flex items-center gap-2 text-xs text-muted">
-        <Database size={13} /> ซิงก์อัตโนมัติทุกชั่วโมง และทันทีเมื่อ TDBM แจ้งมา (webhook) — ไม่ต้องกด “ซิงก์ตอนนี้” เอง เว้นแต่ต้องการเช็คทันที
+        <Database size={13} /> {t("ซิงก์อัตโนมัติทุกชั่วโมง และทันทีเมื่อ TDBM แจ้งมา (webhook) — ไม่ต้องกด “ซิงก์ตอนนี้” เอง เว้นแต่ต้องการเช็คทันที")}
       </div>
     </div>
   );

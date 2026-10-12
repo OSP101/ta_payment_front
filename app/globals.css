@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
+/* dark: follows the theme the person picked (the .dark class app/layout.tsx
+   puts on <html>), not the device setting — Tailwind's default would make
+   dark: fire on a dark-mode laptop even with the light theme chosen. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* -------------------------------------------------------------------------- */
 /* A button must look clickable.                                              */
 /*                                                                            */
@@ -53,20 +58,407 @@ button:not(:disabled):not([aria-disabled="true"]),
   --accent: #0776BC;
   --accent-hover: #065f97;
   --accent-foreground: #ffffff;
+
+  /* Text and soft fills for status colours used outside Tailwind classes —
+     chart labels (app/staff/insights) and the manual's diagrams
+     (app/components/docs). Each has a .dark twin. */
+  --tone-danger-ink: #b91c1c;
+  --tone-warn-ink: #92400e;
+  --tone-info-ink: #0369a1;
+  --tone-good-ink: #15803d;
+  --tone-muted-ink: #475569;
+  --tone-brand-ink: #0776bc;
+  --tone-ta-ink: #1d7a4a;
+  --tone-staff-ink: #9a5b00;
+  --tone-brand-soft: #f1f7fc;
+  --tone-brand-line: #bcd9ee;
+  --tone-brand-dash: #9cc7e6;
+  --tone-ta-soft: #f3faf6;
+  --tone-ta-line: #bfe3cd;
+  --tone-staff-soft: #fbf6ee;
+  --tone-staff-line: #ecd4ad;
+  --tone-paper-soft: #f6f7f9;
+  --tone-paper-line: #d5dbe3;
+  --tone-glow: #eef6fc;
+  --tone-track: #dfe4ea;
 }
 
 @theme {
   --font-sans: "Kanit", ui-sans-serif, system-ui, sans-serif;
-  --color-brand: #0776BC;
-  --color-brand-fg: #ffffff;
-  --color-brand-hover: #065f97;
-  --color-brand-soft: #e7f3fb;
-  --color-ink-1: #0f172a;
-  --color-ink-2: #334155;
-  --color-ink-3: #64748b;
-  --color-ink-4: #94a3b8;
-  --color-hairline: #eef0f3;
+  /* Pointers to the tokens above rather than copies, so text-ink-1,
+     bg-brand-soft and friends follow the dark theme too. */
+  --color-brand: var(--brand);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-ink-1: var(--ink-1);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-hairline: var(--hairline);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Dark theme                                                                 */
+/*                                                                            */
+/* Switched by the .dark class on <html> (app/layout.tsx, ThemeSwitch). Not    */
+/* layered, so it beats both HeroUI's own .dark block and the :root tokens.   */
+/*                                                                            */
+/* The second half re-points Tailwind's colour palette instead of giving      */
+/* ~700 class lists a dark: twin. In this app a palette class names a ROLE:   */
+/* bg-amber-50 is "soft warning surface", text-red-700 is "danger text",      */
+/* bg-slate-50 is "slightly raised area". Under .dark the light steps become  */
+/* a dim tint of the panel and the dark steps become light, so each role      */
+/* still reads the same way. 400–600 stay mid-tone for solid fills that carry */
+/* white text (dots, solid chips). A new colour that must NOT flip should use */
+/* an arbitrary value (bg-[#…]) or a token, not a palette step.               */
+/* -------------------------------------------------------------------------- */
+
+.dark {
+  color-scheme: dark;
+
+  --brand: #1683c9;
+  --brand-hover: #2b93d6;
+  --brand-fg: #ffffff;
+  --brand-soft: rgba(22, 131, 201, 0.16);
+
+  --page-bg: #0d1117;
+  --panel-bg: #161b22;
+  --border: #30363d;
+  --border-strong: #3d444d;
+  --hairline: #262c36;
+  --ink-1: #e6edf3;
+  --ink-2: #c4ccd6;
+  --ink-3: #8b949e;
+  --ink-4: #6e7681;
+
+  --sidebar-bg: var(--panel-bg);
+  --sidebar-hover: #1f2630;
+  --sidebar-active-bg: rgba(22, 131, 201, 0.18);
+  --sidebar-active-fg: #58a6e0;
+
+  /* HeroUI, lined up with the tokens above so its components and ours sit
+     on the same greys. */
+  --accent: #1683c9;
+  --accent-hover: #2b93d6;
+  --accent-foreground: #ffffff;
+  --background: var(--page-bg);
+  --surface: var(--panel-bg);
+  --surface-secondary: #1c222b;
+  --surface-tertiary: #222936;
+  --overlay: #1c222b;
+  --field-background: #0d1117;
+  --separator: var(--hairline);
+  --default: #262c36;
+
+  --tone-danger-ink: #f87171;
+  --tone-warn-ink: #fbbf24;
+  --tone-info-ink: #7dd3fc;
+  --tone-good-ink: #4ade80;
+  --tone-muted-ink: #94a3b8;
+  --tone-brand-ink: #58a6e0;
+  --tone-ta-ink: #4ade80;
+  --tone-staff-ink: #f0b44c;
+  --tone-brand-soft: rgba(22, 131, 201, 0.12);
+  --tone-brand-line: #1f4f73;
+  --tone-brand-dash: #2a6a99;
+  --tone-ta-soft: rgba(29, 122, 74, 0.14);
+  --tone-ta-line: #24573a;
+  --tone-staff-soft: rgba(154, 91, 0, 0.16);
+  --tone-staff-line: #6b4a17;
+  --tone-paper-soft: #1c222b;
+  --tone-paper-line: #3d444d;
+  --tone-glow: rgba(22, 131, 201, 0.10);
+  --tone-track: #3d444d;
+
+  /* slate */
+  --color-slate-50: color-mix(in oklab, oklch(27.9% 0.041 260.031) 45%, var(--panel-bg));
+  --color-slate-100: oklch(27.9% 0.041 260.031);
+  --color-slate-200: oklch(37.2% 0.044 257.287);
+  --color-slate-300: oklch(44.6% 0.043 257.281);
+  --color-slate-400: oklch(55.4% 0.046 257.417);
+  --color-slate-500: oklch(70.4% 0.04 256.788);
+  --color-slate-600: oklch(86.9% 0.022 252.894);
+  --color-slate-700: oklch(92.9% 0.013 255.508);
+  --color-slate-800: oklch(96.8% 0.007 247.896);
+  --color-slate-900: oklch(98.4% 0.003 247.858);
+  --color-slate-950: #fff;
+  /* gray */
+  --color-gray-50: color-mix(in oklab, oklch(27.8% 0.033 256.848) 45%, var(--panel-bg));
+  --color-gray-100: oklch(27.8% 0.033 256.848);
+  --color-gray-200: oklch(37.3% 0.034 259.733);
+  --color-gray-300: oklch(44.6% 0.03 256.802);
+  --color-gray-400: oklch(55.1% 0.027 264.364);
+  --color-gray-500: oklch(70.7% 0.022 261.325);
+  --color-gray-600: oklch(87.2% 0.01 258.338);
+  --color-gray-700: oklch(92.8% 0.006 264.531);
+  --color-gray-800: oklch(96.7% 0.003 264.542);
+  --color-gray-900: oklch(98.5% 0.002 247.839);
+  --color-gray-950: #fff;
+  /* zinc */
+  --color-zinc-50: color-mix(in oklab, oklch(27.4% 0.006 286.033) 45%, var(--panel-bg));
+  --color-zinc-100: oklch(27.4% 0.006 286.033);
+  --color-zinc-200: oklch(37% 0.013 285.805);
+  --color-zinc-300: oklch(44.2% 0.017 285.786);
+  --color-zinc-400: oklch(55.2% 0.016 285.938);
+  --color-zinc-500: oklch(70.5% 0.015 286.067);
+  --color-zinc-600: oklch(87.1% 0.006 286.286);
+  --color-zinc-700: oklch(92% 0.004 286.32);
+  --color-zinc-800: oklch(96.7% 0.001 286.375);
+  --color-zinc-900: oklch(98.5% 0 0);
+  --color-zinc-950: #fff;
+  /* neutral */
+  --color-neutral-50: color-mix(in oklab, oklch(26.9% 0 0) 45%, var(--panel-bg));
+  --color-neutral-100: oklch(26.9% 0 0);
+  --color-neutral-200: oklch(37.1% 0 0);
+  --color-neutral-300: oklch(43.9% 0 0);
+  --color-neutral-400: oklch(55.6% 0 0);
+  --color-neutral-500: oklch(70.8% 0 0);
+  --color-neutral-600: oklch(87% 0 0);
+  --color-neutral-700: oklch(92.2% 0 0);
+  --color-neutral-800: oklch(97% 0 0);
+  --color-neutral-900: oklch(98.5% 0 0);
+  --color-neutral-950: #fff;
+  /* stone */
+  --color-stone-50: color-mix(in oklab, oklch(26.8% 0.007 34.298) 45%, var(--panel-bg));
+  --color-stone-100: oklch(26.8% 0.007 34.298);
+  --color-stone-200: oklch(37.4% 0.01 67.558);
+  --color-stone-300: oklch(44.4% 0.011 73.639);
+  --color-stone-400: oklch(55.3% 0.013 58.071);
+  --color-stone-500: oklch(70.9% 0.01 56.259);
+  --color-stone-600: oklch(86.9% 0.005 56.366);
+  --color-stone-700: oklch(92.3% 0.003 48.717);
+  --color-stone-800: oklch(97% 0.001 106.424);
+  --color-stone-900: oklch(98.5% 0.001 106.423);
+  --color-stone-950: #fff;
+  /* red */
+  --color-red-50: color-mix(in oklab, oklch(39.6% 0.141 25.723) 30%, var(--panel-bg));
+  --color-red-100: color-mix(in oklab, oklch(39.6% 0.141 25.723) 50%, var(--panel-bg));
+  --color-red-200: color-mix(in oklab, oklch(44.4% 0.177 26.899) 70%, var(--panel-bg));
+  --color-red-300: oklch(50.5% 0.213 27.518);
+  --color-red-400: oklch(63.7% 0.237 25.331);
+  --color-red-500: oklch(63.7% 0.237 25.331);
+  --color-red-600: oklch(63.7% 0.237 25.331);
+  --color-red-700: oklch(70.4% 0.191 22.216);
+  --color-red-800: oklch(80.8% 0.114 19.571);
+  --color-red-900: oklch(88.5% 0.062 18.334);
+  --color-red-950: oklch(93.6% 0.032 17.717);
+  /* orange */
+  --color-orange-50: color-mix(in oklab, oklch(40.8% 0.123 38.172) 30%, var(--panel-bg));
+  --color-orange-100: color-mix(in oklab, oklch(40.8% 0.123 38.172) 50%, var(--panel-bg));
+  --color-orange-200: color-mix(in oklab, oklch(47% 0.157 37.304) 70%, var(--panel-bg));
+  --color-orange-300: oklch(55.3% 0.195 38.402);
+  --color-orange-400: oklch(70.5% 0.213 47.604);
+  --color-orange-500: oklch(70.5% 0.213 47.604);
+  --color-orange-600: oklch(70.5% 0.213 47.604);
+  --color-orange-700: oklch(75% 0.183 55.934);
+  --color-orange-800: oklch(83.7% 0.128 66.29);
+  --color-orange-900: oklch(90.1% 0.076 70.697);
+  --color-orange-950: oklch(95.4% 0.038 75.164);
+  /* amber */
+  --color-amber-50: color-mix(in oklab, oklch(41.4% 0.112 45.904) 30%, var(--panel-bg));
+  --color-amber-100: color-mix(in oklab, oklch(41.4% 0.112 45.904) 50%, var(--panel-bg));
+  --color-amber-200: color-mix(in oklab, oklch(47.3% 0.137 46.201) 70%, var(--panel-bg));
+  --color-amber-300: oklch(55.5% 0.163 48.998);
+  --color-amber-400: oklch(76.9% 0.188 70.08);
+  --color-amber-500: oklch(76.9% 0.188 70.08);
+  --color-amber-600: oklch(76.9% 0.188 70.08);
+  --color-amber-700: oklch(82.8% 0.189 84.429);
+  --color-amber-800: oklch(87.9% 0.169 91.605);
+  --color-amber-900: oklch(92.4% 0.12 95.746);
+  --color-amber-950: oklch(96.2% 0.059 95.617);
+  /* yellow */
+  --color-yellow-50: color-mix(in oklab, oklch(42.1% 0.095 57.708) 30%, var(--panel-bg));
+  --color-yellow-100: color-mix(in oklab, oklch(42.1% 0.095 57.708) 50%, var(--panel-bg));
+  --color-yellow-200: color-mix(in oklab, oklch(47.6% 0.114 61.907) 70%, var(--panel-bg));
+  --color-yellow-300: oklch(55.4% 0.135 66.442);
+  --color-yellow-400: oklch(79.5% 0.184 86.047);
+  --color-yellow-500: oklch(79.5% 0.184 86.047);
+  --color-yellow-600: oklch(79.5% 0.184 86.047);
+  --color-yellow-700: oklch(85.2% 0.199 91.936);
+  --color-yellow-800: oklch(90.5% 0.182 98.111);
+  --color-yellow-900: oklch(94.5% 0.129 101.54);
+  --color-yellow-950: oklch(97.3% 0.071 103.193);
+  /* lime */
+  --color-lime-50: color-mix(in oklab, oklch(40.5% 0.101 131.063) 30%, var(--panel-bg));
+  --color-lime-100: color-mix(in oklab, oklch(40.5% 0.101 131.063) 50%, var(--panel-bg));
+  --color-lime-200: color-mix(in oklab, oklch(45.3% 0.124 130.933) 70%, var(--panel-bg));
+  --color-lime-300: oklch(53.2% 0.157 131.589);
+  --color-lime-400: oklch(76.8% 0.233 130.85);
+  --color-lime-500: oklch(76.8% 0.233 130.85);
+  --color-lime-600: oklch(76.8% 0.233 130.85);
+  --color-lime-700: oklch(84.1% 0.238 128.85);
+  --color-lime-800: oklch(89.7% 0.196 126.665);
+  --color-lime-900: oklch(93.8% 0.127 124.321);
+  --color-lime-950: oklch(96.7% 0.067 122.328);
+  /* green */
+  --color-green-50: color-mix(in oklab, oklch(39.3% 0.095 152.535) 30%, var(--panel-bg));
+  --color-green-100: color-mix(in oklab, oklch(39.3% 0.095 152.535) 50%, var(--panel-bg));
+  --color-green-200: color-mix(in oklab, oklch(44.8% 0.119 151.328) 70%, var(--panel-bg));
+  --color-green-300: oklch(52.7% 0.154 150.069);
+  --color-green-400: oklch(72.3% 0.219 149.579);
+  --color-green-500: oklch(72.3% 0.219 149.579);
+  --color-green-600: oklch(72.3% 0.219 149.579);
+  --color-green-700: oklch(79.2% 0.209 151.711);
+  --color-green-800: oklch(87.1% 0.15 154.449);
+  --color-green-900: oklch(92.5% 0.084 155.995);
+  --color-green-950: oklch(96.2% 0.044 156.743);
+  /* emerald */
+  --color-emerald-50: color-mix(in oklab, oklch(37.8% 0.077 168.94) 30%, var(--panel-bg));
+  --color-emerald-100: color-mix(in oklab, oklch(37.8% 0.077 168.94) 50%, var(--panel-bg));
+  --color-emerald-200: color-mix(in oklab, oklch(43.2% 0.095 166.913) 70%, var(--panel-bg));
+  --color-emerald-300: oklch(50.8% 0.118 165.612);
+  --color-emerald-400: oklch(69.6% 0.17 162.48);
+  --color-emerald-500: oklch(69.6% 0.17 162.48);
+  --color-emerald-600: oklch(69.6% 0.17 162.48);
+  --color-emerald-700: oklch(76.5% 0.177 163.223);
+  --color-emerald-800: oklch(84.5% 0.143 164.978);
+  --color-emerald-900: oklch(90.5% 0.093 164.15);
+  --color-emerald-950: oklch(95% 0.052 163.051);
+  /* teal */
+  --color-teal-50: color-mix(in oklab, oklch(38.6% 0.063 188.416) 30%, var(--panel-bg));
+  --color-teal-100: color-mix(in oklab, oklch(38.6% 0.063 188.416) 50%, var(--panel-bg));
+  --color-teal-200: color-mix(in oklab, oklch(43.7% 0.078 188.216) 70%, var(--panel-bg));
+  --color-teal-300: oklch(51.1% 0.096 186.391);
+  --color-teal-400: oklch(70.4% 0.14 182.503);
+  --color-teal-500: oklch(70.4% 0.14 182.503);
+  --color-teal-600: oklch(70.4% 0.14 182.503);
+  --color-teal-700: oklch(77.7% 0.152 181.912);
+  --color-teal-800: oklch(85.5% 0.138 181.071);
+  --color-teal-900: oklch(91% 0.096 180.426);
+  --color-teal-950: oklch(95.3% 0.051 180.801);
+  /* cyan */
+  --color-cyan-50: color-mix(in oklab, oklch(39.8% 0.07 227.392) 30%, var(--panel-bg));
+  --color-cyan-100: color-mix(in oklab, oklch(39.8% 0.07 227.392) 50%, var(--panel-bg));
+  --color-cyan-200: color-mix(in oklab, oklch(45% 0.085 224.283) 70%, var(--panel-bg));
+  --color-cyan-300: oklch(52% 0.105 223.128);
+  --color-cyan-400: oklch(71.5% 0.143 215.221);
+  --color-cyan-500: oklch(71.5% 0.143 215.221);
+  --color-cyan-600: oklch(71.5% 0.143 215.221);
+  --color-cyan-700: oklch(78.9% 0.154 211.53);
+  --color-cyan-800: oklch(86.5% 0.127 207.078);
+  --color-cyan-900: oklch(91.7% 0.08 205.041);
+  --color-cyan-950: oklch(95.6% 0.045 203.388);
+  /* sky */
+  --color-sky-50: color-mix(in oklab, oklch(39.1% 0.09 240.876) 30%, var(--panel-bg));
+  --color-sky-100: color-mix(in oklab, oklch(39.1% 0.09 240.876) 50%, var(--panel-bg));
+  --color-sky-200: color-mix(in oklab, oklch(44.3% 0.11 240.79) 70%, var(--panel-bg));
+  --color-sky-300: oklch(50% 0.134 242.749);
+  --color-sky-400: oklch(68.5% 0.169 237.323);
+  --color-sky-500: oklch(68.5% 0.169 237.323);
+  --color-sky-600: oklch(68.5% 0.169 237.323);
+  --color-sky-700: oklch(74.6% 0.16 232.661);
+  --color-sky-800: oklch(82.8% 0.111 230.318);
+  --color-sky-900: oklch(90.1% 0.058 230.902);
+  --color-sky-950: oklch(95.1% 0.026 236.824);
+  /* blue */
+  --color-blue-50: color-mix(in oklab, oklch(37.9% 0.146 265.522) 30%, var(--panel-bg));
+  --color-blue-100: color-mix(in oklab, oklch(37.9% 0.146 265.522) 50%, var(--panel-bg));
+  --color-blue-200: color-mix(in oklab, oklch(42.4% 0.199 265.638) 70%, var(--panel-bg));
+  --color-blue-300: oklch(48.8% 0.243 264.376);
+  --color-blue-400: oklch(62.3% 0.214 259.815);
+  --color-blue-500: oklch(62.3% 0.214 259.815);
+  --color-blue-600: oklch(62.3% 0.214 259.815);
+  --color-blue-700: oklch(70.7% 0.165 254.624);
+  --color-blue-800: oklch(80.9% 0.105 251.813);
+  --color-blue-900: oklch(88.2% 0.059 254.128);
+  --color-blue-950: oklch(93.2% 0.032 255.585);
+  /* indigo */
+  --color-indigo-50: color-mix(in oklab, oklch(35.9% 0.144 278.697) 30%, var(--panel-bg));
+  --color-indigo-100: color-mix(in oklab, oklch(35.9% 0.144 278.697) 50%, var(--panel-bg));
+  --color-indigo-200: color-mix(in oklab, oklch(39.8% 0.195 277.366) 70%, var(--panel-bg));
+  --color-indigo-300: oklch(45.7% 0.24 277.023);
+  --color-indigo-400: oklch(58.5% 0.233 277.117);
+  --color-indigo-500: oklch(58.5% 0.233 277.117);
+  --color-indigo-600: oklch(58.5% 0.233 277.117);
+  --color-indigo-700: oklch(67.3% 0.182 276.935);
+  --color-indigo-800: oklch(78.5% 0.115 274.713);
+  --color-indigo-900: oklch(87% 0.065 274.039);
+  --color-indigo-950: oklch(93% 0.034 272.788);
+  /* violet */
+  --color-violet-50: color-mix(in oklab, oklch(38% 0.189 293.745) 30%, var(--panel-bg));
+  --color-violet-100: color-mix(in oklab, oklch(38% 0.189 293.745) 50%, var(--panel-bg));
+  --color-violet-200: color-mix(in oklab, oklch(43.2% 0.232 292.759) 70%, var(--panel-bg));
+  --color-violet-300: oklch(49.1% 0.27 292.581);
+  --color-violet-400: oklch(60.6% 0.25 292.717);
+  --color-violet-500: oklch(60.6% 0.25 292.717);
+  --color-violet-600: oklch(60.6% 0.25 292.717);
+  --color-violet-700: oklch(70.2% 0.183 293.541);
+  --color-violet-800: oklch(81.1% 0.111 293.571);
+  --color-violet-900: oklch(89.4% 0.057 293.283);
+  --color-violet-950: oklch(94.3% 0.029 294.588);
+  /* purple */
+  --color-purple-50: color-mix(in oklab, oklch(38.1% 0.176 304.987) 30%, var(--panel-bg));
+  --color-purple-100: color-mix(in oklab, oklch(38.1% 0.176 304.987) 50%, var(--panel-bg));
+  --color-purple-200: color-mix(in oklab, oklch(43.8% 0.218 303.724) 70%, var(--panel-bg));
+  --color-purple-300: oklch(49.6% 0.265 301.924);
+  --color-purple-400: oklch(62.7% 0.265 303.9);
+  --color-purple-500: oklch(62.7% 0.265 303.9);
+  --color-purple-600: oklch(62.7% 0.265 303.9);
+  --color-purple-700: oklch(71.4% 0.203 305.504);
+  --color-purple-800: oklch(82.7% 0.119 306.383);
+  --color-purple-900: oklch(90.2% 0.063 306.703);
+  --color-purple-950: oklch(94.6% 0.033 307.174);
+  /* fuchsia */
+  --color-fuchsia-50: color-mix(in oklab, oklch(40.1% 0.17 325.612) 30%, var(--panel-bg));
+  --color-fuchsia-100: color-mix(in oklab, oklch(40.1% 0.17 325.612) 50%, var(--panel-bg));
+  --color-fuchsia-200: color-mix(in oklab, oklch(45.2% 0.211 324.591) 70%, var(--panel-bg));
+  --color-fuchsia-300: oklch(51.8% 0.253 323.949);
+  --color-fuchsia-400: oklch(66.7% 0.295 322.15);
+  --color-fuchsia-500: oklch(66.7% 0.295 322.15);
+  --color-fuchsia-600: oklch(66.7% 0.295 322.15);
+  --color-fuchsia-700: oklch(74% 0.238 322.16);
+  --color-fuchsia-800: oklch(83.3% 0.145 321.434);
+  --color-fuchsia-900: oklch(90.3% 0.076 319.62);
+  --color-fuchsia-950: oklch(95.2% 0.037 318.852);
+  /* pink */
+  --color-pink-50: color-mix(in oklab, oklch(40.8% 0.153 2.432) 30%, var(--panel-bg));
+  --color-pink-100: color-mix(in oklab, oklch(40.8% 0.153 2.432) 50%, var(--panel-bg));
+  --color-pink-200: color-mix(in oklab, oklch(45.9% 0.187 3.815) 70%, var(--panel-bg));
+  --color-pink-300: oklch(52.5% 0.223 3.958);
+  --color-pink-400: oklch(65.6% 0.241 354.308);
+  --color-pink-500: oklch(65.6% 0.241 354.308);
+  --color-pink-600: oklch(65.6% 0.241 354.308);
+  --color-pink-700: oklch(71.8% 0.202 349.761);
+  --color-pink-800: oklch(82.3% 0.12 346.018);
+  --color-pink-900: oklch(89.9% 0.061 343.231);
+  --color-pink-950: oklch(94.8% 0.028 342.258);
+  /* rose */
+  --color-rose-50: color-mix(in oklab, oklch(41% 0.159 10.272) 30%, var(--panel-bg));
+  --color-rose-100: color-mix(in oklab, oklch(41% 0.159 10.272) 50%, var(--panel-bg));
+  --color-rose-200: color-mix(in oklab, oklch(45.5% 0.188 13.697) 70%, var(--panel-bg));
+  --color-rose-300: oklch(51.4% 0.222 16.935);
+  --color-rose-400: oklch(64.5% 0.246 16.439);
+  --color-rose-500: oklch(64.5% 0.246 16.439);
+  --color-rose-600: oklch(64.5% 0.246 16.439);
+  --color-rose-700: oklch(71.2% 0.194 13.428);
+  --color-rose-800: oklch(81% 0.117 11.638);
+  --color-rose-900: oklch(89.2% 0.058 10.001);
+  --color-rose-950: oklch(94.1% 0.03 12.58);
+
+}
+.dark .bg-white { background-color: var(--panel-bg); }
+.dark .ring-white { --tw-ring-color: var(--panel-bg); }
+.dark .btn-secondary { background: var(--panel-bg); }
+.dark .btn-secondary:hover:not(:disabled),
+.dark .btn-ghost:hover:not(:disabled) { background: var(--sidebar-hover); }
+.dark .field, .dark .input, .dark .card { background: var(--field-background); }
+.dark .card { background: var(--panel-bg); }
+.dark .field:disabled { background: var(--surface-secondary); }
+.dark .data-table thead th,
+.dark .data-table tbody tr:hover td { background: var(--surface-secondary); }
+.dark .btn-danger-soft,
+.dark .chip-danger, .dark .badge-err   { background: color-mix(in oklab, #7f1d1d 35%, var(--panel-bg)); color: #fca5a5; border-color: #7f1d1d; }
+.dark .chip-success, .dark .badge-ok   { background: color-mix(in oklab, #064e3b 35%, var(--panel-bg)); color: #6ee7b7; border-color: #065f46; }
+.dark .chip-warn, .dark .badge-warn    { background: color-mix(in oklab, #78350f 35%, var(--panel-bg)); color: #fcd34d; border-color: #92400e; }
+.dark .chip-info, .dark .badge-info    { background: color-mix(in oklab, #1e3a8a 35%, var(--panel-bg)); color: #93c5fd; border-color: #1e40af; }
+.dark .chip-neutral { background: var(--surface-secondary); color: var(--ink-2); border-color: var(--border); }
+.dark .chip-brand   { border-color: rgba(22, 131, 201, 0.4); color: #58a6e0; }
+.dark .form-error { color: #f87171; }
+.dark .link-brand { color: #58a6e0; }
+.dark ::-webkit-scrollbar-thumb { background: #3d444d; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #4d5562; }
+.dark .docs-flow-link, .dark .docs-flow-spine { background: var(--border); }
 
 html, body {
   font-family: var(--font-sans);

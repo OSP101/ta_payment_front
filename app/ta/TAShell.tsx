@@ -3,6 +3,7 @@ import {
   LayoutDashboard, IdCard, CalendarDays, FileText, Route, Megaphone, CalendarClock,
 } from "lucide-react";
 import type { Me } from "../lib/api";
+import { msg } from "../lib/i18n/client";
 import Shell, { type NavSection, type NavStatus, type UserMenuItem } from "../components/Shell";
 import NotificationBell from "../components/NotificationBell";
 import TaTourLauncher from "./tours/TourLauncher";
@@ -21,32 +22,32 @@ import { EnrollmentScopeSwitcher } from "./EnrollmentScopeModal";
 const buildNav = (docsStatus?: NavStatus, docsLabel?: string,
                  schedStatus?: NavStatus, schedLabel?: string): NavSection[] => [
   {
-    title: "ภาพรวม",
-    items: [{ label: "หน้าหลัก", href: "/ta", icon: LayoutDashboard, exact: true }],
+    title: msg("ภาพรวม"),
+    items: [{ label: msg("หน้าหลัก"), href: "/ta", icon: LayoutDashboard, exact: true }],
   },
   {
-    title: "ของฉัน",
+    title: msg("ของฉัน"),
     items: [
       // /account, not /ta/profile: both rendered the same component, and the
       // shared route now carries whichever shell the reader belongs to. One
       // page, one URL, identical for a TA and a lecturer. /ta/profile still
       // resolves — it redirects here — so old links and bookmarks survive.
-      { label: "โปรไฟล์และบัญชี", href: "/account", icon: IdCard },
-      { label: "ตารางเรียนของฉัน", href: "/ta/schedule", icon: CalendarDays,
+      { label: msg("โปรไฟล์และบัญชี"), href: "/account", icon: IdCard },
+      { label: msg("ตารางเรียนของฉัน"), href: "/ta/schedule", icon: CalendarDays,
         status: schedStatus, statusLabel: schedLabel },
-      { label: "เอกสารของฉัน", href: "/ta/documents", icon: FileText,
+      { label: msg("เอกสารของฉัน"), href: "/ta/documents", icon: FileText,
         status: docsStatus, statusLabel: docsLabel },
     ],
   },
   {
-    title: "ติดตาม",
+    title: msg("ติดตาม"),
     items: [
       // The per-month payout tracker. It used to be reachable only from the
       // avatar dropdown inside a course, so a TA on the home screen had no
       // way in at all.
-      { label: "สถานะการเบิกจ่าย", href: "/ta/reminders", icon: CalendarClock },
-      { label: "ความคืบหน้าเอกสาร", href: "/document-progress", icon: Route },
-      { label: "ประกาศ", href: "/announcements", icon: Megaphone },
+      { label: msg("สถานะการเบิกจ่าย"), href: "/ta/reminders", icon: CalendarClock },
+      { label: msg("ความคืบหน้าเอกสาร"), href: "/document-progress", icon: Route },
+      { label: msg("ประกาศ"), href: "/announcements", icon: Megaphone },
     ],
   },
 ];
@@ -76,11 +77,11 @@ export default function TAShell({
           : undefined;
 
   const nav = buildNav(
-    docsStatus, docState === "approved" ? "เอกสารอนุมัติแล้ว" : docLabel,
+    docsStatus, docState === "approved" ? msg("เอกสารอนุมัติแล้ว") : docLabel,
     // No mark at all while the hook is still loading — it would flash on
     // every page load and then change.
     loading ? undefined : scheduleDone ? "done" : "warn",
-    scheduleDone ? "ทำตารางเรียนของภาคเรียนนี้แล้ว" : scheduleLabel,
+    scheduleDone ? msg("ทำตารางเรียนของภาคเรียนนี้แล้ว") : scheduleLabel,
   );
 
   return (

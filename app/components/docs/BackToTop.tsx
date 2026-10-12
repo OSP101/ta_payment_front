@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowUp } from "lucide-react";
 import { Tip } from "../ui";
+import { useI18n } from "../../lib/i18n/client";
 
 /**
  * Floating "back to top" button, bottom-right. Hidden until the reader has
@@ -10,6 +11,7 @@ import { Tip } from "../ui";
  * scroll unless the reader asked for reduced motion.
  */
 export default function BackToTop() {
+  const { t } = useI18n();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -31,11 +33,11 @@ export default function BackToTop() {
         (show ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0")
       }
     >
-      <Tip content="กลับขึ้นบนสุด">
+      <Tip content={t("กลับขึ้นบนสุด")}>
         <button
           type="button"
           onClick={toTop}
-          aria-label="กลับขึ้นบนสุด"
+          aria-label={t("กลับขึ้นบนสุด")}
           tabIndex={show ? 0 : -1}
           className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-foreground shadow-lg shadow-slate-900/10 hover:border-(--brand) hover:text-(--brand) transition-colors"
         >

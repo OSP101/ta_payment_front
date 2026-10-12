@@ -10,7 +10,10 @@ import { formatFullName } from "../lib/prefixes";
 import { Button, Chip, Panel } from "./ui";
 import ProfilePhotoCard from "./ProfilePhotoCard";
 import TwoFactorManageModal from "./TwoFactorManageModal";
+import ThemeSwitch from "./ThemeSwitch";
+import LanguageSwitch from "./LanguageSwitch";
 import { Skel, SkelRegion, SkelValue } from "./Skeletons";
+import { msg, useI18n } from "../lib/i18n/client";
 
 /**
  * The account screen's body: picture, identity, security. One implementation
@@ -18,6 +21,7 @@ import { Skel, SkelRegion, SkelValue } from "./Skeletons";
  * belongs to — so no role ever gets its own copy to drift apart from.
  */
 export default function AccountSettings({ me }: { me: Me | undefined }) {
+  const { t } = useI18n();
   const [manageOpen, setManageOpen] = useState(false);
 
   return (
@@ -27,8 +31,8 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
       {manageOpen && <TwoFactorManageModal onClose={() => setManageOpen(false)} />}
 
       <Panel
-        title="ข้อมูลส่วนตัว"
-        description="หากต้องการแก้ไข โปรดติดต่อเจ้าหน้าที่"
+        title={t("ข้อมูลส่วนตัว")}
+        description={t("หากต้องการแก้ไข โปรดติดต่อเจ้าหน้าที่")}
         className="mb-4"
       >
         <div className="grid md:grid-cols-2 gap-4">
@@ -37,18 +41,18 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
               anything about the row it sat on. */}
           {/* Before /me lands the values are placeholders, not "—" — a dash
               reads as "we have no name for you". */}
-          <InfoRow icon={<User size={16} />} label="ชื่อ-นามสกุล" value={me ? formatFullName(me) || "—" : undefined} />
-          <InfoRow icon={<Mail size={16} />} label="อีเมล" value={me ? me.email ?? "—" : undefined} />
-          <InfoRow icon={<Phone size={16} />} label="เบอร์โทรศัพท์" value={me ? me.phone ?? "—" : undefined} />
+          <InfoRow icon={<User size={16} />} label={t("ชื่อ-นามสกุล")} value={me ? formatFullName(me) || "—" : undefined} />
+          <InfoRow icon={<Mail size={16} />} label={t("อีเมล")} value={me ? me.email ?? "—" : undefined} />
+          <InfoRow icon={<Phone size={16} />} label={t("เบอร์โทรศัพท์")} value={me ? me.phone ?? "—" : undefined} />
           {/* Only students have one; a lecturer's account would otherwise show
               a row that reads "—" forever. */}
           {me?.study_level && (
-            <InfoRow icon={<GraduationCap size={16} />} label="ระดับการศึกษา" value={studyLabel(me.study_level)} />
+            <InfoRow icon={<GraduationCap size={16} />} label={t("ระดับการศึกษา")} value={t(studyLabel(me.study_level))} />
           )}
           {/* Only for the people who hold one — e.g. หัวหน้าสาขาวิชา. Display
               only, same as everywhere else this shows: it carries no rights. */}
           {me?.admin_position && (
-            <InfoRow icon={<Briefcase size={16} />} label="ตำแหน่งบริหาร" value={me.admin_position} />
+            <InfoRow icon={<Briefcase size={16} />} label={t("ตำแหน่งบริหาร")} value={me.admin_position} />
           )}
         </div>
       </Panel>
@@ -58,16 +62,16 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
           panel would only ever render empty for them. */}
       {me?.roles?.includes("ta") && <EducationHistoryPanel userId={me.id} />}
 
-      <Panel title="ความปลอดภัย" description="รหัสผ่านและการยืนยันตัวตน" className="mb-4">
+      <Panel title={t("ความปลอดภัย")} description={t("รหัสผ่านและการยืนยันตัวตน")} className="mb-4">
         <div className="divide-y divide-[var(--hairline)] -my-2">
           <SecurityRow
             icon={<KeyRound size={18} />}
-            title="รหัสผ่าน"
-            description="คุณสามารถเปลี่ยนรหัสผ่านได้ตลอดเวลา"
+            title={t("รหัสผ่าน")}
+            description={t("คุณสามารถเปลี่ยนรหัสผ่านได้ตลอดเวลา")}
             action={
               <Link href="/change-password">
                 <Button variant="primary" size="sm">
-                  เปลี่ยนรหัสผ่าน <ArrowRight size={13} />
+                  {t("เปลี่ยนรหัสผ่าน")} <ArrowRight size={13} />
                 </Button>
               </Link>
             }
@@ -82,20 +86,20 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
               !me
                 ? <SkelValue className="h-3 w-56 max-w-full" />
                 : me.totp_enabled
-                ? `เปิดใช้งานแล้ว · เหลือรหัสสำรอง ${me.recovery_codes_remaining} ชุด`
-                : "เพิ่มความปลอดภัยด้วยการยืนยันตัวตนสองขั้นตอน"
+                ? t("เปิดใช้งานแล้ว · เหลือรหัสสำรอง {n} ชุด", { n: me.recovery_codes_remaining })
+                : t("เพิ่มความปลอดภัยด้วยการยืนยันตัวตนสองขั้นตอน")
             }
             action={
               !me ? (
                 <Skel className="h-8 w-24 rounded-xl" />
               ) : me.totp_enabled ? (
                 <Button variant="secondary" size="sm" onClick={() => setManageOpen(true)}>
-                  <Settings2 size={13} /> จัดการ
+                  <Settings2 size={13} /> {t("จัดการ")}
                 </Button>
               ) : (
                 <Link href="/setup-2fa">
                   <Button variant="primary" size="sm">
-                    เปิดใช้งาน <ArrowRight size={13} />
+                    {t("เปิดใช้งาน")} <ArrowRight size={13} />
                   </Button>
                 </Link>
               )
@@ -104,15 +108,32 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
         </div>
       </Panel>
 
-      <Panel title="ความเป็นส่วนตัว" description="ข้อมูลของคุณภายใต้ PDPA" className="mb-4">
+      <Panel title={t("การแสดงผล")} description={t("บันทึกไว้กับบัญชี ใช้ได้ทุกอุปกรณ์ที่คุณเข้าสู่ระบบ")} className="mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground">{t("ธีม")}</div>
+            <div className="text-xs text-muted mt-0.5">{t("\"ตามอุปกรณ์\" จะสลับสว่างหรือมืดตามการตั้งค่าของเครื่อง")}</div>
+          </div>
+          <ThemeSwitch signedIn showLabels />
+        </div>
+        <div className="mt-4 pt-4 border-t border-[var(--hairline)] flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground">{t("ภาษา")}</div>
+            <div className="text-xs text-muted mt-0.5">{t("เอกสารที่ส่งออกและอีเมลยังเป็นภาษาไทยตามแบบฟอร์มของมหาวิทยาลัย")}</div>
+          </div>
+          <LanguageSwitch signedIn showLabels />
+        </div>
+      </Panel>
+
+      <Panel title={t("ความเป็นส่วนตัว")} description={t("ข้อมูลของคุณภายใต้ PDPA")} className="mb-4">
         <SecurityRow
           icon={<Database size={18} />}
-          title="ข้อมูลของฉัน"
-          description="ดูข้อมูลทั้งหมดที่ระบบจัดเก็บไว้ ดาวน์โหลด หรือขอให้ลบข้อมูล"
+          title={t("ข้อมูลของฉัน")}
+          description={t("ดูข้อมูลทั้งหมดที่ระบบจัดเก็บไว้ ดาวน์โหลด หรือขอให้ลบข้อมูล")}
           action={
             <Link href="/account/my-data">
               <Button variant="secondary" size="sm">
-                เปิดดู <ArrowRight size={13} />
+                {t("เปิดดู")} <ArrowRight size={13} />
               </Button>
             </Link>
           }
@@ -158,8 +179,9 @@ function SecurityRow({
 /** ProfilePhotoCard's frame (same Panel title, avatar circle, text + button)
  *  while /me loads, so the cards below don't jump down when it arrives. */
 function ProfilePhotoSkeleton() {
+  const { t } = useI18n();
   return (
-    <Panel title="รูปโปรไฟล์" description="รูปโปรไฟล์ของคุณในระบบ" className="mb-4">
+    <Panel title={t("รูปโปรไฟล์")} description={t("รูปโปรไฟล์ของคุณในระบบ")} className="mb-4">
       <SkelRegion className="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-dashed border-[var(--hairline)] p-4">
         <Skel className="size-32 shrink-0 rounded-full" />
         <div className="min-w-0 flex-1 w-full flex flex-col items-center sm:items-start gap-2">
@@ -181,6 +203,7 @@ function ProfilePhotoSkeleton() {
  * write action here.
  */
 function EducationHistoryPanel({ userId }: { userId: string }) {
+  const { t, intl } = useI18n();
   const { data, isLoading } = useSWR<{ items: Enrollment[] }>(`/users/${userId}/enrollments`);
   const items = data?.items ?? [];
   // Nothing to show before the TA's first profile submission creates their
@@ -190,8 +213,8 @@ function EducationHistoryPanel({ userId }: { userId: string }) {
 
   return (
     <Panel
-      title="ประวัติการศึกษา"
-      description="ระดับการศึกษาและรหัสนักศึกษาของคุณในแต่ละช่วง — แก้ไขได้โดยเจ้าหน้าที่เท่านั้น"
+      title={t("ประวัติการศึกษา")}
+      description={t("ระดับการศึกษาและรหัสนักศึกษาของคุณในแต่ละช่วง — แก้ไขได้โดยเจ้าหน้าที่เท่านั้น")}
       className="mb-4"
     >
       {isLoading ? (
@@ -203,14 +226,14 @@ function EducationHistoryPanel({ userId }: { userId: string }) {
           {items.map(e => (
             <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--hairline)] px-3 py-2">
               <div>
-                <div className="text-sm font-medium">{e.student_id} — {studyLabel(e.study_level)}</div>
+                <div className="text-sm font-medium">{e.student_id} — {t(studyLabel(e.study_level))}</div>
                 <div className="text-xs text-muted">
-                  {new Date(e.started_at).toLocaleDateString("th-TH")}
+                  {new Date(e.started_at).toLocaleDateString(intl)}
                   {" – "}
-                  {e.ended_at ? new Date(e.ended_at).toLocaleDateString("th-TH") : "ปัจจุบัน"}
+                  {e.ended_at ? new Date(e.ended_at).toLocaleDateString(intl) : t("ปัจจุบัน")}
                 </div>
               </div>
-              {!e.ended_at && <Chip tone="success">ปัจจุบัน</Chip>}
+              {!e.ended_at && <Chip tone="success">{t("ปัจจุบัน")}</Chip>}
             </div>
           ))}
         </div>
@@ -222,8 +245,8 @@ function EducationHistoryPanel({ userId }: { userId: string }) {
 function studyLabel(v: string | undefined): string {
   if (!v) return "—";
   return ({
-    undergrad: "ปริญญาตรี",
-    master: "ปริญญาโท",
-    phd: "ปริญญาเอก",
+    undergrad: msg("ปริญญาตรี"),
+    master: msg("ปริญญาโท"),
+    phd: msg("ปริญญาเอก"),
   } as Record<string, string>)[v] ?? v;
 }

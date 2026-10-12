@@ -4,6 +4,7 @@ import {
   List, ListOrdered, Link as LinkIcon, AlignCenter, AlignLeft, AlignRight,
 } from "lucide-react";
 import { Tip } from "../../components/ui";
+import { useI18n } from "../../lib/i18n/client";
 
 /**
  * The buttons insert the same tiny markup RichText renders, around whatever the
@@ -12,6 +13,11 @@ import { Tip } from "../../components/ui";
  * the composer that a reader's browser could be asked to run.
  */
 export default function BodyEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t, locale } = useI18n();
+  // The B / I glyphs: a one-letter key ("อ") would clash with the weekday
+  // abbreviation of the same spelling, so the glyph is picked by locale.
+  const glyphB = locale === "en" ? "B" : "ห"; // i18n-ignore
+  const glyphI = locale === "en" ? "I" : "อ"; // i18n-ignore
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
   /** Apply an edit and leave the caret where the officer would expect it. */
@@ -62,7 +68,7 @@ export default function BodyEditor({ value, onChange }: { value: string; onChang
     const { selectionStart: a, selectionEnd: b } = el;
     const lineStart = value.lastIndexOf("\n", a - 1) + 1;
     const lineEnd = value.indexOf("\n", b) === -1 ? value.length : value.indexOf("\n", b);
-    const chunk = value.slice(lineStart, lineEnd) || "รายการ";
+    const chunk = value.slice(lineStart, lineEnd) || t("รายการ");
     const marked = chunk.split("\n").map((l, i) => make(i) + l.replace(/^\s*(?:[-•]\s+|\d+[.)]\s+)/, "")).join("\n");
     apply(value.slice(0, lineStart) + marked + value.slice(lineEnd), lineStart, lineStart + marked.length);
   };
@@ -95,9 +101,9 @@ export default function BodyEditor({ value, onChange }: { value: string; onChang
     const mod = e.metaKey || e.ctrlKey;
     if (mod && !e.altKey) {
       const k = e.key.toLowerCase();
-      if (k === "b") { e.preventDefault(); surround("**", "**", "ข้อความหนา"); return; }
-      if (k === "i") { e.preventDefault(); surround("*", "*", "ข้อความเอียง"); return; }
-      if (k === "k") { e.preventDefault(); surround("[", "](https://)", "ข้อความลิงก์"); return; }
+      if (k === "b") { e.preventDefault(); surround("**", "**", t("ข้อความหนา")); return; }
+      if (k === "i") { e.preventDefault(); surround("*", "*", t("ข้อความเอียง")); return; }
+      if (k === "k") { e.preventDefault(); surround("[", "](https://)", t("ข้อความลิงก์")); return; }
     }
     if (e.key !== "Enter" || e.shiftKey) return;
 
@@ -168,17 +174,17 @@ export default function BodyEditor({ value, onChange }: { value: string; onChang
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-1">
-        <Tool title="ตัวหนา (⌘B)" onPress={() => surround("**", "**", "ข้อความหนา")}><b>ห</b></Tool>
-        <Tool title="ตัวเอียง (⌘I)" onPress={() => surround("*", "*", "ข้อความเอียง")}><i>อ</i></Tool>
+        <Tool title={t("ตัวหนา (⌘B)")} onPress={() => surround("**", "**", t("ข้อความหนา"))}><b>{glyphB}</b></Tool>
+        <Tool title={t("ตัวเอียง (⌘I)")} onPress={() => surround("*", "*", t("ข้อความเอียง"))}><i>{glyphI}</i></Tool>
         <span className="mx-0.5 w-px bg-border" />
-        <Tool title="รายการ" onPress={() => prefixLines(() => "- ")}><List size={13} /></Tool>
-        <Tool title="รายการมีลำดับ" onPress={() => prefixLines(i => `${i + 1}. `)}><ListOrdered size={13} /></Tool>
+        <Tool title={t("รายการ")} onPress={() => prefixLines(() => "- ")}><List size={13} /></Tool>
+        <Tool title={t("รายการมีลำดับ")} onPress={() => prefixLines(i => `${i + 1}. `)}><ListOrdered size={13} /></Tool>
         <span className="mx-0.5 w-px bg-border" />
-        <Tool title="แนบลิงก์ (⌘K)" onPress={() => surround("[", "](https://)", "ข้อความลิงก์")}><LinkIcon size={13} /></Tool>
+        <Tool title={t("แนบลิงก์ (⌘K)")} onPress={() => surround("[", "](https://)", t("ข้อความลิงก์"))}><LinkIcon size={13} /></Tool>
         <span className="mx-0.5 w-px bg-border" />
-        <Tool title="จัดกึ่งกลาง" onPress={() => alignLine("center")}><AlignCenter size={13} /></Tool>
-        <Tool title="ชิดขวา" onPress={() => alignLine("right")}><AlignRight size={13} /></Tool>
-        <Tool title="ชิดซ้าย" onPress={() => alignLine("left")}><AlignLeft size={13} /></Tool>
+        <Tool title={t("จัดกึ่งกลาง")} onPress={() => alignLine("center")}><AlignCenter size={13} /></Tool>
+        <Tool title={t("ชิดขวา")} onPress={() => alignLine("right")}><AlignRight size={13} /></Tool>
+        <Tool title={t("ชิดซ้าย")} onPress={() => alignLine("left")}><AlignLeft size={13} /></Tool>
       </div>
       {/* A native textarea, not the shared TextArea: the toolbar needs a ref to
           the element to place the caret, and the wrapper does not forward one.
@@ -186,7 +192,7 @@ export default function BodyEditor({ value, onChange }: { value: string; onChang
       <textarea
         ref={ref}
         rows={8}
-        placeholder="ใส่รายละเอียดของประกาศ วางลิงก์ได้เลยระบบจะทำให้กดได้เอง"
+        placeholder={t("ใส่รายละเอียดของประกาศ วางลิงก์ได้เลยระบบจะทำให้กดได้เอง")}
         value={value}
         maxLength={8000}
         onChange={e => onChange(e.target.value)}
@@ -195,11 +201,12 @@ export default function BodyEditor({ value, onChange }: { value: string; onChang
         className="w-full resize-none overflow-y-auto rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-6 text-foreground outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
       />
       <p className="text-xs text-muted">
-        เลือกข้อความแล้วกดปุ่มด้านบน
+        {t("เลือกข้อความแล้วกดปุ่มด้านบน")}
         {/* Keyboard shortcuts are noise on a phone — there is no keyboard to
             press them on. */}
-        <span className="hidden sm:inline"> หรือใช้ ⌘B ⌘I ⌘K</span>
-        {" · "}ขึ้นต้นบรรทัดด้วย - หรือ 1. แล้วกด Enter ระบบจะต่อรายการให้เอง
+        <span className="hidden sm:inline"> {t("หรือใช้ ⌘B ⌘I ⌘K")}</span>
+        {" · "}{t("ขึ้นต้นบรรทัดด้วย - หรือ 1. แล้วกด Enter ระบบจะต่อรายการให้เอง")}
+
       </p>
     </div>
   );

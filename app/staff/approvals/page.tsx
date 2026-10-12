@@ -13,6 +13,7 @@ import {
 import { ChecksBlock } from "./ChecksBlock";
 import { TAListBlock } from "./TAListBlock";
 import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 interface DecisionCheck {
   rule: string;
@@ -67,16 +68,16 @@ interface RequestDetail extends RequestSummary {
   assignments: AssignmentDetail[] | null;
 }
 
-const SEMESTER_LABEL: Record<number, string> = { 1: "ภาคต้น", 2: "ภาคปลาย", 3: "ภาคฤดูร้อน" };
+const SEMESTER_LABEL: Record<number, string> = { 1: msg("ภาคต้น"), 2: msg("ภาคปลาย"), 3: msg("ภาคฤดูร้อน") };
 
 // Every request is one TA, decided on its own. 'submitted' is that TA still
 // owing a timetable — the system decides the moment it arrives.
 const STATUS_META: Record<string, { tone: "success" | "danger" | "warn" | "neutral"; label: string }> = {
-  approved:  { tone: "success", label: "อนุมัติ" },
-  rejected:  { tone: "danger",  label: "ปฏิเสธ" },
-  submitted: { tone: "warn",    label: "รอตารางเรียน" },
-  cancelled: { tone: "neutral", label: "ยกเลิก" },
-  draft:     { tone: "neutral", label: "ฉบับร่าง" },
+  approved:  { tone: "success", label: msg("อนุมัติ@status") },
+  rejected:  { tone: "danger",  label: msg("ปฏิเสธ@status") },
+  submitted: { tone: "warn",    label: msg("รอตารางเรียน") },
+  cancelled: { tone: "neutral", label: msg("ยกเลิก@status") },
+  draft:     { tone: "neutral", label: msg("ฉบับร่าง") },
 };
 
 export default function TARequestsPage() {
@@ -88,7 +89,8 @@ export default function TARequestsPage() {
   // term, and the officer can widen again from there.
   const { data, error } = useSWR<RequestSummary[]>("/ta-requests");
   const { terms, term, termId, loaded } = useTerm();
-  const activeTerm = terms?.find(t => t.is_active);
+  const { t } = useI18n();
+  const activeTerm = terms?.find(x => x.is_active);
 
   const rows = useMemo(() => data ?? [], [data]);
 
@@ -147,11 +149,11 @@ export default function TARequestsPage() {
   return (
     <div>
       <PageHeader
-        title="รายการคำขอ TA"
+        title={t("รายการคำขอ TA")}
         description={(() => {
           // The fixed half of the line stands on its own while the count loads.
-          if (!listReady || !data) return "ระบบตัดสินอัตโนมัติเป็นรายบุคคล";
-          return `ระบบตัดสินอัตโนมัติเป็นรายบุคคล · แสดง ${filtered.length}/${data.length} รายการ`;
+          if (!listReady || !data) return t("ระบบตัดสินอัตโนมัติเป็นรายบุคคล");
+          return t("ระบบตัดสินอัตโนมัติเป็นรายบุคคล · แสดง {shown}/{total} รายการ", { shown: filtered.length, total: data.length });
         })()}
       />
 
@@ -159,11 +161,11 @@ export default function TARequestsPage() {
         <div data-tour="approvals-filters" className="flex flex-wrap items-end gap-3 border-b border-(--hairline) px-4 py-3">
           <SelectField
             className="min-w-[9rem]"
-            label={<span className="text-xs">ปีการศึกษา</span>}
+            label={<span className="text-xs">{t("ปีการศึกษา")}</span>}
             value={year}
             onChange={setYear}
             options={[
-              { id: "", label: "ทุกปี" },
+              { id: "", label: t("ทุกปี") },
               // Marked with the same <Chip>active</Chip> the settings page and
               // the term switcher use — one word for one concept, so anyone who
               // wonders what "active" means can search it and find the switch
@@ -182,17 +184,17 @@ export default function TARequestsPage() {
           />
           <SelectField
             className="min-w-[9rem]"
-            label={<span className="text-xs">ภาคเรียน</span>}
+            label={<span className="text-xs">{t("ภาคเรียน")}</span>}
             value={sem}
             onChange={setSem}
             options={[
-              { id: "", label: "ทุกภาค" },
+              { id: "", label: t("ทุกภาค") },
               ...semesterOptions.map(s => ({
                 id: String(s),
-                textValue: SEMESTER_LABEL[s] ?? `ภาค ${s}`,
+                textValue: SEMESTER_LABEL[s] ? t(SEMESTER_LABEL[s]) : t("ภาค {n}", { n: s }),
                 label: (
                   <span className="flex items-center gap-2">
-                    <span>{SEMESTER_LABEL[s] ?? `ภาค ${s}`}</span>
+                    <span>{SEMESTER_LABEL[s] ? t(SEMESTER_LABEL[s]) : t("ภาค {n}", { n: s })}</span>
                     {activeTerm?.semester === s && <Chip tone="success">active</Chip>}
                   </span>
                 ),
@@ -202,26 +204,26 @@ export default function TARequestsPage() {
           <SearchField
             value={q}
             onChange={setQ}
-            placeholder="ค้นหารหัส/ชื่อวิชา/อาจารย์/TA…"
+            placeholder={t("ค้นหารหัส/ชื่อวิชา/อาจารย์/TA…")}
           />
 
           <div className="ml-auto flex flex-wrap gap-2 text-xs">
-            <Chip tone="success"><CheckCircle2 size={12} /> อนุมัติ {listReady ? approvedCount : <SkelValue className="h-3 w-4" />}</Chip>
-            <Chip tone="danger"><XCircle size={12} /> ปฏิเสธ {listReady ? rejectedCount : <SkelValue className="h-3 w-4" />}</Chip>
+            <Chip tone="success"><CheckCircle2 size={12} /> {t("อนุมัติ@status")} {listReady ? approvedCount : <SkelValue className="h-3 w-4" />}</Chip>
+            <Chip tone="danger"><XCircle size={12} /> {t("ปฏิเสธ@status")} {listReady ? rejectedCount : <SkelValue className="h-3 w-4" />}</Chip>
             {listReady && waitingCount > 0 && (
-              <Chip tone="warn"><Clock size={12} /> รอตารางเรียน {waitingCount}</Chip>
+              <Chip tone="warn"><Clock size={12} /> {t("รอตารางเรียน")} {waitingCount}</Chip>
             )}
           </div>
         </div>
 
         <div className="p-4">
           {error ? (
-            <div className="py-10 text-center text-sm text-red-600">โหลดข้อมูลไม่สำเร็จ</div>
+            <div className="py-10 text-center text-sm text-red-600">{t("โหลดข้อมูลไม่สำเร็จ")}</div>
           ) : !listReady ? (
             <RequestListSkeleton />
           ) : filtered.length === 0 ? (
             <div className="py-10 text-center text-sm text-(--ink-3)">
-              ไม่พบคำขอตามเงื่อนไขที่เลือก
+              {t("ไม่พบคำขอตามเงื่อนไขที่เลือก")}
             </div>
           ) : (
             <div data-tour="approvals-list">
@@ -275,13 +277,14 @@ function RequestListSkeleton() {
 }
 
 function RequestHeader({ req }: { req: RequestSummary }) {
+  const { t } = useI18n();
   const meta = STATUS_META[req.status] ?? { tone: "neutral" as const, label: req.status };
   return (
     // min-w-0 on the row and on each text child: without it a long course or
     // lecturer name sets the flex item's floor and pushes the whole accordion
     // past the edge of a phone screen instead of truncating.
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 pr-2 text-left">
-      <Chip tone={meta.tone}>{meta.label}</Chip>
+      <Chip tone={meta.tone}>{t(meta.label)}</Chip>
       {/* The TA leads: each row is one person's verdict, so who it is for
           matters more than which course — that repeats down the list. */}
       {req.ta_names && (
@@ -291,15 +294,15 @@ function RequestHeader({ req }: { req: RequestSummary }) {
         </span>
       )}
       <span className="font-semibold tabular-nums">{req.course_code}</span>
-      <Tip content={`${req.course_code} ${req.course_name}\nอ. ${req.lecturer_name}`}>
+      <Tip content={t("{code} {name}\nอ. {lecturer}", { code: req.course_code, name: req.course_name, lecturer: req.lecturer_name })}>
         <span tabIndex={-1} className="min-w-0 max-w-full truncate text-(--ink-2) sm:max-w-[24rem]">{req.course_name}</span>
       </Tip>
-      <Tip content={`${req.course_code} ${req.course_name}\nอ. ${req.lecturer_name}`}>
-        <span tabIndex={-1} className="min-w-0 max-w-full truncate text-xs text-(--ink-3)">อ. {req.lecturer_name}</span>
+      <Tip content={t("{code} {name}\nอ. {lecturer}", { code: req.course_code, name: req.course_name, lecturer: req.lecturer_name })}>
+        <span tabIndex={-1} className="min-w-0 max-w-full truncate text-xs text-(--ink-3)">{t("อ. {name}", { name: req.lecturer_name })}</span>
       </Tip>
       {req.submitted_by_name && (
         <Chip tone="info">
-          <UserCog size={11} /> เจ้าหน้าที่ {req.submitted_by_name} ส่งแทน
+          <UserCog size={11} /> {t("เจ้าหน้าที่ {name} ส่งแทน", { name: req.submitted_by_name })}
         </Chip>
       )}
     </div>
@@ -307,6 +310,7 @@ function RequestHeader({ req }: { req: RequestSummary }) {
 }
 
 function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) {
+  const { t } = useI18n();
   const { data: d } = useSWR<RequestDetail>(`/ta-requests/${id}`);
   const checks = d?.decision_checks ?? summary.decision_checks;
   const allPass = checks.every(c => c.passed);
@@ -328,10 +332,10 @@ function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) 
         {waiting ? <Clock size={14} /> : allPass ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
         <span>
           {waiting
-            ? "รอ TA บันทึกตารางเรียน ระบบจะตัดสินให้อัตโนมัติทันทีที่บันทึก โดยไม่ต้องรอ TA คนอื่น"
+            ? t("รอ TA บันทึกตารางเรียน ระบบจะตัดสินให้อัตโนมัติทันทีที่บันทึก โดยไม่ต้องรอ TA คนอื่น")
             : allPass
-            ? `ระบบตรวจสอบผ่านทุกข้อ (${checks.length} รายการ)`
-            : `ผ่าน ${passCount}/${checks.length} รายการ`}
+            ? t("ระบบตรวจสอบผ่านทุกข้อ ({n} รายการ)", { n: checks.length })
+            : t("ผ่าน {pass}/{total} รายการ", { pass: passCount, total: checks.length })}
         </span>
         {summary.status === "rejected" && summary.reject_reason && (
           <span className="ml-auto italic">{summary.reject_reason}</span>
@@ -349,8 +353,8 @@ function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) 
         <Accordion.Item id="checks">
           <Accordion.Heading>
             <Accordion.Trigger className="flex items-center gap-1.5 w-full px-3 py-2 text-xs font-semibold text-(--ink-2)">
-              <ClipboardList size={13} /> การตรวจสอบของระบบ
-              <Tip content={`ผ่านการตรวจสอบ ${passCount} จาก ${checks.length} ข้อ`}>
+              <ClipboardList size={13} /> {t("การตรวจสอบของระบบ")}
+              <Tip content={t("ผ่านการตรวจสอบ {pass} จาก {total} ข้อ", { pass: passCount, total: checks.length })}>
                 <span tabIndex={-1} className={
                   "ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium " +
                   (allPass ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")
@@ -371,7 +375,7 @@ function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) 
 
       <section>
         <h4 className="text-xs font-semibold text-(--ink-2) mb-2 flex items-center gap-1.5">
-          <Users size={13} /> รายชื่อ TA และภาระงาน
+          <Users size={13} /> {t("รายชื่อ TA และภาระงาน")}
         </h4>
         {!d ? (
           // One tile per TA the summary already counted, same grid as TAListBlock.
@@ -395,31 +399,32 @@ function ExpandedBody({ id, summary }: { id: string; summary: RequestSummary }) 
 }
 
 const SCOPE_LABEL: Record<string, string> = {
-  lecture: "เฉพาะบรรยาย",
-  lab:     "เฉพาะปฏิบัติการ",
-  both:    "บรรยาย + ปฏิบัติการ",
+  lecture: msg("เฉพาะบรรยาย"),
+  lab:     msg("เฉพาะปฏิบัติการ"),
+  both:    msg("บรรยาย + ปฏิบัติการ"),
 };
 
 function MetaFooter({ d }: { d: RequestDetail }) {
+  const { t, intl } = useI18n();
   return (
     <div className="text-xs text-(--ink-3) flex flex-wrap gap-x-4 gap-y-1 pt-2 border-t border-(--hairline)">
-      <span>ประเภทการเบิก: {SCOPE_LABEL[d.reimburse_scope] ?? d.reimburse_scope}</span>
-      <span>ปีการศึกษา {d.academic_year} · {SEMESTER_LABEL[d.semester] ?? `ภาค ${d.semester}`}</span>
+      <span>{t("ประเภทการเบิก: {scope}", { scope: SCOPE_LABEL[d.reimburse_scope] ? t(SCOPE_LABEL[d.reimburse_scope]) : d.reimburse_scope })}</span>
+      <span>{t("ปีการศึกษา {year} · {sem}", { year: d.academic_year, sem: SEMESTER_LABEL[d.semester] ? t(SEMESTER_LABEL[d.semester]) : t("ภาค {n}", { n: d.semester }) })}</span>
       {d.submitted_at && (
         <span className="inline-flex items-center gap-1">
-          <FileCheck2 size={11} /> ส่ง {new Date(d.submitted_at).toLocaleString("th-TH")}
-          {d.submitted_by_name && ` โดยเจ้าหน้าที่ ${d.submitted_by_name} แทน อ. ${d.lecturer_name}`}
+          <FileCheck2 size={11} /> {t("ส่ง {when}", { when: new Date(d.submitted_at).toLocaleString(intl) })}
+          {d.submitted_by_name && " " + t("โดยเจ้าหน้าที่ {officer} แทน อ. {lecturer}", { officer: d.submitted_by_name, lecturer: d.lecturer_name })}
         </span>
       )}
       {d.decided_at && (
         <span className="inline-flex items-center gap-1">
-          <CalendarCheck2 size={11} /> ตัดสิน {new Date(d.decided_at).toLocaleString("th-TH")}
+          <CalendarCheck2 size={11} /> {t("ตัดสิน {when}", { when: new Date(d.decided_at).toLocaleString(intl) })}
         </span>
       )}
       {(d.counts?.length ?? 0) > 0 && (
         <span className="inline-flex items-center gap-1 flex-wrap">
           <BookOpenCheck size={11} />
-          {d.counts!.map(c => `Sec ${c.section_no} (ตรี ${c.undergrad_count} · โท/เอก ${c.graduate_count})`).join(" · ")}
+          {d.counts!.map(c => t("Sec {sec} (ตรี {ug} · โท/เอก {grad})", { sec: c.section_no, ug: c.undergrad_count, grad: c.graduate_count })).join(" · ")}
         </span>
       )}
     </div>

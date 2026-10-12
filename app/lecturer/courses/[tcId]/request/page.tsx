@@ -30,6 +30,7 @@ import { TaPlanner, planHandoffKey, type PlanItem, type DraftEstimate } from "..
 import { Skel, SkelValue } from "../../../../components/Skeletons";
 import NationalityPicker from "../../../../components/NationalityPicker";
 import { isForeign, type Nationality } from "../../../../lib/nationality";
+import { msg, useI18n, type TFn } from "../../../../lib/i18n/client";
 
 /**
  * On a short screen the planner card fills the viewport and the numbered
@@ -38,6 +39,7 @@ import { isForeign, type Nationality } from "../../../../lib/nationality";
  * away for good (it is a hint, not a control worth keeping).
  */
 function ScrollToFormHint({ targetRef }: { targetRef: React.RefObject<HTMLDivElement | null> }) {
+  const { t } = useI18n();
   const [show, setShow] = useState(false);
   useEffect(() => {
     const el = targetRef.current;
@@ -65,16 +67,16 @@ function ScrollToFormHint({ targetRef }: { targetRef: React.RefObject<HTMLDivEle
         type="button"
         onClick={() => targetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
         className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-accent text-accent-foreground pl-4 pr-3 py-2 text-sm font-medium shadow-lg hover:opacity-90 transition-opacity"
-        aria-label="เลื่อนลงไปกรอกรายละเอียดคำขอ"
+        aria-label={t("เลื่อนลงไปกรอกรายละเอียดคำขอ")}
       >
-        เลื่อนลงเพื่อกรอกรายละเอียดคำขอ
+        {t("เลื่อนลงเพื่อกรอกรายละเอียดคำขอ")}
         <ChevronDown size={16} className="animate-bounce" />
       </button>
     </div>
   );
 }
 
-const fmtBahtEst = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
+const fmtBahtEst = (n: number, intl: string) => `฿${Math.round(n).toLocaleString(intl)}`; // i18n-ignore — ฿ symbol stays
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                       */
@@ -160,11 +162,11 @@ interface TA {
 }
 
 /** Why a TA cannot be picked, or null when they can. */
-function taBlockedReason(t: TA): string | null {
+function taBlockedReason(ta: TA, t: TFn): string | null {
   // Already on the course: pickable, to add sections to their request. Only
   // blocked if the server could not name that request.
-  if (t.already_in_course && !t.existing_request_id) return "อยู่ในคำขอของวิชานี้แล้ว";
-  if (t.at_quota) return `รับสอนครบ ${t.course_cap ?? DEFAULT_COURSE_CAP} วิชาแล้ว`;
+  if (ta.already_in_course && !ta.existing_request_id) return t("อยู่ในคำขอของวิชานี้แล้ว");
+  if (ta.at_quota) return t("รับสอนครบ {n} วิชาแล้ว", { n: ta.course_cap ?? DEFAULT_COURSE_CAP });
   return null;
 }
 
@@ -264,11 +266,11 @@ function remapWorkloadLevel(w: WorkloadFields, toGrad: boolean, hrs: { lecture: 
   if (toGrad) {
     out.help_teach_hrs = w.attendance_hrs + w.lab_hrs + w.lab_other_hrs;
     out.grade_hrs = Math.min(GRAD_REVIEW_HOUR_CAP, w.check_work_hrs);
-    out.grade_desc = out.grade_hrs > 0 ? "ตรวจการบ้าน" : "";
+    out.grade_desc = out.grade_hrs > 0 ? "ตรวจการบ้าน" : ""; // i18n-ignore — stored duty text, sent to the API
     out.other_hrs = w.ug_other_hrs;
     out.other_desc = w.ug_other_desc;
     out.prep_hrs = Math.max(0, GRAD_MIN_HRS - (out.help_teach_hrs + out.grade_hrs + out.other_hrs));
-    out.prep_desc = out.prep_hrs > 0 ? "เตรียมการสอน" : "";
+    out.prep_desc = out.prep_hrs > 0 ? "เตรียมการสอน" : ""; // i18n-ignore — stored duty text, sent to the API
   } else {
     // Class time goes back onto the section's own timetable: the lab first
     // (it is the whole period), the rest as เช็คชื่อ within the lecture.
@@ -315,6 +317,7 @@ interface CourseBudget {
 
 export default function RequestPage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
+  const { t } = useI18n();
   const { data: course } = useSWR<{
     id: string; code: string; name_th: string; term_id?: string;
     lecture_hrs?: number; lab_hrs?: number;
@@ -368,10 +371,10 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
   return (
     <div>
       <PageHeader
-        title="คำขอผู้ช่วยสอน"
+        title={t("คำขอผู้ช่วยสอน")}
         description={course
-          ? `${course.code} ${course.name_th} · กรอกแบบฟอร์มด้านล่างเพื่อขอ TA`
-          : "กรอกแบบฟอร์มด้านล่างเพื่อขอ TA"}
+          ? `${course.code} ${course.name_th} · ` + t("กรอกแบบฟอร์มด้านล่างเพื่อขอ TA")
+          : t("กรอกแบบฟอร์มด้านล่างเพื่อขอ TA")}
       />
 
       <WindowStatusBanner state={windowState} loading={windowLoading} />
@@ -381,20 +384,20 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
           <Alert
             status={noLecturer ? "danger" : "accent"}
             icon={<UserCog size={16} />}
-            title={noLecturer ? "วิชานี้ยังไม่มีอาจารย์ผู้สอน จึงส่งคำขอแทนไม่ได้" : "คุณกำลังส่งคำขอแทนอาจารย์"}
+            title={noLecturer ? t("วิชานี้ยังไม่มีอาจารย์ผู้สอน จึงส่งคำขอแทนไม่ได้") : t("คุณกำลังส่งคำขอแทนอาจารย์")}
             description={noLecturer
-              ? "กำหนดอาจารย์ผู้สอนของวิชาที่หน้าวิชาที่เปิดสอนก่อน แล้วจึงกลับมาส่งคำขอ"
-              : "คำขอจะเป็นของอาจารย์ที่เลือก ระบบบันทึกว่าคุณเป็นผู้ส่งแทน และแจ้งอาจารย์ให้ทราบ"}
+              ? t("กำหนดอาจารย์ผู้สอนของวิชาที่หน้าวิชาที่เปิดสอนก่อน แล้วจึงกลับมาส่งคำขอ")
+              : t("คำขอจะเป็นของอาจารย์ที่เลือก ระบบบันทึกว่าคุณเป็นผู้ส่งแทน และแจ้งอาจารย์ให้ทราบ")}
           />
           {!noLecturer && (
             <div className="mt-3 max-w-md">
               <SelectField
-                label="ส่งในนามอาจารย์"
+                label={t("ส่งในนามอาจารย์")}
                 value={forLecturer}
                 onChange={setPickedLecturer}
                 options={lecturers.map(l => ({
                   id: l.id,
-                  label: `${l.first_name} ${l.last_name}${l.is_primary ? " (ผู้รับผิดชอบหลัก)" : ""}`,
+                  label: `${l.first_name} ${l.last_name}` + (l.is_primary ? " (" + t("ผู้รับผิดชอบหลัก") + ")" : ""),
                   textValue: `${l.first_name} ${l.last_name}`,
                 }))}
               />
@@ -410,11 +413,11 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
           <Alert
             status="danger"
             icon={<CalendarOff size={16} />}
-            title="ยังส่งคำขอ TA ไม่ได้ วิชานี้ยังไม่ระบุเวลาเรียน (WBA)"
-            description="มี section ที่ยังไม่มีตารางเรียน กรุณากรอกวัน-เวลาเรียนให้ครบทุก section ก่อน แล้วจึงกลับมาส่งคำขอ TA"
+            title={t("ยังส่งคำขอ TA ไม่ได้ วิชานี้ยังไม่ระบุเวลาเรียน (WBA)")}
+            description={t("มี section ที่ยังไม่มีตารางเรียน กรุณากรอกวัน-เวลาเรียนให้ครบทุก section ก่อน แล้วจึงกลับมาส่งคำขอ TA")}
             action={
               <Link href={`/lecturer/courses/${tcId}/settings`}>
-                <Button variant="secondary" size="sm">ไปกรอกตารางเรียน</Button>
+                <Button variant="secondary" size="sm">{t("ไปกรอกตารางเรียน")}</Button>
               </Link>
             }
           />
@@ -454,19 +457,20 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
 /* -------------------------------------------------------------------------- */
 
 function BudgetForecast({ budget }: { budget: CourseBudget }) {
-  const fmt = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const { t } = useI18n();
+  const fmt = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`; // i18n-ignore — ฿ symbol stays
   return (
     <div className="mb-4">
       <Alert
         status="warning"
         icon={<Wallet size={16} />}
-        title="งบวิชานี้เกินเพดานแล้ว (โดยประมาณ)"
+        title={t("งบวิชานี้เกินเพดานแล้ว (โดยประมาณ)")}
         description={
-          <>
-            ใช้ไปแล้ว ~{fmt(budget.used_baht)} จากเพดาน ~{fmt(budget.per_course_max)}
-            {" "}ถ้าเพิ่ม TA อีก การเบิกจ่ายอาจไม่ครบตามที่ควรได้{" "}
-            <b>รบกวนแจ้งนักศึกษาให้ทราบล่วงหน้า</b>
-          </>
+          t.rich("ใช้ไปแล้ว ~{used} จากเพดาน ~{cap} ถ้าเพิ่ม TA อีก การเบิกจ่ายอาจไม่ครบตามที่ควรได้ {notice}", {
+            used: fmt(budget.used_baht),
+            cap: fmt(budget.per_course_max),
+            notice: <b>{t("รบกวนแจ้งนักศึกษาให้ทราบล่วงหน้า")}</b>,
+          })
         }
       />
     </div>
@@ -488,28 +492,29 @@ interface GradSpecialFacts {
 }
 
 function GradSpecialAlert({ g }: { g: GradSpecialFacts }) {
-  const fmt = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const { t } = useI18n();
+  const fmt = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`; // i18n-ignore — ฿ symbol stays
   const who = g.names.join(", ");
   return (
     <Alert
       status={g.over ? "danger" : "warning"}
       icon={<Wallet size={18} />}
       title={g.over
-        ? "TA บัณฑิตศึกษาใน section ภาคพิเศษ — งบภาคพิเศษไม่พอ"
-        : "TA บัณฑิตศึกษาใน section ภาคพิเศษ ได้เหมาจ่ายทั้งเทอม"}
+        ? t("TA บัณฑิตศึกษาใน section ภาคพิเศษ — งบภาคพิเศษไม่พอ")
+        : t("TA บัณฑิตศึกษาใน section ภาคพิเศษ ได้เหมาจ่ายทั้งเทอม")}
       description={
         <>
-          <b>{who}</b> จะได้ค่าตอบแทนเหมาจ่าย {fmt(g.lump)}/คน/เทอม (ไม่คิดรายชั่วโมง)
-          หักจากงบภาคพิเศษของวิชานี้ก่อนใคร — งบภาคพิเศษมี {fmt(g.cap)}
-          {g.already > 0 && <> ผูกไว้แล้ว {fmt(g.already)} จากคำขอก่อนหน้า</>}
-          {" "}รวมเป็น {fmt(g.committed)}{" "}
+          {t.rich("{who} จะได้ค่าตอบแทนเหมาจ่าย {lump}/คน/เทอม (ไม่คิดรายชั่วโมง) หักจากงบภาคพิเศษของวิชานี้ก่อนใคร — งบภาคพิเศษมี {cap}", {
+            who: <b>{who}</b>, lump: fmt(g.lump), cap: fmt(g.cap),
+          })}
+          {g.already > 0 && <> {t("ผูกไว้แล้ว {n} จากคำขอก่อนหน้า", { n: fmt(g.already) })}</>}
+          {" "}{t("รวมเป็น {n}", { n: fmt(g.committed) })}{" "}
           {g.over ? (
-            <>
-              <b>เกินงบ {fmt(g.committed - g.cap)}</b> — TA ปริญญาตรีทุกคนใน section ภาคพิเศษ
-              จะเบิกชั่วโมงไม่ได้เลย ถ้าไม่ตั้งใจ ให้ย้าย TA คนนี้ไป section ภาคปกติ หรือเลือก TA ปริญญาตรีแทน
-            </>
+            t.rich("{over} — TA ปริญญาตรีทุกคนใน section ภาคพิเศษ จะเบิกชั่วโมงไม่ได้เลย ถ้าไม่ตั้งใจ ให้ย้าย TA คนนี้ไป section ภาคปกติ หรือเลือก TA ปริญญาตรีแทน", {
+              over: <b>{t("เกินงบ {n}", { n: fmt(g.committed - g.cap) })}</b>,
+            })
           ) : (
-            <>เหลือให้ TA ปริญญาตรีใน section ภาคพิเศษเบิกรายชั่วโมง {fmt(g.cap - g.committed)}</>
+            t("เหลือให้ TA ปริญญาตรีใน section ภาคพิเศษเบิกรายชั่วโมง {n}", { n: fmt(g.cap - g.committed) })
           )}
         </>
       }
@@ -541,6 +546,7 @@ function RequestFormSection({
   // Candidates carry each TA's approved-course count so we can keep those who
   // already hit the 3-course cap out of the picker (prevents over-quota requests
   // up front, instead of a reject at submit time).
+  const { t, intl } = useI18n();
   const candidatesKey = tcId ? `/ta-requests/candidates?teaching_course_id=${tcId}` : null;
   const { data: tas } = useSWR<{ items: TA[] }>(candidatesKey);
   // เพดาน ชม./วัน ตามประกาศ — ใช้กันไม่ให้กรอกภาระงานที่ลงบันทึกเวลาจริงไม่ได้
@@ -720,11 +726,11 @@ function RequestFormSection({
   // Why ส่งคำขอ is greyed out, in the same order as step 2's status line.
   const submitBlockReason =
     canSubmit ? undefined
-    : assignments.length === 0 ? "ยังไม่ได้เพิ่ม TA"
-    : !taChosen ? "ยังไม่ได้เลือก TA ให้ครบทุกแถว"
-    : !sectionChosen ? "ยังไม่ได้เลือก section ให้ครบทุกคน"
-    : anyScheduleConflict ? "มี TA ที่ตารางทับซ้อนกับรายวิชาอื่น กรุณาเอาชื่อออกก่อน"
-    : "ภาระงานยังไม่ครบตามระเบียบ";
+    : assignments.length === 0 ? t("ยังไม่ได้เพิ่ม TA")
+    : !taChosen ? t("ยังไม่ได้เลือก TA ให้ครบทุกแถว")
+    : !sectionChosen ? t("ยังไม่ได้เลือก section ให้ครบทุกคน")
+    : anyScheduleConflict ? t("มี TA ที่ตารางทับซ้อนกับรายวิชาอื่น กรุณาเอาชื่อออกก่อน")
+    : t("ภาระงานยังไม่ครบตามระเบียบ");
 
   // TAs on this form who have not filed a timetable yet. Submitting is still
   // allowed — that is the point of the change — but the request will rest
@@ -759,14 +765,14 @@ function RequestFormSection({
     for (const a of assignments) {
       if (a.level !== "master" && a.level !== "phd") continue;
       if (!a.section_ids.some(sid => specialIds.has(sid))) continue;
-      const t = a.ta_id ? byId.get(a.ta_id) : undefined;
-      names.push(t ? `${t.first_name} ${t.last_name}` : "TA ที่ยังไม่ได้เลือกชื่อ");
+      const ta = a.ta_id ? byId.get(a.ta_id) : undefined;
+      names.push(ta ? `${ta.first_name} ${ta.last_name}` : t("TA ที่ยังไม่ได้เลือกชื่อ"));
     }
     if (names.length === 0) return null;
     const already = settlement?.forecast?.special?.committed ?? 0;
     const committed = already + names.length * lump;
     return { names, lump, cap, already, committed, over: committed > cap };
-  }, [assignments, allTas, secs, budget, settlement]);
+  }, [assignments, allTas, secs, budget, settlement, t]);
 
   // What the planner needs from the form: timetables (to see shared sittings)
   // and the draft assignments with their declared hours, so its estimate is of
@@ -805,8 +811,8 @@ function RequestFormSection({
         section_workloads: { ...it.workloads },
       })),
     ]);
-    notify.success(`เพิ่ม ${items.length} รายการลงฟอร์มแล้ว เลือกชื่อ TA ให้แต่ละคน`);
-  }, []);
+    notify.success(t("เพิ่ม {n} รายการลงฟอร์มแล้ว เลือกชื่อ TA ให้แต่ละคน", { n: items.length }));
+  }, [t]);
 
   // A plan handed over from the budget page: applied once, then forgotten, so
   // a reload does not add the rows twice.
@@ -974,16 +980,16 @@ function RequestFormSection({
         // the lecturer can fix them and send again.
         setAssignments(prev => prev.filter(a => rejectedTa.has(a.ta_id)));
         const reason = rejected
-          .map(r => `${r.ta_name ? r.ta_name + ": " : ""}${r.reject_reason || "ระบบตัดสินว่าไม่ผ่านเกณฑ์"}`)
+          .map(r => (r.ta_name ? r.ta_name + ": " : "") + (r.reject_reason || t("ระบบตัดสินว่าไม่ผ่านเกณฑ์")))
           .join("\n");
         setErr(reason);
         const passed = [
-          approvedN ? `อนุมัติ ${approvedN} คน` : "",
-          waitingN ? `รอตารางเรียน ${waitingN} คน` : "",
-          extend.length ? `เพิ่ม section ${extend.length} คน` : "",
+          approvedN ? t("อนุมัติ {n} คน", { n: approvedN }) : "",
+          waitingN ? t("รอตารางเรียน {n} คน", { n: waitingN }) : "",
+          extend.length ? t("เพิ่ม section {n} คน", { n: extend.length }) : "",
         ].filter(Boolean);
         if (passed.length) {
-          notify.success(`ส่งคำขอแล้ว: ${passed.join(" · ")} ส่วนที่เหลือไม่ผ่านเกณฑ์ ดูเหตุผลด้านล่าง`);
+          notify.success(t("ส่งคำขอแล้ว: {passed} ส่วนที่เหลือไม่ผ่านเกณฑ์ ดูเหตุผลด้านล่าง", { passed: passed.join(" · ") }));
         } else {
           notify.error(reason);
         }
@@ -1003,7 +1009,7 @@ function RequestFormSection({
       setDraftSavedAt(null);
       if (draftKey) api.del(draftKey).catch(() => {});
       if (!res) {
-        notify.success("เพิ่ม section ให้ TA ในคำขอเดิมเรียบร้อยแล้ว");
+        notify.success(t("เพิ่ม section ให้ TA ในคำขอเดิมเรียบร้อยแล้ว"));
         onSubmitted();
         return;
       }
@@ -1012,12 +1018,12 @@ function RequestFormSection({
         // nothing to judge. Say so plainly rather than implying approval —
         // and that each one is decided on their own, not when all are in.
         notify.success(approvedN
-          ? `อนุมัติ ${approvedN} คน · รอตารางเรียน ${waitingN} คน ระบบจะตัดสินให้แต่ละคนอัตโนมัติเมื่อบันทึกตารางเรียน`
-          : "ส่งคำขอแล้ว ระบบจะตัดสินให้ TA แต่ละคนอัตโนมัติเมื่อบันทึกตารางเรียน");
+          ? t("อนุมัติ {approved} คน · รอตารางเรียน {waiting} คน ระบบจะตัดสินให้แต่ละคนอัตโนมัติเมื่อบันทึกตารางเรียน", { approved: approvedN, waiting: waitingN })
+          : t("ส่งคำขอแล้ว ระบบจะตัดสินให้ TA แต่ละคนอัตโนมัติเมื่อบันทึกตารางเรียน"));
         onSubmitted();
         return;
       }
-      notify.success("ระบบอนุมัติคำขอเรียบร้อยแล้ว");
+      notify.success(t("ระบบอนุมัติคำขอเรียบร้อยแล้ว"));
       onSubmitted();
     } catch (e) {
       // Structural failures (bad section, negative workload, TA doesn't exist)
@@ -1030,12 +1036,12 @@ function RequestFormSection({
   }
 
   const steps = [
-    { n: 1, label: "ประเภทการเบิก", icon: <Wallet size={14} />, ok: true },
-    { n: 2, label: "เลือก TA", icon: <ClipboardList size={14} />, ok: taChosen },
-    { n: 3, label: "ภาระงาน", icon: <CheckCircle2 size={14} />, ok: workloadOk },
+    { n: 1, label: t("ประเภทการเบิก"), icon: <Wallet size={14} />, ok: true },
+    { n: 2, label: t("เลือก TA"), icon: <ClipboardList size={14} />, ok: taChosen },
+    { n: 3, label: t("ภาระงาน"), icon: <CheckCircle2 size={14} />, ok: workloadOk },
   ];
 
-  const scopeLabel = scope === "lecture" ? "บรรยาย" : scope === "lab" ? "ปฏิบัติการ" : "บรรยาย+ปฏิบัติการ";
+  const scopeLabel = scope === "lecture" ? t("บรรยาย") : scope === "lab" ? t("ปฏิบัติการ") : t("บรรยาย+ปฏิบัติการ");
   const stepsRef = useRef<HTMLDivElement>(null);
   return (
     <Panel className="mb-4">
@@ -1044,12 +1050,12 @@ function RequestFormSection({
           <Send size={16} />
         </div>
         <div className="min-w-0">
-          <div className="font-semibold">ส่งคำขอผู้ช่วยสอน</div>
-          <div className="text-xs text-muted">ทำทีละขั้นตามหมายเลข แล้วกด “ส่งคำขอ” ด้านล่าง</div>
+          <div className="font-semibold">{t("ส่งคำขอผู้ช่วยสอน")}</div>
+          <div className="text-xs text-muted">{t("ทำทีละขั้นตามหมายเลข แล้วกด “ส่งคำขอ” ด้านล่าง")}</div>
         </div>
         {draftSavedAt && assignments.length > 0 && (
-          <Tip content="ระบบเก็บสิ่งที่กรอกไว้ให้อัตโนมัติ เปิดจากเครื่องไหนก็ได้ค่าเดิม"><div className="ml-auto text-xs text-muted flex items-center gap-1 shrink-0">
-            <CheckCircle2 size={12} /> บันทึกร่างแล้ว {draftSavedAt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+          <Tip content={t("ระบบเก็บสิ่งที่กรอกไว้ให้อัตโนมัติ เปิดจากเครื่องไหนก็ได้ค่าเดิม")}><div className="ml-auto text-xs text-muted flex items-center gap-1 shrink-0">
+            <CheckCircle2 size={12} /> {t("บันทึกร่างแล้ว {time}", { time: draftSavedAt.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" }) })}
           </div></Tip>
         )}
       </div>
@@ -1059,8 +1065,8 @@ function RequestFormSection({
           <Alert
             status="warning"
             icon={<AlertCircle size={16} />}
-            title="คำขอนี้จะถูกนับเป็น “ส่งช้า”"
-            description="เลยกำหนดส่งแล้ว ยังส่งได้ตามปกติ แต่คำขอจะถูกทำเครื่องหมายว่าล่าช้า และการเบิกจ่ายค่าตอบแทนของ TA จะล่าช้าไปด้วย"
+            title={t("คำขอนี้จะถูกนับเป็น “ส่งช้า”")}
+            description={t("เลยกำหนดส่งแล้ว ยังส่งได้ตามปกติ แต่คำขอจะถูกทำเครื่องหมายว่าล่าช้า และการเบิกจ่ายค่าตอบแทนของ TA จะล่าช้าไปด้วย")}
           />
         </div>
       )}
@@ -1096,18 +1102,18 @@ function RequestFormSection({
 
       <div className="space-y-4">
         {/* Step 1 --------------------------------------------------------- */}
-        <StepPanel tourId="req-step1" n={1} title="ประเภทการเบิกค่าตอบแทน" description="เลือกให้ตรงกับหน่วยกิตวิชา">
+        <StepPanel tourId="req-step1" n={1} title={t("ประเภทการเบิกค่าตอบแทน")} description={t("เลือกให้ตรงกับหน่วยกิตวิชา")}>
           <RadioGroup
             value={scope}
             onChange={v => setScope(v as "lecture" | "lab" | "both")}
             orientation="horizontal"
             className="w-full"
           >
-            <Label className="sr-only">ประเภทการเบิก</Label>
+            <Label className="sr-only">{t("ประเภทการเบิก")}</Label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 w-full">
-              <ScopeRadio value="lecture" label="เฉพาะบรรยาย" desc="Lecture only" />
-              <ScopeRadio value="lab" label="เฉพาะปฏิบัติการ" desc="Lab only" />
-              <ScopeRadio value="both" label="บรรยาย + ปฏิบัติการ" desc="Lec. + Lab" />
+              <ScopeRadio value="lecture" label={t("เฉพาะบรรยาย")} desc="Lecture only" />
+              <ScopeRadio value="lab" label={t("เฉพาะปฏิบัติการ")} desc="Lab only" />
+              <ScopeRadio value="both" label={t("บรรยาย + ปฏิบัติการ")} desc="Lec. + Lab" />
             </div>
           </RadioGroup>
         </StepPanel>
@@ -1116,24 +1122,24 @@ function RequestFormSection({
         <StepPanel
           tourId="req-step2"
           n={2}
-          title="เพิ่มรายชื่อ TA และกำหนดภาระงาน"
-          description="เพิ่ม TA ทีละคน เลือก section และกรอกภาระงานของแต่ละคน"
+          title={t("เพิ่มรายชื่อ TA และกำหนดภาระงาน")}
+          description={t("เพิ่ม TA ทีละคน เลือก section และกรอกภาระงานของแต่ละคน")}
           status={
             // No verdict while the saved draft is still loading — it may well
             // hold the rows "ยังไม่ได้เพิ่ม TA" would deny.
             !draftReady && assignments.length === 0
               ? undefined
               : assignments.length === 0
-              ? { tone: "warn", text: "ยังไม่ได้เพิ่ม TA" }
+              ? { tone: "warn", text: t("ยังไม่ได้เพิ่ม TA") }
               : !taChosen
-              ? { tone: "warn", text: "ยังไม่ได้เลือก TA" }
+              ? { tone: "warn", text: t("ยังไม่ได้เลือก TA") }
               : !sectionChosen
-              ? { tone: "warn", text: "ยังไม่ได้เลือก section" }
+              ? { tone: "warn", text: t("ยังไม่ได้เลือก section") }
               : anyScheduleConflict
-              ? { tone: "danger", text: "มี TA ที่ตารางทับซ้อน เอาชื่อออกก่อน" }
+              ? { tone: "danger", text: t("มี TA ที่ตารางทับซ้อน เอาชื่อออกก่อน") }
               : !workloadOk
-              ? { tone: "warn", text: "ภาระงานยังไม่ครบตามระเบียบ" }
-              : { tone: "success", text: `${assignments.length} คน · พร้อมส่ง` }
+              ? { tone: "warn", text: t("ภาระงานยังไม่ครบตามระเบียบ") }
+              : { tone: "success", text: t("{n} คน · พร้อมส่ง", { n: assignments.length }) }
           }
         >
           {!course ? (
@@ -1142,13 +1148,13 @@ function RequestFormSection({
               <Skel className="h-20 w-full rounded-lg" />
             </div>
           ) : !course.sections?.length ? (
-            <EmptyState title="ยังไม่มี section ในรายวิชานี้" />
+            <EmptyState title={t("ยังไม่มี section ในรายวิชานี้")} />
           ) : (
             <div className="space-y-3">
               {/* Toolbar with add + create buttons */}
               <div data-tour="req-toolbar" className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 border border-hairline px-3 py-2">
                 <div className="flex items-center gap-2 text-xs text-ink-3">
-                  รวม TA ในวิชานี้ <b className="text-ink-1">{!draftReady && assignments.length === 0 ? <SkelValue className="h-3 w-4" /> : assignments.length}</b> คน
+                  {t.rich("รวม TA ในวิชานี้ {n} คน", { n: <b className="text-ink-1">{!draftReady && assignments.length === 0 ? <SkelValue className="h-3 w-4" /> : assignments.length}</b> })}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -1156,7 +1162,7 @@ function RequestFormSection({
                     size="sm"
                     onClick={() => setCreatingTa(true)}
                   >
-                    <UserPlus size={14} /> สร้างบัญชี TA ใหม่
+                    <UserPlus size={14} /> {t("สร้างบัญชี TA ใหม่")}
                   </Button>
                   {assignments.length > 0 && (
                     <Button
@@ -1164,7 +1170,7 @@ function RequestFormSection({
                       size="sm"
                       onClick={addAssignmentCopyingPrevious}
                     >
-                      <Copy size={14} /> คัดลอกจากคนก่อนหน้า
+                      <Copy size={14} /> {t("คัดลอกจากคนก่อนหน้า")}
                     </Button>
                   )}
                   <Button
@@ -1172,7 +1178,7 @@ function RequestFormSection({
                     size="sm"
                     onClick={() => addAssignment()}
                   >
-                    <Plus size={14} /> เพิ่ม TA
+                    <Plus size={14} /> {t("เพิ่ม TA")}
                   </Button>
                 </div>
               </div>
@@ -1197,7 +1203,7 @@ function RequestFormSection({
                 <Skel className="h-20 w-full rounded-lg" />
               ) : assignments.length === 0 ? (
                 <div className="text-xs text-ink-3 text-center py-8 border border-dashed border-hairline rounded-lg">
-                  ยังไม่ได้เพิ่ม TA กดปุ่ม "เพิ่ม TA" ด้านบน
+                  {t("ยังไม่ได้เพิ่ม TA กดปุ่ม \"เพิ่ม TA\" ด้านบน")}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1212,7 +1218,7 @@ function RequestFormSection({
                         n={idx + 1}
                         assignment={a}
                         sections={course?.sections ?? []}
-                        tas={allTas.filter(t => !takenElsewhere.has(t.id))}
+                        tas={allTas.filter(x => !takenElsewhere.has(x.id))}
                         scope={scope}
                         weeklyCap={weeklyCapFor(a)}
                         tcId={tcId}
@@ -1232,12 +1238,8 @@ function RequestFormSection({
         {waitingOnSchedule.length > 0 && (
           <Alert
             status="warning"
-            title="มี TA ที่ยังไม่ได้สร้างตารางเรียน"
-            description={
-              `${waitingOnSchedule.join(", ")} ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้ ` +
-              "ส่งคำขอได้ตามปกติ แต่ระบบจะยังไม่ตัดสินจนกว่าจะสร้างครบทุกคน " +
-              "และถ้าคาบใดตรงกับตารางเรียนของเขา คาบนั้นจะถูกตัดออกโดยอัตโนมัติ"
-            }
+            title={t("มี TA ที่ยังไม่ได้สร้างตารางเรียน")}
+            description={t("{names} ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้ ส่งคำขอได้ตามปกติ แต่ระบบจะยังไม่ตัดสินจนกว่าจะสร้างครบทุกคน และถ้าคาบใดตรงกับตารางเรียนของเขา คาบนั้นจะถูกตัดออกโดยอัตโนมัติ", { names: waitingOnSchedule.join(", ") })}
             icon={<CalendarClock size={18} />}
           />
         )}
@@ -1245,15 +1247,15 @@ function RequestFormSection({
         {gradSpecial && <GradSpecialAlert g={gradSpecial} />}
 
         {err && (
-          <Alert status="danger" title="ส่งคำขอไม่สำเร็จ" description={err} icon={<AlertCircle size={18} />} />
+          <Alert status="danger" title={t("ส่งคำขอไม่สำเร็จ")} description={err} icon={<AlertCircle size={18} />} />
         )}
       </div>
 
       {/* Inline footer */}
       <div data-tour="req-submit" className="mt-4 pt-3 border-t border-hairline flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xs text-ink-3">
-          <span>เพิ่มแล้ว <b className="text-ink-1">{assignments.length}</b> คน</span>
-          <span>เบิก <b className="text-ink-1">{scopeLabel}</b></span>
+          <span>{t.rich("เพิ่มแล้ว {n} คน", { n: <b className="text-ink-1">{assignments.length}</b> })}</span>
+          <span>{t.rich("เบิก {scope}", { scope: <b className="text-ink-1">{scopeLabel}</b> })}</span>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -1261,17 +1263,17 @@ function RequestFormSection({
             onClick={() => setConfirmClear(true)}
             disabled={assignments.length === 0}
           >
-            ล้างฟอร์ม
+            {t("ล้างฟอร์ม")}
           </Button>
           <ConfirmDialog
             open={confirmClear}
             onClose={() => setConfirmClear(false)}
             onConfirm={() => { setAssignments([]); setErr(null); setConfirmClear(false); }}
             danger
-            title="ล้างฟอร์มคำขอ?"
-            message={`รายชื่อผู้ช่วยสอน ${assignments.length} คนและภาระงานที่กรอกไว้จะถูกลบทั้งหมด รวมถึงฉบับร่างที่บันทึกไว้ และกู้คืนไม่ได้`}
-            confirmLabel="ล้างฟอร์ม"
-            cancelLabel="เก็บไว้"
+            title={t("ล้างฟอร์มคำขอ?")}
+            message={t("รายชื่อผู้ช่วยสอน {n} คนและภาระงานที่กรอกไว้จะถูกลบทั้งหมด รวมถึงฉบับร่างที่บันทึกไว้ และกู้คืนไม่ได้", { n: assignments.length })}
+            confirmLabel={t("ล้างฟอร์ม")}
+            cancelLabel={t("เก็บไว้")}
           />
           <TipWrap
             className="inline-flex"
@@ -1290,7 +1292,7 @@ function RequestFormSection({
             isPending={pending}
           >
             <Send size={16} />
-            {pending ? "กำลังส่ง…" : `ส่งคำขอ (${assignments.length} คน)`}
+            {pending ? t("กำลังส่ง…") : t("ส่งคำขอ ({n} คน)", { n: assignments.length })}
           </Button>
           </TipWrap>
         </div>
@@ -1299,28 +1301,28 @@ function RequestFormSection({
       <Modal
         open={confirming}
         onClose={() => setConfirming(false)}
-        title="ยืนยันการส่งคำขอ"
+        title={t("ยืนยันการส่งคำขอ")}
         icon={<Send size={18} />}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setConfirming(false)}>ย้อนกลับ</Button>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>{t("ย้อนกลับ")}</Button>
             <Button
               variant="primary"
               isPending={pending}
               onClick={() => { setConfirming(false); submit(); }}
             >
-              <Send size={16} /> ยืนยันส่งคำขอ
+              <Send size={16} /> {t("ยืนยันส่งคำขอ")}
             </Button>
           </>
         }
       >
         <div className="space-y-3 text-sm">
           <p className="text-ink-2">
-            ตรวจสอบรายชื่อและภาระงานก่อนส่ง — เบิก <b>{scopeLabel}</b>
+            {t.rich("ตรวจสอบรายชื่อและภาระงานก่อนส่ง — เบิก {scope}", { scope: <b>{scopeLabel}</b> })}
           </p>
           <ul className="space-y-2">
             {assignments.map((a, i) => {
-              const ta = allTas.find(t => t.id === a.ta_id);
+              const ta = allTas.find(x => x.id === a.ta_id);
               const total = sumWorkload(a, secs);
               const secLabels = a.section_ids
                 .map(sid => secs.find(s => s.id === sid)?.sec_no)
@@ -1335,23 +1337,23 @@ function RequestFormSection({
                       {ta ? `${ta.first_name} ${ta.last_name}` : "-"}
                     </div>
                     <div className="text-xs text-ink-3 mt-0.5">
-                      กลุ่ม {secLabels.join(", ") || "-"} ·{" "}
-                      {a.level === "master" || a.level === "phd" ? "บัณฑิตศึกษา" : "ปริญญาตรี"} ·{" "}
-                      {total.toFixed(1)} ชม./สัปดาห์
+                      {t("กลุ่ม {secs}", { secs: secLabels.join(", ") || "-" })} ·{" "}
+                      {a.level === "master" || a.level === "phd" ? t("บัณฑิตศึกษา") : t("ปริญญาตรี")} ·{" "}
+                      {t("{h} ชม./สัปดาห์", { h: total.toFixed(1) })}
                     </div>
                   </div>
                   {est && (
                     <div className="tabular-nums sm:shrink-0 sm:text-right">
-                      <div className="text-xs text-ink-3">จะได้ประมาณ</div>
+                      <div className="text-xs text-ink-3">{t("จะได้ประมาณ")}</div>
                       <div className={"font-semibold " + (cut ? "text-danger" : "text-ink-1")}>
                         {cut && (
-                          <Tip content="ค่าตอบแทนเต็มตามภาระงานที่ระบุ งบไม่พอจึงได้รับตามยอดด้านขวา">
-                            <s className="font-normal text-ink-3 mr-1">{fmtBahtEst(est.owed)}</s>
+                          <Tip content={t("ค่าตอบแทนเต็มตามภาระงานที่ระบุ งบไม่พอจึงได้รับตามยอดด้านขวา")}>
+                            <s className="font-normal text-ink-3 mr-1">{fmtBahtEst(est.owed, intl)}</s>
                           </Tip>
                         )}
-                        {fmtBahtEst(est.share)}
+                        {fmtBahtEst(est.share, intl)}
                       </div>
-                      <div className="text-xs text-ink-3">≈ {fmtBahtEst(est.perMonth)}/เดือน · {est.hours.toLocaleString("th-TH", { maximumFractionDigits: 1 })} ชม./เทอม</div>
+                      <div className="text-xs text-ink-3">{t("≈ {perMonth}/เดือน · {h} ชม./เทอม", { perMonth: fmtBahtEst(est.perMonth, intl), h: est.hours.toLocaleString(intl, { maximumFractionDigits: 1 }) })}</div>
                     </div>
                   )}
                 </li>
@@ -1365,25 +1367,25 @@ function RequestFormSection({
               (estimate.verdict === "over" ? "border-danger/30 bg-danger-soft/40" : estimate.verdict === "tight" ? "border-warning/30 bg-warning-soft/40" : "border-success/30 bg-success-soft/40")
             }>
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold">งบภาคปกติที่จะใช้ (รวม TA เดิม)</span>
+                <span className="font-semibold">{t("งบภาคปกติที่จะใช้ (รวม TA เดิม)")}</span>
                 <span className={"tabular-nums " + (estimate.regularTotal > estimate.regularCap + 0.5 ? "text-danger font-semibold" : "")}>
-                  {fmtBahtEst(estimate.regularTotal)} / {fmtBahtEst(estimate.regularCap)}
+                  {fmtBahtEst(estimate.regularTotal, intl)} / {fmtBahtEst(estimate.regularCap, intl)}
                 </span>
               </div>
               {estimate.hasSpecial && (
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">งบภาคพิเศษที่จะใช้</span>
+                  <span className="font-semibold">{t("งบภาคพิเศษที่จะใช้")}</span>
                   <span className={"tabular-nums " + (estimate.specialTotal > estimate.specialCap + 0.5 ? "text-danger font-semibold" : "")}>
-                    {fmtBahtEst(estimate.specialTotal)} / {fmtBahtEst(estimate.specialCap)}
+                    {fmtBahtEst(estimate.specialTotal, intl)} / {fmtBahtEst(estimate.specialCap, intl)}
                   </span>
                 </div>
               )}
               <div className="pt-0.5 text-ink-2">
                 {estimate.verdict === "over"
-                  ? <>เกินงบ <b>{fmtBahtEst(estimate.over)}</b> — ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขที่ขีดฆ่าคือค่างานเต็ม) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า หรือย้อนกลับไปลดจำนวนคน/ชั่วโมง</>
+                  ? t.rich("เกินงบ {over} — ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขที่ขีดฆ่าคือค่างานเต็ม) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า หรือย้อนกลับไปลดจำนวนคน/ชั่วโมง", { over: <b>{fmtBahtEst(estimate.over, intl)}</b> })
                   : estimate.verdict === "tight"
-                    ? <>พอดีงบแบบตึง ๆ — ถ้ามีคาบชดเชยเพิ่มระหว่างเทอมอาจเกินได้เล็กน้อย</>
-                    : <>อยู่ในงบ — ตัวเลขเป็นประมาณการจากจำนวนคาบสอนจริงตามปฏิทิน</>}
+                    ? t("พอดีงบแบบตึง ๆ — ถ้ามีคาบชดเชยเพิ่มระหว่างเทอมอาจเกินได้เล็กน้อย")
+                    : t("อยู่ในงบ — ตัวเลขเป็นประมาณการจากจำนวนคาบสอนจริงตามปฏิทิน")}
               </div>
             </div>
           )}
@@ -1393,22 +1395,21 @@ function RequestFormSection({
           {waitingOnSchedule.length > 0 && (
             <>
               <p className="text-ink-2">
-                มี TA ที่ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้: <b>{waitingOnSchedule.join(", ")}</b>
+                {t.rich("มี TA ที่ยังไม่ได้บันทึกตารางเรียนของภาคเรียนนี้: {names}", { names: <b>{waitingOnSchedule.join(", ")}</b> })}
               </p>
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1.5 text-xs text-amber-900">
-                <p className="font-semibold">สิ่งที่จะเกิดขึ้นหลังกดส่ง</p>
-                <p>• คำขอจะยังไม่ถูกตัดสิน จนกว่า TA ทุกคนในคำขอจะสร้างตารางเรียนครบ</p>
+                <p className="font-semibold">{t("สิ่งที่จะเกิดขึ้นหลังกดส่ง")}</p>
+                <p>• {t("คำขอจะยังไม่ถูกตัดสิน จนกว่า TA ทุกคนในคำขอจะสร้างตารางเรียนครบ")}</p>
                 <p>
-                  • ถ้าคาบสอนใดตรงกับตารางเรียนของ TA ระบบจะ<b>ตัดคาบนั้นออกทั้งคาบ</b>โดยอัตโนมัติ
-                  เพราะเขาต้องไปเรียน และจะแจ้งทั้งคุณและ TA
+                  • {t.rich("ถ้าคาบสอนใดตรงกับตารางเรียนของ TA ระบบจะ{cut}โดยอัตโนมัติ เพราะเขาต้องไปเรียน และจะแจ้งทั้งคุณและ TA", { cut: <b>{t("ตัดคาบนั้นออกทั้งคาบ")}</b> })}
                 </p>
-                <p>• ถ้าทุกคาบตรงกับตารางเรียนของเขา TA คนนั้นจะถูกตัดออกจากวิชานี้ และคืนโควตาให้ไปรับวิชาอื่นได้</p>
+                <p>• {t("ถ้าทุกคาบตรงกับตารางเรียนของเขา TA คนนั้นจะถูกตัดออกจากวิชานี้ และคืนโควตาให้ไปรับวิชาอื่นได้")}</p>
               </div>
             </>
           )}
 
           <p className="text-xs text-ink-3">
-            ที่นั่งของ TA ทุกคนในคำขอถูกจองไว้ตั้งแต่ตอนกดส่ง (นับเข้าโควตา {allTas[0]?.course_cap ?? DEFAULT_COURSE_CAP} วิชา) แม้ยังไม่ได้ตัดสิน
+            {t("ที่นั่งของ TA ทุกคนในคำขอถูกจองไว้ตั้งแต่ตอนกดส่ง (นับเข้าโควตา {n} วิชา) แม้ยังไม่ได้ตัดสิน", { n: allTas[0]?.course_cap ?? DEFAULT_COURSE_CAP })}
           </p>
         </div>
       </Modal>
@@ -1528,6 +1529,7 @@ function AssignmentBlock({
   onWorkload: (idx: number, sectionId: string, patch: Partial<WorkloadFields>) => void;
   onRemove: () => void;
 }) {
+  const { t } = useI18n();
   const isGrad = a.level === "master" || a.level === "phd";
   const total = sumWorkload(a, sections);
   // Which of the picked sections are taught together. Drives the "billed once"
@@ -1564,7 +1566,7 @@ function AssignmentBlock({
   const pickedSoft = pickedConflicts.filter(x => !x.c.cross_conflict);
   const blocked = pickedHard.length > 0;
 
-  const ta = tas.find(t => t.id === a.ta_id);
+  const ta = tas.find(x => x.id === a.ta_id);
   // Already on this course: this block adds sections to their request.
   const heldIds = ta?.existing_request_id ? (ta.held_section_ids ?? []) : [];
   const heldLabels = heldIds
@@ -1583,7 +1585,7 @@ function AssignmentBlock({
         (blocked ? "bg-red-50 border-red-200" : "bg-slate-50 border-hairline")
       }>
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <Chip tone={blocked ? "danger" : "brand"}>คนที่ {n}</Chip>
+          <Chip tone={blocked ? "danger" : "brand"}>{t("คนที่ {n}", { n })}</Chip>
           {ta ? (
             <>
               <Tip content={`${ta.first_name} ${ta.last_name}`}>
@@ -1594,10 +1596,10 @@ function AssignmentBlock({
               </Tip>
             </>
           ) : (
-            <span className="text-xs text-ink-3">ยังไม่ได้เลือก TA</span>
+            <span className="text-xs text-ink-3">{t("ยังไม่ได้เลือก TA")}</span>
           )}
         </div>
-        <IconButton label="ลบ" variant="ghost" size="sm" onClick={onRemove}>
+        <IconButton label={t("ลบ")} variant="ghost" size="sm" onClick={onRemove}>
           <Trash2 size={14} />
         </IconButton>
       </div>
@@ -1610,10 +1612,10 @@ function AssignmentBlock({
             value={a.ta_id}
             onChange={(taId, level) => onUpdate(idx, { ta_id: taId, level })}
           />
-          <FieldGroup label="ระดับ">
+          <FieldGroup label={t("ระดับ")}>
             <div className="h-9 flex items-center">
               <Chip tone={isGrad ? "brand" : "neutral"}>
-                {a.level === "undergrad" ? "ปริญญาตรี" : a.level === "master" ? "ปริญญาโท" : a.level === "phd" ? "ปริญญาเอก" : a.level}
+                {a.level === "undergrad" ? t("ปริญญาตรี") : a.level === "master" ? t("ปริญญาโท") : a.level === "phd" ? t("ปริญญาเอก") : a.level}
               </Chip>
             </div>
           </FieldGroup>
@@ -1627,10 +1629,10 @@ function AssignmentBlock({
           <div className="rounded-md border border-brand/30 bg-brand-soft p-3 text-xs text-ink-1 space-y-0.5">
             <div className="flex items-center gap-1.5 font-medium text-brand">
               <Info size={13} />
-              {ta?.first_name} ดูแล Sec {heldLabels.join(", ")} ของวิชานี้อยู่แล้ว
+              {t("{name} ดูแล Sec {secs} ของวิชานี้อยู่แล้ว", { name: ta?.first_name ?? "", secs: heldLabels.join(", ") })}
             </div>
             <div>
-              เลือก section ที่จะเพิ่ม ระบบจะเพิ่มเข้าคำขอเดิมโดยไม่ต้องยกเลิก เวลาที่ TA บันทึกไว้แล้วยังอยู่ครบ
+              {t("เลือก section ที่จะเพิ่ม ระบบจะเพิ่มเข้าคำขอเดิมโดยไม่ต้องยกเลิก เวลาที่ TA บันทึกไว้แล้วยังอยู่ครบ")}
             </div>
           </div>
         )}
@@ -1648,7 +1650,7 @@ function AssignmentBlock({
           <div className="rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-800 space-y-1.5">
             <div className="flex items-center gap-1.5 font-medium">
               <AlertCircle size={13} />
-              TA คนนี้มีตารางทับซ้อน กรุณาเอาชื่อออกหรือเปลี่ยน section
+              {t("TA คนนี้มีตารางทับซ้อน กรุณาเอาชื่อออกหรือเปลี่ยน section")}
             </div>
             <ul className="pl-5 list-disc space-y-0.5">
               {pickedHard.flatMap(x =>
@@ -1664,15 +1666,17 @@ function AssignmentBlock({
           <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 space-y-1.5">
             <div className="flex items-center gap-1.5 font-medium">
               <AlertCircle size={13} />
-              บางคาบตรงกับตารางเรียนของ TA ส่งคำขอได้เฉพาะส่วนที่ไม่ทับ
+              {t("บางคาบตรงกับตารางเรียนของ TA ส่งคำขอได้เฉพาะส่วนที่ไม่ทับ")}
             </div>
             <ul className="pl-5 list-disc space-y-0.5">
               {pickedSoft.map(x => {
                 const sec = sections.find(s => s.id === x.sid);
                 const kinds = x.c.blocked_kinds ?? [];
                 const what = kinds.length === 0
-                  ? "ทับบางคาบ คาบที่ทับจะถูกตัดออกเมื่อส่งคำขอ"
-                  : `${kinds.map(k => (k === "lab" ? "ปฏิบัติการ" : "บรรยาย")).join(" และ ")} ทับทุกคาบ งานในคาบส่วนนี้ส่งคำขอไม่ได้`;
+                  ? t("ทับบางคาบ คาบที่ทับจะถูกตัดออกเมื่อส่งคำขอ")
+                  : t("{kinds} ทับทุกคาบ งานในคาบส่วนนี้ส่งคำขอไม่ได้", {
+                    kinds: kinds.map(k => (k === "lab" ? t("ปฏิบัติการ") : t("บรรยาย"))).reduce((p, q) => t("{a} และ {b}", { a: p, b: q })),
+                  });
                 return <li key={x.sid}>Sec {sec?.sec_no ?? "?"}: {what}</li>;
               })}
             </ul>
@@ -1685,12 +1689,12 @@ function AssignmentBlock({
         <div data-tour="req-workload" className={blocked ? "opacity-50 pointer-events-none select-none" : ""}>
           {a.section_ids.length === 0 ? (
             <div className="text-xs text-ink-3 py-3 text-center border border-dashed border-hairline rounded-md">
-              เลือก section ก่อน จึงจะกำหนดชั่วโมงได้
+              {t("เลือก section ก่อน จึงจะกำหนดชั่วโมงได้")}
             </div>
           ) : (
             <div className="space-y-3">
               <div className="text-xs font-medium text-ink-2">
-                ชั่วโมงทำงานต่อสัปดาห์ กำหนดแยกแต่ละกลุ่มเรียน
+                {t("ชั่วโมงทำงานต่อสัปดาห์ กำหนดแยกแต่ละกลุ่มเรียน")}
               </div>
               {/* Course order (Sec 1, 2, 3), not tick order: ticking Sec 2 before
                   Sec 1 put Sec 2's card first and lecturers filled the wrong one. */}
@@ -1710,12 +1714,12 @@ function AssignmentBlock({
                   <div key={sid} className="rounded-md border border-hairline overflow-hidden">
                     <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-brand-soft border-b border-brand/20">
                       <span className="text-sm font-semibold text-brand">
-                        กลุ่มเรียน Sec {sec?.sec_no ?? "—"}
+                        {t("กลุ่มเรียน Sec {sec}", { sec: sec?.sec_no ?? "—" })}
                       </span>
-                      {sec?.track === "special" && <Chip tone="warn">ภาคพิเศษ</Chip>}
+                      {sec?.track === "special" && <Chip tone="warn">{t("ภาคพิเศษ")}</Chip>}
                       {mates.length > 0 && (
                         <span className="text-xs text-ink-2">
-                          สอนพร้อมกับ Sec {mates.join(", ")} เบิกรวมเป็นก้อนเดียว
+                          {t("สอนพร้อมกับ Sec {secs} เบิกรวมเป็นก้อนเดียว", { secs: mates.join(", ") })}
                         </span>
                       )}
                     </div>
@@ -1749,11 +1753,11 @@ function AssignmentBlock({
                           return (
                             <div className="space-y-3">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <HrsRow label="ช่วยสอน" hrs={w.help_teach_hrs} desc={w.help_teach_desc}
+                                <HrsRow label={t("ช่วยสอน")} hrs={w.help_teach_hrs} desc={w.help_teach_desc}
                                   max={cap(w.help_teach_hrs)}
                                   onH={v => onWorkload(idx, sid, { help_teach_hrs: v })}
                                   onD={v => onWorkload(idx, sid, { help_teach_desc: v })} />
-                                <HrsRow label="ตรวจการบ้าน (ไม่เกิน 2 ชม./สัปดาห์)" hrs={w.grade_hrs} desc={w.grade_desc}
+                                <HrsRow label={t("ตรวจการบ้าน (ไม่เกิน 2 ชม./สัปดาห์)")} hrs={w.grade_hrs} desc={w.grade_desc}
                                   max={Math.min(GRAD_REVIEW_HOUR_CAP, cap(w.grade_hrs))}
                                   onH={v => onWorkload(idx, sid, { grade_hrs: v })}
                                   onD={v => onWorkload(idx, sid, { grade_desc: v })} />
@@ -1763,11 +1767,11 @@ function AssignmentBlock({
                                 — ไม่ถูกนำไปสร้างตารางลงเวลาหรือคำนวณค่าตอบแทน
                               </div> */}
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <HrsRow label="เตรียมการสอน" hrs={w.prep_hrs} desc={w.prep_desc}
+                                <HrsRow label={t("เตรียมการสอน")} hrs={w.prep_hrs} desc={w.prep_desc}
                                   max={cap(w.prep_hrs)}
                                   onH={v => onWorkload(idx, sid, { prep_hrs: v })}
                                   onD={v => onWorkload(idx, sid, { prep_desc: v })} />
-                                <HrsRow label="อื่น ๆ ระบุ" hrs={w.other_hrs} desc={w.other_desc}
+                                <HrsRow label={t("อื่น ๆ ระบุ")} hrs={w.other_hrs} desc={w.other_desc}
                                   max={cap(w.other_hrs)}
                                   onH={v => onWorkload(idx, sid, { other_hrs: v })}
                                   onD={v => onWorkload(idx, sid, { other_desc: v })} />
@@ -1803,16 +1807,18 @@ function AssignmentBlock({
           const overDaily = total > weeklyCap;
           const bad = gradUnder || gradOver || overDaily || (!isGrad && total === 0);
           const msg = overDaily
-            ? `เกิน ${weeklyCap.toFixed(0)} ชม./สัปดาห์ ที่ลงบันทึกเวลาได้จริง (เพดาน ${(weeklyCap / WORKING_DAYS_PER_WEEK).toFixed(0)} ชม./วัน ตามประกาศ × ${WORKING_DAYS_PER_WEEK} วันทำการ)`
+            ? t("เกิน {weekly} ชม./สัปดาห์ ที่ลงบันทึกเวลาได้จริง (เพดาน {daily} ชม./วัน ตามประกาศ × {days} วันทำการ)", {
+              weekly: weeklyCap.toFixed(0), daily: (weeklyCap / WORKING_DAYS_PER_WEEK).toFixed(0), days: WORKING_DAYS_PER_WEEK,
+            })
             : gradUnder
-            ? `ต้องกรอกอย่างน้อย ${GRAD_MIN_HRS} ชม./สัปดาห์ ตามระเบียบบัณฑิตศึกษา ยังส่งคำขอไม่ได้`
+            ? t("ต้องกรอกอย่างน้อย {n} ชม./สัปดาห์ ตามระเบียบบัณฑิตศึกษา ยังส่งคำขอไม่ได้", { n: GRAD_MIN_HRS })
             : gradOver
-            ? `เกินขีดจำกัด ${GRAD_MAX_HRS} ชม./สัปดาห์`
+            ? t("เกินขีดจำกัด {n} ชม./สัปดาห์", { n: GRAD_MAX_HRS })
             : !isGrad && total === 0
-            ? "ยังไม่ได้ระบุภาระงาน"
+            ? t("ยังไม่ได้ระบุภาระงาน")
             : isGrad
-            ? "อยู่ในช่วง 10–12 ชม./สัปดาห์"
-            : "ภาระงานรวม";
+            ? t("อยู่ในช่วง 10–12 ชม./สัปดาห์")
+            : t("ภาระงานรวม");
           return (
             <div data-tour="req-total" className={
               "flex items-center justify-between rounded-md px-3 py-2 text-xs " +
@@ -1822,7 +1828,7 @@ function AssignmentBlock({
                 {bad ? <AlertCircle size={12} /> : <CheckCircle2 size={12} />}
                 {msg}
               </span>
-              <span className="font-semibold">{total.toFixed(1)} ชม./สัปดาห์</span>
+              <span className="font-semibold">{t("{h} ชม./สัปดาห์", { h: total.toFixed(1) })}</span>
             </div>
           );
         })()}
@@ -1852,14 +1858,15 @@ function UndergradWorkload({
   blockedKinds: string[];
   onWorkload: (idx: number, sectionId: string, patch: Partial<WorkloadFields>) => void;
 }) {
+  const { t } = useI18n();
   const showLec = scope === "lecture" || scope === "both";
   const showLab = scope === "lab" || scope === "both";
   const lecBlocked = blockedKinds.includes("lecture");
   const labBlocked = blockedKinds.includes("lab");
   const capHint = (hrs: number) =>
     hrs <= 0
-      ? "กลุ่มนี้ไม่มีคาบประเภทนี้ในตารางสอน"
-      : `สูงสุด ${hrs.toFixed(1)} ชม./สัปดาห์ ต่อกลุ่ม (ตามตารางสอนจริง)`;
+      ? t("กลุ่มนี้ไม่มีคาบประเภทนี้ในตารางสอน")
+      : t("สูงสุด {h} ชม./สัปดาห์ ต่อกลุ่ม (ตามตารางสอนจริง)", { h: hrs.toFixed(1) });
 
   // ปฏิบัติการ is either-or: running the session, or supporting it from outside.
   // Ticking one clears the other so the form cannot submit a pair the server
@@ -1872,7 +1879,7 @@ function UndergradWorkload({
       {showLec && (
         <div className="rounded-md border border-hairline p-2 sm:p-3">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-            <div className="text-xs font-medium text-ink-2">1. ชั่วโมงบรรยาย (ปริญญาตรี)</div>
+            <div className="text-xs font-medium text-ink-2">{t("1. ชั่วโมงบรรยาย (ปริญญาตรี)")}</div>
             <div className="flex items-center gap-2 flex-wrap">
               <SideTotal
                 used={workload.check_work_hrs + workload.attendance_hrs + workload.ug_other_hrs}
@@ -1883,27 +1890,27 @@ function UndergradWorkload({
           </div>
           {lecBlocked && (
             <div className="mb-2 text-[11px] text-amber-700">
-              ทุกคาบบรรยายของกลุ่มนี้ตรงกับตารางเรียนของ TA เช็คชื่อไม่ได้ แต่ยังช่วยตรวจงาน/งานอื่นนอกคาบได้
+              {t("ทุกคาบบรรยายของกลุ่มนี้ตรงกับตารางเรียนของ TA เช็คชื่อไม่ได้ แต่ยังช่วยตรวจงาน/งานอื่นนอกคาบได้")}
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <CheckHrs
-              label="ช่วยตรวจงาน"
+              label={t("ช่วยตรวจงาน")}
               hrs={workload.check_work_hrs}
               max={lectureHrs}
               onH={v => onWorkload(idx, sectionId, { check_work_hrs: v })}
             />
             <CheckHrs
-              label="เช็คชื่อ / เก็บใบงาน"
+              label={t("เช็คชื่อ / เก็บใบงาน")}
               hrs={workload.attendance_hrs}
               max={lectureHrs}
               disabled={lecBlocked}
-              disabledHint="ตรงกับตารางเรียนของ TA ทุกคาบ"
+              disabledHint={t("ตรงกับตารางเรียนของ TA ทุกคาบ")}
               onH={v => onWorkload(idx, sectionId, { attendance_hrs: v })}
             />
             <div className="md:col-span-2">
               <CheckHrs
-                label="อื่น ๆ"
+                label={t("อื่น ๆ")}
                 hrs={workload.ug_other_hrs}
                 desc={workload.ug_other_desc}
                 max={lectureHrs}
@@ -1918,36 +1925,36 @@ function UndergradWorkload({
       {showLab && (
         <div className="rounded-md border border-hairline p-2 sm:p-3">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-            <div className="text-xs font-medium text-ink-2">2. ชั่วโมงปฏิบัติการ</div>
+            <div className="text-xs font-medium text-ink-2">{t("2. ชั่วโมงปฏิบัติการ")}</div>
             <div className="flex items-center gap-2 flex-wrap">
               <SideTotal used={workload.lab_hrs + workload.lab_other_hrs} hrs={labHrs} />
               <span className="text-[11px] text-ink-3">{capHint(labHrs)}</span>
             </div>
           </div>
-          <div className="mb-2 text-[11px] text-ink-3">เลือกได้อย่างใดอย่างหนึ่ง</div>
+          <div className="mb-2 text-[11px] text-ink-3">{t("เลือกได้อย่างใดอย่างหนึ่ง")}</div>
           {labBlocked && (
             <div className="mb-2 text-[11px] text-amber-700">
-              ทุกคาบปฏิบัติการของกลุ่มนี้ตรงกับตารางเรียนของ TA สอนปฏิบัติการไม่ได้ แต่ยังทำงานอื่นนอกคาบได้
+              {t("ทุกคาบปฏิบัติการของกลุ่มนี้ตรงกับตารางเรียนของ TA สอนปฏิบัติการไม่ได้ แต่ยังทำงานอื่นนอกคาบได้")}
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <CheckHrs
-              label="สอนปฏิบัติการ"
+              label={t("สอนปฏิบัติการ")}
               hrs={workload.lab_hrs}
               max={labHrs}
               disabled={labBlocked || labMode === "other"}
-              disabledHint={labBlocked ? "ตรงกับตารางเรียนของ TA ทุกคาบ" : "เลือก 'อื่น ๆ' ไว้แล้ว"}
+              disabledHint={labBlocked ? t("ตรงกับตารางเรียนของ TA ทุกคาบ") : t("เลือก 'อื่น ๆ' ไว้แล้ว")}
               onH={v => onWorkload(idx, sectionId, { lab_hrs: v, lab_other_hrs: 0, lab_other_desc: "" })}
             />
             <div className="md:col-span-2">
               <CheckHrs
-                label="อื่น ๆ (ปฏิบัติการ)"
+                label={t("อื่น ๆ (ปฏิบัติการ)")}
                 hrs={workload.lab_other_hrs}
                 desc={workload.lab_other_desc}
                 max={labHrs}
                 hint={capHint(labHrs)}
                 disabled={labMode === "teach"}
-                disabledHint="เลือก 'สอนปฏิบัติการ' ไว้แล้ว"
+                disabledHint={t("เลือก 'สอนปฏิบัติการ' ไว้แล้ว")}
                 onH={v => onWorkload(idx, sectionId, { lab_other_hrs: v, lab_hrs: 0 })}
                 onD={v => onWorkload(idx, sectionId, { lab_other_desc: v })}
               />
@@ -1966,6 +1973,7 @@ function UndergradWorkload({
  * already say so, and "0.0 / 0.0" reads like a bug.
  */
 function SideTotal({ used, hrs }: { used: number; hrs: number }) {
+  const { t } = useI18n();
   if (hrs <= 0) return null;
   const limit = hrs * SECTION_TOTAL_MULTIPLIER;
   const over = used > limit + 0.001;
@@ -1976,7 +1984,7 @@ function SideTotal({ used, hrs }: { used: number; hrs: number }) {
         (over ? "bg-amber-100 text-amber-800 font-medium" : "text-ink-3")
       }
     >
-      รวม {used.toFixed(1)} / {limit.toFixed(1)} ชม.
+      {t("รวม {used} / {limit} ชม.", { used: used.toFixed(1), limit: limit.toFixed(1) })}
     </span>
   );
 }
@@ -2000,6 +2008,7 @@ function CheckHrs({
   onH: (v: number) => void;
   onD?: (v: string) => void;
 }) {
+  const { t } = useI18n();
   const enabled = hrs > 0;
   // Disable the whole row when the cap is 0 (no sections picked yet, or this
   // group simply never meets for this kind), or when the caller forces it.
@@ -2030,7 +2039,7 @@ function CheckHrs({
           <TextInput
             value={desc ?? ""}
             onChange={e => onD(e.target.value)}
-            placeholder="กิจกรรมที่ปฏิบัติ"
+            placeholder={t("กิจกรรมที่ปฏิบัติ")}
             className="min-w-0 flex-1 basis-full sm:basis-auto"
           />
         )}
@@ -2042,6 +2051,7 @@ function CheckHrs({
 function HrsRow({
   label, hrs, desc, onH, onD, max,
 }: { label: string; hrs: number; desc: string; onH: (v: number) => void; onD: (v: string) => void; max?: number }) {
+  const { t } = useI18n();
   return (
     <FieldGroup label={label}>
       <div className="flex flex-wrap items-center gap-2">
@@ -2049,7 +2059,7 @@ function HrsRow({
         <TextInput
           value={desc}
           onChange={e => onD(e.target.value)}
-          placeholder="รายละเอียดกิจกรรม"
+          placeholder={t("รายละเอียดกิจกรรม")}
           className="min-w-0 flex-1 basis-full sm:basis-auto"
         />
       </div>
@@ -2068,6 +2078,7 @@ function SectionPicker({
   /** Sections the TA already covers on an earlier request: shown, not pickable. */
   heldIds?: string[];
 }) {
+  const { t } = useI18n();
   const invalid = value.length === 0;
   // Only a clash with another course the TA assists makes a section
   // unpickable — the server refuses that one. A clash with the TA's own class
@@ -2086,7 +2097,7 @@ function SectionPicker({
     >
       <Label className="text-sm font-medium">
         Section <span className="text-red-500">*</span>{" "}
-        <span className="text-xs text-ink-3 font-normal">(เลือกได้หลายกลุ่ม รวมกลุ่มที่สอนพร้อมกันเวลาเดียว)</span>
+        <span className="text-xs text-ink-3 font-normal">{t("(เลือกได้หลายกลุ่ม รวมกลุ่มที่สอนพร้อมกันเวลาเดียว)")}</span>
       </Label>
       <div className="flex flex-wrap gap-2 mt-1">
         {sections.map(s => {
@@ -2121,11 +2132,11 @@ function SectionPicker({
                 <span className="text-sm">
                   Sec {s.sec_no}
                   {s.track === "special" ? (
-                    <span className="text-xs text-ink-3 ml-1">· ภาคพิเศษ</span>
+                    <span className="text-xs text-ink-3 ml-1">· {t("ภาคพิเศษ")}</span>
                   ) : null}
-                  {held && <span className="text-[10px] text-brand ml-1">· อยู่ในคำขอเดิม</span>}
-                  {bad && <span className="text-[10px] text-red-600 ml-1">· เลือกไม่ได้ ทับวิชาอื่นที่ช่วยสอน</span>}
-                  {partial && <span className="text-[10px] text-amber-700 ml-1">· ตารางเรียนทับบางส่วน</span>}
+                  {held && <span className="text-[10px] text-brand ml-1">· {t("อยู่ในคำขอเดิม")}</span>}
+                  {bad && <span className="text-[10px] text-red-600 ml-1">· {t("เลือกไม่ได้ ทับวิชาอื่นที่ช่วยสอน")}</span>}
+                  {partial && <span className="text-[10px] text-amber-700 ml-1">· {t("ตารางเรียนทับบางส่วน")}</span>}
                 </span>
               </Checkbox.Content>
             </Checkbox>
@@ -2133,7 +2144,7 @@ function SectionPicker({
         })}
       </div>
       {invalid && (
-        <div className="text-xs text-red-600 mt-1">กรุณาเลือก section อย่างน้อย 1 กลุ่ม</div>
+        <div className="text-xs text-red-600 mt-1">{t("กรุณาเลือก section อย่างน้อย 1 กลุ่ม")}</div>
       )}
       {blockedIds.size > 0 && (
         <div className="mt-1.5 space-y-0.5">
@@ -2157,13 +2168,14 @@ function TaAutocomplete({
   value: string;
   onChange: (taId: string, level: string) => void;
 }) {
+  const { t } = useI18n();
   const { contains } = useFilter({ sensitivity: "base" });
-  const selected = tas.find(t => t.id === value) ?? null;
+  const selected = tas.find(x => x.id === value) ?? null;
   // Blocked TAs stay in the collection so they remain searchable; react-aria
   // renders them dimmed and unselectable via disabledKeys.
   const disabledKeys = useMemo(
-    () => tas.filter(t => taBlockedReason(t) !== null).map(t => t.id),
-    [tas],
+    () => tas.filter(x => taBlockedReason(x, t) !== null).map(x => x.id),
+    [tas, t],
   );
 
   return (
@@ -2173,13 +2185,13 @@ function TaAutocomplete({
       disabledKeys={disabledKeys}
       onChange={(k: Key | null) => {
         const id = k ? String(k) : "";
-        const t = tas.find(x => x.id === id);
-        onChange(id, t?.study_level ?? "undergrad");
+        const ta = tas.find(x => x.id === id);
+        onChange(id, ta?.study_level ?? "undergrad");
       }}
       className="w-full"
-      placeholder="พิมพ์ชื่อหรืออีเมลเพื่อค้นหา…"
+      placeholder={t("พิมพ์ชื่อหรืออีเมลเพื่อค้นหา…")}
     >
-      <Label>เลือก TA</Label>
+      <Label>{t("เลือก TA")}</Label>
       <Autocomplete.Trigger>
         <Autocomplete.Value>
           {({ defaultChildren, isPlaceholder }) => {
@@ -2200,24 +2212,24 @@ function TaAutocomplete({
           <SearchField autoFocus name="ta-search" variant="secondary">
             <SearchField.Group>
               <SearchField.SearchIcon />
-              <SearchField.Input placeholder="ค้นหา TA…" />
+              <SearchField.Input placeholder={t("ค้นหา TA…")} />
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
-          <ListBox renderEmptyState={() => <HEmptyState>ไม่พบ TA ที่ตรงกัน</HEmptyState>}>
-            {tas.map(t => {
-              const blocked = taBlockedReason(t);
-              const booked = t.approved_course_count ?? 0;
+          <ListBox renderEmptyState={() => <HEmptyState>{t("ไม่พบ TA ที่ตรงกัน")}</HEmptyState>}>
+            {tas.map(ta => {
+              const blocked = taBlockedReason(ta, t);
+              const booked = ta.approved_course_count ?? 0;
               return (
                 <ListBox.Item
-                  key={t.id}
-                  id={t.id}
-                  textValue={`${t.first_name} ${t.last_name} ${t.email}`}
+                  key={ta.id}
+                  id={ta.id}
+                  textValue={`${ta.first_name} ${ta.last_name} ${ta.email}`}
                 >
                   <div className="flex flex-col min-w-0">
-                    <Label>{t.first_name} {t.last_name}</Label>
+                    <Label>{ta.first_name} {ta.last_name}</Label>
                     <Description className="text-xs">
-                      {t.email} · {t.study_level === "master" ? "ป.โท" : t.study_level === "phd" ? "ป.เอก" : "ป.ตรี"}
+                      {ta.email} · {ta.study_level === "master" ? t("ป.โท") : ta.study_level === "phd" ? t("ป.เอก") : t("ป.ตรี")}
                       {/* The count is the whole point of keeping blocked TAs
                           visible — the lecturer can see WHY, not just that the
                           name is missing. */}
@@ -2225,21 +2237,21 @@ function TaAutocomplete({
                           the quota check for adding one more), so a TA already
                           here read "รับสอน 0/3" while teaching it. Count this
                           course back in and say so instead. */}
-                      {t.already_in_course ? (
+                      {ta.already_in_course ? (
                         <span className={"ml-1 font-medium " + (blocked ? "text-red-600" : "text-brand")}>
-                          · อยู่ในวิชานี้แล้ว · รวม {booked + 1}/{t.course_cap ?? DEFAULT_COURSE_CAP} วิชา
+                          · {t("อยู่ในวิชานี้แล้ว · รวม {n}/{cap} วิชา", { n: booked + 1, cap: ta.course_cap ?? DEFAULT_COURSE_CAP })}
                         </span>
                       ) : (
                         <span className={"ml-1 font-medium " + (blocked ? "text-red-600" : "text-ink-2")}>
-                          · รับสอน {booked}/{t.course_cap ?? DEFAULT_COURSE_CAP} วิชา
+                          · {t("รับสอน {n}/{cap} วิชา", { n: booked, cap: ta.course_cap ?? DEFAULT_COURSE_CAP })}
                         </span>
                       )}
                       {blocked && <span className="ml-1 text-red-600">· {blocked}</span>}
-                      {!blocked && t.already_in_course && (
-                        <span className="ml-1 text-brand">· เพิ่ม section ได้</span>
+                      {!blocked && ta.already_in_course && (
+                        <span className="ml-1 text-brand">· {t("เพิ่ม section ได้")}</span>
                       )}
-                      {!blocked && t.has_schedule === false && (
-                        <span className="ml-1 text-amber-600">· ยังไม่ได้สร้างตารางเรียน</span>
+                      {!blocked && ta.has_schedule === false && (
+                        <span className="ml-1 text-amber-600">· {t("ยังไม่ได้สร้างตารางเรียน")}</span>
                       )}
                     </Description>
                   </div>
@@ -2257,6 +2269,7 @@ function TaAutocomplete({
 function HourInput({
   value, onChange, maxValue,
 }: { value: number; onChange: (v: number) => void; maxValue?: number }) {
+  const { t } = useI18n();
   return (
     <NumberField
       value={value}
@@ -2266,7 +2279,7 @@ function HourInput({
       step={0.5}
       formatOptions={{ maximumFractionDigits: 1 }}
       className="w-32 shrink-0"
-      aria-label="ชั่วโมง/สัปดาห์"
+      aria-label={t("ชั่วโมง/สัปดาห์")}
     >
       <NumberField.Group>
         <NumberField.DecrementButton />
@@ -2281,11 +2294,12 @@ function HourInput({
 /* Create-TA modal — mirrors the staff CreateUserModal but locked to role=ta  */
 /* -------------------------------------------------------------------------- */
 
-const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว"];
+// Values are sent to the API as they are; only the shown label is translated.
+const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว"]; // i18n-ignore — stored title values
 const STUDY_LEVELS: { value: string; label: string }[] = [
-  { value: "undergrad", label: "ปริญญาตรี" },
-  { value: "master", label: "ปริญญาโท" },
-  { value: "phd", label: "ปริญญาเอก" },
+  { value: "undergrad", label: msg("ปริญญาตรี") },
+  { value: "master", label: msg("ปริญญาโท") },
+  { value: "phd", label: msg("ปริญญาเอก") },
 ];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -2295,10 +2309,11 @@ function CreateTaPanel({
   onClose: () => void;
   onCreated: (ta: TA) => void;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState<{
     email: string; title: string; first_name: string; last_name: string; study_level: string; nationality: Nationality;
   }>({
-    email: "", title: "นาย", first_name: "", last_name: "", study_level: "undergrad", nationality: "thai",
+    email: "", title: "นาย", first_name: "", last_name: "", study_level: "undergrad", nationality: "thai", // i18n-ignore — stored title value
   });
   const foreign = isForeign(form.nationality);
   const [showErrors, setShowErrors] = useState(false);
@@ -2308,14 +2323,14 @@ function CreateTaPanel({
 
   const errors = useMemo(() => ({
     email: !form.email.trim()
-      ? "กรุณากรอกอีเมล"
+      ? t("กรุณากรอกอีเมล")
       : !EMAIL_RE.test(form.email.trim())
-      ? "รูปแบบอีเมลไม่ถูกต้อง"
+      ? t("รูปแบบอีเมลไม่ถูกต้อง")
       : null,
-    first_name: !form.first_name.trim() ? "กรุณากรอกชื่อ" : null,
-    last_name: !form.last_name.trim() ? "กรุณากรอกนามสกุล" : null,
-    study_level: STUDY_LEVELS.some(l => l.value === form.study_level) ? null : "กรุณาเลือกระดับการศึกษา",
-  }), [form]);
+    first_name: !form.first_name.trim() ? t("กรุณากรอกชื่อ") : null,
+    last_name: !form.last_name.trim() ? t("กรุณากรอกนามสกุล") : null,
+    study_level: STUDY_LEVELS.some(l => l.value === form.study_level) ? null : t("กรุณาเลือกระดับการศึกษา"),
+  }), [form, t]);
   const hasErrors = Object.values(errors).some(Boolean);
 
   async function submit() {
@@ -2349,7 +2364,7 @@ function CreateTaPanel({
       <div className="flex items-center gap-2 mb-3">
         <UserPlus size={16} className="text-accent" />
         <div className="font-medium text-sm">
-          {created ? "สร้างบัญชี TA สำเร็จ" : "สร้างบัญชี TA ใหม่"}
+          {created ? t("สร้างบัญชี TA สำเร็จ") : t("สร้างบัญชี TA ใหม่")}
         </div>
       </div>
 
@@ -2362,9 +2377,9 @@ function CreateTaPanel({
             password={created.temp_password}
           />
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={onClose}>ปิด</Button>
+            <Button variant="ghost" size="sm" onClick={onClose}>{t("ปิด")}</Button>
             <Button variant="primary" size="sm" onClick={useAndAdd}>
-              <Plus size={14} /> เพิ่มเข้ารายวิชานี้
+              <Plus size={14} /> {t("เพิ่มเข้ารายวิชานี้")}
             </Button>
           </div>
         </div>
@@ -2372,51 +2387,51 @@ function CreateTaPanel({
         <div className="space-y-3">
           <Alert
             status="accent"
-            title="บัญชีนี้จะได้รับสิทธิ์ผู้ช่วยสอน (TA)"
-            description="สร้างบัญชีสำหรับ TA ใหม่ที่ยังไม่มีในระบบ ระบบจะสร้างรหัสผ่านชั่วคราวให้"
+            title={t("บัญชีนี้จะได้รับสิทธิ์ผู้ช่วยสอน (TA)")}
+            description={t("สร้างบัญชีสำหรับ TA ใหม่ที่ยังไม่มีในระบบ ระบบจะสร้างรหัสผ่านชั่วคราวให้")}
             icon={<Info size={16} />}
           />
           <VField
-            label="อีเมล" required type="email" placeholder="ta@kkumail.com"
+            label={t("อีเมล")} required type="email" placeholder="ta@kkumail.com"
             value={form.email} onChange={v => setForm({ ...form, email: v })}
             error={errors.email} show={showErrors}
           />
           <NationalityPicker value={form.nationality} onChange={v => setForm({ ...form, nationality: v })} />
           {foreign && (
             <p className="text-xs text-ink-3 -mt-1">
-              กรอกชื่อ-นามสกุลเป็นภาษาอังกฤษตาม Passport ส่วนคำนำหน้ายังใช้ นาย/นาง/นางสาว ตามแบบฟอร์มเจ้าหนี้
+              {t("กรอกชื่อ-นามสกุลเป็นภาษาอังกฤษตาม Passport ส่วนคำนำหน้ายังใช้ นาย/นาง/นางสาว ตามแบบฟอร์มเจ้าหนี้")}
             </p>
           )}
           {/* Title stays on its own line on a phone — sharing one with two
               name fields left each name about 90px wide. */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_1fr_1fr]">
-            <FieldGroup label="คำนำหน้า">
+            <FieldGroup label={t("คำนำหน้า")}>
               <Select value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}>
-                {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                {TITLE_OPTIONS.map(x => <option key={x} value={x}>{t(x)}</option>)}
               </Select>
             </FieldGroup>
-            <VField label={foreign ? "ชื่อ (ภาษาอังกฤษ)" : "ชื่อ"} required
+            <VField label={foreign ? t("ชื่อ (ภาษาอังกฤษ)") : t("ชื่อ")} required
               placeholder={foreign ? "John" : undefined}
               value={form.first_name} onChange={v => setForm({ ...form, first_name: v })}
               error={errors.first_name} show={showErrors}
             />
-            <VField label={foreign ? "นามสกุล (ภาษาอังกฤษ)" : "นามสกุล"} required
+            <VField label={foreign ? t("นามสกุล (ภาษาอังกฤษ)") : t("นามสกุล")} required
               placeholder={foreign ? "Smith" : undefined}
               value={form.last_name} onChange={v => setForm({ ...form, last_name: v })}
               error={errors.last_name} show={showErrors}
             />
           </div>
-          <FieldGroup label="ระดับการศึกษา">
+          <FieldGroup label={t("ระดับการศึกษา")}>
             <Select value={form.study_level} onChange={e => setForm({ ...form, study_level: e.target.value })}>
-              {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{t(l.label)}</option>)}
             </Select>
           </FieldGroup>
-          {err && <Alert status="danger" title="สร้างบัญชีไม่สำเร็จ" description={err} />}
+          {err && <Alert status="danger" title={t("สร้างบัญชีไม่สำเร็จ")} description={err} />}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={onClose}>ยกเลิก</Button>
+            <Button variant="ghost" size="sm" onClick={onClose}>{t("ยกเลิก")}</Button>
             <Button variant="primary" size="sm" onClick={submit}
               disabled={pending || (showErrors && hasErrors)} isPending={pending}>
-              สร้างบัญชี
+              {t("สร้างบัญชี")}
             </Button>
           </div>
         </div>
@@ -2451,9 +2466,10 @@ function VField({
 // Same shape as the staff panel (app/staff/users/page.tsx) so the lecturer can
 // paste one block — name, email, role, password — straight to the new TA.
 // Accounts made here are always TA, so the role is fixed.
-const TA_ROLE_LABEL = "ผู้ช่วยสอน";
+const TA_ROLE_LABEL = msg("ผู้ช่วยสอน");
 
 function TempPasswordPanel({ userId, name, email, password }: { userId: string; name: string; email: string; password: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   async function copy() {
@@ -2466,7 +2482,7 @@ function TempPasswordPanel({ userId, name, email, password }: { userId: string; 
   async function copyAll() {
     try {
       await navigator.clipboard.writeText(
-        `Name: ${name}\nEmail: ${email}\nRole: ${TA_ROLE_LABEL}\nPassword: ${password}`
+        `Name: ${name}\nEmail: ${email}\nRole: ${t(TA_ROLE_LABEL)}\nPassword: ${password}`
       );
       setCopiedAll(true);
       setTimeout(() => setCopiedAll(false), 1500);
@@ -2476,31 +2492,31 @@ function TempPasswordPanel({ userId, name, email, password }: { userId: string; 
     <div className="space-y-3">
       <Alert
         status="success"
-        title="รหัสผ่านชั่วคราวถูกสร้างแล้ว"
-        description="โปรดคัดลอกหรือส่งทางอีเมลให้ TA ระบบจะบังคับให้เปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก รหัสนี้จะไม่แสดงอีก"
+        title={t("รหัสผ่านชั่วคราวถูกสร้างแล้ว")}
+        description={t("โปรดคัดลอกหรือส่งทางอีเมลให้ TA ระบบจะบังคับให้เปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก รหัสนี้จะไม่แสดงอีก")}
         icon={<CheckCircle2 size={18} />}
       />
       <div>
-        <div className="text-xs text-muted mb-1">อีเมล</div>
+        <div className="text-xs text-muted mb-1">{t("อีเมล")}</div>
         <div className="text-sm font-mono">{email}</div>
       </div>
       <div>
-        <div className="text-xs text-muted mb-1">บทบาท</div>
-        <div className="text-sm">{TA_ROLE_LABEL}</div>
+        <div className="text-xs text-muted mb-1">{t("บทบาท")}</div>
+        <div className="text-sm">{t(TA_ROLE_LABEL)}</div>
       </div>
       <div>
-        <div className="text-xs text-muted mb-1">รหัสผ่านชั่วคราว</div>
+        <div className="text-xs text-muted mb-1">{t("รหัสผ่านชั่วคราว")}</div>
         <div className="flex items-center gap-2">
           <code className="flex-1 px-3 py-2 rounded-md bg-default text-sm font-mono select-all">
             {password}
           </code>
           <Button variant="secondary" size="sm" onClick={copy}>
-            <Copy size={14} /> {copied ? "คัดลอกแล้ว" : "คัดลอก"}
+            <Copy size={14} /> {copied ? t("คัดลอกแล้ว") : t("คัดลอก")}
           </Button>
         </div>
       </div>
       <Button variant="primary" size="sm" className="w-full" onClick={copyAll}>
-        <Files size={14} /> {copiedAll ? "คัดลอกแล้ว" : "คัดลอกอีเมลและรหัสผ่าน"}
+        <Files size={14} /> {copiedAll ? t("คัดลอกแล้ว") : t("คัดลอกอีเมลและรหัสผ่าน")}
       </Button>
       {userId && <SendCredentialsButton userId={userId} email={email} password={password} />}
     </div>
@@ -2539,28 +2555,30 @@ function useWindowState(windows: RequestWindow[] | undefined): WindowState {
   }, [windows, now]);
 }
 
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return "หมดเวลาแล้ว";
+function formatRemaining(ms: number, t: TFn): string {
+  if (ms <= 0) return t("หมดเวลาแล้ว");
   const totalMin = Math.floor(ms / 60_000);
   const days = Math.floor(totalMin / (60 * 24));
   const hours = Math.floor((totalMin % (60 * 24)) / 60);
   const minutes = totalMin % 60;
-  if (days > 0) return `${days} วัน ${hours} ชั่วโมง`;
-  if (hours > 0) return `${hours} ชั่วโมง ${minutes} นาที`;
-  return `${minutes} นาที`;
+  if (days > 0) return t("{d} วัน {h} ชั่วโมง", { d: days, h: hours });
+  if (hours > 0) return t("{h} ชั่วโมง {m} นาที", { h: hours, m: minutes });
+  return t("{m} นาที", { m: minutes });
 }
 
-const THAI_MONTHS_ABBR = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-function formatThaiDateTime(iso: string): string {
+function formatThaiDateTime(iso: string, t: TFn, fmtDate: (iso?: string | null) => string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const date = `${d.getDate()} ${THAI_MONTHS_ABBR[d.getMonth()]} ${d.getFullYear() + 543}`;
+  // The local calendar day, not the UTC one the ISO string carries.
+  const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${date} ${hh}:${mm} น.`;
+  return t("{date} {time} น.", { date: fmtDate(local), time: `${hh}:${mm}` });
 }
 
 function WindowStatusBanner({ state, loading }: { state: WindowState; loading: boolean }) {
+  const { t, fmtDate } = useI18n();
+  const when = (iso: string) => formatThaiDateTime(iso, t, fmtDate);
   // The banner is always shown once loaded, so hold its space: chip + two lines.
   if (loading) {
     return (
@@ -2581,10 +2599,10 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
         <Alert
           status="danger"
           icon={<CalendarOff size={16} />}
-          title="ยังส่งคำขอ TA ไม่ได้"
+          title={t("ยังส่งคำขอ TA ไม่ได้")}
           description={state.phase === "none"
-            ? "เจ้าหน้าที่ยังไม่ได้กำหนดช่วงรับคำขอของภาคเรียนนี้ เมื่อเปิดรับแล้วจะส่งคำขอได้ที่หน้านี้"
-            : `ช่วงรับคำขอของภาคเรียนนี้เริ่ม ${formatThaiDateTime(new Date(state.opensAt).toISOString())}`}
+            ? t("เจ้าหน้าที่ยังไม่ได้กำหนดช่วงรับคำขอของภาคเรียนนี้ เมื่อเปิดรับแล้วจะส่งคำขอได้ที่หน้านี้")
+            : t("ช่วงรับคำขอของภาคเรียนนี้เริ่ม {when}", { when: when(new Date(state.opensAt).toISOString()) })}
         />
       </div>
     );
@@ -2594,13 +2612,13 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
   if (state.phase === "late") {
     return (
       <div data-tour="req-window" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center gap-3">
-        <Chip tone="warn"><AlertCircle size={12} /> ส่งช้า</Chip>
+        <Chip tone="warn"><AlertCircle size={12} /> {t("ส่งช้า")}</Chip>
         <div className="flex flex-col min-w-0">
           <div className="text-sm font-medium text-amber-900">
-            เลยกำหนดแล้ว ส่งคำขอได้ตามปกติ แต่จะถูกทำเครื่องหมายว่า “ล่าช้า”
+            {t("เลยกำหนดแล้ว ส่งคำขอได้ตามปกติ แต่จะถูกทำเครื่องหมายว่า “ล่าช้า”")}
           </div>
           <div className="text-xs text-amber-800">
-            <b>การเบิกจ่ายค่าตอบแทนจะล่าช้าไปด้วย</b> · กำหนดเดิม: {formatThaiDateTime(state.window.closes_at)}
+            <b>{t("การเบิกจ่ายค่าตอบแทนจะล่าช้าไปด้วย")}</b> · {t("กำหนดเดิม: {when}", { when: when(state.window.closes_at) })}
             {state.window.note ? ` · ${state.window.note}` : ""}
           </div>
         </div>
@@ -2616,17 +2634,17 @@ function WindowStatusBanner({ state, loading }: { state: WindowState; loading: b
       (urgent ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50")
     }>
       <Chip tone={urgent ? "warn" : "success"}>
-        <CheckCircle2 size={12} /> ส่งทันเวลา
+        <CheckCircle2 size={12} /> {t("ส่งทันเวลา")}
       </Chip>
       <div className="flex flex-col min-w-0">
         <div className={"text-sm font-medium " + (urgent ? "text-amber-900" : "text-emerald-900")}>
           <Clock size={14} className="inline -mt-0.5 mr-1" />
-          {`เหลืออีก ${formatRemaining(state.remainingMs)} ถึงกำหนดส่ง`}
+          {t("เหลืออีก {left} ถึงกำหนดส่ง", { left: formatRemaining(state.remainingMs, t) })}
         </div>
         <div className={"text-xs " + (urgent ? "text-amber-800" : "text-emerald-800")}>
-          กำหนดส่ง: {formatThaiDateTime(state.window.closes_at)}
+          {t("กำหนดส่ง: {when}", { when: when(state.window.closes_at) })}
           {state.window.note ? ` · ${state.window.note}` : ""}
-          {" · หลังกำหนดยังส่งได้ แต่จะนับเป็น“ส่งช้า”"}
+          {" · " + t("หลังกำหนดยังส่งได้ แต่จะนับเป็น“ส่งช้า”")}
         </div>
       </div>
     </div>

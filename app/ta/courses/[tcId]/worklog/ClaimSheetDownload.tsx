@@ -9,6 +9,7 @@ import { notify } from "../../../../lib/notify";
 import { fmtHours } from "../../../../lib/dates";
 import { Alert, Button, Modal, TipWrap } from "../../../../components/ui";
 import { SkelRows } from "../../../../components/Skeletons";
+import { useI18n } from "../../../../lib/i18n/client";
 
 interface ClaimMonth {
   year_month: string; // Gregorian "2026-06"
@@ -37,15 +38,16 @@ export function ClaimSheetDownload({ tcId, courseCode }: { tcId: string; courseC
   const [downloading, setDownloading] = useState(false);
   const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const { t, monthName, year } = useI18n();
 
   useEffect(() => {
     if (!blockedUntil) return;
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       const n = Date.now();
       setNow(n);
       if (n >= blockedUntil) setBlockedUntil(null);
     }, 1000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [blockedUntil]);
   const secondsLeft = blockedUntil ? Math.max(0, Math.ceil((blockedUntil - now) / 1000)) : 0;
   const blocked = secondsLeft > 0;
@@ -62,6 +64,12 @@ export function ClaimSheetDownload({ tcId, courseCode }: { tcId: string; courseC
     return new Set(withHours.length > 0 ? withHours : months.map(m => m.year_month));
   }, [months]);
   const selected = picked ?? defaultPick;
+  // The server's label is Thai ("มิถุนายน 2569"); rebuild it from year_month
+  // in the reader's language, falling back to the label if it is malformed.
+  const monthLabel = (m: ClaimMonth) => {
+    const [y, mo] = m.year_month.split("-").map(Number);
+    return y && mo ? `${monthName(mo, false)} ${year(y)}` : m.label;
+  };
 
   function toggle(ym: string, on: boolean) {
     const next = new Set(selected);
@@ -82,6 +90,7 @@ export function ClaimSheetDownload({ tcId, courseCode }: { tcId: string; courseC
       const el = document.createElement("a");
       el.href = url;
       const slice = qs ? `_${chosen[0]}${chosen.length > 1 ? `_${chosen[chosen.length - 1]}` : ""}` : "";
+      // i18n-ignore-next-line — file name stays Thai like the staff exports
       el.download = `ใบเบิก-${(courseCode ?? "").replaceAll("/", "_")}${slice}.xlsx`;
       el.click();
       URL.revokeObjectURL(url);
@@ -91,16 +100,16 @@ export function ClaimSheetDownload({ tcId, courseCode }: { tcId: string; courseC
         const wait = e.retryAfter ?? 60;
         setNow(Date.now());
         setBlockedUntil(Date.now() + wait * 1000);
-        notify.warning(`ดาวน์โหลดบ่อยเกินไป ระบบระงับไว้ชั่วคราว ลองใหม่ได้ในอีก ${fmtCountdown(wait)} นาที`);
+        notify.warning(t("ดาวน์โหลดบ่อยเกินไป ระบบระงับไว้ชั่วคราว ลองใหม่ได้ในอีก {time} นาที", { time: fmtCountdown(wait) }));
       } else {
-        notify.error(e, "ดาวน์โหลดใบเบิกไม่สำเร็จ");
+        notify.error(e, t("ดาวน์โหลดใบเบิกไม่สำเร็จ"));
       }
     } finally {
       setDownloading(false);
     }
   }
 
-  const blockedText = `ดาวน์โหลดบ่อยเกินไป ระบบระงับไว้ชั่วคราว ลองใหม่ได้ในอีก ${fmtCountdown(secondsLeft)} นาที`;
+  const blockedText = t("ดาวน์โหลดบ่อยเกินไป ระบบระงับไว้ชั่วคราว ลองใหม่ได้ในอีก {time} นาที", { time: fmtCountdown(secondsLeft) });
 
   return (
     <>
@@ -108,23 +117,23 @@ export function ClaimSheetDownload({ tcId, courseCode }: { tcId: string; courseC
         content={
           blocked
             ? blockedText
-            : "ไฟล์ Excel ใบเบิกเวลาแบบเดียวกับที่เจ้าหน้าที่ใช้เบิกจ่าย เฉพาะของคุณ ใช้ตรวจสอบชั่วโมง ดาวน์โหลดได้แม้ยังไม่ได้ส่งให้อาจารย์"
+            : t("ไฟล์ Excel ใบเบิกเวลาแบบเดียวกับที่เจ้าหน้าที่ใช้เบิกจ่าย เฉพาะของคุณ ใช้ตรวจสอบชั่วโมง ดาวน์โหลดได้แม้ยังไม่ได้ส่งให้อาจารย์")
         }
       >
         <Button variant="ghost" onClick={() => setOpen(true)} disabled={blocked}>
           {blocked ? <Timer size={14} /> : <Download size={14} />}
-          {blocked ? `รอ ${fmtCountdown(secondsLeft)}` : "ดาวน์โหลดใบเบิก"}
+          {blocked ? t("รอ {time}", { time: fmtCountdown(secondsLeft) }) : t("ดาวน์โหลดใบเบิก")}
         </Button>
       </TipWrap>
 
       <Modal
         open={open}
         onClose={() => { if (!downloading) setOpen(false); }}
-        title="ดาวน์โหลดใบเบิก"
+        title={t("ดาวน์โหลดใบเบิก")}
         icon={<FileSpreadsheet size={20} />}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setOpen(false)} disabled={downloading}>ยกเลิก</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={downloading}>{t("ยกเลิก")}</Button>
             <Button
               variant="primary"
               onClick={download}
@@ -132,36 +141,34 @@ export function ClaimSheetDownload({ tcId, courseCode }: { tcId: string; courseC
               disabled={downloading || blocked || !months || selected.size === 0}
             >
               {blocked ? <Timer size={14} /> : <Download size={14} />}
-              {blocked ? `รอ ${fmtCountdown(secondsLeft)}` : `ดาวน์โหลด (${selected.size} เดือน)`}
+              {blocked ? t("รอ {time}", { time: fmtCountdown(secondsLeft) }) : t("ดาวน์โหลด ({n} เดือน)", { n: selected.size })}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
           <p className="text-sm text-ink-2">
-            ใบเบิกเวลาแบบเดียวกับที่เจ้าหน้าที่ใช้เบิกจ่าย แสดงเฉพาะของคุณ
-            ใช้ตรวจสอบได้แม้ยังไม่ได้ส่งให้อาจารย์ รายการที่ยังไม่ส่งหรือรออาจารย์อนุมัติจะมีหมายเหตุกำกับ
-            ไฟล์นี้เป็นสำเนาสำหรับตรวจสอบ ไม่ใช่เอกสารเบิกจ่าย ยอดเงินอาจเปลี่ยนได้จนกว่าเจ้าหน้าที่จะส่งออกเอกสาร
+            {t("ใบเบิกเวลาแบบเดียวกับที่เจ้าหน้าที่ใช้เบิกจ่าย แสดงเฉพาะของคุณ ใช้ตรวจสอบได้แม้ยังไม่ได้ส่งให้อาจารย์ รายการที่ยังไม่ส่งหรือรออาจารย์อนุมัติจะมีหมายเหตุกำกับ ไฟล์นี้เป็นสำเนาสำหรับตรวจสอบ ไม่ใช่เอกสารเบิกจ่าย ยอดเงินอาจเปลี่ยนได้จนกว่าเจ้าหน้าที่จะส่งออกเอกสาร")}
           </p>
           {blocked && (
             <Alert status="warning" icon={<Timer size={16} />} title={blockedText} />
           )}
           {error ? (
-            <Alert status="danger" title="โหลดรายการเดือนไม่สำเร็จ" description={error instanceof Error ? error.message : undefined} />
+            <Alert status="danger" title={t("โหลดรายการเดือนไม่สำเร็จ")} description={error instanceof Error ? error.message : undefined} />
           ) : !months ? (
             <SkelRows rows={4} columns={2} />
           ) : months.length === 0 ? (
-            <p className="text-sm text-muted">ยังไม่มีเดือนของภาคการศึกษานี้</p>
+            <p className="text-sm text-muted">{t("ยังไม่มีเดือนของภาคการศึกษานี้")}</p>
           ) : (
             <>
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">เลือกเดือน</span>
+                <span className="font-medium">{t("เลือกเดือน")}</span>
                 <span className="flex gap-3">
                   <button type="button" className="text-accent hover:underline" onClick={() => setPicked(new Set(months.map(m => m.year_month)))}>
-                    เลือกทั้งหมด
+                    {t("เลือกทั้งหมด")}
                   </button>
                   <button type="button" className="text-accent hover:underline" onClick={() => setPicked(new Set())}>
-                    ล้าง
+                    {t("ล้าง")}
                   </button>
                 </span>
               </div>
@@ -173,15 +180,15 @@ export function ClaimSheetDownload({ tcId, courseCode }: { tcId: string; courseC
                         <Checkbox.Control>
                           <Checkbox.Indicator />
                         </Checkbox.Control>
-                        <span className="text-sm">{m.label}</span>
+                        <span className="text-sm">{monthLabel(m)}</span>
                       </Checkbox.Content>
                     </Checkbox>
                     <span className={"text-right text-xs tabular-nums " + (m.hours > 0 ? "text-ink-2" : "text-muted")}>
                       {m.hours <= 0
-                        ? "ยังไม่มีบันทึกเวลา"
+                        ? t("ยังไม่มีบันทึกเวลา")
                         : m.approved_hours >= m.hours
-                        ? `${fmtHours(m.hours)} ชม. · อนุมัติแล้วทั้งหมด`
-                        : `${fmtHours(m.hours)} ชม. · อนุมัติแล้ว ${fmtHours(m.approved_hours)}`}
+                        ? t("{h} ชม. · อนุมัติแล้วทั้งหมด", { h: fmtHours(m.hours) })
+                        : t("{h} ชม. · อนุมัติแล้ว {approved}", { h: fmtHours(m.hours), approved: fmtHours(m.approved_hours) })}
                     </span>
                   </div>
                 ))}

@@ -5,6 +5,7 @@ import { Check, Globe, Users, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { Skel } from "../../components/Skeletons";
 import { TextInput, Tip } from "../../components/ui";
+import { useI18n, type TFn } from "../../lib/i18n/client";
 import Section from "./Section";
 import {
   ROLES, roleLabel, ruleOf, ruleIsEmpty,
@@ -69,9 +70,9 @@ export function useAudiencePreview(rule: AudienceRule): AudiencePreviewState {
  * back in words is how an officer catches a rule that does not mean what the
  * chips looked like.
  */
-export function describeRule(d: Draft, filters: FilterOption[]): string {
+export function describeRule(d: Draft, filters: FilterOption[], t: TFn): string {
   const rule = ruleOf(d);
-  if (ruleIsEmpty(rule)) return "ยังไม่ได้เลือกผู้รับ";
+  if (ruleIsEmpty(rule)) return t("ยังไม่ได้เลือกผู้รับ");
 
   const hasGroup = rule.roles.length > 0 || rule.course_ids.length > 0 || rule.filters.length > 0;
   const parts: string[] = [];
@@ -79,26 +80,28 @@ export function describeRule(d: Draft, filters: FilterOption[]): string {
     const allRoles = rule.roles.length === 0 || rule.roles.length === ROLES.length;
     let who: string;
     if (allRoles) {
-      who = rule.course_ids.length ? "อาจารย์และผู้ช่วยสอน" : rule.filters.length ? "ทุกคน" : "ทุกคนในระบบ";
+      who = rule.course_ids.length ? t("อาจารย์และผู้ช่วยสอน") : rule.filters.length ? t("ทุกคน") : t("ทุกคนในระบบ");
     } else {
-      who = rule.roles.map(roleLabel).join(" และ");
+      who = rule.roles.map(r => t(roleLabel(r))).join(t(" และ"));
     }
     if (rule.course_ids.length) {
-      who += "ของวิชา " + d.targetCourses.map(c => c.label.split(" ")[0]).join(", ");
+      who = t("{who}ของวิชา {courses}", { who, courses: d.targetCourses.map(c => c.label.split(" ")[0]).join(", ") });
     }
     if (rule.filters.length) {
-      who += " เฉพาะคนที่เข้าเงื่อนไข " +
-        rule.filters.map(f => `“${filters.find(x => x.value === f)?.label ?? f}”`).join(" และ ");
+      who = t("{who} เฉพาะคนที่เข้าเงื่อนไข {conditions}", {
+        who,
+        conditions: rule.filters.map(f => `“${t(filters.find(x => x.value === f)?.label ?? f)}”`).join(" " + t("และ") + " "),
+      });
     }
     parts.push(who);
   }
   if (rule.user_ids.length) {
     parts.push(
       hasGroup
-        ? `และอีก ${rule.user_ids.length} คนที่ระบุชื่อ`
+        ? t("และอีก {n} คนที่ระบุชื่อ", { n: rule.user_ids.length })
         : d.targetUsers.length <= 3
           ? d.targetUsers.map(u => u.name).join(", ")
-          : `${rule.user_ids.length} คนที่ระบุชื่อ`,
+          : t("{n} คนที่ระบุชื่อ", { n: rule.user_ids.length }),
     );
   }
   return parts.join(" ");
@@ -113,6 +116,7 @@ export function AudienceSection({
   setDraft: SetDraft;
   audience: AudiencePreviewState;
 }) {
+  const { t } = useI18n();
   const { preview, loading } = audience;
   const filterOpts = useFilterOptions();
   const allRoles = draft.audience.length === ROLES.length;
@@ -124,17 +128,17 @@ export function AudienceSection({
   return (
     <Section
       icon={<Users size={15} />}
-      title="ส่งถึงใคร"
-      summary={preview && !preview.empty ? `${preview.total} คน` : undefined}
+      title={t("ส่งถึงใคร")}
+      summary={preview && !preview.empty ? t("{n} คน", { n: preview.total }) : undefined}
     >
       <div>
-        <div className="mb-1.5 text-sm font-medium text-foreground">กลุ่มผู้รับ</div>
+        <div className="mb-1.5 text-sm font-medium text-foreground">{t("กลุ่มผู้รับ")}</div>
         <div className="flex flex-wrap gap-2">
           {ROLES.map(r => {
             const on = draft.audience.includes(r.value);
             return (
               <button key={r.value} type="button" aria-pressed={on} onClick={() => toggleRole(r.value)} className={chip(on)}>
-                {on ? <Check size={12} className="me-1 inline" /> : null}{r.label}
+                {on ? <Check size={12} className="me-1 inline" /> : null}{t(r.label)}
               </button>
             );
           })}
@@ -145,18 +149,18 @@ export function AudienceSection({
             onClick={() => setDraft(d => ({ ...d, audience: allRoles ? [] : ROLES.map(r => r.value) }))}
             className={chip(allRoles)}
           >
-            {allRoles ? <Check size={12} className="me-1 inline" /> : null}ทุกกลุ่ม
+            {allRoles ? <Check size={12} className="me-1 inline" /> : null}{t("ทุกกลุ่ม")}
           </button>
         </div>
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-3">
         <div className="text-sm font-medium text-foreground">
-          จำกัดให้แคบลง <span className="font-normal text-muted">(ไม่บังคับ)</span>
+          {t("จำกัดให้แคบลง")} <span className="font-normal text-muted">{t("(ไม่บังคับ)")}</span>
         </div>
         <CoursePicker draft={draft} setDraft={setDraft} />
         <div>
-          <div className="mb-1.5 text-xs text-ink-2">เฉพาะคนที่เข้าเงื่อนไข (เลือกหลายข้อ = ต้องเข้าทุกข้อ)</div>
+          <div className="mb-1.5 text-xs text-ink-2">{t("เฉพาะคนที่เข้าเงื่อนไข (เลือกหลายข้อ = ต้องเข้าทุกข้อ)")}</div>
           <div className="flex flex-wrap gap-1.5">
             {filterOpts.map(f => {
               const on = draft.targetFilters.includes(f.value);
@@ -171,7 +175,7 @@ export function AudienceSection({
                   }))}
                   className={chip(on)}
                 >
-                  {on ? <Check size={11} className="me-1 inline" /> : null}{f.label}
+                  {on ? <Check size={11} className="me-1 inline" /> : null}{t(f.label)}
                 </button>
               );
             })}
@@ -183,11 +187,11 @@ export function AudienceSection({
 
       {audience.failed ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-900">
-          นับจำนวนผู้รับไม่สำเร็จ
-          <button type="button" className="font-medium text-accent hover:underline" onClick={audience.retry}>ลองอีกครั้ง</button>
+          {t("นับจำนวนผู้รับไม่สำเร็จ")}
+          <button type="button" className="font-medium text-accent hover:underline" onClick={audience.retry}>{t("ลองอีกครั้ง")}</button>
         </div>
       ) : (
-        <AudienceSummary sentence={describeRule(draft, filterOpts)} preview={preview} loading={loading} isPublic={draft.isPublic} />
+        <AudienceSummary sentence={describeRule(draft, filterOpts, t)} preview={preview} loading={loading} isPublic={draft.isPublic} />
       )}
 
       <label className="flex cursor-pointer items-start gap-2.5">
@@ -198,10 +202,9 @@ export function AudienceSection({
           onChange={e => { const v = e.target.checked; setDraft(d => ({ ...d, isPublic: v })); }}
         />
         <span className="text-sm">
-          <span className="inline-flex items-center gap-1.5 font-medium"><Globe size={14} />เปิดให้บุคคลทั่วไปอ่านได้</span>
+          <span className="inline-flex items-center gap-1.5 font-medium"><Globe size={14} />{t("เปิดให้บุคคลทั่วไปอ่านได้")}</span>
           <span className="mt-0.5 block text-xs text-muted">
-            สร้างลิงก์สาธารณะสำหรับแชร์ลง Facebook หรือ LINE เปิดอ่านได้โดยไม่ต้องเข้าสู่ระบบ
-            (เห็นเฉพาะหัวข้อและเนื้อหา ไม่เห็นว่าส่งถึงใครบ้าง)
+            {t("สร้างลิงก์สาธารณะสำหรับแชร์ลง Facebook หรือ LINE เปิดอ่านได้โดยไม่ต้องเข้าสู่ระบบ (เห็นเฉพาะหัวข้อและเนื้อหา ไม่เห็นว่าส่งถึงใครบ้าง)")}
           </span>
         </span>
       </label>
@@ -219,6 +222,7 @@ function AudienceSummary({
   loading: boolean;
   isPublic: boolean;
 }) {
+  const { t } = useI18n();
   const [showAll, setShowAll] = useState(false);
   if (!preview) return <Skel className="h-14 w-full rounded-lg" />;
 
@@ -234,7 +238,7 @@ function AudienceSummary({
     <div data-testid="audience-summary" className={`rounded-lg border px-3 py-2.5 ${tone} ${loading ? "opacity-60" : ""}`}>
       <div className="flex flex-wrap items-baseline gap-x-2">
         <span className="text-sm font-semibold text-ink-1">
-          {preview.empty ? "ยังไม่ได้เลือกผู้รับ" : nobody ? "ไม่มีใครเข้าเงื่อนไขนี้" : `ส่งถึง ${preview.total} คน`}
+          {preview.empty ? t("ยังไม่ได้เลือกผู้รับ") : nobody ? t("ไม่มีใครเข้าเงื่อนไขนี้") : t("ส่งถึง {n} คน", { n: preview.total })}
         </span>
         {!preview.empty && <span className="text-xs text-ink-2">{sentence}</span>}
       </div>
@@ -245,7 +249,7 @@ function AudienceSummary({
             <>
               {" "}
               <button type="button" className="text-accent hover:underline" onClick={() => setShowAll(true)}>
-                และอีก {preview.total - names.length} คน
+                {t("และอีก {n} คน", { n: preview.total - names.length })}
               </button>
             </>
           )}
@@ -255,9 +259,9 @@ function AudienceSummary({
         <div className="mt-0.5 text-xs text-amber-800">
           {preview.empty
             ? isPublic
-              ? "ประกาศนี้จะอ่านได้ทางลิงก์สาธารณะเท่านั้น ไม่มีใครในระบบได้รับแจ้งเตือน"
-              : "เลือกกลุ่มผู้รับ วิชา เงื่อนไข หรือระบุชื่อ อย่างน้อยหนึ่งอย่าง"
-            : "ลองผ่อนเงื่อนไขลง ประกาศที่ไม่ถึงใครเลยจะเผยแพร่ไม่ได้"}
+              ? t("ประกาศนี้จะอ่านได้ทางลิงก์สาธารณะเท่านั้น ไม่มีใครในระบบได้รับแจ้งเตือน")
+              : t("เลือกกลุ่มผู้รับ วิชา เงื่อนไข หรือระบุชื่อ อย่างน้อยหนึ่งอย่าง")
+            : t("ลองผ่อนเงื่อนไขลง ประกาศที่ไม่ถึงใครเลยจะเผยแพร่ไม่ได้")}
         </div>
       )}
     </div>
@@ -266,6 +270,7 @@ function AudienceSummary({
 
 /** Pick teaching courses; the group is cut down to people attached to them. */
 function CoursePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const search = useDebounced(q, 300);
   const { data } = useSWR<{ id: string; code: string; name_th: string }[]>(
@@ -277,8 +282,8 @@ function CoursePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft })
 
   return (
     <div>
-      <div className="mb-1.5 text-xs text-ink-2">เฉพาะคนในวิชา (อาจารย์และผู้ช่วยสอนของวิชานั้น)</div>
-      <TextInput placeholder="พิมพ์รหัสหรือชื่อวิชา…" value={q} onChange={e => setQ(e.target.value)} aria-label="ค้นหาวิชา" />
+      <div className="mb-1.5 text-xs text-ink-2">{t("เฉพาะคนในวิชา (อาจารย์และผู้ช่วยสอนของวิชานั้น)")}</div>
+      <TextInput placeholder={t("พิมพ์รหัสหรือชื่อวิชา…")} value={q} onChange={e => setQ(e.target.value)} aria-label={t("ค้นหาวิชา")} />
       {!!matches.length && (
         <ul className="mt-1 rounded-lg border border-border bg-surface">
           {matches.map(c => (
@@ -300,7 +305,7 @@ function CoursePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft })
         </ul>
       )}
       {search.trim().length >= 2 && data && matches.length === 0 && (
-        <div className="mt-1 text-xs text-muted">ไม่พบวิชาที่ตรงกับ “{search.trim()}”</div>
+        <div className="mt-1 text-xs text-muted">{t("ไม่พบวิชาที่ตรงกับ “{q}”", { q: search.trim() })}</div>
       )}
       <Picked
         items={draft.targetCourses.map(c => ({ id: c.id, label: c.label }))}
@@ -322,6 +327,7 @@ const formatName = (u: PickUser) => `${u.title ?? ""}${u.first_name} ${u.last_na
 
 /** Named people. Always reached, whatever the group above says. */
 function PeoplePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft }) {
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const search = useDebounced(q, 300);
   const { data: found } = useSWR<{ items: PickUser[] }>(
@@ -331,9 +337,9 @@ function PeoplePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft })
   return (
     <div>
       <div className="mb-1.5 text-sm font-medium text-foreground">
-        เพิ่มรายบุคคล <span className="font-normal text-muted">(ส่งถึงเสมอ ไม่ขึ้นกับกลุ่มและเงื่อนไขด้านบน)</span>
+        {t("เพิ่มรายบุคคล")} <span className="font-normal text-muted">{t("(ส่งถึงเสมอ ไม่ขึ้นกับกลุ่มและเงื่อนไขด้านบน)")}</span>
       </div>
-      <TextInput placeholder="ค้นหาชื่อหรืออีเมลของคนในระบบ…" value={q} onChange={e => setQ(e.target.value)} aria-label="ค้นหาบุคคล" />
+      <TextInput placeholder={t("ค้นหาชื่อหรืออีเมลของคนในระบบ…")} value={q} onChange={e => setQ(e.target.value)} aria-label={t("ค้นหาบุคคล")} />
       {!!found?.items?.length && (
         <ul className="mt-1 rounded-lg border border-border bg-surface">
           {found.items.map(u => (
@@ -356,7 +362,7 @@ function PeoplePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft })
         </ul>
       )}
       {search.trim().length >= 2 && found && !found.items?.length && (
-        <div className="mt-1 text-xs text-muted">ไม่พบบัญชีที่ตรงกับ “{search.trim()}”</div>
+        <div className="mt-1 text-xs text-muted">{t("ไม่พบบัญชีที่ตรงกับ “{q}”", { q: search.trim() })}</div>
       )}
       <Picked
         items={draft.targetUsers.map(u => ({ id: u.id, label: u.name }))}
@@ -367,14 +373,16 @@ function PeoplePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft })
 }
 
 function Picked({ items, onRemove }: { items: { id: string; label: string }[]; onRemove: (id: string) => void }) {
+  const { t } = useI18n();
   if (!items.length) return null;
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
       {items.map(it => (
         <span key={it.id} className="chip chip-brand inline-flex items-center gap-1">
           {it.label}
-          <Tip content={`เอา ${it.label} ออก`}>
-            <button type="button" aria-label={`เอา ${it.label} ออก`} onClick={() => onRemove(it.id)} className="text-brand/70 hover:text-brand">
+          <Tip content={t("เอา {name} ออก", { name: it.label })}>
+            <button type="button" aria-label={t("เอา {name} ออก", { name: it.label })}
+ onClick={() => onRemove(it.id)} className="text-brand/70 hover:text-brand">
               <X size={11} />
             </button>
           </Tip>

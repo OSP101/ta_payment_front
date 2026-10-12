@@ -3,6 +3,18 @@ import { MEDIA } from "../../../content/docs/registry";
 import type { Hotspot } from "../../../content/docs/types";
 import { mediaExists } from "./mediaExists";
 import { Tip } from "../ui";
+import { getT } from "../../lib/i18n/server";
+
+/** Fills {name} placeholders of an already-translated sentence with
+ *  monospace <code> spans (ids, routes, file paths), so the sentence stays
+ *  one translation key while the identifiers keep their code styling. The
+ *  server-side t() returns plain strings, hence this instead of t.rich. */
+export function withCode(sentence: string, code: Record<string, string>): React.ReactNode {
+  return sentence.split(/(\{\w+\})/g).map((part, i) => {
+    const m = /^\{(\w+)\}$/.exec(part);
+    return m && m[1] in code ? <code key={i} className="font-mono">{code[m[1]]}</code> : part;
+  });
+}
 
 /**
  * Renders one screenshot by its registry ID (`content/docs/media.json`).
@@ -16,7 +28,7 @@ import { Tip } from "../ui";
  * request, no rebuild step to remember; in production the result is cached
  * (see `mediaExists`) since the deployed file set can't change mid-process.
  */
-export default function Screenshot({
+export default async function Screenshot({
   id,
   caption,
   hotspots,
@@ -26,10 +38,11 @@ export default function Screenshot({
   hotspots?: Hotspot[];
 }) {
   const meta = MEDIA[id];
+  const { t } = await getT();
   if (!meta) {
     return (
       <div className="my-3 rounded-lg border-2 border-dashed border-danger/40 bg-danger-soft/30 px-4 py-3 text-sm text-danger-soft-foreground">
-        ไม่พบรหัสภาพ <code className="font-mono">{id}</code> ใน media.json (พิมพ์ผิดหรือยังไม่ได้ลงทะเบียน)
+        {withCode(t("ไม่พบรหัสภาพ {id} ใน media.json (พิมพ์ผิดหรือยังไม่ได้ลงทะเบียน)"), { id })}
       </div>
     );
   }
@@ -49,12 +62,11 @@ export default function Screenshot({
         <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
           <ImageOff className="mx-auto mb-2 text-slate-400" size={28} />
           <div className="text-sm font-medium text-slate-600">
-            รอภาพ <code className="font-mono">{id}</code>
+            {withCode(t("รอภาพ {id}"), { id })}
           </div>
           <div className="mt-1 text-xs text-slate-500 max-w-md mx-auto">{meta.desc}</div>
           <div className="mt-2 text-[11px] text-slate-400">
-            หน้า/route: <code className="font-mono">{meta.route}</code> · บัญชี {meta.account} · วางไฟล์ที่{" "}
-            <code className="font-mono">public/docs/v1/{meta.file}</code>
+            {withCode(t("หน้า/route: {route} · บัญชี {account} · วางไฟล์ที่ {file}", { account: meta.account }), { route: meta.route, file: `public/docs/v1/${meta.file}` })}
           </div>
         </div>
         {caption && <figcaption className="mt-1.5 text-xs text-muted text-center">{caption}</figcaption>}

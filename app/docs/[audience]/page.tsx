@@ -4,19 +4,22 @@ import { ArrowRight, Footprints, Rocket } from "lucide-react";
 import { notFound } from "next/navigation";
 import { docHref, findPage, gettingStarted, sidebarSections } from "../../../content/docs/registry";
 import { AUDIENCE_LABEL, type Audience } from "../../../content/docs/types";
+import { getT } from "../../lib/i18n/server";
+import { msg } from "../../lib/i18n/core";
 
 const VALID: Audience[] = ["staff", "lecturer", "ta"];
 
 export async function generateMetadata({ params }: { params: Promise<{ audience: string }> }): Promise<Metadata> {
   const { audience: raw } = await params;
   if (!VALID.includes(raw as Audience)) return {};
-  return { title: `คู่มือ${AUDIENCE_LABEL[raw as Audience]}` };
+  const { t } = await getT();
+  return { title: t("คู่มือ{audience}", { audience: t(AUDIENCE_LABEL[raw as Audience]) }) };
 }
 
 const INTRO: Record<Audience, string> = {
-  staff: "งานของเจ้าหน้าที่ใน COCO TAS เรียงตามลำดับจริงของแต่ละเทอม ตั้งแต่เปิดเทอมใหม่จนส่งเอกสารเบิกจ่ายเดือนสุดท้าย",
-  lecturer: "งานของอาจารย์ใน COCO TAS ตั้งแต่กรอกตารางเวลาต้นเทอม จนอนุมัติบันทึกเวลาเดือนสุดท้ายและเซ็นเอกสาร",
-  ta: "สิ่งที่ผู้ช่วยสอนต้องทำใน COCO TAS ตั้งแต่เข้าสู่ระบบครั้งแรกจนเงินเข้าบัญชี ทำตามลำดับนี้แล้วจะไม่ตกขั้นไหน",
+  staff: msg("งานของเจ้าหน้าที่ใน COCO TAS เรียงตามลำดับจริงของแต่ละเทอม ตั้งแต่เปิดเทอมใหม่จนส่งเอกสารเบิกจ่ายเดือนสุดท้าย"),
+  lecturer: msg("งานของอาจารย์ใน COCO TAS ตั้งแต่กรอกตารางเวลาต้นเทอม จนอนุมัติบันทึกเวลาเดือนสุดท้ายและเซ็นเอกสาร"),
+  ta: msg("สิ่งที่ผู้ช่วยสอนต้องทำใน COCO TAS ตั้งแต่เข้าสู่ระบบครั้งแรกจนเงินเข้าบัญชี ทำตามลำดับนี้แล้วจะไม่ตกขั้นไหน"),
   common: "",
 };
 
@@ -30,22 +33,24 @@ export default async function AudienceHomePage({ params }: { params: Promise<{ a
   const { audience: raw } = await params;
   if (!VALID.includes(raw as Audience)) notFound();
   const audience = raw as Audience;
+  const { t, locale } = await getT();
+  const audLabel = t(AUDIENCE_LABEL[audience]);
 
-  const path = gettingStarted(audience);
+  const path = gettingStarted(audience, locale);
   // The one-page walkthrough a newcomer is sent to (lecturer and TA only).
-  const start = findPage(audience, "start");
-  const sections = sidebarSections(audience);
+  const start = findPage(audience, "start", locale);
+  const sections = sidebarSections(audience, locale);
 
   return (
     <div>
       <div className="mb-8">
         <div className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft/50 px-3 py-1 text-xs font-medium text-accent-soft-foreground mb-3">
-          <Rocket size={13} /> เริ่มต้นใช้งาน สำหรับ{AUDIENCE_LABEL[audience]}
+          <Rocket size={13} /> {t("เริ่มต้นใช้งาน สำหรับ{audience}", { audience: audLabel })}
         </div>
         <h1 className="text-3xl font-semibold text-foreground tracking-tight leading-tight">
-          คู่มือ{AUDIENCE_LABEL[audience]}
+          {t("คู่มือ{audience}", { audience: audLabel })}
         </h1>
-        <p className="mt-3 text-base leading-7 text-muted max-w-[60ch]">{INTRO[audience]}</p>
+        <p className="mt-3 text-base leading-7 text-muted max-w-[60ch]">{INTRO[audience] && t(INTRO[audience])}</p>
       </div>
 
       {start && (
@@ -57,7 +62,7 @@ export default async function AudienceHomePage({ params }: { params: Promise<{ a
             <Footprints size={22} aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-[17px] font-semibold text-foreground">ใช้งานครั้งแรก เริ่มที่นี่</div>
+            <div className="text-[17px] font-semibold text-foreground">{t("ใช้งานครั้งแรก เริ่มที่นี่")}</div>
             <div className="text-sm text-muted mt-0.5">{start.description}</div>
           </div>
           <ArrowRight size={18} className="shrink-0 text-(--brand) transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -65,7 +70,7 @@ export default async function AudienceHomePage({ params }: { params: Promise<{ a
       )}
 
       {path.length > 0 && (
-        <h2 className="text-base font-semibold text-foreground mb-3">{start ? "หรือเลือกอ่านทีละหัวข้อ" : "เริ่มต้นใช้งาน"}</h2>
+        <h2 className="text-base font-semibold text-foreground mb-3">{start ? t("หรือเลือกอ่านทีละหัวข้อ") : t("เริ่มต้นใช้งาน")}</h2>
       )}
       {path.length > 0 && (
         <ol className="space-y-3 mb-10">
@@ -90,7 +95,7 @@ export default async function AudienceHomePage({ params }: { params: Promise<{ a
       )}
 
       <div className="border-t border-border pt-6">
-        <h2 className="text-base font-semibold text-foreground mb-3">หัวข้อทั้งหมด</h2>
+        <h2 className="text-base font-semibold text-foreground mb-3">{t("หัวข้อทั้งหมด")}</h2>
         <div className="grid gap-6 sm:grid-cols-2">
           {sections.map(({ section, pages }) => (
             <div key={section}>

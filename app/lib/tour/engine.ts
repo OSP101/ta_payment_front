@@ -2,6 +2,7 @@
 
 import { driver, type DriveStep, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
+import { tc } from "../i18n/client";
 
 /**
  * A DriveStep that may declare what to do when its target element is not on
@@ -20,7 +21,17 @@ export type TourStep = DriveStep & { fallbackCenter?: boolean };
 export function startTour(steps: TourStep[], onDone?: () => void): Driver | null {
   const visible: DriveStep[] = [];
   for (const s of steps) {
-    const { fallbackCenter, ...drive } = s;
+    const { fallbackCenter, ...raw } = s;
+    // Step texts are msg() keys from the tour definitions; translated here,
+    // when the tour starts, so they follow the reader's language.
+    const drive: DriveStep = raw.popover ? {
+      ...raw,
+      popover: {
+        ...raw.popover,
+        title: typeof raw.popover.title === "string" ? tc(raw.popover.title) : raw.popover.title,
+        description: typeof raw.popover.description === "string" ? tc(raw.popover.description) : raw.popover.description,
+      },
+    } : raw;
     if (!drive.element || typeof drive.element !== "string") {
       visible.push(drive);
       continue;
@@ -37,9 +48,9 @@ export function startTour(steps: TourStep[], onDone?: () => void): Driver | null
     steps: visible,
     showProgress: visible.length > 1,
     progressText: "{{current}} / {{total}}",
-    nextBtnText: "ถัดไป",
-    prevBtnText: "ย้อนกลับ",
-    doneBtnText: "เสร็จสิ้น",
+    nextBtnText: tc("ถัดไป"),
+    prevBtnText: tc("ย้อนกลับ"),
+    doneBtnText: tc("เสร็จสิ้น"),
     popoverClass: "kku-tour",
     overlayColor: "rgb(2, 20, 43)",
     overlayOpacity: 0.62,

@@ -15,6 +15,7 @@ import {
 import { WorkloadEditModal } from "../../../../components/WorkloadEditModal";
 import { Skel, SkelRows, SkelValue } from "../../../../components/Skeletons";
 import { SectionReview } from "./SectionReview";
+import { msg, useI18n, type I18n } from "../../../../lib/i18n/client";
 
 /**
  * One row of /reports/pending — an ASSIGNMENT (a TA on one section) that has
@@ -103,48 +104,40 @@ interface WorkLog {
 }
 
 const ACTIVITY_LABEL: Record<string, string> = {
-  lecture: "บรรยาย",
-  lab: "ปฏิบัติการ",
-  review: "ตรวจงาน",
-  makeup: "ชดเชย",
-  other: "อื่น ๆ",
+  lecture: msg("บรรยาย"),
+  lab: msg("ปฏิบัติการ"),
+  review: msg("ตรวจงาน"),
+  makeup: msg("ชดเชย"),
+  other: msg("อื่น ๆ"),
 };
 const PARENT_KIND_LABEL: Record<string, string> = {
-  lecture: "คู่กับบรรยาย",
-  lab: "คู่กับปฏิบัติการ",
+  lecture: msg("คู่กับบรรยาย"),
+  lab: msg("คู่กับปฏิบัติการ"),
 };
-const TRACK_LABEL: Record<string, string> = { regular: "ภาคปกติ", special: "ภาคพิเศษ" };
-const ACTOR_ROLE_TH: Record<string, string> = { staff: "เจ้าหน้าที่", admin: "ผู้ดูแลระบบ" };
+const TRACK_LABEL: Record<string, string> = { regular: msg("ภาคปกติ"), special: msg("ภาคพิเศษ") };
+const ACTOR_ROLE_TH: Record<string, string> = { staff: msg("เจ้าหน้าที่"), admin: msg("ผู้ดูแลระบบ") };
 
-const DOW_ABBR_TH = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-const MONTH_TH_SHORT = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-];
-const MONTH_TH_LONG = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-];
-function formatWorkDate(iso: string): string {
+const DOW_ABBR_TH = [msg("อา"), msg("จ"), msg("อ"), msg("พ"), msg("พฤ"), msg("ศ"), msg("ส")];
+function formatWorkDate(iso: string, i: I18n): string {
   if (!iso) return "";
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d || m < 1 || m > 12) return iso;
   const dt = new Date(y, m - 1, d);
   if (Number.isNaN(dt.getTime())) return iso;
-  return `${DOW_ABBR_TH[dt.getDay()]} ${d} ${MONTH_TH_SHORT[m - 1]} ${y + 543}`;
+  return `${i.t(DOW_ABBR_TH[dt.getDay()])} ${i.fmtDate(iso)}`;
 }
 /** Short Thai date for the "ส่งช่วง …" line. The API used to hand this screen a
  *  pre-formatted "2026-06-22 – 2026-10-18", the only raw ISO date in the app. */
-function shortDateTH(iso?: string): string {
+function shortDateTH(iso: string | undefined, i: I18n): string {
   if (!iso) return "";
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d || m < 1 || m > 12) return iso;
-  return `${d} ${MONTH_TH_SHORT[m - 1]} ${y + 543}`;
+  return i.fmtDate(iso);
 }
-function dateRangeTH(first?: string, last?: string): string {
+function dateRangeTH(first: string | undefined, last: string | undefined, i: I18n): string {
   if (!first) return "";
-  if (!last || first === last) return shortDateTH(first);
-  return `${shortDateTH(first)} – ${shortDateTH(last)}`;
+  if (!last || first === last) return shortDateTH(first, i);
+  return `${shortDateTH(first, i)} – ${shortDateTH(last, i)}`;
 }
 /** Postgres hands back "13:00:00"; nobody schedules to the second. */
 function hhmm(t?: string): string {
@@ -153,15 +146,15 @@ function hhmm(t?: string): string {
 function monthKey(iso: string): string {
   return (iso ?? "").slice(0, 7);
 }
-function formatMonthShortTH(key: string): string {
+function formatMonthShortTH(key: string, i: I18n): string {
   const [y, m] = key.split("-").map(Number);
   if (!y || !m || m < 1 || m > 12) return key;
-  return `${MONTH_TH_SHORT[m - 1]} ${y + 543}`;
+  return `${i.monthName(m)} ${i.year(y)}`;
 }
-function formatMonthTH(key: string): string {
+function formatMonthTH(key: string, i: I18n): string {
   const [y, m] = key.split("-").map(Number);
   if (!y || !m || m < 1 || m > 12) return key;
-  return `${MONTH_TH_LONG[m - 1]} ${y + 543}`;
+  return `${i.monthName(m, false)} ${i.year(y)}`;
 }
 
 /** สัปดาห์เริ่มวันจันทร์ — คืนคีย์เป็นวันจันทร์ของสัปดาห์นั้น (YYYY-MM-DD) */
@@ -197,7 +190,7 @@ interface Sitting extends WorkLog {
 interface WeekGroup { key: string; label: string; hours: number; items: Sitting[] }
 
 /** จัดรายการในเดือนหนึ่งเป็นสัปดาห์ — ใช้เป็นตัวคั่นสายตาเบา ๆ ในตาราง */
-function groupByWeek(items: Sitting[]): WeekGroup[] {
+function groupByWeek(items: Sitting[], i: I18n): WeekGroup[] {
   const buckets = new Map<string, Sitting[]>();
   for (const r of items) {
     const k = weekStart(r.work_date);
@@ -211,10 +204,14 @@ function groupByWeek(items: Sitting[]): WeekGroup[] {
       const first = list[0]?.work_date ?? key;
       const last = list[list.length - 1]?.work_date ?? key;
       const dayOf = (iso: string) => Number(iso.split("-")[2]);
-      const monthOf = (iso: string) => MONTH_TH_SHORT[Number(iso.split("-")[1]) - 1] ?? "";
+      const monthOf = (iso: string) => {
+        const m = Number(iso.split("-")[1]);
+        return m >= 1 && m <= 12 ? i.monthName(m) : "";
+      };
+      const { t } = i;
       const label = first === last
-        ? `สัปดาห์ ${dayOf(first)} ${monthOf(first)}`
-        : `สัปดาห์ ${dayOf(first)}–${dayOf(last)} ${monthOf(last)}`;
+        ? t("สัปดาห์ {d} {month}", { d: dayOf(first), month: monthOf(first) })
+        : t("สัปดาห์ {d1}–{d2} {month}", { d1: dayOf(first), d2: dayOf(last), month: monthOf(last) });
       return { key, label, hours: list.reduce((s, i) => s + (i.hours || 0), 0), items: list };
     });
 }
@@ -296,6 +293,8 @@ const PENDING_KEY = "/reports/pending";
 
 export default function ReportsPage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
+  const i18n = useI18n();
+  const { t } = i18n;
 
   const { data: course } = useSWR<Course>(`/teaching-courses/${tcId}`);
   const { data: all, error, isLoading } = useSWR<PendingRow[]>(PENDING_KEY);
@@ -342,8 +341,8 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
       }
       notify.success(
         kind === "approve"
-          ? `อนุมัติบันทึกเวลาเดือน${formatMonthTH(ym)} ของ ${g.name} แล้ว`
-          : `ส่งกลับให้ ${g.name} แก้ไขเดือน${formatMonthTH(ym)} แล้ว`,
+          ? t("อนุมัติบันทึกเวลาเดือน{month} ของ {name} แล้ว", { month: formatMonthTH(ym, i18n), name: g.name })
+          : t("ส่งกลับให้ {name} แก้ไขเดือน{month} แล้ว", { month: formatMonthTH(ym, i18n), name: g.name }),
       );
       await Promise.all([
         mutate(PENDING_KEY),
@@ -391,7 +390,7 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
     setPendingKey(`${g.taId}|ALL`);
     try {
       await api.post("/worklog/approve-batch", { assignment_ids: g.rows.map(r => r.id) });
-      notify.success(`อนุมัติบันทึกเวลาที่รออยู่ทั้งหมดของ ${g.name} แล้ว`);
+      notify.success(t("อนุมัติบันทึกเวลาที่รออยู่ทั้งหมดของ {name} แล้ว", { name: g.name }));
       await Promise.all([
         mutate(PENDING_KEY),
         mutate(historyKey),
@@ -411,8 +410,8 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
   return (
     <div>
       <PageHeader
-        title="อนุมัติรายงานบันทึกเวลา TA"
-        description={course ? `${course.code} ${course.name_th}` : "รายการที่ TA กดส่งขออนุมัติ"}
+        title={t("อนุมัติรายงานบันทึกเวลา TA")}
+        description={course ? `${course.code} ${course.name_th}` : t("รายการที่ TA กดส่งขออนุมัติ")}
       />
 
       {/* Always on screen, queue or no queue: what each TA will actually be
@@ -426,11 +425,11 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
           <Alert
             status="danger"
             icon={<CircleAlert size={16} />}
-            title="โหลดรายการรออนุมัติไม่สำเร็จ"
-            description={(error as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+            title={t("โหลดรายการรออนุมัติไม่สำเร็จ")}
+            description={(error as Error).message || t("กรุณาลองใหม่อีกครั้ง")}
             action={
               <Button variant="secondary" size="sm" onPress={() => mutate(PENDING_KEY)}>
-                ลองใหม่
+                {t("ลองใหม่")}
               </Button>
             }
           />
@@ -441,8 +440,8 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
         <Panel>
           <EmptyState
             icon={<CalendarCheck size={28} />}
-            title="ไม่มีรายการรออนุมัติ"
-            description="เมื่อ TA ในวิชานี้ส่งบันทึกเวลา จะปรากฏที่นี่"
+            title={t("ไม่มีรายการรออนุมัติ")}
+            description={t("เมื่อ TA ในวิชานี้ส่งบันทึกเวลา จะปรากฏที่นี่")}
           />
         </Panel>
       ) : (
@@ -458,9 +457,9 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
           <div data-tour="rep-summary" className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
               <Users size={14} className="text-muted" />
-              รอตรวจ {groups.length} คน
+              {t("รอตรวจ {n} คน", { n: groups.length })}
             </span>
-            <span className="text-muted">รวม <HoursSplit regular={totalRegular} special={totalSpecial} /></span>
+            <span className="text-muted">{t.rich("รวม {hours}", { hours: <HoursSplit regular={totalRegular} special={totalSpecial} /> })}</span>
           </div>
 
           <div data-tour="rep-list" className="flex flex-col gap-3">
@@ -495,9 +494,10 @@ export default function ReportsPage({ params }: { params: Promise<{ tcId: string
 
 /** The pending queue while it loads: the summary line, then collapsed TA cards. */
 function QueueSkeleton() {
+  const { t } = useI18n();
   return (
     <div role="status" aria-busy="true">
-      <span className="sr-only">กำลังโหลด</span>
+      <span className="sr-only">{t("กำลังโหลด")}</span>
       <div className="mb-3 flex items-center gap-4">
         <Skel className="h-4 w-24" />
         <Skel className="h-4 w-32" />
@@ -524,19 +524,20 @@ function QueueSkeleton() {
 /* -------------------------------------------------------------------------- */
 
 function SectionChips({ group }: { group: TAGroup }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {group.rows.map(r => (
         <Chip key={r.id} tone={(r.track === "special" ? "brand" : "neutral") as ChipTone}>
-          sec {r.sec_no} · {TRACK_LABEL[r.track] ?? r.track}
+          sec {r.sec_no} · {TRACK_LABEL[r.track] ? t(TRACK_LABEL[r.track]) : r.track}
         </Chip>
       ))}
       {group.coTaught.map(secs => (
-        <Tip key={secs.join("-")} content="คาบเดียวกันบันทึกไว้ทุกเซคชันที่สอนพร้อมกัน ระบบนับและจ่ายครั้งเดียว"><span
+        <Tip key={secs.join("-")} content={t("คาบเดียวกันบันทึกไว้ทุกเซคชันที่สอนพร้อมกัน ระบบนับและจ่ายครั้งเดียว")}><span
           className="inline-flex items-center gap-1 text-xs text-muted"
         >
           <Link2 size={12} />
-          sec {secs.join(", ")} สอนพร้อมกัน นับชั่วโมงครั้งเดียว
+          {t("sec {secs} สอนพร้อมกัน นับชั่วโมงครั้งเดียว", { secs: secs.join(", ") })}
         </span></Tip>
       ))}
     </div>
@@ -555,6 +556,8 @@ function TACard({
   onApproveAll: () => void;
   onChanged: () => Promise<void>;
 }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const [open, setOpen] = useState(defaultOpen);
   const [confirmAll, setConfirmAll] = useState(false);
   // True while one of this person's months has its send-back reason box open.
@@ -588,7 +591,7 @@ function TACard({
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-semibold text-foreground">{group.name}</span>
               <Chip tone={group.studyLevel === "undergrad" ? "neutral" : "brand"}>
-                {group.studyLevel === "undergrad" ? "ป.ตรี" : "บัณฑิตศึกษา"}
+                {group.studyLevel === "undergrad" ? t("ป.ตรี") : t("บัณฑิตศึกษา")}
               </Chip>
             </div>
             <div className="mt-1.5">
@@ -601,13 +604,13 @@ function TACard({
               <div className="mt-1.5 flex items-start gap-1 text-xs text-warning">
                 <CircleAlert size={13} className="mt-px shrink-0" />
                 <span>
-                  มีฉบับร่างที่ TA ยังไม่ส่ง: {group.draftMonths.map(formatMonthShortTH).join(", ")}
+                  {t("มีฉบับร่างที่ TA ยังไม่ส่ง: {months}", { months: group.draftMonths.map(m => formatMonthShortTH(m, i18n)).join(", ") })}
                 </span>
               </div>
             )}
             {group.forfeitedMonths.length > 0 && (
               <div className="mt-1 text-xs text-muted">
-                ไม่ได้ส่งภายในกำหนด (ไม่ประสงค์ลงเวลา): {group.forfeitedMonths.map(formatMonthShortTH).join(", ")}
+                {t("ไม่ได้ส่งภายในกำหนด (ไม่ประสงค์ลงเวลา): {months}", { months: group.forfeitedMonths.map(m => formatMonthShortTH(m, i18n)).join(", ") })}
               </div>
             )}
           </div>
@@ -616,10 +619,10 @@ function TACard({
         <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:shrink-0 sm:gap-3">
           <div className="text-right text-xs text-muted">
             <div className="font-medium text-foreground">
-              รอพิจารณา <HoursSplit regular={group.pendingRegular} special={group.pendingSpecial} />
+              {t.rich("รอพิจารณา {hours}", { hours: <HoursSplit regular={group.pendingRegular} special={group.pendingSpecial} /> })}
             </div>
             {group.firstDate && (
-              <div className="mt-0.5">ส่งช่วง {dateRangeTH(group.firstDate, group.lastDate)}</div>
+              <div className="mt-0.5">{t("ส่งช่วง {range}", { range: dateRangeTH(group.firstDate, group.lastDate, i18n) })}</div>
             )}
           </div>
           {canEditWorkload && (
@@ -627,7 +630,7 @@ function TACard({
               variant="ghost" size="sm"
               onPress={() => setWorkloadEditOpen(true)}
             >
-              <Settings2 size={14} /> แก้ไขภาระงาน
+              <Settings2 size={14} /> {t("แก้ไขภาระงาน")}
             </Button>
           )}
           <Button
@@ -635,7 +638,7 @@ function TACard({
             disabled={busyAll || rejecting} isPending={busyAll}
             onPress={() => setConfirmAll(true)}
           >
-            <Check size={14} /> อนุมัติทุกเดือน
+            <Check size={14} /> {t("อนุมัติทุกเดือน")}
           </Button>
         </div>
       </div>
@@ -657,25 +660,27 @@ function TACard({
         open={confirmAll}
         onClose={() => setConfirmAll(false)}
         onConfirm={() => { setConfirmAll(false); onApproveAll(); }}
-        title="อนุมัติทุกเดือนที่รออยู่"
+        title={t("อนุมัติทุกเดือนที่รออยู่")}
         icon={<Check size={18} />}
-        confirmLabel="อนุมัติทั้งหมด"
+        confirmLabel={t("อนุมัติทั้งหมด")}
         isPending={busyAll}
         message={
           <div className="space-y-2 text-sm">
             <p>
-              อนุมัติบันทึกเวลาที่รออยู่<b>ทุกเดือน</b>ของ{" "}
-              <b className="text-foreground">{group.name}</b> รวม{" "}
-              {hoursSplitText(group.pendingRegular, group.pendingSpecial)}
-              {group.rows.length > 1 && ` (${group.rows.length} เซคชัน)`}
+              {t.rich("อนุมัติบันทึกเวลาที่รออยู่{all}ของ {name} รวม {hours}", {
+                all: <b>{t("ทุกเดือน")}</b>,
+                name: <b className="text-foreground">{group.name}</b>,
+                hours: hoursSplitText(group.pendingRegular, group.pendingSpecial),
+              })}
+              {group.rows.length > 1 && <> {t("({n} เซคชัน)", { n: group.rows.length })}</>}
             </p>
             {group.draftMonths.length > 0 && (
               <p className="text-muted">
-                ไม่รวมฉบับร่างที่ TA ยังไม่ส่ง ({group.draftMonths.map(formatMonthShortTH).join(", ")})
+                {t("ไม่รวมฉบับร่างที่ TA ยังไม่ส่ง ({months})", { months: group.draftMonths.map(m => formatMonthShortTH(m, i18n)).join(", ") })}
               </p>
             )}
             <p className="text-muted">
-              หลังอนุมัติ TA จะแก้ไขไม่ได้ หากต้องแก้ ให้ส่งกลับเป็นรายเดือน
+              {t("หลังอนุมัติ TA จะแก้ไขไม่ได้ หากต้องแก้ ให้ส่งกลับเป็นรายเดือน")}
             </p>
           </div>
         }
@@ -748,25 +753,25 @@ interface SettlementView {
 /** Total paid per month across both pools — what a TA on this course actually
  *  sees arrive, which is the number the lecturer is choosing between. */
 const MODE_LABEL: Record<string, string> = {
-  chronological: "จ่ายเรียงตามวัน",
-  spread: "เฉลี่ยทุกเดือน",
+  chronological: msg("จ่ายเรียงตามวัน"),
+  spread: msg("เฉลี่ยทุกเดือน"),
 };
 const MODE_BLURB: Record<string, string> = {
-  chronological: "จ่ายเต็มไล่ตามเดือนจนงบหมด ส่วนที่ขาดตกอยู่ที่เดือนท้ายเทอม",
-  spread: "หักทุกเดือนเป็นสัดส่วนเท่ากัน ส่วนที่ขาดกระจายทุกเดือน",
+  chronological: msg("จ่ายเต็มไล่ตามเดือนจนงบหมด ส่วนที่ขาดตกอยู่ที่เดือนท้ายเทอม"),
+  spread: msg("หักทุกเดือนเป็นสัดส่วนเท่ากัน ส่วนที่ขาดกระจายทุกเดือน"),
 };
 
-const bahtOf = (n: number) => `฿${Math.round(n).toLocaleString()}`;
+const bahtOf = (n: number) => `฿${Math.round(n).toLocaleString()}`; // i18n-ignore — ฿ symbol stays
 
 /** "2026-06" → "มิ.ย. 69". The comparison table has four columns and the delta
  *  is the one worth reading; full month names pushed it off a phone screen. */
-function shortMonthTH(key: string): string {
+function shortMonthTH(key: string, i: I18n): string {
   const [y, m] = key.split("-").map(Number);
   if (!y || !m || m < 1 || m > 12) return key;
-  return `${MONTH_TH_SHORT[m - 1]} ${String((y + 543) % 100).padStart(2, "0")}`;
+  return `${i.monthName(m)} ${String(i.year(y) % 100).padStart(2, "0")}`;
 }
 
-const LEVEL_LABEL: Record<string, string> = { undergrad: "ป.ตรี", master: "ป.โท", phd: "ป.เอก" };
+const LEVEL_LABEL: Record<string, string> = { undergrad: msg("ป.ตรี"), master: msg("ป.โท"), phd: msg("ป.เอก") };
 
 /** One TA's figures merged across both pools, month by month. */
 interface PersonMonthly {
@@ -785,7 +790,7 @@ interface PersonMonthly {
 /** Merge the two pools' people lists into one row per TA. */
 function peopleOf(s?: Settlement): PersonMonthly[] {
   const byTA = new Map<string, PersonMonthly>();
-  for (const [track, label] of [["regular", "ภาคปกติ"], ["special", "ภาคพิเศษ"]] as const) {
+  for (const [track, label] of [["regular", msg("ภาคปกติ")], ["special", msg("ภาคพิเศษ")]] as const) {
     const t = track === "regular" ? s?.regular : s?.special;
     for (const p of t?.people ?? []) {
       let row = byTA.get(p.ta_id);
@@ -849,6 +854,8 @@ function poolTotals(t?: TrackSettlement): { work: number; paid: number } {
  * both tracks is paid from two budgets that can run out at different points.
  */
 function MonthlyPayPanel({ tcId }: { tcId: string }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const key = tcId ? `/teaching-courses/${tcId}/budget-settlement` : null;
   const { data, mutate: refresh } = useSWR<SettlementView>(key);
   // "approved" = money the approvals have already committed; "forecast" = plus
@@ -864,7 +871,7 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
   // pay still ends with no panel — that is decided by the data.)
   if (!data) {
     return (
-      <Panel className="mb-3" title="ค่าตอบแทน TA รายเดือน" description={<SkelValue className="h-3 w-56" />}>
+      <Panel className="mb-3" title={t("ค่าตอบแทน TA รายเดือน")} description={<SkelValue className="h-3 w-56" />}>
         <SkelRows rows={3} columns={5} />
       </Panel>
     );
@@ -899,8 +906,8 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
   // ฿600" on its own hides which one ran out — and on SC362005 it is the special
   // pool alone, while the regular one has room to spare.
   const pools = [
-    { label: "ภาคปกติ", ...poolTotals(data.forecast?.regular) },
-    { label: "ภาคพิเศษ", ...poolTotals(data.forecast?.special) },
+    { label: msg("ภาคปกติ"), ...poolTotals(data.forecast?.regular) },
+    { label: msg("ภาคพิเศษ"), ...poolTotals(data.forecast?.special) },
   ].filter(x => x.work > 0);
   const paidUnder = { [current]: peopleNow.reduce((t, p) => t + p.paid, 0), [other]: peopleThen.reduce((t, p) => t + p.paid, 0) };
   const zeroUnder = { [current]: strandedMonths(peopleNow, forecastMonths), [other]: strandedMonths(peopleThen, forecastMonths) };
@@ -911,13 +918,13 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
       await api.patch(`/teaching-courses/${tcId}/settlement-mode`, { settlement_mode: other });
       notify.success(
         data?.reexport_months?.length
-          ? `เปลี่ยนเป็น “${MODE_LABEL[other]}” แล้ว กรุณาดาวน์โหลดใบเบิกใหม่`
-          : `เปลี่ยนเป็น “${MODE_LABEL[other]}” แล้ว`,
+          ? t("เปลี่ยนเป็น “{mode}” แล้ว กรุณาดาวน์โหลดใบเบิกใหม่", { mode: t(MODE_LABEL[other]) })
+          : t("เปลี่ยนเป็น “{mode}” แล้ว", { mode: t(MODE_LABEL[other]) }),
       );
       setViewMode(null);
       await refresh();
     } catch (e) {
-      notify.error(e, "เปลี่ยนวิธีแบ่งงบไม่สำเร็จ");
+      notify.error(e, t("เปลี่ยนวิธีแบ่งงบไม่สำเร็จ"));
     } finally {
       setBusy(false);
       setConfirming(false);
@@ -927,10 +934,10 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
   const cell = (paid: number, work: number, muted = false) => (
     <>
       <div className={`tabular-nums ${muted ? "text-muted" : ""}`}>
-        {work <= 0 ? <span className="text-muted">–</span> : paid <= 0 ? <span className="text-red-700">ไม่ได้รับ</span> : bahtOf(paid)}
+        {work <= 0 ? <span className="text-muted">–</span> : paid <= 0 ? <span className="text-red-700">{t("ไม่ได้รับ")}</span> : bahtOf(paid)}
       </div>
       {work > 0 && work - paid >= 0.5 && (
-        <div className="text-[11px] text-red-700">ควรได้ {bahtOf(work)}</div>
+        <div className="text-[11px] text-red-700">{t("ควรได้ {n}", { n: bahtOf(work) })}</div>
       )}
     </>
   );
@@ -965,27 +972,29 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
         }`}
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-foreground">{MODE_LABEL[mode]}</span>
-          {inUse && <Chip tone="info">ใช้อยู่</Chip>}
-          {viewing && !inUse && <Chip tone="neutral">กำลังดู</Chip>}
+          <span className="text-sm font-semibold text-foreground">{t(MODE_LABEL[mode])}</span>
+          {inUse && <Chip tone="info">{t("ใช้อยู่")}</Chip>}
+          {viewing && !inUse && <Chip tone="neutral">{t("กำลังดู")}</Chip>}
         </div>
-        <p className="mt-1 text-xs leading-relaxed text-muted">{MODE_BLURB[mode]}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted">{t(MODE_BLURB[mode])}</p>
         <div className="mt-2.5 mb-auto text-sm">
           {zeroUnder[mode] > 0 ? (
-            <span className="font-semibold text-red-700">มี {zeroUnder[mode]} เดือนที่บางคนไม่ได้รับค่าตอบแทน</span>
+            <span className="font-semibold text-red-700">{t("มี {n} เดือนที่บางคนไม่ได้รับค่าตอบแทน", { n: zeroUnder[mode] })}</span>
           ) : (
-            <span className="font-semibold text-emerald-700">ทุกคนได้รับค่าตอบแทนทุกเดือน</span>
+            <span className="font-semibold text-emerald-700">{t("ทุกคนได้รับค่าตอบแทนทุกเดือน")}</span>
           )}
           <div className="mt-0.5 text-xs text-muted">
-            เบิกได้รวม <span className="tabular-nums font-medium text-foreground">{bahtOf(paidUnder[mode])}</span>
-            {" · "}ขาด <span className="tabular-nums font-medium text-red-700">{bahtOf(forecastWork - paidUnder[mode])}</span>
+            {t.rich("เบิกได้รวม {paid} · ขาด {short}", {
+              paid: <span className="tabular-nums font-medium text-foreground">{bahtOf(paidUnder[mode])}</span>,
+              short: <span className="tabular-nums font-medium text-red-700">{bahtOf(forecastWork - paidUnder[mode])}</span>,
+            })}
           </div>
         </div>
         {!inUse && data.can_change_mode && (
           // Wrapped so the press does not also count as a click on the card.
           <div className="mt-3 self-stretch" onClick={e => e.stopPropagation()}>
             <Button size="sm" fullWidth disabled={busy} onPress={() => setConfirming(true)}>
-              ใช้วิธีนี้
+              {t("ใช้วิธีนี้")}
             </Button>
           </div>
         )}
@@ -996,57 +1005,59 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
   return (
     <Panel
       className="mb-3"
-      title="ค่าตอบแทน TA รายเดือน"
+      title={t("ค่าตอบแทน TA รายเดือน")}
       description={
         short
-          ? `ยอดที่แต่ละคนจะได้รับจริงในแต่ละเดือน ตามวิธี “${MODE_LABEL[showing]}”${showing !== current ? " (กำลังดูเปรียบเทียบ ยังไม่ได้ใช้)" : ""}`
-          : "งบพอ ทุกคนได้รับเต็มตามชั่วโมงที่อนุมัติ"
+          ? (showing !== current
+            ? t("ยอดที่แต่ละคนจะได้รับจริงในแต่ละเดือน ตามวิธี “{mode}” (กำลังดูเปรียบเทียบ ยังไม่ได้ใช้)", { mode: t(MODE_LABEL[showing]) })
+            : t("ยอดที่แต่ละคนจะได้รับจริงในแต่ละเดือน ตามวิธี “{mode}”", { mode: t(MODE_LABEL[showing]) }))
+          : t("งบพอ ทุกคนได้รับเต็มตามชั่วโมงที่อนุมัติ")
       }
       actions={
         <div className="flex flex-wrap items-center gap-1.5">
-          {seg(basis === "forecast" && showing === current, () => { setBasis("forecast"); setViewMode(null); }, "รวมที่รอพิจารณา")}
-          {seg(basis === "committed" && showing === current, () => { setBasis("committed"); setViewMode(null); }, "เฉพาะที่อนุมัติแล้ว")}
-          {shortForecast && seg(showing === other, () => setViewMode(other), `ถ้าใช้ “${MODE_LABEL[other]}”`)}
+          {seg(basis === "forecast" && showing === current, () => { setBasis("forecast"); setViewMode(null); }, t("รวมที่รอพิจารณา"))}
+          {seg(basis === "committed" && showing === current, () => { setBasis("committed"); setViewMode(null); }, t("เฉพาะที่อนุมัติแล้ว"))}
+          {shortForecast && seg(showing === other, () => setViewMode(other), t("ถ้าใช้ “{mode}”", { mode: t(MODE_LABEL[other]) }))}
         </div>
       }
     >
       {shortForecast && (
         <div className="mb-4 border-b border-(--hairline) pb-4">
-          <div className="mb-2 text-sm font-semibold">วิธีแบ่งงบให้ TA</div>
+          <div className="mb-2 text-sm font-semibold">{t("วิธีแบ่งงบให้ TA")}</div>
           {/* The shortfall, pool by pool. The two budgets run out at different
               points, so the total alone cannot say which one is short. */}
           <div className="mb-3 overflow-x-auto rounded-lg bg-surface-secondary px-3.5 py-2.5">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-muted">
-                  <th className="py-1 pr-3 text-left font-medium">งบ</th>
-                  <Tip content="ค่าตอบแทนเต็มตามชั่วโมงที่ลงเวลา รวมรายการที่รอพิจารณาและค่าเหมาจ่าย">
-                    <th className="py-1 pr-3 text-right font-medium">ควรได้</th>
+                  <th className="py-1 pr-3 text-left font-medium">{t("งบ")}</th>
+                  <Tip content={t("ค่าตอบแทนเต็มตามชั่วโมงที่ลงเวลา รวมรายการที่รอพิจารณาและค่าเหมาจ่าย")}>
+                    <th className="py-1 pr-3 text-right font-medium">{t("ควรได้")}</th>
                   </Tip>
-                  <Tip content="ยอดที่จ่ายได้จริงภายในงบของรายวิชา">
-                    <th className="py-1 pr-3 text-right font-medium">เบิกได้</th>
+                  <Tip content={t("ยอดที่จ่ายได้จริงภายในงบของรายวิชา")}>
+                    <th className="py-1 pr-3 text-right font-medium">{t("เบิกได้")}</th>
                   </Tip>
-                  <Tip content="ส่วนที่งบไม่พอจ่าย (ควรได้ ลบ เบิกได้)">
-                    <th className="py-1 text-right font-medium">ขาด</th>
+                  <Tip content={t("ส่วนที่งบไม่พอจ่าย (ควรได้ ลบ เบิกได้)")}>
+                    <th className="py-1 text-right font-medium">{t("ขาด")}</th>
                   </Tip>
                 </tr>
               </thead>
               <tbody>
                 {pools.map(x => (
                   <tr key={x.label}>
-                    <td className="py-1 pr-3">{x.label}</td>
+                    <td className="py-1 pr-3">{t(x.label)}</td>
                     <td className="py-1 pr-3 text-right tabular-nums">{bahtOf(x.work)}</td>
                     <td className="py-1 pr-3 text-right tabular-nums">{bahtOf(x.paid)}</td>
                     <td className="py-1 text-right tabular-nums">
                       {x.work - x.paid >= 0.5
                         ? <span className="font-semibold text-red-700">{bahtOf(x.work - x.paid)}</span>
-                        : <span className="text-emerald-700">พอ</span>}
+                        : <span className="text-emerald-700">{t("พอ")}</span>}
                     </td>
                   </tr>
                 ))}
                 {pools.length > 1 && (
                   <tr className="border-t border-(--hairline) font-semibold">
-                    <td className="py-1 pr-3">รวม</td>
+                    <td className="py-1 pr-3">{t("รวม")}</td>
                     <td className="py-1 pr-3 text-right tabular-nums">{bahtOf(forecastWork)}</td>
                     <td className="py-1 pr-3 text-right tabular-nums">{bahtOf(paidUnder[current])}</td>
                     <td className="py-1 text-right tabular-nums text-red-700">{bahtOf(forecastWork - paidUnder[current])}</td>
@@ -1055,7 +1066,7 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
               </tbody>
             </table>
             <p className="mt-1.5 text-xs text-muted">
-              การเปลี่ยนวิธีไม่ทำให้ส่วนที่ขาดลดลง เลือกได้เพียงว่าจะให้ตกอยู่ที่เดือนใด — กดที่วิธีเพื่อดูตารางตามวิธีนั้น
+              {t("การเปลี่ยนวิธีไม่ทำให้ส่วนที่ขาดลดลง เลือกได้เพียงว่าจะให้ตกอยู่ที่เดือนใด — กดที่วิธีเพื่อดูตารางตามวิธีนั้น")}
             </p>
           </div>
 
@@ -1070,26 +1081,23 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
           {!data.can_change_mode && (
             <p className="mt-3 rounded-lg bg-surface-secondary px-3 py-2 text-xs text-muted">
               {data.lock_reason === "staff_reviewed" ? (
-                <>เจ้าหน้าที่ตรวจสอบเดือน {(data.locked_months ?? []).join(", ")} แล้ว จึงเปลี่ยนวิธีไม่ได้
-                หากต้องการเปลี่ยน กรุณาติดต่อเจ้าหน้าที่</>
+                t("เจ้าหน้าที่ตรวจสอบเดือน {months} แล้ว จึงเปลี่ยนวิธีไม่ได้ หากต้องการเปลี่ยน กรุณาติดต่อเจ้าหน้าที่", { months: (data.locked_months ?? []).join(", ") })
               ) : (
-                <>เดือน {(data.locked_months ?? []).join(", ")} ส่งการเงินแล้ว จึงเปลี่ยนวิธีไม่ได้
-                หากจำเป็น กรุณาให้ผู้ดูแลระบบปลดล็อกก่อน</>
+                t("เดือน {months} ส่งการเงินแล้ว จึงเปลี่ยนวิธีไม่ได้ หากจำเป็น กรุณาให้ผู้ดูแลระบบปลดล็อกก่อน", { months: (data.locked_months ?? []).join(", ") })
               )}
             </p>
           )}
 
           <ConfirmDialog
             open={confirming}
-            title={`เปลี่ยนเป็น “${MODE_LABEL[other]}”?`}
+            title={t("เปลี่ยนเป็น “{mode}”?", { mode: t(MODE_LABEL[other]) })}
             message={
               (data.reexport_months?.length
-                ? `เดือน ${data.reexport_months.join(", ")} ส่งออกใบเบิกแล้ว หลังเปลี่ยนต้องดาวน์โหลดใบเบิกใหม่ — `
+                ? t("เดือน {months} ส่งออกใบเบิกแล้ว หลังเปลี่ยนต้องดาวน์โหลดใบเบิกใหม่", { months: data.reexport_months.join(", ") }) + " — "
                 : "") +
-              "TA ทุกคนในวิชานี้จะได้รับแจ้งเตือน ยอดรายเดือนจะเปลี่ยนตามตารางด้านล่าง " +
-              "เปลี่ยนกลับได้จนกว่าจะมีเดือนใดส่งการเงิน"
+              t("TA ทุกคนในวิชานี้จะได้รับแจ้งเตือน ยอดรายเดือนจะเปลี่ยนตามตารางด้านล่าง เปลี่ยนกลับได้จนกว่าจะมีเดือนใดส่งการเงิน")
             }
-            confirmLabel="เปลี่ยน"
+            confirmLabel={t("เปลี่ยน")}
             isPending={busy}
             onConfirm={apply}
             onClose={() => setConfirming(false)}
@@ -1102,9 +1110,9 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
             <tr className="text-xs text-muted">
               <th className="py-1.5 pr-3 text-left font-medium">TA</th>
               {months.map(m => (
-                <th key={m} className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{shortMonthTH(m)}</th>
+                <th key={m} className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{shortMonthTH(m, i18n)}</th>
               ))}
-              <th className="py-1.5 text-right font-medium">รวม</th>
+              <th className="py-1.5 text-right font-medium">{t("รวม")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1119,9 +1127,9 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
                     <td className="py-2 pr-3">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium">{p.name || "TA"}</span>
-                        {p.levels.map(l => <Chip key={l} tone="neutral">{LEVEL_LABEL[l] ?? l}</Chip>)}
+                        {p.levels.map(l => <Chip key={l} tone="neutral">{LEVEL_LABEL[l] ? t(LEVEL_LABEL[l]) : l}</Chip>)}
                         {!split && p.tracks[0] && (
-                          <span className="text-xs text-muted">{p.tracks[0].label}</span>
+                          <span className="text-xs text-muted">{t(p.tracks[0].label)}</span>
                         )}
                       </div>
                     </td>
@@ -1134,8 +1142,8 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
                   {split && p.tracks.map(({ track, label, person }) => (
                     <tr key={track} className="text-xs align-top">
                       <td className="py-1 pl-6 pr-3 text-muted">
-                        {label}
-                        {person.lump_baht ? " · เหมาจ่ายรายเทอม" : ""}
+                        {t(label)}
+                        {person.lump_baht ? " · " + t("เหมาจ่ายรายเทอม") : ""}
                       </td>
                       {months.map(m => {
                         const mm = person.months?.find(x => x.year_month === m);
@@ -1158,7 +1166,7 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-(--hairline) font-semibold align-top">
-              <td className="py-2 pr-3">รวมทุกคน</td>
+              <td className="py-2 pr-3">{t("รวมทุกคน")}</td>
               {months.map(m => {
                 const paid = people.reduce((t, p) => t + (p.months.get(m)?.paid ?? 0), 0);
                 const work = people.reduce((t, p) => t + (p.months.get(m)?.work ?? 0), 0);
@@ -1170,8 +1178,8 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
         </table>
       </div>
       <p className="mt-2 text-xs text-muted">
-        ยอดตรงกับช่อง “ขอเบิกจ่ายเพียง” ในใบเบิก
-        {short && " · เมื่องบไม่พอ ทุกคนถูกหักเป็นสัดส่วนเท่ากัน ปัดลงเป็นบาทเต็ม"}
+        {t("ยอดตรงกับช่อง “ขอเบิกจ่ายเพียง” ในใบเบิก")}
+        {short && " · " + t("เมื่องบไม่พอ ทุกคนถูกหักเป็นสัดส่วนเท่ากัน ปัดลงเป็นบาทเต็ม")}
       </p>
 
     </Panel>
@@ -1187,6 +1195,8 @@ function MonthlyPayPanel({ tcId }: { tcId: string }) {
  * finds out on payday, so it names the months rather than quoting a shortfall.
  */
 function BudgetNotice({ tcId }: { tcId: string }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const key = tcId ? `/teaching-courses/${tcId}/budget-settlement` : null;
   const { data } = useSWR<SettlementView>(key);
   // Read the FORECAST, not the settled figure. By the time approved spending
@@ -1206,12 +1216,16 @@ function BudgetNotice({ tcId }: { tcId: string }) {
   // out on payday that the screen lied to them. "ไม่ได้รับเลย" is the whole
   // course; "ภาคพิเศษไม่ได้รับเลย" is one pool emptied while the other was paid
   // in full; "ได้ไม่เต็มจำนวน" is everyone short by the same proportion.
+  const months = (list: string[]) => list.map(m => formatMonthTH(m, i18n)).join(", ");
   const what = [
-    partial.length ? `${partial.map(formatMonthTH).join(", ")} ได้ไม่เต็มจำนวน` : "",
+    partial.length ? t("{months} ได้ไม่เต็มจำนวน", { months: months(partial) }) : "",
     ...zeroed.map(z =>
-      `${formatMonthTH(z.year_month)} ${z.zero_tracks.map(t => TRACK_LABEL[t] ?? t).join("และ")}ไม่ได้รับเลย`),
-    unpaid.length ? `${unpaid.map(formatMonthTH).join(", ")} ไม่ได้รับค่าตอบแทน` : "",
-  ].filter(Boolean).join(" และ");
+      t("{month} {tracks}ไม่ได้รับเลย", {
+        month: formatMonthTH(z.year_month, i18n),
+        tracks: z.zero_tracks.map(tr => TRACK_LABEL[tr] ? t(TRACK_LABEL[tr]) : tr).reduce((a, b) => t("{a}และ{b}", { a, b })),
+      })),
+    unpaid.length ? t("{months} ไม่ได้รับค่าตอบแทน", { months: months(unpaid) }) : "",
+  ].filter(Boolean).reduce((a, b) => (a ? t("{a} และ{b}", { a, b }) : b), "");
   // Already committed vs still avoidable changes what the lecturer can do about
   // it, so the two are worded differently rather than sharing one alarm.
   const committed = data?.committed?.over_budget;
@@ -1226,13 +1240,13 @@ function BudgetNotice({ tcId }: { tcId: string }) {
         <div className="min-w-0">
           <div className="font-semibold">
             {committed
-              ? `งบรายวิชาไม่พอแล้ว ${what}`
-              : `ถ้าอนุมัติครบตามที่ TA ลงไว้ งบจะไม่พอ ${what}`}
+              ? t("งบรายวิชาไม่พอแล้ว {what}", { what })
+              : t("ถ้าอนุมัติครบตามที่ TA ลงไว้ งบจะไม่พอ {what}", { what })}
           </div>
           <div className="mt-0.5 text-red-900/85">
-            อนุมัติได้ตามปกติ ชั่วโมงบันทึกไว้ครบ แต่ส่วนที่เกินงบ ฿{Math.round(view.dropped_baht).toLocaleString()} จะไม่ถูกนำไปเบิก
+            {t("อนุมัติได้ตามปกติ ชั่วโมงบันทึกไว้ครบ แต่ส่วนที่เกินงบ ฿{n} จะไม่ถูกนำไปเบิก", { n: Math.round(view.dropped_baht).toLocaleString() })}
             {spilled > 0 && (
-              <> (นำงบภาคพิเศษที่เหลือ ฿{Math.round(spilled).toLocaleString()} มาช่วยคาบที่สอนร่วมกันแล้ว)</>
+              <> {t("(นำงบภาคพิเศษที่เหลือ ฿{n} มาช่วยคาบที่สอนร่วมกันแล้ว)", { n: Math.round(spilled).toLocaleString() })}</>
             )}
           </div>
         </div>
@@ -1244,21 +1258,23 @@ function BudgetNotice({ tcId }: { tcId: string }) {
 }
 
 function MonthTable({ weeks, showSections }: { weeks: WeekGroup[]; showSections: boolean }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const cols = showSections ? 7 : 6;
   return (
     <div className="overflow-x-auto border-t border-(--hairline)">
       <table className="w-full min-w-[560px] text-sm sm:min-w-0">
         <thead className="border-b border-(--hairline) text-xs text-muted">
           <tr>
-            <th className="whitespace-nowrap px-4 py-2 text-left font-medium">วันที่</th>
-            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">เวลา</th>
-            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">ชม.</th>
-            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">กิจกรรม</th>
+            <th className="whitespace-nowrap px-4 py-2 text-left font-medium">{t("วันที่")}</th>
+            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">{t("เวลา")}</th>
+            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">{t("ชม.")}</th>
+            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">{t("กิจกรรม")}</th>
             {showSections && (
               <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Sec</th>
             )}
-            <th className="px-3 py-2 text-left font-medium">หมายเหตุ</th>
-            <th className="whitespace-nowrap px-4 py-2 text-left font-medium">สถานะ</th>
+            <th className="px-3 py-2 text-left font-medium">{t("หมายเหตุ")}</th>
+            <th className="whitespace-nowrap px-4 py-2 text-left font-medium">{t("สถานะ")}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-(--hairline)">
@@ -1267,20 +1283,20 @@ function MonthTable({ weeks, showSections }: { weeks: WeekGroup[]; showSections:
               {/* ป้ายสัปดาห์ — จงใจให้จาง เป็นตัวคั่นสายตา ไม่ใช่หัวข้อเด่น */}
               <tr>
                 <td colSpan={cols} className="px-4 pt-2 pb-0.5 text-[11px] text-muted">
-                  {wk.label} · <span className="tabular">{wk.hours.toFixed(1)} ชม.</span>
+                  {wk.label} · <span className="tabular">{t("{h} ชม.", { h: wk.hours.toFixed(1) })}</span>
                 </td>
               </tr>
               {wk.items.map(r => {
-                const activityLabel = ACTIVITY_LABEL[r.activity] ?? r.activity;
+                const activityLabel = ACTIVITY_LABEL[r.activity] ? t(ACTIVITY_LABEL[r.activity]) : r.activity;
                 const parentKindLabel =
                   r.activity === "other" && (r.parent_kind === "lecture" || r.parent_kind === "lab")
-                    ? ` (${PARENT_KIND_LABEL[r.parent_kind]})`
+                    ? ` (${t(PARENT_KIND_LABEL[r.parent_kind])})`
                     : "";
                 // แถวที่ไม่ได้อยู่ในรอบพิจารณานี้ทำให้จาง เพื่อให้สายตาไปที่รายการที่กำลังตัดสิน
                 const dim = r.status !== "submitted";
                 return (
                   <tr key={r.id} className={dim ? "text-muted" : ""}>
-                    <td className="whitespace-nowrap px-4 py-2">{formatWorkDate(r.work_date)}</td>
+                    <td className="whitespace-nowrap px-4 py-2">{formatWorkDate(r.work_date, i18n)}</td>
                     <td className="whitespace-nowrap px-3 py-2 tabular">{hhmm(r.start_time)}–{hhmm(r.end_time)}</td>
                     <td className="px-3 py-2 text-right tabular">{r.hours.toFixed(1)}</td>
                     <td className="whitespace-nowrap px-3 py-2">{activityLabel}{parentKindLabel}</td>
@@ -1314,22 +1330,23 @@ function MonthTable({ weeks, showSections }: { weeks: WeekGroup[]; showSections:
 // moment of the action (ApprovalHistoryEntry.rows), so "ดูรายละเอียด" shows
 // what was actually approved/rejected even if the live work_logs have since
 // changed — it isn't a live re-query into the assignment.
-function formatHistoryAt(iso: string): string {
+function formatHistoryAt(iso: string, i: I18n): string {
   if (!iso) return "";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return iso;
-  const diff = Date.now() - t.getTime();
+  const { t } = i;
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return iso;
+  const diff = Date.now() - dt.getTime();
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "เมื่อสักครู่";
-  if (min < 60) return `${min} นาทีที่แล้ว`;
+  if (min < 1) return t("เมื่อสักครู่");
+  if (min < 60) return t("{n} นาทีที่แล้ว", { n: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} ชม.ที่แล้ว`;
+  if (hr < 24) return t("{n} ชม.ที่แล้ว", { n: hr });
   const day = Math.floor(hr / 24);
-  if (day < 7) return `${day} วันที่แล้ว`;
+  if (day < 7) return t("{n} วันที่แล้ว", { n: day });
   // Older than a week — show the calendar date instead of a stale relative.
-  const d = t.getDate();
-  const m = t.getMonth() + 1;
-  const y = t.getFullYear() + 543;
+  const d = dt.getDate();
+  const m = dt.getMonth() + 1;
+  const y = i.year(dt.getFullYear());
   return `${d}/${m}/${y}`;
 }
 
@@ -1340,6 +1357,8 @@ function formatHistoryAt(iso: string): string {
 function HistoryRowDetail({
   entry,
 }: { entry: ApprovalHistoryEntry }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const status = entry.action === "worklog.approve" ? "approved" : "rejected";
   const sittings: Sitting[] = entry.rows.map((r, i) => ({
     id: `${entry.id}-${i}`,
@@ -1377,12 +1396,12 @@ function HistoryRowDetail({
         return (
           <div key={mk}>
             <div className="flex items-baseline gap-2 bg-surface-secondary px-4 py-1.5">
-              <span className="text-xs font-semibold">{formatMonthTH(mk)}</span>
+              <span className="text-xs font-semibold">{formatMonthTH(mk, i18n)}</span>
               <span className="tabular text-xs text-muted">
-                {items.length} รายการ · {hours.toFixed(1)} ชม.
+                {t("{n} รายการ · {h} ชม.", { n: items.length, h: hours.toFixed(1) })}
               </span>
             </div>
-            <MonthTable weeks={groupByWeek(items)} showSections={false} />
+            <MonthTable weeks={groupByWeek(items, i18n)} showSections={false} />
           </div>
         );
       })}
@@ -1396,6 +1415,8 @@ function ApprovalHistoryPanel({
   history: ApprovalHistoryEntry[] | undefined;
   loading: boolean;
 }) {
+  const i18n = useI18n();
+  const { t, intl } = i18n;
   const count = history?.length ?? 0;
   // Folded away when there is nothing in it — an empty history used to occupy
   // half the screen underneath the queue that is the reason for the visit. Once
@@ -1424,9 +1445,9 @@ function ApprovalHistoryPanel({
             className={`shrink-0 text-muted transition-transform ${show ? "" : "-rotate-90"}`}
           />
           <History size={15} className="text-muted" />
-          <span className="text-sm font-medium">ประวัติการอนุมัติ</span>
+          <span className="text-sm font-medium">{t("ประวัติการอนุมัติ")}</span>
           <span className="text-xs text-muted">
-            {loading ? <SkelValue className="h-3 w-20" /> : count > 0 ? `${count} รายการล่าสุด` : "ยังไม่มี"}
+            {loading ? <SkelValue className="h-3 w-20" /> : count > 0 ? t("{n} รายการล่าสุด", { n: count }) : t("ยังไม่มี")}
           </span>
         </button>
       </div>
@@ -1434,7 +1455,7 @@ function ApprovalHistoryPanel({
         <ul className="divide-y divide-(--hairline) border-t border-(--hairline)">
           {history!.map(h => {
             const approved = h.action === "worklog.approve";
-            const trackTH = h.track === "special" ? "พิเศษ" : "ปกติ";
+            const trackTH = h.track === "special" ? t("พิเศษ") : t("ปกติ");
             const hasRows = h.rows.length > 0;
             const rowsOpen = openId === h.id;
             const rowsHours = h.rows.reduce((s, r) => s + (r.hours || 0), 0);
@@ -1457,14 +1478,14 @@ function ApprovalHistoryPanel({
                     }`}
                   >
                     {approved ? <Check size={12} /> : <X size={12} />}
-                    {approved ? "อนุมัติ" : "ส่งกลับ"}
+                    {approved ? t("อนุมัติ@status") : t("ส่งกลับ@status")}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm">
                       <span className="font-medium">{h.ta_name}</span>
                       <span className="text-muted"> · sec {h.sec_no} ({trackTH})</span>
                       {hasRows && (
-                        <span className="text-muted"> · {h.rows.length} รายการ ({rowsHours.toFixed(1)} ชม.)</span>
+                        <span className="text-muted"> · {t("{n} รายการ ({h} ชม.)", { n: h.rows.length, h: rowsHours.toFixed(1) })}</span>
                       )}
                     </div>
                     {/* Who did it — not necessarily the viewer. Staff/admin can
@@ -1472,28 +1493,28 @@ function ApprovalHistoryPanel({
                         place the lecturer learns it happened at all. */}
                     {h.actor_name && (
                       <div className="mt-0.5 text-xs text-muted">
-                        โดย {h.actor_name}
+                        {t("โดย {name}", { name: h.actor_name })}
                         {h.actor_role && h.actor_role !== "lecturer" && (
                           <span className="ml-1 rounded bg-surface-secondary px-1.5 py-0.5 text-[11px] font-medium">
-                            {ACTOR_ROLE_TH[h.actor_role] ?? h.actor_role}
+                            {ACTOR_ROLE_TH[h.actor_role] ? t(ACTOR_ROLE_TH[h.actor_role]) : h.actor_role}
                           </span>
                         )}
                       </div>
                     )}
                     {!approved && h.note && (
                       <div className="mt-1 whitespace-pre-wrap rounded border border-warning-soft-border bg-warning-soft px-2 py-1 text-xs text-warning-soft-foreground">
-                        เหตุผล: {h.note}
+                        {t("เหตุผล: {note}", { note: h.note })}
                       </div>
                     )}
                     {hasRows && (
                       <div className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary">
                         <ChevronDown size={12} className={`transition-transform ${rowsOpen ? "" : "-rotate-90"}`} />
-                        ดูรายละเอียด
+                        {t("ดูรายละเอียด")}
                       </div>
                     )}
                   </div>
-                  <Tip content={new Date(h.at).toLocaleString("th-TH")}><div className="shrink-0 text-xs text-muted">
-                    {formatHistoryAt(h.at)}
+                  <Tip content={new Date(h.at).toLocaleString(intl)}><div className="shrink-0 text-xs text-muted">
+                    {formatHistoryAt(h.at, i18n)}
                   </div></Tip>
                 </div>
                 {/* The frozen snapshot from the moment of the action — not a
@@ -1510,7 +1531,7 @@ function ApprovalHistoryPanel({
       )}
       {show && !loading && count === 0 && (
         <div className="border-t border-(--hairline) px-4 py-6 text-center text-xs text-muted">
-          เมื่อคุณกดอนุมัติหรือส่งกลับให้ TA แก้ไข รายการจะปรากฏที่นี่
+          {t("เมื่อคุณกดอนุมัติหรือส่งกลับให้ TA แก้ไข รายการจะปรากฏที่นี่")}
         </div>
       )}
     </Panel>

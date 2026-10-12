@@ -2,6 +2,7 @@
 import { FlaskConical, Lock, ClipboardList } from "lucide-react";
 import { Button } from "@heroui/react";
 import { Modal, Tip } from "./ui";
+import { useI18n } from "../lib/i18n/client";
 
 // Bumped if the notice content changes materially and testers should see it
 // again even though they already dismissed an earlier version.
@@ -26,8 +27,9 @@ export function markBetaNoticeSeen() {
 // Small pill next to the logo. Always clickable so someone who dismissed the
 // notice can still find it again — it isn't only a one-time interruption.
 export function BetaBadge({ onClick }: { onClick: () => void }) {
+  const { t } = useI18n();
   return (
-    <Tip content="ระบบอยู่ระหว่างช่วงทดสอบ (Beta) คลิกเพื่อดูรายละเอียด" delay={300}>
+    <Tip content={t("ระบบอยู่ระหว่างช่วงทดสอบ (Beta) คลิกเพื่อดูรายละเอียด")} delay={300}>
     <button
       type="button"
       onClick={e => { e.preventDefault(); e.stopPropagation(); onClick(); }}
@@ -40,6 +42,7 @@ export function BetaBadge({ onClick }: { onClick: () => void }) {
 }
 
 export function BetaNoticeModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
   function close() {
     markBetaNoticeSeen();
     onClose();
@@ -48,25 +51,23 @@ export function BetaNoticeModal({ open, onClose }: { open: boolean; onClose: () 
     <Modal
       open={open}
       onClose={close}
-      title="ระบบอยู่ระหว่างช่วงทดสอบ (Beta)"
+      title={t("ระบบอยู่ระหว่างช่วงทดสอบ (Beta)")}
       size="sm"
       icon={<FlaskConical size={18} />}
-      footer={<Button variant="primary" onPress={close}>เข้าใจแล้ว</Button>}
+      footer={<Button variant="primary" onPress={close}>{t("เข้าใจแล้ว")}</Button>}
     >
       <div className="space-y-3 text-sm text-foreground/80">
         <p>
-          เว็บไซต์นี้เปิดให้ทดลองใช้งานกับกลุ่มตัวอย่างก่อนใช้งานจริง อาจพบข้อผิดพลาด
-          หรือมีการปรับเปลี่ยนหน้าจอและฟังก์ชันระหว่างช่วงทดสอบ
+          {t("เว็บไซต์นี้เปิดให้ทดลองใช้งานกับกลุ่มตัวอย่างก่อนใช้งานจริง อาจพบข้อผิดพลาด หรือมีการปรับเปลี่ยนหน้าจอและฟังก์ชันระหว่างช่วงทดสอบ")}
         </p>
         <div className="flex gap-2.5">
           <Lock size={16} className="mt-0.5 shrink-0 text-muted" />
-          <p>ข้อมูลที่ท่านอัปโหลดจะถูกเข้ารหัสไว้บนระบบ เพื่อความปลอดภัยของข้อมูล</p>
+          <p>{t("ข้อมูลที่ท่านอัปโหลดจะถูกเข้ารหัสไว้บนระบบ เพื่อความปลอดภัยของข้อมูล")}</p>
         </div>
         <div className="flex gap-2.5">
           <ClipboardList size={16} className="mt-0.5 shrink-0 text-muted" />
           <p>
-            ทีมงานขอเก็บข้อมูลการใช้งานของท่านในระหว่างช่วงทดสอบ เพื่อนำไปปรับปรุงและพัฒนาระบบ
-            ให้ใช้งานได้ดียิ่งขึ้นก่อนเปิดใช้งานจริง
+            {t("ทีมงานขอเก็บข้อมูลการใช้งานของท่านในระหว่างช่วงทดสอบ เพื่อนำไปปรับปรุงและพัฒนาระบบ ให้ใช้งานได้ดียิ่งขึ้นก่อนเปิดใช้งานจริง")}
           </p>
         </div>
       </div>

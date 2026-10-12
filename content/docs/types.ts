@@ -18,6 +18,8 @@
  * file patterns and route paths. See `app/components/docs/DocRichText.tsx`.
  */
 
+import { msg } from "../../app/lib/i18n/core";
+
 export type Audience = "common" | "ta" | "lecturer" | "staff";
 
 /** Roles from `Me.roles` (+ `is_executive`) that may open a given audience.
@@ -32,11 +34,12 @@ export const AUDIENCE_ROLES: Record<Audience, (me: { roles: string[]; is_executi
   staff: (me) => me.roles.includes("admin") || me.roles.includes("staff"),
 };
 
+/** Thai keys (msg()): translate where shown — `t(AUDIENCE_LABEL[a])`. */
 export const AUDIENCE_LABEL: Record<Audience, string> = {
-  common: "ทั่วไป",
-  ta: "ผู้ช่วยสอน",
-  lecturer: "อาจารย์",
-  staff: "เจ้าหน้าที่",
+  common: msg("ทั่วไป"),
+  ta: msg("ผู้ช่วยสอน"),
+  lecturer: msg("อาจารย์"),
+  staff: msg("เจ้าหน้าที่"),
 };
 
 /** Order the switch shows audiences in (common is never a switch option). */

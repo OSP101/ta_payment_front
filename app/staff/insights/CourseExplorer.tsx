@@ -11,6 +11,7 @@ import type { CourseStaffing, StaffingStatus } from "../types";
 import { curriculumTH } from "../types";
 import { STAFFING_META, CAP_META, capState, baht, money, num1, pct0, type CapState } from "./analysis";
 import { MiniBar, onActivate } from "./charts";
+import { useI18n } from "../../lib/i18n/client";
 
 type SortKey = "code" | "curriculum" | "students" | "recommended" | "requested" | "ratio" | "spent" | "use" | "status";
 
@@ -29,6 +30,7 @@ export default function CourseExplorer({
   /** The near-cap line (near_cap_ratio) — the same capState as Q1. */
   ratio: number;
 }) {
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const [scope, setScope] = useState<"all" | "requested" | "none">("all");
   const [money_, setMoney] = useState<"" | "over" | "near">("");
@@ -73,8 +75,8 @@ export default function CourseExplorer({
     if (!selected) return;
     const idx = filtered.findIndex(r => r.teaching_course_id === selected);
     if (idx >= limit) setLimit(idx + 1);
-    const t = setTimeout(() => selRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => selRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
@@ -96,39 +98,39 @@ export default function CourseExplorer({
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <SearchField value={q} onChange={v => { setQ(v); setLimit(PAGE); }}
-                     placeholder="ค้นหารหัส ชื่อวิชา หรืออาจารย์" ariaLabel="ค้นหารายวิชา" className="w-full sm:w-72" />
-        <Select aria-label="กรองตามผลการเทียบ" value={status} onChange={e => onStatus(e.target.value as StaffingStatus | "")}>
-          <option value="">ทุกผลการเทียบ</option>
+                     placeholder={t("ค้นหารหัส ชื่อวิชา หรืออาจารย์")} ariaLabel={t("ค้นหารายวิชา")} className="w-full sm:w-72" />
+        <Select aria-label={t("กรองตามผลการเทียบ")} value={status} onChange={e => onStatus(e.target.value as StaffingStatus | "")}>
+          <option value="">{t("ทุกผลการเทียบ")}</option>
           {(Object.keys(STAFFING_META) as StaffingStatus[])
             .sort((a, b) => STAFFING_META[a].rank - STAFFING_META[b].rank)
-            .map(k => <option key={k} value={k}>{STAFFING_META[k].label}</option>)}
+            .map(k => <option key={k} value={k}>{t(STAFFING_META[k].label)}</option>)}
         </Select>
-        <Select aria-label="กรองตามการขอ TA" value={scope} onChange={e => setScope(e.target.value as typeof scope)}>
-          <option value="all">ทุกวิชา</option>
-          <option value="requested">เฉพาะวิชาที่ขอ TA</option>
-          <option value="none">เฉพาะวิชาที่ยังไม่ขอ</option>
+        <Select aria-label={t("กรองตามการขอ TA")} value={scope} onChange={e => setScope(e.target.value as typeof scope)}>
+          <option value="all">{t("ทุกวิชา")}</option>
+          <option value="requested">{t("เฉพาะวิชาที่ขอ TA")}</option>
+          <option value="none">{t("เฉพาะวิชาที่ยังไม่ขอ")}</option>
         </Select>
-        <Select aria-label="กรองตามสถานะงบ" value={money_} onChange={e => setMoney(e.target.value as typeof money_)}>
-          <option value="">ทุกสถานะงบ</option>
-          <option value="over">{CAP_META.over.label}</option>
-          <option value="near">{CAP_META.near.label} (ถึง {pct0(ratio * 100)})</option>
+        <Select aria-label={t("กรองตามสถานะงบ")} value={money_} onChange={e => setMoney(e.target.value as typeof money_)}>
+          <option value="">{t("ทุกสถานะงบ")}</option>
+          <option value="over">{t(CAP_META.over.label)}</option>
+          <option value="near">{t("{label} (ถึง {pct})", { label: t(CAP_META.near.label), pct: pct0(ratio * 100) })}</option>
         </Select>
-        <span className="ms-auto text-xs text-[var(--ink-3)] tabular-nums" aria-live="polite">{filtered.length} จาก {rows.length} วิชา</span>
+        <span className="ms-auto text-xs text-[var(--ink-3)] tabular-nums" aria-live="polite">{t("{n} จาก {total} วิชา", { n: filtered.length, total: rows.length })}</span>
       </div>
 
       <div className="overflow-x-auto -mx-1 px-1">
         <table className="w-full min-w-[860px] text-sm">
           <thead>
             <tr className="border-b border-[var(--hairline)] text-xs text-[var(--ink-3)]">
-              {th("code", "วิชา")}
-              {th("curriculum", "หลักสูตร")}
-              {th("students", "นศ.", "end")}
-              {th("recommended", "แนะนำ", "end")}
-              {th("requested", "ขอ", "end")}
-              {th("ratio", "นศ./TA", "end")}
-              {th("spent", "เบิกแล้ว (บาท)", "end")}
-              {th("use", "คาดการณ์เทียบเพดานวิชา", "start", "w-44")}
-              {th("status", "ผลการเทียบ")}
+              {th("code", t("วิชา"))}
+              {th("curriculum", t("หลักสูตร"))}
+              {th("students", t("นศ."), "end")}
+              {th("recommended", t("แนะนำ"), "end")}
+              {th("requested", t("ขอ"), "end")}
+              {th("ratio", t("นศ./TA"), "end")}
+              {th("spent", t("เบิกแล้ว (บาท)"), "end")}
+              {th("use", t("คาดการณ์เทียบเพดานวิชา"), "start", "w-44")}
+              {th("status", t("ผลการเทียบ"))}
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--hairline)]">
@@ -150,7 +152,7 @@ export default function CourseExplorer({
                         ? <Link href={`/staff/teaching/${r.teaching_course_id}`} onClick={e => e.stopPropagation()}
                                 className="font-semibold tabular-nums hover:underline">{r.code}</Link>
                         : <span className="font-semibold tabular-nums">{r.code}</span>}
-                      {r.pending_request && <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">รออนุมัติ</span>}
+                      {r.pending_request && <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">{t("รออนุมัติ")}</span>}
                     </div>
                     <Tip content={r.name_th}>
                       <div className="text-xs text-[var(--ink-2)] line-clamp-1">{r.name_th}</div>
@@ -161,21 +163,21 @@ export default function CourseExplorer({
                       </Tip>
                     )}
                   </td>
-                  <td className="py-2.5 pe-3 text-xs text-[var(--ink-2)] whitespace-nowrap">{curriculumTH(r.curriculum)}</td>
+                  <td className="py-2.5 pe-3 text-xs text-[var(--ink-2)] whitespace-nowrap">{t(curriculumTH(r.curriculum))}</td>
                   <td className="py-2.5 pe-3 text-end tabular-nums">
                     {r.students_missing && r.students === 0
-                      ? <span className="inline-flex items-center gap-1 text-amber-800"><AlertTriangle size={12} />ไม่มี</span>
+                      ? <span className="inline-flex items-center gap-1 text-amber-800"><AlertTriangle size={12} />{t("ไม่มี")}</span>
                       : r.students}
-                    <div className="text-xs text-[var(--ink-3)]">{r.sittings} กลุ่ม</div>
+                    <div className="text-xs text-[var(--ink-3)]">{t("{n} กลุ่ม", { n: r.sittings })}</div>
                   </td>
                   <td className="py-2.5 pe-3 text-end tabular-nums text-[var(--ink-2)]">
                     {r.recommended}
-                    <div className="text-xs text-[var(--ink-3)]">สูงสุด {r.ceiling}</div>
+                    <div className="text-xs text-[var(--ink-3)]">{t("สูงสุด {n}", { n: r.ceiling })}</div>
                   </td>
                   <td className="py-2.5 pe-3 text-end tabular-nums">
                     <b>{r.requested || "–"}</b>
                     {r.requested > 0 && diff !== 0 && (
-                      <Tip content={diff > 0 ? `ขอ TA เกินจำนวนที่แนะนำ ${diff} คน` : `ขอ TA น้อยกว่าจำนวนที่แนะนำ ${-diff} คน`}>
+                      <Tip content={diff > 0 ? t("ขอ TA เกินจำนวนที่แนะนำ {n} คน", { n: diff }) : t("ขอ TA น้อยกว่าจำนวนที่แนะนำ {n} คน", { n: -diff })}>
                         <div className={`text-xs ${diff > 0 ? "text-red-700" : "text-sky-700"}`}>
                           {diff > 0 ? `+${diff}` : diff}
                         </div>
@@ -186,8 +188,8 @@ export default function CourseExplorer({
                   <td className="py-2.5 pe-3 text-end tabular-nums">
                     {r.spent_baht > 0 ? baht(r.spent_baht) : "–"}
                     {r.unfunded_baht > 0 && (
-                      <Tip content="งานที่บันทึกแล้วแต่เพดานวิชาจ่ายไม่ได้"><div className="text-xs text-red-700">
-                        จ่ายไม่ได้ {money(r.unfunded_baht)}
+                      <Tip content={t("งานที่บันทึกแล้วแต่เพดานวิชาจ่ายไม่ได้")}><div className="text-xs text-red-700">
+                        {t("จ่ายไม่ได้ {amount}", { amount: money(r.unfunded_baht, t) })}
                       </div></Tip>
                     )}
                   </td>
@@ -196,21 +198,21 @@ export default function CourseExplorer({
                       <div className="pt-1.5">
                         <MiniBar value={r.forecast_baht} max={r.cap_baht} warnAt={ratio} over={cs === "over"} />
                         <div className="mt-1 text-xs tabular-nums" style={{ color: cs === "over" || cs === "near" ? CAP_META[cs].ink : "var(--ink-3)" }}>
-                          {Math.round(usePct)}% ของ {money(r.cap_baht)}{cs === "over" || cs === "near" ? ` · ${CAP_META[cs].label}` : ""}
+                          {t("{pct}% ของ {cap}", { pct: Math.round(usePct), cap: money(r.cap_baht, t) })}{cs === "over" || cs === "near" ? ` · ${t(CAP_META[cs].label)}` : ""}
                         </div>
                       </div>
                     ) : <span className="text-xs text-[var(--ink-3)]">–</span>}
                   </td>
                   <td className="py-2.5">
-                    <Tip content={m.label !== m.short ? m.label : undefined}>
+                    <Tip content={m.label !== m.short ? t(m.label) : undefined}>
                       <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
                             style={{ background: `${m.color}1a`, color: m.ink }}>
-                        <i className="size-1.5 rounded-full" style={{ background: m.color }} />{m.short}
+                        <i className="size-1.5 rounded-full" style={{ background: m.color }} />{t(m.short)}
                       </span>
                     </Tip>
                     {r.unresolved_makeups > 0 && (
-                      <Tip content="คาบตรงวันหยุดที่ยังไม่กำหนดวันชดเชย"><div className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--ink-3)]">
-                        <CalendarX2 size={11} /> ชดเชย {r.unresolved_makeups} คาบ
+                      <Tip content={t("คาบตรงวันหยุดที่ยังไม่กำหนดวันชดเชย")}><div className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--ink-3)]">
+                        <CalendarX2 size={11} /> {t("ชดเชย {n} คาบ", { n: r.unresolved_makeups })}
                       </div></Tip>
                     )}
                   </td>
@@ -218,7 +220,7 @@ export default function CourseExplorer({
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="py-10 text-center text-sm text-[var(--ink-3)]">ไม่พบรายวิชาที่ตรงเงื่อนไข</td></tr>
+              <tr><td colSpan={9} className="py-10 text-center text-sm text-[var(--ink-3)]">{t("ไม่พบรายวิชาที่ตรงเงื่อนไข")}</td></tr>
             )}
           </tbody>
         </table>
@@ -227,7 +229,7 @@ export default function CourseExplorer({
         <div className="mt-3 text-center">
           <button type="button" onClick={() => setLimit(l => l + PAGE * 2)}
                   className="rounded-lg border border-[var(--border)] px-4 py-1.5 text-sm text-[var(--ink-2)] hover:bg-slate-50">
-            แสดงเพิ่ม ({filtered.length - limit} วิชา)
+            {t("แสดงเพิ่ม ({n} วิชา)", { n: filtered.length - limit })}
           </button>
         </div>
       )}

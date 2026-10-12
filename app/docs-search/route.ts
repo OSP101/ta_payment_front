@@ -4,6 +4,7 @@ import { search } from "../lib/docs/search";
 import { searchablePagesFor, isAudience } from "../lib/docs/index";
 import { defaultAudience, canViewAudience } from "../lib/docs/audience";
 import { findPage, toMeta } from "../../content/docs/registry";
+import { getT } from "../lib/i18n/server";
 
 const MAX_QUERY = 200;
 
@@ -12,7 +13,8 @@ const MAX_QUERY = 200;
  * signed-in reader may open. Runs here, not in the browser, because it needs
  * every page's text and that text must not ship to the client. `audience` +
  * `slug` name the page the search was opened from, so results in its
- * section rank first.
+ * section rank first. Searches the manual in the reader's language and
+ * returns titles and match labels in it.
  */
 export async function GET(req: NextRequest) {
   const noStore = { "Cache-Control": "private, no-store" };
@@ -25,11 +27,12 @@ export async function GET(req: NextRequest) {
   const viewing = isAudience(rawAudience) && rawAudience !== "common" && canViewAudience(me, rawAudience)
     ? rawAudience
     : defaultAudience(me);
+  const { t, locale } = await getT();
   const slug = params.get("slug");
-  const currentSection = slug ? findPage(viewing, slug)?.section : undefined;
+  const currentSection = slug ? findPage(viewing, slug, locale)?.section : undefined;
 
-  const results = search(searchablePagesFor(me), q, { currentSection })
+  const results = search(searchablePagesFor(me, locale), q, { currentSection, locale })
     .slice(0, 12)
-    .map((r) => ({ page: toMeta(r.page, viewing), matchedIn: r.matchedIn }));
+    .map((r) => ({ page: toMeta(r.page, viewing, locale), matchedIn: r.matchedIn.map((m) => t(m)) }));
   return NextResponse.json(results, { headers: noStore });
 }

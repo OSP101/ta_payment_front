@@ -21,6 +21,7 @@ import { useMemo } from "react";
 import type { TermAnalytics } from "../types";
 import { baht, money, thMonth, thDate } from "./analysis";
 import { useTip, useWidth, niceMax } from "./charts";
+import { useI18n } from "../../lib/i18n/client";
 
 const DAY = 86_400_000;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -32,7 +33,8 @@ const nextMonth = (ym: string) => {
 };
 
 export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnalytics }) {
-  const t = useTip();
+  const tip = useTip();
+  const { t, monthName, intl, year } = useI18n();
   const { ref: box, w: W } = useWidth<HTMLDivElement>();
   const months = useMemo(() => a.monthly ?? [], [a.monthly]);
   const undated = a.budget_lump_undated ?? 0;
@@ -77,7 +79,7 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
   }, [a.starts_on, a.ends_on, months, undated, today.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!g || (months.length === 0 && base <= 0)) {
-    return <div className="py-10 text-center text-sm text-[var(--ink-3)]">ยังไม่มีการเบิกจ่ายในภาคเรียนนี้</div>;
+    return <div className="py-10 text-center text-sm text-[var(--ink-3)]">{t("ยังไม่มีการเบิกจ่ายในภาคเรียนนี้")}</div>;
   }
 
   const narrow = W < 480;
@@ -105,9 +107,9 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
 
   return (
     <div ref={box}>
-      <div ref={t.ref} className="relative">
+      <div ref={tip.ref} className="relative">
         <svg width={W} height={H} className="block max-w-full" role="img"
-             aria-label={`ยอดเบิกจ่ายสะสม ${money(g.total)} จากงบรวม ${money(base)} รายเดือน: ${g.bands.filter(bd => bd.baht > 0).map(bd => `${thMonth(bd.ym)} ${money(bd.baht)}`).join(", ")}`}>
+             aria-label={t("ยอดเบิกจ่ายสะสม {total} จากงบรวม {base} รายเดือน: {months}", { total: money(g.total, t), base: money(base, t), months: g.bands.filter(bd => bd.baht > 0).map(bd => `${thMonth(bd.ym, monthName)} ${money(bd.baht, t)}`).join(", ") })}>
           <defs>
             <pattern id="mc-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <rect width="6" height="6" fill="#0776BC" fillOpacity="0.18" />
@@ -117,7 +119,7 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
 
           {/* ---- top panel: running total vs reference ---- */}
           <text x={L} y={12} fontSize="12" fontWeight={600} fill="var(--ink-2,#334155)"
-                display={showToday && x(today) < L + 150 ? "none" : undefined}>ยอดสะสม (บาท)</text>
+                display={showToday && x(today) < L + 150 ? "none" : undefined}>{t("ยอดสะสม (บาท)")}</text>
           {[0, 0.5, 1].map(f => (
             <g key={f}>
               <line x1={L} x2={W - R} y1={y1(y1Max * f)} y2={y1(y1Max * f)} stroke="var(--hairline,#eef0f3)" />
@@ -134,7 +136,7 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
               <line x1={L} x2={W - R} y1={y1(base)} y2={y1(base)} stroke="#b91c1c" strokeWidth="1.5" />
               {/* Above the line, unless that would collide with the panel title
                   at the top — then just below it. */}
-              <text x={L + 4} y={y1(base) - 5 < 30 ? y1(base) + 15 : y1(base) - 5} fontSize="12" fill="#b91c1c">งบรวม {money(base)}</text>
+              <text x={L + 4} y={y1(base) - 5 < 30 ? y1(base) + 15 : y1(base) - 5} fontSize="12" fill="var(--tone-danger-ink)">{t("งบรวม {amount}", { amount: money(base, t) })}</text>
             </g>
           )}
           {pace && (
@@ -148,20 +150,20 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
             <line x1={x(last.d)} x2={x(last.d)} y1={y1(last.v)} y2={y1(g.total)} stroke="#6366f1" strokeWidth="2.5" />
           )}
           {g.cum.slice(1).map(p => (
-            <circle key={p.ym} cx={x(p.d)} cy={y1(p.v)} r="3.5" fill="#15803d" stroke="white" strokeWidth="1.5"
-                    onMouseMove={e => t.show(e, <><b>สะสมถึง{thMonth(p.ym)}</b><div className="tabular-nums">{money(p.v)}</div></>)}
-                    onMouseLeave={t.hide} />
+            <circle key={p.ym} cx={x(p.d)} cy={y1(p.v)} r="3.5" fill="#15803d" stroke="var(--panel-bg)" strokeWidth="1.5"
+                    onMouseMove={e => tip.show(e, <><b>{t("สะสมถึง{month}", { month: thMonth(p.ym, monthName) })}</b><div className="tabular-nums">{money(p.v, t)}</div></>)}
+                    onMouseLeave={tip.hide} />
           ))}
-          <circle cx={x(last.d)} cy={y1(g.total)} r="5" fill="#15803d" stroke="white" strokeWidth="2"
-                  onMouseMove={e => t.show(e, <>
-                    <b>เบิกจ่ายแล้ว {money(g.total)}</b>
-                    {undated > 0 && <div>รวมเหมาจ่ายยังไม่ระบุเดือน {money(undated)}</div>}
-                    {paceToday != null && <div className="text-[var(--ink-3)]">เส้นอ้างอิง ณ วันนี้ {money(paceToday)}</div>}
+          <circle cx={x(last.d)} cy={y1(g.total)} r="5" fill="#15803d" stroke="var(--panel-bg)" strokeWidth="2"
+                  onMouseMove={e => tip.show(e, <>
+                    <b>{t("เบิกจ่ายแล้ว {amount}", { amount: money(g.total, t) })}</b>
+                    {undated > 0 && <div>{t("รวมเหมาจ่ายยังไม่ระบุเดือน {amount}", { amount: money(undated, t) })}</div>}
+                    {paceToday != null && <div className="text-[var(--ink-3)]">{t("เส้นอ้างอิง ณ วันนี้ {amount}", { amount: money(paceToday, t) })}</div>}
                   </>)}
-                  onMouseLeave={t.hide} />
-          <text x={Math.min(x(last.d) + 8, W - R)} y={y1(g.total) - 9} fontSize="12" fontWeight={600} fill="#15803d"
+                  onMouseLeave={tip.hide} />
+          <text x={Math.min(x(last.d) + 8, W - R)} y={y1(g.total) - 9} fontSize="12" fontWeight={600} fill="var(--tone-good-ink)"
                 textAnchor={x(last.d) + 120 > W - R ? "end" : "start"} className="tabular-nums">
-            {money(g.total)}
+            {money(g.total, t)}
           </text>
 
           {/* ---- today ---- */}
@@ -169,12 +171,12 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
             <g>
               <line x1={x(today)} x2={x(today)} y1={17} y2={T2 + H2} stroke="var(--ink-1,#0f172a)" strokeWidth="1" strokeDasharray="2 3" />
               <text x={x(today)} y={12} fontSize="12" fill="var(--ink-1,#0f172a)"
-                    textAnchor={x(today) > W - R - 60 ? "end" : x(today) < L + 150 ? "start" : "middle"}>วันนี้ {thDate(iso(today))}</text>
+                    textAnchor={x(today) > W - R - 60 ? "end" : x(today) < L + 150 ? "start" : "middle"}>{t("วันนี้ {date}", { date: thDate(iso(today), intl) })}</text>
             </g>
           )}
 
           {/* ---- bottom panel: each month ---- */}
-          <text x={L} y={T2 - 12} fontSize="12" fontWeight={600} fill="var(--ink-2,#334155)">ยอดต่อเดือน (บาท)</text>
+          <text x={L} y={T2 - 12} fontSize="12" fontWeight={600} fill="var(--ink-2,#334155)">{t("ยอดต่อเดือน (บาท)")}</text>
           <line x1={L} x2={W - R} y1={y2(0)} y2={y2(0)} stroke="var(--border-strong,#d1d5db)" />
           <text x={L - 6} y={y2(y2Max) + 4} fontSize="12" textAnchor="end" fill="var(--ink-3,#64748b)" className="tabular-nums">{baht(y2Max)}</text>
           <text x={L - 6} y={y2(0) + 4} fontSize="12" textAnchor="end" fill="var(--ink-3,#64748b)">0</text>
@@ -185,13 +187,13 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
             const hollow = bd.current;
             return (
               <g key={bd.ym}
-                 onMouseMove={e => t.show(e, <>
-                   <b>{thMonth(bd.ym)} {String(Number(bd.ym.slice(0, 4)) + 543).slice(2)}{hollow ? " (ถึงวันนี้)" : ""}</b>
-                   <div className="tabular-nums">รายชั่วโมง {money(hourly)}</div>
-                   {bd.lump > 0 && <div className="tabular-nums">เหมาจ่ายบัณฑิต {money(bd.lump)}</div>}
-                   <div className="tabular-nums font-medium">รวม {money(bd.baht)}</div>
+                 onMouseMove={e => tip.show(e, <>
+                   <b>{thMonth(bd.ym, monthName)} {String(year(Number(bd.ym.slice(0, 4)))).slice(2)}{hollow ? " " + t("(ถึงวันนี้)") : ""}</b>
+                   <div className="tabular-nums">{t("รายชั่วโมง {amount}", { amount: money(hourly, t) })}</div>
+                   {bd.lump > 0 && <div className="tabular-nums">{t("เหมาจ่ายบัณฑิต {amount}", { amount: money(bd.lump, t) })}</div>}
+                   <div className="tabular-nums font-medium">{t("รวม {amount}", { amount: money(bd.baht, t) })}</div>
                  </>)}
-                 onMouseLeave={t.hide}>
+                 onMouseLeave={tip.hide}>
                 <rect x={x(bd.s)} y={T2} width={Math.max(0, x(bd.e) - x(bd.s))} height={H2} fill="transparent" />
                 {bd.baht > 0 && (
                   <>
@@ -203,42 +205,42 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
                     )}
                     {bandLabels && (
                       <text x={cx} y={y2(bd.baht) - 5} fontSize="12" textAnchor="middle" fill="var(--ink-2,#334155)" className="tabular-nums">
-                        {money(bd.baht)}
+                        {money(bd.baht, t)}
                       </text>
                     )}
                   </>
                 )}
                 <text x={cx} y={T2 + H2 + 18} fontSize="12" textAnchor="middle" fill={hollow ? "var(--ink-1,#0f172a)" : "var(--ink-3,#64748b)"}
                       fontWeight={hollow ? 600 : 400}>
-                  {thMonth(bd.ym)}
+                  {thMonth(bd.ym, monthName)}
                 </text>
                 {hollow && (
-                  <text x={cx} y={T2 + H2 + 34} fontSize="12" textAnchor="middle" fill="var(--ink-1,#0f172a)">ถึงวันนี้</text>
+                  <text x={cx} y={T2 + H2 + 34} fontSize="12" textAnchor="middle" fill="var(--ink-1,#0f172a)">{t("ถึงวันนี้")}</text>
                 )}
               </g>
             );
           })}
         </svg>
-        {t.node}
+        {tip.node}
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--ink-3)]">
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-[#15803d]" />ยอดสะสม</span>
-        {pace && <span className="inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t-2 border-dashed border-[var(--ink-3)]" />เส้นอ้างอิง: ถ้าใช้เท่ากันทุกเดือน (ไม่ใช่เป้าหมาย)</span>}
-        {base > 0 && <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-[#b91c1c]" />งบรวม</span>}
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block size-3 rounded-sm bg-[#0776BC]" />รายชั่วโมง</span>
-        {a.budget_lump > 0 && <span className="inline-flex items-center gap-1.5"><i className="inline-block size-3 rounded-sm bg-[#6366f1]" />เหมาจ่ายบัณฑิต ภาคพิเศษ</span>}
+        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-[#15803d]" />{t("ยอดสะสม")}</span>
+        {pace && <span className="inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t-2 border-dashed border-[var(--ink-3)]" />{t("เส้นอ้างอิง: ถ้าใช้เท่ากันทุกเดือน (ไม่ใช่เป้าหมาย)")}</span>}
+        {base > 0 && <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-[#b91c1c]" />{t("งบรวม")}</span>}
+        <span className="inline-flex items-center gap-1.5"><i className="inline-block size-3 rounded-sm bg-[#0776BC]" />{t("รายชั่วโมง")}</span>
+        {a.budget_lump > 0 && <span className="inline-flex items-center gap-1.5"><i className="inline-block size-3 rounded-sm bg-[#6366f1]" />{t("เหมาจ่ายบัณฑิต ภาคพิเศษ")}</span>}
         {g.bands.some(bd => bd.current && bd.baht > 0) && (
           <span className="inline-flex items-center gap-1.5">
-            <i className="inline-block size-3 rounded-sm border border-dashed border-[#0776BC] bg-[#0776BC]/20" />เดือนปัจจุบัน ยังไม่จบเดือน
+            <i className="inline-block size-3 rounded-sm border border-dashed border-[#0776BC] bg-[#0776BC]/20" />{t("เดือนปัจจุบัน ยังไม่จบเดือน")}
           </span>
         )}
       </div>
       {undated > 0 && (
-        <p className="mt-1 text-xs text-[var(--ink-3)]">รวมเหมาจ่ายบัณฑิตที่ยังไม่ระบุเดือน {money(undated)} ไว้ที่ปลายเส้นสะสม</p>
+        <p className="mt-1 text-xs text-[var(--ink-3)]">{t("รวมเหมาจ่ายบัณฑิตที่ยังไม่ระบุเดือน {amount} ไว้ที่ปลายเส้นสะสม", { amount: money(undated, t) })}</p>
       )}
       {b && (b.monthly ?? []).length > 0 && (
         <p className="mt-1 text-xs text-[var(--ink-2)]">
-          ภาคเรียน {b.term_label} เบิกรวม {money(b.budget_used)} ส่วนภาคเรียนนี้ {money(a.budget_used)}
+          {t("ภาคเรียน {term} เบิกรวม {other} ส่วนภาคเรียนนี้ {current}", { term: b.term_label, other: money(b.budget_used, t), current: money(a.budget_used, t) })}
         </p>
       )}
     </div>

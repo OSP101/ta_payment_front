@@ -16,6 +16,7 @@ import { Skel } from "../../components/Skeletons";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 import { budgetConfirmMessage } from "./budgetConfirm";
 import BudgetCapNotice from "../../components/BudgetCapNotice";
+import { useI18n, type TFn } from "../../lib/i18n/client";
 
 // Both modals are heavy (forms, section-schedule editors, autocompletes) but
 // only one person in ten ever opens them in a given visit — code-split them
@@ -72,6 +73,7 @@ export default function TeachingPage() {
   // Term comes from the shell's switcher — see TermContext. This page used to
   // default to terms[0] ("the newest term that exists"), which is not the same
   // thing as the active term the dashboard showed.
+  const { t } = useI18n();
   const { terms, termId, term, loaded } = useTerm();
 
   // Gate: the whole teaching flow depends on at least one academic term existing.
@@ -105,25 +107,25 @@ export default function TeachingPage() {
   return (
     <div>
       <PageHeader
-        title="วิชาที่เปิดสอน"
-        description="จัดการรายวิชาที่เปิดสอนในแต่ละภาคการศึกษา"
+        title={t("วิชาที่เปิดสอน")}
+        description={t("จัดการรายวิชาที่เปิดสอนในแต่ละภาคการศึกษา")}
         actions={
           noTerms ? null : (
             <>
               <span data-tour="teaching-import" className="inline-flex">
                 <Button variant="secondary" disabled={!termId} onClick={() => setImporting(true)}>
-                  <FileSpreadsheet size={16} /> นำเข้า Excel
+                  <FileSpreadsheet size={16} /> {t("นำเข้า Excel")}
                 </Button>
               </span>
               <Button variant="secondary" disabled={!termId} onClick={() => setBulkCountsOpen(true)}>
-                <ClipboardPaste size={16} /> อัปเดตจำนวนนักศึกษา
+                <ClipboardPaste size={16} /> {t("อัปเดตจำนวนนักศึกษา")}
               </Button>
               <Button variant="tertiary" disabled={!termId} onClick={() => setImportHistoryOpen(true)}>
-                <History size={16} /> ประวัติการนำเข้า
+                <History size={16} /> {t("ประวัติการนำเข้า")}
               </Button>
               <span data-tour="teaching-open" className="inline-flex">
                 <Button variant="primary" disabled={!termId} onClick={() => setCreating(true)}>
-                  <BookPlus size={16} /> เปิดรายวิชา
+                  <BookPlus size={16} /> {t("เปิดรายวิชา")}
                 </Button>
               </span>
             </>
@@ -134,12 +136,12 @@ export default function TeachingPage() {
       {noTerms ? (
         <EmptyState
           icon={<CalendarPlus size={28} />}
-          title="ยังไม่ได้สร้างปีการศึกษา / ภาคเรียน"
-          description="ก่อนกำหนดวิชาที่เปิดสอน ต้องสร้างปีการศึกษาและภาคเรียนอย่างน้อย 1 รายการก่อน จึงจะเลือกได้ว่าวิชาที่เปิดสอนอยู่ในปีไหน ภาคไหน"
+          title={t("ยังไม่ได้สร้างปีการศึกษา / ภาคเรียน")}
+          description={t("ก่อนกำหนดวิชาที่เปิดสอน ต้องสร้างปีการศึกษาและภาคเรียนอย่างน้อย 1 รายการก่อน จึงจะเลือกได้ว่าวิชาที่เปิดสอนอยู่ในปีไหน ภาคไหน")}
           action={
             <Link href="/staff/settings?tab=terms">
               <Button variant="primary">
-                <CalendarPlus size={16} /> สร้างปีการศึกษา / ภาคเรียน
+                <CalendarPlus size={16} /> {t("สร้างปีการศึกษา / ภาคเรียน")}
               </Button>
             </Link>
           }
@@ -155,9 +157,9 @@ export default function TeachingPage() {
               student count (the budget depends on it, and export is blocked
               without it). One click filters the list down to the offenders. */}
           {missingCourses.length > 0 && (
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-950/30 px-3 py-2 text-sm">
-              <span className="text-amber-800 dark:text-amber-200">
-                มี <b>{missingCourses.length}</b> วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา ต้องกรอกก่อนจึงจะส่งออกได้
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm">
+              <span className="text-amber-800">
+                {t.rich("มี {n} วิชาที่ยังไม่ได้กรอกจำนวนนักศึกษา ต้องกรอกก่อนจึงจะส่งออกได้", { n: <b>{missingCourses.length}</b> })}
               </span>
               <Button
                 variant={onlyMissing ? "primary" : "secondary"}
@@ -165,7 +167,7 @@ export default function TeachingPage() {
                 className="ms-auto"
                 onClick={() => { setOnlyMissing(v => !v); setOnlyWba(false); }}
               >
-                {onlyMissing ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่กรอก"}
+                {onlyMissing ? t("แสดงทั้งหมด") : t("แสดงเฉพาะที่ยังไม่กรอก")}
               </Button>
             </div>
           )}
@@ -173,9 +175,9 @@ export default function TeachingPage() {
               courses — the lecturer (or staff on their behalf) must fill the
               section schedules in, otherwise TA requests are blocked. */}
           {wbaCourses.length > 0 && (
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30 px-3 py-2 text-sm">
-              <span className="text-red-800 dark:text-red-200">
-                มี <b>{wbaCourses.length}</b> วิชาที่ยังไม่ระบุเวลาเรียน (WBA) อาจารย์หรือเจ้าหน้าที่ต้องกรอกตารางเรียนก่อน จึงจะส่งคำขอ TA ได้
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-300 bg-red-50/60 px-3 py-2 text-sm">
+              <span className="text-red-800">
+                {t.rich("มี {n} วิชาที่ยังไม่ระบุเวลาเรียน (WBA) อาจารย์หรือเจ้าหน้าที่ต้องกรอกตารางเรียนก่อน จึงจะส่งคำขอ TA ได้", { n: <b>{wbaCourses.length}</b> })}
               </span>
               <Button
                 variant={onlyWba ? "primary" : "secondary"}
@@ -183,29 +185,29 @@ export default function TeachingPage() {
                 className="ms-auto"
                 onClick={() => { setOnlyWba(v => !v); setOnlyMissing(false); }}
               >
-                {onlyWba ? "แสดงทั้งหมด" : "แสดงเฉพาะที่ยังไม่มีตาราง"}
+                {onlyWba ? t("แสดงทั้งหมด") : t("แสดงเฉพาะที่ยังไม่มีตาราง")}
               </Button>
             </div>
           )}
           <div data-tour="teaching-table">
             <DataTable
-              ariaLabel="วิชาที่เปิดสอน"
+              ariaLabel={t("วิชาที่เปิดสอน")}
               rows={shownCourses}
               // Also covers the moment before the term itself resolves (key is
               // still null) — otherwise the table briefly says "ยังไม่มีวิชา".
               loading={(!courses && !noTerms) || coursesLoading}
               rowKey={c => c.id}
               searchFn={c => `${courseCodeLabel(c)} ${c.name_th}`}
-              searchPlaceholder="ค้นหารหัสวิชา / ชื่อวิชา…"
-              filters={makeCourseFilters(courses ?? [])}
+              searchPlaceholder={t("ค้นหารหัสวิชา / ชื่อวิชา…")}
+              filters={makeCourseFilters(courses ?? [], t)}
               initialSort={{ column: "code", direction: "ascending" }}
               pageSize={10}
-              emptyTitle="ยังไม่มีวิชาในภาคเรียนนี้"
-              emptyDescription="กดปุ่ม “เปิดรายวิชา” เพื่อสร้างวิชาใหม่"
+              emptyTitle={t("ยังไม่มีวิชาในภาคเรียนนี้")}
+              emptyDescription={t("กดปุ่ม “เปิดรายวิชา” เพื่อสร้างวิชาใหม่")}
               // 8 คอลัมน์ — ถ้าไม่กันความกว้างขั้นต่ำไว้ ชื่อวิชาจะถูกบีบจนตัดเป็น
               // 3 บรรทัด อ่านยาก สู้ให้เลื่อนตารางแนวนอนแทน
               minWidth="1080px"
-              columns={makeCourseColumns(setEditStudents, term ? { year: term.academic_year, semester: term.semester } : undefined)}
+              columns={makeCourseColumns(setEditStudents, t, term ? { year: term.academic_year, semester: term.semester } : undefined)}
             />
           </div>
         </div>
@@ -257,18 +259,18 @@ function lecturerList(c: TC): string[] {
 
 // Filters beside the search box. The lecturer options come from the courses
 // in this term, so the list never offers a name that matches nothing.
-function makeCourseFilters(courses: TC[]): DataFilter<TC>[] {
+function makeCourseFilters(courses: TC[], t: TFn): DataFilter<TC>[] {
   const lecturers = [...new Set(courses.flatMap(lecturerList))]
     .sort((a, b) => a.localeCompare(b, "th"));
   return [
     {
       id: "students",
-      placeholder: "จำนวนนักศึกษาทั้งหมด",
+      placeholder: t("จำนวนนักศึกษาทั้งหมด"),
       options: [
-        { id: "", label: "จำนวนนักศึกษาทั้งหมด" },
-        { id: "missing", label: "ยังไม่กรอก (-)" },
-        { id: "zero", label: "ไม่มีนักศึกษา (0 คน)" },
-        { id: "filled", label: "กรอกแล้ว" },
+        { id: "", label: t("จำนวนนักศึกษาทั้งหมด") },
+        { id: "missing", label: t("ยังไม่กรอก (-)") },
+        { id: "zero", label: t("ไม่มีนักศึกษา (0 คน)") },
+        { id: "filled", label: t("กรอกแล้ว") },
       ],
       predicate: (c, v) => {
         const missing = needsStudentCount(c);
@@ -279,11 +281,11 @@ function makeCourseFilters(courses: TC[]): DataFilter<TC>[] {
     },
     {
       id: "schedule",
-      placeholder: "ตารางเรียนทั้งหมด",
+      placeholder: t("ตารางเรียนทั้งหมด"),
       options: [
-        { id: "", label: "ตารางเรียนทั้งหมด" },
-        { id: "wba", label: "ยังไม่มีตาราง (WBA)" },
-        { id: "ok", label: "มีตารางครบ" },
+        { id: "", label: t("ตารางเรียนทั้งหมด") },
+        { id: "wba", label: t("ยังไม่มีตาราง (WBA)") },
+        { id: "ok", label: t("มีตารางครบ") },
       ],
       predicate: (c, v) => (v === "wba" ? c.has_missing_schedule : !c.has_missing_schedule),
     },
@@ -292,14 +294,14 @@ function makeCourseFilters(courses: TC[]): DataFilter<TC>[] {
       // the dashboard's งบรวม counts. A draft the lecturer never sent is not a
       // request yet, so it gets its own option instead of hiding under either.
       id: "ta_request",
-      placeholder: "คำขอ TA ทั้งหมด",
+      placeholder: t("คำขอ TA ทั้งหมด"),
       options: [
-        { id: "", label: "คำขอ TA ทั้งหมด" },
-        { id: "requested", label: "ขอ TA แล้ว" },
-        { id: "approved", label: "อนุมัติแล้ว" },
-        { id: "submitted", label: "รออนุมัติ" },
-        { id: "draft", label: "ร่างไว้ ยังไม่ส่ง" },
-        { id: "none", label: "ยังไม่ขอ TA" },
+        { id: "", label: t("คำขอ TA ทั้งหมด") },
+        { id: "requested", label: t("ขอ TA แล้ว") },
+        { id: "approved", label: t("อนุมัติแล้ว") },
+        { id: "submitted", label: t("รออนุมัติ") },
+        { id: "draft", label: t("ร่างไว้ ยังไม่ส่ง") },
+        { id: "none", label: t("ยังไม่ขอ TA") },
       ],
       predicate: (c, v) => {
         const st = c.ta_request_state ?? "none";
@@ -309,9 +311,9 @@ function makeCourseFilters(courses: TC[]): DataFilter<TC>[] {
     },
     {
       id: "lecturer",
-      placeholder: "อาจารย์ทุกคน",
+      placeholder: t("อาจารย์ทุกคน"),
       options: [
-        { id: "", label: "อาจารย์ทุกคน" },
+        { id: "", label: t("อาจารย์ทุกคน") },
         ...lecturers.map(n => ({ id: n, label: n })),
       ],
       predicate: (c, v) => lecturerList(c).includes(v),
@@ -323,17 +325,17 @@ function makeCourseFilters(courses: TC[]): DataFilter<TC>[] {
 // Column factory — the students column needs the page's "open edit modal"
 // callback, so the columns are built per render instead of as a module const.
 function makeCourseColumns(
-  onEditStudents: (c: TC) => void, reg?: { year: number; semester: number },
+  onEditStudents: (c: TC) => void, t: TFn, reg?: { year: number; semester: number },
 ): DataColumn<TC>[] {
   return [
     {
-      id: "code", width: 160, label: "รหัสวิชา", sortable: true, isRowHeader: true,
+      id: "code", width: 160, label: t("รหัสวิชา"), sortable: true, isRowHeader: true,
       sortValue: c => c.code,
       className: "font-medium tabular-nums whitespace-nowrap",
       render: c => <CourseCode c={c} reg={reg} copyable />,
     },
     {
-      id: "name", width: 320, label: "ชื่อวิชา", sortable: true,
+      id: "name", width: 320, label: t("ชื่อวิชา"), sortable: true,
       sortValue: c => c.name_th,
       // ชื่อวิชาเป็นคอลัมน์ยืดหยุ่นตัวเดียว ถ้าปล่อยให้ตัดบรรทัดจะโดนบีบเหลือ
       // 3-4 บรรทัดจนอ่านยาก — ให้เลื่อนตารางแนวนอนแทนการตัดคำ
@@ -343,64 +345,67 @@ function makeCourseColumns(
           {c.name_th}
           {c.exported_at && (
             <Chip tone="success">
-              <span className="inline-flex items-center gap-1"><CheckCircle2 size={11} /> ส่งออกแล้ว</span>
+              <span className="inline-flex items-center gap-1"><CheckCircle2 size={11} /> {t("ส่งออกแล้ว")}</span>
             </Chip>
           )}
           {c.has_missing_schedule && (
             <Chip tone="warn">
-              <span className="inline-flex items-center gap-1"><CalendarOff size={11} /> ยังไม่ระบุเวลาเรียน</span>
+              <span className="inline-flex items-center gap-1"><CalendarOff size={11} /> {t("ยังไม่ระบุเวลาเรียน")}</span>
             </Chip>
           )}
           {/* คำขอ TA ของวิชา — same states as the "คำขอ TA" filter. */}
-          {c.ta_request_state === "approved" && <Chip tone="info">ขอ TA แล้ว · อนุมัติ</Chip>}
-          {c.ta_request_state === "submitted" && <Chip tone="warn">ขอ TA แล้ว · รออนุมัติ</Chip>}
+          {c.ta_request_state === "approved" && <Chip tone="info">{t("ขอ TA แล้ว · อนุมัติ")}</Chip>}
+          {c.ta_request_state === "submitted" && <Chip tone="warn">{t("ขอ TA แล้ว · รออนุมัติ")}</Chip>}
           {c.ta_request_state === "draft" && (
-            <Tip content="อาจารย์บันทึกร่างคำขอไว้ แต่ยังไม่ได้ส่ง">
-              <span className="inline-flex"><Chip tone="neutral">ร่างคำขอ TA</Chip></span>
+            <Tip content={t("อาจารย์บันทึกร่างคำขอไว้ แต่ยังไม่ได้ส่ง")}>
+              <span className="inline-flex"><Chip tone="neutral">{t("ร่างคำขอ TA")}</Chip></span>
             </Tip>
           )}
         </span>
       ),
     },
     {
-      id: "credits", width: 100, label: "หน่วยกิต", sortable: true,
+      id: "credits", width: 100, label: t("หน่วยกิต"), sortable: true,
       sortValue: c => c.credits,
       className: "tabular-nums whitespace-nowrap",
       render: c => `${c.credits} (${c.lecture_hrs}-${c.lab_hrs}-${c.self_hrs})`,
     },
     {
-      id: "lecturers", width: 200, label: "อาจารย์ผู้สอน",
+      id: "lecturers", width: 200, label: t("อาจารย์ผู้สอน"),
       render: c => c.lecturer_names ? (
         <Tip content={c.lecturer_names}><span className="block max-w-[180px] truncate">
           {c.lecturer_names}
         </span></Tip>
       ) : (
-        <span className="text-warning text-xs">ยังไม่ผูกอาจารย์</span>
+        <span className="text-warning text-xs">{t("ยังไม่ผูกอาจารย์")}</span>
       ),
     },
     {
-      id: "sections", width: 130, label: "Sec (ปกติ / พิเศษ)",
+      id: "sections", width: 130, label: t("Sec (ปกติ / พิเศษ)"),
       className: "tabular-nums whitespace-nowrap",
       // แสดง "x / y" เสมอ แม้ฝั่งใดเป็น 0 — ทุกแถวอ่านด้วยรูปแบบเดียวกัน
       render: c => (
-        <Tip content={`ภาคปกติ ${c.num_sections_regular} sec · ภาคพิเศษ ${c.num_sections_special} sec`}><span>
+        <Tip content={t("ภาคปกติ {reg} sec · ภาคพิเศษ {spc} sec", { reg: c.num_sections_regular, spc: c.num_sections_special })}><span>
           {c.num_sections_regular} / {c.num_sections_special}
         </span></Tip>
       ),
     },
     {
-      id: "students", width: 170, label: "นักศึกษา (ปกติ / พิเศษ)",
+      id: "students", width: 170, label: t("นักศึกษา (ปกติ / พิเศษ)"),
       render: c => {
         const missing = needsStudentCount(c);
         return (
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <Users size={13} className="text-muted shrink-0" />
-            <Tip content={`ภาคปกติ ${c.num_students_regular_entered ? `${c.num_students_regular} คน` : "ยังไม่กรอก"} · ภาคพิเศษ ${c.num_students_special_entered ? `${c.num_students_special} คน` : "ยังไม่กรอก"}`}><span className="tabular-nums">
+            <Tip content={t("ภาคปกติ {reg} · ภาคพิเศษ {spc}", {
+              reg: c.num_students_regular_entered ? t("{n} คน", { n: c.num_students_regular }) : t("ยังไม่กรอก"),
+              spc: c.num_students_special_entered ? t("{n} คน", { n: c.num_students_special }) : t("ยังไม่กรอก"),
+            })}><span className="tabular-nums">
               {studentCountLabel(c.num_students_regular, c.num_students_regular_entered)} / {studentCountLabel(c.num_students_special, c.num_students_special_entered)}
             </span></Tip>
-            {missing && <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">ยังไม่กรอก</span>}
+            {missing && <span className="text-[11px] text-amber-600 font-medium">{t("ยังไม่กรอก")}</span>}
             <IconButton
-              label={`แก้ไขจำนวนนักศึกษา ${courseCodeLabel(c)}`}
+              label={t("แก้ไขจำนวนนักศึกษา {code}", { code: courseCodeLabel(c) })}
               variant="ghost" size="sm"
               onClick={() => onEditStudents(c)}
             >
@@ -411,18 +416,18 @@ function makeCourseColumns(
       },
     },
     {
-      id: "budget", width: 210, label: "งบประมาณ (ใช้ไป / ทั้งหมด)",
+      id: "budget", width: 210, label: t("งบประมาณ (ใช้ไป / ทั้งหมด)"),
       render: c => <BudgetBadge course={c} />,
     },
     {
-      id: "actions", width: 120, label: <span className="sr-only">การจัดการ</span>,
+      id: "actions", width: 120, label: <span className="sr-only">{t("การจัดการ")}</span>,
       className: "text-right",
       render: c => (
         <div className="inline-flex items-center gap-1 whitespace-nowrap">
           {/* Settings: this course's own staff-side page (sections, schedule,
               curriculum, lecturers) — stays in this tab. */}
           <IconButton
-            label="ตั้งค่ารายวิชา"
+            label={t("ตั้งค่ารายวิชา")}
             variant="ghost"
             size="sm"
             render={props => (
@@ -444,7 +449,7 @@ function makeCourseColumns(
               never applied — it navigated in place. As a real anchor,
               middle-click and "open in new tab" work too. */}
           <IconButton
-            label="ไปหน้ารายวิชา (แท็บใหม่)"
+            label={t("ไปหน้ารายวิชา (แท็บใหม่)")}
             variant="ghost"
             size="sm"
             render={props => (
@@ -472,6 +477,7 @@ function makeCourseColumns(
 // The server refuses (with a clear reason) if the course has any TA / worklog /
 // export data, so no data is ever lost.
 function DeleteCourseButton({ course }: { course: TC }) {
+  const { t } = useI18n();
   const [confirm, setConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -480,7 +486,7 @@ function DeleteCourseButton({ course }: { course: TC }) {
     try {
       await api.del(`/teaching-courses/${course.id}`);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
-      toast.success("ลบรายวิชาแล้ว", { description: `${course.code} ${course.name_th}` });
+      toast.success(t("ลบรายวิชาแล้ว"), { description: `${course.code} ${course.name_th}` });
       setConfirm(false);
     } catch (e) {
       notify.error(e); // backend returns a clear Thai reason when it has data
@@ -493,7 +499,7 @@ function DeleteCourseButton({ course }: { course: TC }) {
   return (
     <>
       <IconButton
-        label={`ลบรายวิชา ${course.code}`}
+        label={t("ลบรายวิชา {code}", { code: course.code })}
         variant="ghost"
         size="sm"
         className="text-danger hover:bg-danger/10"
@@ -509,17 +515,18 @@ function DeleteCourseButton({ course }: { course: TC }) {
         isPending={deleting}
         danger
         icon={<Trash2 size={20} />}
-        title="ยืนยันการลบรายวิชา"
-        confirmLabel="ลบรายวิชา"
+        title={t("ยืนยันการลบรายวิชา")}
+        confirmLabel={t("ลบรายวิชา")}
         message={
           <p className="text-sm text-muted">
-            จะลบรายวิชา <b>{course.code} {course.name_th}</b> พร้อม section และตารางเวลาทั้งหมด
-            การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)
+            {t.rich("จะลบรายวิชา {course} พร้อม section และตารางเวลาทั้งหมด การกระทำนี้ย้อนกลับไม่ได้ (ระบบจะไม่ลบให้หากวิชานี้มี TA / บันทึกเวลา หรือถูกส่งออกแล้ว)", {
+              course: <b>{course.code} {course.name_th}</b>,
+            })}
           </p>
         }
         requireTyped={[
-          { label: "พิมพ์รหัสและชื่อวิชาเพื่อยืนยัน", expected: `${course.code} ${course.name_th}` },
-          { label: 'พิมพ์ "Delete this subject" เพื่อยืนยัน', expected: "Delete this subject" },
+          { label: t("พิมพ์รหัสและชื่อวิชาเพื่อยืนยัน"), expected: `${course.code} ${course.name_th}` },
+          { label: t('พิมพ์ "Delete this subject" เพื่อยืนยัน'), expected: "Delete this subject" },
         ]}
       />
     </>
@@ -532,6 +539,7 @@ function DeleteCourseButton({ course }: { course: TC }) {
 // StudentCountsModal — edit a course's enrolment in a dialog instead of inline
 // inputs; the table row only displays the numbers plus a pencil button.
 function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: () => void }) {
+  const { t } = useI18n();
   // Keep raw strings so an empty field isn't silently coerced to 0.
   const [reg, setReg] = useState("");
   const [spc, setSpc] = useState("");
@@ -571,7 +579,7 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
       if (confirm) body.confirm = true;
       await api.patch(`/teaching-courses/${course.id}/num-students`, body);
       await mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
-      toast.success("บันทึกจำนวนนักศึกษาแล้ว", { description: course.code });
+      toast.success(t("บันทึกจำนวนนักศึกษาแล้ว"), { description: course.code });
       setBudgetPrompt(null);
       onClose();
     } catch (e) {
@@ -579,7 +587,7 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
       // to its budget and save only on an explicit yes.
       const preview = budgetConfirmMessage(e);
       if (preview) setBudgetPrompt(preview);
-      else toast.danger("บันทึกไม่สำเร็จ", { description: errMessage(e) });
+      else toast.danger(t("บันทึกไม่สำเร็จ"), { description: errMessage(e) });
     } finally {
       setSaving(false);
     }
@@ -591,12 +599,12 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
       onClose={() => { if (!saving) onClose(); }}
       size="sm"
       icon={<Users size={18} />}
-      title={course ? `แก้ไขจำนวนนักศึกษา · ${courseCodeLabel(course)}` : ""}
+      title={course ? t("แก้ไขจำนวนนักศึกษา · {code}", { code: courseCodeLabel(course) }) : ""}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={() => save()} disabled={!dirty || invalid || saving} isPending={saving}>
-            <Save size={14} />บันทึก
+            <Save size={14} />{t("บันทึก")}
           </Button>
         </>
       }
@@ -605,9 +613,9 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
         open={budgetPrompt !== null}
         onClose={() => setBudgetPrompt(null)}
         onConfirm={() => save(true)}
-        title="ยืนยันการเปลี่ยนงบประมาณรายวิชา"
+        title={t("ยืนยันการเปลี่ยนงบประมาณรายวิชา")}
         message={<span className="whitespace-pre-line">{budgetPrompt}</span>}
-        confirmLabel="ยืนยันการเปลี่ยนงบ"
+        confirmLabel={t("ยืนยันการเปลี่ยนงบ")}
         danger
         isPending={saving}
         size="md"
@@ -617,8 +625,8 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
           <div className="text-xs text-muted">{course.name_th}</div>
           <div className="grid grid-cols-2 gap-3">
             <FieldGroup
-              label="ภาคปกติ"
-              error={regInvalid && reg.trim() !== "" ? "ต้องเป็นจำนวนเต็ม ≥ 0" : undefined}
+              label={t("ภาคปกติ")}
+              error={regInvalid && reg.trim() !== "" ? t("ต้องเป็นจำนวนเต็ม ≥ 0") : undefined}
             >
               <TextInput
                 type="number" min={0} step={1}
@@ -629,9 +637,9 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
               />
             </FieldGroup>
             <FieldGroup
-              label="ภาคพิเศษ"
-              hint={hasSpecial ? undefined : "วิชานี้ไม่มีโครงการพิเศษ"}
-              error={spcInvalid && spc.trim() !== "" ? "ต้องเป็นจำนวนเต็ม ≥ 0" : undefined}
+              label={t("ภาคพิเศษ")}
+              hint={hasSpecial ? undefined : t("วิชานี้ไม่มีโครงการพิเศษ")}
+              error={spcInvalid && spc.trim() !== "" ? t("ต้องเป็นจำนวนเต็ม ≥ 0") : undefined}
             >
               {hasSpecial ? (
                 <TextInput
@@ -649,7 +657,7 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
             </FieldGroup>
           </div>
           <div className="text-xs text-muted">
-            จำนวนนักศึกษาใช้คำนวณงบประมาณโดยประมาณของวิชา ต้องกรอกก่อนจึงจะส่งออกเอกสารได้
+            {t("จำนวนนักศึกษาใช้คำนวณงบประมาณโดยประมาณของวิชา ต้องกรอกก่อนจึงจะส่งออกเอกสารได้")}
           </div>
         </div>
       )}
@@ -671,6 +679,7 @@ interface Budget {
 // BudgetBadge — used/ceiling chip plus the ceiling split by track (ปกติ/พิเศษ),
 // so staff can see how the course budget divides across the two pools.
 function BudgetBadge({ course }: { course: TC }) {
+  const { t } = useI18n();
   const id = course.id;
   const { data } = useSWR<Budget>(`/teaching-courses/${id}/budget`);
   // Same size as the loaded chip, so the row doesn't move when it lands.
@@ -680,22 +689,22 @@ function BudgetBadge({ course }: { course: TC }) {
   const capLabel = data.budget_cap_baht == null
     ? ""
     : data.cap_applied
-      ? `งบตามสูตร ${fmt(data.formula_baht)} บาท เกินเพดานงบรายวิชาของคณะ ${fmt(data.budget_cap_baht)} บาท จึงใช้เพดาน`
-      : `งบตามสูตร ${fmt(data.formula_baht)} บาท ไม่เกินเพดานงบรายวิชาของคณะ ${fmt(data.budget_cap_baht)} บาท`;
+      ? t("งบตามสูตร {formula} บาท เกินเพดานงบรายวิชาของคณะ {cap} บาท จึงใช้เพดาน", { formula: fmt(data.formula_baht), cap: fmt(data.budget_cap_baht) })
+      : t("งบตามสูตร {formula} บาท ไม่เกินเพดานงบรายวิชาของคณะ {cap} บาท", { formula: fmt(data.formula_baht), cap: fmt(data.budget_cap_baht) });
   return (
     // One line (tables keep every row to one line): the regular / special
     // split that used to sit underneath now lives in the chip's tooltip.
     <span className="inline-flex items-center gap-1 whitespace-nowrap">
-        <Tip content={`งบที่ใช้ไปแล้ว ${fmt(data.used_baht)} บาท จากงบของวิชา ${fmt(data.per_course_max)} บาท\nแบ่งตามภาค: ปกติ ${fmt(data.term_pay_regular)} บาท พิเศษ ${fmt(data.term_pay_special)} บาท`}>
+        <Tip content={t("งบที่ใช้ไปแล้ว {used} บาท จากงบของวิชา {max} บาท\nแบ่งตามภาค: ปกติ {reg} บาท พิเศษ {spc} บาท", { used: fmt(data.used_baht), max: fmt(data.per_course_max), reg: fmt(data.term_pay_regular), spc: fmt(data.term_pay_special) })}>
           <span className="inline-flex">
             <Chip tone={tone}>
-              {fmt(data.used_baht)}/{fmt(data.per_course_max)} บ.
+              {t("{used}/{max} บ.", { used: fmt(data.used_baht), max: fmt(data.per_course_max) })}
             </Chip>
           </span>
         </Tip>
         {data.cap_applied && (
           <Tip content={capLabel}>
-            <span className="inline-flex"><Chip tone="info">เพดาน</Chip></span>
+            <span className="inline-flex"><Chip tone="info">{t("เพดาน")}</Chip></span>
           </Tip>
         )}
     </span>

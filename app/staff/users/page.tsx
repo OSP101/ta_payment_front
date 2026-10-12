@@ -26,6 +26,7 @@ import TermSelect from "../../components/TermSelect";
 import AvatarCropper from "../../components/AvatarCropper";
 import SendCredentialsButton from "../../components/SendCredentialsButton";
 import { SkelList } from "../../components/Skeletons";
+import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 /** Mirrors ProfilePhotoCard's own picker rules (app/components/ProfilePhotoCard.tsx)
  *  — kept in sync by hand since the two forms upload to different endpoints. */
@@ -80,30 +81,31 @@ function userHaystack(u: User): string {
 // ตำแหน่งทางวิชาการนำหน้าคุณวุฒิเสมอ (เช่น "รศ. ดร." ไม่ใช่ "ดร. รศ.")
 // รศ. / ศ. without ดร. and plain ดร. were missing: a rank outside this list
 // could not be picked at all, and the officer seat printed no rank for it.
+// i18n-ignore-next-line — titles are stored and printed on the official forms as written
 const TITLE_OPTIONS = ["นาย", "นาง", "นางสาว", "อาจารย์", "อ. ดร.", "ดร.", "ผศ.", "ผศ. ดร.", "รศ.", "รศ. ดร.", "ศ.", "ศ. ดร."];
 const STUDY_LEVELS: { value: string; label: string }[] = [
-  { value: "undergrad", label: "ปริญญาตรี" },
-  { value: "master", label: "ปริญญาโท" },
-  { value: "phd", label: "ปริญญาเอก" },
+  { value: "undergrad", label: msg("ปริญญาตรี") },
+  { value: "master", label: msg("ปริญญาโท") },
+  { value: "phd", label: msg("ปริญญาเอก") },
 ];
 const ROLE_OPTIONS = ["staff", "lecturer", "ta"] as const;
 
 /** "ปริญญาตรี ปี 3" — the year is the server's derivation from the student id
  *  (UserService.applyDerivedStudyYear), never something staff type in. */
-function levelLabel(u: Pick<User, "study_level" | "study_year">): string {
+function levelLabel(t: TFn, u: Pick<User, "study_level" | "study_year">): string {
   if (!u.study_level) return "-";
-  const label = STUDY_LEVELS.find(l => l.value === u.study_level)?.label ?? u.study_level;
-  return u.study_level === "undergrad" && u.study_year ? `${label} ปี ${u.study_year}` : label;
+  const label = t(STUDY_LEVELS.find(l => l.value === u.study_level)?.label ?? u.study_level);
+  return u.study_level === "undergrad" && u.study_year ? t("{level} ปี {year}", { level: label, year: u.study_year }) : label;
 }
 
 // "ผู้บริหาร" now names the executive FLAG (read-only budget analytics), so
 // admin reverts to the name the backend's own messages use — ผู้ดูแลระบบ.
 // Keeping both as "ผู้บริหาร" would put two different powers under one word.
 const ROLE_LABEL: Record<string, string> = {
-  admin: "ผู้ดูแลระบบ",
-  staff: "เจ้าหน้าที่",
-  lecturer: "อาจารย์",
-  ta: "ผู้ช่วยสอน",
+  admin: msg("ผู้ดูแลระบบ"),
+  staff: msg("เจ้าหน้าที่"),
+  lecturer: msg("อาจารย์"),
+  ta: msg("ผู้ช่วยสอน"),
 };
 
 /* -------------------------------------------------------------------------- */
@@ -112,17 +114,18 @@ const ROLE_LABEL: Record<string, string> = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-function vRequired(v: string, msg = "กรุณากรอกข้อมูล"): string | null {
-  return v.trim() === "" ? msg : null;
+// Validators return Thai keys (msg); VField / VSelect translate them when shown.
+function vRequired(v: string, message: string = msg("กรุณากรอกข้อมูล")): string | null {
+  return v.trim() === "" ? message : null;
 }
 function vEmail(v: string): string | null {
-  if (!v.trim()) return "กรุณากรอกอีเมล";
-  if (!EMAIL_RE.test(v.trim())) return "รูปแบบอีเมลไม่ถูกต้อง";
+  if (!v.trim()) return msg("กรุณากรอกอีเมล");
+  if (!EMAIL_RE.test(v.trim())) return msg("รูปแบบอีเมลไม่ถูกต้อง");
   return null;
 }
-function vName(v: string, label: string): string | null {
-  if (!v.trim()) return `กรุณากรอก${label}`;
-  if (v.trim().length > 100) return `${label}ยาวเกินไป`;
+function vName(t: TFn, v: string, label: string): string | null {
+  if (!v.trim()) return t("กรุณากรอก{label}", { label: t(label) });
+  if (v.trim().length > 100) return t("{label}ยาวเกินไป", { label: t(label) });
   return null;
 }
 function vPhone(v: string, foreign = false): string | null {
@@ -130,10 +133,10 @@ function vPhone(v: string, foreign = false): string | null {
   if (!s) return null;
   // ชาวต่างชาติอาจมีแต่เบอร์ต่างประเทศ: รับรหัสประเทศได้ สูงสุด 15 หลัก (E.164)
   if (foreign) {
-    return /^\d{9,15}$/.test(s) ? null : "เบอร์โทรศัพท์ต้องเป็นตัวเลข 9–15 หลัก (ใส่รหัสประเทศได้)";
+    return /^\d{9,15}$/.test(s) ? null : msg("เบอร์โทรศัพท์ต้องเป็นตัวเลข 9–15 หลัก (ใส่รหัสประเทศได้)");
   }
   // เบอร์โทรศัพท์ไทย: ตัวเลข 10 หลัก ขึ้นต้นด้วย 0
-  if (!/^0\d{9}$/.test(s)) return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก (ขึ้นต้นด้วย 0)";
+  if (!/^0\d{9}$/.test(s)) return msg("เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก (ขึ้นต้นด้วย 0)");
   return null;
 }
 /** 0812345678 → 081-234-5678; 9-digit landline 043123456 → 04-312-3456.
@@ -155,20 +158,20 @@ function onlyPhoneDigits(v: string, foreign = false): string {
 function vAccountNo(v: string): string | null {
   const s = v.trim();
   if (!s) return null;
-  if (!/^[0-9\- ]{6,25}$/.test(s)) return "เลขที่บัญชีต้องเป็นตัวเลข";
+  if (!/^[0-9\- ]{6,25}$/.test(s)) return msg("เลขที่บัญชีต้องเป็นตัวเลข");
   return null;
 }
 function vBranchCode(v: string): string | null {
   const s = v.trim();
   if (!s) return null;
-  if (!/^[0-9]{3,6}$/.test(s)) return "รหัสสาขาต้องเป็นตัวเลข 3–6 หลัก";
+  if (!/^[0-9]{3,6}$/.test(s)) return msg("รหัสสาขาต้องเป็นตัวเลข 3–6 หลัก");
   return null;
 }
 function vSelect(v: string, allowed: readonly string[]): string | null {
-  return allowed.includes(v) ? null : "กรุณาเลือกจากรายการ";
+  return allowed.includes(v) ? null : msg("กรุณาเลือกจากรายการ");
 }
 function vStudentID(v: string): string | null {
-  return STUDENT_ID_PATTERN.test(v.trim()) ? null : "รูปแบบรหัสนักศึกษาไม่ถูกต้อง (XXXXXXXXX-X)";
+  return STUDENT_ID_PATTERN.test(v.trim()) ? null : msg("รูปแบบรหัสนักศึกษาไม่ถูกต้อง (XXXXXXXXX-X)");
 }
 // Student ID renders as `XXXXXXXXX-X` — same auto-formatting as the TA's own
 // documents/page.tsx so pasting either `123456789-0` or `1234567890` works.
@@ -195,6 +198,7 @@ function VField({
   required?: boolean;
   autoFocus?: boolean;
 }) {
+  const { t } = useI18n();
   const invalid = show && !!error;
   return (
     <HTextField
@@ -206,7 +210,7 @@ function VField({
     >
       <HLabel>{label}</HLabel>
       <HInput type={type} placeholder={placeholder} />
-      {invalid && <HFieldError>{error}</HFieldError>}
+      {invalid && <HFieldError>{t(error!)}</HFieldError>}
     </HTextField>
   );
 }
@@ -222,9 +226,10 @@ function VSelect({
   show: boolean;
   children: React.ReactNode;
 }) {
+  const { t } = useI18n();
   const invalid = show && !!error;
   return (
-    <FieldGroup label={label} error={invalid ? error : undefined}>
+    <FieldGroup label={label} error={invalid ? t(error!) : undefined}>
       <Select
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -258,6 +263,7 @@ export default function UsersPage() {
   // Search / filters / sort / page live here rather than inside DataTable,
   // because each one has to reach the API: the table now shows one page at a
   // time and cannot answer "which 15 of 51" on its own.
+  const { t, locale } = useI18n();
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [sort, setSort] = useState<SortDescriptor>({ column: "name", direction: "ascending" });
@@ -335,7 +341,7 @@ export default function UsersPage() {
 
   const columns: DataColumn<User>[] = [
     {
-      id: "name", width: 200, minWidth: 140, label: "ชื่อ", sortable: true, isRowHeader: true,
+      id: "name", width: 200, minWidth: 140, label: t("ชื่อ"), sortable: true, isRowHeader: true,
       sortValue: u => `${u.first_name} ${u.last_name}`,
       className: "font-medium",
       render: u => (
@@ -354,7 +360,7 @@ export default function UsersPage() {
       ),
     },
     {
-      id: "email", width: 230, minWidth: 140, label: "อีเมล", sortable: true,
+      id: "email", width: 230, minWidth: 140, label: t("อีเมล"), sortable: true,
       sortValue: u => u.email,
       className: "text-(--ink-3) whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
@@ -363,7 +369,7 @@ export default function UsersPage() {
     {
       // ติดต่อ TA กรณีเหตุฉุกเฉิน — TA กรอกเองในแบบฟอร์มข้อมูลส่วนตัว
       // (UpsertProfile writes users.phone), staff may also set it here.
-      id: "phone", width: 140, minWidth: 110, label: "เบอร์โทรศัพท์",
+      id: "phone", width: 140, minWidth: 110, label: t("เบอร์โทรศัพท์"),
       className: "text-(--ink-3) whitespace-nowrap tabular-nums",
       headerClassName: "whitespace-nowrap",
       render: u => u.phone
@@ -371,7 +377,7 @@ export default function UsersPage() {
         : "-",
     },
     {
-      id: "roles", width: 170, minWidth: 110, label: "บทบาท",
+      id: "roles", width: 170, minWidth: 110, label: t("บทบาท"),
       headerClassName: "whitespace-nowrap",
       render: u => {
         // 2FA is mandatory for admin/staff/ผู้บริหาร (see AccountGuard's
@@ -384,15 +390,15 @@ export default function UsersPage() {
           // telling them apart. The 2FA chip stays — its colour is the point.
           <div className="inline-flex items-center gap-2">
             <span className="text-sm">
-              {[...u.roles.map(r => ROLE_LABEL[r] ?? r), ...(u.is_executive ? ["ผู้บริหาร"] : [])].join(", ") || "-"}
+              {[...u.roles.map(r => t(ROLE_LABEL[r] ?? r)), ...(u.is_executive ? [t("ผู้บริหาร")] : [])].join(", ") || "-"}
             </span>
             {u.totp_enabled ? (
-              <Tip content="เปิดใช้การยืนยันตัวตนสองขั้นตอนแล้ว">
+              <Tip content={t("เปิดใช้การยืนยันตัวตนสองขั้นตอนแล้ว")}>
                 <span className="inline-flex"><Chip tone="success">2FA</Chip></span>
               </Tip>
             ) : mandatory ? (
-              <Tip content="บัญชีนี้ต้องเปิดใช้การยืนยันตัวตนสองขั้นตอน แต่ยังไม่ได้ตั้งค่า">
-                <span className="inline-flex"><Chip tone="danger"><ShieldAlert size={11} className="me-1" /> ยังไม่ตั้ง 2FA</Chip></span>
+              <Tip content={t("บัญชีนี้ต้องเปิดใช้การยืนยันตัวตนสองขั้นตอน แต่ยังไม่ได้ตั้งค่า")}>
+                <span className="inline-flex"><Chip tone="danger"><ShieldAlert size={11} className="me-1" /> {t("ยังไม่ตั้ง 2FA")}</Chip></span>
               </Tip>
             ) : null}
           </div>
@@ -400,32 +406,34 @@ export default function UsersPage() {
       },
     },
     {
-      id: "level", width: 140, minWidth: 100, label: "ระดับ",
+      id: "level", width: 140, minWidth: 100, label: t("ระดับ"),
       className: "text-(--ink-3) whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
       render: u => (
         <span className="inline-flex items-center gap-1.5">
-          {levelLabel(u)}
-          {u.roles.includes("ta") && isForeign(u.nationality) && <Chip tone="info">ต่างชาติ</Chip>}
+          {levelLabel(t, u)}
+          {u.roles.includes("ta") && isForeign(u.nationality) && <Chip tone="info">{t("ต่างชาติ")}</Chip>}
         </span>
       ),
     },
     {
-      id: "student_id", width: 140, minWidth: 110, label: "รหัสนักศึกษา",
+      id: "student_id", width: 140, minWidth: 110, label: t("รหัสนักศึกษา"),
       className: "text-(--ink-3) whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
       render: u => u.student_id ?? "-",
     },
     {
-      id: "status", width: 100, minWidth: 80, label: "สถานะ",
+      id: "status", width: 100, minWidth: 80, label: t("สถานะ"),
       className: "whitespace-nowrap",
       headerClassName: "whitespace-nowrap",
       render: u => u.is_active
-        ? <Chip tone="success">ใช้งาน</Chip>
-        : <Chip tone="danger">ปิด</Chip>,
+        ? <Chip tone="success">{t("ใช้งาน")}</Chip>
+        // "ปิด" alone is also the Close button's key, so English reads the
+        // filter's own wording for this state instead.
+        : <Chip tone="danger">{locale === "th" ? "ปิด" /* i18n-ignore */ : t("ปิดใช้งาน")}</Chip>,
     },
     {
-      id: "actions", width: 120, minWidth: 120, label: <span className="sr-only">การจัดการ</span>,
+      id: "actions", width: 120, minWidth: 120, label: <span className="sr-only">{t("การจัดการ")}</span>,
       className: "text-right whitespace-nowrap",
       // The two everyday actions stay as icons (label in the tooltip); the
       // rarely used ones fold into a "⋯" menu. Each keeps its slot — an
@@ -435,25 +443,25 @@ export default function UsersPage() {
         const ta = u.roles.includes("ta");
         const more: Array<{ id: string; label: string; icon: React.ReactNode; run: () => void; danger?: boolean }> = [];
         if (ta) {
-          more.push({ id: "history", label: "ประวัติการศึกษา", icon: <GraduationCap className="size-4" />, run: () => setHistoryFor(u) });
-          more.push({ id: "timetable", label: "ตารางเรียน", icon: <CalendarDays className="size-4" />, run: () => setTimetableFor(u) });
+          more.push({ id: "history", label: t("ประวัติการศึกษา"), icon: <GraduationCap className="size-4" />, run: () => setHistoryFor(u) });
+          more.push({ id: "timetable", label: t("ตารางเรียน"), icon: <CalendarDays className="size-4" />, run: () => setTimetableFor(u) });
         }
-        if (canUnlock(u)) more.push({ id: "unlock", label: "ปลดล็อกการยืนยันรหัสผ่าน", icon: <LockOpen className="size-4" />, run: () => setUnlocking(u) });
-        if (canReset2FA(u) && u.totp_enabled) more.push({ id: "2fa", label: "รีเซ็ต 2FA", icon: <ShieldOff className="size-4" />, run: () => setResetting2FA(u) });
+        if (canUnlock(u)) more.push({ id: "unlock", label: t("ปลดล็อกการยืนยันรหัสผ่าน"), icon: <LockOpen className="size-4" />, run: () => setUnlocking(u) });
+        if (canReset2FA(u) && u.totp_enabled) more.push({ id: "2fa", label: t("รีเซ็ต 2FA"), icon: <ShieldOff className="size-4" />, run: () => setResetting2FA(u) });
         if (canManage(u)) more.push(u.is_active
-          ? { id: "deactivate", label: "ปิดใช้งานบัญชี", icon: <UserX className="size-4 text-danger" />, run: () => setDeactivating(u), danger: true }
-          : { id: "activate", label: "เปิดใช้งานบัญชี", icon: <UserCheck className="size-4" />, run: () => setReactivating(u) });
+          ? { id: "deactivate", label: t("ปิดใช้งานบัญชี"), icon: <UserX className="size-4 text-danger" />, run: () => setDeactivating(u), danger: true }
+          : { id: "activate", label: t("เปิดใช้งานบัญชี"), icon: <UserCheck className="size-4" />, run: () => setReactivating(u) });
         return (
           <div className="flex gap-1 justify-end">
             {canManage(u)
-              ? <IconButton variant="ghost" size="sm" label="แก้ไขข้อมูล" onClick={() => setEditing(u)}><Pencil size={15} /></IconButton>
+              ? <IconButton variant="ghost" size="sm" label={t("แก้ไขข้อมูล")} onClick={() => setEditing(u)}><Pencil size={15} /></IconButton>
               : spacer}
             {canManage(u)
-              ? <IconButton variant="ghost" size="sm" label="รีเซ็ตรหัสผ่าน" onClick={() => setResetting(u)}><KeyRound size={15} /></IconButton>
+              ? <IconButton variant="ghost" size="sm" label={t("รีเซ็ตรหัสผ่าน")} onClick={() => setResetting(u)}><KeyRound size={15} /></IconButton>
               : spacer}
             {more.length === 0 ? spacer : (
               <Dropdown>
-                <HButton variant="ghost" size="sm" isIconOnly aria-label={`การจัดการเพิ่มเติมของ ${formatFullName(u)}`}>
+                <HButton variant="ghost" size="sm" isIconOnly aria-label={t("การจัดการเพิ่มเติมของ {name}", { name: formatFullName(u) })}>
                   <MoreHorizontal size={16} />
                 </HButton>
                 <Dropdown.Popover placement="bottom end">
@@ -477,12 +485,12 @@ export default function UsersPage() {
   return (
     <div>
       <PageHeader
-        title="จัดการผู้ใช้"
-        description={data?.total ? `ทั้งหมด ${data.total} รายชื่อ` : "ผู้ใช้ทั้งหมดในระบบ"}
+        title={t("จัดการผู้ใช้")}
+        description={data?.total ? t("ทั้งหมด {n} รายชื่อ", { n: data.total }) : t("ผู้ใช้ทั้งหมดในระบบ")}
         actions={
           <span data-tour="users-create">
             <Button variant="primary" onClick={() => setCreating(true)}>
-              <Plus size={16} /> สร้างผู้ใช้
+              <Plus size={16} /> {t("สร้างผู้ใช้")}
             </Button>
           </span>
         }
@@ -490,7 +498,7 @@ export default function UsersPage() {
 
       <div data-tour="users-table">
         <DataTable
-          ariaLabel="ผู้ใช้ทั้งหมดในระบบ"
+          ariaLabel={t("ผู้ใช้ทั้งหมดในระบบ")}
           rows={me ? data?.items : undefined}
           // Rows wait for /me too: which action icons a row gets depends on
           // who is looking, and drawing them a moment later made them pop in.
@@ -499,17 +507,17 @@ export default function UsersPage() {
           onRetry={() => mutate(listKey)}
           rowKey={u => u.id}
           searchFn={userHaystack}
-          searchPlaceholder="ค้นหาชื่อ / อีเมล…"
+          searchPlaceholder={t("ค้นหาชื่อ / อีเมล…")}
           filters={[
             {
               id: "role",
-              placeholder: "ทุกบทบาท",
+              placeholder: t("ทุกบทบาท"),
               options: [
-                { id: "", label: "ทุกบทบาท" },
-                { id: "admin", label: "Admin / ผู้ดูแลระบบ" },
-                { id: "staff", label: "เจ้าหน้าที่" },
-                { id: "lecturer", label: "อาจารย์" },
-                { id: "ta", label: "ผู้ช่วยสอน (TA)" },
+                { id: "", label: t("ทุกบทบาท") },
+                { id: "admin", label: t("Admin / ผู้ดูแลระบบ") },
+                { id: "staff", label: t("เจ้าหน้าที่") },
+                { id: "lecturer", label: t("อาจารย์") },
+                { id: "ta", label: t("ผู้ช่วยสอน (TA)") },
               ],
               // Unused in server mode — the API applies these. Kept so the
               // component keeps working if the table is ever taken off it.
@@ -517,18 +525,18 @@ export default function UsersPage() {
             },
             {
               id: "active",
-              placeholder: "ทุกสถานะ",
+              placeholder: t("ทุกสถานะ"),
               options: [
-                { id: "", label: "ทุกสถานะ" },
-                { id: "active", label: "ใช้งาน" },
-                { id: "inactive", label: "ปิดใช้งาน" },
+                { id: "", label: t("ทุกสถานะ") },
+                { id: "active", label: t("ใช้งาน") },
+                { id: "inactive", label: t("ปิดใช้งาน") },
               ],
               predicate: (u, v) => (v === "active" ? u.is_active : !u.is_active),
             },
           ]}
           pageSize={PAGE_SIZE}
-          emptyTitle="ไม่พบผู้ใช้"
-          emptyDescription="ลองปรับเงื่อนไขการค้นหา"
+          emptyTitle={t("ไม่พบผู้ใช้")}
+          emptyDescription={t("ลองปรับเงื่อนไขการค้นหา")}
           // Level and student id belong to TAs only: filtered to staff, admin
           // or lecturers the two columns would be nothing but dashes.
           columns={roleFilter && roleFilter !== "ta"
@@ -564,11 +572,12 @@ export default function UsersPage() {
 /* -------------------------------------------------------------------------- */
 
 function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
   const [form, setForm] = useState<{
     email: string; title: string; first_name: string; last_name: string; phone: string;
     role: string; study_level: string; nationality: Nationality;
   }>({
-    email: "", title: "นาย", first_name: "", last_name: "", phone: "",
+    email: "", title: "นาย", first_name: "", last_name: "", phone: "", // i18n-ignore
     role: "ta", study_level: "undergrad", nationality: "thai",
   });
   // Nationality only means something for a TA account.
@@ -589,7 +598,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
 
   useEffect(() => {
     if (open) {
-      setForm({ email: "", title: "นาย", first_name: "", last_name: "", phone: "", role: "ta", study_level: "undergrad", nationality: "thai" });
+      setForm({ email: "", title: "นาย", first_name: "", last_name: "", phone: "", role: "ta", study_level: "undergrad", nationality: "thai" }); // i18n-ignore
       setErr(null); setTempPassword(null); setShowErrors(false);
       setPickedPhoto(null); setPhotoBlob(null); setPhotoPreview(null);
     }
@@ -602,11 +611,11 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
   function pickPhoto(f: File | undefined | null) {
     if (!f) return;
     if (!AVATAR_ACCEPT.split(",").includes(f.type)) {
-      notify.error("รองรับเฉพาะไฟล์ JPEG, PNG หรือ WebP");
+      notify.error(t("รองรับเฉพาะไฟล์ JPEG, PNG หรือ WebP"));
       return;
     }
     if (f.size > AVATAR_MAX_PICK_BYTES) {
-      notify.error("ไฟล์ใหญ่เกิน 12MB กรุณาเลือกไฟล์ที่เล็กกว่านี้");
+      notify.error(t("ไฟล์ใหญ่เกิน 12MB กรุณาเลือกไฟล์ที่เล็กกว่านี้"));
       return;
     }
     setPickedPhoto(f);
@@ -641,15 +650,15 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
   const errors = useMemo(() => ({
     email: vEmail(form.email) ??
       (emailTaken && debouncedEmail === typedEmail
-        ? `อีเมลนี้ผูกกับบัญชีที่เปิดใช้งานอยู่ (${activeHolder ? formatFullName(activeHolder) : ""}) ต้องปิดบัญชีนั้นก่อน`
+        ? t("อีเมลนี้ผูกกับบัญชีที่เปิดใช้งานอยู่ ({name}) ต้องปิดบัญชีนั้นก่อน", { name: activeHolder ? formatFullName(activeHolder) : "" })
         : null),
     title: vSelect(form.title, TITLE_OPTIONS),
-    first_name: vName(form.first_name, "ชื่อ"),
-    last_name: vName(form.last_name, "นามสกุล"),
+    first_name: vName(t, form.first_name, msg("ชื่อ")),
+    last_name: vName(t, form.last_name, msg("นามสกุล")),
     role: vSelect(form.role, ROLE_OPTIONS),
     study_level: form.role === "ta" ? vSelect(form.study_level, STUDY_LEVELS.map(l => l.value)) : null,
     phone: vPhone(form.phone, foreign),
-  }), [form, foreign, emailTaken, activeHolder, debouncedEmail, typedEmail]);
+  }), [form, foreign, emailTaken, activeHolder, debouncedEmail, typedEmail, t]);
   const hasErrors = Object.values(errors).some(Boolean);
 
   async function submit() {
@@ -678,7 +687,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
           photoForm.append("file", photoBlob, "avatar.jpg");
           await api.upload(`/users/${res.user.id}/avatar`, photoForm);
         } catch (e) {
-          notify.error(errMessage(e) || "อัปโหลดรูปโปรไฟล์ไม่สำเร็จ ผู้ใช้ถูกสร้างแล้วและอัปโหลดรูปเองภายหลังได้");
+          notify.error(errMessage(e) || t("อัปโหลดรูปโปรไฟล์ไม่สำเร็จ ผู้ใช้ถูกสร้างแล้วและอัปโหลดรูปเองภายหลังได้"));
         }
       }
       setCreatedId(res.user.id);
@@ -695,15 +704,15 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
     <Modal
       open={open}
       onClose={onClose}
-      title={tempPassword ? "สร้างผู้ใช้สำเร็จ" : "สร้างผู้ใช้ใหม่"}
+      title={tempPassword ? t("สร้างผู้ใช้สำเร็จ") : t("สร้างผู้ใช้ใหม่")}
       size="lg"
       footer={
         tempPassword
-          ? <Button variant="primary" onClick={onClose}>ปิด</Button>
+          ? <Button variant="primary" onClick={onClose}>{t("ปิด")}</Button>
           : <>
-              <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+              <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
               <Button variant="primary" onClick={submit}
-                disabled={pending || (showErrors && hasErrors)}>บันทึก</Button>
+                disabled={pending || (showErrors && hasErrors)}>{t("บันทึก")}</Button>
             </>
       }
     >
@@ -713,7 +722,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
           name={`${form.first_name} ${form.last_name}`.trim()}
           email={form.email}
           password={tempPassword}
-          role={ROLE_LABEL[form.role] ?? form.role}
+          role={t(ROLE_LABEL[form.role] ?? form.role)}
         />
       ) : (
         <div className="space-y-3">
@@ -725,19 +734,19 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
                 src={photoPreview}
                 className="size-16 text-lg"
               />
-              <Tip content={photoBlob ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}><button
+              <Tip content={photoBlob ? t("เปลี่ยนรูปโปรไฟล์") : t("เพิ่มรูปโปรไฟล์")}><button
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
-                aria-label={photoBlob ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
+                aria-label={photoBlob ? t("เปลี่ยนรูปโปรไฟล์") : t("เพิ่มรูปโปรไฟล์")}
                 className="absolute bottom-0 -end-0.5 size-6 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <Camera size={12} />
               </button></Tip>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-foreground">รูปโปรไฟล์ (ไม่บังคับ)</div>
+              <div className="text-sm text-foreground">{t("รูปโปรไฟล์ (ไม่บังคับ)")}</div>
               <div className="text-xs text-muted mt-0.5">
-                JPEG, PNG, WebP ขนาดไม่เกิน 12MB — ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก
+                {t("JPEG, PNG, WebP ขนาดไม่เกิน 12MB — ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก")}
               </div>
             </div>
             <input
@@ -749,15 +758,15 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
             />
           </div>
           <VField
-            label="อีเมล" required type="email" placeholder="you@kkumail.com"
+            label={t("อีเมล")} required type="email" placeholder="you@kkumail.com"
             value={form.email} onChange={v => setForm({ ...form, email: v })}
             error={errors.email} show={showErrors}
           />
           {!emailTaken && closedHolders.length > 0 && (
             <Alert
               status="accent"
-              title="อีเมลนี้เคยใช้กับบัญชีที่ปิดไปแล้ว"
-              description={`${closedHolders.map(u => formatFullName(u)).join(", ")} (ปิดใช้งาน) บัญชีใหม่จะแยกจากบัญชีเดิม ข้อมูลเดิมยังอยู่ครบ และจะเปิดบัญชีเดิมกลับมาไม่ได้ตราบที่บัญชีใหม่ยังเปิดใช้งาน`}
+              title={t("อีเมลนี้เคยใช้กับบัญชีที่ปิดไปแล้ว")}
+              description={t("{names} (ปิดใช้งาน) บัญชีใหม่จะแยกจากบัญชีเดิม ข้อมูลเดิมยังอยู่ครบ และจะเปิดบัญชีเดิมกลับมาไม่ได้ตราบที่บัญชีใหม่ยังเปิดใช้งาน", { names: closedHolders.map(u => formatFullName(u)).join(", ") })}
             />
           )}
           {form.role === "ta" && (
@@ -765,57 +774,55 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
               <NationalityPicker value={form.nationality} onChange={v => setForm({ ...form, nationality: v })} />
               {foreign && (
                 <p className="text-xs text-muted -mt-1">
-                  กรอกชื่อ-นามสกุลเป็นภาษาอังกฤษตาม Passport ส่วนคำนำหน้ายังใช้ นาย/นาง/นางสาว ตามแบบฟอร์มเจ้าหนี้
-                  ผู้ช่วยสอนจะกรอกเลข Passport แทนเลขบัตรประชาชน (ใช้เป็นเลขพร้อมเพย์ในใบปะหน้าด้วย) และแนบสำเนา Passport แทนสำเนาบัตรประชาชน
+                  {t("กรอกชื่อ-นามสกุลเป็นภาษาอังกฤษตาม Passport ส่วนคำนำหน้ายังใช้ นาย/นาง/นางสาว ตามแบบฟอร์มเจ้าหนี้ ผู้ช่วยสอนจะกรอกเลข Passport แทนเลขบัตรประชาชน (ใช้เป็นเลขพร้อมเพย์ในใบปะหน้าด้วย) และแนบสำเนา Passport แทนสำเนาบัตรประชาชน")}
                 </p>
               )}
             </>
           )}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-[140px_1fr_1fr]">
-            <VSelect label="คำนำหน้า" value={form.title}
+            <VSelect label={t("คำนำหน้า")} value={form.title}
               onChange={v => setForm({ ...form, title: v })}
               error={errors.title} show={showErrors}
             >
-              {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+              {TITLE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </VSelect>
-            <VField label={foreign ? "ชื่อ (ภาษาอังกฤษ)" : "ชื่อ"} required value={form.first_name}
+            <VField label={foreign ? t("ชื่อ (ภาษาอังกฤษ)") : t("ชื่อ")} required value={form.first_name}
               onChange={v => setForm({ ...form, first_name: v })}
               error={errors.first_name} show={showErrors}
             />
-            <VField label={foreign ? "นามสกุล (ภาษาอังกฤษ)" : "นามสกุล"} required value={form.last_name}
+            <VField label={foreign ? t("นามสกุล (ภาษาอังกฤษ)") : t("นามสกุล")} required value={form.last_name}
               onChange={v => setForm({ ...form, last_name: v })}
               error={errors.last_name} show={showErrors}
             />
           </div>
-          <VField label="เบอร์โทรศัพท์" type="tel" placeholder={foreign ? "0812345678 หรือ 8613812345678" : "0812345678"}
+          <VField label={t("เบอร์โทรศัพท์")} type="tel" placeholder={foreign ? t("0812345678 หรือ 8613812345678") : "0812345678"}
             value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v, foreign) })}
             error={errors.phone} show={showErrors}
           />
           <div className="grid grid-cols-2 gap-3">
-            <VSelect label="สิทธิ์การใช้งาน" value={form.role}
+            <VSelect label={t("สิทธิ์การใช้งาน")} value={form.role}
               onChange={v => setForm({ ...form, role: v })}
               error={errors.role} show={showErrors}
             >
-              <option value="staff">เจ้าหน้าที่</option>
-              <option value="lecturer">อาจารย์</option>
-              <option value="ta">ผู้ช่วยสอน (TA)</option>
+              <option value="staff">{t("เจ้าหน้าที่")}</option>
+              <option value="lecturer">{t("อาจารย์")}</option>
+              <option value="ta">{t("ผู้ช่วยสอน (TA)")}</option>
             </VSelect>
             {form.role === "ta" && (
-              <VSelect label="ระดับการศึกษา" value={form.study_level}
+              <VSelect label={t("ระดับการศึกษา")} value={form.study_level}
                 onChange={v => setForm({ ...form, study_level: v })}
                 error={errors.study_level} show={showErrors}
               >
-                {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{t(l.label)}</option>)}
               </VSelect>
             )}
           </div>
           {form.role === "ta" && form.study_level === "undergrad" && (
             <p className="text-xs text-muted">
-              ไม่ต้องกรอกชั้นปี ระบบคำนวณจากรหัสนักศึกษาที่ผู้ช่วยสอนกรอกในแบบฟอร์มข้อมูลส่วนตัว
-              (2 หลักแรกเทียบกับปีการศึกษาปัจจุบัน) และเลื่อนชั้นให้เองทุกปี
+              {t("ไม่ต้องกรอกชั้นปี ระบบคำนวณจากรหัสนักศึกษาที่ผู้ช่วยสอนกรอกในแบบฟอร์มข้อมูลส่วนตัว (2 หลักแรกเทียบกับปีการศึกษาปัจจุบัน) และเลื่อนชั้นให้เองทุกปี")}
             </p>
           )}
-          {err && <Alert status="danger" title="ไม่สามารถสร้างผู้ใช้ได้" description={err} />}
+          {err && <Alert status="danger" title={t("ไม่สามารถสร้างผู้ใช้ได้")} description={err} />}
         </div>
       )}
       <AvatarCropper
@@ -831,6 +838,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
 /* -------------------------------------------------------------------------- */
 
 function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     email: user.email,
     title: user.title ?? "",
@@ -847,10 +855,10 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
   const errors = useMemo(() => ({
     email: vEmail(form.email),
     title: form.title === "" ? null : vSelect(form.title, TITLE_OPTIONS),
-    first_name: vName(form.first_name, "ชื่อ"),
-    last_name: vName(form.last_name, "นามสกุล"),
+    first_name: vName(t, form.first_name, msg("ชื่อ")),
+    last_name: vName(t, form.last_name, msg("นามสกุล")),
     phone: vPhone(form.phone, foreign),
-  }), [form, foreign]);
+  }), [form, foreign, t]);
   const hasErrors = Object.values(errors).some(Boolean);
 
   // Photo edits upload immediately (the account already exists, unlike the
@@ -868,11 +876,11 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
   function pickPhoto(f: File | undefined | null) {
     if (!f) return;
     if (!AVATAR_ACCEPT.split(",").includes(f.type)) {
-      notify.error("รองรับเฉพาะไฟล์ JPEG, PNG หรือ WebP");
+      notify.error(t("รองรับเฉพาะไฟล์ JPEG, PNG หรือ WebP"));
       return;
     }
     if (f.size > AVATAR_MAX_PICK_BYTES) {
-      notify.error("ไฟล์ใหญ่เกิน 12MB กรุณาเลือกไฟล์ที่เล็กกว่านี้");
+      notify.error(t("ไฟล์ใหญ่เกิน 12MB กรุณาเลือกไฟล์ที่เล็กกว่านี้"));
       return;
     }
     setPickedPhoto(f);
@@ -887,7 +895,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
       setAvatarUrl(res.avatar_url);
       refreshUsers();
       setPickedPhoto(null);
-      notify.success("บันทึกรูปโปรไฟล์แล้ว");
+      notify.success(t("บันทึกรูปโปรไฟล์แล้ว"));
     } catch (e) {
       notify.error(e);
     } finally {
@@ -934,17 +942,17 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
     <Modal
       open
       onClose={onClose}
-      title="แก้ไขข้อมูลผู้ใช้"
+      title={t("แก้ไขข้อมูลผู้ใช้")}
       size="lg"
       footer={<>
-        <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+        <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
         <Button variant="primary" onClick={submit}
-          disabled={pending || (showErrors && hasErrors)}>บันทึกการแก้ไข</Button>
+          disabled={pending || (showErrors && hasErrors)}>{t("บันทึกการแก้ไข")}</Button>
       </>}
     >
       <div className="space-y-4">
         <div>
-          <div className="text-xs text-muted mb-2">ข้อมูลทั่วไป</div>
+          <div className="text-xs text-muted mb-2">{t("ข้อมูลทั่วไป")}</div>
           <div className="space-y-3">
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
@@ -954,19 +962,19 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                   src={avatarUrl}
                   className="size-16 text-lg"
                 />
-                <Tip content={avatarUrl ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}><button
+                <Tip content={avatarUrl ? t("เปลี่ยนรูปโปรไฟล์") : t("เพิ่มรูปโปรไฟล์")}><button
                   type="button"
                   onClick={() => photoInputRef.current?.click()}
-                  aria-label={avatarUrl ? "เปลี่ยนรูปโปรไฟล์" : "เพิ่มรูปโปรไฟล์"}
+                  aria-label={avatarUrl ? t("เปลี่ยนรูปโปรไฟล์") : t("เพิ่มรูปโปรไฟล์")}
                   className="absolute bottom-0 -end-0.5 size-6 rounded-full bg-accent text-accent-foreground grid place-items-center shadow-sm ring-2 ring-surface hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <Camera size={12} />
                 </button></Tip>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm text-foreground">รูปโปรไฟล์</div>
+                <div className="text-sm text-foreground">{t("รูปโปรไฟล์")}</div>
                 <div className="text-xs text-muted mt-0.5">
-                  JPEG, PNG, WebP ขนาดไม่เกิน 12MB — ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก
+                  {t("JPEG, PNG, WebP ขนาดไม่เกิน 12MB — ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก")}
                 </div>
               </div>
               <input
@@ -977,28 +985,28 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }}
               />
             </div>
-            <VField label="อีเมล" required type="email"
+            <VField label={t("อีเมล")} required type="email"
               value={form.email} onChange={v => setForm({ ...form, email: v })}
               error={errors.email} show={showErrors}
             />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-[140px_1fr_1fr]">
-              <VSelect label="คำนำหน้า" value={form.title}
+              <VSelect label={t("คำนำหน้า")} value={form.title}
                 onChange={v => setForm({ ...form, title: v })}
                 error={errors.title} show={showErrors}
               >
                 <option value="">-</option>
-                {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                {TITLE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </VSelect>
-              <VField label={foreign ? "ชื่อ (ภาษาอังกฤษ)" : "ชื่อ"} required value={form.first_name}
+              <VField label={foreign ? t("ชื่อ (ภาษาอังกฤษ)") : t("ชื่อ")} required value={form.first_name}
                 onChange={v => setForm({ ...form, first_name: v })}
                 error={errors.first_name} show={showErrors}
               />
-              <VField label={foreign ? "นามสกุล (ภาษาอังกฤษ)" : "นามสกุล"} required value={form.last_name}
+              <VField label={foreign ? t("นามสกุล (ภาษาอังกฤษ)") : t("นามสกุล")} required value={form.last_name}
                 onChange={v => setForm({ ...form, last_name: v })}
                 error={errors.last_name} show={showErrors}
               />
             </div>
-            <VField label="เบอร์โทรศัพท์" type="tel" placeholder={foreign ? "0812345678 หรือ 8613812345678" : "0812345678"}
+            <VField label={t("เบอร์โทรศัพท์")} type="tel" placeholder={foreign ? t("0812345678 หรือ 8613812345678") : "0812345678"}
               value={form.phone} onChange={v => setForm({ ...form, phone: onlyPhoneDigits(v, foreign) })}
               error={errors.phone} show={showErrors}
             />
@@ -1006,7 +1014,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
               <div>
                 <NationalityPicker value={form.nationality} onChange={v => setForm({ ...form, nationality: v })} />
                 <div className="text-xs text-muted mt-1.5">
-                  เปลี่ยนได้จนกว่าเอกสารของผู้ช่วยสอนจะอนุมัติ เพราะชุดเอกสารที่ต้องส่งเปลี่ยนตามสัญชาติ
+                  {t("เปลี่ยนได้จนกว่าเอกสารของผู้ช่วยสอนจะอนุมัติ เพราะชุดเอกสารที่ต้องส่งเปลี่ยนตามสัญชาติ")}
                 </div>
               </div>
             )}
@@ -1017,12 +1025,12 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 no supported way to change a role after creation — recreate the
                 account under the new role if one is genuinely needed. */}
             <div>
-              <div className="text-sm text-foreground mb-1.5">สิทธิ์การใช้งาน</div>
+              <div className="text-sm text-foreground mb-1.5">{t("สิทธิ์การใช้งาน")}</div>
               <div className="flex gap-1 flex-wrap">
-                {user.roles.map(r => <Chip key={r} tone="neutral">{ROLE_LABEL[r] ?? r}</Chip>)}
+                {user.roles.map(r => <Chip key={r} tone="neutral">{t(ROLE_LABEL[r] ?? r)}</Chip>)}
               </div>
               <div className="text-xs text-muted mt-1.5">
-                เปลี่ยนบทบาทหลังสร้างบัญชีไม่ได้ — หากต้องการเปลี่ยน ให้สร้างบัญชีใหม่ด้วยบทบาทที่ถูกต้อง
+                {t("เปลี่ยนบทบาทหลังสร้างบัญชีไม่ได้ — หากต้องการเปลี่ยน ให้สร้างบัญชีใหม่ด้วยบทบาทที่ถูกต้อง")}
               </div>
             </div>
             {/* สิทธิ์ผู้บริหารไม่ได้ติ๊กตรงนี้อีกต่อไป — มาจากการถือตำแหน่งฝ่ายบริหาร
@@ -1030,18 +1038,18 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 ผลลัพธ์ให้ดูอย่างเดียวเพื่อไม่ให้สับสนว่าทำไมช่องติ๊กหายไป */}
             {user.is_executive && (
               <div className="text-sm rounded-lg border border-border bg-surface px-3 py-2.5">
-                <span className="font-medium">สิทธิ์ผู้บริหาร: มี</span>
+                <span className="font-medium">{t("สิทธิ์ผู้บริหาร: มี")}</span>
                 <span className="block text-xs text-muted mt-0.5">
-                  มาจากการดำรงตำแหน่งฝ่ายบริหารที่เปิดใช้งานอยู่ — จัดการที่หน้า &quot;ตั้งค่า &gt; ฝ่ายบริหาร&quot;
+                  {t("มาจากการดำรงตำแหน่งฝ่ายบริหารที่เปิดใช้งานอยู่ — จัดการที่หน้า \"ตั้งค่า > ฝ่ายบริหาร\"")}
                 </span>
               </div>
             )}
             {isTa && (
               <div className="text-sm rounded-lg border border-border bg-surface px-3 py-2.5">
-                <span className="text-muted">ระดับการศึกษาปัจจุบัน: </span>
-                <span className="font-medium">{levelLabel(user)}</span>
+                <span className="text-muted">{t("ระดับการศึกษาปัจจุบัน:")} </span>
+                <span className="font-medium">{levelLabel(t, user)}</span>
                 <span className="block text-xs text-muted mt-0.5">
-                  เลื่อนระดับ (ตรี → โท → เอก) ใช้ปุ่ม &quot;ประวัติการศึกษา&quot; ในตาราง ส่วนรหัสที่กรอกผิด แก้ได้ในหัวข้อด้านล่าง
+                  {t("เลื่อนระดับ (ตรี → โท → เอก) ใช้ปุ่ม \"ประวัติการศึกษา\" ในตาราง ส่วนรหัสที่กรอกผิด แก้ได้ในหัวข้อด้านล่าง")}
                 </span>
               </div>
             )}
@@ -1053,7 +1061,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
             migration 0047) เจ้าหน้าที่ดูจากไฟล์แบบฟอร์มเจ้าหนี้ที่ TA ส่งมา
             ในหน้า "ตรวจสอบแบบฟอร์มใบแจ้งหนี้" แทน */}
 
-        {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+        {err && <Alert status="danger" title={t("บันทึกไม่สำเร็จ")} description={err} />}
       </div>
       <AvatarCropper
         file={pickedPhoto}
@@ -1073,6 +1081,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
  * back in full; the last 4 digits are enough to compare against the card.
  */
 function TAIdentityFix({ userId }: { userId: string }) {
+  const { t } = useI18n();
   const key = `/users/${userId}/ta-identity`;
   const { data } = useSWR<{
     student_id: string | null; prefix: string | null; citizen_id_last4: string | null; has_profile: boolean;
@@ -1080,7 +1089,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
   }>(key);
   // A foreign TA's stored number is their passport number (0151).
   const foreign = !!data?.foreign;
-  const idLabel = foreign ? "เลข Passport" : "เลขบัตรประชาชน";
+  const idLabel = foreign ? t("เลข Passport") : t("เลขบัตรประชาชน");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ student_id: "", national_id: "", prefix: "", reason: "", password: "" });
   const [showErrors, setShowErrors] = useState(false);
@@ -1097,10 +1106,10 @@ function TAIdentityFix({ userId }: { userId: string }) {
     student_id: form.student_id.trim() === "" ? null : vStudentID(form.student_id),
     national_id: nidDigits === "" ? null
       : foreign ? passportError(nidDigits)
-      : nidDigits.length === 13 ? null : `${idLabel}ต้องเป็นตัวเลข 13 หลัก`,
-    reason: vRequired(form.reason, "กรุณาระบุเหตุผล เช่น ผู้ช่วยสอนแสดงบัตรนักศึกษาที่ห้องธุรการ"),
-    nothing: form.student_id.trim() === "" && nidDigits === "" && form.prefix === "" ? "กรอกอย่างน้อย 1 ช่องที่ต้องการแก้" : null,
-    password: rebuildsForm && form.password === "" ? "กรอกรหัสผ่านของคุณเพื่อดาวน์โหลดแบบฟอร์มเจ้าหนี้ฉบับใหม่" : null,
+      : nidDigits.length === 13 ? null : t("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก"),
+    reason: vRequired(form.reason, msg("กรุณาระบุเหตุผล เช่น ผู้ช่วยสอนแสดงบัตรนักศึกษาที่ห้องธุรการ")),
+    nothing: form.student_id.trim() === "" && nidDigits === "" && form.prefix === "" ? msg("กรอกอย่างน้อย 1 ช่องที่ต้องการแก้") : null,
+    password: rebuildsForm && form.password === "" ? msg("กรอกรหัสผ่านของคุณเพื่อดาวน์โหลดแบบฟอร์มเจ้าหนี้ฉบับใหม่") : null,
   };
   const hasErrors = Object.values(errors).some(Boolean);
 
@@ -1109,10 +1118,10 @@ function TAIdentityFix({ userId }: { userId: string }) {
     const url = URL.createObjectURL(pdf);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `แบบแจ้งเจ้าหนี้-${data?.student_id ?? userId}.pdf`;
+    a.download = `แบบแจ้งเจ้าหนี้-${data?.student_id ?? userId}.pdf`; // i18n-ignore — the official form's file name
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    notify.success("สร้างแบบฟอร์มเจ้าหนี้ฉบับใหม่และดาวน์โหลดแล้ว");
+    notify.success(t("สร้างแบบฟอร์มเจ้าหนี้ฉบับใหม่และดาวน์โหลดแล้ว"));
   }
 
   const [regenOpen, setRegenOpen] = useState(false);
@@ -1120,7 +1129,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
   const [regenErr, setRegenErr] = useState<string | null>(null);
   const [regenPending, setRegenPending] = useState(false);
   async function regenOnly() {
-    if (!regenPw) { setRegenErr("กรอกรหัสผ่านของคุณ"); return; }
+    if (!regenPw) { setRegenErr(t("กรอกรหัสผ่านของคุณ")); return; }
     setRegenPending(true); setRegenErr(null);
     try {
       await rebuildCreditorForm(regenPw);
@@ -1145,14 +1154,14 @@ function TAIdentityFix({ userId }: { userId: string }) {
       });
       await mutate(key);
       refreshUsers();
-      notify.success("แก้ไขข้อมูลผู้ช่วยสอนแล้ว และแจ้งผู้ช่วยสอนแล้ว");
+      notify.success(t("แก้ไขข้อมูลผู้ช่วยสอนแล้ว และแจ้งผู้ช่วยสอนแล้ว"));
       if (rebuildsForm) {
         try {
           await rebuildCreditorForm(form.password);
         } catch (e) {
           // The correction itself is saved; only the rebuild failed — the
           // separate "สร้างแบบฟอร์มเจ้าหนี้ใหม่" button retries it.
-          notify.error(`บันทึกการแก้ไขแล้ว แต่สร้างแบบฟอร์มเจ้าหนี้ใหม่ไม่สำเร็จ: ${errMessage(e)}`);
+          notify.error(t("บันทึกการแก้ไขแล้ว แต่สร้างแบบฟอร์มเจ้าหนี้ใหม่ไม่สำเร็จ: {error}", { error: errMessage(e) }));
         }
       }
       setForm({ student_id: "", national_id: "", prefix: "", reason: "", password: "" });
@@ -1169,20 +1178,24 @@ function TAIdentityFix({ userId }: { userId: string }) {
     <div className="rounded-lg border border-border px-3 py-2.5 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="text-sm">
-          <div className="font-medium">ข้อมูลที่ผู้ช่วยสอนกรอก</div>
+          <div className="font-medium">{t("ข้อมูลที่ผู้ช่วยสอนกรอก")}</div>
           <div className="text-xs text-muted mt-0.5">
-            รหัสนักศึกษา {data?.student_id ?? "-"} · คำนำหน้า {data?.prefix ?? "-"} · {idLabel}{" "}
-            {data?.citizen_id_last4 ? `ลงท้าย ${data.citizen_id_last4}` : "-"}
+            {t("รหัสนักศึกษา {sid} · คำนำหน้า {prefix} · {idLabel} {last4}", {
+              sid: data?.student_id ?? "-",
+              prefix: data?.prefix ?? "-",
+              idLabel,
+              last4: data?.citizen_id_last4 ? t("ลงท้าย {n}", { n: data.citizen_id_last4 }) : "-",
+            })}
           </div>
         </div>
         {!open && (
           <div className="flex flex-wrap gap-1 justify-end">
             <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-              <Pencil size={14} /> แก้ข้อมูลที่กรอกผิด
+              <Pencil size={14} /> {t("แก้ข้อมูลที่กรอกผิด")}
             </Button>
             {data?.has_profile && !regenOpen && (
               <Button variant="ghost" size="sm" onClick={() => setRegenOpen(true)}>
-                <Files size={14} /> สร้างแบบฟอร์มเจ้าหนี้ใหม่
+                <Files size={14} /> {t("สร้างแบบฟอร์มเจ้าหนี้ใหม่")}
               </Button>
             )}
           </div>
@@ -1191,66 +1204,66 @@ function TAIdentityFix({ userId }: { userId: string }) {
       {!open && regenOpen && (
         <div className="space-y-2">
           <p className="text-xs text-muted">
-            สร้างแบบฟอร์มเจ้าหนี้ใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้ โดยใช้คำนำหน้า ชื่อ-นามสกุล และเลขบัตรปัจจุบันในระบบ
-            (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่า แล้วดาวน์โหลดทันที
+            {t("สร้างแบบฟอร์มเจ้าหนี้ใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้ โดยใช้คำนำหน้า ชื่อ-นามสกุล และเลขบัตรปัจจุบันในระบบ (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่า แล้วดาวน์โหลดทันที")}
           </p>
-          <VField label="รหัสผ่านของคุณ (ยืนยันก่อนดาวน์โหลด)" type="password" required
+          <VField label={t("รหัสผ่านของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="password" required
             value={regenPw} onChange={setRegenPw} error={regenErr} show={!!regenErr}
           />
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" onClick={() => { setRegenOpen(false); setRegenPw(""); setRegenErr(null); }}>ยกเลิก</Button>
-            <Button variant="primary" size="sm" onClick={regenOnly} disabled={regenPending} isPending={regenPending}>สร้างและดาวน์โหลด</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setRegenOpen(false); setRegenPw(""); setRegenErr(null); }}>{t("ยกเลิก")}</Button>
+            <Button variant="primary" size="sm" onClick={regenOnly} disabled={regenPending} isPending={regenPending}>{t("สร้างและดาวน์โหลด")}</Button>
           </div>
         </div>
       )}
       {open && (
         <div className="space-y-3">
           <p className="text-xs text-muted">
-            เว้นว่างช่องที่ไม่ต้องแก้ ใช้เมื่อผู้ช่วยสอนกรอกผิดและมาแสดงหลักฐานที่ห้องธุรการ
-            การแก้รหัสนักศึกษาจะแก้ในทุกคำขอ TA ของช่วงการศึกษาปัจจุบันด้วย
+            {t("เว้นว่างช่องที่ไม่ต้องแก้ ใช้เมื่อผู้ช่วยสอนกรอกผิดและมาแสดงหลักฐานที่ห้องธุรการ การแก้รหัสนักศึกษาจะแก้ในทุกคำขอ TA ของช่วงการศึกษาปัจจุบันด้วย")}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_140px] gap-3">
-            <VField label="รหัสนักศึกษาที่ถูกต้อง" placeholder="XXXXXXXXX-X"
+            <VField label={t("รหัสนักศึกษาที่ถูกต้อง")} placeholder="XXXXXXXXX-X"
               value={form.student_id} onChange={v => setForm({ ...form, student_id: formatStudentID(v) })}
               error={errors.student_id} show={showErrors}
             />
-            <VField label={`${idLabel}ที่ถูกต้อง`} placeholder={foreign ? "เช่น AB1234567" : "13 หลัก"}
+            <VField label={foreign ? t("เลข Passport ที่ถูกต้อง") : t("เลขบัตรประชาชนที่ถูกต้อง")} placeholder={foreign ? t("เช่น AB1234567") : t("13 หลัก")}
               value={form.national_id} onChange={v => setForm({ ...form, national_id: foreign ? passportNumber(v) : v.replace(/[^\d-]/g, "").slice(0, 17) })}
               error={errors.national_id} show={showErrors}
             />
-            <VSelect label="คำนำหน้า" value={form.prefix}
+            <VSelect label={t("คำนำหน้า")} value={form.prefix}
               onChange={v => setForm({ ...form, prefix: v })} error={null} show={false}
             >
-              <option value="">ไม่แก้</option>
+              <option value="">{t("ไม่แก้")}</option>
+              {/* i18n-ignore-next-line — the prefix as stored and printed on the creditor form */}
               <option value="นาย">นาย</option>
+              {/* i18n-ignore-next-line */}
               <option value="นาง">นาง</option>
+              {/* i18n-ignore-next-line */}
               <option value="นางสาว">นางสาว</option>
             </VSelect>
           </div>
           {data && !data.has_profile && (form.national_id || form.prefix) && (
-            <Alert status="warning" title="ยังไม่มีแบบฟอร์มข้อมูลส่วนตัว"
-              description="ผู้ช่วยสอนยังไม่เคยส่งแบบฟอร์ม จึงแก้เลขบัตรหรือคำนำหน้าไม่ได้ (แก้รหัสนักศึกษาได้)" />
+            <Alert status="warning" title={t("ยังไม่มีแบบฟอร์มข้อมูลส่วนตัว")}
+              description={t("ผู้ช่วยสอนยังไม่เคยส่งแบบฟอร์ม จึงแก้เลขบัตรหรือคำนำหน้าไม่ได้ (แก้รหัสนักศึกษาได้)")} />
           )}
-          <VField label="เหตุผล (บันทึกในประวัติการใช้งานและแจ้งผู้ช่วยสอน)" required
+          <VField label={t("เหตุผล (บันทึกในประวัติการใช้งานและแจ้งผู้ช่วยสอน)")} required
             value={form.reason} onChange={v => setForm({ ...form, reason: v })}
             error={errors.reason ?? errors.nothing} show={showErrors}
           />
           {rebuildsForm && (
             <>
               <p className="text-xs text-muted">
-                เลขบัตรและคำนำหน้าอยู่ในแบบฟอร์มเจ้าหนี้ ระบบจะสร้างแบบฟอร์มฉบับใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้
-                (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่าในระบบ และดาวน์โหลดให้ทันที
+                {t("เลขบัตรและคำนำหน้าอยู่ในแบบฟอร์มเจ้าหนี้ ระบบจะสร้างแบบฟอร์มฉบับใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้ (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่าในระบบ และดาวน์โหลดให้ทันที")}
               </p>
-              <VField label="รหัสผ่านของคุณ (ยืนยันก่อนดาวน์โหลด)" type="password" required
+              <VField label={t("รหัสผ่านของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="password" required
                 value={form.password} onChange={v => setForm({ ...form, password: v })}
                 error={errors.password} show={showErrors}
               />
             </>
           )}
-          {err && <Alert status="danger" title="แก้ไขไม่สำเร็จ" description={err} />}
+          {err && <Alert status="danger" title={t("แก้ไขไม่สำเร็จ")} description={err} />}
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); setErr(null); setShowErrors(false); setForm(f => ({ ...f, password: "" })); }}>ยกเลิก</Button>
-            <Button variant="primary" size="sm" onClick={save} disabled={pending} isPending={pending}>บันทึกการแก้ไข</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); setErr(null); setShowErrors(false); setForm(f => ({ ...f, password: "" })); }}>{t("ยกเลิก")}</Button>
+            <Button variant="primary" size="sm" onClick={save} disabled={pending} isPending={pending}>{t("บันทึกการแก้ไข")}</Button>
           </div>
         </div>
       )}
@@ -1284,7 +1297,7 @@ interface ClassBlockRow {
   is_wba?: boolean;
 }
 
-const DAY_TH = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+const DAY_TH = [msg("อาทิตย์"), msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์")];
 
 /**
  * Staff correction of a TA's own timetable. Once a TA has an approved request
@@ -1294,6 +1307,7 @@ const DAY_TH = ["อาทิตย์", "จันทร์", "อังคา�
  * under the staff member, and re-runs pending request decisions like a TA save.
  */
 function TimetableCorrectionModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useI18n();
   const { data: terms } = useSWR<Term[]>("/terms");
   const [termId, setTermId] = useState("");
   useEffect(() => {
@@ -1314,7 +1328,7 @@ function TimetableCorrectionModal({ user, onClose }: { user: User; onClose: () =
     try {
       await api.put(key, blocks.filter((_, i) => !removed.has(i)));
       await mutate(key);
-      notify.success("บันทึกตารางเรียนของผู้ช่วยสอนแล้ว");
+      notify.success(t("บันทึกตารางเรียนของผู้ช่วยสอนแล้ว"));
       onClose();
     } catch (e) {
       notify.error(e);
@@ -1327,13 +1341,13 @@ function TimetableCorrectionModal({ user, onClose }: { user: User; onClose: () =
     <Modal
       open
       onClose={onClose}
-      title={`ตารางเรียนของ ${formatFullName(user)}`}
+      title={t("ตารางเรียนของ {name}", { name: formatFullName(user) })}
       size="lg"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={save} disabled={pending || removed.size === 0 || !!data?.locked}>
-            บันทึกการแก้ไข
+            {t("บันทึกการแก้ไข")}
           </Button>
         </>
       }
@@ -1341,14 +1355,13 @@ function TimetableCorrectionModal({ user, onClose }: { user: User; onClose: () =
       <div className="space-y-3">
         <TermSelect terms={terms} value={termId} onChange={setTermId} className="w-48" />
         <p className="text-sm text-muted">
-          ใช้เมื่อตารางเรียนของผู้ช่วยสอนเปลี่ยนจริง (เช่น ถอนวิชา) หลังคำขอ TA ได้รับอนุมัติแล้ว
-          ผู้ช่วยสอนเพิ่มคาบเองได้ แต่ลบหรือลดคาบเองไม่ได้ การบันทึกที่นี่จะถูกบันทึกในประวัติการใช้งาน
+          {t("ใช้เมื่อตารางเรียนของผู้ช่วยสอนเปลี่ยนจริง (เช่น ถอนวิชา) หลังคำขอ TA ได้รับอนุมัติแล้ว ผู้ช่วยสอนเพิ่มคาบเองได้ แต่ลบหรือลดคาบเองไม่ได้ การบันทึกที่นี่จะถูกบันทึกในประวัติการใช้งาน")}
         </p>
-        {data?.locked && <Alert status="warning" title="แก้ไขไม่ได้" description={data.lock_reason} />}
+        {data?.locked && <Alert status="warning" title={t("แก้ไขไม่ได้")} description={data.lock_reason} />}
         {isLoading ? (
           <SkelList />
         ) : blocks.length === 0 ? (
-          <p className="text-sm text-muted">ยังไม่มีตารางเรียนในภาคเรียนนี้</p>
+          <p className="text-sm text-muted">{t("ยังไม่มีตารางเรียนในภาคเรียนนี้")}</p>
         ) : (
           <ul className="divide-y divide-[var(--hairline)] rounded-lg border border-[var(--hairline)]">
             {blocks.map((b, i) => {
@@ -1356,10 +1369,14 @@ function TimetableCorrectionModal({ user, onClose }: { user: User; onClose: () =
               return (
                 <li key={i} className={`flex items-center justify-between gap-3 px-3 py-2 text-sm ${gone ? "opacity-50 line-through" : ""}`}>
                   <span>
-                    {b.is_wba ? "WBA (ไม่มีตารางเรียน)" : (
-                      <>
-                        <b>{b.course_code || b.course_label}</b> {b.course_name} วัน{DAY_TH[b.day_of_week] ?? b.day_of_week} {hhmm(b.start_time)}–{hhmm(b.end_time)} น.
-                      </>
+                    {b.is_wba ? t("WBA (ไม่มีตารางเรียน)") : (
+                      t.rich("{code} {name} วัน{day} {start}–{end} น.", {
+                        code: <b>{b.course_code || b.course_label}</b>,
+                        name: b.course_name,
+                        day: DAY_TH[b.day_of_week] ? t(DAY_TH[b.day_of_week]) : b.day_of_week,
+                        start: hhmm(b.start_time),
+                        end: hhmm(b.end_time),
+                      })
                     )}
                   </span>
                   <Button
@@ -1372,7 +1389,7 @@ function TimetableCorrectionModal({ user, onClose }: { user: User; onClose: () =
                       return next;
                     })}
                   >
-                    <Trash2 size={14} /> {gone ? "เลิกลบ" : "ลบคาบนี้"}
+                    <Trash2 size={14} /> {gone ? t("เลิกลบ") : t("ลบคาบนี้")}
                   </Button>
                 </li>
               );
@@ -1385,6 +1402,7 @@ function TimetableCorrectionModal({ user, onClose }: { user: User; onClose: () =
 }
 
 function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t, intl } = useI18n();
   const key = `/users/${user.id}/enrollments`;
   const { data, isLoading, error } = useSWR<{ items: Enrollment[] }>(key);
 
@@ -1431,31 +1449,31 @@ function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => 
     <Modal
       open
       onClose={onClose}
-      title={`ประวัติการศึกษา — ${formatFullName(user)}`}
+      title={t("ประวัติการศึกษา — {name}", { name: formatFullName(user) })}
       size="lg"
-      footer={<Button variant="ghost" onClick={onClose}>ปิด</Button>}
+      footer={<Button variant="ghost" onClick={onClose}>{t("ปิด")}</Button>}
     >
       <div className="space-y-4">
         <div>
-          <div className="text-xs text-muted mb-2">ช่วงการศึกษาที่ผ่านมา</div>
+          <div className="text-xs text-muted mb-2">{t("ช่วงการศึกษาที่ผ่านมา")}</div>
           {isLoading ? (
             <SkelList items={2} icon={false} bordered />
           ) : error ? (
-            <Alert status="danger" title="โหลดประวัติไม่สำเร็จ" description={errMessage(error)} />
+            <Alert status="danger" title={t("โหลดประวัติไม่สำเร็จ")} description={errMessage(error)} />
           ) : items.length === 0 ? (
-            <div className="text-sm text-muted">ยังไม่มีประวัติ</div>
+            <div className="text-sm text-muted">{t("ยังไม่มีประวัติ")}</div>
           ) : (
             <div className="space-y-2">
               {items.map(e => (
                 <div key={e.id} className="rounded-lg border border-border px-3 py-2 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-medium">
-                      {e.student_id} — {STUDY_LEVELS.find(l => l.value === e.study_level)?.label ?? e.study_level}
+                      {e.student_id} — {t(STUDY_LEVELS.find(l => l.value === e.study_level)?.label ?? e.study_level)}
                     </div>
                     <div className="text-xs text-muted">
-                      {new Date(e.started_at).toLocaleDateString("th-TH")}
+                      {new Date(e.started_at).toLocaleDateString(intl)}
                       {" – "}
-                      {e.ended_at ? new Date(e.ended_at).toLocaleDateString("th-TH") : "ปัจจุบัน"}
+                      {e.ended_at ? new Date(e.ended_at).toLocaleDateString(intl) : t("ปัจจุบัน")}
                     </div>
                     {e.note && <div className="text-xs text-muted mt-0.5">{e.note}</div>}
                   </div>
@@ -1469,32 +1487,32 @@ function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => 
         {adding ? (
           <div className="border-t border-border pt-4 space-y-3">
             <div className="text-xs text-muted">
-              บันทึกการเปลี่ยนระดับ — ช่วงเดิมที่ยัง active อยู่จะถูกปิดโดยอัตโนมัติ
+              {t("บันทึกการเปลี่ยนระดับ — ช่วงเดิมที่ยัง active อยู่จะถูกปิดโดยอัตโนมัติ")}
             </div>
-            <VField label="รหัสนักศึกษาใหม่" required placeholder="XXXXXXXXX-X"
+            <VField label={t("รหัสนักศึกษาใหม่")} required placeholder="XXXXXXXXX-X"
               value={form.student_id} onChange={v => setForm({ ...form, student_id: formatStudentID(v) })}
               error={errors.student_id} show={showErrors}
             />
-            <VSelect label="ระดับการศึกษาใหม่" value={form.study_level}
+            <VSelect label={t("ระดับการศึกษาใหม่")} value={form.study_level}
               onChange={v => setForm({ ...form, study_level: v })}
               error={errors.study_level} show={showErrors}
             >
-              {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              {STUDY_LEVELS.map(l => <option key={l.value} value={l.value}>{t(l.label)}</option>)}
             </VSelect>
-            <FieldGroup label="หมายเหตุ (ถ้ามี)">
+            <FieldGroup label={t("หมายเหตุ (ถ้ามี)")}>
               <TextArea rows={2} value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
             </FieldGroup>
-            {err && <Alert status="danger" title="บันทึกไม่สำเร็จ" description={err} />}
+            {err && <Alert status="danger" title={t("บันทึกไม่สำเร็จ")} description={err} />}
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => { setAdding(false); setErr(null); }}>ยกเลิก</Button>
+              <Button variant="ghost" onClick={() => { setAdding(false); setErr(null); }}>{t("ยกเลิก")}</Button>
               <Button variant="primary" onClick={submit} disabled={pending || (showErrors && hasErrors)}>
-                บันทึก
+                {t("บันทึก")}
               </Button>
             </div>
           </div>
         ) : (
           <Button variant="primary" onClick={() => setAdding(true)}>
-            <Plus size={16} /> บันทึกการเปลี่ยนระดับ
+            <Plus size={16} /> {t("บันทึกการเปลี่ยนระดับ")}
           </Button>
         )}
       </div>
@@ -1505,6 +1523,7 @@ function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => 
 /* -------------------------------------------------------------------------- */
 
 function ResetPasswordModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pw, setPw] = useState<string | null>(null);
@@ -1525,13 +1544,13 @@ function ResetPasswordModal({ user, onClose }: { user: User; onClose: () => void
     <Modal
       open
       onClose={onClose}
-      title={pw ? "รีเซ็ตรหัสผ่านสำเร็จ" : "ยืนยันการรีเซ็ตรหัสผ่าน"}
+      title={pw ? t("รีเซ็ตรหัสผ่านสำเร็จ") : t("ยืนยันการรีเซ็ตรหัสผ่าน")}
       size="md"
       footer={pw
-        ? <Button variant="primary" onClick={onClose}>ปิด</Button>
+        ? <Button variant="primary" onClick={onClose}>{t("ปิด")}</Button>
         : <>
-            <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
-            <Button variant="primary" onClick={submit} disabled={pending}>รีเซ็ตรหัสผ่าน</Button>
+            <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
+            <Button variant="primary" onClick={submit} disabled={pending}>{t("รีเซ็ตรหัสผ่าน")}</Button>
           </>}
     >
       {pw ? (
@@ -1540,16 +1559,17 @@ function ResetPasswordModal({ user, onClose }: { user: User; onClose: () => void
           name={`${user.first_name} ${user.last_name}`.trim()}
           email={user.email}
           password={pw}
-          role={user.roles.map(r => ROLE_LABEL[r] ?? r).join(", ")}
+          role={user.roles.map(r => t(ROLE_LABEL[r] ?? r)).join(", ")}
         />
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
-            ระบบจะสร้างรหัสผ่านชั่วคราวใหม่ให้กับ
-            <span className="font-medium"> {user.first_name} {user.last_name} </span>
-            ({user.email}) และจะบังคับให้เปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งถัดไป
+            {t.rich("ระบบจะสร้างรหัสผ่านชั่วคราวใหม่ให้กับ {name} ({email}) และจะบังคับให้เปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งถัดไป", {
+              name: <span className="font-medium">{user.first_name} {user.last_name}</span>,
+              email: user.email,
+            })}
           </p>
-          {err && <Alert status="danger" title="รีเซ็ตไม่สำเร็จ" description={err} />}
+          {err && <Alert status="danger" title={t("รีเซ็ตไม่สำเร็จ")} description={err} />}
         </div>
       )}
     </Modal>
@@ -1559,15 +1579,16 @@ function ResetPasswordModal({ user, onClose }: { user: User; onClose: () => void
 /* -------------------------------------------------------------------------- */
 
 function DeactivateModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useI18n();
   const [confirmEmail, setConfirmEmail] = useState("");
   const [showError, setShowError] = useState(false);
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const emailError = useMemo<string | null>(() => {
-    if (!confirmEmail.trim()) return "กรุณากรอกอีเมลเพื่อยืนยัน";
+    if (!confirmEmail.trim()) return msg("กรุณากรอกอีเมลเพื่อยืนยัน");
     if (confirmEmail.trim().toLowerCase() !== user.email.toLowerCase())
-      return "อีเมลไม่ตรงกับบัญชีที่จะปิดใช้งาน";
+      return msg("อีเมลไม่ตรงกับบัญชีที่จะปิดใช้งาน");
     return null;
   }, [confirmEmail, user.email]);
 
@@ -1578,7 +1599,7 @@ function DeactivateModal({ user, onClose }: { user: User; onClose: () => void })
     try {
       await api.post(`/users/${user.id}/deactivate`, { confirm_email: confirmEmail });
       refreshUsers();
-      notify.success("ปิดใช้งานบัญชีเรียบร้อยแล้ว");
+      notify.success(t("ปิดใช้งานบัญชีเรียบร้อยแล้ว"));
       onClose();
     } catch (e) {
       setErr((e as Error).message);
@@ -1592,28 +1613,29 @@ function DeactivateModal({ user, onClose }: { user: User; onClose: () => void })
     <Modal
       open
       onClose={onClose}
-      title="ปิดการใช้งานบัญชี"
+      title={t("ปิดการใช้งานบัญชี")}
       size="md"
       footer={<>
-        <Button variant="ghost" onClick={onClose}>ยกเลิก</Button>
+        <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
         <Button variant="danger" onClick={submit} disabled={pending || !!emailError}>
-          ยืนยันการปิดใช้งาน
+          {t("ยืนยันการปิดใช้งาน")}
         </Button>
       </>}
     >
       <div className="space-y-3">
         <p className="text-sm">
-          บัญชีของ <span className="font-medium">{user.first_name} {user.last_name}</span> จะไม่สามารถเข้าใช้งานระบบได้อีก
-          กรุณากรอกอีเมลของผู้ใช้งานเพื่อยืนยัน
+          {t.rich("บัญชีของ {name} จะไม่สามารถเข้าใช้งานระบบได้อีก กรุณากรอกอีเมลของผู้ใช้งานเพื่อยืนยัน", {
+            name: <span className="font-medium">{user.first_name} {user.last_name}</span>,
+          })}
         </p>
         <VField
-          label={<>พิมพ์ <code className="text-xs">{user.email}</code> เพื่อยืนยัน</>}
+          label={t.rich("พิมพ์ {email} เพื่อยืนยัน", { email: <code className="text-xs">{user.email}</code> })}
           required autoFocus placeholder={user.email}
           value={confirmEmail}
           onChange={v => { setConfirmEmail(v); setShowError(true); }}
           error={emailError} show={showError}
         />
-        {err && <Alert status="danger" title="ปิดใช้งานไม่สำเร็จ" description={err} />}
+        {err && <Alert status="danger" title={t("ปิดใช้งานไม่สำเร็จ")} description={err} />}
       </div>
     </Modal>
   );
@@ -1622,6 +1644,7 @@ function DeactivateModal({ user, onClose }: { user: User; onClose: () => void })
 /* -------------------------------------------------------------------------- */
 
 function ReactivateModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // One address, one ACTIVE account (migration 0143). Say so before the click
@@ -1638,7 +1661,7 @@ function ReactivateModal({ user, onClose }: { user: User; onClose: () => void })
     try {
       await api.post(`/users/${user.id}/activate`);
       refreshUsers();
-      notify.success("เปิดใช้งานบัญชีเรียบร้อยแล้ว");
+      notify.success(t("เปิดใช้งานบัญชีเรียบร้อยแล้ว"));
       onClose();
     } catch (e) {
       setErr((e as Error).message);
@@ -1652,28 +1675,30 @@ function ReactivateModal({ user, onClose }: { user: User; onClose: () => void })
     <Modal
       open
       onClose={onClose}
-      title="เปิดใช้งานบัญชี"
+      title={t("เปิดใช้งานบัญชี")}
       size="md"
       footer={<>
-        <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
+        <Button variant="ghost" onClick={onClose} disabled={pending}>{t("ยกเลิก")}</Button>
         <Button variant="primary" onClick={submit} disabled={pending || !!otherActive} isPending={pending}>
-          <UserCheck size={14} /> เปิดใช้งาน
+          <UserCheck size={14} /> {t("เปิดใช้งาน")}
         </Button>
       </>}
     >
       <div className="space-y-3">
         <p className="text-sm">
-          เปิดใช้งานบัญชีของ <span className="font-medium">{user.first_name} {user.last_name}</span> ({user.email})
-          อีกครั้ง ผู้ใช้จะสามารถเข้าสู่ระบบได้ตามปกติ
+          {t.rich("เปิดใช้งานบัญชีของ {name} ({email}) อีกครั้ง ผู้ใช้จะสามารถเข้าสู่ระบบได้ตามปกติ", {
+            name: <span className="font-medium">{user.first_name} {user.last_name}</span>,
+            email: user.email,
+          })}
         </p>
         {otherActive && (
           <Alert
             status="warning"
-            title="ต้องปิดอีกบัญชีก่อน"
-            description={`อีเมลนี้ผูกกับบัญชีที่เปิดใช้งานอยู่แล้ว (${formatFullName(otherActive)}) อีเมลหนึ่งเปิดใช้งานได้ครั้งละ 1 บัญชี กรุณาปิดบัญชีนั้นก่อนจึงจะเปิดบัญชีนี้ได้`}
+            title={t("ต้องปิดอีกบัญชีก่อน")}
+            description={t("อีเมลนี้ผูกกับบัญชีที่เปิดใช้งานอยู่แล้ว ({name}) อีเมลหนึ่งเปิดใช้งานได้ครั้งละ 1 บัญชี กรุณาปิดบัญชีนั้นก่อนจึงจะเปิดบัญชีนี้ได้", { name: formatFullName(otherActive) })}
           />
         )}
-        {err && <Alert status="danger" title="เปิดใช้งานไม่สำเร็จ" description={err} />}
+        {err && <Alert status="danger" title={t("เปิดใช้งานไม่สำเร็จ")} description={err} />}
       </div>
     </Modal>
   );
@@ -1696,6 +1721,7 @@ function ReactivateModal({ user, onClose }: { user: User; onClose: () => void })
  * admin away believing they had fixed it.
  */
 function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1704,8 +1730,8 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
     try {
       const res = await api.post<{ was_locked: boolean }>(`/users/${user.id}/unlock-password-gate`);
       notify.success(res.was_locked
-        ? "ปลดล็อกเรียบร้อยแล้ว ผู้ใช้ยืนยันรหัสผ่านได้ทันที"
-        : "บัญชีนี้ไม่ได้ถูกล็อกอยู่ จึงไม่มีอะไรต้องปลด");
+        ? t("ปลดล็อกเรียบร้อยแล้ว ผู้ใช้ยืนยันรหัสผ่านได้ทันที")
+        : t("บัญชีนี้ไม่ได้ถูกล็อกอยู่ จึงไม่มีอะไรต้องปลด"));
       onClose();
     } catch (e) {
       setErr((e as Error).message);
@@ -1719,28 +1745,28 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
     <Modal
       open
       onClose={onClose}
-      title="ปลดล็อกการยืนยันรหัสผ่าน"
+      title={t("ปลดล็อกการยืนยันรหัสผ่าน")}
       size="md"
       footer={<>
-        <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
+        <Button variant="ghost" onClick={onClose} disabled={pending}>{t("ยกเลิก")}</Button>
         <Button variant="primary" onClick={submit} disabled={pending} isPending={pending}>
-          <LockOpen size={14} /> ปลดล็อก
+          <LockOpen size={14} /> {t("ปลดล็อก")}
         </Button>
       </>}
     >
       <div className="space-y-3">
         <p className="text-sm">
-          ล้างการนับรหัสผ่านผิดของ
-          <span className="font-medium"> {user.first_name} {user.last_name} </span>
-          ({user.email}) เพื่อให้กลับมายืนยันตัวตนตอนดาวน์โหลดเอกสารหรือแก้ไขเวลาปฏิบัติงานได้ทันที
-          โดยไม่ต้องรอจนครบ 15 นาที
+          {t.rich("ล้างการนับรหัสผ่านผิดของ {name} ({email}) เพื่อให้กลับมายืนยันตัวตนตอนดาวน์โหลดเอกสารหรือแก้ไขเวลาปฏิบัติงานได้ทันที โดยไม่ต้องรอจนครบ 15 นาที", {
+            name: <span className="font-medium">{user.first_name} {user.last_name}</span>,
+            email: user.email,
+          })}
         </p>
         <p className="text-sm text-(--ink-3)">
-          การดำเนินการนี้ <span className="font-medium">ไม่เปลี่ยนรหัสผ่าน</span> ของผู้ใช้
-          หากผู้ใช้จำรหัสผ่านไม่ได้ ให้ใช้ &ldquo;รีเซ็ตรหัส&rdquo; แทน
-          ทั้งนี้ระบบจะบันทึกผู้ปลดล็อกไว้ในประวัติการใช้งาน
+          {t.rich("การดำเนินการนี้ {notChange} ของผู้ใช้ หากผู้ใช้จำรหัสผ่านไม่ได้ ให้ใช้ “รีเซ็ตรหัส” แทน ทั้งนี้ระบบจะบันทึกผู้ปลดล็อกไว้ในประวัติการใช้งาน", {
+            notChange: <span className="font-medium">{t("ไม่เปลี่ยนรหัสผ่าน")}</span>,
+          })}
         </p>
-        {err && <Alert status="danger" title="ปลดล็อกไม่สำเร็จ" description={err} />}
+        {err && <Alert status="danger" title={t("ปลดล็อกไม่สำเร็จ")} description={err} />}
       </div>
     </Modal>
   );
@@ -1753,20 +1779,21 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
 // UnlockPasswordGateModal above — resetting 2FA removes a security control
 // entirely, not just a temporary rate-limit, so it gets the stronger gate.
 function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
     if (!password) {
-      setErr("กรุณากรอกรหัสผ่านของคุณเพื่อยืนยัน");
+      setErr(t("กรุณากรอกรหัสผ่านของคุณเพื่อยืนยัน"));
       return;
     }
     setPending(true);
     setErr(null);
     try {
       await mfaAdminReset(user.id, password);
-      notify.success(`รีเซ็ต 2FA ของ ${user.first_name} ${user.last_name} แล้ว`);
+      notify.success(t("รีเซ็ต 2FA ของ {name} แล้ว", { name: `${user.first_name} ${user.last_name}` }));
       refreshUsers();
       onClose();
     } catch (e) {
@@ -1781,26 +1808,27 @@ function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
     <Modal
       open
       onClose={onClose}
-      title="รีเซ็ต 2FA"
+      title={t("รีเซ็ต 2FA")}
       size="md"
       footer={<>
-        <Button variant="ghost" onClick={onClose} disabled={pending}>ยกเลิก</Button>
+        <Button variant="ghost" onClick={onClose} disabled={pending}>{t("ยกเลิก")}</Button>
         <Button variant="danger" onClick={submit} disabled={pending} isPending={pending}>
-          <ShieldOff size={14} /> รีเซ็ต 2FA
+          <ShieldOff size={14} /> {t("รีเซ็ต 2FA")}
         </Button>
       </>}
     >
       <div className="space-y-3">
         <p className="text-sm">
-          ล้างการยืนยันตัวตนสองขั้นตอนของ
-          <span className="font-medium"> {user.first_name} {user.last_name} </span>
-          ({user.email}) ผู้ใช้จะเข้าสู่ระบบด้วยรหัสผ่านเพียงอย่างเดียว และต้องตั้งค่า 2FA ใหม่
+          {t.rich("ล้างการยืนยันตัวตนสองขั้นตอนของ {name} ({email}) ผู้ใช้จะเข้าสู่ระบบด้วยรหัสผ่านเพียงอย่างเดียว และต้องตั้งค่า 2FA ใหม่", {
+            name: <span className="font-medium">{user.first_name} {user.last_name}</span>,
+            email: user.email,
+          })}
         </p>
         <p className="text-sm text-(--ink-3)">
-          ใช้เมื่อผู้ใช้ทำอุปกรณ์ยืนยันตัวตนหายและไม่มีรหัสสำรองเหลืออยู่
+          {t("ใช้เมื่อผู้ใช้ทำอุปกรณ์ยืนยันตัวตนหายและไม่มีรหัสสำรองเหลืออยู่")}
         </p>
         <VField
-          label="รหัสผ่านของคุณ (ยืนยันตัวตน)"
+          label={t("รหัสผ่านของคุณ (ยืนยันตัวตน)")}
           value={password}
           onChange={setPassword}
           error={err}
@@ -1814,6 +1842,7 @@ function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
 }
 
 function TempPasswordPanel({ userId, name, email, password, role }: { userId: string; name: string; email: string; password: string; role?: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   async function copy() {
@@ -1836,32 +1865,32 @@ function TempPasswordPanel({ userId, name, email, password, role }: { userId: st
     <div className="space-y-3">
       <Alert
         status="success"
-        title="รหัสผ่านชั่วคราวถูกสร้างแล้ว"
-        description="โปรดคัดลอกหรือส่งทางอีเมลให้ผู้ใช้งาน ระบบจะบังคับเปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก รหัสนี้จะไม่แสดงอีกครั้ง"
+        title={t("รหัสผ่านชั่วคราวถูกสร้างแล้ว")}
+        description={t("โปรดคัดลอกหรือส่งทางอีเมลให้ผู้ใช้งาน ระบบจะบังคับเปลี่ยนรหัสผ่านเมื่อเข้าใช้งานครั้งแรก รหัสนี้จะไม่แสดงอีกครั้ง")}
       />
       <div>
-        <div className="text-xs text-muted mb-1">อีเมล</div>
+        <div className="text-xs text-muted mb-1">{t("อีเมล")}</div>
         <div className="text-sm font-mono">{email}</div>
       </div>
       {role && (
         <div>
-          <div className="text-xs text-muted mb-1">บทบาท</div>
+          <div className="text-xs text-muted mb-1">{t("บทบาท")}</div>
           <div className="text-sm">{role}</div>
         </div>
       )}
       <div>
-        <div className="text-xs text-muted mb-1">รหัสผ่านชั่วคราว</div>
+        <div className="text-xs text-muted mb-1">{t("รหัสผ่านชั่วคราว")}</div>
         <div className="flex items-center gap-2">
           <code className="flex-1 px-3 py-2 rounded-md bg-default text-sm font-mono select-all">
             {password}
           </code>
           <Button variant="secondary" size="sm" onClick={copy}>
-            <Copy size={14} /> {copied ? "คัดลอกแล้ว" : "คัดลอก"}
+            <Copy size={14} /> {copied ? t("คัดลอกแล้ว") : t("คัดลอก")}
           </Button>
         </div>
       </div>
       <Button variant="primary" size="sm" className="w-full" onClick={copyAll}>
-        <Files size={14} /> {copiedAll ? "คัดลอกแล้ว" : "คัดลอกอีเมลและรหัสผ่าน"}
+        <Files size={14} /> {copiedAll ? t("คัดลอกแล้ว") : t("คัดลอกอีเมลและรหัสผ่าน")}
       </Button>
       {userId && <SendCredentialsButton userId={userId} email={email} password={password} />}
     </div>

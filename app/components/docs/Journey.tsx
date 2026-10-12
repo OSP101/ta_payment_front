@@ -4,6 +4,7 @@ import type { Audience, JourneyStage } from "../../../content/docs/types";
 import DocRichText from "./DocRichText";
 import Screenshot from "./Screenshot";
 import Gif from "./Gif";
+import { getT } from "../../lib/i18n/server";
 
 /** Anchor id of a journey stage; `journeyEntries` and the `<li id>` share it. */
 export const stageId = (blockIndex: number, stageIndex: number) => `stage-${blockIndex + 1}-${stageIndex + 1}`;
@@ -15,7 +16,7 @@ export const stageId = (blockIndex: number, stageIndex: number) => `stage-${bloc
  * reader will receive when it is their turn again, so "what now?" never
  * needs a second page.
  */
-export default function Journey({
+export default async function Journey({
   stages,
   blockIndex,
   audience,
@@ -26,6 +27,7 @@ export default function Journey({
   audience: Audience;
   linkBase: "/docs" | "/docs-embed";
 }) {
+  const { t } = await getT();
   let n = 0;
   const moreHref = (ref: string) => {
     const i = ref.indexOf(":");
@@ -62,7 +64,7 @@ export default function Journey({
               }
             >
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                {!isDo && <span className="text-xs font-semibold text-slate-500">ช่วงรอ</span>}
+                {!isDo && <span className="text-xs font-semibold text-slate-500">{t("ช่วงรอ")}</span>}
                 <h3 className={"text-base font-semibold leading-7 " + (isDo ? "text-foreground" : "text-slate-600")}>{s.title}</h3>
                 {s.when && (
                   <span className="rounded-full bg-accent-soft/60 px-2 py-0.5 text-[11.5px] font-medium text-accent-soft-foreground">{s.when}</span>
@@ -103,7 +105,7 @@ export default function Journey({
                   )}
                   {s.more && (
                     <Link href={moreHref(s.more)} className="inline-flex items-center gap-1 text-sm font-medium text-(--brand) hover:underline underline-offset-2">
-                      อ่านวิธีทำแบบละเอียด
+                      {t("อ่านวิธีทำแบบละเอียด")}
                       <ArrowRight size={14} aria-hidden="true" />
                     </Link>
                   )}

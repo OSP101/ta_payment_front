@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import type { Me } from "../lib/api";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * Tiled name/email/time watermark over every page an admin or staff account
@@ -21,11 +22,12 @@ export default function StaffWatermark({ initial }: { initial: Me | null }) {
   // Live copy so a name edited on /account shows up without a reload.
   const { data: me } = useSWR<Me>(initial ? "/me" : null, { fallbackData: initial ?? undefined });
   const now = useMinuteClock();
+  const { intl } = useI18n();
 
   const isStaff = !!me && (me.roles.includes("admin") || me.roles.includes("staff"));
   const name = me ? [me.title, `${me.first_name} ${me.last_name}`].filter(Boolean).join(" ").trim() : "";
   const email = me?.email ?? "";
-  const stamp = now ? formatStamp(now) : "";
+  const stamp = now ? formatStamp(now, intl) : "";
 
   useEffect(() => {
     // The /docs-embed iframe sits inside a page that already carries one.
@@ -87,9 +89,9 @@ function useMinuteClock(): Date | null {
 }
 
 // 26/09/2569 18:49 — th-TH already counts years in พ.ศ.
-function formatStamp(d: Date): string {
-  const date = d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const time = d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false });
+function formatStamp(d: Date, intl: string): string {
+  const date = d.toLocaleDateString(intl, { day: "2-digit", month: "2-digit", year: "numeric" });
+  const time = d.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit", hour12: false });
   return `${date} ${time}`;
 }
 
@@ -119,7 +121,7 @@ function layerStyle(tile: string, size: number): Record<string, string> {
 async function renderTile(lines: string[]): Promise<{ url: string; size: number }> {
   const family = getComputedStyle(document.documentElement).getPropertyValue("--font-kanit").trim() || "sans-serif";
   try {
-    await document.fonts.load(`14px ${family}`, "กขค");
+    await document.fonts.load(`14px ${family}`, "กขค"); // i18n-ignore — glyph sample for font loading, never shown
   } catch {
     // Falls back to the system Thai font; still readable.
   }

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { AUDIENCE_LABEL, type Audience } from "../../../content/docs/types";
+import { useI18n } from "../../lib/i18n/client";
 
 /**
  * Segmented "which manual" switch — the same idea as choosing App Router vs
@@ -27,6 +28,7 @@ export default function AudienceSwitch({
   allowed: Audience[];
   variant?: "compact" | "full";
 }) {
+  const { t } = useI18n();
   if (allowed.length <= 1) return null;
 
   const isFull = variant === "full";
@@ -40,12 +42,12 @@ export default function AudienceSwitch({
     (active ? "bg-white text-foreground shadow-sm" : isFull ? "text-muted" : "text-muted hover:text-foreground");
 
   return (
-    <div role="tablist" aria-label="เลือกมุมมองคู่มือ" className={wrapperClassName} style={wrapperStyle}>
+    <div role="tablist" aria-label={t("เลือกมุมมองคู่มือ")} className={wrapperClassName} style={wrapperStyle}>
       {allowed.map((a) => {
         const active = a === current;
         return (
           <Link key={a} href={`/docs/${a}`} role="tab" aria-selected={active} className={tabClassName(active)}>
-            {AUDIENCE_LABEL[a]}
+            {t(AUDIENCE_LABEL[a])}
           </Link>
         );
       })}

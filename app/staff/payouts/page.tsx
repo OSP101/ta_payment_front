@@ -11,6 +11,7 @@ import { PageHeader, Panel, EmptyState, Chip, Tip, Button, type ChipTone } from 
 import { Skel, SkelRegion } from "../../components/Skeletons";
 import { roundRangeLabel, type FiscalSplitInfo } from "../../components/monthScope";
 import { CertifierPicker } from "./CertifierPicker";
+import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 /**
  * ตรวจและส่งออกเอกสาร — the merged staff steps 3 and 4.
@@ -145,10 +146,11 @@ interface CourseCard {
   rounds: CourseRound[];
 }
 
-const baht = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+const baht = (n: number) => `฿${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`; // i18n-ignore — currency symbol
 
 export default function PayoutsPage() {
   const router = useRouter();
+  const { t, monthName } = useI18n();
   const { termId } = useTerm();
   const queueKey = useTermKey("/submission-periods/review-queue");
   const summaryKey = useTermKey("/exports/summary");
@@ -195,8 +197,8 @@ export default function PayoutsPage() {
   return (
     <>
       <PageHeader
-        title="ตรวจและส่งออกเอกสาร"
-        description="กดที่วิชาเพื่อตรวจชั่วโมงรายเดือน แล้วส่งออกเอกสารเบิกจ่าย"
+        title={t("ตรวจและส่งออกเอกสาร")}
+        description={t("กดที่วิชาเพื่อตรวจชั่วโมงรายเดือน แล้วส่งออกเอกสารเบิกจ่าย")}
         // Term-wide, so it belongs beside the title rather than inside any one
         // course's export panel.
         actions={termId ? <CertifierPicker termId={termId} /> : null}
@@ -206,16 +208,16 @@ export default function PayoutsPage() {
         <div className="space-y-4">
           <Section
             icon={<ClipboardCheck size={14} />}
-            title="รอคุณดำเนินการ"
-            hint="ป้ายท้ายชื่อวิชาบอกว่าต้องทำอะไรต่อ"
+            title={t("รอคุณดำเนินการ")}
+            hint={t("ป้ายท้ายชื่อวิชาบอกว่าต้องทำอะไรต่อ")}
             empty=""
           >
             <CourseRowsSkeleton count={3} />
           </Section>
           <Section
             icon={<Lock size={14} />}
-            title="ส่งออกแล้ว"
-            hint="ดาวน์โหลดซ้ำได้ · เดือนที่ส่งออกไปแล้วถูกล็อกไม่ให้แก้"
+            title={t("ส่งออกแล้ว")}
+            hint={t("ดาวน์โหลดซ้ำได้ · เดือนที่ส่งออกไปแล้วถูกล็อกไม่ให้แก้")}
             empty=""
           >
             <CourseRowsSkeleton count={2} />
@@ -225,11 +227,11 @@ export default function PayoutsPage() {
         <Panel>
           <EmptyState
             icon={<CalendarX size={24} />}
-            title="ยังไม่ได้สร้างรอบเบิกจ่ายของภาคเรียนนี้"
-            description="วิชาจะขึ้นที่นี่ได้ต่อเมื่อมีรอบเบิกจ่ายรายเดือน สร้างรอบได้ที่ ตั้งค่า → ปฏิทินเทอม"
+            title={t("ยังไม่ได้สร้างรอบเบิกจ่ายของภาคเรียนนี้")}
+            description={t("วิชาจะขึ้นที่นี่ได้ต่อเมื่อมีรอบเบิกจ่ายรายเดือน สร้างรอบได้ที่ ตั้งค่า → ปฏิทินเทอม")}
             action={
               <Button variant="primary" onClick={() => router.push(`/staff/settings?tab=calendar${termId ? `&term=${termId}` : ""}`)}>
-                <CalendarClock size={14} />ไปสร้างรอบเบิกจ่าย
+                <CalendarClock size={14} />{t("ไปสร้างรอบเบิกจ่าย")}
               </Button>
             }
           />
@@ -238,11 +240,11 @@ export default function PayoutsPage() {
         <Panel>
           <EmptyState
             icon={<ClipboardCheck size={24} />}
-            title="ยังไม่มีวิชาที่ต้องดำเนินการ"
+            title={t("ยังไม่มีวิชาที่ต้องดำเนินการ")}
             description={
               (queue?.awaiting_appointment ?? 0) > 0
-                ? `มีงาน ${queue?.awaiting_appointment} รายการที่รออยู่ แต่ยังไม่ได้ออกคำสั่งแต่งตั้ง TA ออกคำสั่งที่เมนู “ใบแต่งตั้งทีเอ” แล้วรายการจะขึ้นที่นี่`
-                : "เมื่ออาจารย์อนุมัติบันทึกเวลาของ TA แล้ว วิชาจะขึ้นที่นี่"
+                ? t("มีงาน {n} รายการที่รออยู่ แต่ยังไม่ได้ออกคำสั่งแต่งตั้ง TA ออกคำสั่งที่เมนู “ใบแต่งตั้งทีเอ” แล้วรายการจะขึ้นที่นี่", { n: queue?.awaiting_appointment })
+                : t("เมื่ออาจารย์อนุมัติบันทึกเวลาของ TA แล้ว วิชาจะขึ้นที่นี่")
             }
           />
         </Panel>
@@ -256,13 +258,13 @@ export default function PayoutsPage() {
           <Section
             tourId="payouts-act"
             icon={<ClipboardCheck size={14} />}
-            title={`รอคุณดำเนินการ (${act.length})`}
+            title={t("รอคุณดำเนินการ ({n})", { n: act.length })}
             // The chip beside each course name already says exactly what that
             // course needs. The old hint described the sort order instead —
             // a mechanic the officer can see for themselves, and which answers
             // no question they came here with.
-            hint="ป้ายท้ายชื่อวิชาบอกว่าต้องทำอะไรต่อ"
-            empty="ไม่มีวิชาที่รอคุณอยู่ เคลียร์หมดแล้ว"
+            hint={t("ป้ายท้ายชื่อวิชาบอกว่าต้องทำอะไรต่อ")}
+            empty={t("ไม่มีวิชาที่รอคุณอยู่ เคลียร์หมดแล้ว")}
             count={act.length}
           >
             {act.map(c => <CourseRow key={c.id} card={c} split={split} onOpen={() => open(c)} />)}
@@ -277,9 +279,9 @@ export default function PayoutsPage() {
             <Section
               tourId="payouts-round2"
               icon={<CalendarClock size={14} />}
-              title={`รอบ 2 (${roundRangeLabel(split!.after)}) ยังไม่ได้ส่ง (${round2.length})`}
-              hint="ส่งรอบแรกครบแล้ว แต่ยังต้องออกอีกใบสำหรับปีงบใหม่"
-              empty="ไม่มีวิชาที่ค้างรอบ 2"
+              title={t("รอบ 2 ({range}) ยังไม่ได้ส่ง ({n})", { range: roundRangeLabel(split!.after, monthName), n: round2.length })}
+              hint={t("ส่งรอบแรกครบแล้ว แต่ยังต้องออกอีกใบสำหรับปีงบใหม่")}
+              empty={t("ไม่มีวิชาที่ค้างรอบ 2")}
               count={round2.length}
             >
               {round2.map(c => <CourseRow key={c.id} card={c} split={split} onOpen={() => open(c)} />)}
@@ -289,9 +291,9 @@ export default function PayoutsPage() {
           <Section
             tourId="payouts-done"
             icon={<Lock size={14} />}
-            title={`${crosses ? "ส่งออกครบทุกรอบ" : "ส่งออกแล้ว"} (${done.length})`}
-            hint="ดาวน์โหลดซ้ำได้ · เดือนที่ส่งออกไปแล้วถูกล็อกไม่ให้แก้"
-            empty="ยังไม่มีวิชาที่ส่งออก"
+            title={crosses ? t("ส่งออกครบทุกรอบ ({n})", { n: done.length }) : t("ส่งออกแล้ว ({n})", { n: done.length })}
+            hint={t("ดาวน์โหลดซ้ำได้ · เดือนที่ส่งออกไปแล้วถูกล็อกไม่ให้แก้")}
+            empty={t("ยังไม่มีวิชาที่ส่งออก")}
             count={done.length}
           >
             {done.map(c => <CourseRow key={c.id} card={c} split={split} onOpen={() => open(c)} muted />)}
@@ -302,7 +304,7 @@ export default function PayoutsPage() {
               page. */}
           {waiting > 0 && (
             <p className="px-1 text-xs text-muted">
-              อีก {waiting} วิชายังไม่ถึงคิวคุณ รอ TA ลงเวลา รออาจารย์อนุมัติ หรือยังไม่ได้ออกคำสั่งแต่งตั้ง
+              {t("อีก {n} วิชายังไม่ถึงคิวคุณ รอ TA ลงเวลา รออาจารย์อนุมัติ หรือยังไม่ได้ออกคำสั่งแต่งตั้ง", { n: waiting })}
             </p>
           )}
         </div>
@@ -320,20 +322,22 @@ export default function PayoutsPage() {
  * bars and the section heading use, so the vocabulary is learned in one place.
  */
 function FiscalSplitNotice({ split, owed }: { split: FiscalSplitInfo; owed: number }) {
+  const { t, monthName } = useI18n();
   return (
     <Panel>
       <div className="flex items-start gap-2.5 text-xs">
         <CalendarClock size={15} className="mt-px shrink-0 text-muted" aria-hidden="true" />
         <div className="space-y-1">
-          <p className="text-sm font-medium">ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — ต้องออกเอกสาร 2 รอบ</p>
+          <p className="text-sm font-medium">{t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — ต้องออกเอกสาร 2 รอบ")}</p>
           <p className="text-muted">
-            <b className="font-medium">รอบ 1 ({roundRangeLabel(split.before)})</b> เบิกจากงบปีที่กำลังจะปิด ·{" "}
-            <b className="font-medium">รอบ 2 ({roundRangeLabel(split.after)})</b> เบิกจากงบปีใหม่
-            {" "}— คนละใบ คนละก้อนงบ วิชาหนึ่งจึงส่งรอบแรกครบแล้วแต่ยังค้างรอบสองได้
+            {t.rich("{r1} เบิกจากงบปีที่กำลังจะปิด · {r2} เบิกจากงบปีใหม่ — คนละใบ คนละก้อนงบ วิชาหนึ่งจึงส่งรอบแรกครบแล้วแต่ยังค้างรอบสองได้", {
+              r1: <b className="font-medium">{t("รอบ {n} ({range})", { n: 1, range: roundRangeLabel(split.before, monthName) })}</b>,
+              r2: <b className="font-medium">{t("รอบ {n} ({range})", { n: 2, range: roundRangeLabel(split.after, monthName) })}</b>,
+            })}
           </p>
           {owed > 0 && (
             <p className="text-amber-700">
-              ตอนนี้มี {owed} วิชาที่ส่งรอบ 1 ไปแล้วและยังค้างรอบ 2 อยู่
+              {t("ตอนนี้มี {n} วิชาที่ส่งรอบ 1 ไปแล้วและยังค้างรอบ 2 อยู่", { n: owed })}
             </p>
           )}
         </div>
@@ -359,14 +363,13 @@ const ROUND_STATE: Record<RoundState, {
   // to a monochrome print-out, a dim screen, or red-green colour blindness, and
   // this pair is the whole point of the row.
   //
-  // No dark: variants. This app has no dark theme — globals.css defines no dark
-  // token set and the surfaces stay light even when the OS asks for dark — so a
-  // dark: colour here would either never fire (dead weight) or, if a dark
-  // variant is ever switched on, paint dark text on a still-light card. Measured
-  // against the surfaces these actually sit on: 7.2:1 and 8.7:1, both past AA.
-  exported: { icon: Check, word: "ส่งแล้ว", cls: "border-emerald-600/30 bg-emerald-50 text-emerald-800" },
-  owed:     { icon: CircleDashed, word: "ยังไม่ส่ง", cls: "border-amber-600/40 bg-amber-50 text-amber-900" },
-  empty:    { icon: Minus, word: "ไม่มีงาน", cls: "border-[var(--hairline)] text-muted" },
+  // No dark: variants: globals.css re-points the Tailwind palette under .dark
+  // (see "Dark theme"), so these same classes turn into a dark tint with light
+  // text there. Light-theme contrast against the surfaces these sit on: 7.2:1
+  // and 8.7:1, both past AA.
+  exported: { icon: Check, word: msg("ส่งแล้ว"), cls: "border-emerald-600/30 bg-emerald-50 text-emerald-800" },
+  owed:     { icon: CircleDashed, word: msg("ยังไม่ส่ง"), cls: "border-amber-600/40 bg-amber-50 text-amber-900" },
+  empty:    { icon: Minus, word: msg("ไม่มีงาน"), cls: "border-[var(--hairline)] text-muted" },
 };
 
 /**
@@ -379,9 +382,10 @@ const ROUND_STATE: Record<RoundState, {
  * absent state to misread: every course shows two, and each says which it is.
  */
 function RoundBar({ rounds, split }: { rounds: CourseRound[]; split?: FiscalSplitInfo }) {
+  const { t, monthName } = useI18n();
   if (!rounds.length) return null;
   const range = (n: number) =>
-    n === 1 ? roundRangeLabel(split?.before ?? []) : roundRangeLabel(split?.after ?? []);
+    n === 1 ? roundRangeLabel(split?.before ?? [], monthName) : roundRangeLabel(split?.after ?? [], monthName);
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5">
       {rounds.map(r => {
@@ -400,9 +404,9 @@ function RoundBar({ rounds, split }: { rounds: CourseRound[]; split?: FiscalSpli
             }
           >
             <Icon size={12} aria-hidden="true" className="shrink-0" />
-            รอบ {r.round}
+            {t("รอบ {n}", { n: r.round })}
             {span && <span className="opacity-70">({span})</span>}
-            <span className="font-medium">{s.word}</span>
+            <span className="font-medium">{t(s.word)}</span>
           </span>
         );
       })}
@@ -468,16 +472,16 @@ function CourseRowsSkeleton({ count }: { count: number }) {
  * with 98 rows still in the lecturer's queue, and the row said "พร้อมส่งออก".
  * The download would have shipped one TA and silently left the other out.
  */
-function statusOf(c: CourseCard): { tone: ChipTone; label: string } {
+function statusOf(c: CourseCard, t: TFn, intl: string): { tone: ChipTone; label: string } {
   // Review first: a course with months still to sign off has work here whatever
   // its export history says, and saying "ส่งออกแล้ว" over the top of it would
   // hide the only thing on the row an officer can act on.
-  if (c.ready.length > 0) return { tone: "warn", label: `รอตรวจ ${c.ready.length} รายการ` };
+  if (c.ready.length > 0) return { tone: "warn", label: t("รอตรวจ {n} รายการ", { n: c.ready.length }) };
   // Before any round/export wording: no round can be issued until the next
   // appointment order names these TAs, so "ยังต้องส่งอีก N รอบ" would point the
   // officer at a download that refuses. The fix is the order, named as such.
-  if (c.awaitingAppointment.length > 0) return { tone: "warn", label: "รอออกคำสั่งแต่งตั้ง" };
-  if (c.profileNotReady.length > 0) return { tone: "warn", label: "เอกสาร TA ยังไม่พร้อม" };
+  if (c.awaitingAppointment.length > 0) return { tone: "warn", label: t("รอออกคำสั่งแต่งตั้ง") };
+  if (c.profileNotReady.length > 0) return { tone: "warn", label: t("เอกสาร TA ยังไม่พร้อม") };
   // In a crossing term the round bar already carries export state per round,
   // and a flat "ส่งออกแล้ว" beside it is at best redundant and at worst a
   // contradiction — it was the exact wording that made a course owing round 2
@@ -485,30 +489,30 @@ function statusOf(c: CourseCard): { tone: ChipTone; label: string } {
   if (c.rounds.length > 0) {
     const owed = c.rounds.filter(r => r.billable && !r.exported);
     if (owed.length > 0) {
-      return { tone: "warn", label: `ยังต้องส่งอีก ${owed.length} รอบ` };
+      return { tone: "warn", label: t("ยังต้องส่งอีก {n} รอบ", { n: owed.length }) };
     }
-    if (c.exportedAt) return { tone: "success", label: "ส่งครบทุกรอบ" };
+    if (c.exportedAt) return { tone: "success", label: t("ส่งครบทุกรอบ") };
   } else if (c.exportedAt) {
     // Thai date like every other screen, not the raw ISO "2026-09-27".
-    const d = new Date(c.exportedAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
-    return { tone: "success", label: `ส่งออกแล้ว ${d}` };
+    const d = new Date(c.exportedAt).toLocaleDateString(intl, { day: "numeric", month: "short", year: "numeric" });
+    return { tone: "success", label: t("ส่งออกแล้ว {date}", { date: d }) };
   }
-  if (c.exportable && c.blocked.length > 0) return { tone: "info", label: "ส่งออกได้บางส่วน" };
-  if (c.exportable) return { tone: "brand", label: "พร้อมส่งออก" };
-  return { tone: "neutral", label: "ยังไม่ถึงคิว" };
+  if (c.exportable && c.blocked.length > 0) return { tone: "info", label: t("ส่งออกได้บางส่วน") };
+  if (c.exportable) return { tone: "brand", label: t("พร้อมส่งออก") };
+  return { tone: "neutral", label: t("ยังไม่ถึงคิว") };
 }
 
 /** Who is holding the rest of the course up, when someone is. */
-function blockedHint(c: CourseCard): string {
+function blockedHint(c: CourseCard, t: TFn): string {
   const parts: string[] = [];
-  if (c.waitingLecturer > 0) parts.push(`${c.waitingLecturer} รายการรออาจารย์อนุมัติ`);
-  if (c.waitingTA > 0) parts.push(`${c.waitingTA} รายการ TA ยังไม่ส่ง`);
+  if (c.waitingLecturer > 0) parts.push(t("{n} รายการรออาจารย์อนุมัติ", { n: c.waitingLecturer }));
+  if (c.waitingTA > 0) parts.push(t("{n} รายการ TA ยังไม่ส่ง", { n: c.waitingTA }));
   if (c.awaitingAppointment.length > 0) {
     // Short on purpose: this line is truncated in the card, and the status chip
     // already says the fix (issue the next appointment order).
-    parts.push(`รอคำสั่งแต่งตั้ง: ${c.awaitingAppointment.join(", ")}`);
+    parts.push(t("รอคำสั่งแต่งตั้ง: {names}", { names: c.awaitingAppointment.join(", ") }));
   }
-  if (c.profileNotReady.length > 0) parts.push(`เอกสาร TA ยังไม่พร้อม: ${c.profileNotReady.join(", ")}`);
+  if (c.profileNotReady.length > 0) parts.push(t("เอกสาร TA ยังไม่พร้อม: {names}", { names: c.profileNotReady.join(", ") }));
   return parts.join(" · ");
 }
 
@@ -519,8 +523,9 @@ function blockedHint(c: CourseCard): string {
 function CourseRow({ card, split, onOpen, muted }: {
   card: CourseCard; split?: FiscalSplitInfo; onOpen: () => void; muted?: boolean;
 }) {
-  const st = statusOf(card);
-  const hint = blockedHint(card);
+  const { t, intl } = useI18n();
+  const st = statusOf(card, t, intl);
+  const hint = blockedHint(card, t);
   const pct = card.maxBaht > 0 ? (card.usedBaht / card.maxBaht) * 100 : 0;
   return (
     <button
@@ -556,7 +561,7 @@ function CourseRow({ card, split, onOpen, muted }: {
         <RoundBar rounds={card.rounds} split={split} />
         <Tip content={card.lecturers || undefined}>
           <div tabIndex={-1} className="mt-0.5 truncate text-xs text-muted">
-            {card.lecturers || "ยังไม่มีอาจารย์ผู้สอนในระบบ"}
+            {card.lecturers || t("ยังไม่มีอาจารย์ผู้สอนในระบบ")}
           </div>
         </Tip>
         {hint && (
@@ -570,13 +575,13 @@ function CourseRow({ card, split, onOpen, muted }: {
           down rather than read one at a time. */}
       <div className="hidden w-40 shrink-0 text-right sm:block">
         <div className="tabular text-sm font-medium">{baht(card.usedBaht)}</div>
-        <div className="tabular text-xs text-muted">จากงบ {baht(card.maxBaht)}</div>
+        <div className="tabular text-xs text-muted">{t("จากงบ {amount}", { amount: baht(card.maxBaht) })}</div>
         {card.overBudget ? (
           <div className="mt-0.5 inline-flex items-center gap-1 text-xs text-red-600">
-            <AlertTriangle size={11} /> เกินงบ
+            <AlertTriangle size={11} /> {t("เกินงบ")}
           </div>
         ) : card.maxBaht > 0 ? (
-          <Tip content={`ใช้งบไปแล้ว ${Math.round(pct)}% (${baht(card.usedBaht)} จาก ${baht(card.maxBaht)})`}>
+          <Tip content={t("ใช้งบไปแล้ว {pct}% ({used} จาก {max})", { pct: Math.round(pct), used: baht(card.usedBaht), max: baht(card.maxBaht) })}>
             <div tabIndex={-1} className="mt-1 h-1 overflow-hidden rounded-full bg-[var(--hairline)]">
               <div
                 className="h-full rounded-full bg-[var(--brand)]"

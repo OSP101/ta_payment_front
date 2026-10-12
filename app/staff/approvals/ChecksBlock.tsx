@@ -1,6 +1,7 @@
 "use client";
 import { Check, X, AlertTriangle } from "lucide-react";
 import { Tip } from "../../components/ui";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 interface DecisionCheck {
   rule: string;
@@ -14,16 +15,16 @@ interface DecisionCheck {
 }
 
 const RULE_LABEL: Record<string, string> = {
-  docs:           "เอกสาร TA",
-  schedule:       "ตารางเรียน",
-  cap:            "ไม่เกินจำนวนวิชาต่อภาคที่กำหนด",
-  duplicate:      "ไม่ซ้ำในวิชานี้",
-  own_conflict:   "ไม่ทับตารางเรียนของ TA",
-  clash_trimmed:  "คาบที่ถูกตัดออก",
-  cross_conflict: "ไม่ทับกับวิชาอื่นที่สอน",
-  intra_conflict: "sections ในคำขอไม่ทับกันเอง",
-  workload:       "ภาระงาน",
-  section:        "section ตรงกับรายวิชา",
+  docs:           msg("เอกสาร TA"),
+  schedule:       msg("ตารางเรียน"),
+  cap:            msg("ไม่เกินจำนวนวิชาต่อภาคที่กำหนด"),
+  duplicate:      msg("ไม่ซ้ำในวิชานี้"),
+  own_conflict:   msg("ไม่ทับตารางเรียนของ TA"),
+  clash_trimmed:  msg("คาบที่ถูกตัดออก"),
+  cross_conflict: msg("ไม่ทับกับวิชาอื่นที่สอน"),
+  intra_conflict: msg("sections ในคำขอไม่ทับกันเอง"),
+  workload:       msg("ภาระงาน"),
+  section:        msg("section ตรงกับรายวิชา"),
 };
 
 // Group by rule so the checklist reads like a rubric — one row per rule per
@@ -45,10 +46,11 @@ function group(checks: DecisionCheck[]): [string, DecisionCheck[]][] {
 }
 
 export function ChecksBlock({ checks }: { checks: DecisionCheck[] }) {
+  const { t } = useI18n();
   if (!checks || checks.length === 0) {
     return (
       <div className="text-xs text-(--ink-3) italic px-3 py-2 rounded border border-dashed border-(--hairline)">
-        ไม่มีบันทึกการตรวจสอบ (ข้อมูลก่อนระบบเปลี่ยนเป็นตัดสินอัตโนมัติ)
+        {t("ไม่มีบันทึกการตรวจสอบ (ข้อมูลก่อนระบบเปลี่ยนเป็นตัดสินอัตโนมัติ)")}
       </div>
     );
   }
@@ -58,7 +60,7 @@ export function ChecksBlock({ checks }: { checks: DecisionCheck[] }) {
       {grouped.map(([rule, list]) => (
         <li key={rule} className="rounded-md border border-(--hairline) bg-white overflow-hidden">
           <div className="text-[11px] font-medium tracking-wide text-(--ink-3) bg-slate-50/70 px-3 py-1 border-b border-(--hairline)">
-            {RULE_LABEL[rule] ?? rule}
+            {RULE_LABEL[rule] ? t(RULE_LABEL[rule]) : rule}
           </div>
           <ul>
             {list.map((c, i) => {
@@ -76,14 +78,14 @@ export function ChecksBlock({ checks }: { checks: DecisionCheck[] }) {
                 : "bg-red-100 text-red-700";
               return (
                 <li key={i} className={"flex items-start gap-2 px-3 py-1.5 text-xs " + rowCls}>
-                  <Tip content={c.passed ? "ผ่าน" : warn ? "ไม่ผ่าน แต่ไม่ขัดขวางคำขอ ควรติดตามต่อ" : "ไม่ผ่าน"}>
+                  <Tip content={c.passed ? t("ผ่าน") : warn ? t("ไม่ผ่าน แต่ไม่ขัดขวางคำขอ ควรติดตามต่อ") : t("ไม่ผ่าน")}>
                     <span className={"mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full " + iconCls}>
                       {c.passed ? <Check size={10} /> : warn ? <AlertTriangle size={10} /> : <X size={10} />}
                     </span>
                   </Tip>
                   <span>
                     {c.message}
-                    {warn && <span className="ml-1 text-[10px] uppercase tracking-wide">· ต้องติดตาม</span>}
+                    {warn && <span className="ml-1 text-[10px] uppercase tracking-wide">· {t("ต้องติดตาม")}</span>}
                   </span>
                 </li>
               );

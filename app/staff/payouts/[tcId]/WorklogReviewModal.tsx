@@ -17,6 +17,7 @@ import { packLanes, parseTime } from "../../../components/ScheduleGrid";
 import { readAddForm, writeAddForm, clearAddForm } from "../../../lib/draftStorage";
 import { WorkloadEditModal } from "../../../components/WorkloadEditModal";
 import { Skel, SkelRegion } from "../../../components/Skeletons";
+import { msg, useI18n } from "../../../lib/i18n/client";
 
 /**
  * One TA's month, checked against their own week.
@@ -82,18 +83,16 @@ export interface ReviewTarget {
 }
 
 const ACTIVITY_LABEL: Record<string, string> = {
-  lecture: "บรรยาย", lab: "ปฏิบัติการ", review: "ตรวจงาน", other: "อื่นๆ", makeup: "ชดเชย",
+  lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ"), review: msg("ตรวจงาน"), other: msg("อื่นๆ"), makeup: msg("ชดเชย"),
 };
 /**
  * ภาคปกติ vs ภาคพิเศษ decides the hourly rate (ป.ตรี: 40฿ vs 50฿), so a section
  * number without it does not tell the reviewer what an hour on that row is
  * worth. Short forms because it sits inside a narrow column beside the number.
  */
-const TRACK_TH: Record<string, string> = { regular: "ปกติ", special: "พิเศษ" };
+const TRACK_TH: Record<string, string> = { regular: msg("ปกติ"), special: msg("พิเศษ") };
 
-const DOW_TH = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
-const MONTH_TH = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+const DOW_TH = [msg("อาทิตย์"), msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์")];
 const START_HR = 8;
 const END_HR = 21;
 const TOTAL_MIN = (END_HR - START_HR) * 60;
@@ -103,7 +102,7 @@ const TOTAL_MIN = (END_HR - START_HR) * 60;
 const LANE_PX = 24;
 const DAYS = [1, 2, 3, 4, 5, 6, 0];
 const DAY_LABEL: Record<number, string> = {
-  1: "จันทร์", 2: "อังคาร", 3: "พุธ", 4: "พฤหัส", 5: "ศุกร์", 6: "เสาร์", 0: "อาทิตย์",
+  1: msg("จันทร์"), 2: msg("อังคาร"), 3: msg("พุธ"), 4: msg("พฤหัส"), 5: msg("ศุกร์"), 6: msg("เสาร์"), 0: msg("อาทิตย์"),
 };
 const pct = (n: number) => `${(n * 100).toFixed(3)}%`;
 
@@ -112,7 +111,7 @@ const KIND_BG: Record<string, string> = {
   lecture: "#C0DD97", lab: "#B5D4F4", review: "#CECBF6", own_class: "#F5C4B3",
 };
 const KIND_LABEL: Record<string, string> = {
-  lecture: "บรรยาย", lab: "ปฏิบัติการ", review: "ตรวจงาน", own_class: "คาบเรียนของเขา",
+  lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ"), review: msg("ตรวจงาน"), own_class: msg("คาบเรียนของเขา"),
 };
 const KIND_FG: Record<string, string> = {
   lecture: "#173404", lab: "#042C53", review: "#26215C", own_class: "#4A1B0C",
@@ -166,6 +165,7 @@ export function WorklogReviewModal({
   const formKey = open && termId && target
     ? `/timetable-form?term_id=${termId}&user_id=${target.taId}`
     : null;
+  const { t } = useI18n();
   const { data, isLoading } = useSWR<MonthDetail>(detailKey);
   const { data: form } = useSWR<{ blocks: OwnBlock[] }>(formKey);
   const { data: me } = useSWR<Me>("/me");
@@ -191,7 +191,7 @@ export function WorklogReviewModal({
         me.id, staffBatchAid(tcId, target.taId, target.yearMonth));
       if (saved && Object.keys(saved.form).length > 0) {
         setPending(saved.form);
-        notify.info(`กู้คืนการแก้ไขที่ยังไม่ได้บันทึก ${Object.keys(saved.form).length} รายการ`);
+        notify.info(t("กู้คืนการแก้ไขที่ยังไม่ได้บันทึก {n} รายการ", { n: Object.keys(saved.form).length }));
       } else {
         setPending({});
       }
@@ -248,7 +248,7 @@ export function WorklogReviewModal({
         `/submission-periods/${target.periodId}/courses/${tcId}/tas/${target.taId}/staff-review`,
         { comment: "" },
       );
-      notify.success(`ตรวจผ่าน ${target.periodLabel}`);
+      notify.success(t("ตรวจผ่าน {period}", { period: target.periodLabel }));
       if (detailKey) await mutate(detailKey);
       onChanged();
     } catch (e) {
@@ -269,7 +269,7 @@ export function WorklogReviewModal({
         `/submission-periods/${target.periodId}/courses/${tcId}/tas/${target.taId}/send-back`,
         { to_status: "pending", reason: rejectReason },
       );
-      notify.success(`ตีกลับ ${target.periodLabel} แล้ว`);
+      notify.success(t("ตีกลับ {period} แล้ว", { period: target.periodLabel }));
       setRejectOpen(false);
       setRejectReason("");
       if (detailKey) await mutate(detailKey);
@@ -298,7 +298,7 @@ export function WorklogReviewModal({
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hairline)] pb-2">
             <div className="inline-flex items-center overflow-hidden rounded-lg border border-[var(--hairline)]">
               <IconButton
-                label="เดือนก่อนหน้า"
+                label={t("เดือนก่อนหน้า")}
                 variant="ghost"
                 size="sm"
                 isDisabled={idx <= 0}
@@ -308,7 +308,7 @@ export function WorklogReviewModal({
               </IconButton>
               <span className="px-3 text-sm font-medium">{target.periodLabel}</span>
               <IconButton
-                label="เดือนถัดไป"
+                label={t("เดือนถัดไป")}
                 variant="ghost"
                 size="sm"
                 isDisabled={idx < 0 || idx >= months.length - 1}
@@ -318,25 +318,25 @@ export function WorklogReviewModal({
               </IconButton>
             </div>
             {target.status !== "pending" ? (
-              <Chip tone="success">ตรวจแล้ว</Chip>
+              <Chip tone="success">{t("ตรวจแล้ว")}</Chip>
             ) : target.openRows > 0 ? (
-              <Chip tone="warn">ยังมี {target.openRows} รายการไม่ปิด</Chip>
+              <Chip tone="warn">{t("ยังมี {n} รายการไม่ปิด", { n: target.openRows })}</Chip>
             ) : null}
 
             <Button variant="ghost" size="sm" onPress={() => setWorkloadEditOpen(true)}>
-              <Settings2 size={14} /> แก้ไขภาระงาน
+              <Settings2 size={14} /> {t("แก้ไขภาระงาน")}
             </Button>
 
             <span className="flex-1" />
 
             {pendingCount > 0 && (
               <>
-                <Chip tone="warn">แก้ไว้ {pendingCount} รายการ ยังไม่บันทึก</Chip>
+                <Chip tone="warn">{t("แก้ไว้ {n} รายการ ยังไม่บันทึก", { n: pendingCount })}</Chip>
                 <Button variant="ghost" size="sm" onPress={() => setPending({})}>
-                  <RotateCcw size={14} /> ยกเลิก
+                  <RotateCcw size={14} /> {t("ยกเลิก")}
                 </Button>
                 <Button variant="primary" size="sm" onPress={() => setCommitOpen(true)}>
-                  <ShieldCheck size={14} /> บันทึกการแก้ไข
+                  <ShieldCheck size={14} /> {t("บันทึกการแก้ไข")}
                 </Button>
               </>
             )}
@@ -349,12 +349,12 @@ export function WorklogReviewModal({
                     finance (finance-revert), so ตีกลับ is not offered. */}
                 {target.periodOpen && target.status !== "finance_sent" && (
                   <Button variant="secondary" size="sm" isDisabled={busy} onPress={() => setRejectOpen(true)}>
-                    <Undo2 size={14} /> ตีกลับ
+                    <Undo2 size={14} /> {t("ตีกลับ")}
                   </Button>
                 )}
                 {target.status === "pending" && target.openRows === 0 && (
                   <Button size="sm" isDisabled={busy} onPress={approve}>
-                    <CheckCircle2 size={14} /> ผ่านเดือนนี้
+                    <CheckCircle2 size={14} /> {t("ผ่านเดือนนี้")}
                   </Button>
                 )}
               </>
@@ -383,7 +383,7 @@ export function WorklogReviewModal({
               {/* ── left: the week ─────────────────────────────────────────── */}
               <div className="min-h-0 overflow-auto">
                 <p className="mb-1.5 text-xs text-muted">
-                  ตารางสัปดาห์ คาบของวิชาอื่นเป็นสีเทา · กดคาบเพื่อไฮไลต์แถวที่มาจากคาบนั้น
+                  {t("ตารางสัปดาห์ คาบของวิชาอื่นเป็นสีเทา · กดคาบเพื่อไฮไลต์แถวที่มาจากคาบนั้น")}
                 </p>
                 <WeekGrid
                   blocks={form?.blocks ?? []}
@@ -396,12 +396,12 @@ export function WorklogReviewModal({
                   {(["lecture", "lab", "review"] as const).map(k => (
                     <span key={k} className="inline-flex items-center gap-1.5">
                       <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: KIND_BG[k] }} />
-                      {KIND_LABEL[k]}
+                      {t(KIND_LABEL[k])}
                     </span>
                   ))}
                   <span className="inline-flex items-center gap-1.5">
                     <span className="inline-block h-2.5 w-2.5 rounded-sm bg-surface-secondary ring-1 ring-[var(--hairline)]" />
-                    วิชาอื่น / คาบเรียนของเขา
+                    {t("วิชาอื่น / คาบเรียนของเขา")}
                   </span>
                 </div>
               </div>
@@ -423,18 +423,18 @@ export function WorklogReviewModal({
                         }
                       >
                         {sec === "__all"
-                          ? "ทุก sec"
-                          : `sec ${sec}${TRACK_TH[track] ? ` · ภาค${TRACK_TH[track]}` : ""}`}
+                          ? t("ทุก sec")
+                          : "sec " + sec + (TRACK_TH[track] ? " · " + t("ภาค{track}", { track: t(TRACK_TH[track]) }) : "")}
                       </button>
                     ))}
                   </div>
                 )}
 
                 <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <Stat label="บรรยาย" value={totals.lecture} />
-                  <Stat label="ปฏิบัติการ" value={totals.lab} />
-                  <Stat label="ตรวจงาน + อื่นๆ" value={totals.review + totals.other} />
-                  <Stat label="รวม" value={<HoursSplit stacked regular={totals.regular} special={totals.special} />} strong />
+                  <Stat label={t("บรรยาย")} value={totals.lecture} />
+                  <Stat label={t("ปฏิบัติการ")} value={totals.lab} />
+                  <Stat label={t("ตรวจงาน + อื่นๆ")} value={totals.review + totals.other} />
+                  <Stat label={t("รวม")} value={<HoursSplit stacked regular={totals.regular} special={totals.special} />} strong />
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--hairline)]">
@@ -466,7 +466,7 @@ export function WorklogReviewModal({
       <ConfirmDialog
         open={rejectOpen}
         onClose={() => setRejectOpen(false)}
-        title="ตีกลับให้แก้ไข"
+        title={t("ตีกลับให้แก้ไข")}
         icon={<Undo2 size={18} />}
         danger
         isPending={busy}
@@ -480,15 +480,15 @@ export function WorklogReviewModal({
               className="w-full"
               value={rejectReason}
               onChange={e => setRejectReason(e.target.value)}
-              placeholder="เหตุผล เช่น ชั่วโมงวันที่ 12 ไม่ตรงกับตารางสอน"
+              placeholder={t("เหตุผล เช่น ชั่วโมงวันที่ 12 ไม่ตรงกับตารางสอน")}
               rows={3}
             />
             {rejectReason.trim() === "" && (
-              <p className="text-xs text-red-600">ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร</p>
+              <p className="text-xs text-red-600">{t("ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร")}</p>
             )}
           </div>
         }
-        confirmLabel="ตีกลับ"
+        confirmLabel={t("ตีกลับ")}
         onConfirm={() => { if (rejectReason.trim() !== "") void sendBack(); }}
       />
 
@@ -523,11 +523,12 @@ export function WorklogReviewModal({
 }
 
 function Stat({ label, value, strong }: { label: string; value: number | React.ReactNode; strong?: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-lg bg-surface-secondary px-2 py-1.5">
       <div className="text-[11px] text-muted">{label}</div>
       <div className={"tabular " + (strong ? "text-sm font-medium" : "text-sm")}>
-        {typeof value === "number" ? `${value.toFixed(1)} ชม.` : value}
+        {typeof value === "number" ? t("{h} ชม.", { h: value.toFixed(1) }) : value}
       </div>
     </div>
   );
@@ -546,6 +547,7 @@ function WeekGrid({
   blocks: OwnBlock[]; courseCode: string;
   activeKey: string | null; onPick: (k: string) => void;
 }) {
+  const { t } = useI18n();
   const byDay = useMemo(() => {
     const m = new Map<number, { block: OwnBlock; lane: number; laneCount: number }[]>();
     for (const dow of DAYS) {
@@ -564,7 +566,7 @@ function WeekGrid({
     <div className="overflow-x-auto rounded-lg border border-[var(--hairline)]">
       <div className="min-w-[520px]">
         <div className="flex border-b border-[var(--hairline)] bg-surface-secondary">
-          <div className="w-14 shrink-0 px-2 py-1 text-[11px] text-muted">เวลา</div>
+          <div className="w-14 shrink-0 px-2 py-1 text-[11px] text-muted">{t("เวลา")}</div>
           <div className="relative flex-1" style={{ height: 20 }}>
             {hours.map((h, i) => (
               <span
@@ -590,7 +592,7 @@ function WeekGrid({
                 className="flex w-14 shrink-0 items-center justify-center bg-surface-secondary text-[11px]"
                 style={{ minHeight: rowH }}
               >
-                {DAY_LABEL[dow]}
+                {t(DAY_LABEL[dow])}
               </div>
               <div className="relative flex-1" style={{ height: rowH }}>
                 {hours.slice(1, -1).map((h, i) => (
@@ -611,10 +613,10 @@ function WeekGrid({
                   return (
                     <Tip key={i} content={
                         `${b.course_code}${b.sec_no ? ` sec ${b.sec_no}` : ""}` +
-                        (TRACK_TH[b.track ?? ""] ? ` · ภาค${TRACK_TH[b.track ?? ""]}` : "") +
-                        ` · ${KIND_LABEL[b.kind] ?? ""}` +
+                        (TRACK_TH[b.track ?? ""] ? " · " + t("ภาค{track}", { track: t(TRACK_TH[b.track ?? ""]) }) : "") +
+                        ` · ${KIND_LABEL[b.kind] ? t(KIND_LABEL[b.kind]) : ""}` +
                         ` · ${b.start_time.slice(0, 5)}–${b.end_time.slice(0, 5)}` +
-                        (mine ? "" : " (วิชาอื่น)")
+                        (mine ? "" : " " + t("(วิชาอื่น)"))
                       }><button
                       type="button"
                       disabled={!mine}
@@ -662,10 +664,13 @@ function weekStart(iso: string): string {
 // Spelled out, with the Buddhist year the rest of the system prints. "อ. 23/6"
 // saved a few pixels and cost the reviewer the one thing they cross-check
 // against a paper form: which day of which month.
-const fullDate = (iso: string) => {
-  const d = new Date(iso + "T00:00:00");
-  return `${DOW_TH[d.getDay()]} ${d.getDate()} ${MONTH_TH[d.getMonth()]} ${d.getFullYear() + 543}`;
-};
+function useFullDate() {
+  const { t, monthName, year } = useI18n();
+  return (iso: string) => {
+    const d = new Date(iso + "T00:00:00");
+    return `${t(DOW_TH[d.getDay()])} ${d.getDate()} ${monthName(d.getMonth() + 1)} ${year(d.getFullYear())}`;
+  };
+}
 
 function WeekTable({
   days, canEdit, pending, activeKey, onHover, onStage, onUndo,
@@ -681,6 +686,8 @@ function WeekTable({
   // Which row is open for editing, and its draft. Editing happens IN the row:
   // a dialog on top of a dialog hid the very table the reviewer was checking
   // the numbers against, which is the only reason they opened this screen.
+  const { t } = useI18n();
+  const fullDate = useFullDate();
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ start: "", end: "", note: "" });
 
@@ -695,7 +702,7 @@ function WeekTable({
   }, [days]);
 
   if (days.length === 0) {
-    return <p className="p-4 text-sm text-muted">ไม่มีบันทึกเวลาในเดือนนี้</p>;
+    return <p className="p-4 text-sm text-muted">{t("ไม่มีบันทึกเวลาในเดือนนี้")}</p>;
   }
 
   const beginEdit = (d: ReviewDay) => {
@@ -717,14 +724,14 @@ function WeekTable({
           reviewer to infer which was hours and which was the section. */}
       <thead className="sticky top-0 z-10 bg-surface-secondary text-muted">
         <tr>
-          <th className="px-2 py-1.5 text-left font-normal">วันที่</th>
-          <th className="px-1 py-1.5 text-left font-normal">เวลา</th>
-          <th className="px-1 py-1.5 text-right font-normal">ชม.</th>
-          <th className="px-1 py-1.5 text-left font-normal">กิจกรรม</th>
-          <th className="px-1 py-1.5 text-left font-normal">Sec · ภาค</th>
-          <th className="px-1 py-1.5 text-left font-normal">หมายเหตุ</th>
-          <th className="px-1 py-1.5 text-left font-normal">ที่มา</th>
-          <th className="px-1 py-1.5 text-right font-normal">แก้ไข</th>
+          <th className="px-2 py-1.5 text-left font-normal">{t("วันที่")}</th>
+          <th className="px-1 py-1.5 text-left font-normal">{t("เวลา")}</th>
+          <th className="px-1 py-1.5 text-right font-normal">{t("ชม.")}</th>
+          <th className="px-1 py-1.5 text-left font-normal">{t("กิจกรรม")}</th>
+          <th className="px-1 py-1.5 text-left font-normal">{t("Sec · ภาค")}</th>
+          <th className="px-1 py-1.5 text-left font-normal">{t("หมายเหตุ")}</th>
+          <th className="px-1 py-1.5 text-left font-normal">{t("ที่มา")}</th>
+          <th className="px-1 py-1.5 text-right font-normal">{t("แก้ไข")}</th>
         </tr>
       </thead>
       <tbody>
@@ -732,7 +739,7 @@ function WeekTable({
           <Fragment key={wk}>
             <tr>
               <td colSpan={8} className="bg-surface-secondary/60 px-2 py-1 text-[11px] text-muted">
-                สัปดาห์ {fullDate(wk)} · {rows.reduce((a, r) => a + r.hours, 0).toFixed(1)} ชม.
+                {t("สัปดาห์ {date} · {h} ชม.", { date: fullDate(wk), h: rows.reduce((a, r) => a + r.hours, 0).toFixed(1) })}
               </td>
             </tr>
             {rows.map(d => {
@@ -784,25 +791,25 @@ function WeekTable({
                       <td className={"px-1 py-1 text-right tabular " + (draftOK ? "" : "text-red-600")}>
                         {draftOK ? (draftMins / 60).toFixed(2) : "—"}
                       </td>
-                      <td className="px-1 py-1">{ACTIVITY_LABEL[d.activity] ?? d.activity}</td>
+                      <td className="px-1 py-1">{ACTIVITY_LABEL[d.activity] ? t(ACTIVITY_LABEL[d.activity]) : d.activity}</td>
                       <td className="whitespace-nowrap px-1 py-1">
                         {d.sec_no}
                         {TRACK_TH[d.track] && (
-                          <span className="text-muted"> · {TRACK_TH[d.track]}</span>
+                          <span className="text-muted"> · {t(TRACK_TH[d.track])}</span>
                         )}
                       </td>
                       <td className="px-1 py-1">
                         <TextInput
                           className="w-full"
                           value={draft.note}
-                          placeholder="ทำอะไรในคาบนี้"
+                          placeholder={t("ทำอะไรในคาบนี้")}
                           onChange={e => setDraft(v => ({ ...v, note: e.target.value }))}
                         />
                       </td>
                       <td className="px-1 py-1" />
                       <td className="whitespace-nowrap px-1 py-1 text-right">
                         <IconButton
-                          label="เก็บการแก้ไขไว้"
+                          label={t("เก็บการแก้ไขไว้")}
                           variant="ghost"
                           size="sm"
                           isDisabled={!draftOK}
@@ -819,7 +826,7 @@ function WeekTable({
                         >
                           <Check size={12} />
                         </IconButton>
-                        <IconButton label="เลิกแก้" variant="ghost" size="sm" onClick={() => setEditId(null)}>
+                        <IconButton label={t("เลิกแก้")} variant="ghost" size="sm" onClick={() => setEditId(null)}>
                           <X size={12} />
                         </IconButton>
                       </td>
@@ -834,11 +841,11 @@ function WeekTable({
                       <td className={"px-1 py-1 text-right tabular " + (p?.action === "delete" ? "line-through" : "")}>
                         {(p?.action === "update" ? p.hours : d.hours).toFixed(1)}
                       </td>
-                      <td className="whitespace-nowrap px-1 py-1">{ACTIVITY_LABEL[d.activity] ?? d.activity}</td>
+                      <td className="whitespace-nowrap px-1 py-1">{ACTIVITY_LABEL[d.activity] ? t(ACTIVITY_LABEL[d.activity]) : d.activity}</td>
                       <td className="whitespace-nowrap px-1 py-1">
                         {d.sec_no}
                         {TRACK_TH[d.track] && (
-                          <span className="text-muted"> · {TRACK_TH[d.track]}</span>
+                          <span className="text-muted"> · {t(TRACK_TH[d.track])}</span>
                         )}
                       </td>
                       <td className="px-1 py-1 text-muted">
@@ -846,30 +853,30 @@ function WeekTable({
                       </td>
                       <td className="px-1 py-1">
                         {d.source === "manual" ? (
-                          <Tip content="TA กรอกรายการนี้เอง ไม่ได้สร้างจากตารางสอน">
-                            <span className="inline-flex"><Chip tone="warn">TA เพิ่มเอง</Chip></span>
+                          <Tip content={t("TA กรอกรายการนี้เอง ไม่ได้สร้างจากตารางสอน")}>
+                            <span className="inline-flex"><Chip tone="warn">{t("TA เพิ่มเอง")}</Chip></span>
                           </Tip>
                         ) : (
-                          <Tip content="ระบบสร้างรายการนี้จากตารางสอนของ section">
-                            <span className="text-[11px] text-muted">ระบบ</span>
+                          <Tip content={t("ระบบสร้างรายการนี้จากตารางสอนของ section")}>
+                            <span className="text-[11px] text-muted">{t("ระบบ")}</span>
                           </Tip>
                         )}
                       </td>
                       <td className="whitespace-nowrap px-1 py-1 text-right">
                         {p ? (
-                          <IconButton label="ยกเลิกการแก้" variant="ghost" size="sm" onClick={() => onUndo(d.id)}>
+                          <IconButton label={t("ยกเลิกการแก้")} variant="ghost" size="sm" onClick={() => onUndo(d.id)}>
                             <RotateCcw size={12} />
                           </IconButton>
                         ) : canEdit ? (
                           <>
-                            <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => beginEdit(d)}>
+                            <IconButton label={t("แก้ไข")} variant="ghost" size="sm" onClick={() => beginEdit(d)}>
                               <Pencil size={12} />
                             </IconButton>
                             {/* StaffDelete removes draft/rejected rows only; an
                                 approved or submitted row is corrected, not deleted. */}
                             {(d.status === "draft" || d.status === "rejected") && (
                               <IconButton
-                                label="ลบ"
+                                label={t("ลบ")}
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => onStage(d.id, { action: "delete" })}
@@ -910,6 +917,8 @@ function CommitDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const { t } = useI18n();
+  const fullDate = useFullDate();
   const [reason, setReason] = useState("");
   const [password, setPassword] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -965,9 +974,9 @@ function CommitDialog({
         `/submission-periods/courses/${tcId}/tas/${taId}/worklog-batch`, fd,
       );
       if (res.failed > 0) {
-        notify.error(`บันทึก ${res.applied} รายการ · ไม่ผ่าน ${res.failed}: ${(res.errors ?? []).join(" · ")}`);
+        notify.error(t("บันทึก {applied} รายการ · ไม่ผ่าน {failed}: {errors}", { applied: res.applied, failed: res.failed, errors: (res.errors ?? []).join(" · ") }));
       } else {
-        notify.success(`บันทึกการแก้ไข ${res.applied} รายการ แจ้งอาจารย์และ TA แล้ว`);
+        notify.success(t("บันทึกการแก้ไข {n} รายการ แจ้งอาจารย์และ TA แล้ว", { n: res.applied }));
       }
       if (me?.id) clearAddForm(me.id, reasonAid);
       onDone();
@@ -979,12 +988,12 @@ function CommitDialog({
   }
 
   return (
-    <Modal open onClose={onClose} size="md" title="ยืนยันการแก้ไขบันทึกเวลา" icon={<ShieldCheck size={16} />}>
+    <Modal open onClose={onClose} size="md" title={t("ยืนยันการแก้ไขบันทึกเวลา")} icon={<ShieldCheck size={16} />}>
       <div className="space-y-3">
         <Alert
           status="warning"
-          title={`จะแก้ ${entries.length} รายการของเดือนนี้`}
-          description="เหตุผลจะถูกส่งถึงอาจารย์ผู้สอนและ TA พร้อมบันทึกไว้ในประวัติการแก้ไขถาวร"
+          title={t("จะแก้ {n} รายการของเดือนนี้", { n: entries.length })}
+          description={t("เหตุผลจะถูกส่งถึงอาจารย์ผู้สอนและ TA พร้อมบันทึกไว้ในประวัติการแก้ไขถาวร")}
         />
 
         <ul className="max-h-32 space-y-0.5 overflow-auto text-xs text-muted">
@@ -995,41 +1004,41 @@ function CommitDialog({
               <li key={id}>
                 {fullDate(d.work_date)} {d.start_time.slice(0, 5)}–{d.end_time.slice(0, 5)} →{" "}
                 {p.action === "delete"
-                  ? <span className="text-red-600">ลบ</span>
-                  : `${p.start_time}–${p.end_time} (${p.hours.toFixed(2)} ชม.)`}
+                  ? <span className="text-red-600">{t("ลบ")}</span>
+                  : t("{start}–{end} ({h} ชม.)", { start: p.start_time, end: p.end_time, h: p.hours.toFixed(2) })}
               </li>
             );
           })}
         </ul>
 
         <div>
-          <label className="mb-1 block text-xs text-ink-2">เหตุผล (อย่างน้อย 10 ตัวอักษร)</label>
+          <label className="mb-1 block text-xs text-ink-2">{t("เหตุผล (อย่างน้อย 10 ตัวอักษร)")}</label>
           <TextArea
             className="w-full"
             value={reason}
             onChange={e => setReason(e.target.value)}
             rows={3}
-            placeholder="เช่น ตารางสอนเปลี่ยนกลางเทอม เวลาที่ลงไว้ไม่ตรงกับคาบจริง"
+            placeholder={t("เช่น ตารางสอนเปลี่ยนกลางเทอม เวลาที่ลงไว้ไม่ตรงกับคาบจริง")}
           />
           {!reasonOK && reason.length > 0 && (
-            <p className="mt-1 text-xs text-red-600">ยังสั้นเกินไป ({reason.trim().length}/10)</p>
+            <p className="mt-1 text-xs text-red-600">{t("ยังสั้นเกินไป ({n}/10)", { n: reason.trim().length })}</p>
           )}
         </div>
 
         <div>
-          <label className="mb-1 block text-xs text-ink-2">แนบหลักฐาน (ไม่เกิน 3 รูป)</label>
+          <label className="mb-1 block text-xs text-ink-2">{t("แนบหลักฐาน (ไม่เกิน 3 รูป)")}</label>
           <div className="flex flex-wrap items-center gap-2">
             {files.map((f, i) => (
               <span key={i} className="inline-flex items-center gap-1 rounded border border-[var(--hairline)] px-2 py-0.5 text-xs">
                 <Tip content={f.name.length > 18 ? f.name : undefined}><span tabIndex={-1}>{f.name.slice(0, 18)}</span></Tip>
-                <Tip content="เอารูปนี้ออก"><button type="button" className="cursor-pointer" aria-label={`เอา ${f.name} ออก`} onClick={() => setFiles(v => v.filter((_, j) => j !== i))}>
+                <Tip content={t("เอารูปนี้ออก")}><button type="button" className="cursor-pointer" aria-label={t("เอา {name} ออก", { name: f.name })} onClick={() => setFiles(v => v.filter((_, j) => j !== i))}>
                   <X size={11} />
                 </button></Tip>
               </span>
             ))}
             {files.length < 3 && (
               <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-[var(--hairline)] px-2 py-0.5 text-xs hover:border-[var(--brand)]">
-                <ImagePlus size={12} /> เพิ่มรูป
+                <ImagePlus size={12} /> {t("เพิ่มรูป")}
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
@@ -1046,25 +1055,25 @@ function CommitDialog({
         </div>
 
         <label className="block text-xs text-ink-2">
-          รหัสผ่านของคุณ
+          {t("รหัสผ่านของคุณ")}
           <TextInput
             className="mt-1 w-full"
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder="ยืนยันว่าเป็นคุณจริง"
+            placeholder={t("ยืนยันว่าเป็นคุณจริง")}
           />
         </label>
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onPress={onClose}>ยกเลิก</Button>
+          <Button variant="ghost" size="sm" onPress={onClose}>{t("ยกเลิก")}</Button>
           <Button
             variant="primary"
             size="sm"
             isDisabled={busy || !reasonOK || password === ""}
             onPress={submit}
           >
-            {busy ? <Spinner size="sm" /> : <ShieldCheck size={14} />} บันทึกการแก้ไข
+            {busy ? <Spinner size="sm" /> : <ShieldCheck size={14} />} {t("บันทึกการแก้ไข")}
           </Button>
         </div>
       </div>
@@ -1080,13 +1089,14 @@ export { linkKey };
  *  the month's approved and pending rows go back to the TA as ถูกส่งกลับ, the
  *  lecturer must approve them again, and staff must check the month again. */
 export function SendBackEffect({ status }: { status: string }) {
+  const { t } = useI18n();
   return (
     <ul className="list-disc space-y-0.5 pl-4 text-xs text-ink-2">
-      <li>รายการที่อนุมัติแล้วและที่รออนุมัติของเดือนนี้ทั้งหมดจะกลับไปเป็น “ถูกส่งกลับ” พร้อมเหตุผลด้านล่าง ให้ TA แก้ไขและส่งใหม่</li>
-      <li>อาจารย์ต้องอนุมัติรายการที่ส่งใหม่อีกครั้ง แล้วเจ้าหน้าที่จึงตรวจเดือนนี้ได้อีกครั้ง</li>
-      {status === "staff_reviewed" && <li>ผลการตรวจของเจ้าหน้าที่สำหรับเดือนนี้จะถูกยกเลิก</li>}
+      <li>{t("รายการที่อนุมัติแล้วและที่รออนุมัติของเดือนนี้ทั้งหมดจะกลับไปเป็น “ถูกส่งกลับ” พร้อมเหตุผลด้านล่าง ให้ TA แก้ไขและส่งใหม่")}</li>
+      <li>{t("อาจารย์ต้องอนุมัติรายการที่ส่งใหม่อีกครั้ง แล้วเจ้าหน้าที่จึงตรวจเดือนนี้ได้อีกครั้ง")}</li>
+      {status === "staff_reviewed" && <li>{t("ผลการตรวจของเจ้าหน้าที่สำหรับเดือนนี้จะถูกยกเลิก")}</li>}
       {status === "exported" && (
-        <li>เดือนนี้ส่งออกเอกสารแล้ว ล็อกจะถูกปลด และเมื่อส่งออกใหม่จะได้เอกสาร “ฉบับแก้ไข” แทนฉบับเดิม (ฉบับเดิมยังอยู่ในประวัติการส่งออก)</li>
+        <li>{t("เดือนนี้ส่งออกเอกสารแล้ว ล็อกจะถูกปลด และเมื่อส่งออกใหม่จะได้เอกสาร “ฉบับแก้ไข” แทนฉบับเดิม (ฉบับเดิมยังอยู่ในประวัติการส่งออก)")}</li>
       )}
     </ul>
   );

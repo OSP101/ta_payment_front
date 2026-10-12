@@ -12,6 +12,7 @@ import {
   Button, IconButton, TextArea, FieldGroup, Chip, StatusChip, Modal, TimePicker, Alert, Tip,
 } from "../../../../components/ui";
 import { Skel } from "../../../../components/Skeletons";
+import { msg, useI18n, type I18n, type TFn } from "../../../../lib/i18n/client";
 
 /**
  * The review of one TA, laid out section by section (09/2026).
@@ -87,13 +88,11 @@ interface HolidayImpactsResponse {
 }
 
 const ACTIVITY_LABEL: Record<string, string> = {
-  lecture: "บรรยาย", lab: "ปฏิบัติการ", review: "ตรวจงาน", makeup: "ชดเชย", other: "อื่น ๆ",
+  lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ"), review: msg("ตรวจงาน"), makeup: msg("ชดเชย"), other: msg("อื่น ๆ"),
 };
-const PARENT_KIND_LABEL: Record<string, string> = { lecture: "คู่กับบรรยาย", lab: "คู่กับปฏิบัติการ" };
-const TRACK_LABEL: Record<string, string> = { regular: "ภาคปกติ", special: "ภาคพิเศษ" };
-const DOW_ABBR_TH = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-const MONTH_TH_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-const MONTH_TH_LONG = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+const PARENT_KIND_LABEL: Record<string, string> = { lecture: msg("คู่กับบรรยาย"), lab: msg("คู่กับปฏิบัติการ") };
+const TRACK_LABEL: Record<string, string> = { regular: msg("ภาคปกติ"), special: msg("ภาคพิเศษ") };
+const DOW_ABBR_TH = [msg("อา"), msg("จ"), msg("อ"), msg("พ"), msg("พฤ"), msg("ศ"), msg("ส")];
 const REASON_MIN = 10; // editReasonMinLen on the server
 
 function hhmm(t?: string): string { return (t ?? "").slice(0, 5); }
@@ -106,24 +105,24 @@ function spanHours(start: string, end: string): number | null {
   if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return null;
   return Math.round(((e - s) / 60) * 100) / 100;
 }
-function dateTH(iso: string): string {
+function dateTH(iso: string, i: Pick<I18n, "t" | "fmtDate">): string {
   const [y, m, d] = (iso ?? "").split("-").map(Number);
   if (!y || !m || !d) return iso;
   const dt = new Date(y, m - 1, d);
-  return `${DOW_ABBR_TH[dt.getDay()]} ${d} ${MONTH_TH_SHORT[m - 1]} ${y + 543}`;
+  return `${i.t(DOW_ABBR_TH[dt.getDay()])} ${i.fmtDate(iso)}`;
 }
-function monthTH(key: string): string {
+function monthTH(key: string, i: Pick<I18n, "monthName" | "year">): string {
   const [y, m] = key.split("-").map(Number);
-  return y && m ? `${MONTH_TH_LONG[m - 1]} ${y + 543}` : key;
+  return y && m ? `${i.monthName(m, false)} ${i.year(y)}` : key;
 }
 function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function activityText(r: { activity: string; parent_kind?: string | null }): string {
-  const base = ACTIVITY_LABEL[r.activity] ?? r.activity;
+function activityText(r: { activity: string; parent_kind?: string | null }, t: TFn): string {
+  const base = ACTIVITY_LABEL[r.activity] ? t(ACTIVITY_LABEL[r.activity]) : r.activity;
   return r.activity === "other" && r.parent_kind && PARENT_KIND_LABEL[r.parent_kind]
-    ? `${base} (${PARENT_KIND_LABEL[r.parent_kind]})` : base;
+    ? `${base} (${t(PARENT_KIND_LABEL[r.parent_kind])})` : base;
 }
 
 /* ------------------------------------------------------------------ */
@@ -214,13 +213,13 @@ function flagsFor(s: Sitting, all: Sitting[], ctx: FlagContext): string[] {
       toMin(x.start_time) <= st && en <= toMin(x.end_time));
     const onMakeup = ctx.makeups.some(mk => mk.date === s.work_date &&
       (!mk.start || !mk.end || (toMin(mk.start) <= st && en <= toMin(mk.end))));
-    if (!inSlot && !onMakeup && s.activity !== "makeup") out.push("นอกเวลาตารางสอน");
+    if (!inSlot && !onMakeup && s.activity !== "makeup") out.push(msg("นอกเวลาตารางสอน"));
   }
   if (all.some(o => o !== s && o.work_date === s.work_date &&
       toMin(o.start_time) < en && st < toMin(o.end_time))) {
-    out.push("เวลาซ้อนกับรายการอื่น");
+    out.push(msg("เวลาซ้อนกับรายการอื่น"));
   }
-  if (s.work_date > ctx.today) out.push("ยังไม่ถึงวันที่ปฏิบัติงาน");
+  if (s.work_date > ctx.today) out.push(msg("ยังไม่ถึงวันที่ปฏิบัติงาน"));
   return out;
 }
 
@@ -239,6 +238,7 @@ export function SectionReview({
   onChanged: () => Promise<void>;
   onRejectingChange?: (rejecting: boolean) => void;
 }) {
+  const { t } = useI18n();
   // Same composite key the page has always used, so its invalidation after a
   // decision (k[0] === "worklogs") still reaches this view.
   const paths = sections.map(s => `/assignments/${s.id}/worklog`);
@@ -267,7 +267,7 @@ export function SectionReview({
   if (isLoading && !perAssignment) {
     return (
       <div className="border-t border-(--hairline) px-4 py-3" role="status" aria-busy="true">
-        <span className="sr-only">กำลังโหลด</span>
+        <span className="sr-only">{t("กำลังโหลด")}</span>
         <Skel className="h-4 w-40" />
         <Skel className="mt-3 h-8 w-full rounded-lg" />
       </div>
@@ -330,6 +330,8 @@ function BlockView({
   rejectingKey: string | null;
   setRejectingKey: (k: string | null) => void;
 }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const sittings = useMemo(() => sittingsOf(logs, block), [logs, block]);
   const secNos = block.sections.map(s => s.sec_no);
   const flagCtx = useMemo<FlagContext>(() => {
@@ -400,21 +402,21 @@ function BlockView({
       <div className="flex flex-wrap items-center gap-2 bg-surface-secondary/60 px-4 py-2">
         {block.sections.map(s => (
           <Chip key={s.id} tone={s.track === "special" ? "brand" : "neutral"}>
-            sec {s.sec_no} · {TRACK_LABEL[s.track] ?? s.track}
+            sec {s.sec_no} · {TRACK_LABEL[s.track] ? t(TRACK_LABEL[s.track]) : s.track}
           </Chip>
         ))}
         {block.coTaught && (
-          <Tip content="คาบเดียวกันบันทึกไว้ทุกเซคชันที่สอนพร้อมกัน ระบบนับและจ่ายครั้งเดียว อนุมัติ/แก้ไขพร้อมกันทุกเซคชัน"><span className="inline-flex items-center gap-1 text-xs text-muted">
-            <Link2 size={12} /> สอนพร้อมกัน นับชั่วโมงครั้งเดียว
+          <Tip content={t("คาบเดียวกันบันทึกไว้ทุกเซคชันที่สอนพร้อมกัน ระบบนับและจ่ายครั้งเดียว อนุมัติ/แก้ไขพร้อมกันทุกเซคชัน")}><span className="inline-flex items-center gap-1 text-xs text-muted">
+            <Link2 size={12} /> {t("สอนพร้อมกัน นับชั่วโมงครั้งเดียว")}
           </span></Tip>
         )}
         <span className="ms-auto text-xs text-muted">
-          {pendingTotal > 0 ? `รอพิจารณา ${pendingTotal} คาบ` : "ไม่มีรายการรอพิจารณา"}
+          {pendingTotal > 0 ? t("รอพิจารณา {n} คาบ", { n: pendingTotal }) : t("ไม่มีรายการรอพิจารณา")}
         </span>
       </div>
 
       {months.length === 0 && (
-        <div className="px-4 py-4 text-center text-xs text-muted">ยังไม่มีบันทึกเวลาที่ส่งมาในเซคชันนี้</div>
+        <div className="px-4 py-4 text-center text-xs text-muted">{t("ยังไม่มีบันทึกเวลาที่ส่งมาในเซคชันนี้")}</div>
       )}
 
       {months.map(mo => {
@@ -432,22 +434,22 @@ function BlockView({
                 className="-mx-1 flex min-w-0 basis-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md px-1 py-0.5 text-left hover:bg-surface-secondary sm:flex-1 sm:basis-auto"
               >
                 <ChevronDown size={14} className={`shrink-0 text-muted transition-transform ${open ? "" : "-rotate-90"}`} />
-                <span className="text-sm font-medium">{monthTH(mo.ym)}</span>
+                <span className="text-sm font-medium">{monthTH(mo.ym, i18n)}</span>
                 <span className="whitespace-nowrap text-xs text-muted">
                   {actionable
-                    ? <>รอพิจารณา <HoursSplit regular={mo.submittedRegular} special={mo.submittedSpecial} /> · {mo.submittedCount} คาบ</>
+                    ? t.rich("รอพิจารณา {hours} · {n} คาบ", { hours: <HoursSplit regular={mo.submittedRegular} special={mo.submittedSpecial} />, n: mo.submittedCount })
                     : mo.rejectedCount > 0
-                      ? `ส่งกลับให้ TA แก้ไข ${mo.rejectedCount} คาบ`
-                      : mo.approvedCount > 0 ? `${mo.approvedCount} คาบ · ตรวจครบแล้ว` : "ไม่มีรายการ"}
+                      ? t("ส่งกลับให้ TA แก้ไข {n} คาบ", { n: mo.rejectedCount })
+                      : mo.approvedCount > 0 ? t("{n} คาบ · ตรวจครบแล้ว", { n: mo.approvedCount }) : t("ไม่มีรายการ")}
                 </span>
                 {mo.flagged > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
-                    <AlertTriangle size={11} /> ควรตรวจ {mo.flagged}
+                    <AlertTriangle size={11} /> {t("ควรตรวจ {n}", { n: mo.flagged })}
                   </span>
                 )}
                 {mo.cuts.length > 0 && (
                   <span className="rounded-full border border-border bg-surface-secondary px-2 py-0.5 text-xs text-muted">
-                    ตัดออก {mo.cuts.length}
+                    {t("ตัดออก {n}", { n: mo.cuts.length })}
                   </span>
                 )}
               </button>
@@ -457,33 +459,33 @@ function BlockView({
                   (rejectingThis ? "pointer-events-none opacity-40" : "")}>
                   <Button variant="danger-soft" size="sm" disabled={!!busy || rejectingThis}
                           onClick={() => { setRejectingKey(key); setReason(""); }}>
-                    <X size={14} /> ส่งกลับ
+                    <X size={14} /> {t("ส่งกลับ")}
                   </Button>
                   <Button variant="primary" size="sm" disabled={!!busy || rejectingThis}
                           isPending={busy === `${mo.ym}|approve`}
                           onClick={() => decide(mo.ym, mo.ids, "approve")}>
-                    <Check size={14} /> อนุมัติ{block.sections.length > 1 ? ` sec ${secNos.join(", ")}` : ""}
+                    <Check size={14} /> {block.sections.length > 1 ? t("อนุมัติ sec {secs}", { secs: secNos.join(", ") }) : t("อนุมัติ")}
                   </Button>
                 </div>
               ) : mo.rejectedCount > 0 ? (
-                <span className="ms-auto shrink-0"><Chip tone="warn"><X size={12} /> รอ TA แก้ไข</Chip></span>
+                <span className="ms-auto shrink-0"><Chip tone="warn"><X size={12} /> {t("รอ TA แก้ไข")}</Chip></span>
               ) : mo.approvedCount > 0 ? (
-                <span className="ms-auto shrink-0"><Chip tone="success"><Check size={12} /> อนุมัติแล้ว</Chip></span>
+                <span className="ms-auto shrink-0"><Chip tone="success"><Check size={12} /> {t("อนุมัติแล้ว")}</Chip></span>
               ) : null}
             </div>
 
             {rejectingThis && (
               <div className="border-t border-(--hairline) bg-surface-secondary px-4 py-3">
-                <FieldGroup label={`เหตุผลที่ส่งกลับ ${monthTH(mo.ym)} (sec ${secNos.join(", ")})`}>
+                <FieldGroup label={t("เหตุผลที่ส่งกลับ {month} (sec {secs})", { month: monthTH(mo.ym, i18n), secs: secNos.join(", ") })}>
                   <TextArea rows={2} value={reason} onChange={e => setReason(e.target.value)}
-                            placeholder="เช่น ชั่วโมงวันที่ 5 ไม่ตรงกับตารางสอน" />
+                            placeholder={t("เช่น ชั่วโมงวันที่ 5 ไม่ตรงกับตารางสอน")} />
                 </FieldGroup>
                 <div className="mt-2 flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setRejectingKey(null)}>ยกเลิก</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setRejectingKey(null)}>{t("ยกเลิก")}</Button>
                   <Button variant="danger" size="sm" disabled={!reason.trim() || !!busy}
                           isPending={busy === `${mo.ym}|reject`}
                           onClick={async () => { setRejectingKey(null); await decide(mo.ym, mo.ids, "reject", reason.trim()); }}>
-                    ส่งกลับให้แก้ไข
+                    {t("ส่งกลับให้แก้ไข")}
                   </Button>
                 </div>
               </div>
@@ -520,6 +522,8 @@ function SittingTable({
   onEdit: (s: Sitting) => void;
   onCut: (s: Sitting) => void;
 }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   // Live rows and cut rows in one date order, so a cut day sits where it was.
   type Line = { kind: "row"; s: Sitting } | { kind: "cut"; c: WorkLogChange };
   const lines: Line[] = [
@@ -537,14 +541,14 @@ function SittingTable({
       <table className="w-full min-w-[720px] text-sm">
         <thead className="border-b border-(--hairline) text-xs text-muted">
           <tr>
-            <th className="whitespace-nowrap px-4 py-2 text-left font-medium">วันที่</th>
-            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">เวลา</th>
-            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">ชม.</th>
-            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">กิจกรรม</th>
-            <th className="px-3 py-2 text-left font-medium">หมายเหตุ / ข้อสังเกต</th>
-            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">สถานะ</th>
+            <th className="whitespace-nowrap px-4 py-2 text-left font-medium">{t("วันที่")}</th>
+            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">{t("เวลา")}</th>
+            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">{t("ชม.")}</th>
+            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">{t("กิจกรรม")}</th>
+            <th className="px-3 py-2 text-left font-medium">{t("หมายเหตุ / ข้อสังเกต")}</th>
+            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">{t("สถานะ")}</th>
             <th className="whitespace-nowrap px-4 py-2 text-right font-medium">
-              <span className="sr-only">จัดการ</span>
+              <span className="sr-only">{t("จัดการ")}</span>
             </th>
           </tr>
         </thead>
@@ -554,17 +558,17 @@ function SittingTable({
               const c = line.c;
               return (
                 <tr key={`cut-${c.id}`} className="bg-surface-secondary/50 text-muted">
-                  <td className="whitespace-nowrap px-4 py-2 line-through">{dateTH(c.work_date)}</td>
+                  <td className="whitespace-nowrap px-4 py-2 line-through">{dateTH(c.work_date, i18n)}</td>
                   <td className="whitespace-nowrap px-3 py-2 tabular line-through">{c.before.start_time}–{c.before.end_time}</td>
                   <td className="px-3 py-2 text-right tabular line-through">{c.before.hours.toFixed(1)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 line-through">{activityText(c.before)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 line-through">{activityText(c.before, t)}</td>
                   <td className="px-3 py-2 text-xs">
                     <span className="inline-flex items-start gap-1">
                       <Scissors size={12} className="mt-0.5 shrink-0" />
-                      <span>ตัดออกโดย {c.actor_name || "อาจารย์"} · {c.reason}</span>
+                      <span>{t("ตัดออกโดย {name}", { name: c.actor_name || t("อาจารย์") })} · {c.reason}</span>
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2"><Chip tone="neutral">ตัดออก</Chip></td>
+                  <td className="whitespace-nowrap px-3 py-2"><Chip tone="neutral">{t("ตัดออก")}</Chip></td>
                   <td />
                 </tr>
               );
@@ -575,23 +579,25 @@ function SittingTable({
             const canTouch = s.status === "submitted";
             return (
               <tr key={s.id} className={s.status === "submitted" ? "" : "text-muted"}>
-                <td className="whitespace-nowrap px-4 py-2">{dateTH(s.work_date)}</td>
+                <td className="whitespace-nowrap px-4 py-2">{dateTH(s.work_date, i18n)}</td>
                 <td className="whitespace-nowrap px-3 py-2 tabular">{s.start_time}–{s.end_time}</td>
                 <td className="px-3 py-2 text-right tabular">{s.hours.toFixed(s.hours % 0.5 ? 2 : 1)}</td>
-                <td className="whitespace-nowrap px-3 py-2">{activityText(s)}</td>
+                <td className="whitespace-nowrap px-3 py-2">{activityText(s, t)}</td>
                 <td className="px-3 py-2">
                   {s.note && <div>{s.note}</div>}
                   {flags.map(f => (
                     <div key={f} className="mt-0.5 inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-800 me-1">
-                      <AlertTriangle size={11} /> {f}
+                      <AlertTriangle size={11} /> {t(f)}
                     </div>
                   ))}
                   {edit && (
                     <div className="mt-0.5 flex items-start gap-1 text-xs text-muted">
                       <History size={12} className="mt-0.5 shrink-0" />
                       <span>
-                        แก้จาก {edit.before.start_time}–{edit.before.end_time} ({fmtHours(edit.before.hours)} ชม.)
-                        {" "}โดย {edit.actor_name || "อาจารย์"} · {edit.reason}
+                        {t("แก้จาก {start}–{end} ({h} ชม.) โดย {name}", {
+                          start: edit.before.start_time, end: edit.before.end_time,
+                          h: fmtHours(edit.before.hours), name: edit.actor_name || t("อาจารย์"),
+                        })} · {edit.reason}
                       </span>
                     </div>
                   )}
@@ -600,10 +606,10 @@ function SittingTable({
                 <td className="whitespace-nowrap px-4 py-1.5 text-right">
                   {canTouch && (
                     <div className="inline-flex gap-1">
-                      <IconButton variant="ghost" size="sm" label="แก้ไขเวลา" onClick={() => onEdit(s)}>
+                      <IconButton variant="ghost" size="sm" label={t("แก้ไขเวลา")} onClick={() => onEdit(s)}>
                         <Pencil size={14} />
                       </IconButton>
-                      <IconButton variant="ghost" size="sm" label="ตัดรายการนี้ออก" onClick={() => onCut(s)}>
+                      <IconButton variant="ghost" size="sm" label={t("ตัดรายการนี้ออก")} onClick={() => onCut(s)}>
                         <Scissors size={14} />
                       </IconButton>
                     </div>
@@ -615,7 +621,7 @@ function SittingTable({
         </tbody>
         <tfoot className="border-t border-(--hairline) text-xs text-muted">
           <tr>
-            <td className="px-4 py-2" colSpan={2}>รวมเดือนนี้ (ไม่นับที่ตัดออกและที่ส่งกลับ)</td>
+            <td className="px-4 py-2" colSpan={2}>{t("รวมเดือนนี้ (ไม่นับที่ตัดออกและที่ส่งกลับ)")}</td>
             <td className="px-3 py-2 text-right tabular font-medium text-foreground">{total.toFixed(1)}</td>
             <td colSpan={4} />
           </tr>
@@ -630,11 +636,13 @@ function SittingTable({
 /* ------------------------------------------------------------------ */
 
 function SittingSummary({ s }: { s: Sitting }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   return (
     <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm">
-      <b>{dateTH(s.work_date)}</b> · {s.start_time}–{s.end_time} · {fmtHours(s.hours)} ชม. · {activityText(s)}
+      <b>{dateTH(s.work_date, i18n)}</b> · {s.start_time}–{s.end_time} · {t("{h} ชม.", { h: fmtHours(s.hours) })} · {activityText(s, t)}
       {s.assignmentIds.length > 1 && (
-        <div className="mt-1 text-xs text-muted">คาบนี้สอนพร้อมกันหลายเซคชัน จะแก้ทุกเซคชันพร้อมกัน</div>
+        <div className="mt-1 text-xs text-muted">{t("คาบนี้สอนพร้อมกันหลายเซคชัน จะแก้ทุกเซคชันพร้อมกัน")}</div>
       )}
     </div>
   );
@@ -643,6 +651,8 @@ function SittingSummary({ s }: { s: Sitting }) {
 function EditSittingModal({
   sitting, taName, onClose, onDone,
 }: { sitting: Sitting | null; taName: string; onClose: () => void; onDone: () => Promise<void> }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [reason, setReason] = useState("");
@@ -661,10 +671,10 @@ function EditSittingModal({
     setSaving(true); setError(null);
     try {
       await api.post(`/worklogs/${sitting.id}/review-edit`, { start_time: start, end_time: end, hours, reason: reason.trim() });
-      notify.success(`แก้ไขเวลาวันที่ ${dateTH(sitting.work_date)} ของ ${taName} แล้ว`);
+      notify.success(t("แก้ไขเวลาวันที่ {date} ของ {name} แล้ว", { date: dateTH(sitting.work_date, i18n), name: taName }));
       await onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      setError(e instanceof Error ? e.message : t("บันทึกไม่สำเร็จ"));
     } finally { setSaving(false); }
   }
 
@@ -672,15 +682,15 @@ function EditSittingModal({
     <Modal
       open={sitting !== null}
       onClose={() => { if (!saving) onClose(); }}
-      title="แก้ไขเวลาที่ TA บันทึก"
+      title={t("แก้ไขเวลาที่ TA บันทึก")}
       icon={<Pencil size={18} />}
       size="md"
       footer={
         <div className="flex w-full justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={save} isPending={saving}
                   disabled={saving || hours === null || !!unchanged || !reasonOK}>
-            บันทึกการแก้ไข
+            {t("บันทึกการแก้ไข")}
           </Button>
         </div>
       }
@@ -689,18 +699,18 @@ function EditSittingModal({
         <div className="flex flex-col gap-3">
           <SittingSummary s={sitting} />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <FieldGroup label="เวลาเริ่ม"><TimePicker value={start} onChange={setStart} label="เวลาเริ่ม" /></FieldGroup>
-            <FieldGroup label="เวลาสิ้นสุด"><TimePicker value={end} onChange={setEnd} label="เวลาสิ้นสุด" /></FieldGroup>
-            <FieldGroup label="จำนวนชั่วโมง">
+            <FieldGroup label={t("เวลาเริ่ม")}><TimePicker value={start} onChange={setStart} label={t("เวลาเริ่ม")} /></FieldGroup>
+            <FieldGroup label={t("เวลาสิ้นสุด")}><TimePicker value={end} onChange={setEnd} label={t("เวลาสิ้นสุด")} /></FieldGroup>
+            <FieldGroup label={t("จำนวนชั่วโมง")}>
               <div className="flex h-9 items-center rounded-lg border border-border bg-surface-secondary px-3 tabular">
                 {fmtHours(hours)}
               </div>
             </FieldGroup>
           </div>
-          <FieldGroup label="เหตุผล (TA จะเห็นข้อความนี้)"
-                      hint={`อย่างน้อย ${REASON_MIN} ตัวอักษร เก็บไว้ตรวจสอบย้อนหลัง`}>
+          <FieldGroup label={t("เหตุผล (TA จะเห็นข้อความนี้)")}
+                      hint={t("อย่างน้อย {n} ตัวอักษร เก็บไว้ตรวจสอบย้อนหลัง", { n: REASON_MIN })}>
             <TextArea rows={2} value={reason} onChange={e => setReason(e.target.value)}
-                      placeholder="เช่น ปฏิบัติการวันนี้เลิก 15.00 น. ตามตารางจริง" />
+                      placeholder={t("เช่น ปฏิบัติการวันนี้เลิก 15.00 น. ตามตารางจริง")} />
           </FieldGroup>
           {error && <Alert status="danger" icon={<AlertTriangle size={14} />} title={error} />}
         </div>
@@ -712,6 +722,8 @@ function EditSittingModal({
 function CutSittingModal({
   sitting, taName, onClose, onDone,
 }: { sitting: Sitting | null; taName: string; onClose: () => void; onDone: () => Promise<void> }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -723,10 +735,10 @@ function CutSittingModal({
     setSaving(true); setError(null);
     try {
       await api.post(`/worklogs/${sitting.id}/review-cut`, { reason: reason.trim() });
-      notify.success(`ตัดรายการวันที่ ${dateTH(sitting.work_date)} ของ ${taName} ออกแล้ว`);
+      notify.success(t("ตัดรายการวันที่ {date} ของ {name} ออกแล้ว", { date: dateTH(sitting.work_date, i18n), name: taName }));
       await onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "ดำเนินการไม่สำเร็จ");
+      setError(e instanceof Error ? e.message : t("ดำเนินการไม่สำเร็จ"));
     } finally { setSaving(false); }
   }
 
@@ -734,14 +746,14 @@ function CutSittingModal({
     <Modal
       open={sitting !== null}
       onClose={() => { if (!saving) onClose(); }}
-      title="ตัดรายการนี้ออกจากการเบิก"
+      title={t("ตัดรายการนี้ออกจากการเบิก")}
       icon={<Scissors size={18} />}
       size="md"
       footer={
         <div className="flex w-full justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="danger" onClick={cut} isPending={saving} disabled={saving || !reasonOK}>
-            <Scissors size={14} /> ตัดออก
+            <Scissors size={14} /> {t("ตัดออก")}
           </Button>
         </div>
       }
@@ -750,12 +762,11 @@ function CutSittingModal({
         <div className="flex flex-col gap-3">
           <SittingSummary s={sitting} />
           <p className="text-sm text-muted">
-            รายการจะไม่ถูกนับชั่วโมงและค่าตอบแทน TA แก้กลับไม่ได้ ระบบเก็บรายการเดิมพร้อมเหตุผลไว้ให้ตรวจสอบย้อนหลัง
-            และแจ้งให้ TA ทราบ
+            {t("รายการจะไม่ถูกนับชั่วโมงและค่าตอบแทน TA แก้กลับไม่ได้ ระบบเก็บรายการเดิมพร้อมเหตุผลไว้ให้ตรวจสอบย้อนหลัง และแจ้งให้ TA ทราบ")}
           </p>
-          <FieldGroup label="เหตุผล (TA จะเห็นข้อความนี้)" hint={`อย่างน้อย ${REASON_MIN} ตัวอักษร`}>
+          <FieldGroup label={t("เหตุผล (TA จะเห็นข้อความนี้)")} hint={t("อย่างน้อย {n} ตัวอักษร", { n: REASON_MIN })}>
             <TextArea rows={2} value={reason} onChange={e => setReason(e.target.value)}
-                      placeholder="เช่น วันนี้งดการเรียนการสอน ไม่มีการปฏิบัติงาน" />
+                      placeholder={t("เช่น วันนี้งดการเรียนการสอน ไม่มีการปฏิบัติงาน")} />
           </FieldGroup>
           {error && <Alert status="danger" icon={<AlertTriangle size={14} />} title={error} />}
         </div>

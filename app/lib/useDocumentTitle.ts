@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { useT } from "./i18n/client";
 
 const BRAND = "COCO TAS";
 
@@ -22,8 +23,11 @@ function enforce() {
  *  `unreadCount`, when positive, prefixes a Facebook/YouTube-style "(N) "
  *  badge — capped at "99+" so a busy inbox doesn't stretch the tab title. */
 export default function useDocumentTitle(title?: string | null, unreadCount?: number) {
+  // Titles are passed as Thai keys; translated here so no caller has to.
+  const t = useT();
+  const shown = title ? t(title) : title;
   useEffect(() => {
-    const base = title ? `${title} | ${BRAND}` : BRAND;
+    const base = shown ? `${shown} | ${BRAND}` : BRAND;
     const next = unreadCount && unreadCount > 0
       ? `(${unreadCount > 99 ? "99+" : unreadCount}) ${base}`
       : base;
@@ -38,5 +42,5 @@ export default function useDocumentTitle(title?: string | null, unreadCount?: nu
       // then keeps whatever its own metadata says.
       if (wanted === next) wanted = null;
     };
-  }, [title, unreadCount]);
+  }, [shown, unreadCount]);
 }

@@ -31,6 +31,7 @@ import {
 import Link from "next/link";
 import { Info } from "lucide-react";
 import { I18nProvider } from "react-aria-components";
+import { msg, useI18n } from "../lib/i18n/client";
 import PageDocsPill from "./docs/PageDocsPill";
 import type { Audience } from "../../content/docs/types";
 import { Time, parseTime, parseDate, type DateValue } from "@internationalized/date";
@@ -184,12 +185,13 @@ export function InfoTip({
   size?: number;
   className?: string;
 }) {
+  const { t } = useI18n();
   if (!content) return null;
   return (
     <Tip content={content}>
       <button
         type="button"
-        aria-label="คำอธิบาย"
+        aria-label={t("คำอธิบาย")}
         className={
           "tap-target inline-flex items-center justify-center text-muted hover:text-foreground transition-colors rounded-full " +
           (className ?? "")
@@ -455,17 +457,18 @@ export function Chip({ tone = "neutral", children }: { tone?: ChipTone; children
 }
 
 export function StatusChip({ status }: { status: string }) {
+  const { t } = useI18n();
   const map: Record<string, { tone: ChipTone; label: string }> = {
-    approved:  { tone: "success", label: "อนุมัติแล้ว" },
-    submitted: { tone: "info",    label: "รอตรวจ" },
-    pending:   { tone: "warn",    label: "รอดำเนินการ" },
-    draft:     { tone: "neutral", label: "ฉบับร่าง" },
-    rejected:  { tone: "danger",  label: "ไม่ผ่าน" },
-    cancelled: { tone: "neutral", label: "ยกเลิก" },
-    needs_fix: { tone: "warn",    label: "ให้แก้ไข" },
+    approved:  { tone: "success", label: msg("อนุมัติแล้ว") },
+    submitted: { tone: "info",    label: msg("รอตรวจ") },
+    pending:   { tone: "warn",    label: msg("รอดำเนินการ") },
+    draft:     { tone: "neutral", label: msg("ฉบับร่าง") },
+    rejected:  { tone: "danger",  label: msg("ไม่ผ่าน") },
+    cancelled: { tone: "neutral", label: msg("ยกเลิก@status") },
+    needs_fix: { tone: "warn",    label: msg("ให้แก้ไข") },
   };
   const m = map[status] ?? { tone: "neutral" as ChipTone, label: status };
-  return <Chip tone={m.tone}>{m.label}</Chip>;
+  return <Chip tone={m.tone}>{t(m.label)}</Chip>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -690,6 +693,7 @@ export function DatePicker({
   /** Latest selectable date, ISO "YYYY-MM-DD". */
   maxValue?: string;
 }) {
+  const { t } = useI18n();
   const parsed: DateValue | null = (() => {
     if (!value) return null;
     try { return parseDate(value); } catch { return null; }
@@ -753,7 +757,7 @@ export function DatePicker({
           </HDateField.Suffix>
         </HDateField.Group>
         <HDatePicker.Popover>
-          <HCalendar aria-label={label ?? "เลือกวันที่"}>
+          <HCalendar aria-label={label ?? t("เลือกวันที่")}>
             <HCalendar.Header>
               <HCalendar.YearPickerTrigger>
                 <HCalendar.YearPickerTriggerHeading />
@@ -826,6 +830,7 @@ export function FieldGroup({
   required?: boolean;
   children: React.ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
@@ -834,7 +839,7 @@ export function FieldGroup({
           {required && (
             <>
               <span aria-hidden className="text-danger"> *</span>
-              <span className="sr-only"> (จำเป็น)</span>
+              <span className="sr-only"> {t("(จำเป็น)")}</span>
             </>
           )}
         </HLabel>
@@ -883,13 +888,14 @@ export function SelectField({
   hint?: React.ReactNode;
   error?: React.ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <HSelect
       className={className}
       // react-aria's own default placeholder is the English "Select an item",
       // which showed through on every picker that had no value yet (e.g. the
       // term picker on the TA timetable page before terms load).
-      placeholder={placeholder ?? "เลือก…"}
+      placeholder={placeholder ?? t("เลือก…")}
       isDisabled={isDisabled}
       isRequired={isRequired}
       isInvalid={!!error}
@@ -948,6 +954,7 @@ export function Modal({
    *  keyboard must not cover — a search box's results, for one. */
   placement?: "auto" | "center" | "top" | "bottom";
 }) {
+  const { t } = useI18n();
   const sizeCls = {
     sm: "sm:max-w-sm",
     md: "sm:max-w-md",
@@ -968,7 +975,7 @@ export function Modal({
       <HModal.Backdrop isOpen={open} onOpenChange={o => { if (!o) onClose(); }}>
         <HModal.Container size={size === "full" ? "full" : undefined} placement={placement}>
           <HModal.Dialog className={sizeCls}>
-            <HModal.CloseTrigger />
+            <HModal.CloseTrigger aria-label={t("ปิด")} />
             {(title || icon) && (
               <HModal.Header>
                 {icon && (
@@ -1005,10 +1012,10 @@ export function ConfirmDialog({
   open,
   onClose,
   onConfirm,
-  title = "ยืนยันการดำเนินการ",
+  title = msg("ยืนยันการดำเนินการ"),
   message,
-  confirmLabel = "ยืนยัน",
-  cancelLabel = "ยกเลิก",
+  confirmLabel = msg("ยืนยัน"),
+  cancelLabel = msg("ยกเลิก"),
   danger = false,
   isPending = false,
   icon,
@@ -1041,6 +1048,7 @@ export function ConfirmDialog({
   // send): keeps the confirm button off until that choice is valid.
   confirmDisabled?: boolean;
 }) {
+  const { t } = useI18n();
   const [typed, setTyped] = useState<string[]>(() => (requireTyped ?? []).map(() => ""));
   useEffect(() => {
     if (open) setTyped((requireTyped ?? []).map(() => ""));
@@ -1050,14 +1058,14 @@ export function ConfirmDialog({
     <Modal
       open={open}
       onClose={() => { if (!isPending) onClose(); }}
-      title={title}
+      title={typeof title === "string" ? t(title) : title}
       size={size}
       icon={icon}
       footer={
         <>
-          <Button variant="tertiary" onPress={onClose} disabled={isPending}>{cancelLabel}</Button>
+          <Button variant="tertiary" onPress={onClose} disabled={isPending}>{t(cancelLabel)}</Button>
           <Button variant={danger ? "danger" : "primary"} onPress={onConfirm} isPending={isPending} disabled={!typedOk || confirmDisabled}>
-            {confirmLabel}
+            {t(confirmLabel)}
           </Button>
         </>
       }
@@ -1119,11 +1127,12 @@ export function ProgressBar({
   label?: string;
   showValue?: boolean;
 }) {
+  const { t } = useI18n();
   const color = { brand: "accent", warn: "warning", danger: "danger", success: "success" }[tone] as
     | "accent" | "warning" | "danger" | "success";
   const v = Math.max(0, Math.min(100, value));
   return (
-    <HProgressBar aria-label={label ?? "ความคืบหน้า"} value={v} color={color}>
+    <HProgressBar aria-label={label ?? t("ความคืบหน้า")} value={v} color={color}>
       {label && <HLabel>{label}</HLabel>}
       {showValue && <HProgressBar.Output />}
       <HProgressBar.Track>
@@ -1194,11 +1203,12 @@ export function SearchField({
   ariaLabel?: string;
   className?: string;
 }) {
+  const { t } = useI18n();
   return (
     <HSearchField
       value={value}
       onChange={onChange}
-      aria-label={ariaLabel ?? "ค้นหา"}
+      aria-label={ariaLabel ?? t("ค้นหา")}
       className={className ?? SEARCH_FIELD_WIDTH}
     >
       <HSearchField.Group>

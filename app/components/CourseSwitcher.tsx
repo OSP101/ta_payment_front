@@ -8,6 +8,7 @@ import {
 import { BookOpen, ChevronsUpDown } from "lucide-react";
 import { courseCodeLabel } from "../lib/courseCode";
 import { Tip } from "./ui";
+import { useI18n } from "../lib/i18n/client";
 
 interface TC { id: string; code: string; alt_codes?: string[]; name_th: string; term_id?: string; }
 
@@ -31,6 +32,7 @@ export default function CourseSwitcher({
   siblingsPath?: string;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const pathname = usePathname();
   const { contains } = useFilter({ sensitivity: "base" });
   const { data: course } = useSWR<TC>(tcId ? `/teaching-courses/${tcId}` : null);
@@ -60,7 +62,7 @@ export default function CourseSwitcher({
 
   return (
     <Autocomplete
-      aria-label="สลับวิชา"
+      aria-label={t("สลับวิชา")}
       variant="secondary"
       selectionMode="single"
       value={tcId || null}
@@ -86,11 +88,11 @@ export default function CourseSwitcher({
           <SearchField autoFocus name="course-search" variant="secondary">
             <SearchField.Group>
               <SearchField.SearchIcon />
-              <SearchField.Input placeholder="ค้นหาวิชา…" />
+              <SearchField.Input placeholder={t("ค้นหาวิชา…")} />
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
-          <ListBox renderEmptyState={() => <HEmptyState>ไม่พบวิชาที่ตรงกัน</HEmptyState>}>
+          <ListBox renderEmptyState={() => <HEmptyState>{t("ไม่พบวิชาที่ตรงกัน")}</HEmptyState>}>
             {siblings.map(c => (
               <ListBox.Item key={c.id} id={c.id} textValue={`${courseCodeLabel(c)} ${c.name_th}`}>
                 <div className="flex items-center gap-2 min-w-0">

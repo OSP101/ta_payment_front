@@ -13,6 +13,7 @@ import {
 import { TimetableModal } from "../../../components/TimetableModal";
 import { Skel, SkelRegion } from "../../../components/Skeletons";
 import { SendBackEffect, WorklogReviewModal, type ReviewTarget } from "./WorklogReviewModal";
+import { useI18n } from "../../../lib/i18n/client";
 
 /**
  * TA × month review grid for one course.
@@ -67,15 +68,9 @@ interface TimelineRow {
   worklog_total: number;
 }
 
-const shortMonth = (label: string) => {
-  const m = label.replace(/\s*\d{4}$/, "").trim();
-  const map: Record<string, string> = {
-    มกราคม: "ม.ค.", กุมภาพันธ์: "ก.พ.", มีนาคม: "มี.ค.", เมษายน: "เม.ย.",
-    พฤษภาคม: "พ.ค.", มิถุนายน: "มิ.ย.", กรกฎาคม: "ก.ค.", สิงหาคม: "ส.ค.",
-    กันยายน: "ก.ย.", ตุลาคม: "ต.ค.", พฤศจิกายน: "พ.ย.", ธันวาคม: "ธ.ค.",
-  };
-  return map[m] ?? m;
-};
+/** Column header: the month's short name from the academic "YYYY-MM" key
+ *  (the period label itself is backend Thai text, "กรกฎาคม 2569"). */
+const ymMonth = (ym: string) => Number(ym.slice(5, 7));
 
 /** Placeholder shaped like the TA × month table: a name column and a few month cells per row. */
 function GridSkeleton() {
@@ -100,6 +95,7 @@ function GridSkeleton() {
 
 export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () => void }) {
   const { termId } = useTerm();
+  const { t, monthName } = useI18n();
   const queueKey = useTermKey("/submission-periods/review-queue");
   const { data, error } = useSWR<{ items: ReviewRow[] }>(queueKey);
   const rows = useMemo(
@@ -175,9 +171,9 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
         );
         done++;
       }
-      notify.success(`ตรวจผ่าน ${done} รายการ`);
+      notify.success(t("ตรวจผ่าน {n} รายการ", { n: done }));
     } catch (e) {
-      notify.error(done > 0 ? `ผ่านไป ${done} รายการแล้วหยุด ${errMessage(e)}` : e);
+      notify.error(done > 0 ? t("ผ่านไป {n} รายการแล้วหยุด {error}", { n: done, error: errMessage(e) }) : e);
     } finally {
       setBusy(null);
       await revalidate();
@@ -188,7 +184,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
     setBusy("remind");
     try {
       await api.post(`/submission-periods/courses/${tcId}/remind-lecturer`, {});
-      notify.success("แจ้งเตือนอาจารย์แล้ว");
+      notify.success(t("แจ้งเตือนอาจารย์แล้ว"));
       setRemindOpen(false);
     } catch (e) {
       notify.error(errMessage(e));
@@ -206,7 +202,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
         `/submission-periods/${r.period_id}/courses/${r.teaching_course_id}/tas/${r.ta_id}/send-back`,
         { to_status: "pending", reason },
       );
-      notify.success("ตีกลับเรียบร้อย");
+      notify.success(t("ตีกลับเรียบร้อย"));
       setSendBack(null);
       setReason("");
       await revalidate();
@@ -226,7 +222,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
   if (rows.length === 0) {
     return (
       <p className="py-4 text-sm text-muted">
-        ไม่มีเดือนที่รอตรวจในวิชานี้ ทุกเดือนผ่านการตรวจแล้ว หรือยังไม่มีบันทึกเวลาที่อาจารย์อนุมัติ
+        {t("ไม่มีเดือนที่รอตรวจในวิชานี้ ทุกเดือนผ่านการตรวจแล้ว หรือยังไม่มีบันทึกเวลาที่อาจารย์อนุมัติ")}
       </p>
     );
   }
@@ -242,9 +238,9 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
         <table className="w-full table-fixed text-xs" style={{ minWidth: 160 + months.length * 132 }}>
           <thead>
             <tr className="text-muted">
-              <th className="px-2 py-1.5 text-left font-normal" style={{ width: 160 }}>TA \ เดือน</th>
-              {months.map(([ym, label]) => (
-                <th key={ym} className="px-2 py-1.5 text-center font-normal">{shortMonth(label)}</th>
+              <th className="px-2 py-1.5 text-left font-normal" style={{ width: 160 }}>{t("TA \\ เดือน")}</th>
+              {months.map(([ym]) => (
+                <th key={ym} className="px-2 py-1.5 text-center font-normal">{monthName(ymMonth(ym))}</th>
               ))}
             </tr>
           </thead>
@@ -264,7 +260,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
                       onClick={() => setTimetableFor({ id: taId, name: taName })}
                       className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-md border border-[var(--hairline)] px-1.5 py-0.5 text-[11px] text-muted hover:border-[var(--brand)] hover:text-[var(--brand)]"
                     >
-                      <CalendarDays size={11} /> ตารางเรียน/ทำงาน
+                      <CalendarDays size={11} /> {t("ตารางเรียน/ทำงาน")}
                     </button>
                   )}
                 </td>
@@ -303,17 +299,17 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
             {/* Shown while months are still WAITING for sign-off, so it must
                 not claim they are done. */}
             {readyRows.length > 0
-              ? `มี ${readyRows.length} เดือนพร้อมให้ตรวจ เมื่อตรวจผ่านครบทุกเดือนแล้ว แถบส่งออกด้านล่างจึงจะเปิดให้ดาวน์โหลด`
-              : `มี ${waitingLecturer} รายการรออาจารย์อนุมัติ ตรวจต่อไม่ได้จนกว่าจะอนุมัติครบ`}
+              ? t("มี {n} เดือนพร้อมให้ตรวจ เมื่อตรวจผ่านครบทุกเดือนแล้ว แถบส่งออกด้านล่างจึงจะเปิดให้ดาวน์โหลด", { n: readyRows.length })
+              : t("มี {n} รายการรออาจารย์อนุมัติ ตรวจต่อไม่ได้จนกว่าจะอนุมัติครบ", { n: waitingLecturer })}
           </p>
           {waitingLecturer > 0 && (
             <Button variant="secondary" size="sm" isDisabled={busy !== null} onPress={() => setRemindOpen(true)}>
-              <BellRing size={14} /> เตือนอาจารย์
+              <BellRing size={14} /> {t("เตือนอาจารย์")}
             </Button>
           )}
           {readyRows.length > 0 && (
             <Button size="sm" isDisabled={busy !== null} onPress={() => approve(readyRows)}>
-              <CheckCircle2 size={14} /> ผ่านทั้งวิชา ({readyRows.length} รายการ)
+              <CheckCircle2 size={14} /> {t("ผ่านทั้งวิชา ({n} รายการ)", { n: readyRows.length })}
             </Button>
           )}
         </div>
@@ -322,16 +318,15 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
       <ConfirmDialog
         open={remindOpen}
         onClose={() => setRemindOpen(false)}
-        title="แจ้งเตือนอาจารย์"
+        title={t("แจ้งเตือนอาจารย์")}
         icon={<BellRing size={18} />}
         isPending={busy === "remind"}
         message={
           <p className="text-sm text-muted">
-            ส่งการแจ้งเตือนถึงอาจารย์ผู้สอนวิชานี้ว่ามีบันทึกเวลา {waitingLecturer} รายการรออนุมัติอยู่
-            ส่งได้วันละครั้งต่อวิชา
+            {t("ส่งการแจ้งเตือนถึงอาจารย์ผู้สอนวิชานี้ว่ามีบันทึกเวลา {n} รายการรออนุมัติอยู่ ส่งได้วันละครั้งต่อวิชา", { n: waitingLecturer })}
           </p>
         }
-        confirmLabel="ส่งแจ้งเตือน"
+        confirmLabel={t("ส่งแจ้งเตือน")}
         onConfirm={() => void confirmRemind()}
       />
 
@@ -366,7 +361,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
       <ConfirmDialog
         open={!!sendBack}
         onClose={() => setSendBack(null)}
-        title="ตีกลับให้แก้ไข"
+        title={t("ตีกลับให้แก้ไข")}
         icon={<Undo2 size={18} />}
         danger
         isPending={busy !== null && sendBack !== null && busy === cellKey(sendBack)}
@@ -379,29 +374,26 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
             <TextArea
               value={reason}
               onChange={e => setReason(e.target.value)}
-              placeholder="เหตุผล เช่น ชั่วโมงวันที่ 12 ไม่ตรงกับตารางสอน"
+              placeholder={t("เหตุผล เช่น ชั่วโมงวันที่ 12 ไม่ตรงกับตารางสอน")}
               rows={3}
             />
             {reason.trim() === "" && (
-              <p className="text-xs text-red-600">ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร</p>
+              <p className="text-xs text-red-600">{t("ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร")}</p>
             )}
           </div>
         }
-        confirmLabel="ตีกลับ"
+        confirmLabel={t("ตีกลับ")}
         onConfirm={() => { if (reason.trim() !== "") void confirmSendBack(); }}
       />
     </>
   );
 }
 
-const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-                   "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-
 /** "2026-07-31" → "31 ก.ค." — the due date is only ever read next to its own
  *  month column, so the year would be noise. */
-const shortDue = (iso: string) => {
+const shortDue = (iso: string, monthName: (m: number) => string) => {
   const [, m, d] = iso.split("-");
-  return `${Number(d)} ${TH_MONTHS[Number(m) - 1]}`;
+  return `${Number(d)} ${monthName(Number(m))}`;
 };
 
 /**
@@ -431,41 +423,42 @@ const shortDue = (iso: string) => {
  * look identical to abandoned ones. Hence "ไม่มีบันทึกเวลาถึงกำหนด" — what the
  * record shows — rather than an accusation the data cannot support.
  */
-function EmptyCell({ t, loading }: { t?: TimelineRow; loading?: boolean }) {
+function EmptyCell({ t: tl, loading }: { t?: TimelineRow; loading?: boolean }) {
+  const { t, monthName } = useI18n();
   // The timeline is fetched separately from the grid; until it lands, hold the
   // cell's space rather than showing "—" and swapping it for a reason chip.
-  if (!t && loading) return <Skel className="h-9 w-full rounded-lg" />;
-  if (!t) return <div className="py-2 text-center text-muted">—</div>;
+  if (!tl && loading) return <Skel className="h-9 w-full rounded-lg" />;
+  if (!tl) return <div className="py-2 text-center text-muted">—</div>;
 
-  if (t.status === "finance_sent") {
+  if (tl.status === "finance_sent") {
     return (
       <div className="rounded-lg border border-[var(--hairline)] bg-surface-secondary px-2 py-2 text-center text-[11px] leading-tight text-muted">
-        ส่งการเงินแล้ว
+        {t("ส่งการเงินแล้ว")}
       </div>
     );
   }
-  if (t.worklog_total > 0) {
+  if (tl.worklog_total > 0) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-center text-[11px] leading-tight text-amber-800">
-        รอออกใบแต่งตั้ง
+        {t("รอออกใบแต่งตั้ง")}
       </div>
     );
   }
 
-  const past = t.is_closed || new Date(t.due_date) < new Date(new Date().toDateString());
+  const past = tl.is_closed || new Date(tl.due_date) < new Date(new Date().toDateString());
   if (past) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-2 text-center leading-tight">
-        <div className="text-[11px] font-medium text-red-800">ไม่มีบันทึกเวลาถึงกำหนด</div>
-        <div className="mt-0.5 text-[11px] text-red-700">ถือว่าสละสิทธิ์เดือนนี้</div>
-        <div className="mt-0.5 text-[10px] text-red-600/80">ครบกำหนด {shortDue(t.due_date)}</div>
+        <div className="text-[11px] font-medium text-red-800">{t("ไม่มีบันทึกเวลาถึงกำหนด")}</div>
+        <div className="mt-0.5 text-[11px] text-red-700">{t("ถือว่าสละสิทธิ์เดือนนี้")}</div>
+        <div className="mt-0.5 text-[10px] text-red-600/80">{t("ครบกำหนด {date}", { date: shortDue(tl.due_date, monthName) })}</div>
       </div>
     );
   }
   return (
     <div className="rounded-lg border border-[var(--hairline)] bg-surface-secondary px-2 py-2 text-center leading-tight">
-      <div className="text-[11px] text-muted">ยังไม่มีบันทึกเวลา</div>
-      <div className="mt-0.5 text-[10px] text-muted">ครบกำหนด {shortDue(t.due_date)}</div>
+      <div className="text-[11px] text-muted">{t("ยังไม่มีบันทึกเวลา")}</div>
+      <div className="mt-0.5 text-[10px] text-muted">{t("ครบกำหนด {date}", { date: shortDue(tl.due_date, monthName) })}</div>
     </div>
   );
 }
@@ -503,6 +496,7 @@ function Cell({
   settled: boolean;
   onOpen: () => void; onApprove: () => void; onSendBack: () => void;
 }) {
+  const { t } = useI18n();
   const reviewed = r.status !== "pending";
   const blocked = !reviewed && r.open_rows > 0;
   // A forfeited month needs no tone of its own: it is already the neutral one.
@@ -526,23 +520,23 @@ function Cell({
       <div className="mt-1 text-[11px] leading-tight">
         {blocked ? (
           <span className="text-amber-800">
-            {r.waiting_lecturer > 0 ? `รออาจารย์อนุมัติ ${r.waiting_lecturer}` : ""}
+            {r.waiting_lecturer > 0 ? t("รออาจารย์อนุมัติ {n}", { n: r.waiting_lecturer }) : ""}
             {r.waiting_lecturer > 0 && r.waiting_ta > 0 ? " · " : ""}
-            {r.waiting_ta > 0 ? `TA ยังไม่ส่ง ${r.waiting_ta}` : ""}
+            {r.waiting_ta > 0 ? t("TA ยังไม่ส่ง {n}", { n: r.waiting_ta }) : ""}
           </span>
         ) : r.forfeited > 0 && r.row_count === 0 ? (
           // Nothing was ever sent and the window has shut. Reported as the
           // settled outcome it is — "TA ยังไม่ส่ง" read as a chase still worth
           // making, on a month where there is nobody left to chase.
-          <span className="text-ink-3">ไม่ประสงค์ลงเวลา {r.forfeited} รายการ</span>
+          <span className="text-ink-3">{t("ไม่ประสงค์ลงเวลา {n} รายการ", { n: r.forfeited })}</span>
         ) : reviewed ? (
-          <span className="text-emerald-800">ตรวจแล้ว · {r.row_count} รายการ</span>
+          <span className="text-emerald-800">{t("ตรวจแล้ว · {n} รายการ", { n: r.row_count })}</span>
         ) : r.manual_count > 0 ? (
           <span className="rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900">
-            TA เพิ่มเอง {r.manual_count}
+            {t("TA เพิ่มเอง {n}", { n: r.manual_count })}
           </span>
         ) : (
-          <span className="text-muted">{r.row_count} รายการ · สร้างอัตโนมัติทั้งหมด</span>
+          <span className="text-muted">{t("{n} รายการ · สร้างอัตโนมัติทั้งหมด", { n: r.row_count })}</span>
         )}
       </div>
 
@@ -560,16 +554,16 @@ function Cell({
               onClick={onOpen}
               className="flex-1 whitespace-nowrap rounded-md border border-[var(--hairline)] bg-surface px-1 py-0.5 text-[11px] hover:border-[var(--brand)] hover:text-[var(--brand)]"
             >
-              ดู
+              {t("ดู")}
             </button>
           )}
           {!reviewed && !blocked && !settled && (
             <>
-              <Tip content="ผ่าน"><button
+              <Tip content={t("ผ่าน@action")}><button
                 type="button"
                 disabled={disabled}
                 onClick={onApprove}
-                aria-label="ผ่าน"
+                aria-label={t("ผ่าน@action")}
                 className="rounded-md border border-[var(--hairline)] bg-surface px-1.5 py-0.5 hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-40"
               >
                 <Check size={12} />
@@ -577,11 +571,11 @@ function Cell({
               {/* A closed month is final: rows sent back there could never be
                   resent, so the TA would lose the month. Fixes go through ดู. */}
               {r.period_open && (
-              <Tip content="ตีกลับ"><button
+              <Tip content={t("ตีกลับ")}><button
                 type="button"
                 disabled={disabled}
                 onClick={onSendBack}
-                aria-label="ตีกลับ"
+                aria-label={t("ตีกลับ")}
                 className="rounded-md border border-[var(--hairline)] bg-surface px-1.5 py-0.5 hover:border-red-400 hover:text-red-700 disabled:opacity-40"
               >
                 <Undo2 size={12} />

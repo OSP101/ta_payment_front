@@ -1,5 +1,6 @@
 "use client";
 import { Scale } from "lucide-react";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * เพดานงบรายวิชา — one figure per term every course shares (migration 0144),
@@ -15,16 +16,17 @@ export default function BudgetCapNotice({
   applied?: boolean;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   if (cap == null) return null;
   const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
   return (
     <div className={`flex items-start gap-2 rounded-lg border border-border bg-surface-secondary ${compact ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm"}`}>
       <Scale size={compact ? 13 : 15} className="mt-0.5 shrink-0 text-muted" />
       <div>
-        <div>ตามระเบียบของคณะ งบประมาณแต่ละรายวิชาไม่เกิน <b className="tabular-nums">{fmt(cap)}</b> บาท</div>
+        <div>{t.rich("ตามระเบียบของคณะ งบประมาณแต่ละรายวิชาไม่เกิน {cap} บาท", { cap: <b className="tabular-nums">{fmt(cap)}</b> })}</div>
         {applied && formula != null && (
           <div className="text-muted text-xs mt-0.5">
-            งบตามสูตรของวิชานี้คือ {fmt(formula)} บาท ซึ่งเกินเพดาน ระบบจึงใช้ {fmt(cap)} บาท
+            {t("งบตามสูตรของวิชานี้คือ {formula} บาท ซึ่งเกินเพดาน ระบบจึงใช้ {cap} บาท", { formula: fmt(formula), cap: fmt(cap) })}
           </div>
         )}
       </div>

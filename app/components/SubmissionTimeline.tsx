@@ -2,6 +2,7 @@
 import { Check, Clock } from "lucide-react";
 import type { ReactNode } from "react";
 import { Tip } from "./ui";
+import { useI18n } from "../lib/i18n/client";
 
 // Timeline shape returned by GET /submission-periods/:id/courses/:tcId/tas/:taId/timeline
 // (kept lax on unused fields so callers can hand in any superset).
@@ -67,21 +68,22 @@ export function SubmissionTimeline({
   data: SubmissionTimelineData;
   title?: ReactNode;
 }) {
+  const { t } = useI18n();
   const rank = rankOf(data);
   const steps: Step[] = [
     {
       key: "approved",
-      label: "อาจารย์อนุมัติบันทึกเวลาครบทุกรายการ",
+      label: t("อาจารย์อนุมัติบันทึกเวลาครบทุกรายการ"),
     },
     {
       key: "exported",
-      label: "เจ้าหน้าที่ตรวจสอบและส่งออกไฟล์เบิกจ่าย",
+      label: t("เจ้าหน้าที่ตรวจสอบและส่งออกไฟล์เบิกจ่าย"),
       signer: data.exported_name,
       at: data.exported_at,
     },
     {
       key: "finance_sent",
-      label: "ส่งเบิกจ่ายที่การเงิน",
+      label: t("ส่งเบิกจ่ายที่การเงิน"),
       signer: data.finance_sent_name,
       at: data.finance_sent_at,
       comment: data.finance_note,
@@ -89,22 +91,22 @@ export function SubmissionTimeline({
   ];
 
   return (
-    <section className="rounded-xl border border-hairline bg-white/60 dark:bg-slate-900/40">
+    <section className="rounded-xl border border-hairline bg-surface/60">
       {title != null && (
         <header className="px-4 pt-3 pb-1 text-sm font-medium text-ink-1">
           {title}
         </header>
       )}
       {data.sent_back_at && (
-        <div className="mx-4 mt-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+        <div className="mx-4 mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <div className="font-medium">
-            ตีกลับโดย {data.sent_back_name ?? "-"}
+            {t("ตีกลับโดย {name}", { name: data.sent_back_name ?? "-" })}
             {data.sent_back_at && (
               <span className="ml-2 font-normal tabular">{fmt(data.sent_back_at)}</span>
             )}
           </div>
           {data.sent_back_reason && (
-            <div className="mt-1 whitespace-pre-wrap">เหตุผล: {data.sent_back_reason}</div>
+            <div className="mt-1 whitespace-pre-wrap">{t("เหตุผล: {reason}", { reason: data.sent_back_reason })}</div>
           )}
         </div>
       )}
@@ -125,17 +127,17 @@ export function SubmissionTimeline({
                   }
                 />
               )}
-              <Tip content={done ? "เสร็จแล้ว" : active ? "รอดำเนินการ" : "ยังไม่ถึงขั้นนี้"}>
+              <Tip content={done ? t("เสร็จแล้ว") : active ? t("รอดำเนินการ") : t("ยังไม่ถึงขั้นนี้")}>
               <span
                 role="img"
-                aria-label={done ? "เสร็จแล้ว" : active ? "รอดำเนินการ" : "ยังไม่ถึงขั้นนี้"}
+                aria-label={done ? t("เสร็จแล้ว") : active ? t("รอดำเนินการ") : t("ยังไม่ถึงขั้นนี้")}
                 className={
                   "absolute left-0 top-0 grid place-items-center w-6 h-6 rounded-full " +
                   (done
                     ? "bg-emerald-500 text-white"
                     : active
                     ? "bg-brand text-white"
-                    : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400")
+                    : "bg-slate-200 text-slate-500")
                 }
               >
                 {done ? (
@@ -151,7 +153,7 @@ export function SubmissionTimeline({
                 <div className="text-sm text-ink-1">{step.label}</div>
                 {done && step.signer && (
                   <div className="mt-1 text-xs text-ink-2">
-                    <span className="text-muted">โดย </span>
+                    <span className="text-muted">{t("โดย")} </span>
                     <span className="font-medium text-ink-1">{step.signer}</span>
                     {step.at && (
                       <>
@@ -162,15 +164,15 @@ export function SubmissionTimeline({
                   </div>
                 )}
                 {done && step.comment && (
-                  <div className="mt-2 rounded-md border border-hairline bg-slate-50/70 dark:bg-slate-800/60 px-3 py-2 text-xs text-ink-2">
+                  <div className="mt-2 rounded-md border border-hairline bg-slate-50/70 px-3 py-2 text-xs text-ink-2">
                     <div className="text-[10px] uppercase tracking-wide text-muted mb-0.5">
-                      ความคิดเห็น
+                      {t("ความคิดเห็น")}
                     </div>
                     <div className="whitespace-pre-wrap">{step.comment}</div>
                   </div>
                 )}
                 {active && !done && (
-                  <div className="mt-1 text-xs text-muted">รอดำเนินการ</div>
+                  <div className="mt-1 text-xs text-muted">{t("รอดำเนินการ")}</div>
                 )}
               </div>
             </li>

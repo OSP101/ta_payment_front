@@ -26,8 +26,11 @@ import { api } from "../lib/api";
 import { notify } from "../lib/notify";
 import { formatFullName } from "../lib/prefixes";
 import UserAvatar from "./UserAvatar";
+import ThemeSwitch from "./ThemeSwitch";
+import LanguageSwitch from "./LanguageSwitch";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "./BetaNotice";
 import useDocumentTitle from "../lib/useDocumentTitle";
+import { msg, useI18n } from "../lib/i18n/client";
 import useUnreadCount from "../lib/useUnreadCount";
 import { DocsPanelProvider, DocsDock } from "./docs/DocsPanel";
 import { defaultAudience } from "../lib/docs/audience";
@@ -56,11 +59,11 @@ const DEMO_CHROME_OFFSET = "top-[var(--demo-banner-h,0px)]";
  *  dropdown entry to borrow a label from — reached from a banner or a
  *  notification link instead. Without these the tab reads just "COCO TAS". */
 const UNLISTED_TITLES: Record<string, string> = {
-  "/ta/notifications": "การเตือน",
-  "/ta/reminders": "สถานะการเบิกจ่ายรายเดือน",
+  "/ta/notifications": msg("การเตือน"),
+  "/ta/reminders": msg("สถานะการเบิกจ่ายรายเดือน"),
   // In the lecturer/TA sidebars, but not the staff one.
-  "/document-progress": "ความคืบหน้าเอกสาร",
-  "/executive": "มุมมองผู้บริหาร",
+  "/document-progress": msg("ความคืบหน้าเอกสาร"),
+  "/executive": msg("มุมมองผู้บริหาร"),
 };
 
 // Lets a page inside the shell supply the title scope itself, for pages that
@@ -154,8 +157,8 @@ interface Props {
 export default function Shell({
   me,
   brandTitle,
-  nav,
-  userMenuItems,
+  nav: navKeys,
+  userMenuItems: userMenuKeys,
   topBarAccessory,
   topBarLeft,
   topBarScope,
@@ -165,6 +168,24 @@ export default function Shell({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useI18n();
+  // Role shells hand over Thai labels (marked with msg()); translated once
+  // here so every row, tooltip and the tab title below see the reader's
+  // language.
+  const nav = useMemo(() => navKeys.map(s => ({
+    ...s,
+    title: s.title && t(s.title),
+    items: s.items.map(i => ({
+      ...i,
+      label: t(i.label),
+      badgeLabel: i.badgeLabel && t(i.badgeLabel),
+      statusLabel: i.statusLabel && t(i.statusLabel),
+    })),
+  })), [navKeys, t]);
+  const userMenuItems = useMemo(
+    () => userMenuKeys?.map(i => ({ ...i, label: t(i.label) })),
+    [userMenuKeys, t],
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // A page built around one wide data table (columns of names, emails, role
@@ -244,9 +265,9 @@ export default function Shell({
     const items = userMenuItems ?? [];
     const href = matchActiveHref(items, pathname);
     return items.find(i => i.href === href)?.label
-      ?? (pathname ? UNLISTED_TITLES[pathname] : undefined)
+      ?? (pathname && UNLISTED_TITLES[pathname] ? t(UNLISTED_TITLES[pathname]) : undefined)
       ?? null;
-  }, [currentTitle, brandTitle, userMenuItems, pathname]);
+  }, [currentTitle, brandTitle, userMenuItems, pathname, t]);
 
   const [pageScope, setPageScope] = useState<string | undefined>();
   const scope = titleScope ?? pageScope;
@@ -286,7 +307,7 @@ export default function Shell({
             <div className="h-14 flex items-center justify-center border-b border-border">
               {/* Same logo as the open panel, so collapsing does not
                   swap the brand for a different mark. */}
-              <Link href="/" aria-label={`${brandTitle} ไปหน้าแรก`}
+              <Link href="/" aria-label={t("{brand} ไปหน้าแรก", { brand: brandTitle })}
                     className="rounded-md p-1 hover:bg-surface-secondary transition-colors">
                 <Image
                   src="/images/logo-cp-1.png"
@@ -322,10 +343,10 @@ export default function Shell({
             ))}
           </nav>
           <div className="border-t border-border p-2">
-            <Tip content={collapsed ? "ขยายเมนู" : "ย่อเมนู"}><button
+            <Tip content={collapsed ? t("ขยายเมนู") : t("ย่อเมนู")}><button
               type="button"
               onClick={() => setCollapsedPersistent(!collapsed)}
-              aria-label={collapsed ? "ขยายเมนู" : "ย่อเมนู"}
+              aria-label={collapsed ? t("ขยายเมนู") : t("ย่อเมนู")}
               aria-expanded={!collapsed}
               className={
                 "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground/70 " +
@@ -334,7 +355,7 @@ export default function Shell({
               }
             >
               {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-              {sidebarOpen && <span className="truncate">ย่อเมนู</span>}
+              {sidebarOpen && <span className="truncate">{t("ย่อเมนู")}</span>}
             </button></Tip>
           </div>
         </aside>
@@ -352,8 +373,8 @@ export default function Shell({
                  onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-3 border-b border-border">
               <BrandMark brandTitle={brandTitle} onBetaClick={() => setBetaOpen(true)} />
-              <Tip content="ปิดเมนู">
-                <Button variant="ghost" isIconOnly size="sm" onPress={() => setMobileOpen(false)} aria-label="ปิดเมนู">
+              <Tip content={t("ปิดเมนู")}>
+                <Button variant="ghost" isIconOnly size="sm" onPress={() => setMobileOpen(false)} aria-label={t("ปิดเมนู")}>
                   <X size={18} />
                 </Button>
               </Tip>
@@ -422,11 +443,12 @@ function BrandBlock({ brandTitle, onBetaClick }: { brandTitle: string; onBetaCli
 }
 
 function BrandMark({ brandTitle, onBetaClick }: { brandTitle: string; onBetaClick: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       <Link
         href="/"
-        aria-label={`${brandTitle} ไปหน้าแรก`}
+        aria-label={t("{brand} ไปหน้าแรก", { brand: brandTitle })}
         className="flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 hover:bg-surface-secondary transition-colors min-w-0"
       >
         <Image
@@ -447,6 +469,7 @@ function BrandMark({ brandTitle, onBetaClick }: { brandTitle: string; onBetaClic
 /** Executive titles are long ("รองคณบดีฝ่ายวิชาการ", "หัวหน้าสาขาวิชาวิทยาการ
  *  คอมพิวเตอร์"); the top bar only has room for the rank. Longest prefix
  *  first so "ผู้ช่วยคณบดี" is not read as "คณบดี". */
+// i18n-ignore-next-line — matched against the stored position text (data), shown as entered
 const POSITION_RANKS = ["ผู้ช่วยอธิการบดี", "รองอธิการบดี", "อธิการบดี", "ผู้ช่วยคณบดี", "รองคณบดี", "คณบดี", "หัวหน้าสาขาวิชา", "หัวหน้าภาควิชา", "ผู้อำนวยการ"];
 function shortPosition(title: string): string {
   const t = title.trim();
@@ -484,6 +507,7 @@ function NavRow({
   rail?: boolean;
   onClick?: () => void;
 }) {
+  const { t } = useI18n();
   const Icon = item.icon;
   const active = !item.external && item.href === activeHref;
 
@@ -533,7 +557,7 @@ function NavRow({
         ? <CheckCircle2 size={16} className="text-[var(--success-soft-foreground)]" />
         : null;
   const statusTitle = status
-    ? (item.statusLabel ?? (status === "warn" ? "ต้องดำเนินการ" : status === "pending" ? "รอตรวจสอบ" : "เรียบร้อยแล้ว"))
+    ? (item.statusLabel ?? (status === "warn" ? t("ต้องดำเนินการ") : status === "pending" ? t("รอตรวจสอบ") : t("เรียบร้อยแล้ว")))
     : undefined;
 
   if (item.external) {
@@ -550,7 +574,7 @@ function NavRow({
       </a></Tip>
     );
   }
-  const badgeTitle = hasBadge ? `${item.badgeLabel ?? "ค้างอยู่"} ${item.badge} รายการ` : undefined;
+  const badgeTitle = hasBadge ? t("{label} {n} รายการ", { label: item.badgeLabel ?? t("ค้างอยู่"), n: item.badge }) : undefined;
   return (
     // Tooltip in rail mode: the label is the only thing that says what the
     // icon does, and hiding it entirely would make the rail a guessing game
@@ -602,12 +626,13 @@ function NavRow({
 
 // Priority order — a user may have multiple roles (e.g. staff + lecturer),
 // so pick the most privileged label to show.
+// Returns a Thai key; translate where it is shown (t(roleLabel(...))).
 export function roleLabel(roles: string[]): string {
-  if (roles.includes("admin")) return "ผู้ดูแลระบบ";
-  if (roles.includes("staff")) return "เจ้าหน้าที่";
-  if (roles.includes("lecturer")) return "อาจารย์";
-  if (roles.includes("ta")) return "ผู้ช่วยสอน (TA)";
-  return "ผู้ใช้งาน";
+  if (roles.includes("admin")) return msg("ผู้ดูแลระบบ");
+  if (roles.includes("staff")) return msg("เจ้าหน้าที่");
+  if (roles.includes("lecturer")) return msg("อาจารย์");
+  if (roles.includes("ta")) return msg("ผู้ช่วยสอน (TA)");
+  return msg("ผู้ใช้งาน");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -642,9 +667,10 @@ function TopBar({
   onBetaClick: () => void;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const menuItems = userMenuItems ?? [];
   const fullName = formatFullName(me);
-  const roleLbl = roleLabel(me.roles);
+  const roleLbl = t(roleLabel(me.roles));
   // Display-only: a lecturer can also hold an administrative post (หัวหน้า
   // สาขาวิชา, ประธานหลักสูตร, ...) alongside their teaching role. Appended
   // rather than replacing roleLbl, since the role still says what the account
@@ -654,9 +680,9 @@ function TopBar({
   return (
     <header className={`h-14 border-b border-border bg-surface flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 sticky ${DEMO_CHROME_OFFSET} z-30`}>
       {showMobileMenu && (
-        <Tip content="เปิดเมนู">
+        <Tip content={t("เปิดเมนู")}>
         <Button variant="ghost" isIconOnly size="sm" onPress={onOpenMobile}
-                aria-label="เปิดเมนู" className="md:hidden shrink-0 size-9!">
+                aria-label={t("เปิดเมนู")} className="md:hidden shrink-0 size-9!">
           <Menu size={20} />
         </Button>
         </Tip>
@@ -684,7 +710,7 @@ function TopBar({
       {topBarAccessory}
 
       <Dropdown>
-        <Button variant="ghost" aria-label="เมนูผู้ใช้" className="px-1.5! gap-2! h-auto! py-1! shrink-0">
+        <Button variant="ghost" aria-label={t("เมนูผู้ใช้")} className="px-1.5! gap-2! h-auto! py-1! shrink-0">
           <UserAvatar firstName={me.first_name} lastName={me.last_name} src={me.avatar_url} />
           <div className="hidden sm:flex flex-col items-start min-w-0 leading-tight">
             <span className="text-sm font-medium text-foreground truncate max-w-40 md:max-w-56">
@@ -704,6 +730,14 @@ function TopBar({
             <div className="text-xs text-muted truncate max-w-50">{roleWithPosition}</div>
             <div className="text-xs text-muted truncate max-w-50">{me.email}</div>
           </div>
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-3">
+            <span className="text-xs text-muted">{t("ธีม")}</span>
+            <ThemeSwitch signedIn />
+          </div>
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-3">
+            <span className="text-xs text-muted">{t("ภาษา")}</span>
+            <LanguageSwitch signedIn />
+          </div>
           <Dropdown.Menu
             onAction={(key: React.Key) => {
               if (key === "logout") { onLogout(); return; }
@@ -720,9 +754,9 @@ function TopBar({
                 </Dropdown.Item>
               );
             })}
-            <Dropdown.Item id="logout" textValue="ออกจากระบบ" variant="danger">
+            <Dropdown.Item id="logout" textValue={t("ออกจากระบบ")} variant="danger">
               <LogOut className="size-4 shrink-0 text-danger" />
-              <Label>ออกจากระบบ</Label>
+              <Label>{t("ออกจากระบบ")}</Label>
             </Dropdown.Item>
           </Dropdown.Menu>
         </Dropdown.Popover>

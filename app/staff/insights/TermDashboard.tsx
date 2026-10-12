@@ -47,6 +47,7 @@ import MonthlyChart from "./MonthlyChart";
 import CurriculumBars from "./CurriculumBars";
 import CourseExplorer from "./CourseExplorer";
 import { Skel, SkelValue, SkelRegion, SkelBlock, SkelRows } from "../../components/Skeletons";
+import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 // Text colours on their tinted backgrounds all pass WCAG AA (≥ 4.5:1).
 const TONE: Record<Tone, { icon: typeof Info; text: string; bg: string; ring: string }> = {
@@ -80,6 +81,8 @@ export default function TermDashboard({
   const [flowAsChart, setFlowAsChart] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const demo = useIsDemo();
+  const i18n = useI18n();
+  const { t, intl } = i18n;
 
   const view = useMemo(() => {
     if (!a) return null;
@@ -90,10 +93,10 @@ export default function TermDashboard({
       risk: courseRisk(a),
       rows,
       st: staffingStats(rows),
-      insights: buildInsights(a),
+      insights: buildInsights(a, t),
       curricula: [...new Set(allRows.map(r => r.curriculum))].sort(),
     };
-  }, [a, curriculum]);
+  }, [a, curriculum, t]);
 
   const downloadXlsx = async () => {
     if (!a) return;
@@ -118,18 +121,18 @@ export default function TermDashboard({
   const switching = !!termId && a.term_id !== termId;
 
   const { bv, risk, rows, st, insights } = view;
-  const bAns = budgetAnswer(bv, risk);
-  const sAns = staffingAnswer(st, a.plan.students_per_ta);
-  const pAns = pipelineAnswer(a);
+  const bAns = budgetAnswer(bv, risk, t);
+  const sAns = staffingAnswer(st, a.plan.students_per_ta, t);
+  const pAns = pipelineAnswer(a, i18n);
   const pendingTotal = a.pipeline?.stages.reduce((s, x) => s + x.count, 0) ?? 0;
   const stale = a.pipeline?.stages.some(x => x.count > 0 && (x.oldest_days ?? 0) >= RULES.staleDays) ?? false;
   const returnedTotal = (a.pipeline?.docs_returned ?? 0) + (a.pipeline?.months_sent_back ?? 0) + (a.pipeline?.worklogs_rejected ?? 0);
-  const compareOptions = (terms ?? []).filter(t => t.id !== a.term_id);
+  const compareOptions = (terms ?? []).filter(x => x.id !== a.term_id);
   const shownInsights = showAllInsights ? insights : insights.slice(0, 5);
   const atRisk = [...risk.over, ...risk.near];
   const scatterPts = rows.filter(r => r.requested > 0 && r.students > 0).length;
   const flow = flowShape(a.flow ?? []);
-  const docs = docsShape(a.docs);
+  const docs = docsShape(a.docs, t);
 
   const selectCourse = (id: string | null) => {
     setSelected(id);
@@ -153,8 +156,8 @@ export default function TermDashboard({
         <div role="note" className="flex items-start gap-3 rounded-xl border-2 border-dashed border-amber-400 bg-amber-50 px-4 py-3 text-amber-900">
           <FlaskConical size={20} className="mt-0.5 shrink-0" aria-hidden />
           <div>
-            <div className="text-sm font-semibold">ข้อมูลสาธิต ไม่ใช่ข้อมูลจริง</div>
-            <div className="text-xs">ตัวเลข รายวิชา และรายชื่อทั้งหมดในหน้านี้มาจากห้องทดลอง เป็นข้อมูลสมมติเพื่อการนำเสนอเท่านั้น</div>
+            <div className="text-sm font-semibold">{t("ข้อมูลสาธิต ไม่ใช่ข้อมูลจริง")}</div>
+            <div className="text-xs">{t("ตัวเลข รายวิชา และรายชื่อทั้งหมดในหน้านี้มาจากห้องทดลอง เป็นข้อมูลสมมติเพื่อการนำเสนอเท่านั้น")}</div>
           </div>
         </div>
       )}
@@ -164,13 +167,13 @@ export default function TermDashboard({
       <div className="flex flex-wrap items-center gap-2">
         <QuestionNav />
         {compareOptions.length > 0 && (
-          <Select aria-label="เทียบกับภาคเรียน" value={compareId} onChange={e => setCompareId(e.target.value)}>
-            <option value="">ไม่เปรียบเทียบ</option>
-            {compareOptions.map(t => <option key={t.id} value={t.id}>เทียบกับ {t.academic_year}/{t.semester}</option>)}
+          <Select aria-label={t("เทียบกับภาคเรียน")} value={compareId} onChange={e => setCompareId(e.target.value)}>
+            <option value="">{t("ไม่เปรียบเทียบ")}</option>
+            {compareOptions.map(x => <option key={x.id} value={x.id}>{t("เทียบกับ {term}", { term: `${x.academic_year}/${x.semester}` })}</option>)}
           </Select>
         )}
         <Button variant="secondary" size="sm" onClick={downloadXlsx} disabled={downloading}>
-          <Download size={15} className="me-1.5" />{downloading ? "กำลังสร้างไฟล์…" : "ดาวน์โหลด Excel"}
+          <Download size={15} className="me-1.5" />{downloading ? t("กำลังสร้างไฟล์…") : t("ดาวน์โหลด Excel")}
         </Button>
       </div>
 
@@ -179,21 +182,21 @@ export default function TermDashboard({
       {/* ------------------------------------------------------------------ */}
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-surface" aria-labelledby="dash-decisions">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline)] bg-[radial-gradient(120%_140%_at_0%_0%,rgba(7,118,188,0.08),transparent_60%)] px-5 py-3 text-sm text-[var(--ink-2)]">
-          <span>ภาคเรียน <b className="text-[var(--ink-1)]">{a.term_label}</b></span>
-          {a.starts_on && a.ends_on && <span>{thDate(a.starts_on)} – {thDate(a.ends_on)}</span>}
-          {bv.elapsedPct != null && <span>ผ่านไป <b className="tabular-nums text-[var(--ink-1)]">{pct0(bv.elapsedPct)}</b> ของเทอม</span>}
-          {a.as_of && <span className="ms-auto text-xs text-[var(--ink-3)]">ข้อมูล ณ {thDate(a.as_of)}</span>}
+          <span>{t.rich("ภาคเรียน {term}", { term: <b className="text-[var(--ink-1)]">{a.term_label}</b> })}</span>
+          {a.starts_on && a.ends_on && <span>{thDate(a.starts_on, intl)} – {thDate(a.ends_on, intl)}</span>}
+          {bv.elapsedPct != null && <span>{t.rich("ผ่านไป {pct} ของเทอม", { pct: <b className="tabular-nums text-[var(--ink-1)]">{pct0(bv.elapsedPct)}</b> })}</span>}
+          {a.as_of && <span className="ms-auto text-xs text-[var(--ink-3)]">{t("ข้อมูล ณ {date}", { date: thDate(a.as_of, intl) })}</span>}
         </div>
         <div className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]">
               <Sparkles size={15} />
             </span>
-            <h2 id="dash-decisions" className="text-base font-semibold text-[var(--ink-1)]">ข้อสังเกตที่ต้องตัดสินใจหรือติดตาม</h2>
-            <span className="hidden sm:inline text-xs text-[var(--ink-3)]">วิเคราะห์อัตโนมัติจากข้อมูลล่าสุด</span>
+            <h2 id="dash-decisions" className="text-base font-semibold text-[var(--ink-1)]">{t("ข้อสังเกตที่ต้องตัดสินใจหรือติดตาม")}</h2>
+            <span className="hidden sm:inline text-xs text-[var(--ink-3)]">{t("วิเคราะห์อัตโนมัติจากข้อมูลล่าสุด")}</span>
           </div>
           {insights.length === 0 ? (
-            <p className="flex items-center gap-2 text-sm text-emerald-800"><CircleCheck size={16} />ไม่มีเรื่องที่ต้องตัดสินใจหรือติดตามในตอนนี้</p>
+            <p className="flex items-center gap-2 text-sm text-emerald-800"><CircleCheck size={16} />{t("ไม่มีเรื่องที่ต้องตัดสินใจหรือติดตามในตอนนี้")}</p>
           ) : (
             <ul className="grid gap-2 lg:grid-cols-2">
               {shownInsights.map((it, i) => {
@@ -218,7 +221,7 @@ export default function TermDashboard({
             <button type="button" onClick={() => setShowAllInsights(v => !v)} aria-expanded={showAllInsights}
                     className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--brand)] hover:underline">
               <ChevronDown size={14} className={showAllInsights ? "rotate-180" : ""} />
-              {showAllInsights ? "ย่อ" : `ดูทั้งหมด ${insights.length} ข้อ`}
+              {showAllInsights ? t("ย่อ") : t("ดูทั้งหมด {n} ข้อ", { n: insights.length })}
             </button>
           )}
         </div>
@@ -228,48 +231,48 @@ export default function TermDashboard({
       {/* KPI row (TOR 3.13 figures) — one headline number per card          */}
       {/* ------------------------------------------------------------------ */}
       <div data-tour="dash-stats" className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-4 gap-3">
-        <Kpi icon={<BookOpen size={18} />} label="รายวิชาที่ขอ TA" value={a.courses_with_ta} unit="วิชา"
-             sub={`จาก ${a.courses_open} วิชาที่เปิด${a.pipeline?.courses_no_ta ? ` · มีนักศึกษาแต่ยังไม่ขอ ${a.pipeline.courses_no_ta} วิชา` : ""}`}
-             delta={b ? delta(a.courses_with_ta, b.courses_with_ta, b.term_label) : undefined} />
-        <Kpi icon={<Users size={18} />} label="TA ปฏิบัติงานจริง" value={a.active_tas} unit="คน"
-             sub={`จาก ${a.total_tas} คนที่แต่งตั้ง · ป.ตรี ${a.tas_undergrad} · บัณฑิต ${a.tas_graduate}`}
-             title="TA ปฏิบัติงานจริง = มีบันทึกเวลาที่อนุมัติแล้วอย่างน้อย 1 รายการในภาคเรียนนี้"
-             delta={b ? delta(a.active_tas, b.active_tas, b.term_label) : undefined} />
-        <Kpi icon={<Wallet size={18} />} label="เบิกจ่ายแล้ว" value={Math.round(bv.used).toLocaleString("th-TH")} unit="บาท"
-             sub={bv.base > 0 ? `${pct0(bv.usedPct)} ของงบรวม ${money(bv.base)}` : "ยังไม่มีงบรวม"}
-             delta={b ? delta(a.budget_used, b.budget_used, b.term_label, "บาท") : undefined} />
-        <Kpi icon={<Inbox size={18} />} label="รายการรอดำเนินการ" value={pendingTotal} unit="รายการ"
+        <Kpi icon={<BookOpen size={18} />} label={t("รายวิชาที่ขอ TA")} value={a.courses_with_ta} unit={t("วิชา")}
+             sub={t("จาก {n} วิชาที่เปิด", { n: a.courses_open }) + (a.pipeline?.courses_no_ta ? " · " + t("มีนักศึกษาแต่ยังไม่ขอ {n} วิชา", { n: a.pipeline.courses_no_ta }) : "")}
+             delta={b ? delta(t, a.courses_with_ta, b.courses_with_ta, b.term_label) : undefined} />
+        <Kpi icon={<Users size={18} />} label={t("TA ปฏิบัติงานจริง")} value={a.active_tas} unit={t("คน")}
+             sub={t("จาก {total} คนที่แต่งตั้ง · ป.ตรี {ug} · บัณฑิต {grad}", { total: a.total_tas, ug: a.tas_undergrad, grad: a.tas_graduate })}
+             title={t("TA ปฏิบัติงานจริง = มีบันทึกเวลาที่อนุมัติแล้วอย่างน้อย 1 รายการในภาคเรียนนี้")}
+             delta={b ? delta(t, a.active_tas, b.active_tas, b.term_label) : undefined} />
+        <Kpi icon={<Wallet size={18} />} label={t("เบิกจ่ายแล้ว")} value={Math.round(bv.used).toLocaleString(intl)} unit={t("บาท")}
+             sub={bv.base > 0 ? t("{pct} ของงบรวม {amount}", { pct: pct0(bv.usedPct), amount: money(bv.base, t) }) : t("ยังไม่มีงบรวม")}
+             delta={b ? delta(t, a.budget_used, b.budget_used, b.term_label, true) : undefined} />
+        <Kpi icon={<Inbox size={18} />} label={t("รายการรอดำเนินการ")} value={pendingTotal} unit={t("รายการ")}
              tone={stale ? "warn" : undefined}
-             sub={`${stale ? `มีรายการรอนานเกิน ${RULES.staleDays} วัน · ` : ""}ถูกตีกลับให้แก้ไข ${returnedTotal} รายการ`} />
+             sub={(stale ? t("มีรายการรอนานเกิน {n} วัน", { n: RULES.staleDays }) + " · " : "") + t("ถูกตีกลับให้แก้ไข {n} รายการ", { n: returnedTotal })} />
       </div>
 
       {/* ------------------------------------------------------------------ */}
       {/* Q1 — งบพอไหม                                                       */}
       {/* ------------------------------------------------------------------ */}
-      <Question id="q-budget" n={1} title="งบพอถึงสิ้นเทอมไหม?" answer={bAns} onCourse={jumpTo} tour="dash-budget">
+      <Question id="q-budget" n={1} title={t("งบพอถึงสิ้นเทอมไหม?")} answer={bAns} onCourse={jumpTo} tour="dash-budget">
         <Panel>
           <div className="mb-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
             <div>
-              <div className="text-sm text-[var(--ink-2)]">งบรวม <b className="text-lg tabular-nums text-[var(--ink-1)]">{money(bv.base)}</b></div>
-              <div className="text-xs text-[var(--ink-3)]">ผลรวมงบของ {a.courses_with_ta} วิชาที่ส่งคำขอ TA คำนวณจากจำนวนนักศึกษาและหน่วยกิต เงินย้ายข้ามวิชาไม่ได้</div>
+              <div className="text-sm text-[var(--ink-2)]">{t.rich("งบรวม {amount}", { amount: <b className="text-lg tabular-nums text-[var(--ink-1)]">{money(bv.base, t)}</b> })}</div>
+              <div className="text-xs text-[var(--ink-3)]">{t("ผลรวมงบของ {n} วิชาที่ส่งคำขอ TA คำนวณจากจำนวนนักศึกษาและหน่วยกิต เงินย้ายข้ามวิชาไม่ได้", { n: a.courses_with_ta })}</div>
             </div>
-            <div className="text-sm text-[var(--ink-2)]">คงเหลือ <b className="text-lg tabular-nums text-[var(--ink-1)]">{money(bv.remaining)}</b></div>
+            <div className="text-sm text-[var(--ink-2)]">{t.rich("คงเหลือ {amount}", { amount: <b className="text-lg tabular-nums text-[var(--ink-1)]">{money(bv.remaining, t)}</b> })}</div>
           </div>
           <BudgetStack b={bv} />
           <div className="mt-5 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Metric label="คาดการณ์สิ้นเทอม"
-                      value={bv.projectedHigh - bv.projectedLow > 1 ? `${Math.round(bv.projectedLow).toLocaleString("th-TH")}–${money(bv.projectedHigh)}` : money(bv.projectedHigh)}
-                      sub={bv.runRate ? "ต่ำสุดจากชั่วโมงที่บันทึกแล้ว สูงสุดถ้าใช้ในอัตราเดิม" : "จากชั่วโมงที่บันทึกแล้ว"} />
-              <Metric label="งานที่ยังจ่ายไม่ได้" value={money(risk.unfunded)} tone={risk.unfunded > 0 ? "danger" : undefined}
-                      sub={risk.unfunded > 0 ? "ชั่วโมงที่เกินเพดานวิชา" : "ไม่มีวิชาใดเกินเพดาน"} />
-              <Metric label="ค่าเฉลี่ยต่อชั่วโมง" value={a.approved_hours > 0 ? `${num1((a.budget_used - (a.budget_lump ?? 0)) / a.approved_hours)} บาท` : "–"}
-                      sub={`จาก ${num1(a.approved_hours)} ชม. ที่อนุมัติ (ไม่รวมเหมาจ่ายบัณฑิต)`} />
+              <Metric label={t("คาดการณ์สิ้นเทอม")}
+                      value={bv.projectedHigh - bv.projectedLow > 1 ? `${Math.round(bv.projectedLow).toLocaleString(intl)}–${money(bv.projectedHigh, t)}` : money(bv.projectedHigh, t)}
+                      sub={bv.runRate ? t("ต่ำสุดจากชั่วโมงที่บันทึกแล้ว สูงสุดถ้าใช้ในอัตราเดิม") : t("จากชั่วโมงที่บันทึกแล้ว")} />
+              <Metric label={t("งานที่ยังจ่ายไม่ได้")} value={money(risk.unfunded, t)} tone={risk.unfunded > 0 ? "danger" : undefined}
+                      sub={risk.unfunded > 0 ? t("ชั่วโมงที่เกินเพดานวิชา") : t("ไม่มีวิชาใดเกินเพดาน")} />
+              <Metric label={t("ค่าเฉลี่ยต่อชั่วโมง")} value={a.approved_hours > 0 ? t("{n} บาท", { n: num1((a.budget_used - (a.budget_lump ?? 0)) / a.approved_hours) }) : "–"}
+                      sub={t("จาก {n} ชม. ที่อนุมัติ (ไม่รวมเหมาจ่ายบัณฑิต)", { n: num1(a.approved_hours) })} />
             </div>
             <div className="rounded-xl border border-[var(--hairline)] p-3">
-              <div className="mb-2 text-sm font-medium text-[var(--ink-1)]">วิชาที่ชนหรือใกล้เพดานงบ <span className="font-normal text-xs text-[var(--ink-3)]">(คาดการณ์ถึง {pct0(risk.ratio * 100)} ของเพดานวิชา)</span></div>
+              <div className="mb-2 text-sm font-medium text-[var(--ink-1)]">{t("วิชาที่ชนหรือใกล้เพดานงบ")} <span className="font-normal text-xs text-[var(--ink-3)]">{t("(คาดการณ์ถึง {pct} ของเพดานวิชา)", { pct: pct0(risk.ratio * 100) })}</span></div>
               {atRisk.length === 0 ? (
-                <p className="flex items-center gap-2 text-sm text-emerald-800"><CircleCheck size={15} />ไม่มีวิชาใดใช้ถึง {pct0(risk.ratio * 100)} ของเพดาน</p>
+                <p className="flex items-center gap-2 text-sm text-emerald-800"><CircleCheck size={15} />{t("ไม่มีวิชาใดใช้ถึง {pct} ของเพดาน", { pct: pct0(risk.ratio * 100) })}</p>
               ) : (
                 <ul className="divide-y divide-[var(--hairline)]">
                   {atRisk.slice(0, 6).map(r => {
@@ -279,9 +282,9 @@ export default function TermDashboard({
                         <button type="button" onClick={() => jumpTo(r.teaching_course_id)}
                                 className="grid w-full grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-lg px-1.5 py-2 text-start hover:bg-slate-50">
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold text-[var(--ink-1)]">{r.code} <span className="text-xs font-medium" style={{ color: CAP_META[cs].ink }}>{CAP_META[cs].label}</span></div>
+                            <div className="text-sm font-semibold text-[var(--ink-1)]">{r.code} <span className="text-xs font-medium" style={{ color: CAP_META[cs].ink }}>{t(CAP_META[cs].label)}</span></div>
                             <div className="text-xs text-[var(--ink-3)] tabular-nums">
-                              {money(r.forecast_baht)} จาก {money(r.cap_baht)}{r.unfunded_baht > 0 ? ` · จ่ายไม่ได้ ${money(r.unfunded_baht)}` : ""}
+                              {t("{forecast} จาก {cap}", { forecast: money(r.forecast_baht, t), cap: money(r.cap_baht, t) })}{r.unfunded_baht > 0 ? " · " + t("จ่ายไม่ได้ {amount}", { amount: money(r.unfunded_baht, t) }) : ""}
                             </div>
                           </div>
                           <MiniBar value={r.forecast_baht} max={r.cap_baht} warnAt={risk.ratio} over={cs === "over"} />
@@ -291,17 +294,17 @@ export default function TermDashboard({
                   })}
                 </ul>
               )}
-              {atRisk.length > 6 && <p className="mt-1 text-xs text-[var(--ink-3)]">และอีก {atRisk.length - 6} วิชา ดูในตารางรายวิชา</p>}
+              {atRisk.length > 6 && <p className="mt-1 text-xs text-[var(--ink-3)]">{t("และอีก {n} วิชา ดูในตารางรายวิชา", { n: atRisk.length - 6 })}</p>}
             </div>
           </div>
         </Panel>
         <div className="grid gap-4 lg:grid-cols-5">
-          <Panel title="การเบิกจ่ายสะสมเทียบเวลา"
-                 description="เส้นเขียวคือยอดสะสมจริง เส้นประคือเส้นอ้างอิงถ้าใช้เท่ากันทุกเดือน ไม่ใช่เป้าหมาย แท่งด้านล่างคือยอดแต่ละเดือน"
+          <Panel title={t("การเบิกจ่ายสะสมเทียบเวลา")}
+                 description={t("เส้นเขียวคือยอดสะสมจริง เส้นประคือเส้นอ้างอิงถ้าใช้เท่ากันทุกเดือน ไม่ใช่เป้าหมาย แท่งด้านล่างคือยอดแต่ละเดือน")}
                  className="min-w-0 lg:col-span-3">
             <MonthlyChart a={a} b={b ?? undefined} />
           </Panel>
-          <Panel title="การใช้งบรายหลักสูตร" description="วิชาที่เปิดให้หลายหลักสูตร นับในหลักสูตรหลักของวิชา" className="min-w-0 lg:col-span-2">
+          <Panel title={t("การใช้งบรายหลักสูตร")} description={t("วิชาที่เปิดให้หลายหลักสูตร นับในหลักสูตรหลักของวิชา")} className="min-w-0 lg:col-span-2">
             <CurriculumBars a={a} />
           </Panel>
         </div>
@@ -310,59 +313,59 @@ export default function TermDashboard({
       {/* ------------------------------------------------------------------ */}
       {/* Q2 — ขอ TA สมเหตุสมผลไหม                                           */}
       {/* ------------------------------------------------------------------ */}
-      <Question id="q-staffing" n={2} title="แต่ละวิชาขอ TA เกินที่แนะนำหรือเกินจำนวนนักศึกษาไหม?" answer={sAns} onCourse={jumpTo}
+      <Question id="q-staffing" n={2} title={t("แต่ละวิชาขอ TA เกินที่แนะนำหรือเกินจำนวนนักศึกษาไหม?")} answer={sAns} onCourse={jumpTo}
                 action={view.curricula.length > 1 ? (
-                  <Select aria-label="กรองหลักสูตร" value={curriculum} onChange={e => { setCurriculum(e.target.value); setSelected(null); }}>
-                    <option value="">ทุกหลักสูตร</option>
-                    {view.curricula.map(c => <option key={c || "none"} value={c}>{curriculumTH(c)}</option>)}
+                  <Select aria-label={t("กรองหลักสูตร")} value={curriculum} onChange={e => { setCurriculum(e.target.value); setSelected(null); }}>
+                    <option value="">{t("ทุกหลักสูตร")}</option>
+                    {view.curricula.map(c => <option key={c || "none"} value={c}>{t(curriculumTH(c))}</option>)}
                   </Select>
                 ) : undefined}>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,5fr)]">
           {scatterPts >= RULES.scatterMinPoints ? (
-            <Panel title="นักศึกษา เทียบ TA ที่ขอ"
-                   description={`จุดแต่ละจุดคือหนึ่งวิชา เหนือเส้นเขียวคือขอมากกว่าเกณฑ์ 1 ต่อ ${a.plan.students_per_ta} คน เหนือเส้นประแดงคือเกินเพดาน 1 ต่อ ${a.plan.min_students_per_ta} คน คลิกจุดเพื่อดูวิชาในตาราง`}
+            <Panel title={t("นักศึกษา เทียบ TA ที่ขอ")}
+                   description={t("จุดแต่ละจุดคือหนึ่งวิชา เหนือเส้นเขียวคือขอมากกว่าเกณฑ์ 1 ต่อ {guide} คน เหนือเส้นประแดงคือเกินเพดาน 1 ต่อ {ceiling} คน คลิกจุดเพื่อดูวิชาในตาราง", { guide: a.plan.students_per_ta, ceiling: a.plan.min_students_per_ta })}
                    className="min-w-0">
               <div className="mb-3"><StatusLegend counts={st.counts} picked={status} onPick={s => { setStatus(s); document.getElementById("q-courses")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} /></div>
               <StaffingScatter rows={rows} plan={a.plan} selected={selected} onSelect={id => selectCourse(id)} />
               <StaffingNote a={a} />
             </Panel>
           ) : (
-            <Panel title="TA ที่ขอ เทียบที่แนะนำและเพดาน"
-                   description={`มีวิชาที่ขอ TA ${st.withReq} วิชา แสดงเป็นรายวิชา (กราฟกระจายจะแสดงเมื่อมีตั้งแต่ ${RULES.scatterMinPoints} วิชา)`}
+            <Panel title={t("TA ที่ขอ เทียบที่แนะนำและเพดาน")}
+                   description={t("มีวิชาที่ขอ TA {n} วิชา แสดงเป็นรายวิชา (กราฟกระจายจะแสดงเมื่อมีตั้งแต่ {min} วิชา)", { n: st.withReq, min: RULES.scatterMinPoints })}
                    className="min-w-0">
               <StaffingRows rows={rows} selected={selected} onSelect={jumpTo} />
               <StaffingNote a={a} />
             </Panel>
           )}
           <div className="space-y-4 min-w-0">
-            <Panel title="สรุปการขอ TA">
+            <Panel title={t("สรุปการขอ TA")}>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <MiniStat label="นศ. ในวิชาที่ขอ" value={st.students.toLocaleString("th-TH")} />
-                <MiniStat label="TA ที่ขอ / แนะนำ" value={`${st.requested} / ${st.recommended}`}
+                <MiniStat label={t("นศ. ในวิชาที่ขอ")} value={st.students.toLocaleString(intl)} />
+                <MiniStat label={t("TA ที่ขอ / แนะนำ")} value={`${st.requested} / ${st.recommended}`}
                           tone={st.requested > st.recommended ? "warn" : undefined} />
-                <MiniStat label="นศ. ต่อ TA" value={st.ratio ? num1(st.ratio) : "–"} sub={`เกณฑ์ ${a.plan.students_per_ta}`} />
+                <MiniStat label={t("นศ. ต่อ TA")} value={st.ratio ? num1(st.ratio) : "–"} sub={t("เกณฑ์ {n}", { n: a.plan.students_per_ta })} />
               </div>
               <div className="mt-4">
                 <VerdictBar counts={st.counts} />
                 <div className="mt-1.5 flex justify-between text-xs text-[var(--ink-3)]">
-                  <span>{st.compliance != null ? `${pct0(st.compliance)} อยู่ในเกณฑ์หรือต่ำกว่า` : ""}</span>
-                  <span>{st.withReq} วิชาที่ขอ</span>
+                  <span>{st.compliance != null ? t("{pct} อยู่ในเกณฑ์หรือต่ำกว่า", { pct: pct0(st.compliance) }) : ""}</span>
+                  <span>{t("{n} วิชาที่ขอ", { n: st.withReq })}</span>
                 </div>
               </div>
             </Panel>
-            <Panel title="วิชาที่ควรทบทวน" description="ขอ TA มากกว่าที่แนะนำ เรียงจากเกินมากที่สุด">
-              <CourseList rows={st.review.slice(0, 6)} empty="ไม่มีวิชาที่ขอเกินที่แนะนำ" onPick={jumpTo}
+            <Panel title={t("วิชาที่ควรทบทวน")} description={t("ขอ TA มากกว่าที่แนะนำ เรียงจากเกินมากที่สุด")}>
+              <CourseList rows={st.review.slice(0, 6)} empty={t("ไม่มีวิชาที่ขอเกินที่แนะนำ")} onPick={jumpTo}
                           right={r => (
-                            <Tip content={`ขอ TA เกินจำนวนที่แนะนำ ${r.requested - r.recommended} คน`}>
+                            <Tip content={t("ขอ TA เกินจำนวนที่แนะนำ {n} คน", { n: r.requested - r.recommended })}>
                               <span tabIndex={-1} className="text-red-700">+{r.requested - r.recommended}</span>
                             </Tip>
                           )} />
             </Panel>
             {st.under.length > 0 && (
-              <Panel title="วิชาที่ TA อาจไม่พอ" description="ขอน้อยกว่าที่แนะนำ">
+              <Panel title={t("วิชาที่ TA อาจไม่พอ")} description={t("ขอน้อยกว่าที่แนะนำ")}>
                 <CourseList rows={st.under.slice(0, 4)} empty="" onPick={jumpTo}
                             right={r => (
-                              <Tip content={`ขอ TA น้อยกว่าจำนวนที่แนะนำ ${r.recommended - r.requested} คน`}>
+                              <Tip content={t("ขอ TA น้อยกว่าจำนวนที่แนะนำ {n} คน", { n: r.recommended - r.requested })}>
                                 <span tabIndex={-1} className="text-sky-800">{r.requested - r.recommended}</span>
                               </Tip>
                             )} />
@@ -375,23 +378,23 @@ export default function TermDashboard({
       {/* ------------------------------------------------------------------ */}
       {/* Q3 — งานค้างอยู่ขั้นไหน                                            */}
       {/* ------------------------------------------------------------------ */}
-      <Question id="q-work" n={3} title="งานค้างอยู่ขั้นไหน?" answer={pAns} onCourse={jumpTo}>
+      <Question id="q-work" n={3} title={t("งานค้างอยู่ขั้นไหน?")} answer={pAns} onCourse={jumpTo}>
         {a.pipeline && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             {a.pipeline.stages.map((s, i) => {
               const m = PIPELINE_META[s.key];
               const old = s.count > 0 && (s.oldest_days ?? 0) >= RULES.staleDays;
               const card = (
-                <Tip content={old ? `มีรายการรอนานตั้งแต่ ${RULES.staleDays} วันขึ้นไป` : undefined}>
+                <Tip content={old ? t("มีรายการรอนานตั้งแต่ {n} วันขึ้นไป", { n: RULES.staleDays }) : undefined}>
                 <div {...(staffLinks ? { tabIndex: -1 } : {})} className={`relative h-full rounded-xl border p-3 transition ${old ? "border-amber-300 bg-amber-50" : "border-[var(--border)] bg-surface"} ${staffLinks ? "hover:shadow-md" : ""}`}>
                   <div className="flex items-center gap-2 text-xs text-[var(--ink-3)]">
                     <span className={`inline-flex size-5 items-center justify-center rounded-full text-xs font-bold ${s.count > 0 ? "bg-[var(--brand)] text-white" : "bg-slate-200 text-slate-700"}`}>{i + 1}</span>
-                    ขั้นที่ {i + 1}
+                    {t("ขั้นที่ {n}", { n: i + 1 })}
                   </div>
-                  <div className="mt-1.5 text-sm font-medium text-[var(--ink-1)]">{m.label}</div>
+                  <div className="mt-1.5 text-sm font-medium text-[var(--ink-1)]">{t(m.label)}</div>
                   <div className={`mt-1 text-2xl font-semibold tabular-nums ${s.count > 0 ? (old ? "text-amber-800" : "text-[var(--ink-1)]") : "text-[var(--ink-3)]"}`}>{s.count}</div>
                   <div className="mt-0.5 text-xs text-[var(--ink-3)] line-clamp-2">
-                    {s.oldest_days != null && s.count > 0 ? `รอนานสุด ${s.oldest_days} วัน` : m.who}
+                    {s.oldest_days != null && s.count > 0 ? t("รอนานสุด {n} วัน", { n: s.oldest_days }) : t(m.who)}
                   </div>
                 </div>
                 </Tip>
@@ -402,22 +405,22 @@ export default function TermDashboard({
         )}
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]">
-          <Panel title="รอบเบิกรายเดือนอยู่ที่ใคร"
-                 description="แต่ละรายการคือ TA หนึ่งคนในหนึ่งวิชาของเดือนนั้น แยกตามผู้ที่ต้องดำเนินการต่อ" className="min-w-0"
+          <Panel title={t("รอบเบิกรายเดือนอยู่ที่ใคร")}
+                 description={t("แต่ละรายการคือ TA หนึ่งคนในหนึ่งวิชาของเดือนนั้น แยกตามผู้ที่ต้องดำเนินการต่อ")} className="min-w-0"
                  actions={flow.months.length > 0 && !flow.chart ? (
                    <button type="button" onClick={() => setFlowAsChart(v => !v)} aria-pressed={flowAsChart}
                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--brand)] hover:bg-slate-50">
-                     {flowAsChart ? <><AlignLeft size={14} />ดูเป็นข้อความ</> : <><BarChart3 size={14} />ดูเป็นกราฟ</>}
+                     {flowAsChart ? <><AlignLeft size={14} />{t("ดูเป็นข้อความ")}</> : <><BarChart3 size={14} />{t("ดูเป็นกราฟ")}</>}
                    </button>
                  ) : undefined}>
             {flow.months.length === 0 ? (
-              <div className="py-10 text-center text-sm text-[var(--ink-3)]">ยังไม่มีการบันทึกเวลาในภาคเรียนนี้</div>
+              <div className="py-10 text-center text-sm text-[var(--ink-3)]">{t("ยังไม่มีการบันทึกเวลาในภาคเรียนนี้")}</div>
             ) : flow.chart || flowAsChart ? (
               <FlowChart months={flow.months} />
             ) : (
               <>
                 <ul className="space-y-2">
-                  {flowSentences(flow.months).map(l => (
+                  {flowSentences(flow.months, i18n).map(l => (
                     <li key={l.key} className="flex items-start gap-2 text-sm text-[var(--ink-1)]">
                       <i className="mt-1.5 inline-block size-3 shrink-0 rounded-sm" style={{ background: l.color }} aria-hidden />
                       <span>{l.text}</span>
@@ -426,22 +429,22 @@ export default function TermDashboard({
                 </ul>
                 <p className="mt-3 text-xs text-[var(--ink-3)]">
                   {flow.months.length < RULES.flowMinMonths
-                    ? "มีข้อมูลเดือนเดียว จึงสรุปเป็นข้อความ"
-                    : `ทุกเดือนแบ่งสัดส่วนใกล้เคียงกัน (ต่างกันไม่เกิน ${pct0(RULES.flowMinShareSpread * 100)}) จึงสรุปเป็นข้อความ`}
+                    ? t("มีข้อมูลเดือนเดียว จึงสรุปเป็นข้อความ")
+                    : t("ทุกเดือนแบ่งสัดส่วนใกล้เคียงกัน (ต่างกันไม่เกิน {pct}) จึงสรุปเป็นข้อความ", { pct: pct0(RULES.flowMinShareSpread * 100) })}
                 </p>
               </>
             )}
           </Panel>
           <div className="space-y-4 min-w-0">
             <DeadlineCard a={a} />
-            <Panel title="เอกสาร TA" description="สถานะเอกสารของ TA ในภาคเรียนนี้">
+            <Panel title={t("เอกสาร TA")} description={t("สถานะเอกสารของ TA ในภาคเรียนนี้")}>
               {docs.chart ? (
                 <div className="flex items-center gap-4">
-                  <Donut size={116} center={a.docs.approved} sub={`จาก ${a.docs.total} คน`} parts={docs.parts} />
+                  <Donut size={116} center={a.docs.approved} sub={t("จาก {n} คน", { n: a.docs.total })} parts={docs.parts.map(p => ({ ...p, label: t(p.label) }))} />
                   <ul className="flex-1 space-y-1 text-xs">
                     {docs.parts.map(p => (
                       <li key={p.key} className="flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1.5 text-[var(--ink-2)]"><i className="size-3 rounded-sm" style={{ background: p.color }} />{p.label}</span>
+                        <span className="inline-flex items-center gap-1.5 text-[var(--ink-2)]"><i className="size-3 rounded-sm" style={{ background: p.color }} />{t(p.label)}</span>
                         <b className="tabular-nums">{p.value}</b>
                       </li>
                     ))}
@@ -458,11 +461,11 @@ export default function TermDashboard({
 
         {a.pipeline && (
           <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3">
-            <Followup icon={<FileWarning size={16} />} label="เอกสาร TA ถูกตีกลับ" value={a.pipeline.docs_returned} who="TA ต้องแก้ไข" />
-            <Followup icon={<Undo2 size={16} />} label="รอบเบิกถูกส่งกลับ" value={a.pipeline.months_sent_back + a.pipeline.worklogs_rejected}
-                      who={`รอบเดือน ${a.pipeline.months_sent_back} · บันทึกเวลา ${a.pipeline.worklogs_rejected}`} />
-            <Followup icon={<UserX size={16} />} label="วิชาที่ยังไม่มี TA" value={a.pipeline.courses_no_ta} who="อาจารย์ยังไม่ส่งคำขอ" />
-            <Followup icon={<CalendarX2 size={16} />} label="คาบวันหยุดยังไม่ชดเชย" value={a.pipeline.unresolved_makeups} who="อาจารย์ต้องกำหนดวันชดเชย" />
+            <Followup icon={<FileWarning size={16} />} label={t("เอกสาร TA ถูกตีกลับ")} value={a.pipeline.docs_returned} who={t("TA ต้องแก้ไข")} />
+            <Followup icon={<Undo2 size={16} />} label={t("รอบเบิกถูกส่งกลับ")} value={a.pipeline.months_sent_back + a.pipeline.worklogs_rejected}
+                      who={t("รอบเดือน {months} · บันทึกเวลา {logs}", { months: a.pipeline.months_sent_back, logs: a.pipeline.worklogs_rejected })} />
+            <Followup icon={<UserX size={16} />} label={t("วิชาที่ยังไม่มี TA")} value={a.pipeline.courses_no_ta} who={t("อาจารย์ยังไม่ส่งคำขอ")} />
+            <Followup icon={<CalendarX2 size={16} />} label={t("คาบวันหยุดยังไม่ชดเชย")} value={a.pipeline.unresolved_makeups} who={t("อาจารย์ต้องกำหนดวันชดเชย")} />
           </div>
         )}
       </Question>
@@ -471,8 +474,8 @@ export default function TermDashboard({
       {/* Every course                                                       */}
       {/* ------------------------------------------------------------------ */}
       <section id="q-courses" className="scroll-mt-20">
-        <Panel title="รายวิชาทั้งหมดของภาคเรียน"
-               description={`ค้นหา กรอง และเรียงได้ทุกคอลัมน์ ‘คาดการณ์เทียบเพดานวิชา’ คิดจากยอดที่จะจ่ายเมื่อชั่วโมงที่บันทึกแล้วผ่านการอนุมัติทั้งหมด ถึง ${pct0(risk.ratio * 100)} ถือว่าใกล้เพดาน`}>
+        <Panel title={t("รายวิชาทั้งหมดของภาคเรียน")}
+               description={t("ค้นหา กรอง และเรียงได้ทุกคอลัมน์ ‘คาดการณ์เทียบเพดานวิชา’ คิดจากยอดที่จะจ่ายเมื่อชั่วโมงที่บันทึกแล้วผ่านการอนุมัติทั้งหมด ถึง {pct} ถือว่าใกล้เพดาน", { pct: pct0(risk.ratio * 100) })}>
           <CourseExplorer rows={rows} status={status} onStatus={setStatus} selected={selected} onSelect={setSelected}
                           linkCourses={staffLinks} ratio={risk.ratio} />
         </Panel>
@@ -487,17 +490,18 @@ export default function TermDashboard({
 /* -------------------------------------------------------------------------- */
 
 function QuestionNav() {
+  const { t } = useI18n();
   return (
-    <nav aria-label="ไปยังคำถาม" className="flex flex-wrap gap-1.5 me-auto">
+    <nav aria-label={t("ไปยังคำถาม")} className="flex flex-wrap gap-1.5 me-auto">
       {[
-        { id: "q-budget", label: "งบพอไหม", icon: Gauge },
-        { id: "q-staffing", label: "ขอ TA เกินไหม", icon: Scale },
-        { id: "q-work", label: "งานค้างที่ไหน", icon: Workflow },
-        { id: "q-courses", label: "รายวิชา", icon: Table2 },
+        { id: "q-budget", label: msg("งบพอไหม"), icon: Gauge },
+        { id: "q-staffing", label: msg("ขอ TA เกินไหม"), icon: Scale },
+        { id: "q-work", label: msg("งานค้างที่ไหน"), icon: Workflow },
+        { id: "q-courses", label: msg("รายวิชา"), icon: Table2 },
       ].map(n => (
         <a key={n.id} href={`#${n.id}`}
            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-surface px-3 py-1 text-xs text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--brand)]">
-          <n.icon size={14} />{n.label}
+          <n.icon size={14} />{t(n.label)}
         </a>
       ))}
     </nav>
@@ -523,14 +527,15 @@ function SkelQuestion({ id, n, title, children }: { id: string; n: number; title
 // The dashboard's layout with its labels and titles in place and grey where
 // the numbers go — same sections, same order, roughly the same heights.
 function DashboardSkeleton() {
+  const { t } = useI18n();
   const kpis = [
-    { icon: <BookOpen size={18} />, label: "รายวิชาที่ขอ TA", unit: "วิชา" },
-    { icon: <Users size={18} />, label: "TA ปฏิบัติงานจริง", unit: "คน" },
-    { icon: <Wallet size={18} />, label: "เบิกจ่ายแล้ว", unit: "บาท" },
-    { icon: <Inbox size={18} />, label: "รายการรอดำเนินการ", unit: "รายการ" },
+    { icon: <BookOpen size={18} />, label: t("รายวิชาที่ขอ TA"), unit: t("วิชา") },
+    { icon: <Users size={18} />, label: t("TA ปฏิบัติงานจริง"), unit: t("คน") },
+    { icon: <Wallet size={18} />, label: t("เบิกจ่ายแล้ว"), unit: t("บาท") },
+    { icon: <Inbox size={18} />, label: t("รายการรอดำเนินการ"), unit: t("รายการ") },
   ];
   return (
-    <SkelRegion className="space-y-6" label="กำลังโหลดแดชบอร์ด">
+    <SkelRegion className="space-y-6" label={t("กำลังโหลดแดชบอร์ด")}>
       <div className="flex flex-wrap items-center gap-2">
         <QuestionNav />
         <Skel className="h-8 w-36 rounded-lg" />
@@ -545,7 +550,7 @@ function DashboardSkeleton() {
             <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]">
               <Sparkles size={15} />
             </span>
-            <h2 className="text-base font-semibold text-[var(--ink-1)]">ข้อสังเกตที่ต้องตัดสินใจหรือติดตาม</h2>
+            <h2 className="text-base font-semibold text-[var(--ink-1)]">{t("ข้อสังเกตที่ต้องตัดสินใจหรือติดตาม")}</h2>
           </div>
           <div className="grid gap-2 lg:grid-cols-2">
             {[0, 1, 2, 3].map(i => <Skel key={i} className="h-14 rounded-xl" />)}
@@ -559,36 +564,36 @@ function DashboardSkeleton() {
         ))}
       </div>
 
-      <SkelQuestion id="q-budget" n={1} title="งบพอถึงสิ้นเทอมไหม?">
+      <SkelQuestion id="q-budget" n={1} title={t("งบพอถึงสิ้นเทอมไหม?")}>
         <Panel><SkelBlock className="h-72" /></Panel>
         <div className="grid gap-4 lg:grid-cols-5">
-          <Panel title="การเบิกจ่ายสะสมเทียบเวลา" className="min-w-0 lg:col-span-3"><SkelBlock className="h-64" /></Panel>
-          <Panel title="การใช้งบรายหลักสูตร" className="min-w-0 lg:col-span-2"><SkelBlock className="h-64" /></Panel>
+          <Panel title={t("การเบิกจ่ายสะสมเทียบเวลา")} className="min-w-0 lg:col-span-3"><SkelBlock className="h-64" /></Panel>
+          <Panel title={t("การใช้งบรายหลักสูตร")} className="min-w-0 lg:col-span-2"><SkelBlock className="h-64" /></Panel>
         </div>
       </SkelQuestion>
 
-      <SkelQuestion id="q-staffing" n={2} title="แต่ละวิชาขอ TA เกินที่แนะนำหรือเกินจำนวนนักศึกษาไหม?">
+      <SkelQuestion id="q-staffing" n={2} title={t("แต่ละวิชาขอ TA เกินที่แนะนำหรือเกินจำนวนนักศึกษาไหม?")}>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,5fr)]">
           <Panel className="min-w-0"><SkelBlock className="h-80" /></Panel>
           <div className="space-y-4 min-w-0">
-            <Panel title="สรุปการขอ TA"><SkelBlock className="h-28" /></Panel>
-            <Panel title="วิชาที่ควรทบทวน"><SkelRows rows={3} columns={2} /></Panel>
+            <Panel title={t("สรุปการขอ TA")}><SkelBlock className="h-28" /></Panel>
+            <Panel title={t("วิชาที่ควรทบทวน")}><SkelRows rows={3} columns={2} /></Panel>
           </div>
         </div>
       </SkelQuestion>
 
-      <SkelQuestion id="q-work" n={3} title="งานค้างอยู่ขั้นไหน?">
+      <SkelQuestion id="q-work" n={3} title={t("งานค้างอยู่ขั้นไหน?")}>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
           {[0, 1, 2, 3, 4].map(i => <Skel key={i} className="h-28 rounded-xl" />)}
         </div>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]">
-          <Panel title="รอบเบิกรายเดือนอยู่ที่ใคร" className="min-w-0"><SkelBlock className="h-48" /></Panel>
-          <Panel title="เอกสาร TA" className="min-w-0"><SkelBlock className="h-32" /></Panel>
+          <Panel title={t("รอบเบิกรายเดือนอยู่ที่ใคร")} className="min-w-0"><SkelBlock className="h-48" /></Panel>
+          <Panel title={t("เอกสาร TA")} className="min-w-0"><SkelBlock className="h-32" /></Panel>
         </div>
       </SkelQuestion>
 
       <section id="q-courses" className="scroll-mt-20">
-        <Panel title="รายวิชาทั้งหมดของภาคเรียน">
+        <Panel title={t("รายวิชาทั้งหมดของภาคเรียน")}>
           <SkelRows rows={8} columns={6} />
         </Panel>
       </section>
@@ -618,6 +623,7 @@ function Question({ id, n, title, answer, action, children, tour, onCourse }: {
 /** The answer sentence; `{courses}` becomes buttons that open the course's
  *  row in the table. */
 function AnswerLine({ answer, onCourse }: { answer: AnswerT; onCourse: (id: string) => void }) {
+  const { t } = useI18n();
   const T = TONE[answer.tone];
   const [head, tail] = answer.text.split("{courses}");
   const list: CourseRef[] = answer.courses ?? [];
@@ -637,7 +643,7 @@ function AnswerLine({ answer, onCourse }: { answer: AnswerT; onCourse: (id: stri
                 </button>
               </span>
             ))}
-            {list.length > shown.length && ` และอีก ${list.length - shown.length} วิชา`}
+            {list.length > shown.length && " " + t("และอีก {n} วิชา", { n: list.length - shown.length })}
             {tail}
           </>
         )}
@@ -647,11 +653,13 @@ function AnswerLine({ answer, onCourse }: { answer: AnswerT; onCourse: (id: stri
 }
 
 function StaffingNote({ a }: { a: TermAnalytics }) {
+  const { t } = useI18n();
+  const v = { per: a.plan.students_per_ta, cap: a.plan.suggested_ta_cap, ceiling: a.plan.min_students_per_ta };
   return (
     <p className="mt-3 text-xs text-[var(--ink-3)]">
-      ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน กลุ่มละ 1 คนต่อนักศึกษา {a.plan.students_per_ta} คน
-      {a.plan.suggested_ta_cap > 0 ? ` (สูงสุด ${a.plan.suggested_ta_cap} คนต่อกลุ่ม)` : ""} อย่างน้อยกลุ่มละ 1 คน
-      เพดานคือ 1 ต่อ {a.plan.min_students_per_ta} คน ผลการเทียบของแต่ละวิชาคิดรายกลุ่มเรียน
+      {a.plan.suggested_ta_cap > 0
+        ? t("ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน กลุ่มละ 1 คนต่อนักศึกษา {per} คน (สูงสุด {cap} คนต่อกลุ่ม) อย่างน้อยกลุ่มละ 1 คน เพดานคือ 1 ต่อ {ceiling} คน ผลการเทียบของแต่ละวิชาคิดรายกลุ่มเรียน", v)
+        : t("ระบบแนะนำตามกลุ่มเรียนที่เรียนพร้อมกัน กลุ่มละ 1 คนต่อนักศึกษา {per} คน อย่างน้อยกลุ่มละ 1 คน เพดานคือ 1 ต่อ {ceiling} คน ผลการเทียบของแต่ละวิชาคิดรายกลุ่มเรียน", v)}
     </p>
   );
 }
@@ -701,6 +709,7 @@ function MiniStat({ label, value, sub, tone }: { label: string; value: string; s
 function CourseList({ rows, empty, onPick, right }: {
   rows: CourseStaffing[]; empty: string; onPick: (id: string) => void; right: (r: CourseStaffing) => React.ReactNode;
 }) {
+  const { t } = useI18n();
   if (rows.length === 0) {
     return <p className="flex items-center gap-2 py-2 text-sm text-emerald-800"><CircleCheck size={15} />{empty}</p>;
   }
@@ -712,13 +721,13 @@ function CourseList({ rows, empty, onPick, right }: {
           <li key={r.teaching_course_id}>
             <button type="button" onClick={() => onPick(r.teaching_course_id)}
                     className="flex w-full items-center gap-3 py-2 text-start hover:bg-slate-50 -mx-2 px-2 rounded-lg">
-              <Tip content={m.label}>
+              <Tip content={t(m.label)}>
                 <span tabIndex={-1} className="size-2.5 shrink-0 rounded-full" style={{ background: m.color }} />
               </Tip>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-[var(--ink-1)]">{r.code} <span className="font-normal text-[var(--ink-3)] text-xs">{curriculumTH(r.curriculum)}</span></div>
+                <div className="text-sm font-medium text-[var(--ink-1)]">{r.code} <span className="font-normal text-[var(--ink-3)] text-xs">{t(curriculumTH(r.curriculum))}</span></div>
                 <div className="text-xs text-[var(--ink-3)] tabular-nums">
-                  นศ. {r.students} · ขอ {r.requested} · แนะนำ {r.recommended} · เพดาน {r.ceiling}
+                  {t("นศ. {students} · ขอ {requested} · แนะนำ {recommended} · เพดาน {ceiling}", { students: r.students, requested: r.requested, recommended: r.recommended, ceiling: r.ceiling })}
                 </div>
               </div>
               <span className="text-sm font-semibold tabular-nums">{right(r)}</span>
@@ -744,11 +753,12 @@ function Followup({ icon, label, value, who }: { icon: React.ReactNode; label: s
 }
 
 function DeadlineCard({ a }: { a: TermAnalytics }) {
+  const { t, intl } = useI18n();
   const d = a.deadline;
   if (!d) {
     return (
-      <Panel title="รอบส่งบันทึกเวลาถัดไป">
-        <p className="text-sm text-[var(--ink-3)]">ไม่มีรอบที่เปิดอยู่</p>
+      <Panel title={t("รอบส่งบันทึกเวลาถัดไป")}>
+        <p className="text-sm text-[var(--ink-3)]">{t("ไม่มีรอบที่เปิดอยู่")}</p>
       </Panel>
     );
   }
@@ -757,18 +767,18 @@ function DeadlineCard({ a }: { a: TermAnalytics }) {
   return (
     <div className={`rounded-xl border p-4 ${urgent ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white" : "border-[var(--border)] bg-surface"}`}>
       <div className="flex items-start gap-3">
-        <div className={`flex size-14 shrink-0 flex-col items-center justify-center rounded-xl text-white ${urgent ? "bg-amber-700" : "bg-[var(--brand)]"}`}>
+        <div className={`flex size-14 shrink-0 flex-col items-center justify-center rounded-xl text-white ${urgent ? "bg-[#b45309]" : "bg-[var(--brand)]"}`}>
           <span className="text-xl font-bold leading-none tabular-nums">{d.days_left}</span>
-          <span className="text-xs">วัน</span>
+          <span className="text-xs">{t("วัน")}</span>
         </div>
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ink-1)]"><CalendarClock size={15} aria-hidden />ปิดรอบส่งบันทึกเวลา {thDate(d.due_date)}</div>
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ink-1)]"><CalendarClock size={15} aria-hidden />{t("ปิดรอบส่งบันทึกเวลา {date}", { date: thDate(d.due_date, intl) })}</div>
           <div className="text-xs text-[var(--ink-2)] mt-0.5">{d.labels.join(", ")}</div>
           <div className="text-xs mt-1.5 text-[var(--ink-3)]">
             {d.not_sent > 0
-              ? <>TA ยังไม่ส่ง / ต้องแก้ <b className="text-amber-800 tabular-nums">{d.not_sent}</b> รายการ</>
-              : "ทุกรายการที่บันทึกไว้ส่งครบแล้ว"}
-            {` · แจ้งเตือนอัตโนมัติล่วงหน้า ${d.remind_days} วัน`}
+              ? t.rich("TA ยังไม่ส่ง / ต้องแก้ {n} รายการ", { n: <b className="text-amber-800 tabular-nums">{d.not_sent}</b> })
+              : t("ทุกรายการที่บันทึกไว้ส่งครบแล้ว")}
+            {" · " + t("แจ้งเตือนอัตโนมัติล่วงหน้า {n} วัน", { n: d.remind_days })}
           </div>
         </div>
       </div>
@@ -776,10 +786,11 @@ function DeadlineCard({ a }: { a: TermAnalytics }) {
   );
 }
 
-function delta(now: number, prev: number, label: string, unit = "") {
-  if (prev <= 0) return `ภาคเรียน ${label} ไม่มีข้อมูล`;
+function delta(t: TFn, now: number, prev: number, label: string, baht = false) {
+  if (prev <= 0) return t("ภาคเรียน {term} ไม่มีข้อมูล", { term: label });
   const d = now - prev;
-  if (d === 0) return `เท่ากับภาคเรียน ${label}`;
+  if (d === 0) return t("เท่ากับภาคเรียน {term}", { term: label });
   const p = (d / prev) * 100;
-  return `${d > 0 ? "▲" : "▼"} ${Math.abs(Math.round(d)).toLocaleString("th-TH")}${unit ? ` ${unit}` : ""} (${Math.abs(p).toFixed(0)}%) จาก ${label}`;
+  const v = { arrow: d > 0 ? "▲" : "▼", n: Math.abs(Math.round(d)).toLocaleString("en-GB"), pct: Math.abs(p).toFixed(0), term: label };
+  return baht ? t("{arrow} {n} บาท ({pct}%) จาก {term}", v) : t("{arrow} {n} ({pct}%) จาก {term}", v);
 }

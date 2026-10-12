@@ -9,6 +9,8 @@ import SystemMap from "./SystemMap";
 import Journey, { stageId } from "./Journey";
 import ShareLink from "./ShareLink";
 import { Chip, type ChipTone } from "../ui";
+import { getT } from "../../lib/i18n/server";
+import type { Vars } from "../../lib/i18n/core";
 
 const CALLOUT_STYLE: Record<CalloutTone, { cls: string; icon: React.ReactNode }> = {
   info: { cls: "border-accent/30 bg-accent-soft/40 text-accent-soft-foreground", icon: <Info size={16} /> },
@@ -25,15 +27,20 @@ const TONE_MAP: Record<string, ChipTone> = {
  *  Adding a block type means adding one case here and one helper in
  *  `content/docs/types.ts`; page data never imports React. */
 interface LinkCtx { audience: Audience; linkBase: "/docs" | "/docs-embed" }
+/** Server-side t() for the block chrome (table headers, badges); the block
+ *  text itself is already in the reader's language (the page came from that
+ *  language's set). */
+interface RenderCtx extends LinkCtx { t: (key: string, vars?: Vars) => string }
 
-export default function DocBlocks({
+export default async function DocBlocks({
   blocks,
   audience = "common",
   linkBase = "/docs",
 }: { blocks: Block[] } & Partial<LinkCtx>) {
+  const { t } = await getT();
   return (
     <div className="space-y-6">
-      {blocks.map((b, i) => <BlockView key={i} block={b} blockIndex={i} ctx={{ audience, linkBase }} />)}
+      {blocks.map((b, i) => <BlockView key={i} block={b} blockIndex={i} ctx={{ audience, linkBase, t }} />)}
     </div>
   );
 }
@@ -53,7 +60,8 @@ export function stepEntries(blocks: Block[]): { id: string; title: string }[] {
   return out;
 }
 
-function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: number; ctx: LinkCtx }) {
+function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: number; ctx: RenderCtx }) {
+  const { t } = ctx;
   switch (block.type) {
     case "text":
       return <DocRichText body={block.body} />;
@@ -87,7 +95,7 @@ function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: 
                   {s.title}
                   <a
                     href={`#${stepId(blockIndex, i)}`}
-                    aria-label={`ลิงก์ไปยังขั้นตอน ${s.title}`}
+                    aria-label={t("ลิงก์ไปยังขั้นตอน {title}", { title: s.title })}
                     className="text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-(--brand) focus:opacity-100"
                   >
                     #
@@ -119,9 +127,9 @@ function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: 
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs text-muted">
               <tr>
-                <th className="px-3 py-2 text-start font-medium">สถานะ</th>
-                <th className="px-3 py-2 text-start font-medium">ความหมาย</th>
-                <th className="px-3 py-2 text-start font-medium">ใครต้องทำต่อ</th>
+                <th className="px-3 py-2 text-start font-medium">{t("สถานะ")}</th>
+                <th className="px-3 py-2 text-start font-medium">{t("ความหมาย")}</th>
+                <th className="px-3 py-2 text-start font-medium">{t("ใครต้องทำต่อ")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -168,7 +176,7 @@ function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: 
     case "since":
       return (
         <div className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft/50 px-2.5 py-1 text-xs text-accent-soft-foreground">
-          <span className="font-semibold">เพิ่มในเวอร์ชัน {block.version}</span>
+          <span className="font-semibold">{t("เพิ่มในเวอร์ชัน {version}", { version: block.version })}</span>
           {block.note && <span className="text-accent-soft-foreground/80">({block.note})</span>}
         </div>
       );

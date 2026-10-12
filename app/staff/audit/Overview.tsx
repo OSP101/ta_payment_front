@@ -3,6 +3,7 @@ import { ChevronRight, MonitorSmartphone, ShieldAlert, ShieldCheck } from "lucid
 import { Chip, Panel } from "../../components/ui";
 import { Skel, SkelList } from "../../components/Skeletons";
 import { RowBadges } from "./RowBadges";
+import { useI18n, type TFn } from "../../lib/i18n/client";
 import {
   NETWORK_LABEL, ROLE_LABEL, ago, shortDateTime,
   type Attention, type Session, type Summary,
@@ -31,6 +32,7 @@ export function Overview({
   rangeLabel: string;
   onPick: (a: Attention) => void;
 }) {
+  const { t, intl } = useI18n();
   const attention = summary?.attention ?? [];
   return (
     <div className="mb-3 grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -44,16 +46,16 @@ export function Overview({
             <>
               <ShieldAlert size={18} className="shrink-0 text-warning" />
               <span className="font-semibold">
-                มี {attention.length.toLocaleString("th-TH")} เรื่องที่ควรตรวจสอบ
-                <span className="font-normal text-(--ink-3)"> ในช่วง{rangeLabel}</span>
+                {t("มี {n} เรื่องที่ควรตรวจสอบ", { n: attention.length.toLocaleString(intl) })}
+                <span className="font-normal text-(--ink-3)"> {t(rangeLabel)}</span>
               </span>
             </>
           ) : (
             <>
               <ShieldCheck size={18} className="shrink-0 text-success" />
               <span className="font-semibold">
-                ไม่พบเรื่องที่ต้องตรวจสอบ
-                <span className="font-normal text-(--ink-3)"> ในช่วง{rangeLabel}</span>
+                {t("ไม่พบเรื่องที่ต้องตรวจสอบ")}
+                <span className="font-normal text-(--ink-3)"> {t(rangeLabel)}</span>
               </span>
             </>
           )}
@@ -63,8 +65,7 @@ export function Overview({
           <SkelList items={3} />
         ) : attention.length === 0 ? (
           <p className="text-sm text-(--ink-3)">
-            ไม่มีการเข้าระบบที่ล้มเหลวซ้ำ ๆ ไม่มีการย้อนหรือแก้สิ่งที่อนุมัติแล้ว
-            และไม่มีการเปลี่ยนสิทธิ์ของบัญชีใด จากทั้งหมด {summary.events.toLocaleString("th-TH")} เหตุการณ์
+            {t("ไม่มีการเข้าระบบที่ล้มเหลวซ้ำ ๆ ไม่มีการย้อนหรือแก้สิ่งที่อนุมัติแล้ว และไม่มีการเปลี่ยนสิทธิ์ของบัญชีใด จากทั้งหมด {n} เหตุการณ์", { n: summary.events.toLocaleString(intl) })}
           </p>
         ) : (
           <ul className="max-h-72 divide-y divide-(--border) overflow-y-auto">
@@ -77,16 +78,16 @@ export function Overview({
                 >
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-snug">
-                      <span className="min-w-0 break-words">{attentionSentence(a)}</span>
+                      <span className="min-w-0 break-words">{attentionSentence(a, t, intl)}</span>
                       {a.count > 1 && (
                         <span className="rounded-full bg-(--surface-2) px-2 py-0.5 text-xs font-medium tabular-nums text-(--ink-2)">
-                          {a.count.toLocaleString("th-TH")} ครั้ง
+                          {t("{n} ครั้ง", { n: a.count.toLocaleString(intl) })}
                         </span>
                       )}
                       <RowBadges row={a} />
                     </span>
                     <span className="mt-0.5 block text-xs text-(--ink-3)">
-                      {[`ล่าสุด ${shortDateTime(a.last_at)}`, attentionHint(a)].filter(Boolean).join(" · ")}
+                      {[t("ล่าสุด {at}", { at: shortDateTime(a.last_at, intl) }), attentionHint(a, t, intl)].filter(Boolean).join(" · ")}
                     </span>
                   </span>
                   <ChevronRight size={16} className="mt-0.5 shrink-0 text-(--ink-4)" aria-hidden />
@@ -100,31 +101,31 @@ export function Overview({
       <Panel>
         <div className="mb-2 flex items-center gap-2 text-sm">
           <MonitorSmartphone size={18} className="shrink-0 text-(--ink-3)" />
-          <span className="font-semibold">กำลังใช้งานอยู่ตอนนี้</span>
+          <span className="font-semibold">{t("กำลังใช้งานอยู่ตอนนี้")}</span>
           {sessions && (
-            <span className="text-(--ink-3)">{sessions.length.toLocaleString("th-TH")} เครื่อง</span>
+            <span className="text-(--ink-3)">{t("{n} เครื่อง", { n: sessions.length.toLocaleString(intl) })}</span>
           )}
         </div>
         {!sessions ? (
           <SkelList items={2} />
         ) : sessions.length === 0 ? (
-          <p className="text-sm text-(--ink-3)">ไม่มีผู้ใช้ที่กำลังใช้งานระบบ</p>
+          <p className="text-sm text-(--ink-3)">{t("ไม่มีผู้ใช้ที่กำลังใช้งานระบบ")}</p>
         ) : (
           <ul className="max-h-72 divide-y divide-(--border) overflow-y-auto">
             {sessions.map(s => (
               <li key={s.id} className="py-2">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                   <span className="font-medium">{s.name}</span>
-                  {s.id === currentSession && <Chip tone="brand">เครื่องนี้ (คุณ)</Chip>}
+                  {s.id === currentSession && <Chip tone="brand">{t("เครื่องนี้ (คุณ)")}</Chip>}
                   <span className="text-xs text-(--ink-3)">
-                    {s.roles.map(r => ROLE_LABEL[r] ?? r).join(", ")}
+                    {s.roles.map(r => (ROLE_LABEL[r] ? t(ROLE_LABEL[r]) : r)).join(", ")}
                   </span>
                 </div>
                 <div className="mt-0.5 text-xs text-(--ink-3)">
                   {[
-                    s.device || "ไม่ทราบอุปกรณ์",
-                    s.network ? NETWORK_LABEL[s.network] : "",
-                    `ใช้งานล่าสุด ${ago(s.last_activity_at)}`,
+                    s.device || t("ไม่ทราบอุปกรณ์"),
+                    s.network && NETWORK_LABEL[s.network] ? t(NETWORK_LABEL[s.network]) : "",
+                    t("ใช้งานล่าสุด {ago}", { ago: ago(s.last_activity_at, t) }),
                   ].filter(Boolean).join(" · ")}
                 </div>
               </li>
@@ -136,8 +137,8 @@ export function Overview({
   );
 }
 
-function attentionSentence(a: Attention): React.ReactNode {
-  const who = a.actor_name || (a.actor_id ? "ผู้ใช้ที่ไม่มีชื่อในระบบ" : "");
+function attentionSentence(a: Attention, t: TFn, intl: string): React.ReactNode {
+  const who = a.actor_name || (a.actor_id ? t("ผู้ใช้ที่ไม่มีชื่อในระบบ") : "");
   // The subject, unless it is the actor themself (a failed login is "about"
   // the same account that failed).
   const selfSubject = (a.entity === "user" || a.entity === "ta_profile") && a.entity_id === a.actor_id;
@@ -148,7 +149,7 @@ function attentionSentence(a: Attention): React.ReactNode {
       <span>{a.label}</span>
       {subject && <span className="text-(--ink-2)"> · {subject}</span>}
       {!subject && a.subjects > 1 && (
-        <span className="text-(--ink-2)"> · {a.subjects.toLocaleString("th-TH")} รายการ</span>
+        <span className="text-(--ink-2)"> · {t("{n} รายการ", { n: a.subjects.toLocaleString(intl) })}</span>
       )}
     </>
   );
@@ -156,9 +157,9 @@ function attentionSentence(a: Attention): React.ReactNode {
 
 /** What the count means. Many failures from one machine is usually one person
  *  getting it wrong; the same number from many machines is not. */
-function attentionHint(a: Attention): string {
+function attentionHint(a: Attention, t: TFn, intl: string): string {
   if (a.outcome === "ok" || !a.action.startsWith("auth.")) return "";
-  if (a.distinct_ips > 1) return `มาจาก ${a.distinct_ips.toLocaleString("th-TH")} ที่อยู่เครือข่าย ควรตรวจสอบ`;
-  if (a.count > 1) return "ทั้งหมดมาจากเครื่องเดียว";
+  if (a.distinct_ips > 1) return t("มาจาก {n} ที่อยู่เครือข่าย ควรตรวจสอบ", { n: a.distinct_ips.toLocaleString(intl) });
+  if (a.count > 1) return t("ทั้งหมดมาจากเครื่องเดียว");
   return "";
 }

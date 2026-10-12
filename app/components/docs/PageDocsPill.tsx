@@ -6,6 +6,7 @@ import { resolvePageDoc, useDocsPanel } from "./DocsPanel";
 import useIsDemo from "../../lib/useIsDemo";
 import { SkelValue } from "../Skeletons";
 import { Tip } from "../ui";
+import { useI18n } from "../../lib/i18n/client";
 
 /**
  * The "📖 คู่มือ <หัวข้อ>" pill under every page title — the Cloudflare
@@ -42,12 +43,13 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
   // tab would start as production, its first heartbeat would 401 and bounce
   // the tester to the real /login. In demo the topic opens in this tab.
   const demo = useIsDemo();
+  const { t } = useI18n();
   if (!audience) return null;
 
   const { target, page, bigTopic } = resolvePageDoc(index, audience, pathname ?? "", explicit, dataTour);
   const label = indexLoading
     ? <SkelValue className="h-3.5 w-28" />
-    : !page ? "คู่มือการใช้งาน" : bigTopic ? `คู่มือ ${page.section}` : `คู่มือ ${page.title}`;
+    : !page ? t("คู่มือการใช้งาน") : t("คู่มือ {topic}", { topic: bigTopic ? page.section : page.title });
   // The ONLY docs entry on a screen, so it is sized and coloured as a real
   // button (tinted brand fill, not a hairline outline) — the small per-section
   // icons it replaced were easy to miss and cluttered the toolbars.
@@ -60,8 +62,8 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
       <BookOpen size={17} className="shrink-0" />
       <span className="truncate">{label}</span>
       {bigTopic && page && page.subPageCount > 0 && (
-        <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-xs font-normal text-(--brand)/80">
-          {page.subPageCount + 1} หัวข้อ
+        <span className="shrink-0 rounded-full bg-surface/80 px-2 py-0.5 text-xs font-normal text-(--brand)/80">
+          {t("{n} หัวข้อ", { n: page.subPageCount + 1 })}
         </span>
       )}
     </>
@@ -69,7 +71,7 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
 
   if (bigTopic && target.slug) {
     return (
-      <Tip content="เปิดคู่มือฉบับเต็มในแท็บใหม่"><a
+      <Tip content={t("เปิดคู่มือฉบับเต็มในแท็บใหม่")}><a
         href={`/docs/${target.audience}/${target.slug}`}
         target={demo ? "_self" : "_blank"}
         rel={demo ? undefined : "noopener"}
@@ -81,7 +83,7 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
     );
   }
   return (
-    <Tip content="เปิดคู่มือด้านข้าง"><button type="button" onClick={() => open(target)} className={btnClass}>
+    <Tip content={t("เปิดคู่มือด้านข้าง")}><button type="button" onClick={() => open(target)} className={btnClass}>
       {inner}
     </button></Tip>
   );

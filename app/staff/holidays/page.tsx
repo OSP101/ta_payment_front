@@ -10,6 +10,7 @@ import {
   Chip, ConfirmDialog, Alert, type ChipTone,
   DatePicker, TimePicker,
 } from "../../components/ui";
+import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 interface Holiday {
   id: string;
@@ -43,15 +44,15 @@ const PARTIAL_DAY_SOURCES: Holiday["source"][] = ["faculty", "tdbm"];
 // "09:00–12:00" or "ทั้งวัน" — one renderer so the table, the form preview and
 // the confirm dialog cannot disagree.
 function windowLabel(h: { start_time?: string; end_time?: string }): string {
-  if (!h.start_time || !h.end_time) return "ทั้งวัน";
+  if (!h.start_time || !h.end_time) return msg("ทั้งวัน");
   return `${h.start_time.slice(0, 5)}–${h.end_time.slice(0, 5)}`;
 }
 
 const SOURCE_LABEL: Record<Holiday["source"], string> = {
-  national: "ราชการ",
-  university: "มหาวิทยาลัย",
-  faculty: "คณะ",
-  custom: "อื่นๆ",
+  national: msg("ราชการ"),
+  university: msg("มหาวิทยาลัย"),
+  faculty: msg("คณะ"),
+  custom: msg("อื่นๆ"),
   // Synced from TDBM (see /staff/tdbm) — not a manual-entry choice, so it has
   // no entry in SOURCE_OPTIONS below, only here for display.
   tdbm: "TDBM",
@@ -67,29 +68,23 @@ const SOURCE_TONE: Record<Holiday["source"], ChipTone> = {
 // วันหยุดราชการ/มหาวิทยาลัยมาจาก TDBM เท่านั้น (backend validHolidaySource)
 // กรอกเองได้แค่ คณะ/อื่นๆ; ราชการ/มหาวิทยาลัยเหลือใน SOURCE_LABEL ไว้แสดงแถวเก่า
 const SOURCE_OPTIONS: { value: Holiday["source"]; label: string }[] = [
-  { value: "faculty", label: "คณะ" },
-  { value: "custom", label: "อื่นๆ" },
+  { value: "faculty", label: msg("คณะ") },
+  { value: "custom", label: msg("อื่นๆ") },
 ];
 // เครื่องหมายบอกช่องที่จำเป็นต้องกรอก
 const RequiredMark = () => <span className="text-danger"> *</span>;
 
-const MONTH_TH = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-];
+const DOW = [msg("อาทิตย์"), msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์")];
 
 // Convert "YYYY-MM-DD" → "15 กรกฎาคม 2569 (พุธ)" for the table display.
-function formatThaiDate(iso: string): string {
+function formatThaiDate(iso: string, fmtDate: (iso: string, opts?: { long?: boolean }) => string, t: TFn): string {
   const d = new Date(iso + "T00:00:00");
   if (Number.isNaN(d.getTime())) return iso;
-  const day = d.getDate();
-  const month = MONTH_TH[d.getMonth()];
-  const year = d.getFullYear() + 543;
-  const dow = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"][d.getDay()];
-  return `${day} ${month} ${year} (${dow})`;
+  return `${fmtDate(iso, { long: true })} (${t(DOW[d.getDay()])})`;
 }
 
 export default function StaffHolidaysPage() {
+  const { t, fmtDate, year: displayYear } = useI18n();
   // Default to the current CE year — Buddhist-era offset applied at display.
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const { data: holidays, isLoading } = useSWR<Holiday[]>(
@@ -119,7 +114,7 @@ export default function StaffHolidaysPage() {
     setDeleting(true);
     try {
       await api.del(`/holidays/${confirmDelete.id}`);
-      notify.success("ลบวันหยุดแล้ว");
+      notify.success(t("ลบวันหยุดแล้ว"));
       await refresh();
     } catch (e) {
       notify.error(e);
@@ -142,23 +137,23 @@ export default function StaffHolidaysPage() {
   return (
     <div>
       <PageHeader
-        title="วันหยุดราชการ"
-        description="รายการวันหยุดที่ระบบใช้ตรวจสอบการลงเวลาปฏิบัติงานของ TA ถ้าคาบเรียนตรงกับวันหยุด TA จะลงชั่วโมงไม่ได้จนกว่าอาจารย์จะระบุวันชดเชย"
+        title={t("วันหยุดราชการ")}
+        description={t("รายการวันหยุดที่ระบบใช้ตรวจสอบการลงเวลาปฏิบัติงานของ TA ถ้าคาบเรียนตรงกับวันหยุด TA จะลงชั่วโมงไม่ได้จนกว่าอาจารย์จะระบุวันชดเชย")}
         actions={
           <>
             <span className="flex gap-2">
               <Select value={String(year)} onChange={e => setYear(Number(e.target.value))} className="max-w-40">
                 {yearOpts.map(y => (
-                  <option key={y} value={y}>ปี พ.ศ. {y + 543}</option>
+                  <option key={y} value={y}>{t("ปี พ.ศ. {y}", { y: displayYear(y) })}</option>
                 ))}
               </Select>
             </span>
             <span data-tour="holidays-add" className="flex gap-2">
               <Button variant="secondary" onClick={() => setShowBulk(true)}>
-                <Upload size={14} /> นำเข้าหลายรายการ
+                <Upload size={14} /> {t("นำเข้าหลายรายการ")}
               </Button>
               <Button variant="primary" onClick={() => setShowAdd(true)}>
-                <Plus size={14} /> เพิ่มวันหยุด
+                <Plus size={14} /> {t("เพิ่มวันหยุด")}
               </Button>
             </span>
           </>
@@ -168,8 +163,8 @@ export default function StaffHolidaysPage() {
       <Alert
         status="accent"
         icon={<Info size={14} />}
-        title="วันหยุดส่วนใหญ่ซิงก์เข้ามาอัตโนมัติจากระบบ TDBM ของวิทยาลัย"
-        description="ระบบดึงวันหยุด (และวันสอนชดเชยที่อาจารย์ยื่น) จาก TDBM ให้อัตโนมัติทุกชั่วโมง ไม่ต้องกดซิงก์เอง — ใช้หน้านี้เพิ่มวันหยุดที่ TDBM ไม่มี (เช่น กิจกรรมเฉพาะของคณะ) หรือแก้ไขช่วงเวลาของวันหยุดครึ่งวัน"
+        title={t("วันหยุดส่วนใหญ่ซิงก์เข้ามาอัตโนมัติจากระบบ TDBM ของวิทยาลัย")}
+        description={t("ระบบดึงวันหยุด (และวันสอนชดเชยที่อาจารย์ยื่น) จาก TDBM ให้อัตโนมัติทุกชั่วโมง ไม่ต้องกดซิงก์เอง — ใช้หน้านี้เพิ่มวันหยุดที่ TDBM ไม่มี (เช่น กิจกรรมเฉพาะของคณะ) หรือแก้ไขช่วงเวลาของวันหยุดครึ่งวัน")}
       />
 
       <div className="mt-4">
@@ -192,8 +187,8 @@ export default function StaffHolidaysPage() {
           <Panel>
             <EmptyState
               icon={<CalendarOff size={28} />}
-              title="ยังไม่มีวันหยุดในปีนี้"
-              description={`กด "เพิ่มวันหยุด" หรือ "นำเข้าหลายรายการ" เพื่อเริ่มต้น`}
+              title={t("ยังไม่มีวันหยุดในปีนี้")}
+              description={t("กด \"เพิ่มวันหยุด\" หรือ \"นำเข้าหลายรายการ\" เพื่อเริ่มต้น")}
             />
           </Panel>
         ) : (
@@ -232,7 +227,7 @@ export default function StaffHolidaysPage() {
       <BulkImportModal
         open={showBulk}
         onClose={() => setShowBulk(false)}
-        onSaved={async n => { setShowBulk(false); notify.success(`เพิ่ม ${n} วันหยุด`); await refresh(); }}
+        onSaved={async n => { setShowBulk(false); notify.success(t("เพิ่ม {n} วันหยุด", { n })); await refresh(); }}
       />
 
       <ConfirmDialog
@@ -241,10 +236,10 @@ export default function StaffHolidaysPage() {
         onConfirm={handleDelete}
         isPending={deleting}
         danger
-        title="ลบวันหยุด"
-        confirmLabel="ลบ"
+        title={t("ลบวันหยุด")}
+        confirmLabel={t("ลบ")}
         message={confirmDelete
-          ? `ต้องการลบ "${confirmDelete.name_th}" (${formatThaiDate(confirmDelete.holiday_date)}) หรือไม่? การลบจะมีผลทันที และการลงเวลาของ TA ในวันนี้จะไม่ถูกบล็อกอีกต่อไป`
+          ? t("ต้องการลบ \"{name}\" ({date}) หรือไม่? การลบจะมีผลทันที และการลงเวลาของ TA ในวันนี้จะไม่ถูกบล็อกอีกต่อไป", { name: confirmDelete.name_th, date: formatThaiDate(confirmDelete.holiday_date, fmtDate, t) })
           : ""}
       />
     </div>
@@ -266,6 +261,7 @@ function MonthSection({
   onEdit: (h: Holiday) => void;
   onDelete: (h: Holiday) => void;
 }) {
+  const { t, fmtDate, monthName, year: displayYear } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
   return (
     <Panel padded={false}>
@@ -277,8 +273,8 @@ function MonthSection({
       >
         <ChevronDown size={18} className={`shrink-0 text-muted transition ${open ? "" : "-rotate-90"}`} />
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold">{MONTH_TH[monthNo - 1]} {year + 543}</div>
-          <div className="text-xs text-muted mt-0.5">{rows.length} วันหยุด</div>
+          <div className="text-sm font-semibold">{monthName(monthNo, false)} {displayYear(year)}</div>
+          <div className="text-xs text-muted mt-0.5">{t("{n} วันหยุด", { n: rows.length })}</div>
         </div>
       </button>
       {open && (
@@ -286,13 +282,13 @@ function MonthSection({
           {rows.map(h => (
             <div key={h.id} className="flex flex-wrap items-center gap-3 p-4 md:flex-nowrap">
               <div className="w-full md:w-64 md:shrink-0">
-                <div className="text-sm font-medium">{formatThaiDate(h.holiday_date)}</div>
+                <div className="text-sm font-medium">{formatThaiDate(h.holiday_date, fmtDate, t)}</div>
                 <div className="text-xs text-muted mt-0.5 flex items-center gap-1 flex-wrap">
-                  <Chip tone={SOURCE_TONE[h.source]}>{SOURCE_LABEL[h.source]}</Chip>
+                  <Chip tone={SOURCE_TONE[h.source]}>{t(SOURCE_LABEL[h.source])}</Chip>
                   {/* Only labelled when partial: tagging every national holiday
                       "ทั้งวัน" would bury the handful of rows that aren't. */}
                   {h.start_time && h.end_time && (
-                    <Chip tone="info">🕒 {windowLabel(h)}</Chip>
+                    <Chip tone="info">🕒 {t(windowLabel(h))}</Chip>
                   )}
                 </div>
               </div>
@@ -301,10 +297,10 @@ function MonthSection({
                 {h.name_en && <div className="text-xs text-muted">{h.name_en}</div>}
                 {h.note && <div className="text-xs text-muted mt-1">{h.note}</div>}
               </div>
-              <IconButton label="แก้ไข" variant="ghost" size="sm" onClick={() => onEdit(h)}>
+              <IconButton label={t("แก้ไข")} variant="ghost" size="sm" onClick={() => onEdit(h)}>
                 <Pencil size={14} />
               </IconButton>
-              <IconButton label="ลบ" variant="ghost" size="sm" onClick={() => onDelete(h)}>
+              <IconButton label={t("ลบ")} variant="ghost" size="sm" onClick={() => onDelete(h)}>
                 <Trash2 size={14} />
               </IconButton>
             </div>
@@ -327,6 +323,7 @@ function HolidayFormModal({
   onSaved: () => void | Promise<void>;
   initial: Holiday | null;
 }) {
+  const { t } = useI18n();
   const isEdit = !!initial;
   const [date, setDate] = useState(initial?.holiday_date ?? "");
   const [nameTH, setNameTH] = useState(initial?.name_th ?? "");
@@ -365,11 +362,11 @@ function HolidayFormModal({
 
   async function handleSave() {
     setError(null);
-    if (!date) { setError("กรุณาระบุวันที่"); return; }
-    if (!nameTH.trim()) { setError("กรุณาระบุชื่อวันหยุด"); return; }
+    if (!date) { setError(t("กรุณาระบุวันที่")); return; }
+    if (!nameTH.trim()) { setError(t("กรุณาระบุชื่อวันหยุด")); return; }
     if (usePartial) {
-      if (!startTime || !endTime) { setError("กรุณาระบุเวลาเริ่มและเวลาสิ้นสุดของช่วงวันหยุด"); return; }
-      if (startTime >= endTime) { setError("เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม"); return; }
+      if (!startTime || !endTime) { setError(t("กรุณาระบุเวลาเริ่มและเวลาสิ้นสุดของช่วงวันหยุด")); return; }
+      if (startTime >= endTime) { setError(t("เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม")); return; }
     }
     // null (not omitted) so switching a partial holiday back to ทั้งวัน clears
     // the stored window instead of leaving the old one in place.
@@ -407,41 +404,41 @@ function HolidayFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? "แก้ไขวันหยุด" : "เพิ่มวันหยุด"}
+      title={isEdit ? t("แก้ไขวันหยุด") : t("เพิ่มวันหยุด")}
       icon={<CalendarOff size={18} />}
       size="md"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
-          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving}>บันทึก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
+          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving}>{t("บันทึก")}</Button>
         </div>
       }
     >
       <div className="flex flex-col gap-3">
         <FieldGroup
-          label={<>วันที่<RequiredMark /></>}
-          hint={isEdit ? "แก้วันที่ไม่ได้ ต้องลบแล้วเพิ่มใหม่ (เพื่อรักษา audit)" : undefined}
+          label={<>{t("วันที่")}<RequiredMark /></>}
+          hint={isEdit ? t("แก้วันที่ไม่ได้ ต้องลบแล้วเพิ่มใหม่ (เพื่อรักษา audit)") : undefined}
         >
-          <DatePicker value={date} onChange={setDate} label="วันที่" isDisabled={isEdit} />
+          <DatePicker value={date} onChange={setDate} label={t("วันที่")} isDisabled={isEdit} />
         </FieldGroup>
-        <FieldGroup label={<>ชื่อวันหยุด (ไทย)<RequiredMark /></>}>
-          <TextInput value={nameTH} onChange={e => setNameTH(e.target.value)} placeholder="เช่น วันแม่แห่งชาติ" autoFocus />
+        <FieldGroup label={<>{t("ชื่อวันหยุด (ไทย)")}<RequiredMark /></>}>
+          <TextInput value={nameTH} onChange={e => setNameTH(e.target.value)} placeholder={t("เช่น วันแม่แห่งชาติ")} autoFocus />
         </FieldGroup>
-        <FieldGroup label="ชื่อวันหยุด (อังกฤษ, ระบุก็ได้)">
+        <FieldGroup label={t("ชื่อวันหยุด (อังกฤษ, ระบุก็ได้)")}>
           <TextInput value={nameEN} onChange={e => setNameEN(e.target.value)} placeholder="e.g. Mother's Day" />
         </FieldGroup>
         <FieldGroup
-          label={<>ประเภท<RequiredMark /></>}
+          label={<>{t("ประเภท")}<RequiredMark /></>}
           hint={PARTIAL_DAY_SOURCES.includes(source)
-            ? "วันหยุดของคณะมักไม่ได้หยุดทั้งวัน ระบุช่วงเวลาได้ด้านล่าง"
+            ? t("วันหยุดของคณะมักไม่ได้หยุดทั้งวัน ระบุช่วงเวลาได้ด้านล่าง")
             : undefined}
         >
           <Select value={source} onChange={e => setSource(e.target.value as Holiday["source"])} disabled={isEdit}>
             {/* แถวเก่าประเภทราชการ/มหาวิทยาลัยแก้ชื่อได้ แต่ต้องยังแสดงประเภทเดิมในช่องที่ล็อกไว้ */}
             {isEdit && !SOURCE_OPTIONS.some(o => o.value === source) && (
-              <option value={source}>{SOURCE_LABEL[source]}</option>
+              <option value={source}>{t(SOURCE_LABEL[source])}</option>
             )}
-            {SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
           </Select>
         </FieldGroup>
 
@@ -451,26 +448,26 @@ function HolidayFormModal({
             refuses the obvious makeup slot — the free half of the same day. */}
         {canBePartial && (
           <FieldGroup
-            label="ช่วงเวลาที่หยุด"
+            label={t("ช่วงเวลาที่หยุด")}
             hint={usePartial
-              ? "คาบเรียนที่คาบเกี่ยวกับช่วงนี้เท่านั้นที่จะถูกงด คาบนอกช่วงยังเรียนและลงเวลาได้ตามปกติ และใช้เป็นเวลาชดเชยในวันเดียวกันได้"
-              : "หยุดทั้งวัน ทุกคาบของวันนี้จะถูกงด"}
+              ? t("คาบเรียนที่คาบเกี่ยวกับช่วงนี้เท่านั้นที่จะถูกงด คาบนอกช่วงยังเรียนและลงเวลาได้ตามปกติ และใช้เป็นเวลาชดเชยในวันเดียวกันได้")
+              : t("หยุดทั้งวัน ทุกคาบของวันนี้จะถูกงด")}
           >
             <div className="flex flex-col gap-2">
               <Select
                 value={usePartial ? "partial" : "all"}
                 onChange={e => setPartial(e.target.value === "partial")}
               >
-                <option value="all">หยุดทั้งวัน</option>
-                <option value="partial">ระบุช่วงเวลา (หยุดบางช่วง)</option>
+                <option value="all">{t("หยุดทั้งวัน")}</option>
+                <option value="partial">{t("ระบุช่วงเวลา (หยุดบางช่วง)")}</option>
               </Select>
               {usePartial && (
                 <div className="grid grid-cols-2 gap-3">
-                  <FieldGroup label="เวลาเริ่ม">
-                    <TimePicker value={startTime} onChange={setStartTime} label="เวลาเริ่มของช่วงวันหยุด" />
+                  <FieldGroup label={t("เวลาเริ่ม")}>
+                    <TimePicker value={startTime} onChange={setStartTime} label={t("เวลาเริ่มของช่วงวันหยุด")} />
                   </FieldGroup>
-                  <FieldGroup label="เวลาสิ้นสุด">
-                    <TimePicker value={endTime} onChange={setEndTime} label="เวลาสิ้นสุดของช่วงวันหยุด" />
+                  <FieldGroup label={t("เวลาสิ้นสุด")}>
+                    <TimePicker value={endTime} onChange={setEndTime} label={t("เวลาสิ้นสุดของช่วงวันหยุด")} />
                   </FieldGroup>
                 </div>
               )}
@@ -478,8 +475,8 @@ function HolidayFormModal({
           </FieldGroup>
         )}
 
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)">
-          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder="เช่น ประกาศเพิ่มจาก ครม. เมื่อ ..." />
+        <FieldGroup label={t("หมายเหตุ (ระบุก็ได้)")}>
+          <TextInput value={note} onChange={e => setNote(e.target.value)} placeholder={t("เช่น ประกาศเพิ่มจาก ครม. เมื่อ ...")} />
         </FieldGroup>
         {error && <Alert status="danger" title={error} icon={<AlertTriangle size={14} />} />}
       </div>
@@ -499,6 +496,7 @@ function BulkImportModal({
   onClose: () => void;
   onSaved: (inserted: number) => void | Promise<void>;
 }) {
+  const { t } = useI18n();
   const [text, setText] = useState("");
   const [source, setSource] = useState<Holiday["source"]>("faculty");
   const [busy, setBusy] = useState(false);
@@ -507,7 +505,7 @@ function BulkImportModal({
   async function handleImport() {
     setError(null);
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    if (lines.length === 0) { setError("กรุณาระบุอย่างน้อย 1 บรรทัด"); return; }
+    if (lines.length === 0) { setError(t("กรุณาระบุอย่างน้อย 1 บรรทัด")); return; }
     // Parse each line as "YYYY-MM-DD | ชื่อวันหยุด", optionally followed by a
     // "| HH:MM-HH:MM" window for a partial-day closure. Without the optional
     // third field, pasting a คณะ calendar would flatten every half-day activity
@@ -517,11 +515,11 @@ function BulkImportModal({
       holiday_date: string; name_th: string; source: string;
       start_time?: string; end_time?: string;
     }[] = [];
-    const pad = (t: string) => (t.length === 4 ? "0" + t : t);
+    const pad = (v: string) => (v.length === 4 ? "0" + v : v);
     for (const line of lines) {
       const m = /^(\d{4}-\d{2}-\d{2})\s*[|\t\s]\s*(.+)$/.exec(line);
       if (!m) {
-        setError(`บรรทัดไม่ถูกต้อง: "${line}" รูปแบบต้องเป็น "YYYY-MM-DD | ชื่อวันหยุด"`);
+        setError(t("บรรทัดไม่ถูกต้อง: \"{line}\" รูปแบบต้องเป็น \"YYYY-MM-DD | ชื่อวันหยุด\"", { line }));
         return;
       }
       let nameTH = m[2].trim();
@@ -534,11 +532,11 @@ function BulkImportModal({
       const start = pad(win[2]);
       const end = pad(win[3]);
       if (!nameTH) {
-        setError(`บรรทัดไม่ถูกต้อง: "${line}" ขาดชื่อวันหยุด`);
+        setError(t("บรรทัดไม่ถูกต้อง: \"{line}\" ขาดชื่อวันหยุด", { line }));
         return;
       }
       if (start >= end) {
-        setError(`บรรทัดไม่ถูกต้อง: "${line}" เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม`);
+        setError(t("บรรทัดไม่ถูกต้อง: \"{line}\" เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม", { line }));
         return;
       }
       rows.push({ holiday_date: m[1], name_th: nameTH, source, start_time: start, end_time: end });
@@ -559,39 +557,39 @@ function BulkImportModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="นำเข้าหลายรายการ"
+      title={t("นำเข้าหลายรายการ")}
       icon={<Upload size={18} />}
       size="lg"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={busy}>ยกเลิก</Button>
-          <Button variant="primary" onClick={handleImport} isPending={busy} disabled={busy}>นำเข้า</Button>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>{t("ยกเลิก")}</Button>
+          <Button variant="primary" onClick={handleImport} isPending={busy} disabled={busy}>{t("นำเข้า")}</Button>
         </div>
       }
     >
       <div className="flex flex-col gap-3">
         <FieldGroup
-          label="รายการ (บรรทัดละ 1 วันหยุด)"
-          hint="รูปแบบ: YYYY-MM-DD | ชื่อวันหยุด เติม | HH:MM-HH:MM ต่อท้ายถ้าหยุดแค่บางช่วง (ถ้าไม่ใส่เวลาถือว่าหยุดทั้งวัน)"
+          label={t("รายการ (บรรทัดละ 1 วันหยุด)")}
+          hint={t("รูปแบบ: YYYY-MM-DD | ชื่อวันหยุด เติม | HH:MM-HH:MM ต่อท้ายถ้าหยุดแค่บางช่วง (ถ้าไม่ใส่เวลาถือว่าหยุดทั้งวัน)")}
         >
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
             rows={10}
             className="w-full rounded-lg border border-(--hairline) px-3 py-2 font-mono text-sm bg-surface"
-            placeholder="2027-01-01 | วันขึ้นปีใหม่&#10;2027-04-13 | วันสงกรานต์&#10;2027-08-12 | กีฬาสีคณะ | 08:00-12:00"
+            placeholder={t("2027-01-01 | วันขึ้นปีใหม่\n2027-04-13 | วันสงกรานต์\n2027-08-12 | กีฬาสีคณะ | 08:00-12:00")}
           />
         </FieldGroup>
-        <FieldGroup label="ประเภทของรายการทั้งหมด">
+        <FieldGroup label={t("ประเภทของรายการทั้งหมด")}>
           <Select value={source} onChange={e => setSource(e.target.value as Holiday["source"])}>
-            {SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
           </Select>
         </FieldGroup>
         {error && <Alert status="danger" title={error} icon={<AlertTriangle size={14} />} />}
         <Alert
           status="default"
-          title="รายการที่ซ้ำกับที่มีอยู่จะถูกข้าม (ON CONFLICT DO NOTHING)"
-          description="ระบบจะรายงานจำนวนที่เพิ่มจริงหลังนำเข้าเสร็จ"
+          title={t("รายการที่ซ้ำกับที่มีอยู่จะถูกข้าม (ON CONFLICT DO NOTHING)")}
+          description={t("ระบบจะรายงานจำนวนที่เพิ่มจริงหลังนำเข้าเสร็จ")}
         />
       </div>
     </Modal>

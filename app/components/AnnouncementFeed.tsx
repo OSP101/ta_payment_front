@@ -11,6 +11,7 @@ import { Panel, EmptyState, Chip, type ChipTone } from "./ui";
 import AttachmentGallery, { type Attachment } from "./AttachmentGallery";
 import RichText from "./RichText";
 import { Skel, SkelRegion } from "./Skeletons";
+import { msg, useI18n } from "../lib/i18n/client";
 
 // Feed of published announcements as seen by the audience. The staff
 // composer at /staff/announce owns the create/edit flow; this file is
@@ -33,15 +34,15 @@ interface Ann {
 }
 
 const CAT_META: Record<Category, { label: string; icon: React.ReactNode; tone: ChipTone }> = {
-  info:    { label: "ข้อมูลทั่วไป",     icon: <Info size={12} />,          tone: "info" },
-  news:    { label: "ข่าวประชาสัมพันธ์", icon: <Newspaper size={12} />,     tone: "brand" },
-  event:   { label: "กิจกรรม",          icon: <PartyPopper size={12} />,   tone: "success" },
-  warning: { label: "แจ้งเตือน",         icon: <AlertTriangle size={12} />, tone: "warn" },
-  urgent:  { label: "ด่วน",              icon: <Radio size={12} />,         tone: "danger" },
+  info:    { label: msg("ข้อมูลทั่วไป"),     icon: <Info size={12} />,          tone: "info" },
+  news:    { label: msg("ข่าวประชาสัมพันธ์"), icon: <Newspaper size={12} />,     tone: "brand" },
+  event:   { label: msg("กิจกรรม"),          icon: <PartyPopper size={12} />,   tone: "success" },
+  warning: { label: msg("แจ้งเตือน"),         icon: <AlertTriangle size={12} />, tone: "warn" },
+  urgent:  { label: msg("ด่วน"),              icon: <Radio size={12} />,         tone: "danger" },
 };
 
 export default function AnnouncementFeed({
-  title = "ประชาสัมพันธ์",
+  title = msg("ประชาสัมพันธ์"),
   description,
   compact = false,
   limit,
@@ -51,18 +52,19 @@ export default function AnnouncementFeed({
   compact?: boolean;
   limit?: number;
 }) {
+  const { t } = useI18n();
   const { data, isLoading } = useSWR<Ann[]>("/announcements");
   const items = (data ?? []).slice(0, limit);
 
   return (
-    <Panel title={title} description={description} padded={false}>
+    <Panel title={typeof title === "string" ? t(title) : title} description={description} padded={false}>
       {isLoading && !data ? (
         <FeedSkeleton count={Math.min(limit ?? 3, 3)} compact={compact} />
       ) : items.length === 0 ? (
         <EmptyState
           icon={<Megaphone size={26} />}
-          title="ยังไม่มีประกาศสำหรับคุณ"
-          description="เมื่อมีข่าวสารใหม่ ระบบจะแสดงที่นี่และแจ้งเตือน"
+          title={t("ยังไม่มีประกาศสำหรับคุณ")}
+          description={t("เมื่อมีข่าวสารใหม่ ระบบจะแสดงที่นี่และแจ้งเตือน")}
         />
       ) : (
         <ul className="divide-y divide-[var(--hairline)]">
@@ -105,6 +107,7 @@ function FeedSkeleton({ count, compact }: { count: number; compact: boolean }) {
 const reported = new Set<string>();
 
 function AnnouncementItem({ a, compact }: { a: Ann; compact: boolean }) {
+  const { t, intl } = useI18n();
   const [open, setOpen] = useState(false);
   const meta = CAT_META[a.category] ?? CAT_META.info;
   const bodyLong = a.body.length > 280;
@@ -144,14 +147,14 @@ function AnnouncementItem({ a, compact }: { a: Ann; compact: boolean }) {
         )}
         <div className="flex flex-wrap items-center gap-1.5">
           <Chip tone={meta.tone}>
-            <span className="inline-flex items-center gap-1">{meta.icon}{meta.label}</span>
+            <span className="inline-flex items-center gap-1">{meta.icon}{t(meta.label)}</span>
           </Chip>
           {a.pinned && (
-            <Chip tone="brand"><span className="inline-flex items-center gap-1"><Pin size={11} />ปักหมุด</span></Chip>
+            <Chip tone="brand"><span className="inline-flex items-center gap-1"><Pin size={11} />{t("ปักหมุด")}</span></Chip>
           )}
           <span className="text-[11px] text-muted inline-flex items-center gap-1 ms-auto">
             <CalendarClock size={11} />
-            {a.published_at ? new Date(a.published_at).toLocaleString("th-TH", {
+            {a.published_at ? new Date(a.published_at).toLocaleString(intl, {
               day: "2-digit", month: "short", year: "numeric",
               hour: "2-digit", minute: "2-digit",
             }) : "-"}
@@ -173,7 +176,7 @@ function AnnouncementItem({ a, compact }: { a: Ann; compact: boolean }) {
                 onClick={() => setOpen(o => !o)}
                 className="ms-1 inline-flex items-center gap-0.5 text-accent hover:underline text-xs align-middle"
               >
-                {open ? <>ย่อ <ChevronUp size={12} /></> : <>อ่านต่อ <ChevronDown size={12} /></>}
+                {open ? <>{t("ย่อ")} <ChevronUp size={12} /></> : <>{t("อ่านต่อ")} <ChevronDown size={12} /></>}
               </button>
             )}
           </div>

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Label, Slider } from "@heroui/react";
 import { FlipHorizontal, RotateCcw, RotateCw, ZoomIn, ZoomOut, Undo2 } from "lucide-react";
 import { Button, Modal } from "./ui";
+import { useI18n } from "../lib/i18n/client";
 
 /**
  * Crop-and-rotate for a profile picture, in the shape people expect from a
@@ -41,9 +42,10 @@ export default function AvatarCropper({
   /** Receives the cropped, compressed JPEG. */
   onConfirm: (blob: Blob) => void;
 }) {
+  const { t } = useI18n();
   const [img, setImg] = useState<ImageBitmap | HTMLImageElement | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [t, setT] = useState<Transform>(IDENTITY);
+  const [xf, setT] = useState<Transform>(IDENTITY);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ id: number; x: number; y: number } | null>(null);
 
@@ -70,7 +72,7 @@ export default function AvatarCropper({
           const el = await loadImageElement(file);
           if (!cancelled) setImg(el);
         } catch {
-          if (!cancelled) setError("เปิดไฟล์รูปนี้ไม่ได้ กรุณาเลือกไฟล์อื่น");
+          if (!cancelled) setError(t("เปิดไฟล์รูปนี้ไม่ได้ กรุณาเลือกไฟล์อื่น"));
         }
       }
     })();
@@ -122,15 +124,15 @@ export default function AvatarCropper({
       if (img) {
         const k = size / VIEW;
         ctx.imageSmoothingQuality = "high";
-        ctx.translate(size / 2 + t.x * k, size / 2 + t.y * k);
-        ctx.rotate((t.rot * Math.PI) / 180);
-        const s = cover * t.zoom * k;
-        ctx.scale(t.flip ? -s : s, s);
+        ctx.translate(size / 2 + xf.x * k, size / 2 + xf.y * k);
+        ctx.rotate((xf.rot * Math.PI) / 180);
+        const s = cover * xf.zoom * k;
+        ctx.scale(xf.flip ? -s : s, s);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
       }
       ctx.restore();
     },
-    [img, t, cover],
+    [img, xf, cover],
   );
 
   // Redraw the preview on any change. Backing store follows devicePixelRatio so
@@ -193,10 +195,10 @@ export default function AvatarCropper({
     c.width = OUT;
     c.height = OUT;
     const ctx = c.getContext("2d");
-    if (!ctx) { setError("เบราว์เซอร์นี้ไม่รองรับการปรับแต่งรูปภาพ"); return; }
+    if (!ctx) { setError(t("เบราว์เซอร์นี้ไม่รองรับการปรับแต่งรูปภาพ")); return; }
     paint(ctx, OUT);
     const blob = await compress(c);
-    if (!blob) { setError("บันทึกรูปไม่สำเร็จ กรุณาลองใหม่"); return; }
+    if (!blob) { setError(t("บันทึกรูปไม่สำเร็จ กรุณาลองใหม่")); return; }
     onConfirm(blob);
   }
 
@@ -206,20 +208,20 @@ export default function AvatarCropper({
     <Modal
       open={open}
       onClose={() => { if (!isSaving) onCancel(); }}
-      title="ครอบตัดรูปโปรไฟล์"
+      title={t("ครอบตัดรูปโปรไฟล์")}
       size="lg"
       footer={
         <>
-          <Button variant="tertiary" onPress={onCancel} disabled={isSaving}>ยกเลิก</Button>
+          <Button variant="tertiary" onPress={onCancel} disabled={isSaving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onPress={confirm} isPending={isSaving} disabled={!img}>
-            บันทึกรูป
+            {t("บันทึกรูป")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col items-center gap-4">
         <p className="text-xs text-muted text-center">
-          ลากเพื่อเลื่อนรูป เลื่อนแถบด้านล่างหรือหมุนเมาส์เพื่อย่อ-ขยาย เฉพาะส่วนในวงกลมจะถูกบันทึก
+          {t("ลากเพื่อเลื่อนรูป เลื่อนแถบด้านล่างหรือหมุนเมาส์เพื่อย่อ-ขยาย เฉพาะส่วนในวงกลมจะถูกบันทึก")}
         </p>
 
         <div
@@ -229,7 +231,7 @@ export default function AvatarCropper({
           <canvas
             ref={canvasRef}
             role="application"
-            aria-label="พื้นที่ครอบตัดรูปโปรไฟล์ ใช้ปุ่มลูกศรเพื่อเลื่อนรูป"
+            aria-label={t("พื้นที่ครอบตัดรูปโปรไฟล์ ใช้ปุ่มลูกศรเพื่อเลื่อนรูป")}
             tabIndex={0}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -245,7 +247,7 @@ export default function AvatarCropper({
           <div className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] ring-2 ring-white/70" />
           {busy && !error && (
             <div className="absolute inset-0 grid place-items-center bg-black/30 text-xs text-white">
-              กำลังเปิดรูป…
+              {t("กำลังเปิดรูป…")}
             </div>
           )}
         </div>
@@ -256,14 +258,14 @@ export default function AvatarCropper({
           <ZoomOut size={16} className="text-muted shrink-0" aria-hidden />
           <Slider
             className="flex-1"
-            value={t.zoom}
+            value={xf.zoom}
             onChange={v => setT(prev => clamp({ ...prev, zoom: Array.isArray(v) ? v[0] : v }))}
             minValue={1}
             maxValue={MAX_ZOOM}
             step={0.01}
             isDisabled={!img}
           >
-            <Label className="sr-only">ย่อ-ขยายรูป</Label>
+            <Label className="sr-only">{t("ย่อ-ขยายรูป")}</Label>
             <Slider.Track>
               <Slider.Fill />
               <Slider.Thumb />
@@ -274,16 +276,16 @@ export default function AvatarCropper({
 
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Button variant="tertiary" size="sm" onPress={() => rotate(-90)} disabled={!img}>
-            <RotateCcw size={14} /> หมุนซ้าย
+            <RotateCcw size={14} /> {t("หมุนซ้าย")}
           </Button>
           <Button variant="tertiary" size="sm" onPress={() => rotate(90)} disabled={!img}>
-            <RotateCw size={14} /> หมุนขวา
+            <RotateCw size={14} /> {t("หมุนขวา")}
           </Button>
           <Button variant="tertiary" size="sm" onPress={flip} disabled={!img}>
-            <FlipHorizontal size={14} /> กลับด้าน
+            <FlipHorizontal size={14} /> {t("กลับด้าน")}
           </Button>
           <Button variant="ghost" size="sm" onPress={() => setT(IDENTITY)} disabled={!img}>
-            <Undo2 size={14} /> รีเซ็ต
+            <Undo2 size={14} /> {t("รีเซ็ต")}
           </Button>
         </div>
       </div>

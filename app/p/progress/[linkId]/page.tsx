@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { backendURL, siteURL } from "../../../lib/site";
 import PublicProgressBoard from "./PublicProgressBoard";
+import { getT } from "../../../lib/i18n/server";
 
 /**
  * The public face of one term's document-progress board: no login, no
@@ -39,10 +40,11 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { linkId } = await params;
   const label = await getTermLabel(linkId);
-  const title = label ? `ความคืบหน้าเอกสารผู้ช่วยสอน · เทอม ${label}` : "ความคืบหน้าเอกสารผู้ช่วยสอน";
+  const { t } = await getT();
+  const title = label ? t("ความคืบหน้าเอกสารผู้ช่วยสอน · เทอม {label}", { label }) : t("ความคืบหน้าเอกสารผู้ช่วยสอน");
   return {
     title,
-    description: "ติดตามความคืบหน้าการเดินเอกสารเบิกจ่ายผู้ช่วยสอน",
+    description: t("ติดตามความคืบหน้าการเดินเอกสารเบิกจ่ายผู้ช่วยสอน"),
     alternates: { canonical: `${siteURL()}/p/progress/${linkId}` },
     robots: { index: false, follow: false },
   };
@@ -52,6 +54,7 @@ export default async function PublicDocumentProgressPage(
   { params }: { params: Promise<{ linkId: string }> },
 ) {
   const { linkId } = await params;
+  const { t } = await getT();
 
   return (
     <div className="min-h-screen bg-[var(--page-bg)]">
@@ -67,7 +70,7 @@ export default async function PublicDocumentProgressPage(
                 Beta
               </span>
             </div>
-            <div className="text-[11px] text-ink-3">วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น</div>
+            <div className="text-[11px] text-ink-3">{t("วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น")}</div>
           </div>
         </div>
       </header>

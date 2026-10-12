@@ -13,6 +13,7 @@ import { InvestigateTable, type ExpertFilters } from "./InvestigateTable";
 import { Overview } from "./Overview";
 import { Timeline, categoryIcon } from "./Timeline";
 import type { Attention, Catalog, Row, Session, Summary, Trace } from "./types";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 /* -------------------------------------------------------------------------- *
  * The audit trail, read two ways.
@@ -36,12 +37,12 @@ const MODE_KEY = "audit.mode";
 
 /** Time windows, as an investigation thinks about them. */
 const RANGES: { id: string; label: string; phrase: string; hours: number | null }[] = [
-  { id: "24h", label: "24 ชั่วโมงล่าสุด", phrase: " 24 ชั่วโมงที่ผ่านมา", hours: 24 },
-  { id: "7d", label: "7 วันล่าสุด", phrase: " 7 วันที่ผ่านมา", hours: 24 * 7 },
-  { id: "30d", label: "30 วันล่าสุด", phrase: " 30 วันที่ผ่านมา", hours: 24 * 30 },
-  { id: "90d", label: "90 วันล่าสุด", phrase: " 90 วันที่ผ่านมา", hours: 24 * 90 },
-  { id: "all", label: "ทั้งหมดที่เก็บไว้", phrase: "เวลาทั้งหมดที่เก็บไว้", hours: null },
-  { id: "custom", label: "กำหนดวันเอง", phrase: "วันที่เลือก", hours: null },
+  { id: "24h", label: msg("24 ชั่วโมงล่าสุด"), phrase: msg("ในช่วง 24 ชั่วโมงที่ผ่านมา"), hours: 24 },
+  { id: "7d", label: msg("7 วันล่าสุด"), phrase: msg("ในช่วง 7 วันที่ผ่านมา"), hours: 24 * 7 },
+  { id: "30d", label: msg("30 วันล่าสุด"), phrase: msg("ในช่วง 30 วันที่ผ่านมา"), hours: 24 * 30 },
+  { id: "90d", label: msg("90 วันล่าสุด"), phrase: msg("ในช่วง 90 วันที่ผ่านมา"), hours: 24 * 90 },
+  { id: "all", label: msg("ทั้งหมดที่เก็บไว้"), phrase: msg("ในช่วงเวลาทั้งหมดที่เก็บไว้"), hours: null },
+  { id: "custom", label: msg("กำหนดวันเอง"), phrase: msg("ในช่วงวันที่เลือก"), hours: null },
 ];
 
 /** "ทั้งหมด" is bounded rather than truly unbounded: the page count behind an
@@ -51,11 +52,11 @@ const ALL_HOURS = 24 * 365 * 10;
 
 /** The quick filters of the simple view. */
 const ONLY: { id: string; label: string; tip: string; params: Record<string, string> }[] = [
-  { id: "check", label: "ควรตรวจ", tip: "การย้อนหรือแก้สิ่งที่อนุมัติแล้ว การเปลี่ยนสิทธิ์ และความล้มเหลว",
+  { id: "check", label: msg("ควรตรวจ"), tip: msg("การย้อนหรือแก้สิ่งที่อนุมัติแล้ว การเปลี่ยนสิทธิ์ และความล้มเหลว"),
     params: { severity: "warn,danger" } },
-  { id: "failed", label: "ไม่สำเร็จ", tip: "เข้าระบบไม่ผ่าน ถูกล็อก หรือถูกปฏิเสธสิทธิ์",
+  { id: "failed", label: msg("ไม่สำเร็จ"), tip: msg("เข้าระบบไม่ผ่าน ถูกล็อก หรือถูกปฏิเสธสิทธิ์"),
     params: { outcome: "failed,denied" } },
-  { id: "sensitive", label: "ข้อมูลอ่อนไหว", tip: "การเปิดดูหรือดาวน์โหลดข้อมูลส่วนบุคคล",
+  { id: "sensitive", label: msg("ข้อมูลอ่อนไหว"), tip: msg("การเปิดดูหรือดาวน์โหลดข้อมูลส่วนบุคคล"),
     params: { severity: "notice" } },
 ];
 
@@ -71,6 +72,7 @@ function useDebounced<T>(value: T, ms: number): T {
 }
 
 export default function AuditPage() {
+  const { t } = useI18n();
   const [mode, setModeState] = useState<Mode>("simple");
   const [range, setRange] = useState("7d");
   const [fromDate, setFromDate] = useState(() => localDateISO(new Date(Date.now() - 6 * 86400_000)));
@@ -190,8 +192,8 @@ export default function AuditPage() {
   }, [catalog]);
   const actorName = useMemo(() => {
     const hit = (summary?.actors ?? []).find(a => a.id === expert.actor);
-    return hit?.name || data?.items.find(r => r.actor_id === expert.actor)?.actor_name || "ผู้ใช้ที่เลือก";
-  }, [summary, data, expert.actor]);
+    return hit?.name || data?.items.find(r => r.actor_id === expert.actor)?.actor_name || t("ผู้ใช้ที่เลือก");
+  }, [summary, data, expert.actor, t]);
 
   const rangeDef = RANGES.find(r => r.id === range)!;
 
@@ -236,7 +238,7 @@ export default function AuditPage() {
       el.download = `audit-log-${localDateISO()}.csv`;
       el.click();
       URL.revokeObjectURL(url);
-      notify.success("ส่งออกไฟล์แล้ว การส่งออกครั้งนี้ถูกบันทึกไว้ในบันทึกการใช้งานด้วย");
+      notify.success(t("ส่งออกไฟล์แล้ว การส่งออกครั้งนี้ถูกบันทึกไว้ในบันทึกการใช้งานด้วย"));
     } catch (e) {
       notify.error(e);
     } finally {
@@ -261,11 +263,11 @@ export default function AuditPage() {
   if (staleApi) {
     return (
       <div>
-        <PageHeader title="บันทึกการใช้งานระบบ" />
+        <PageHeader title={t("บันทึกการใช้งานระบบ")} />
         <Alert
           status="warning"
-          title="เซิร์ฟเวอร์หลังบ้านยังเป็นรุ่นเก่า"
-          description="หน้านี้ต้องใช้ backend รุ่นใหม่ กรุณา restart backend (ระบบจะรัน migration 0130 ให้เอง) แล้วโหลดหน้านี้อีกครั้ง"
+          title={t("เซิร์ฟเวอร์หลังบ้านยังเป็นรุ่นเก่า")}
+          description={t("หน้านี้ต้องใช้ backend รุ่นใหม่ กรุณา restart backend (ระบบจะรัน migration 0130 ให้เอง) แล้วโหลดหน้านี้อีกครั้ง")}
         />
       </div>
     );
@@ -274,20 +276,20 @@ export default function AuditPage() {
   return (
     <div>
       <PageHeader
-        title="บันทึกการใช้งานระบบ"
-        description="ใครทำอะไร กับอะไร เมื่อไร จากเครื่องไหน ย้อนดูได้ทั้งหมด เก็บไว้ 5 ปี และแก้ไขย้อนหลังไม่ได้"
+        title={t("บันทึกการใช้งานระบบ")}
+        description={t("ใครทำอะไร กับอะไร เมื่อไร จากเครื่องไหน ย้อนดูได้ทั้งหมด เก็บไว้ 5 ปี และแก้ไขย้อนหลังไม่ได้")}
         actions={
-          <div role="group" aria-label="รูปแบบการแสดงผล" className="flex gap-1 rounded-full border border-(--border) p-1">
-            <Tip content="อ่านเป็นประโยค เรียงตามวัน เหมาะกับการดูภาพรวม">
+          <div role="group" aria-label={t("รูปแบบการแสดงผล")} className="flex gap-1 rounded-full border border-(--border) p-1">
+            <Tip content={t("อ่านเป็นประโยค เรียงตามวัน เหมาะกับการดูภาพรวม")}>
               <button type="button" aria-pressed={mode === "simple"} onClick={() => setMode("simple")}
                 className={modeClass(mode === "simple")}>
-                <ListChecks size={14} /> ดูง่าย
+                <ListChecks size={14} /> {t("ดูง่าย")}
               </button>
             </Tip>
-            <Tip content="ทุกแถวที่เก็บไว้ พร้อมข้อมูลทางเทคนิค สำหรับผู้ดูแลระบบ">
+            <Tip content={t("ทุกแถวที่เก็บไว้ พร้อมข้อมูลทางเทคนิค สำหรับผู้ดูแลระบบ")}>
               <button type="button" aria-pressed={mode === "expert"} onClick={() => setMode("expert")}
                 className={modeClass(mode === "expert")}>
-                <Search size={14} /> สืบสวน
+                <Search size={14} /> {t("สืบสวน")}
               </button>
             </Tip>
           </div>
@@ -298,23 +300,23 @@ export default function AuditPage() {
       <Panel className="mb-3">
         <div className="flex flex-wrap items-end gap-2">
           <SelectField
-            label="ช่วงเวลา"
+            label={t("ช่วงเวลา")}
             className="w-44"
             value={range}
             onChange={ask(setRange)}
-            options={RANGES.map(r => ({ id: r.id, label: r.label }))}
+            options={RANGES.map(r => ({ id: r.id, label: t(r.label) }))}
           />
           {range === "custom" && (
             <>
               {/* The shared DatePicker's label is for screen readers only; two
                   unlabelled date boxes side by side do not say which is which. */}
               <div>
-                <div className="mb-1 text-sm font-medium" aria-hidden>ตั้งแต่วันที่</div>
-                <DatePicker label="ตั้งแต่วันที่" value={fromDate} onChange={ask(setFromDate)} maxValue={toDate} />
+                <div className="mb-1 text-sm font-medium" aria-hidden>{t("ตั้งแต่วันที่")}</div>
+                <DatePicker label={t("ตั้งแต่วันที่")} value={fromDate} onChange={ask(setFromDate)} maxValue={toDate} />
               </div>
               <div>
-                <div className="mb-1 text-sm font-medium" aria-hidden>ถึงวันที่</div>
-                <DatePicker label="ถึงวันที่" value={toDate} onChange={ask(setToDate)}
+                <div className="mb-1 text-sm font-medium" aria-hidden>{t("ถึงวันที่")}</div>
+                <DatePicker label={t("ถึงวันที่")} value={toDate} onChange={ask(setToDate)}
                   minValue={fromDate} maxValue={localDateISO()} />
               </div>
             </>
@@ -322,38 +324,38 @@ export default function AuditPage() {
           <SearchField
             value={typed}
             onChange={v => { setTyped(v); setPage(1); }}
-            ariaLabel="ค้นหาในบันทึกการใช้งาน"
-            placeholder="ชื่อคน รหัสวิชา คำที่เห็นในรายการ IP หรือเลขอ้างอิง AL-…"
+            ariaLabel={t("ค้นหาในบันทึกการใช้งาน")}
+            placeholder={t("ชื่อคน รหัสวิชา คำที่เห็นในรายการ IP หรือเลขอ้างอิง AL-…")}
             className="min-w-56 flex-1"
           />
-          <Tip content="ดาวน์โหลดรายการตามตัวกรองนี้เป็นไฟล์ CSV เปิดด้วย Excel ได้ (สูงสุด 10,000 แถวต่อไฟล์)">
+          <Tip content={t("ดาวน์โหลดรายการตามตัวกรองนี้เป็นไฟล์ CSV เปิดด้วย Excel ได้ (สูงสุด 10,000 แถวต่อไฟล์)")}>
             <Button variant="outline" size="md" isPending={exporting} isDisabled={!questionParams}
               onPress={exportCsv}>
-              <Download size={14} /> ส่งออก
+              <Download size={14} /> {t("ส่งออก")}
             </Button>
           </Tip>
         </div>
         {!window_ && (
-          <p className="mt-2 text-xs text-danger">วันสิ้นสุดอยู่ก่อนวันเริ่ม กรุณาเลือกช่วงวันใหม่</p>
+          <p className="mt-2 text-xs text-danger">{t("วันสิ้นสุดอยู่ก่อนวันเริ่ม กรุณาเลือกช่วงวันใหม่")}</p>
         )}
 
         {hasPinned && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-(--border) pt-3 text-sm">
-            <span className="text-xs text-(--ink-3)">กำลังดูเฉพาะ</span>
+            <span className="text-xs text-(--ink-3)">{t("กำลังดูเฉพาะ")}</span>
             {trace && (
               <Pinned onClear={() => { setTrace(null); setPage(1); }}>
                 {trace.kind === "session" ? <KeyRound size={14} /> : trace.action ? <Layers size={14} /> : <Link2 size={14} />}
                 {trace.kind === "session"
-                  ? "ทุกอย่างในการเข้าระบบครั้งเดียวกัน"
+                  ? t("ทุกอย่างในการเข้าระบบครั้งเดียวกัน")
                   : trace.action
-                    ? `ทุกรายการของ “${actionLabel(trace.action)}” ที่เกิดในคราวเดียว`
-                    : "ทุกอย่างที่เกิดพร้อมกันในครั้งเดียว"}
+                    ? t("ทุกรายการของ “{action}” ที่เกิดในคราวเดียว", { action: actionLabel(trace.action) })
+                    : t("ทุกอย่างที่เกิดพร้อมกันในครั้งเดียว")}
                 {mode === "expert" && <code className="font-mono text-xs text-(--ink-3)">{trace.id.slice(0, 8)}</code>}
               </Pinned>
             )}
             {!trace && expert.actor && (
               <Pinned onClear={() => { setExpert(f => ({ ...f, actor: "" })); setPage(1); }}>
-                <User size={14} /> ทุกอย่างที่ {actorName} ทำ
+                <User size={14} /> {t("ทุกอย่างที่ {name} ทำ", { name: actorName })}
               </Pinned>
             )}
             {!trace && expert.action && (
@@ -362,7 +364,7 @@ export default function AuditPage() {
               </Pinned>
             )}
             {trace && (
-              <span className="text-xs text-(--ink-3)">ตัวกรองและช่วงเวลาถูกพักไว้ชั่วคราว</span>
+              <span className="text-xs text-(--ink-3)">{t("ตัวกรองและช่วงเวลาถูกพักไว้ชั่วคราว")}</span>
             )}
           </div>
         )}
@@ -383,7 +385,7 @@ export default function AuditPage() {
             {!trace && (
               <div className="mb-3 flex flex-wrap items-center gap-1.5">
                 <CategoryChip active={category === ""} onPress={() => ask(setCategory)("")}
-                  label="ทุกหมวด" count={showCounts ? summary?.events : undefined} />
+                  label={t("ทุกหมวด")} count={showCounts ? summary?.events : undefined} />
                 {(summary?.categories ?? [])
                   .filter(c => c.events > 0 || c.id === category)
                   .map(c => {
@@ -396,14 +398,14 @@ export default function AuditPage() {
                   })}
                 <span className="mx-1 hidden h-5 w-px bg-(--border) sm:block" aria-hidden />
                 {ONLY.map(o => (
-                  <Tip key={o.id} content={o.tip}>
+                  <Tip key={o.id} content={t(o.tip)}>
                     <button
                       type="button"
                       aria-pressed={only === o.id}
                       onClick={() => ask(setOnly)(only === o.id ? "" : o.id)}
                       className={chipClass(only === o.id)}
                     >
-                      เฉพาะ{o.label}
+                      {t("เฉพาะ{label}", { label: t(o.label) })}
                     </button>
                   </Tip>
                 ))}
@@ -487,13 +489,14 @@ function CategoryChip({
   count?: number;
   icon?: React.ReactNode;
 }) {
+  const { intl } = useI18n();
   return (
     <button type="button" aria-pressed={active} onClick={onPress} className={chipClass(active)}>
       {icon}
       {label}
       {count !== undefined && (
         <span className={`tabular-nums ${active ? "opacity-90" : "text-(--ink-3)"}`}>
-          {count.toLocaleString("th-TH")}
+          {count.toLocaleString(intl)}
         </span>
       )}
     </button>
@@ -502,10 +505,11 @@ function CategoryChip({
 
 /** A question pinned over the filters, with the way back out next to it. */
 function Pinned({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
+  const { t } = useI18n();
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-(--brand-soft) py-1 pl-3 pr-1 text-xs font-medium text-(--brand)">
       {children}
-      <button type="button" aria-label="เลิกดูเฉพาะรายการนี้" onClick={onClear}
+      <button type="button" aria-label={t("เลิกดูเฉพาะรายการนี้")} onClick={onClear}
         className="rounded-full p-0.5 hover:bg-(--brand) hover:text-(--brand-fg)">
         <X size={12} />
       </button>

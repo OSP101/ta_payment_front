@@ -5,6 +5,8 @@ import {
   ArrowRight, Sparkles, Sigma, X, ChevronLeft, ChevronRight, Check, LayoutList, Equal,
 } from "lucide-react";
 import { Modal, Button } from "./ui";
+import { clientLocale, msg, useI18n } from "../lib/i18n/client";
+import { intlLocale } from "../lib/i18n/core";
 
 export interface FormulaConstants {
   hrsPerLecCr: number;      // default 3
@@ -29,13 +31,14 @@ export interface FormulaExample {
 
 const DEFAULT_EXAMPLE: FormulaExample = {
   lecCr: 2, labCr: 1, students: 5,
-  trackLabel: "ภาคปกติ",
+  trackLabel: msg("ภาคปกติ"),
   lecHrs: 2, labHrs: 2,
-  courseName: "ตัวอย่าง SW-TESTING (3 หน่วยกิต)",
+  courseName: msg("ตัวอย่าง SW-TESTING (3 หน่วยกิต)"),
 };
 
-const fmt = (n: number, d = 2) => n.toLocaleString("th-TH", { minimumFractionDigits: d, maximumFractionDigits: d });
-const bahtF = (n: number) => `฿${n.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`;
+// Digits read the same in both languages; the locale only follows the reader.
+const fmt = (n: number, d = 2) => n.toLocaleString(intlLocale(clientLocale()), { minimumFractionDigits: d, maximumFractionDigits: d });
+const bahtF = (n: number) => `฿${n.toLocaleString(intlLocale(clientLocale()), { maximumFractionDigits: 0 })}`; // i18n-ignore — currency symbol
 
 /* -------------------------------------------------------------------------- */
 /* The walkthrough                                                             */
@@ -49,10 +52,10 @@ const bahtF = (n: number) => `฿${n.toLocaleString("th-TH", { maximumFractionDi
 /* -------------------------------------------------------------------------- */
 
 const STEPS = [
-  { key: "input", label: "ข้อมูลวิชา", icon: Users },
-  { key: "workload", label: "ภาระงาน/สัปดาห์", icon: Sigma },
-  { key: "monthly", label: "งบต่อเดือน", icon: Coins },
-  { key: "term", label: "งบทั้งเทอม", icon: Calendar },
+  { key: "input", label: msg("ข้อมูลวิชา"), icon: Users },
+  { key: "workload", label: msg("ภาระงาน/สัปดาห์"), icon: Sigma },
+  { key: "monthly", label: msg("งบต่อเดือน"), icon: Coins },
+  { key: "term", label: msg("งบทั้งเทอม"), icon: Calendar },
 ] as const;
 
 export function FormulaHelpModal({
@@ -63,6 +66,7 @@ export function FormulaHelpModal({
   constants: FormulaConstants;
   example?: FormulaExample;
 }) {
+  const { t } = useI18n();
   const ex = example ?? DEFAULT_EXAMPLE;
   const { hrsPerLecCr, hrsPerLabCr, baseLec, baseLab, rate, termMonths } = constants;
   const { lecCr, labCr, lecHrs, labHrs, students, trackLabel, isSpecial, courseName } = ex;
@@ -79,19 +83,19 @@ export function FormulaHelpModal({
   const last = step === STEPS.length - 1;
 
   const nav = all ? (
-    <Button variant="primary" onClick={onClose}><Check size={14} /> เข้าใจแล้ว</Button>
+    <Button variant="primary" onClick={onClose}><Check size={14} /> {t("เข้าใจแล้ว")}</Button>
   ) : (
     <div className="flex w-full flex-wrap items-center justify-between gap-2">
       <Button variant="ghost" size="sm" onClick={() => setAll(true)}>
-        <LayoutList size={14} /> <span className="hidden sm:inline">ดูทั้งหมดในหน้าเดียว</span><span className="sm:hidden">ดูทั้งหมด</span>
+        <LayoutList size={14} /> <span className="hidden sm:inline">{t("ดูทั้งหมดในหน้าเดียว")}</span><span className="sm:hidden">{t("ดูทั้งหมด")}</span>
       </Button>
       <div className="flex items-center gap-2">
         <Button variant="secondary" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>
-          <ChevronLeft size={14} /> ย้อนกลับ
+          <ChevronLeft size={14} /> {t("ย้อนกลับ")}
         </Button>
         {last
-          ? <Button variant="primary" onClick={onClose}><Check size={14} /> เข้าใจแล้ว</Button>
-          : <Button variant="primary" onClick={() => setStep(s => s + 1)}>ขั้นถัดไป <ChevronRight size={14} /></Button>}
+          ? <Button variant="primary" onClick={onClose}><Check size={14} /> {t("เข้าใจแล้ว")}</Button>
+          : <Button variant="primary" onClick={() => setStep(s => s + 1)}>{t("ขั้นถัดไป")} <ChevronRight size={14} /></Button>}
       </div>
     </div>
   );
@@ -103,7 +107,7 @@ export function FormulaHelpModal({
       title={
         <span className="flex items-center gap-2">
           <Sparkles size={18} className="text-accent" />
-          วิธีคิดงบ TA {trackLabel}
+          {t("วิธีคิดงบ TA {track}", { track: t(trackLabel) })}
         </span>
       }
       size="xl"
@@ -112,12 +116,12 @@ export function FormulaHelpModal({
       <div className="space-y-4">
         {courseName && (
           <div className="text-sm text-muted">
-            {example ? "วิชา" : "ตัวอย่างวิชา"}: <b className="text-foreground">{courseName}</b>
+            {example ? t("วิชา") : t("ตัวอย่างวิชา")}: <b className="text-foreground">{example ? courseName : t(courseName)}</b>
           </div>
         )}
 
         {/* Step rail */}
-        <ol className="grid grid-cols-2 gap-1 sm:grid-cols-4" aria-label="ขั้นตอน">
+        <ol className="grid grid-cols-2 gap-1 sm:grid-cols-4" aria-label={t("ขั้นตอน")}>
           {STEPS.map((s, i) => {
             const Icon = s.icon;
             const state = all || i < step ? "done" : i === step ? "now" : "todo";
@@ -134,7 +138,7 @@ export function FormulaHelpModal({
                     </span>
                     <Icon size={12} />
                   </div>
-                  <div className="mt-0.5 truncate text-xs font-medium">{s.label}</div>
+                  <div className="mt-0.5 truncate text-xs font-medium">{t(s.label)}</div>
                 </button>
               </li>
             );
@@ -144,101 +148,101 @@ export function FormulaHelpModal({
         {/* Running equation — what has been established so far. */}
         {!all && step > 1 && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-hairline bg-surface-secondary px-3 py-2 text-xs tabular animate-in fade-in duration-300">
-            <span className="text-muted">ที่ได้แล้ว:</span>
-            <Pill>{fmt(workload)} ชม./สัปดาห์</Pill>
-            {step >= 3 && <><X size={12} className="text-muted" /><Pill>฿{rate}</Pill><Equal size={12} className="text-muted" /><Pill tone="ok">{bahtF(monthly)}/เดือน</Pill></>}
+            <span className="text-muted">{t("ที่ได้แล้ว:")}</span>
+            <Pill>{t("{n} ชม./สัปดาห์", { n: fmt(workload) })}</Pill>
+            {step >= 3 && <><X size={12} className="text-muted" /><Pill>฿{rate}</Pill><Equal size={12} className="text-muted" /><Pill tone="ok">{t("{amount}/เดือน", { amount: bahtF(monthly) })}</Pill></>}{/* i18n-ignore — currency symbol */}
           </div>
         )}
 
         {(all || step === 0) && (
-          <HelpStep number={1} title="ข้อมูลตั้งต้นของวิชา" icon={<Users size={18} />} delay={0} playKey={`${step}-${all}`}>
+          <HelpStep number={1} title={t("ข้อมูลตั้งต้นของวิชา")} icon={<Users size={18} />} delay={0} playKey={`${step}-${all}`}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <InputChip icon={<BookOpen size={16} />} label="หน่วยกิตบรรยาย" value={`${lecCr}`} delay={100}
-                hint={lecHrs !== undefined ? `จากบรรยาย ${lecHrs} ชั่วโมง/สัปดาห์ (1 ชั่วโมง = 1 หน่วยกิต)` : undefined} />
-              <InputChip icon={<FlaskConical size={16} />} label="หน่วยกิตปฏิบัติการ" value={`${labCr}`} delay={250}
-                hint={labHrs !== undefined ? `จากปฏิบัติการ ${labHrs} ชั่วโมง/สัปดาห์ (2 ชั่วโมง = 1 หน่วยกิต ปัดลง)` : undefined} />
+              <InputChip icon={<BookOpen size={16} />} label={t("หน่วยกิตบรรยาย")} value={`${lecCr}`} delay={100}
+                hint={lecHrs !== undefined ? t("จากบรรยาย {h} ชั่วโมง/สัปดาห์ (1 ชั่วโมง = 1 หน่วยกิต)", { h: lecHrs }) : undefined} />
+              <InputChip icon={<FlaskConical size={16} />} label={t("หน่วยกิตปฏิบัติการ")} value={`${labCr}`} delay={250}
+                hint={labHrs !== undefined ? t("จากปฏิบัติการ {h} ชั่วโมง/สัปดาห์ (2 ชั่วโมง = 1 หน่วยกิต ปัดลง)", { h: labHrs }) : undefined} />
               <InputChip
                 icon={<Users size={16} />}
-                label={isSpecial ? "นักศึกษาภาคพิเศษ" : "นักศึกษาภาคปกติ"}
-                value={`${students} คน`}
+                label={isSpecial ? t("นักศึกษาภาคพิเศษ") : t("นักศึกษาภาคปกติ")}
+                value={t("{n} คน", { n: students })}
                 tone={isSpecial ? "warn" : "brand"}
                 delay={400}
               />
             </div>
             {lecHrs !== undefined && labHrs !== undefined && (
               <div className="mt-3 rounded-lg bg-surface-secondary p-3 text-xs text-ink-2 animate-in fade-in duration-500 fill-mode-both" style={{ animationDelay: "600ms" }}>
-                <div className="mb-1 font-medium text-ink-1">อ่านรหัสหน่วยกิต <span className="tabular">{lecCr + labCr} ({lecHrs}-{labHrs}-{(lecCr + labCr) * 3 - lecHrs - labHrs})</span></div>
+                <div className="mb-1 font-medium text-ink-1">{t("อ่านรหัสหน่วยกิต")} <span className="tabular">{lecCr + labCr} ({lecHrs}-{labHrs}-{(lecCr + labCr) * 3 - lecHrs - labHrs})</span></div>
                 <div className="grid gap-1 sm:grid-cols-3">
-                  <CodePart n={lecHrs} label="บรรยาย ชม./สัปดาห์" note={`= ${lecCr} หน่วยกิต`} />
-                  <CodePart n={labHrs} label="ปฏิบัติการ ชม./สัปดาห์" note={`= ${labCr} หน่วยกิต (2 ชม. = 1 นก.)`} />
-                  <CodePart n={(lecCr + labCr) * 3 - lecHrs - labHrs} label="ศึกษาเอง ชม./สัปดาห์" note="ไม่ใช้ในสูตร" muted />
+                  <CodePart n={lecHrs} label={t("บรรยาย ชม./สัปดาห์")} note={t("= {n} หน่วยกิต", { n: lecCr })} />
+                  <CodePart n={labHrs} label={t("ปฏิบัติการ ชม./สัปดาห์")} note={t("= {n} หน่วยกิต (2 ชม. = 1 นก.)", { n: labCr })} />
+                  <CodePart n={(lecCr + labCr) * 3 - lecHrs - labHrs} label={t("ศึกษาเอง ชม./สัปดาห์")} note={t("ไม่ใช้ในสูตร")} muted />
                 </div>
-                <div className="mt-1.5 text-muted">สูตรงบใช้ <b>หน่วยกิต</b> ไม่ใช่ชั่วโมง (ตามสมุดงบของคณะ ชีต 2_59 ปริญญาตรี)</div>
+                <div className="mt-1.5 text-muted">{t.rich("สูตรงบใช้ {credits} ไม่ใช่ชั่วโมง (ตามสมุดงบของคณะ ชีต 2_59 ปริญญาตรี)", { credits: <b>{t("หน่วยกิต")}</b> })}</div>
               </div>
             )}
           </HelpStep>
         )}
 
         {(all || step === 1) && (
-          <HelpStep number={2} title="คำนวณภาระงานต่อสัปดาห์" icon={<Sigma size={18} />} delay={all ? 80 : 0} playKey={`${step}-${all}`}>
+          <HelpStep number={2} title={t("คำนวณภาระงานต่อสัปดาห์")} icon={<Sigma size={18} />} delay={all ? 80 : 0} playKey={`${step}-${all}`}>
             <div className="mb-3 text-xs text-muted">
-              คณะกำหนดฐานไว้ว่า บรรยาย 1 หน่วยกิต = <b>{hrsPerLecCr}</b> ชม./สัปดาห์ เมื่อมีนักศึกษา {baseLec} คน ·
-              ปฏิบัติการ 1 หน่วยกิต = <b>{hrsPerLabCr}</b> ชม./สัปดาห์ เมื่อมีนักศึกษา {baseLab} คน
-              — วิชาที่มีนักศึกษามากหรือน้อยกว่าฐาน ภาระงานจะเพิ่ม/ลดตามสัดส่วน
+              {t.rich("คณะกำหนดฐานไว้ว่า บรรยาย 1 หน่วยกิต = {lec} ชม./สัปดาห์ เมื่อมีนักศึกษา {baseLec} คน · ปฏิบัติการ 1 หน่วยกิต = {lab} ชม./สัปดาห์ เมื่อมีนักศึกษา {baseLab} คน — วิชาที่มีนักศึกษามากหรือน้อยกว่าฐาน ภาระงานจะเพิ่ม/ลดตามสัดส่วน", {
+                lec: <b>{hrsPerLecCr}</b>, baseLec, lab: <b>{hrsPerLabCr}</b>, baseLab,
+              })}
             </div>
             <div className="space-y-2">
               <AnimatedCalc
                 icon={<BookOpen size={14} className="text-blue-600" />}
-                label="บรรยาย"
-                words={["หน่วยกิต", "×", `${hrsPerLecCr} ชม.`, "×", "นศ. ÷ ฐาน"]}
+                label={t("บรรยาย")}
+                words={[t("หน่วยกิต"), "×", t("{n} ชม.", { n: hrsPerLecCr }), "×", t("นศ. ÷ ฐาน")]}
                 nums={[`${lecCr}`, "×", `${hrsPerLecCr}`, "×", `(${students} ÷ ${baseLec})`]}
                 ratio={{ n: students, base: baseLec }}
                 value={lecWL}
-                unit="ชม./สัปดาห์"
+                unit={t("ชม./สัปดาห์")}
                 delay={0}
               />
               <AnimatedCalc
                 icon={<FlaskConical size={14} className="text-purple-600" />}
-                label="ปฏิบัติการ"
-                words={["หน่วยกิต", "×", `${hrsPerLabCr} ชม.`, "×", "นศ. ÷ ฐาน"]}
+                label={t("ปฏิบัติการ")}
+                words={[t("หน่วยกิต"), "×", t("{n} ชม.", { n: hrsPerLabCr }), "×", t("นศ. ÷ ฐาน")]}
                 nums={[`${labCr}`, "×", `${hrsPerLabCr}`, "×", `(${students} ÷ ${baseLab})`]}
                 ratio={{ n: students, base: baseLab }}
                 value={labWL}
-                unit="ชม./สัปดาห์"
+                unit={t("ชม./สัปดาห์")}
                 delay={900}
               />
-              <Total delay={1900} label="ภาระงานรวมต่อสัปดาห์" sub={`${fmt(lecWL)} + ${fmt(labWL)}`}>
-                <CountUp to={workload} d={2} delay={1900} /> ชั่วโมง
+              <Total delay={1900} label={t("ภาระงานรวมต่อสัปดาห์")} sub={`${fmt(lecWL)} + ${fmt(labWL)}`}>
+                <CountUp to={workload} d={2} delay={1900} /> {t("ชั่วโมง")}
               </Total>
             </div>
           </HelpStep>
         )}
 
         {(all || step === 2) && (
-          <HelpStep number={3} title="คูณด้วยอัตราเฉลี่ยต่อชั่วโมงภาระงาน → งบต่อเดือน" icon={<Coins size={18} />} delay={all ? 160 : 0} playKey={`${step}-${all}`}>
+          <HelpStep number={3} title={t("คูณด้วยอัตราเฉลี่ยต่อชั่วโมงภาระงาน → งบต่อเดือน")} icon={<Coins size={18} />} delay={all ? 160 : 0} playKey={`${step}-${all}`}>
             <div className="mb-3 text-xs text-muted">
-              อัตราเฉลี่ย <b>฿{rate}</b> ต่อชั่วโมงภาระงานต่อเดือน มาจากค่าเฉลี่ยของ TA สองระดับ
+              {t.rich("อัตราเฉลี่ย {rate} ต่อชั่วโมงภาระงานต่อเดือน มาจากค่าเฉลี่ยของ TA สองระดับ", { rate: <b>฿{rate}</b> })}{/* i18n-ignore — currency symbol */}
             </div>
             <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
-              <RateHalf label="ผู้ช่วยสอนปริญญาตรี" baht={200} delay={100} />
-              <RateHalf label="ผู้ช่วยสอนบัณฑิตศึกษา" baht={400} delay={300} />
+              <RateHalf label={t("ผู้ช่วยสอนปริญญาตรี")} baht={200} delay={100} />
+              <RateHalf label={t("ผู้ช่วยสอนบัณฑิตศึกษา")} baht={400} delay={300} />
             </div>
             <Equation
               delay={600}
               parts={[
-                { v: `${fmt(workload)} ชม.`, note: "จากขั้นที่ 2" },
+                { v: t("{n} ชม.", { n: fmt(workload) }), note: t("จากขั้นที่ 2") },
                 { op: "×" },
-                { v: `฿${rate}`, note: "อัตราเฉลี่ย" },
+                { v: `฿${rate}`, note: t("อัตราเฉลี่ย") }, // i18n-ignore — currency symbol
               ]}
-              result={<><CountUp to={monthly} d={0} delay={1000} prefix="฿" /> <span className="text-sm font-normal">/ เดือน</span></>}
+              result={<><CountUp to={monthly} d={0} delay={1000} prefix="฿" /> <span className="text-sm font-normal">{t("/ เดือน")}</span></> /* i18n-ignore — currency symbol */}
             />
           </HelpStep>
         )}
 
         {(all || step === 3) && (
-          <HelpStep number={4} title="คูณด้วยจำนวนเดือน → งบทั้งภาคเรียน" icon={<Calendar size={18} />} delay={all ? 240 : 0} playKey={`${step}-${all}`}>
+          <HelpStep number={4} title={t("คูณด้วยจำนวนเดือน → งบทั้งภาคเรียน")} icon={<Calendar size={18} />} delay={all ? 240 : 0} playKey={`${step}-${all}`}>
             <div className="mb-3 text-xs text-muted">
-              ภาคเรียนนี้มี <b>{termMonths}</b> เดือน (เจ้าหน้าที่กำหนดที่หน้าตั้งค่า → ภาคเรียน)
+              {t.rich("ภาคเรียนนี้มี {n} เดือน (เจ้าหน้าที่กำหนดที่หน้าตั้งค่า → ภาคเรียน)", { n: <b>{termMonths}</b> })}
             </div>
             <div className="mb-3 flex gap-1.5">
               {Array.from({ length: termMonths }).map((_, i) => (
@@ -252,22 +256,22 @@ export function FormulaHelpModal({
             <Equation
               delay={150 + termMonths * 150}
               parts={[
-                { v: bahtF(monthly), note: "ต่อเดือน" },
+                { v: bahtF(monthly), note: t("ต่อเดือน") },
                 { op: "×" },
-                { v: `${termMonths} เดือน`, note: "ทั้งเทอม" },
+                { v: t("{n} เดือน", { n: termMonths }), note: t("ทั้งเทอม") },
               ]}
-              result={<CountUp to={term} d={0} delay={500 + termMonths * 150} prefix="฿" />}
+              result={<CountUp to={term} d={0} delay={500 + termMonths * 150} prefix="฿" /> /* i18n-ignore — currency symbol */}
               big
             />
 
             <div className="mt-4 rounded-lg border border-accent/40 bg-accent-soft p-4 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both" style={{ animationDelay: `${1400 + termMonths * 150}ms` }}>
               <div className="mb-1 text-xs uppercase tracking-wider text-muted">
-                สรุปงบวิชานี้ ({isSpecial ? "พิเศษ" : "ปกติ"})
+                {isSpecial ? t("สรุปงบวิชานี้ (พิเศษ)") : t("สรุปงบวิชานี้ (ปกติ)")}
               </div>
               <div className="flex flex-wrap items-baseline gap-3">
                 <span className="text-3xl font-bold tabular">{bahtF(term)}</span>
                 <span className="text-sm text-muted tabular">
-                  = {fmt(workload)} ชม./สัปดาห์ × ฿{rate} × {termMonths} เดือน
+                  {t("= {wl} ชม./สัปดาห์ × ฿{rate} × {months} เดือน", { wl: fmt(workload), rate, months: termMonths })}
                 </span>
               </div>
             </div>
@@ -278,9 +282,9 @@ export function FormulaHelpModal({
           <div className="flex items-start gap-2 border-t border-border pt-2 text-xs text-muted">
             <InfoIcon size={14} className="mt-0.5 shrink-0" />
             <span>
-              <b>หมายเหตุ:</b> ตัวเลขนี้เป็น <b>เพดานงบต่อวิชา</b> ค่าตอบแทนจริงของผู้ช่วยสอนแต่ละคนเบิกตามชั่วโมงที่ทำจริง
-              (ปริญญาตรี ภาคปกติ 40 บาท/ชั่วโมง · ภาคพิเศษ 50 บาท/ชั่วโมง ไม่เกิน 2,000 บาท/เดือน · บัณฑิตศึกษา ภาคปกติ 50 บาท/ชั่วโมง)
-              หรือเหมาจ่ายทั้งภาคเรียน (บัณฑิตศึกษา ภาคพิเศษ 4,000 บาท/คน/วิชา) รวมทุกคนแล้วต้องไม่เกินเพดานงบนี้
+              {t.rich("{note} ตัวเลขนี้เป็น {cap} ค่าตอบแทนจริงของผู้ช่วยสอนแต่ละคนเบิกตามชั่วโมงที่ทำจริง (ปริญญาตรี ภาคปกติ 40 บาท/ชั่วโมง · ภาคพิเศษ 50 บาท/ชั่วโมง ไม่เกิน 2,000 บาท/เดือน · บัณฑิตศึกษา ภาคปกติ 50 บาท/ชั่วโมง) หรือเหมาจ่ายทั้งภาคเรียน (บัณฑิตศึกษา ภาคพิเศษ 4,000 บาท/คน/วิชา) รวมทุกคนแล้วต้องไม่เกินเพดานงบนี้", {
+                note: <b>{t("หมายเหตุ:")}</b>, cap: <b>{t("เพดานงบต่อวิชา")}</b>,
+              })}
             </span>
           </div>
         )}
@@ -332,10 +336,11 @@ function CodePart({ n, label, note, muted }: { n: number; label: string; note: s
 }
 
 function RateHalf({ label, baht, delay }: { label: string; baht: number; delay: number }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-lg border border-border bg-panel p-2 animate-in fade-in slide-in-from-left-2 duration-400 fill-mode-both" style={{ animationDelay: `${delay}ms` }}>
       <div className="text-muted">{label}</div>
-      <div className="tabular"><b>฿{baht}</b>/ชม.ภาระงาน/เดือน <span className="text-muted">× 50%</span> = <b>฿{baht / 2}</b></div>
+      <div className="tabular"><b>฿{baht}</b>{t("/ชม.ภาระงาน/เดือน")} <span className="text-muted">× 50%</span> = <b>฿{baht / 2}</b></div>{/* i18n-ignore — currency symbol */}
     </div>
   );
 }
@@ -350,6 +355,7 @@ function AnimatedCalc({ icon, label, words, nums, ratio, value, unit, delay }: {
   icon: React.ReactNode; label: string; words: string[]; nums: string[];
   ratio: { n: number; base: number }; value: number; unit: string; delay: number;
 }) {
+  const { t } = useI18n();
   const [beat, setBeat] = useState(0);
   useEffect(() => {
     setBeat(0);
@@ -377,7 +383,7 @@ function AnimatedCalc({ icon, label, words, nums, ratio, value, unit, delay }: {
         </div>
       </div>
       <div className="mt-2 flex items-center gap-2 text-[11px] text-muted">
-        <span className="w-20 shrink-0">นศ. ÷ ฐาน</span>
+        <span className="w-20 shrink-0">{t("นศ. ÷ ฐาน")}</span>
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-secondary">
           <div className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out" style={{ width: beat >= 1 ? `${pct}%` : "0%" }} />
         </div>

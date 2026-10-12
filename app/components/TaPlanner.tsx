@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { Panel, Chip, Button, Tip } from "./ui";
 import { Skel, SkelValue } from "./Skeletons";
+import { clientLocale, msg, useI18n, type TFn } from "../lib/i18n/client";
+import { intlLocale } from "../lib/i18n/core";
 
 /* -------------------------------------------------------------------------- */
 /* TA planner — the calculator on the request page.                            */
@@ -103,8 +105,11 @@ type Track = "regular" | "special";
 type Scope = "lecture" | "lab" | "both";
 
 const isGradLevel = (l: string) => l === "master" || l === "phd";
-const baht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
-const hrs1 = (n: number) => (Math.round(n * 10) / 10).toLocaleString("th-TH");
+// th-TH and en-GB group digits the same way, so SSR (always the default
+// locale) and the browser render identical figures.
+const numLocale = () => intlLocale(clientLocale());
+const baht = (n: number) => "฿" + Math.round(n).toLocaleString(numLocale()); // i18n-ignore — currency sign, same in both languages
+const hrs1 = (n: number) => (Math.round(n * 10) / 10).toLocaleString(numLocale());
 
 /* -------------------------------------------------------------------------- */
 /* Cost model                                                                 */
@@ -262,9 +267,9 @@ interface Template {
  * request normally carries — เช็คชื่อ, แลบ, ตรวจงาน — are on it (12/09/2026).
  */
 const DUTY_LADDER: Template[] = [
-  { reviewHrs: 1, fullLecture: false, label: "เช็คชื่อ 1 ชม. + แลบ + ตรวจงาน 1 ชม." },
-  { reviewHrs: 2, fullLecture: false, label: "เช็คชื่อ 1 ชม. + แลบ + ตรวจงาน 2 ชม." },
-  { reviewHrs: 2, fullLecture: true, label: "เช็คชื่อทั้งคาบ + แลบ + ตรวจงาน 2 ชม." },
+  { reviewHrs: 1, fullLecture: false, label: msg("เช็คชื่อ 1 ชม. + แลบ + ตรวจงาน 1 ชม.") },
+  { reviewHrs: 2, fullLecture: false, label: msg("เช็คชื่อ 1 ชม. + แลบ + ตรวจงาน 2 ชม.") },
+  { reviewHrs: 2, fullLecture: true, label: msg("เช็คชื่อทั้งคาบ + แลบ + ตรวจงาน 2 ชม.") },
 ];
 /** The rung a course with no budget pressure either way starts from. */
 const DUTY_STANDARD = 1;
@@ -286,11 +291,11 @@ function templateWorkload(level: "undergrad" | "master", s: PlanSection, t: Temp
   } else {
     w.help_teach_hrs = lec + lab;
     w.grade_hrs = review;
-    w.grade_desc = review > 0 ? "ตรวจการบ้าน" : "";
+    w.grade_desc = review > 0 ? "ตรวจการบ้าน" : ""; // i18n-ignore — workload text saved with the request
     // Regulation total for a graduate is 10–12 h/week; the rest is
     // preparation, which is administrative and not billed.
     w.prep_hrs = Math.max(0, 10 - (w.help_teach_hrs + w.grade_hrs));
-    w.prep_desc = w.prep_hrs > 0 ? "เตรียมการสอน" : "";
+    w.prep_desc = w.prep_hrs > 0 ? "เตรียมการสอน" : ""; // i18n-ignore — workload text saved with the request
   }
   return w;
 }
@@ -381,6 +386,7 @@ export function TaPlanner({
    */
   variant?: "request" | "budget";
 }) {
+  const { t } = useI18n();
   const { data: f } = useSWR<PlanFacts>(tcId ? `/teaching-courses/${tcId}/ta-plan` : null);
   const [open, setOpen] = useState(true);
   const [tab, setTab] = useState<"plan" | "manual">("plan");
@@ -391,7 +397,7 @@ export function TaPlanner({
     [f, schedules],
   );
 
-  const model = useMemo(() => f ? buildModel(f, groups, scope, drafts) : null, [f, groups, scope, drafts]);
+  const model = useMemo(() => f ? buildModel(f, groups, scope, drafts, t) : null, [f, groups, scope, drafts, t]);
 
   useEffect(() => {
     if (!onDraftEstimate) return;
@@ -421,8 +427,8 @@ export function TaPlanner({
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold">
-              {variant === "budget" ? "งบ TA ของวิชานี้" : "วางแผน TA ให้พอดีงบ"}{" "}
-              <span className="font-normal text-muted">(ประมาณการจากตารางสอนจริง)</span>
+              {variant === "budget" ? t("งบ TA ของวิชานี้") : t("วางแผน TA ให้พอดีงบ")}{" "}
+              <span className="font-normal text-muted">{t("(ประมาณการจากตารางสอนจริง)")}</span>
             </div>
             <div className="text-xs"><SkelValue className="h-3 w-64 max-w-full" /></div>
           </div>
@@ -451,21 +457,21 @@ export function TaPlanner({
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">
-            {variant === "budget" ? "งบ TA ของวิชานี้" : "วางแผน TA ให้พอดีงบ"}{" "}
-            <span className="font-normal text-muted">(ประมาณการจากตารางสอนจริง)</span>
+            {variant === "budget" ? t("งบ TA ของวิชานี้") : t("วางแผน TA ให้พอดีงบ")}{" "}
+            <span className="font-normal text-muted">{t("(ประมาณการจากตารางสอนจริง)")}</span>
           </div>
           <div className="text-xs text-muted">
-            สอนจริง {f.class_weeks} สัปดาห์ จาก {hrs1(f.weeks_total)} สัปดาห์ของเทอม
-            {" · "}งบภาคปกติ {baht(regular.cap)}{hasSpecial && <> · ภาคพิเศษ {baht(special.cap)}</>}
+            {t("สอนจริง {weeks} สัปดาห์ จาก {total} สัปดาห์ของเทอม", { weeks: f.class_weeks, total: hrs1(f.weeks_total) })}
+            {" · "}{t("งบภาคปกติ {amount}", { amount: baht(regular.cap) })}{hasSpecial && <>{" · "}{t("ภาคพิเศษ {amount}", { amount: baht(special.cap) })}</>}
           </div>
         </div>
         {!open && (
           <span className="shrink-0">
             {headline === "over"
-              ? <Chip tone="danger"><TriangleAlert size={12} /> เกินงบ</Chip>
+              ? <Chip tone="danger"><TriangleAlert size={12} /> {t("เกินงบ")}</Chip>
               : headline === "ok"
-              ? <Chip tone="success"><CircleCheck size={12} /> พอดีงบ</Chip>
-              : <Chip tone="warn">งบตึง</Chip>}
+              ? <Chip tone="success"><CircleCheck size={12} /> {t("พอดีงบ")}</Chip>
+              : <Chip tone="warn">{t("งบตึง")}</Chip>}
           </span>
         )}
       </button>
@@ -474,8 +480,8 @@ export function TaPlanner({
         <div className="border-t border-hairline px-4 py-4 space-y-4">
           {/* 1. The two pools — what there is to plan with */}
           <div className={"grid gap-3 " + (hasSpecial ? "sm:grid-cols-2" : "")}>
-            <PoolCard label="ภาคปกติ" tone="brand" pool={regular} weeks={f.class_weeks} />
-            {hasSpecial && <PoolCard label="ภาคพิเศษ" tone="warn" pool={special} weeks={f.class_weeks} />}
+            <PoolCard label={t("ภาคปกติ")} tone="brand" pool={regular} weeks={f.class_weeks} />
+            {hasSpecial && <PoolCard label={t("ภาคพิเศษ")} tone="warn" pool={special} weeks={f.class_weeks} />}
           </div>
 
           {variant === "budget" && f.existing.length > 0 && <ExistingCard f={f} />}
@@ -483,7 +489,7 @@ export function TaPlanner({
           {/* Two ways in: the plan the system works out, or the lecturer's own
               numbers on the same cost model. The plan comes first. */}
           <div className="flex gap-1 rounded-lg bg-surface-secondary p-1 text-xs w-fit" role="tablist">
-            {([["plan", "แผนที่แนะนำ"], ["manual", "คำนวณเอง"]] as const).map(([k, label]) => (
+            {([["plan", t("แผนที่แนะนำ")], ["manual", t("คำนวณเอง")]] as const).map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={tab === k}
                 onClick={() => setTab(k)}
                 className={"rounded-md px-3 py-1 transition-colors " + (tab === k ? "bg-panel font-semibold shadow-sm" : "text-muted hover:text-ink-1")}>
@@ -504,8 +510,9 @@ export function TaPlanner({
             <div className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger-soft/40 p-3 text-xs text-danger-soft-foreground">
               <TriangleAlert size={14} className="mt-0.5 shrink-0" />
               <span>
-                <b>งบของวิชานี้ถูกใช้เต็มแล้ว</b> โดย TA ที่อนุมัติไปก่อนหน้า — TA ที่ขอเพิ่มจะทำให้ทุกคนถูกตัดตามสัดส่วน
-                ถ้ายังจำเป็นต้องขอเพิ่ม ให้ลดชั่วโมงของทุกคนลง หรือปรึกษาเจ้าหน้าที่เรื่องงบก่อนส่ง
+                {t.rich("{full} โดย TA ที่อนุมัติไปก่อนหน้า — TA ที่ขอเพิ่มจะทำให้ทุกคนถูกตัดตามสัดส่วน ถ้ายังจำเป็นต้องขอเพิ่ม ให้ลดชั่วโมงของทุกคนลง หรือปรึกษาเจ้าหน้าที่เรื่องงบก่อนส่ง", {
+                  full: <b>{t("งบของวิชานี้ถูกใช้เต็มแล้ว")}</b>,
+                })}
               </span>
             </div>
           ) : (
@@ -513,10 +520,10 @@ export function TaPlanner({
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold">
                 <Sparkles size={14} className="text-accent" />
-                {variant === "budget" && regular.existingTAs > 0 ? "ถ้าจะขอ TA เพิ่ม" : "แผนที่แนะนำสำหรับวิชานี้"}
+                {variant === "budget" && regular.existingTAs > 0 ? t("ถ้าจะขอ TA เพิ่ม") : t("แผนที่แนะนำสำหรับวิชานี้")}
               </div>
               <span className="text-[11px] text-muted">
-                ปรับตามงบของวิชานี้ — ให้ครบตามเกณฑ์ก่อน แล้วเพิ่มชั่วโมงต่อคน แล้วค่อยเพิ่มคน
+                {t("ปรับตามงบของวิชานี้ — ให้ครบตามเกณฑ์ก่อน แล้วเพิ่มชั่วโมงต่อคน แล้วค่อยเพิ่มคน")}
               </span>
             </div>
             {/* One framed group per budget pool, each with its own colour, name
@@ -524,26 +531,26 @@ export function TaPlanner({
                 plan spends. A single-pool course gets a single frame. */}
             <PoolGroup
               tone="brand"
-              label="ภาคปกติ"
+              label={t("ภาคปกติ")}
               sublabel={model.specialCoSits
-                ? `รวม sec ภาคพิเศษที่สอนพร้อมกัน · งบปกติ ${baht(regular.cap)}`
-                : `sec ${f.sections.filter(x => x.track === "regular").map(x => x.sec_no).join(", ")} · นศ. ${regular.students} คน · งบปกติ ${baht(regular.cap)}`}
+                ? t("รวม sec ภาคพิเศษที่สอนพร้อมกัน · งบปกติ {amount}", { amount: baht(regular.cap) })
+                : t("sec {secs} · นศ. {students} คน · งบปกติ {amount}", { secs: f.sections.filter(x => x.track === "regular").map(x => x.sec_no).join(", "), students: regular.students, amount: baht(regular.cap) })}
             >
               {options.slice(0, 4).map(o => (
                 <OptionCard key={o.key} o={o} hasSpecial={hasSpecial}
-                  applyLabel={variant === "budget" ? "ไปกรอกคำขอด้วยแผนนี้" : "ใส่แผนนี้ลงฟอร์ม"}
+                  applyLabel={variant === "budget" ? t("ไปกรอกคำขอด้วยแผนนี้") : t("ใส่แผนนี้ลงฟอร์ม")}
                   onApply={onApplyPlan ? () => onApplyPlan(o.items) : undefined} />
               ))}
             </PoolGroup>
             {specialOptions.length > 0 && (
               <PoolGroup
                 tone="warn"
-                label="ภาคพิเศษ"
-                sublabel={`sec ${f.sections.filter(x => x.track === "special").map(x => x.sec_no).join(", ")} สอนคนละเวลา ต้องมี TA ของตัวเอง · นศ. ${special.students} คน · งบพิเศษ ${baht(special.cap)} (แยกจากงบปกติ)`}
+                label={t("ภาคพิเศษ")}
+                sublabel={t("sec {secs} สอนคนละเวลา ต้องมี TA ของตัวเอง · นศ. {students} คน · งบพิเศษ {amount} (แยกจากงบปกติ)", { secs: f.sections.filter(x => x.track === "special").map(x => x.sec_no).join(", "), students: special.students, amount: baht(special.cap) })}
               >
                 {specialOptions.map(o => (
                   <OptionCard key={o.key} o={o} hasSpecial={hasSpecial} specialOnly
-                    applyLabel={variant === "budget" ? "ไปกรอกคำขอด้วยแผนนี้" : "ใส่แผนนี้ลงฟอร์ม"}
+                    applyLabel={variant === "budget" ? t("ไปกรอกคำขอด้วยแผนนี้") : t("ใส่แผนนี้ลงฟอร์ม")}
                     onApply={onApplyPlan ? () => onApplyPlan(o.items) : undefined} />
                 ))}
               </PoolGroup>
@@ -562,9 +569,9 @@ export function TaPlanner({
           </>}
 
           <div className="text-[11px] text-muted border-t border-hairline pt-2">
-            คิดจากคาบที่เหลือจริงหลังหักวันหยุดและช่วงสอบ (sec {f.sections.map(s => `${s.sec_no}: ${s.lecture_periods}+${s.lab_periods} คาบ`).join(", ")})
-            {" · "}คาบที่สอนพร้อมกันคิดครั้งเดียว · ชั่วโมง sec พิเศษที่ทับเวลา sec ปกติ เบิกจากงบปกติ
-            {" · "}ตัวเลขจริงขึ้นกับที่ TA ลงเวลาและอาจารย์อนุมัติ
+            {t("คิดจากคาบที่เหลือจริงหลังหักวันหยุดและช่วงสอบ (sec {list})", { list: f.sections.map(s => t("{sec}: {lecture}+{lab} คาบ", { sec: s.sec_no, lecture: s.lecture_periods, lab: s.lab_periods })).join(", ") })}
+            {" · "}{t("คาบที่สอนพร้อมกันคิดครั้งเดียว · ชั่วโมง sec พิเศษที่ทับเวลา sec ปกติ เบิกจากงบปกติ")}
+            {" · "}{t("ตัวเลขจริงขึ้นกับที่ TA ลงเวลาและอาจารย์อนุมัติ")}
           </div>
         </div>
       )}
@@ -601,7 +608,7 @@ interface DraftEval {
   overSpecial: number;
 }
 
-function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, drafts: PlanDraft[]) {
+function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, drafts: PlanDraft[], t: TFn) {
   // Existing spend, split by TA level — summed straight from each approved
   // TA's own row rather than trusting a second server-computed total, so the
   // two numbers can never drift apart. Regular-pool spend is always billed
@@ -615,11 +622,11 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
     }
     return { ug, grad };
   };
-  const mkPool = (t: PlanTrack, byLevel: { ug: number; grad: number }): Pool => {
-    const existing = t.existing_baht + t.existing_lump_baht;
+  const mkPool = (tk: PlanTrack, byLevel: { ug: number; grad: number }): Pool => {
+    const existing = tk.existing_baht + tk.existing_lump_baht;
     return {
-      cap: t.cap_baht, existing, existingUndergrad: byLevel.ug, existingGrad: byLevel.grad,
-      existingTAs: t.existing_tas, students: t.num_students, free: Math.max(0, t.cap_baht - existing),
+      cap: tk.cap_baht, existing, existingUndergrad: byLevel.ug, existingGrad: byLevel.grad,
+      existingTAs: tk.existing_tas, students: tk.num_students, free: Math.max(0, tk.cap_baht - existing),
     };
   };
   const regular = mkPool(f.tracks.regular, existingByLevel("regular_baht", false));
@@ -675,9 +682,9 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
   const specialSittings = sittings.filter(x => x.pool === "special");
   const specialCoSits = hasSpecial && specialSittings.length === 0;
 
-  const costOn = (level: "undergrad" | "master", sit: Sitting, t: Template) => {
+  const costOn = (level: "undergrad" | "master", sit: Sitting, tpl: Template) => {
     const wl: Record<string, PlanWorkload> = {};
-    for (const x of sit.secs) wl[x.section_id] = templateWorkload(level, x, t, scope, sit.noReview.has(x.section_id));
+    for (const x of sit.secs) wl[x.section_id] = templateWorkload(level, x, tpl, scope, sit.noReview.has(x.section_id));
     const cost = personCost(level, sit.secs.map(x => x.section_id), id => wl[id], f, groups, scope);
     return { cost, wl, baht: cost.regular + cost.special + cost.lump };
   };
@@ -731,12 +738,12 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
       return other <= 0.5 || other <= otherPool.free + 0.5;
     };
     const build = (rung: number, gradsOn: number[] = []): Alloc => {
-      const t = DUTY_LADDER[rung];
+      const tpl = DUTY_LADDER[rung];
       const heads = new Map<number, { ug: number; grad: number }>();
       const parts: [PersonCost, number][] = [];
       let spent = 0;
       const place = (sit: Sitting, level: "undergrad" | "master") => {
-        const c = costOn(level, sit, t);
+        const c = costOn(level, sit, tpl);
         const h = heads.get(sit.id) ?? { ug: 0, grad: 0 };
         if (level === "master") h.grad++; else h.ug++;
         heads.set(sit.id, h);
@@ -778,7 +785,7 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
           if (ratio > worst) { worst = ratio; pick = sit; }
         }
         if (!pick) break;
-        const c = costOn("undergrad", pick, t);
+        const c = costOn("undergrad", pick, tpl);
         const next = sumCost([...parts, [c.cost, 1]]);
         if (spent + spentOf(c.cost) > pool.free + 0.5 || !otherOk(next)) break;
         place(pick, "undergrad");
@@ -797,12 +804,12 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
       // as the money allows (largest first), never below one TA per sitting
       // unless even that fails.
       const partial = (rung: number): Alloc => {
-        const t = DUTY_LADDER[rung];
+        const tpl = DUTY_LADDER[rung];
         const heads = new Map<number, { ug: number; grad: number }>();
         const parts: [PersonCost, number][] = [];
         let spent = 0;
         for (const sit of bySize) {
-          const c = costOn("undergrad", sit, t);
+          const c = costOn("undergrad", sit, tpl);
           if (spent + spentOf(c.cost) > pool.free + 0.5) continue;
           heads.set(sit.id, { ug: 1, grad: 0 });
           parts.push([c.cost, 1]);
@@ -811,7 +818,7 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
         // Second pass toward the guideline while it still fits.
         for (const sit of bySize) {
           while ((heads.get(sit.id)?.ug ?? 0) < guide.get(sit.id)!) {
-            const c = costOn("undergrad", sit, t);
+            const c = costOn("undergrad", sit, tpl);
             if (spent + spentOf(c.cost) > pool.free + 0.5) break;
             const h = heads.get(sit.id) ?? { ug: 0, grad: 0 };
             h.ug++; heads.set(sit.id, h);
@@ -855,14 +862,14 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
     const mx = (pick: (w: PlanWorkload) => number) => Math.max(0, ...ws.map(pick));
     const rows = level === "undergrad"
       ? [
-          { label: "เช็คชื่อในคาบบรรยาย", hrs: mx(w => w.attendance_hrs) },
-          { label: "ดูแลแลบ", hrs: mx(w => w.lab_hrs + w.lab_other_hrs) },
-          { label: "ตรวจงาน", hrs: mx(w => w.check_work_hrs + w.ug_other_hrs) },
+          { label: t("เช็คชื่อในคาบบรรยาย"), hrs: mx(w => w.attendance_hrs) },
+          { label: t("ดูแลแลบ"), hrs: mx(w => w.lab_hrs + w.lab_other_hrs) },
+          { label: t("ตรวจงาน"), hrs: mx(w => w.check_work_hrs + w.ug_other_hrs) },
         ]
       : [
-          { label: "ช่วยสอน (บรรยาย + แลบ)", hrs: mx(w => w.help_teach_hrs) },
-          { label: "ตรวจงาน", hrs: mx(w => w.grade_hrs) },
-          { label: "เตรียมการสอน (ไม่คิดเงิน)", hrs: mx(w => w.prep_hrs) },
+          { label: t("ช่วยสอน (บรรยาย + แลบ)"), hrs: mx(w => w.help_teach_hrs) },
+          { label: t("ตรวจงาน"), hrs: mx(w => w.grade_hrs) },
+          { label: t("เตรียมการสอน (ไม่คิดเงิน)"), hrs: mx(w => w.prep_hrs) },
         ];
     return rows.filter(r => r.hrs > 0);
   };
@@ -879,15 +886,15 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
     const split: string[] = [];
     const items: PlanItem[] = [];
     const sittingRows: OptionSitting[] = [];
-    const t = DUTY_LADDER[a.rung];
+    const tpl = DUTY_LADDER[a.rung];
     let ugEach = 0, gradEach = 0, ugWeekly = 0, gradWeekly = 0;
     for (const sit of sits) {
       const h = a.heads.get(sit.id);
       if (!h || h.ug + h.grad === 0) continue;
       ug += h.ug; grad += h.grad; students += sit.students;
-      split.push(`${sit.label}: ${h.ug + h.grad} คน`);
-      const uc = costOn("undergrad", sit, t);
-      const gc = costOn("master", sit, t);
+      split.push(t("{label}: {n} คน", { label: sit.label, n: h.ug + h.grad }));
+      const uc = costOn("undergrad", sit, tpl);
+      const gc = costOn("master", sit, tpl);
       ugEach = Math.max(ugEach, uc.baht); gradEach = Math.max(gradEach, gc.baht);
       ugWeekly = Math.max(ugWeekly, weeklyOf(uc.cost)); gradWeekly = Math.max(gradWeekly, weeklyOf(gc.cost));
       for (let i = 0; i < h.ug; i++) items.push({ level: "undergrad", section_ids: sit.secs.map(x => x.section_id), workloads: { ...uc.wl } });
@@ -899,15 +906,15 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
       });
     }
     const parts: string[] = [];
-    if (ug) parts.push(`ป.ตรี ${ug} คน`);
-    if (grad) parts.push(`ป.โท/เอก ${grad} คน`);
+    if (ug) parts.push(t("ป.ตรี {n} คน", { n: ug }));
+    if (grad) parts.push(t("ป.โท/เอก {n} คน", { n: grad }));
     const detail = [
-      ug ? `ป.ตรี คนละ ${hrs1(ugWeekly)} ชม./สัปดาห์ ≈ ${baht(ugEach)}/เทอม` : "",
-      grad ? `บัณฑิต คนละ ${hrs1(gradWeekly)} ชม./สัปดาห์ ≈ ${baht(gradEach)}/เทอม` : "",
+      ug ? t("ป.ตรี คนละ {hrs} ชม./สัปดาห์ ≈ {amount}/เทอม", { hrs: hrs1(ugWeekly), amount: baht(ugEach) }) : "",
+      grad ? t("บัณฑิต คนละ {hrs} ชม./สัปดาห์ ≈ {amount}/เทอม", { hrs: hrs1(gradWeekly), amount: baht(gradEach) }) : "",
     ].filter(Boolean).join(" · ");
     return {
       key: `${tag}-${ug}-${grad}-${a.rung}-${sits.map(x => x.id).join(".")}`,
-      title: parts.join(" + "), detail, tag, duty: t.label, split: sits.length > 1 ? split : [],
+      title: parts.join(" + "), detail, tag, duty: t(tpl.label), split: sits.length > 1 ? split : [],
       perMonthUg: ugEach / months, perMonthGrad: gradEach / months,
       ug, grad, cost: a.cost, students, sittings: sittingRows,
       regularLeft: regular.free - a.cost.regular, specialLeft: special.free - a.cost.special - a.cost.lump, fits: a.fits,
@@ -918,9 +925,9 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
   const R = planPool(regular, regularSittings, true);
   const options: Option[] = [];
   if (R) {
-    options.push({ ...toOption(R.best, regularSittings, "แนะนำ"), recommended: true });
+    options.push({ ...toOption(R.best, regularSittings, t("แนะนำ")), recommended: true });
     for (const m of R.mixes) {
-      const o = toOption(m, regularSittings, "มีบัณฑิต");
+      const o = toOption(m, regularSittings, t("มีบัณฑิต"));
       if (!options.some(x => x.ug === o.ug && x.grad === o.grad && x.duty === o.duty)) options.push(o);
     }
     // The plain guideline at the standard rung, when it differs — the cheaper
@@ -933,14 +940,14 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
       plain.cost = sumCost(parts);
       plain.spent = plain.cost.regular;
       plain.fits = plain.spent <= regular.free + 0.5;
-      const o = toOption(plain, regularSittings, "ตามเกณฑ์");
+      const o = toOption(plain, regularSittings, t("ตามเกณฑ์"));
       if (!options.some(x => x.ug === o.ug && x.grad === o.grad && x.duty === o.duty)) options.push(o);
     }
   }
   const S = planPool(special, specialSittings, false);
   const specialOptions: Option[] = [];
   if (S) {
-    specialOptions.push({ ...toOption(S.best, specialSittings, "แนะนำ"), recommended: true });
+    specialOptions.push({ ...toOption(S.best, specialSittings, t("แนะนำ")), recommended: true });
   }
 
   // Capacity summary at the standard rung, for the advice line.
@@ -964,16 +971,18 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
   // Plain-language advice — the things a careful colleague would point out.
   const advice: string[] = [];
   if (regular.existingTAs > 0) {
-    advice.push(`วิชานี้มี TA ที่อนุมัติแล้ว ${regular.existingTAs} คน ใช้งบไปแล้ว ≈ ${baht(regular.existing)} จาก ${baht(regular.cap)} แผนข้างบนคิดจากงบที่เหลือ`);
+    advice.push(t("วิชานี้มี TA ที่อนุมัติแล้ว {n} คน ใช้งบไปแล้ว ≈ {used} จาก {cap} แผนข้างบนคิดจากงบที่เหลือ", { n: regular.existingTAs, used: baht(regular.existing), cap: baht(regular.cap) }));
   }
   if (regularSittings.length > 1) {
-    advice.push(`วิชานี้มี ${regularSittings.length} กลุ่มเรียนคนละเวลา (${regularSittings.map(x => x.label).join(", ")}) แผนจึงแบ่ง TA ประจำแต่ละกลุ่ม ไม่ให้คนเดียววิ่งสองตาราง`);
+    advice.push(t("วิชานี้มี {n} กลุ่มเรียนคนละเวลา ({list}) แผนจึงแบ่ง TA ประจำแต่ละกลุ่ม ไม่ให้คนเดียววิ่งสองตาราง", { n: regularSittings.length, list: regularSittings.map(x => x.label).join(", ") }));
   }
   if (regular.free > 0 && ugEach > 0) {
     const mixes = capacity.filter(c => c.grad > 0)
-      .map(c => `บัณฑิต ${c.grad} คน (≈ ${baht(c.grad * gradEach)}) + ป.ตรีได้อีก ${c.ug} คน`).join(" · ");
+      .map(c => t("บัณฑิต {grad} คน (≈ {amount}) + ป.ตรีได้อีก {ug} คน", { grad: c.grad, amount: baht(c.grad * gradEach), ug: c.ug })).join(" · ");
     advice.push(
-      `งบปกติที่เหลือ ${baht(regular.free)} ที่ภาระงานมาตรฐาน (${DUTY_LADDER[DUTY_STANDARD].label}) รับ TA ป.ตรีได้สูงสุด ${maxUgWith(0)} คน (คนละ ≈ ${baht(ugEach)} ≈ ${baht(ugEach / months)}/เดือน)` +
+      t("งบปกติที่เหลือ {free} ที่ภาระงานมาตรฐาน ({duty}) รับ TA ป.ตรีได้สูงสุด {max} คน (คนละ ≈ {each} ≈ {month}/เดือน)", {
+        free: baht(regular.free), duty: t(DUTY_LADDER[DUTY_STANDARD].label), max: maxUgWith(0), each: baht(ugEach), month: baht(ugEach / months),
+      }) +
       (mixes ? ` · ${mixes}` : ""),
     );
   }
@@ -982,44 +991,42 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
     const need = wantUg - regular.existingTAs;
     const perHead = regular.free / need;
     advice.push(
-      `นศ. ${regularStudents} คน ตามเกณฑ์ 1 ต่อ ${perTA} ควรมี TA ป.ตรี ${wantUg} คน แต่ที่ภาระงานมาตรฐานงบรับได้ ${maxUgWith(0) + regular.existingTAs} คน ` +
-      `ระบบไม่ลดค่าตอบแทนต่อคนต่ำกว่ามาตรฐานเพื่อแลกจำนวน — ถ้าต้องการ ${wantUg} คน แต่ละคนจะได้ไม่เกิน ≈ ${baht(perHead)}/เทอม (≈ ${baht(perHead / months)}/เดือน) ` +
-      `ซึ่งต่ำกว่างานที่ทำจริง ควรปรึกษาเจ้าหน้าที่เรื่องงบก่อน`,
+      t("นศ. {students} คน ตามเกณฑ์ 1 ต่อ {perTA} ควรมี TA ป.ตรี {want} คน แต่ที่ภาระงานมาตรฐานงบรับได้ {fit} คน ระบบไม่ลดค่าตอบแทนต่อคนต่ำกว่ามาตรฐานเพื่อแลกจำนวน — ถ้าต้องการ {want} คน แต่ละคนจะได้ไม่เกิน ≈ {term}/เทอม (≈ {month}/เดือน) ซึ่งต่ำกว่างานที่ทำจริง ควรปรึกษาเจ้าหน้าที่เรื่องงบก่อน", {
+        students: regularStudents, perTA, want: wantUg, fit: maxUgWith(0) + regular.existingTAs, term: baht(perHead), month: baht(perHead / months),
+      }),
     );
   }
   if (R && !R.best.fits) {
-    advice.push(`งบปกติที่เหลือ ${baht(regular.free)} ไม่พอแม้ TA 1 คนที่ภาระงานขั้นต่ำ (≈ ${baht(R.best.spent)}) — ถ้าส่งคำขอ TA จะถูกตัดตามสัดส่วน`);
+    advice.push(t("งบปกติที่เหลือ {free} ไม่พอแม้ TA 1 คนที่ภาระงานขั้นต่ำ (≈ {cost}) — ถ้าส่งคำขอ TA จะถูกตัดตามสัดส่วน", { free: baht(regular.free), cost: baht(R.best.spent) }));
   }
   if (hasSpecial) {
+    const secs = specialSecs.map(s => s.sec_no).join(", ");
     if (specialCoSits) {
       if (specialExhausted) {
-        advice.push(
-          `sec ภาคพิเศษ (${specialSecs.map(s => s.sec_no).join(", ")}) สอนเวลาเดียวกับ sec ปกติ แต่งบพิเศษ ${baht(special.cap)} ถูกใช้เต็มแล้ว` +
-          (f.tracks.special.existing_lump_baht > 0 ? ` (เหมาจ่ายบัณฑิต ${baht(f.tracks.special.existing_lump_baht)})` : "") +
-          ` — แผนจึงตั้งตรวจงานฝั่งพิเศษเป็น 0 เพราะจะไม่ได้เงิน คาบเรียนยังดูแลไปพร้อมกันได้โดยเบิกจากงบปกติ`,
+        advice.push(f.tracks.special.existing_lump_baht > 0
+          ? t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ แต่งบพิเศษ {cap} ถูกใช้เต็มแล้ว (เหมาจ่ายบัณฑิต {lump}) — แผนจึงตั้งตรวจงานฝั่งพิเศษเป็น 0 เพราะจะไม่ได้เงิน คาบเรียนยังดูแลไปพร้อมกันได้โดยเบิกจากงบปกติ", { secs, cap: baht(special.cap), lump: baht(f.tracks.special.existing_lump_baht) })
+          : t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ แต่งบพิเศษ {cap} ถูกใช้เต็มแล้ว — แผนจึงตั้งตรวจงานฝั่งพิเศษเป็น 0 เพราะจะไม่ได้เงิน คาบเรียนยังดูแลไปพร้อมกันได้โดยเบิกจากงบปกติ", { secs, cap: baht(special.cap) }),
         );
       } else {
         advice.push(
-          `sec ภาคพิเศษ (${specialSecs.map(s => s.sec_no).join(", ")}) สอนเวลาเดียวกับ sec ปกติ — ให้ TA ภาคปกติดูแลไปพร้อมกัน ` +
-          `คาบเรียนไม่คิดเงินซ้ำ งบพิเศษ ${baht(special.cap)} จะถูกใช้เฉพาะตรวจงานฝั่งพิเศษ`,
+          t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ — ให้ TA ภาคปกติดูแลไปพร้อมกัน คาบเรียนไม่คิดเงินซ้ำ งบพิเศษ {cap} จะถูกใช้เฉพาะตรวจงานฝั่งพิเศษ", { secs, cap: baht(special.cap) }),
         );
       }
     } else if (special.free <= 0 && f.tracks.special.existing_lump_baht > 0) {
       advice.push(
-        `งบภาคพิเศษ ${baht(special.cap)} ถูกใช้เต็มแล้วด้วยเหมาจ่ายของ TA บัณฑิตที่อนุมัติไว้ (${baht(f.tracks.special.existing_lump_baht)}) ` +
-        `— TA ป.ตรีที่เพิ่มใน sec ภาคพิเศษจะเบิกชั่วโมงไม่ได้เลย`,
+        t("งบภาคพิเศษ {cap} ถูกใช้เต็มแล้วด้วยเหมาจ่ายของ TA บัณฑิตที่อนุมัติไว้ ({lump}) — TA ป.ตรีที่เพิ่มใน sec ภาคพิเศษจะเบิกชั่วโมงไม่ได้เลย", { cap: baht(special.cap), lump: baht(f.tracks.special.existing_lump_baht) }),
       );
     } else if (ugSpecialOnly.cost.special > special.free) {
       const maxHrsWeek = special.free / f.rates.undergrad_special / Math.max(1, f.class_weeks);
       advice.push(
-        `งบภาคพิเศษที่เหลือ ${baht(special.free)} ไม่พอสำหรับ TA ป.ตรี 1 คนที่ภาระงานมาตรฐาน (≈ ${baht(ugSpecialOnly.cost.special)}) ` +
-        `ต้องจำกัดชั่วโมงฝั่งพิเศษไม่เกิน ≈ ${hrs1(maxHrsWeek)} ชม./สัปดาห์ หรือคาดว่าเบิกได้ไม่ครบ`,
+        t("งบภาคพิเศษที่เหลือ {free} ไม่พอสำหรับ TA ป.ตรี 1 คนที่ภาระงานมาตรฐาน (≈ {cost}) ต้องจำกัดชั่วโมงฝั่งพิเศษไม่เกิน ≈ {hrs} ชม./สัปดาห์ หรือคาดว่าเบิกได้ไม่ครบ", { free: baht(special.free), cost: baht(ugSpecialOnly.cost.special), hrs: hrs1(maxHrsWeek) }),
       );
     }
     if (f.rates.graduate_special_lumpsum > special.free) {
-      advice.push(
-        `อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษ${special.existingTAs > 0 ? "เพิ่ม" : "ของวิชานี้"} — เหมาจ่าย ${baht(f.rates.graduate_special_lumpsum)}/คน/เทอม ` +
-        `มากกว่างบพิเศษที่${special.existingTAs > 0 ? "เหลือ" : "มี"} (${baht(special.free)}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย`,
+      const v = { lump: baht(f.rates.graduate_special_lumpsum), free: baht(special.free) };
+      advice.push(special.existingTAs > 0
+        ? t("อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษเพิ่ม — เหมาจ่าย {lump}/คน/เทอม มากกว่างบพิเศษที่เหลือ ({free}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย", v)
+        : t("อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษของวิชานี้ — เหมาจ่าย {lump}/คน/เทอม มากกว่างบพิเศษที่มี ({free}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย", v),
       );
     }
   }
@@ -1030,7 +1037,7 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
     .filter(({ d }) => d.section_ids.length > 0)
     .map(({ d, index }) => ({
       index,
-      name: d.ta_name || "ยังไม่เลือกชื่อ",
+      name: d.ta_name || t("ยังไม่เลือกชื่อ"),
       level: d.level,
       cost: personCost(d.level, d.section_ids, sid => d.workloads[sid], f, groups, scope),
       share: 0,
@@ -1080,15 +1087,16 @@ const LEVEL_BAR_COLOR: Record<"undergrad" | "grad", string> = {
 };
 
 function PoolCard({ label, tone, pool, weeks }: { label: string; tone: "brand" | "warn"; pool: Pool; weeks: number }) {
+  const { t } = useI18n();
   const pctOf = (n: number) => (pool.cap > 0 ? Math.min(100, (n / pool.cap) * 100) : 0);
   return (
     <div className="rounded-xl border border-border bg-panel p-3">
       <div className="flex items-center justify-between gap-2">
         <Chip tone={tone}>{label}</Chip>
-        <span className="text-[11px] text-muted">นศ. {pool.students} คน · {weeks} สัปดาห์</span>
+        <span className="text-[11px] text-muted">{t("นศ. {students} คน · {weeks} สัปดาห์", { students: pool.students, weeks })}</span>
       </div>
       <div className="mt-2 flex items-baseline justify-between gap-2">
-        <span className="text-xs text-muted">งบทั้งเทอม</span>
+        <span className="text-xs text-muted">{t("งบทั้งเทอม")}</span>
         <span className="text-sm font-semibold tabular-nums">{baht(pool.cap)}</span>
       </div>
       {/* Segmented by TA level rather than the old single traffic-light
@@ -1097,32 +1105,32 @@ function PoolCard({ label, tone, pool, weeks }: { label: string; tone: "brand" |
           is still answered below (เหลือ turns red), just not by this bar. */}
       <div className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-secondary">
         {pool.existingUndergrad > 0.5 && (
-          <Tip content={`ป.ตรี ${baht(pool.existingUndergrad)}`}><div className={LEVEL_BAR_COLOR.undergrad} style={{ width: `${pctOf(pool.existingUndergrad)}%` }} /></Tip>
+          <Tip content={t("ป.ตรี {amount}", { amount: baht(pool.existingUndergrad) })}><div className={LEVEL_BAR_COLOR.undergrad} style={{ width: `${pctOf(pool.existingUndergrad)}%` }} /></Tip>
         )}
         {pool.existingGrad > 0.5 && (
-          <Tip content={`บัณฑิต ${baht(pool.existingGrad)}`}><div className={LEVEL_BAR_COLOR.grad} style={{ width: `${pctOf(pool.existingGrad)}%` }} /></Tip>
+          <Tip content={t("บัณฑิต {amount}", { amount: baht(pool.existingGrad) })}><div className={LEVEL_BAR_COLOR.grad} style={{ width: `${pctOf(pool.existingGrad)}%` }} /></Tip>
         )}
       </div>
       <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[11px]">
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted">
           {pool.existingTAs > 0 ? (
             <>
-              <span>TA เดิม {pool.existingTAs} คน</span>
+              <span>{t("TA เดิม {n} คน", { n: pool.existingTAs })}</span>
               {pool.existingUndergrad > 0.5 && (
                 <span className="inline-flex items-center gap-1">
-                  <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + LEVEL_BAR_COLOR.undergrad} /> ป.ตรี {baht(pool.existingUndergrad)}
+                  <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + LEVEL_BAR_COLOR.undergrad} /> {t("ป.ตรี {amount}", { amount: baht(pool.existingUndergrad) })}
                 </span>
               )}
               {pool.existingGrad > 0.5 && (
                 <span className="inline-flex items-center gap-1">
-                  <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + LEVEL_BAR_COLOR.grad} /> บัณฑิต {baht(pool.existingGrad)}
+                  <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + LEVEL_BAR_COLOR.grad} /> {t("บัณฑิต {amount}", { amount: baht(pool.existingGrad) })}
                 </span>
               )}
             </>
-          ) : "ยังไม่มี TA ที่อนุมัติ"}
+          ) : t("ยังไม่มี TA ที่อนุมัติ")}
         </span>
         <span className={"font-semibold tabular-nums " + (pool.free <= 0 ? "text-danger" : "text-ink-1")}>
-          เหลือ {baht(pool.free)}
+          {t("เหลือ {amount}", { amount: baht(pool.free) })}
         </span>
       </div>
     </div>
@@ -1144,6 +1152,7 @@ interface ManualPoolInput {
 function ManualCalculator({ f, regular, special, hasSpecial, scope, groups }: {
   f: PlanFacts; regular: Pool; special: Pool; hasSpecial: boolean; scope: Scope; groups: Map<string, number>;
 }) {
+  const { t } = useI18n();
   const months = f.rates.term_months || 4;
   const weeks = Math.max(1, f.class_weeks);
   // Typical weekly duty per person from the timetable: เช็คชื่อ 1 + full lab + ตรวจงาน 2,
@@ -1197,14 +1206,14 @@ function ManualCalculator({ f, regular, special, hasSpecial, scope, groups }: {
   return (
     <div className="space-y-3">
       <div className="text-[11px] text-muted">
-        ใส่ตัวเลขเอง ระบบคิดให้ด้วยสูตรเดียวกับแผนแนะนำ: ชั่วโมง/สัปดาห์ × {weeks} สัปดาห์ที่สอนจริง × อัตราตามประกาศ
-        {" · "}เปลี่ยนจำนวน นศ. แล้วเพดานงบจะเลื่อนตามสูตร
+        {t("ใส่ตัวเลขเอง ระบบคิดให้ด้วยสูตรเดียวกับแผนแนะนำ: ชั่วโมง/สัปดาห์ × {weeks} สัปดาห์ที่สอนจริง × อัตราตามประกาศ", { weeks })}
+        {" · "}{t("เปลี่ยนจำนวน นศ. แล้วเพดานงบจะเลื่อนตามสูตร")}
       </div>
       <div className={"grid gap-3 " + (hasSpecial ? "lg:grid-cols-2" : "")}>
-        <ManualPoolCard label="ภาคปกติ" tone="brand" inp={reg} onChange={setReg} res={R} months={months} rateNote={`ป.ตรี ${baht(f.rates.undergrad_regular)}/ชม. · บัณฑิต ${baht(f.rates.graduate_regular_hourly)}/ชม. (10–12 ชม./สัปดาห์)`} gradHrsEditable />
+        <ManualPoolCard label={t("ภาคปกติ")} tone="brand" inp={reg} onChange={setReg} res={R} months={months} rateNote={t("ป.ตรี {ug}/ชม. · บัณฑิต {grad}/ชม. (10–12 ชม./สัปดาห์)", { ug: baht(f.rates.undergrad_regular), grad: baht(f.rates.graduate_regular_hourly) })} gradHrsEditable />
         {hasSpecial && (
-          <ManualPoolCard label="ภาคพิเศษ" tone="warn" inp={spc} onChange={setSpc} res={S} months={months}
-            rateNote={`ป.ตรี ${baht(f.rates.undergrad_special)}/ชม. ไม่เกิน ${baht(f.rates.ug_special_monthly_cap)}/เดือน · บัณฑิต เหมาจ่าย ${baht(f.rates.graduate_special_lumpsum)}/คน/เทอม`} />
+          <ManualPoolCard label={t("ภาคพิเศษ")} tone="warn" inp={spc} onChange={setSpc} res={S} months={months}
+            rateNote={t("ป.ตรี {ug}/ชม. ไม่เกิน {cap}/เดือน · บัณฑิต เหมาจ่าย {lump}/คน/เทอม", { ug: baht(f.rates.undergrad_special), cap: baht(f.rates.ug_special_monthly_cap), lump: baht(f.rates.graduate_special_lumpsum) })} />
         )}
       </div>
     </div>
@@ -1216,6 +1225,7 @@ function ManualPoolCard({ label, tone, inp, onChange, res, months, rateNote, gra
   res: { cap: number; free: number; ugEach: number; gradEach: number; total: number; left: number; ugCapped: boolean };
   months: number; rateNote: string; gradHrsEditable?: boolean;
 }) {
+  const { t } = useI18n();
   const set = (patch: Partial<ManualPoolInput>) => onChange({ ...inp, ...patch });
   const num = (v: string, min: number, max: number) => {
     const n = Math.floor(Number(v));
@@ -1230,49 +1240,49 @@ function ManualPoolCard({ label, tone, inp, onChange, res, months, rateNote, gra
         <span className="text-[11px] text-muted">{rateNote}</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 items-end sm:grid-cols-3">
-        <label className="block text-[11px] text-muted">นศ. (คน)
+        <label className="block text-[11px] text-muted">{t("นศ. (คน)")}
           <input className={field} type="number" min={0} value={inp.students} onChange={e => set({ students: num(e.target.value, 0, 2000) })} />
         </label>
-        <Stat label="งบตามสูตร/เทอม" value={baht(res.cap)} />
-        <Stat label="เหลือให้วางแผน" value={baht(res.free)} />
+        <Stat label={t("งบตามสูตร/เทอม")} value={baht(res.cap)} />
+        <Stat label={t("เหลือให้วางแผน")} value={baht(res.free)} />
       </div>
       <div className="mt-3 grid grid-cols-[3.5rem_1fr_1fr] sm:grid-cols-[6rem_1fr_1fr] gap-x-2 gap-y-2 items-center text-xs">
-        <span>ป.ตรี</span>
-        <label className="text-[11px] text-muted">จำนวน (คน)
+        <span>{t("ป.ตรี")}</span>
+        <label className="text-[11px] text-muted">{t("จำนวน (คน)")}
           <input className={field} type="number" min={0} max={20} value={inp.ugCount} onChange={e => set({ ugCount: num(e.target.value, 0, 20) })} />
         </label>
-        <label className="text-[11px] text-muted">ชม./สัปดาห์/คน
+        <label className="text-[11px] text-muted">{t("ชม./สัปดาห์/คน")}
           <input className={field} type="number" min={0} max={35} value={inp.ugHrs} onChange={e => set({ ugHrs: num(e.target.value, 0, 35) })} />
         </label>
         <span />
         <div className="col-span-2 text-[11px] text-muted">
-          คนละ ≈ {baht(res.ugEach)}/เทอม (≈ {baht(res.ugEach / months)}/เดือน){res.ugCapped && " · ชนเพดาน/เดือนตามประกาศ"}
+          {t("คนละ ≈ {term}/เทอม (≈ {month}/เดือน)", { term: baht(res.ugEach), month: baht(res.ugEach / months) })}{res.ugCapped && <>{" · "}{t("ชนเพดาน/เดือนตามประกาศ")}</>}
         </div>
-        <span>ป.โท/เอก</span>
-        <label className="text-[11px] text-muted">จำนวน (คน)
+        <span>{t("ป.โท/เอก")}</span>
+        <label className="text-[11px] text-muted">{t("จำนวน (คน)")}
           <input className={field} type="number" min={0} max={5} value={inp.gradCount} onChange={e => set({ gradCount: num(e.target.value, 0, 5) })} />
         </label>
-        <label className="text-[11px] text-muted">ชม./สัปดาห์/คน
+        <label className="text-[11px] text-muted">{t("ชม./สัปดาห์/คน")}
           <input className={field} type="number" min={0} max={12} value={inp.gradHrs} disabled={!gradHrsEditable}
             onChange={e => set({ gradHrs: num(e.target.value, 0, 12) })} />
         </label>
         <span />
         <div className="col-span-2 text-[11px] text-muted">
-          คนละ ≈ {baht(res.gradEach)}/เทอม (≈ {baht(res.gradEach / months)}/เดือน)
-          {gradHrsEditable ? " · คิดเงินเฉพาะคาบสอน + ตรวจงาน ≤ 2 ชม. ส่วนเตรียมสอนไม่คิด" : " · เหมาจ่าย ไม่ขึ้นกับชั่วโมง"}
+          {t("คนละ ≈ {term}/เทอม (≈ {month}/เดือน)", { term: baht(res.gradEach), month: baht(res.gradEach / months) })}
+          {" · "}{gradHrsEditable ? t("คิดเงินเฉพาะคาบสอน + ตรวจงาน ≤ 2 ชม. ส่วนเตรียมสอนไม่คิด") : t("เหมาจ่าย ไม่ขึ้นกับชั่วโมง")}
         </div>
       </div>
       <div className="mt-3 space-y-0.5 border-t border-hairline pt-2 text-xs">
-        <Row label="รวมต้องจ่ายทั้งเทอม" value={baht(res.total)} strong />
-        <Row label={over ? "เกินงบ" : "เหลืองบ"} value={baht(Math.abs(res.left))} tone={over ? "danger" : undefined} />
+        <Row label={t("รวมต้องจ่ายทั้งเทอม")} value={baht(res.total)} strong />
+        <Row label={over ? t("เกินงบ") : t("เหลืองบ")} value={baht(Math.abs(res.left))} tone={over ? "danger" : undefined} />
       </div>
       <div className={
         "mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] " +
         (res.total === 0 ? "bg-surface-secondary text-muted" : over ? "bg-danger-soft text-danger-soft-foreground" : "bg-success-soft text-success-soft-foreground")
       }>
-        {res.total === 0 ? <><Users size={12} /> ใส่จำนวน TA เพื่อดูว่างบพอไหม</>
-          : over ? <><TriangleAlert size={12} /> เกินงบ — จะถูกตัดตามสัดส่วน</>
-          : <><CircleCheck size={12} /> พอดีงบ — เบิกได้เต็ม</>}
+        {res.total === 0 ? <><Users size={12} /> {t("ใส่จำนวน TA เพื่อดูว่างบพอไหม")}</>
+          : over ? <><TriangleAlert size={12} /> {t("เกินงบ — จะถูกตัดตามสัดส่วน")}</>
+          : <><CircleCheck size={12} /> {t("พอดีงบ — เบิกได้เต็ม")}</>}
       </div>
     </div>
   );
@@ -1309,6 +1319,7 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
   /** A special-pool plan: only that pool's balance is meaningful. */
   specialOnly?: boolean;
 }) {
+  const { t } = useI18n();
   const total = o.cost.regular + o.cost.special + o.cost.lump;
   const [more, setMore] = useState(false);
   return (
@@ -1324,15 +1335,15 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
       <div className="mt-1 text-[11px] text-ink-2">{o.duty}</div>
       <div className="mt-0.5 text-[11px] text-muted">{o.detail}</div>
       <div className="mt-0.5 text-[11px] text-muted">
-        TA จะได้ {o.ug > 0 && <>ป.ตรี ≈ <b className="text-ink-1">{baht(o.perMonthUg)}/เดือน</b></>}
+        {t("TA จะได้")} {o.ug > 0 && t.rich("ป.ตรี ≈ {amount}", { amount: <b className="text-ink-1">{t("{amount}/เดือน", { amount: baht(o.perMonthUg) })}</b> })}
         {o.ug > 0 && o.grad > 0 && " · "}
-        {o.grad > 0 && <>บัณฑิต ≈ <b className="text-ink-1">{baht(o.perMonthGrad)}/เดือน</b></>}
+        {o.grad > 0 && t.rich("บัณฑิต ≈ {amount}", { amount: <b className="text-ink-1">{t("{amount}/เดือน", { amount: baht(o.perMonthGrad) })}</b> })}
       </div>
       <div className="mt-2 space-y-0.5 text-xs">
-        <Row label="ใช้งบรวม" value={baht(total)} strong />
-        {!specialOnly && <Row label="เหลืองบปกติ" value={baht(o.regularLeft)} tone={o.regularLeft < 0 ? "danger" : undefined} />}
+        <Row label={t("ใช้งบรวม")} value={baht(total)} strong />
+        {!specialOnly && <Row label={t("เหลืองบปกติ")} value={baht(o.regularLeft)} tone={o.regularLeft < 0 ? "danger" : undefined} />}
         {hasSpecial && (specialOnly || o.cost.special > 0 || o.cost.lump > 0 || o.specialLeft < 0) && (
-          <Row label="เหลืองบพิเศษ" value={baht(o.specialLeft)} tone={o.specialLeft < 0 ? "danger" : undefined} />
+          <Row label={t("เหลืองบพิเศษ")} value={baht(o.specialLeft)} tone={o.specialLeft < 0 ? "danger" : undefined} />
         )}
       </div>
       <div className={
@@ -1340,12 +1351,12 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
         (o.fits ? "bg-success-soft text-success-soft-foreground" : "bg-danger-soft text-danger-soft-foreground")
       }>
         {o.fits ? <CircleCheck size={12} /> : <TriangleAlert size={12} />}
-        {o.fits ? "พอดีงบ — เบิกได้เต็ม" : `เกินงบ ${baht(Math.max(0, -o.regularLeft) + Math.max(0, -o.specialLeft))} — จะถูกตัดตามสัดส่วน`}
+        {o.fits ? t("พอดีงบ — เบิกได้เต็ม") : t("เกินงบ {amount} — จะถูกตัดตามสัดส่วน", { amount: baht(Math.max(0, -o.regularLeft) + Math.max(0, -o.specialLeft)) })}
       </div>
       <button type="button" onClick={() => setMore(m => !m)} aria-expanded={more}
         className="mt-2 flex items-center gap-1 self-start text-[11px] font-medium text-accent hover:underline">
         <ChevronDown size={12} className={"transition-transform " + (more ? "rotate-180" : "")} />
-        {more ? "ซ่อนรายละเอียด" : "ดูรายละเอียดแผนนี้"}
+        {more ? t("ซ่อนรายละเอียด") : t("ดูรายละเอียดแผนนี้")}
       </button>
       {more && <OptionDetail o={o} total={total} />}
       {onApply && (
@@ -1366,19 +1377,20 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
  * and the request form use — this only lays them out.
  */
 function OptionDetail({ o, total }: { o: Option; total: number }) {
+  const { t } = useI18n();
   const heads = o.ug + o.grad;
   const ratio = heads > 0 ? o.students / heads : 0;
   const money: [string, number][] = [
-    ["งบปกติ", o.cost.regular],
-    ["งบพิเศษ (รายชั่วโมง)", o.cost.special],
-    ["งบพิเศษ (เหมาจ่ายบัณฑิต)", o.cost.lump],
+    [t("งบปกติ"), o.cost.regular],
+    [t("งบพิเศษ (รายชั่วโมง)"), o.cost.special],
+    [t("งบพิเศษ (เหมาจ่ายบัณฑิต)"), o.cost.lump],
   ];
   return (
     <div className="mt-2 space-y-2 rounded-lg border border-hairline bg-panel/70 p-2.5 text-[11px]">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Stat label="TA ทั้งหมด" value={`${heads} คน`} />
-        <Stat label="นศ. ที่ดูแล" value={`${o.students} คน`} />
-        <Stat label="นศ. ต่อ TA" value={heads > 0 ? `≈ ${hrs1(ratio)} คน` : "—"} />
+        <Stat label={t("TA ทั้งหมด")} value={t("{n} คน", { n: heads })} />
+        <Stat label={t("นศ. ที่ดูแล")} value={t("{n} คน", { n: o.students })} />
+        <Stat label={t("นศ. ต่อ TA")} value={heads > 0 ? t("≈ {n} คน", { n: hrs1(ratio) }) : "—"} />
       </div>
 
       {o.sittings.map(s => {
@@ -1388,27 +1400,28 @@ function OptionDetail({ o, total }: { o: Option; total: number }) {
             <div className="flex flex-wrap items-baseline justify-between gap-x-2">
               <span className="font-semibold text-ink-1">{s.label}</span>
               <span className="text-muted">
-                นศ. {s.students} คน · TA {n} คน
-                {s.ug > 0 && <> (ป.ตรี {s.ug}{s.grad > 0 && ` + บัณฑิต ${s.grad}`})</>}
-                {s.ug === 0 && s.grad > 0 && <> (บัณฑิต {s.grad})</>}
-                {" · "}≈ {hrs1(n > 0 ? s.students / n : 0)} นศ./TA
+                {t("นศ. {students} คน · TA {n} คน", { students: s.students, n })}
+                {s.ug > 0 && <>{" "}{s.grad > 0 ? t("(ป.ตรี {ug} + บัณฑิต {grad})", { ug: s.ug, grad: s.grad }) : t("(ป.ตรี {ug})", { ug: s.ug })}</>}
+                {s.ug === 0 && s.grad > 0 && <>{" "}{t("(บัณฑิต {grad})", { grad: s.grad })}</>}
+                {" · "}{t("≈ {ratio} นศ./TA", { ratio: hrs1(n > 0 ? s.students / n : 0) })}
               </span>
             </div>
-            {s.ugPlan && <PersonPlan title={`ป.ตรี ${s.ug} คน — แต่ละคน`} p={s.ugPlan} />}
-            {s.gradPlan && <PersonPlan title={`บัณฑิต ${s.grad} คน — แต่ละคน`} p={s.gradPlan} />}
+            {s.ugPlan && <PersonPlan title={t("ป.ตรี {n} คน — แต่ละคน", { n: s.ug })} p={s.ugPlan} />}
+            {s.gradPlan && <PersonPlan title={t("บัณฑิต {n} คน — แต่ละคน", { n: s.grad })} p={s.gradPlan} />}
           </div>
         );
       })}
 
       <div className="space-y-0.5 border-t border-hairline pt-1.5">
         {money.filter(([, v]) => v > 0.5).map(([label, v]) => <Row key={label} label={label} value={baht(v)} />)}
-        <Row label="รวมทั้งแผน" value={baht(total)} strong />
+        <Row label={t("รวมทั้งแผน")} value={baht(total)} strong />
       </div>
     </div>
   );
 }
 
 function PersonPlan({ title, p }: { title: string; p: OptionPerson }) {
+  const { t } = useI18n();
   return (
     <div className="mt-1.5">
       <div className="font-medium text-ink-2">{title}</div>
@@ -1416,19 +1429,20 @@ function PersonPlan({ title, p }: { title: string; p: OptionPerson }) {
         {p.duties.map(d => (
           <li key={d.label} className="flex items-baseline justify-between gap-2">
             <span className="text-muted">{d.label}</span>
-            <span className="tabular-nums">{hrs1(d.hrs)} ชม./สัปดาห์</span>
+            <span className="tabular-nums">{t("{hrs} ชม./สัปดาห์", { hrs: hrs1(d.hrs) })}</span>
           </li>
         ))}
       </ul>
       <div className="mt-0.5 flex items-baseline justify-between gap-2 border-t border-dashed border-hairline pt-0.5">
-        <span className="text-muted">คิดเงิน {hrs1(p.weeklyHrs)} ชม./สัปดาห์ · {hrs1(p.termHrs)} ชม./เทอม</span>
-        <span className="tabular-nums font-semibold text-ink-1">{baht(p.termBaht)} <span className="font-normal text-muted">(≈ {baht(p.monthBaht)}/เดือน)</span></span>
+        <span className="text-muted">{t("คิดเงิน {weekly} ชม./สัปดาห์ · {term} ชม./เทอม", { weekly: hrs1(p.weeklyHrs), term: hrs1(p.termHrs) })}</span>
+        <span className="tabular-nums font-semibold text-ink-1">{baht(p.termBaht)} <span className="font-normal text-muted">{t("(≈ {amount}/เดือน)", { amount: baht(p.monthBaht) })}</span></span>
       </div>
     </div>
   );
 }
 
 function DraftCard({ ev, regular, special, hasSpecial, months }: { ev: DraftEval; regular: Pool; special: Pool; hasSpecial: boolean; months: number }) {
+  const { t } = useI18n();
   const tone = ev.verdict === "over" ? "danger" : ev.verdict === "tight" ? "warn" : "success";
   return (
     <div className={
@@ -1437,12 +1451,12 @@ function DraftCard({ ev, regular, special, hasSpecial, months }: { ev: DraftEval
     }>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold">
-          <Users size={14} /> TA ที่กำลังจะขอ ({ev.people.length} คน) — ประมาณการ
+          <Users size={14} /> {t("TA ที่กำลังจะขอ ({n} คน) — ประมาณการ", { n: ev.people.length })}
         </div>
-        <Tip content={ev.verdict === "tight" ? "งบภาคปกติ (รวม TA เดิม) เหลือไม่ถึง 5% ของเพดาน" : undefined}>
+        <Tip content={ev.verdict === "tight" ? t("งบภาคปกติ (รวม TA เดิม) เหลือไม่ถึง 5% ของเพดาน") : undefined}>
           <span>
             <Chip tone={tone === "danger" ? "danger" : tone === "warn" ? "warn" : "success"}>
-              {ev.verdict === "over" ? <><TriangleAlert size={12} /> เกินงบ</> : ev.verdict === "tight" ? "งบตึง" : <><CircleCheck size={12} /> พอดีงบ</>}
+              {ev.verdict === "over" ? <><TriangleAlert size={12} /> {t("เกินงบ")}</> : ev.verdict === "tight" ? t("งบตึง") : <><CircleCheck size={12} /> {t("พอดีงบ")}</>}
             </Chip>
           </span>
         </Tip>
@@ -1452,33 +1466,32 @@ function DraftCard({ ev, regular, special, hasSpecial, months }: { ev: DraftEval
           const owed = p.cost.regular + p.cost.special + p.cost.lump;
           return (
             <li key={i} className="flex items-baseline justify-between gap-2 py-1">
-              <Tip content={`${p.name}\n${isGradLevel(p.level) ? "บัณฑิต" : "ป.ตรี"} ${hrs1(p.cost.hoursRegular + p.cost.hoursSpecial)} ชม./เทอม`}>
+              <Tip content={`${p.name}\n` + t("{level} {hrs} ชม./เทอม", { level: isGradLevel(p.level) ? t("บัณฑิต") : t("ป.ตรี"), hrs: hrs1(p.cost.hoursRegular + p.cost.hoursSpecial) })}>
                 <span className="min-w-0 truncate">
-                  {p.name} <span className="text-muted">· {isGradLevel(p.level) ? "บัณฑิต" : "ป.ตรี"} · {hrs1(p.cost.hoursRegular + p.cost.hoursSpecial)} ชม./เทอม</span>
+                  {p.name} <span className="text-muted">· {isGradLevel(p.level) ? t("บัณฑิต") : t("ป.ตรี")} · {t("{hrs} ชม./เทอม", { hrs: hrs1(p.cost.hoursRegular + p.cost.hoursSpecial) })}</span>
                 </span>
               </Tip>
               <span className="shrink-0 tabular-nums">
                 {p.share < owed - 0.5
-                  ? <Tip content={"ตัวเลขที่ขีดฆ่าคือค่าตอบแทนตามชั่วโมงงาน\nตัวเลขหลังลูกศรคือยอดประมาณการที่จะได้รับจริง เมื่องบไม่พอระบบแบ่งตามสัดส่วน"}>
+                  ? <Tip content={t("ตัวเลขที่ขีดฆ่าคือค่าตอบแทนตามชั่วโมงงาน\nตัวเลขหลังลูกศรคือยอดประมาณการที่จะได้รับจริง เมื่องบไม่พอระบบแบ่งตามสัดส่วน")}>
                       <span><s className="text-muted">{baht(owed)}</s> → <b>{baht(p.share)}</b></span>
                     </Tip>
                   : <b>{baht(owed)}</b>}
-                <span className="text-muted"> (≈ {baht(p.share / months)}/เดือน)</span>
+                <span className="text-muted"> {t("(≈ {amount}/เดือน)", { amount: baht(p.share / months) })}</span>
               </span>
             </li>
           );
         })}
       </ul>
       <div className="mt-2 grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-2">
-        <Row label="ภาคปกติ: ใช้ทั้งหมด (รวม TA เดิม)" value={`${baht(ev.regularTotal)} / ${baht(regular.cap)}`} tone={ev.overRegular > 0 ? "danger" : undefined} />
-        {hasSpecial && <Row label="ภาคพิเศษ: ใช้ทั้งหมด" value={`${baht(ev.specialTotal)} / ${baht(special.cap)}`} tone={ev.overSpecial > 0 ? "danger" : undefined} />}
+        <Row label={t("ภาคปกติ: ใช้ทั้งหมด (รวม TA เดิม)")} value={`${baht(ev.regularTotal)} / ${baht(regular.cap)}`} tone={ev.overRegular > 0 ? "danger" : undefined} />
+        {hasSpecial && <Row label={t("ภาคพิเศษ: ใช้ทั้งหมด")} value={`${baht(ev.specialTotal)} / ${baht(special.cap)}`} tone={ev.overSpecial > 0 ? "danger" : undefined} />}
       </div>
       {ev.verdict === "over" && (
         <div className="mt-2 flex items-start gap-1.5 text-[11px] text-danger-soft-foreground">
           <Wallet size={12} className="mt-0.5 shrink-0" />
           <span>
-            เกินงบ {baht(ev.overRegular + ev.overSpecial)} — ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขหลังลูกศร) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า
-            หรือลดจำนวนคน/ชั่วโมงตรวจงานให้พอดี
+            {t("เกินงบ {amount} — ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขหลังลูกศร) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า หรือลดจำนวนคน/ชั่วโมงตรวจงานให้พอดี", { amount: baht(ev.overRegular + ev.overSpecial) })}
           </span>
         </div>
       )}
@@ -1493,6 +1506,7 @@ function DraftCard({ ev, regular, special, hasSpecial, months }: { ev: DraftEval
  * before the pool ran short.
  */
 function ExistingCard({ f }: { f: PlanFacts }) {
+  const { t } = useI18n();
   const totalOwed = f.existing.reduce((s, p) => s + p.regular_baht + p.special_baht + p.lump_baht, 0);
   const totalPaid = f.existing.reduce((s, p) => s + p.regular_paid + p.special_paid + p.lump_baht, 0);
   const short = totalPaid < totalOwed - 0.5;
@@ -1500,30 +1514,33 @@ function ExistingCard({ f }: { f: PlanFacts }) {
     <div className="rounded-xl border border-border bg-panel p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold">
-          <Users size={14} /> TA ที่อนุมัติแล้ว ({f.existing.length} คน) — เงินที่แต่ละคนจะได้
+          <Users size={14} /> {t("TA ที่อนุมัติแล้ว ({n} คน) — เงินที่แต่ละคนจะได้", { n: f.existing.length })}
         </div>
-        <span className="text-[11px] text-muted">จากงานที่ลงเวลาไว้ถึงตอนนี้ (รวมที่รออนุมัติ)</span>
+        <span className="text-[11px] text-muted">{t("จากงานที่ลงเวลาไว้ถึงตอนนี้ (รวมที่รออนุมัติ)")}</span>
       </div>
       <ul className="mt-2 divide-y divide-hairline text-xs">
         {f.existing.map(p => {
           const owed = p.regular_baht + p.special_baht + p.lump_baht;
           const paid = p.regular_paid + p.special_paid + p.lump_baht;
           const cut = paid < owed - 0.5;
+          const level = isGradLevel(p.level) ? t("บัณฑิต") : t("ป.ตรี");
+          const trackNames = p.tracks.map(k => k === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ"));
+          const tracks = trackNames.length ? trackNames.reduce((a, b) => t("{a} และ {b}", { a, b })) : "";
           return (
             <li key={p.ta_id} className="flex items-baseline justify-between gap-2 py-1">
-              <Tip content={`${p.name}\n${isGradLevel(p.level) ? "บัณฑิต" : "ป.ตรี"} ${p.tracks.map(t => t === "special" ? "ภาคพิเศษ" : "ภาคปกติ").join(" และ ")}${p.lump_baht > 0 ? " เหมาจ่าย" : ""}`}>
+              <Tip content={`${p.name}\n` + (p.lump_baht > 0 ? t("{level} {tracks} เหมาจ่าย", { level, tracks }) : `${level} ${tracks}`)}>
               <span className="min-w-0 truncate">
                 {p.name}
                 <span className="text-muted">
-                  {" · "}{isGradLevel(p.level) ? "บัณฑิต" : "ป.ตรี"}
-                  {" · "}{p.tracks.map(t => t === "special" ? "พิเศษ" : "ปกติ").join("+")}
-                  {p.lump_baht > 0 && " · เหมาจ่าย"}
+                  {" · "}{level}
+                  {" · "}{p.tracks.map(k => k === "special" ? t("พิเศษ") : t("ปกติ")).join("+")}
+                  {p.lump_baht > 0 && <>{" · "}{t("เหมาจ่าย")}</>}
                 </span>
               </span>
               </Tip>
               <span className="shrink-0 tabular-nums">
                 {cut
-                  ? <Tip content={"ตัวเลขที่ขีดฆ่าคือค่าตอบแทนตามงานที่ลงเวลา\nตัวเลขหลังลูกศรคือยอดที่จะได้รับจริง เมื่องบไม่พอระบบแบ่งตามสัดส่วน"}>
+                  ? <Tip content={t("ตัวเลขที่ขีดฆ่าคือค่าตอบแทนตามงานที่ลงเวลา\nตัวเลขหลังลูกศรคือยอดที่จะได้รับจริง เมื่องบไม่พอระบบแบ่งตามสัดส่วน")}>
                       <span><s className="text-muted">{baht(owed)}</s> → <b>{baht(paid)}</b></span>
                     </Tip>
                   : <b>{baht(owed)}</b>}
@@ -1533,10 +1550,10 @@ function ExistingCard({ f }: { f: PlanFacts }) {
         })}
       </ul>
       <div className="mt-2 flex items-baseline justify-between border-t border-hairline pt-2 text-xs font-semibold">
-        <span>รวม</span>
+        <span>{t("รวม")}</span>
         <span className="tabular-nums">
           {short
-            ? <Tip content={"ตัวเลขที่ขีดฆ่าคือค่าตอบแทนรวมตามงานที่ลงเวลา\nตัวเลขหลังลูกศรคือยอดรวมที่จ่ายได้จริงภายในงบ"}>
+            ? <Tip content={t("ตัวเลขที่ขีดฆ่าคือค่าตอบแทนรวมตามงานที่ลงเวลา\nตัวเลขหลังลูกศรคือยอดรวมที่จ่ายได้จริงภายในงบ")}>
                 <span><s className="font-normal text-muted">{baht(totalOwed)}</s> → {baht(totalPaid)}</span>
               </Tip>
             : baht(totalOwed)}
@@ -1544,7 +1561,7 @@ function ExistingCard({ f }: { f: PlanFacts }) {
       </div>
       {short && (
         <div className="mt-1 text-[11px] text-muted">
-          งบไม่พอสำหรับงานทั้งหมด ระบบแบ่งตามสัดส่วนที่แต่ละคนทำ — เลือกว่าจะให้ส่วนที่ขาดตกเดือนไหนได้ในหน้า “อนุมัติรายงาน TA”
+          {t("งบไม่พอสำหรับงานทั้งหมด ระบบแบ่งตามสัดส่วนที่แต่ละคนทำ — เลือกว่าจะให้ส่วนที่ขาดตกเดือนไหนได้ในหน้า “อนุมัติรายงาน TA”")}
         </div>
       )}
     </div>

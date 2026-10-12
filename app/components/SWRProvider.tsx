@@ -3,6 +3,7 @@ import { SWRConfig } from "swr";
 import { Toast } from "@heroui/react";
 import { toast } from "../lib/toast";
 import { fetcher, ApiError } from "../lib/api";
+import { tc } from "../lib/i18n/client";
 
 export default function SWRProvider({ children }: { children: React.ReactNode }) {
   return (
@@ -16,7 +17,7 @@ export default function SWRProvider({ children }: { children: React.ReactNode })
           // real read failures the user can't otherwise see, and stay quiet for
           // auth so we don't stack a toast on top of a redirect.
           if (err instanceof ApiError && (err.status === 401 || err.status === 403)) return;
-          const msg = err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ";
+          const msg = err instanceof Error ? err.message : tc("โหลดข้อมูลไม่สำเร็จ");
           toast.danger(msg);
         },
       }}

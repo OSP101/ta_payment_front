@@ -19,6 +19,10 @@ import { type DataColumn } from "../../../../components/DataTable";
 import { Skel, SkelRegion, SkelRows, SkelValue } from "../../../../components/Skeletons";
 import { LockedActionButton, useTAApproval } from "../../../TAGate";
 import { ClaimSheetDownload } from "./ClaimSheetDownload";
+import { msg, useI18n, type I18n, type TFn } from "../../../../lib/i18n/client";
+
+// What the module-level date helpers below need from useI18n().
+type DateFmt = Pick<I18n, "t" | "monthName" | "year">;
 
 // Max billable hours per single work-log entry. Kept in sync with backend.
 const MAX_ROW_HOURS = 7;
@@ -62,6 +66,7 @@ function HoursStepper({
     const snapped = Math.round(n * 2) / 2;
     return Math.max(min, Math.min(max, snapped));
   };
+  const { t } = useI18n();
   const dec = () => onChange(clamp(value - step));
   const inc = () => onChange(clamp(value + step));
   return (
@@ -73,7 +78,7 @@ function HoursStepper({
         onClick={dec}
         disabled={value <= min}
         className="px-3 text-base leading-none text-muted hover:bg-surface-secondary disabled:opacity-40 disabled:cursor-not-allowed"
-        aria-label="ลดจำนวนชั่วโมง"
+        aria-label={t("ลดจำนวนชั่วโมง")}
       >
         −
       </button>
@@ -87,14 +92,14 @@ function HoursStepper({
         value={Math.round(value * 100) / 100}
         onChange={e => onChange(clamp(Number(e.target.value)))}
         className={`${fullWidth ? "flex-1 min-w-0" : "w-14"} text-center tabular bg-transparent border-x border-(--hairline) px-1 py-1.5 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-        aria-label="จำนวนชั่วโมง"
+        aria-label={t("จำนวนชั่วโมง")}
       />
       <button
         type="button"
         onClick={inc}
         disabled={value >= max}
         className="px-3 text-base leading-none text-muted hover:bg-surface-secondary disabled:opacity-40 disabled:cursor-not-allowed"
-        aria-label="เพิ่มจำนวนชั่วโมง"
+        aria-label={t("เพิ่มจำนวนชั่วโมง")}
       >
         +
       </button>
@@ -131,25 +136,25 @@ function endAfter(start: string, hours: number): string | null {
 
 // Returns null when the row is savable, otherwise a Thai reason. Enforced
 // client-side so the user gets instant feedback before hitting the server.
-function validateRow(w: WorkLog): string | null {
-  if (!w.work_date) return "โปรดระบุวันที่ปฏิบัติงาน";
-  if (!w.start_time || !w.end_time) return "โปรดระบุเวลาเริ่มและเวลาสิ้นสุด";
+function validateRow(w: WorkLog, t: TFn): string | null {
+  if (!w.work_date) return t("โปรดระบุวันที่ปฏิบัติงาน");
+  if (!w.start_time || !w.end_time) return t("โปรดระบุเวลาเริ่มและเวลาสิ้นสุด");
   const s = parseHM(w.start_time);
   const e = parseHM(w.end_time);
-  if (Number.isNaN(s) || Number.isNaN(e)) return "รูปแบบเวลาไม่ถูกต้อง";
-  if (e <= s) return "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม";
-  if (!(w.hours > 0)) return "จำนวนชั่วโมงต้องมากกว่า 0";
-  if (w.hours > MAX_ROW_HOURS) return `จำนวนชั่วโมงต้องไม่เกิน ${MAX_ROW_HOURS} ชั่วโมงต่อรายการ`;
+  if (Number.isNaN(s) || Number.isNaN(e)) return t("รูปแบบเวลาไม่ถูกต้อง");
+  if (e <= s) return t("เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม");
+  if (!(w.hours > 0)) return t("จำนวนชั่วโมงต้องมากกว่า 0");
+  if (w.hours > MAX_ROW_HOURS) return t("จำนวนชั่วโมงต้องไม่เกิน {max} ชั่วโมงต่อรายการ", { max: MAX_ROW_HOURS });
   // Tolerance matches the server's 0.01h (worklog.go validateWorkLogEntry) so
   // a row that passes here can't bounce off the API with the same complaint.
   const span = (e - s) / 60;
   if (Math.abs(span - w.hours) > 0.01) {
-    return `จำนวนชั่วโมง (${w.hours}) ไม่ตรงกับช่วงเวลา ${w.start_time}–${w.end_time} (${span.toFixed(2)} ชม.) ปรับชั่วโมงให้ตรงกับช่วงเวลา`;
+    return t("จำนวนชั่วโมง ({hours}) ไม่ตรงกับช่วงเวลา {start}–{end} ({span} ชม.) ปรับชั่วโมงให้ตรงกับช่วงเวลา", { hours: w.hours, start: w.start_time, end: w.end_time, span: span.toFixed(2) });
   }
   // Q&A rule 2: "อื่นๆ" must be tagged with the parent session type so the
   // server can enforce the per-session credit-hour cap.
   if (w.activity === "other" && w.parent_kind !== "lecture" && w.parent_kind !== "lab") {
-    return "กรุณาระบุประเภทกิจกรรมหลัก (บรรยาย/ปฏิบัติการ) สำหรับกิจกรรมอื่นๆ";
+    return t("กรุณาระบุประเภทกิจกรรมหลัก (บรรยาย/ปฏิบัติการ) สำหรับกิจกรรมอื่นๆ");
   }
   return null;
 }
@@ -168,7 +173,7 @@ interface Shortfall {
 }
 
 /** ภาคปกติ / ภาคพิเศษ are separate budgets, so shortfalls are named by pool. */
-const TRACK_LABEL: Record<string, string> = { regular: "ภาคปกติ", special: "ภาคพิเศษ" };
+const TRACK_LABEL: Record<string, string> = { regular: msg("ภาคปกติ"), special: msg("ภาคพิเศษ") };
 
 interface MyPeriod {
   period_id: string;
@@ -502,16 +507,16 @@ interface BusyBlock {
 }
 
 const PARENT_KIND_LABEL: Record<string, string> = {
-  lecture: "คู่กับบรรยาย",
-  lab: "คู่กับปฏิบัติการ",
+  lecture: msg("คู่กับบรรยาย"),
+  lab: msg("คู่กับปฏิบัติการ"),
 };
 
 const ACTIVITY_LABEL: Record<string, string> = {
-  lecture: "บรรยาย",
-  lab: "ปฏิบัติการ",
-  review: "ตรวจงาน",
-  makeup: "ชดเชย",
-  other: "อื่น ๆ",
+  lecture: msg("บรรยาย"),
+  lab: msg("ปฏิบัติการ"),
+  review: msg("ตรวจงาน"),
+  makeup: msg("ชดเชย"),
+  other: msg("อื่น ๆ"),
 };
 
 // One fixed colour per activity, used everywhere an activity breakdown is
@@ -549,37 +554,26 @@ function allowedParentKindsFor(scope: Scope | undefined): ("lecture" | "lab")[] 
 }
 
 const SCOPE_LABEL: Record<Scope, string> = {
-  lecture: "บรรยายเท่านั้น",
-  lab: "ปฏิบัติการเท่านั้น",
-  both: "บรรยายและปฏิบัติการ",
+  lecture: msg("บรรยายเท่านั้น"),
+  lab: msg("ปฏิบัติการเท่านั้น"),
+  both: msg("บรรยายและปฏิบัติการ"),
 };
-
-const MONTH_TH = [
-  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-];
 
 // Single-char Thai weekday labels. Distinct from DAY_TH_SHORT below, which
 // spells out full names for the review-schedule panel.
-const DOW_ABBR_TH = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-
-// Thai month abbreviations (with the ราชบัณฑิต-style trailing dot).
-const MONTH_TH_SHORT = [
-  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-];
+const DOW_ABBR_TH = [msg("อา"), msg("จ"), msg("อ"), msg("พ"), msg("พฤ"), msg("ศ"), msg("ส")];
 
 // formatWorkDate renders an ISO YYYY-MM-DD in Thai official style —
 // "อ 25 พ.ย. 2568" (day-of-week + วันที่ เดือน ปี พ.ศ.).
-function formatWorkDate(iso: string): string {
+function workDateLabel(iso: string, i: DateFmt): string {
   if (!iso) return "";
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d || m < 1 || m > 12) return iso;
   const dt = new Date(y, m - 1, d);
   if (Number.isNaN(dt.getTime())) return iso;
-  const dow = DOW_ABBR_TH[dt.getDay()];
-  const month = MONTH_TH_SHORT[m - 1];
-  return `${dow} ${d} ${month} ${y + 543}`;
+  const dow = i.t(DOW_ABBR_TH[dt.getDay()]);
+  const month = i.monthName(m, true);
+  return `${dow} ${d} ${month} ${i.year(y)}`;
 }
 
 // monthKey extracts the "YYYY-MM" prefix from an ISO date so worklog rows and
@@ -638,15 +632,20 @@ function weeklyUsedHours(
 
 // formatMonthTH renders a month key as "กรกฎาคม 2569" — Buddhist-era year is
 // what the Thai users expect on this UI (Gregorian + 543).
-function formatMonthTH(key: string): string {
+function monthLabel(key: string, i: DateFmt): string {
   const [y, m] = key.split("-").map(Number);
   if (!y || !m || m < 1 || m > 12) return key;
-  return `${MONTH_TH[m - 1]} ${y + 543}`;
+  return `${i.monthName(m, false)} ${i.year(y)}`;
+}
+
+// "A และ B และ C" — joined through one key so English can say "A and B".
+function joinAnd(items: string[], t: TFn): string {
+  return items.reduce((acc, x) => (acc ? t("{a}และ{b}", { a: acc, b: x }) : x), "");
 }
 
 // baht — the same rounding TaPlanner.tsx uses: whole baht only, since a
 // fraction of a satang means nothing to a TA reading this.
-const baht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`;
+const baht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`; // i18n-ignore — ฿ symbol; th-TH only groups digits (same as en-GB)
 
 // monthsInRange returns every month between two ISO dates, inclusive. Used to
 // pre-seed month sections from the term's start/end so a TA sees all months in
@@ -672,6 +671,10 @@ function monthsInRange(startIso?: string, endIso?: string): string[] {
 export default function WorklogPage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
   const { approved } = useTAApproval();
+  const i18n = useI18n();
+  const { t } = i18n;
+  const formatWorkDate = (iso: string) => workDateLabel(iso, i18n);
+  const formatMonthTH = (key: string) => monthLabel(key, i18n);
 
   // /me gives us the userId that namespaces the localStorage draft key —
   // guards against a shared device leaking one TA's drafts to another.
@@ -787,10 +790,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     isEditableStatus(w.status) && !monthLockFor(w.work_date);
   const monthLockMessage = (lock: MonthLock) =>
     lock.financeSent
-      ? `เดือน ${lock.label} ถูกส่งการเงินแล้ว แก้ไขไม่ได้`
+      ? t("เดือน {month} ถูกส่งการเงินแล้ว แก้ไขไม่ได้", { month: lock.label })
       : lock.exported
-      ? `เดือน ${lock.label} ถูกส่งออกไฟล์เบิกจ่ายแล้ว แก้ไขไม่ได้ กรุณาติดต่อเจ้าหน้าที่ให้ตีกลับก่อน`
-      : `งวดส่งบันทึกเวลาเดือน ${lock.label} ปิดแล้ว แก้ไขและส่งย้อนหลังไม่ได้ รายการที่ไม่ได้ส่งถือว่าไม่ประสงค์ลงเวลา`;
+      ? t("เดือน {month} ถูกส่งออกไฟล์เบิกจ่ายแล้ว แก้ไขไม่ได้ กรุณาติดต่อเจ้าหน้าที่ให้ตีกลับก่อน", { month: lock.label })
+      : t("งวดส่งบันทึกเวลาเดือน {month} ปิดแล้ว แก้ไขและส่งย้อนหลังไม่ได้ รายการที่ไม่ได้ส่งถือว่าไม่ประสงค์ลงเวลา", { month: lock.label });
 
   // A TA can hold multiple assignments on the same course (one per section).
   // Let them switch between them; default to the first.
@@ -890,10 +893,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // `drafts[aid]`, matching the slice we'd restore on recovery.
   useEffect(() => {
     if (!userId || !aid) return;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       writeDrafts<WorkLog>(userId, aid, aidDrafts);
     }, 400);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [userId, aid, aidDrafts]);
 
   // Recovery: on first arrival at (aid, logs both ready) check if a stored
@@ -938,7 +941,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       return { ...prev, [targetAid]: slice };
     });
     if (recovery.restorable.length > 0) {
-      notify.success(`กู้คืน ${recovery.restorable.length} รายการที่ยังไม่ได้บันทึก`);
+      notify.success(t("กู้คืน {n} รายการที่ยังไม่ได้บันทึก", { n: recovery.restorable.length }));
     }
     setRecoveryDismissed(prev => new Set(prev).add(targetAid));
     setRecovery(null);
@@ -976,8 +979,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // modal used to credit every send-back to the lecturer.
   const rejectedBy = useMemo(() => {
     const r = rejectedRows.find(x => x.reject_reason) ?? rejectedRows[0];
-    return r?.rejected_by_role === "staff" ? "เจ้าหน้าที่" : "อาจารย์";
-  }, [rejectedRows]);
+    return r?.rejected_by_role === "staff" ? t("เจ้าหน้าที่") : t("อาจารย์");
+  }, [rejectedRows, t]);
   const [rejectionSeenAids, setRejectionSeenAids] = useState<Set<string>>(new Set());
   const [showRejection, setShowRejection] = useState(false);
   const [deletingRejected, setDeletingRejected] = useState(false);
@@ -1008,8 +1011,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           failed++;
         }
       }
-      if (failed === 0) notify.success(`ลบรายการที่ไม่ผ่านแล้ว ${ok} รายการ`);
-      else notify.error(`ลบสำเร็จ ${ok} รายการ ล้มเหลว ${failed} รายการ`);
+      if (failed === 0) notify.success(t("ลบรายการที่ไม่ผ่านแล้ว {n} รายการ", { n: ok }));
+      else notify.error(t("ลบสำเร็จ {ok} รายการ ล้มเหลว {failed} รายการ", { ok, failed }));
       revalidate();
     } finally {
       setDeletingRejected(false);
@@ -1059,7 +1062,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   useEffect(() => {
     if (!approved || !aid) return;
     if (Object.keys(aidDrafts).length === 0) return;
-    const t = window.setTimeout(async () => {
+    const timer = window.setTimeout(async () => {
       const serverById = new Map((logs ?? []).map(l => [l.id, l] as const));
       const candidates: [string, WorkLog][] = [];
       for (const [rowId, w] of Object.entries(aidDrafts)) {
@@ -1070,7 +1073,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         // backend Upsert flips a rejected row back to draft on success.
         if (!server || !isEditableStatus(server.status)) continue;
         if (monthLockFor(w.work_date) || monthLockFor(server.work_date)) continue;
-        if (validateRow(w) !== null) continue;
+        if (validateRow(w, t) !== null) continue;
         candidates.push([rowId, w]);
       }
       if (candidates.length === 0) return;
@@ -1087,7 +1090,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           dropDraft(rowId);
           anyOk = true;
         } catch (e) {
-          lastError = e instanceof Error ? e.message : "บันทึกอัตโนมัติไม่สำเร็จ";
+          lastError = e instanceof Error ? e.message : t("บันทึกอัตโนมัติไม่สำเร็จ");
         } finally {
           setAutosavingIds(prev => {
             const next = new Set(prev);
@@ -1104,7 +1107,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         setAutosaveError(lastError);
       }
     }, AUTOSAVE_DELAY_MS);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
     // aidDrafts drives cadence; `logs` gate keeps us from clobbering; other
     // deps ensure the effect re-registers when auth or savingId flips.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1115,12 +1118,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   const [, setNowTick] = useState(0);
   useEffect(() => {
     if (!autoSavedAt) return;
-    const t = window.setInterval(() => setNowTick(x => x + 1), 15000);
-    return () => window.clearInterval(t);
+    const timer = window.setInterval(() => setNowTick(x => x + 1), 15000);
+    return () => window.clearInterval(timer);
   }, [autoSavedAt]);
   const autosaveBusy = autosavingIds.size > 0;
   const autosavePending = hasUnsaved && !autosaveBusy;
-  const savedAgo = autoSavedAt ? formatSavedAgo(autoSavedAt) : "";
+  const savedAgo = autoSavedAt ? formatSavedAgo(autoSavedAt, t) : "";
 
   const totalHours = useMemo(
     () => (logs ?? []).reduce((sum, l) => sum + (view(l).hours || 0), 0),
@@ -1214,7 +1217,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         const raw = hours * rate;
         const activities = activityKeys
           .filter(k => (byActivity[k] ?? 0) > 0.001)
-          .map(k => ({ label: ACTIVITY_LABEL[k], hours: byActivity[k]! }));
+          .map(k => ({ label: t(ACTIVITY_LABEL[k]), hours: byActivity[k]! }));
         const sent = (sentHours.get(ym) ?? 0) * rate;
         const baht = cap > 0 ? Math.min(cap, sent + raw) - Math.min(cap, sent) : raw;
         return { ym, label: formatMonthTH(ym), activities, hours, baht };
@@ -1224,9 +1227,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       months,
       total: months.reduce((s, m) => s + m.baht, 0),
       capped: cap > 0,
-      footnote: "ยังไม่รวมรายการที่อาจารย์ยังไม่อนุมัติ และอาจลดลงหากงบของวิชานี้ไม่พอ",
+      footnote: t("ยังไม่รวมรายการที่อาจารย์ยังไม่อนุมัติ และอาจลดลงหากงบของวิชานี้ไม่พอ"),
     };
-  }, [payRate, submittableRows, logs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payRate, submittableRows, logs, i18n]);
 
   // The estimate shown in the send dialog covers only the ticked months. Each
   // month's figure stands alone (the cap is per month), so filtering is exact.
@@ -1357,8 +1361,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     () =>
       (dutySlots?.items ?? [])
         .filter(s => s.kind === "review")
-        .map(s => `${DAY_TH_SHORT[s.day_of_week] ?? "?"} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`),
-    [dutySlots],
+        .map(s => `${DAY_TH_SHORT[s.day_of_week] ? t(DAY_TH_SHORT[s.day_of_week]) : "?"} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`),
+    [dutySlots, t],
   );
   // The lecturer's ใบคำขอ asked for ตรวจงาน hours (weekly_cap_review > 0) but the
   // TA has never set a day/time for it — Generate reads ta_review_schedules to
@@ -1374,16 +1378,16 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // open — so this defers in exactly the same case, and never refuses a write
   // the server would have taken.
   function dateRangeError(iso: string): string | null {
-    if (!iso) return "โปรดระบุวันที่ปฏิบัติงาน";
+    if (!iso) return t("โปรดระบุวันที่ปฏิบัติงาน");
     if (course?.starts_on && iso < course.starts_on) {
-      return `ภาคการศึกษาเริ่ม ${formatWorkDate(course.starts_on)} ลงเวลาก่อนหน้านั้นไม่ได้`;
+      return t("ภาคการศึกษาเริ่ม {date} ลงเวลาก่อนหน้านั้นไม่ได้", { date: formatWorkDate(course.starts_on) });
     }
     if (course?.ends_on && iso > course.ends_on) {
-      return `ภาคการศึกษาสิ้นสุด ${formatWorkDate(course.ends_on)} ลงเวลาหลังจากนั้นไม่ได้`;
+      return t("ภาคการศึกษาสิ้นสุด {date} ลงเวลาหลังจากนั้นไม่ได้", { date: formatWorkDate(course.ends_on) });
     }
     const minIso = currentMonthStartIso();
     if (iso < minIso && !monthDeadlines.has((iso ?? "").slice(5, 7))) {
-      return `ลงเวลาย้อนหลังได้ตั้งแต่ ${formatWorkDate(minIso)} เป็นต้นไปเท่านั้น (งวดของเดือนนั้นปิดแล้ว)`;
+      return t("ลงเวลาย้อนหลังได้ตั้งแต่ {date} เป็นต้นไปเท่านั้น (งวดของเดือนนั้นปิดแล้ว)", { date: formatWorkDate(minIso) });
     }
     return null;
   }
@@ -1415,14 +1419,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
 
   async function saveRow(l: WorkLog) {
     const w = view(l);
-    const err = validateRow(w);
+    const err = validateRow(w, t);
     if (err) { notify.error(err); return; }
     const rangeErr = dateRangeError(w.work_date);
     if (rangeErr) { notify.error(rangeErr); return; }
     // Same คาบ-must-exist rule the add dialog and the server apply, so editing a
     // row's date/time into a slot with no class is refused here too.
     const windowErr = classWindowError(
-      w.activity, w.work_date, w.start_time, w.end_time, activeSectionSchedules, rowDateIndex,
+      w.activity, w.work_date, w.start_time, w.end_time, activeSectionSchedules, rowDateIndex, i18n,
     );
     if (windowErr) { notify.error(windowErr); return; }
     const lock = monthLockFor(w.work_date) ?? monthLockFor(l.work_date);
@@ -1431,7 +1435,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     try {
       await api.put(`/assignments/${w.assignment_id}/worklog`, w);
       dropDraft(l.id);
-      notify.success("บันทึกรายการแล้ว");
+      notify.success(t("บันทึกรายการแล้ว"));
       revalidate();
     } catch (e) {
       notify.error(e);
@@ -1464,8 +1468,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       const skippedTotal = skipped.reduce((sum, s) => sum + s.count, 0);
       if (skippedTotal > 0) {
         notify.info(
-          `ข้ามไป ${skippedTotal} คาบ เพราะตรงกับตารางเรียนของคุณ ` +
-            skipped.map(s => `${s.reason} (${s.count} คาบ)`).join(", "),
+          t("ข้ามไป {n} คาบ เพราะตรงกับตารางเรียนของคุณ {list}", {
+            n: skippedTotal,
+            list: skipped.map(s => t("{reason} ({n} คาบ)", { reason: s.reason, n: s.count })).join(", "),
+          }),
         );
       }
 
@@ -1475,12 +1481,16 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       const overlapTotal = overlap.reduce((sum, s) => sum + s.count, 0);
       if (overlapTotal > 0) {
         notify.info(
-          `ข้ามไป ${overlapTotal} คาบ เพราะเวลาซ้อนกับรายการของวิชาอื่นที่คุณลงไว้แล้ว (รับค่าตอบแทนช่วงเวลาเดียวกันสองวิชาไม่ได้) ` +
-            overlap.map(s => {
-              const ds = (s.dates ?? []).map(formatWorkDate);
-              const shown = ds.length > 4 ? `${ds.slice(0, 4).join(", ")} และอีก ${ds.length - 4} วัน` : ds.join(", ");
-              return `${s.reason} (${s.count} คาบ${shown ? `: ${shown}` : ""})`;
+          t("ข้ามไป {n} คาบ เพราะเวลาซ้อนกับรายการของวิชาอื่นที่คุณลงไว้แล้ว (รับค่าตอบแทนช่วงเวลาเดียวกันสองวิชาไม่ได้) {list}", {
+            n: overlapTotal,
+            list: overlap.map(s => {
+              const ds = (s.dates ?? []).map(d => formatWorkDate(d));
+              const shown = ds.length > 4 ? t("{dates} และอีก {n} วัน", { dates: ds.slice(0, 4).join(", "), n: ds.length - 4 }) : ds.join(", ");
+              return shown
+                ? t("{reason} ({n} คาบ: {dates})", { reason: s.reason, n: s.count, dates: shown })
+                : t("{reason} ({n} คาบ)", { reason: s.reason, n: s.count });
             }).join("; "),
+          }),
         );
       }
 
@@ -1491,11 +1501,11 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         notify.info(
           res?.empty_reason
             ?? (skippedTotal > 0
-              ? "ไม่ได้สร้างรายการใดเลย เพราะทุกคาบตรงกับตารางเรียนของคุณ หากตารางเรียนไม่ถูกต้อง ให้แก้ที่หน้า 'ตารางเรียนของฉัน'"
-              : "ไม่ได้สร้างรายการใด"),
+              ? t("ไม่ได้สร้างรายการใดเลย เพราะทุกคาบตรงกับตารางเรียนของคุณ หากตารางเรียนไม่ถูกต้อง ให้แก้ที่หน้า 'ตารางเรียนของฉัน'")
+              : t("ไม่ได้สร้างรายการใด")),
         );
       } else {
-        notify.success(`สร้างรายการอัตโนมัติเรียบร้อย (${n} รายการ)`);
+        notify.success(t("สร้างรายการอัตโนมัติเรียบร้อย ({n} รายการ)", { n }));
       }
       const capDays = res?.skipped_daily_baht ?? [];
       if (capDays.length > 0) {
@@ -1512,7 +1522,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
 
   async function createRow(form: NewWorkLog): Promise<boolean> {
     if (!aid) return false;
-    const err = validateRow({ ...form, id: "", assignment_id: aid, status: "draft" });
+    const err = validateRow({ ...form, id: "", assignment_id: aid, status: "draft" }, t);
     if (err) { notify.error(err); return false; }
     // Backstop for the dialog's own checks — this is the only entry point the
     // create path has, so it should not depend on a caller having run them.
@@ -1536,7 +1546,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         room: form.room ?? "",
         note: form.note ?? "",
       });
-      notify.success("เพิ่มรายการเรียบร้อย");
+      notify.success(t("เพิ่มรายการเรียบร้อย"));
       revalidate();
       return true;
     } catch (e) {
@@ -1561,7 +1571,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     try {
       await api.del(`/assignments/${aid}/worklog/${id}`);
       dropDraft(id);
-      notify.success("ลบรายการแล้ว");
+      notify.success(t("ลบรายการแล้ว"));
       revalidate();
     } catch (e) {
       notify.error(e);
@@ -1582,10 +1592,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       if (months.length === 0) return;
       await api.post(`/assignments/${aid}/worklog/submit`, { months });
       const allMonths = months.length === submittableMonths.length;
-      const sentLabel = allMonths ? "" : ` เดือน${months.map(formatMonthTH).join(", ")}`;
+      const sentLabel = allMonths ? "" : t(" เดือน{months}", { months: months.map(m => formatMonthTH(m)).join(", ") });
       const leftLabel = allMonths
         ? ""
-        : ` ส่วนเดือน${submittableMonths.filter(m => !submitMonths.has(m.ym)).map(m => formatMonthTH(m.ym)).join(", ")} ยังเป็นฉบับร่าง กดส่งภายหลังได้`;
+        : t(" ส่วนเดือน{months} ยังเป็นฉบับร่าง กดส่งภายหลังได้", { months: submittableMonths.filter(m => !submitMonths.has(m.ym)).map(m => formatMonthTH(m.ym)).join(", ") });
       // Name the section, and — the point of the whole change — say what is
       // still outstanding elsewhere. This is the moment the TA believes they are
       // finished, so it is the only moment where the reminder lands.
@@ -1595,15 +1605,17 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       const others = (assignments ?? []).filter(a => a.id !== aid && a.submittable_count > 0);
       if (showMultiSection && others.length > 0) {
         notify.success(
-          `ส่ง sec ${activeAssignment?.sec_no ?? ""}${sentLabel} เรียบร้อย ยังเหลือ ` +
-          others.map(a => `sec ${a.sec_no} (${a.submittable_count} รายการ)`).join(", ") +
-          " ที่ยังไม่ได้ส่ง" + leftLabel,
+          t("ส่ง sec {sec}{sent} เรียบร้อย ยังเหลือ {others} ที่ยังไม่ได้ส่ง", {
+            sec: activeAssignment?.sec_no ?? "",
+            sent: sentLabel,
+            others: others.map(a => t("sec {sec} ({n} รายการ)", { sec: a.sec_no, n: a.submittable_count })).join(", "),
+          }) + leftLabel,
         );
       } else {
         notify.success(
           (showMultiSection
-            ? `ส่ง sec ${activeAssignment?.sec_no ?? ""}${sentLabel} ให้อาจารย์อนุมัติแล้ว`
-            : `ส่งบันทึกเวลา${sentLabel} ให้อาจารย์อนุมัติแล้ว`) + leftLabel,
+            ? t("ส่ง sec {sec}{sent} ให้อาจารย์อนุมัติแล้ว", { sec: activeAssignment?.sec_no ?? "", sent: sentLabel })
+            : t("ส่งบันทึกเวลา{sent} ให้อาจารย์อนุมัติแล้ว", { sent: sentLabel })) + leftLabel,
         );
       }
       revalidate();
@@ -1626,7 +1638,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       l => l.status === "draft" && months.has(monthKey(l.work_date)),
     );
     if (targets.length === 0) {
-      notify.info("ไม่มีรายการฉบับร่างในเดือนที่เลือก");
+      notify.info(t("ไม่มีรายการฉบับร่างในเดือนที่เลือก"));
       return;
     }
     bulkDeletingRef.current = true;
@@ -1652,8 +1664,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         else next[aid] = nextSlice;
         return next;
       });
-      if (failed === 0) notify.success(`ลบรายการฉบับร่างแล้ว ${ok} รายการ`);
-      else notify.error(`ลบสำเร็จ ${ok} รายการ ล้มเหลว ${failed} รายการ`);
+      if (failed === 0) notify.success(t("ลบรายการฉบับร่างแล้ว {n} รายการ", { n: ok }));
+      else notify.error(t("ลบสำเร็จ {ok} รายการ ล้มเหลว {failed} รายการ", { ok, failed }));
       revalidate();
     } finally {
       bulkDeletingRef.current = false;
@@ -1668,12 +1680,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // per render, but showing it in-table matches the payroll document and
   // keeps screenshots self-describing.
   const sectionLabel = activeAssignment
-    ? `${activeAssignment.track === "special" ? "พิเศษ" : "ปกติ"} sec ${activeAssignment.sec_no}`
+    ? (activeAssignment.track === "special"
+      ? t("พิเศษ sec {sec}", { sec: activeAssignment.sec_no })
+      : t("ปกติ sec {sec}", { sec: activeAssignment.sec_no }))
     : "—";
 
   const columns: DataColumn<WorkLog>[] = [
     {
-      id: "work_date", label: "วันที่", sortable: true, isRowHeader: true,
+      id: "work_date", label: t("วันที่"), sortable: true, isRowHeader: true,
       sortValue: l => view(l).work_date,
       render: l => {
         const w = view(l);
@@ -1688,12 +1702,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                           : currentMonthStartIso()
                       }
                       maxValue={course?.ends_on}
-                      label="วันที่ปฏิบัติงาน" />
+                      label={t("วันที่ปฏิบัติงาน")} />
         ) : formatWorkDate(w.work_date);
       },
     },
     {
-      id: "time", label: "เวลา",
+      id: "time", label: t("เวลา"),
       className: "whitespace-nowrap",
       render: l => {
         const w = view(l);
@@ -1701,22 +1715,22 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           <div className="flex items-center gap-1">
             <TimePicker value={w.start_time}
                         onChange={v => patchTime(l, { start_time: v })}
-                        label="เวลาเริ่ม" />
+                        label={t("เวลาเริ่ม")} />
             –
             <TimePicker value={w.end_time}
                         onChange={v => patchTime(l, { end_time: v })}
-                        label="เวลาสิ้นสุด" />
+                        label={t("เวลาสิ้นสุด")} />
           </div>
         ) : `${w.start_time}–${w.end_time}`;
       },
     },
     {
-      id: "section", label: "กลุ่มเรียน",
+      id: "section", label: t("กลุ่มเรียน"),
       className: "whitespace-nowrap",
       render: () => sectionLabel,
     },
     {
-      id: "hours", label: "จำนวนชั่วโมง",
+      id: "hours", label: t("จำนวนชั่วโมง"),
       className: "whitespace-nowrap",
       render: l => {
         const w = view(l);
@@ -1726,13 +1740,13 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       },
     },
     {
-      id: "activity", label: "กิจกรรม",
+      id: "activity", label: t("กิจกรรม"),
       render: l => {
         const w = view(l);
         if (!rowEditable(w)) {
-          const label = ACTIVITY_LABEL[w.activity] ?? w.activity;
+          const label = ACTIVITY_LABEL[w.activity] ? t(ACTIVITY_LABEL[w.activity]) : w.activity;
           if (w.activity === "other" && (w.parent_kind === "lecture" || w.parent_kind === "lab")) {
-            return `${label} (${PARENT_KIND_LABEL[w.parent_kind]})`;
+            return `${label} (${t(PARENT_KIND_LABEL[w.parent_kind])})`;
           }
           return label;
         }
@@ -1754,18 +1768,18 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               }}
             >
               {activityKeys.map(v => (
-                <option key={v} value={v}>{ACTIVITY_LABEL[v]}</option>
+                <option key={v} value={v}>{t(ACTIVITY_LABEL[v])}</option>
               ))}
             </Select>
             {w.activity === "other" && (
               <Select
                 value={parentKindKeys.includes(w.parent_kind as "lecture" | "lab") ? (w.parent_kind ?? parentKindKeys[0]) : parentKindKeys[0]}
                 onChange={e => patch(l, { parent_kind: e.target.value as "lecture" | "lab" })}
-                aria-label="ประเภทกิจกรรมหลัก"
+                aria-label={t("ประเภทกิจกรรมหลัก")}
                 disabled={parentKindKeys.length === 1}
               >
                 {parentKindKeys.map(v => (
-                  <option key={v} value={v}>{PARENT_KIND_LABEL[v]}</option>
+                  <option key={v} value={v}>{t(PARENT_KIND_LABEL[v])}</option>
                 ))}
               </Select>
             )}
@@ -1774,7 +1788,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       },
     },
     {
-      id: "note", label: "หมายเหตุ",
+      id: "note", label: t("หมายเหตุ"),
       render: l => {
         const w = view(l);
         return rowEditable(w) ? (
@@ -1784,7 +1798,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       },
     },
     {
-      id: "status", label: "สถานะ",
+      id: "status", label: t("สถานะ"),
       render: l => {
         const w = view(l);
         const canEdit = rowEditable(w);
@@ -1794,12 +1808,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         const forfeited = isEditableStatus(w.status) && !!monthLockFor(w.work_date);
         return (
           <div className="flex items-center gap-1">
-            {forfeited ? <Chip tone="neutral">หมดเวลาส่ง</Chip> : <StatusChip status={w.status} />}
+            {forfeited ? <Chip tone="neutral">{t("หมดเวลาส่ง")}</Chip> : <StatusChip status={w.status} />}
             {canEdit && (
               <LockedActionButton
                 variant={aidDrafts[l.id] ? "primary" : "ghost"} size="sm"
                 onClick={() => saveRow(l)} disabled={savingId === l.id}
-                isIconOnly aria-label="บันทึกแถวนี้"
+                isIconOnly aria-label={t("บันทึกแถวนี้")}
               >
                 <Save size={13} />
               </LockedActionButton>
@@ -1809,7 +1823,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 variant="ghost" size="sm"
                 onClick={() => setConfirmDeleteId(l.id)}
                 disabled={deletingId === l.id}
-                isIconOnly aria-label="ลบแถวนี้"
+                isIconOnly aria-label={t("ลบแถวนี้")}
               >
                 <Trash2 size={13} />
               </LockedActionButton>
@@ -1838,12 +1852,16 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   return (
     <div>
       <PageHeader
-        title="บันทึกเวลาปฏิบัติงาน"
+        title={t("บันทึกเวลาปฏิบัติงาน")}
         info={
           <>
-            บันทึกชั่วโมงปฏิบัติงานเป็นรายวัน ระบบจะเก็บเป็น <b>ฉบับร่าง</b> จนกว่าจะกด <b>ส่งอนุมัติ</b> ให้อาจารย์พิจารณา
+            {t.rich("บันทึกชั่วโมงปฏิบัติงานเป็นรายวัน ระบบจะเก็บเป็น {draft} จนกว่าจะกด {submit} ให้อาจารย์พิจารณา", {
+              draft: <b>{t("ฉบับร่าง")}</b>, submit: <b>{t("ส่งอนุมัติ")}</b>,
+            })}
             <br /><br />
-            หรือใช้ปุ่ม <b>สร้างอัตโนมัติ</b> เพื่อสร้างรายการจากตารางสอนของ section ทั้งเทอมในครั้งเดียว (ข้ามวันหยุด/สอบให้)
+            {t.rich("หรือใช้ปุ่ม {generate} เพื่อสร้างรายการจากตารางสอนของ section ทั้งเทอมในครั้งเดียว (ข้ามวันหยุด/สอบให้)", {
+              generate: <b>{t("สร้างอัตโนมัติ")}</b>,
+            })}
           </>
         }
         actions={
@@ -1862,7 +1880,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             {canAddRows && (
               <span data-tour="wl-add">
                 <LockedActionButton variant="secondary" onClick={() => setShowAdd(true)} disabled={!aid || creating || needStudentCount}>
-                  <Plus size={14} /> เพิ่มรายการ
+                  <Plus size={14} /> {t("เพิ่มรายการ")}
                 </LockedActionButton>
               </span>
             )}
@@ -1870,9 +1888,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               variant="ghost"
               onClick={() => setShowBulkDelete(true)}
               disabled={!aid || draftCount === 0 || bulkDeleting}
-              aria-label="ลบรายการฉบับร่าง"
+              aria-label={t("ลบรายการฉบับร่าง")}
             >
-              <Trash2 size={14} /> ลบฉบับร่าง
+              <Trash2 size={14} /> {t("ลบฉบับร่าง")}
             </LockedActionButton>
             <span data-tour="wl-generate">
             <TipWrap
@@ -1880,7 +1898,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 !aid
                   ? undefined
                   : !canGenerate
-                  ? "อาจารย์ยังไม่ได้ตั้งตารางสอนของ section นี้ในระบบ จึงยังสร้างอัตโนมัติไม่ได้"
+                  ? t("อาจารย์ยังไม่ได้ตั้งตารางสอนของ section นี้ในระบบ จึงยังสร้างอัตโนมัติไม่ได้")
                   : undefined
               }
             >
@@ -1890,7 +1908,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 isPending={generating}
                 disabled={generating || !aid || !canGenerate || needStudentCount}
               >
-                <Wand2 size={14} /> สร้างอัตโนมัติ
+                <Wand2 size={14} /> {t("สร้างอัตโนมัติ")}
               </LockedActionButton>
             </TipWrap>
             </span>
@@ -1903,7 +1921,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 <TipWrap
                   inline
                   className="inline-flex"
-                  content={approved && aid && !submitting && !canSubmit ? "ไม่มีรายการที่พร้อมส่ง" : undefined}
+                  content={approved && aid && !submitting && !canSubmit ? t("ไม่มีรายการที่พร้อมส่ง") : undefined}
                 >
                 <LockedActionButton
                   variant="primary"
@@ -1911,7 +1929,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                   isPending={submitting}
                   disabled={submitting || !canSubmit}
                 >
-                  <Send size={14} /> ส่งอนุมัติ
+                  <Send size={14} /> {t("ส่งอนุมัติ")}
                 </LockedActionButton>
                 </TipWrap>
               </span>
@@ -1924,8 +1942,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <span>
-            รอเจ้าหน้าที่กรอกจำนวนนักศึกษาของวิชานี้ก่อน จึงจะบันทึกเวลาปฏิบัติงานได้
-            (ยอดเบิกจ่ายคำนวณจากจำนวนนักศึกษา)
+            {t("รอเจ้าหน้าที่กรอกจำนวนนักศึกษาของวิชานี้ก่อน จึงจะบันทึกเวลาปฏิบัติงานได้ (ยอดเบิกจ่ายคำนวณจากจำนวนนักศึกษา)")}
           </span>
         </div>
       )}
@@ -1937,12 +1954,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <span>
             {settlement?.committed?.over_budget
-              ? "งบของวิชานี้ไม่พอจ่ายทุกเดือนแล้ว "
-              : "ถ้าอาจารย์อนุมัติครบตามที่ลงไว้ งบจะไม่พอ "}
+              ? t("งบของวิชานี้ไม่พอจ่ายทุกเดือนแล้ว") + " "
+              : t("ถ้าอาจารย์อนุมัติครบตามที่ลงไว้ งบจะไม่พอ") + " "}
             {partialMonths.size > 0 && (
               <>
-                <b>{[...partialMonths].map(formatMonthTH).join(", ")}</b> ได้ไม่เต็มจำนวน
-                {(zeroedTracks.size > 0 || unpaidMonths.size > 0) ? " และ " : " "}
+                {t.rich("{months} ได้ไม่เต็มจำนวน", { months: <b>{[...partialMonths].map(m => formatMonthTH(m)).join(", ")}</b> })}
+                {(zeroedTracks.size > 0 || unpaidMonths.size > 0) ? t(" และ ") : " "}
               </>
             )}
             {/* Named by pool: telling somebody on ภาคพิเศษ that ตุลาคม "ได้ไม่ครบ"
@@ -1950,19 +1967,22 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                 wording exists to stop. */}
             {[...zeroedTracks].map(([m, tracks], i) => (
               <Fragment key={m}>
-                <b>{formatMonthTH(m)}</b> {tracks.map(t => TRACK_LABEL[t] ?? t).join("และ")}ไม่ได้รับค่าตอบแทน
-                {(i < zeroedTracks.size - 1 || unpaidMonths.size > 0) ? " และ " : " "}
+                {t.rich("{month} {tracks}ไม่ได้รับค่าตอบแทน", {
+                  month: <b>{formatMonthTH(m)}</b>,
+                  tracks: joinAnd(tracks.map(tr => (TRACK_LABEL[tr] ? t(TRACK_LABEL[tr]) : tr)), t),
+                })}
+                {(i < zeroedTracks.size - 1 || unpaidMonths.size > 0) ? t(" และ ") : " "}
               </Fragment>
             ))}
             {unpaidMonths.size > 0 && (
-              <><b>{[...unpaidMonths].map(formatMonthTH).join(", ")}</b> ไม่ได้รับค่าตอบแทน </>
+              <>{t.rich("{months} ไม่ได้รับค่าตอบแทน", { months: <b>{[...unpaidMonths].map(m => formatMonthTH(m)).join(", ")}</b> })} </>
             )}
-            ชั่วโมงบันทึกไว้ครบ แต่ส่วนที่เกินงบจะไม่ถูกนำไปเบิก
+            {t("ชั่วโมงบันทึกไว้ครบ แต่ส่วนที่เกินงบจะไม่ถูกนำไปเบิก")}
             {/* Not "ใครสอนคาบไหนก่อนได้ก่อน": the budget is shared out between
                 people as money, in proportion to what each is owed, so being
                 timetabled late costs a TA nothing and nobody's คาบ is singled
                 out (settleTrack, 11/09/2026). */}
-            <br /><span className="text-red-900/75">งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น ทุกคนถูกหักเป็นสัดส่วนเท่ากัน</span>
+            <br /><span className="text-red-900/75">{t("งบเป็นของทั้งวิชา ใช้ร่วมกับ TA คนอื่น ทุกคนถูกหักเป็นสัดส่วนเท่ากัน")}</span>
           </span>
         </div>
       )}
@@ -1977,10 +1997,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-ink-2">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-ink-3" />
           <span>
-            <b>{strandedRows.length} รายการ</b> ในงวดที่ปิดไปแล้ว ({strandedMonths.join(", ")}){" "}
-            ไม่ได้ส่งภายในกำหนด <b>ถือว่าไม่ประสงค์ลงเวลา</b> ระบบจะไม่นำมาคิดค่าตอบแทน
-            และส่งย้อนหลังไม่ได้
-            {submittableCount > 0 && <> ส่วนอีก {submittableCount} รายการในงวดที่ยังเปิดอยู่ ยังกดส่งได้ตามปกติ</>}
+            {t.rich("{rows} ในงวดที่ปิดไปแล้ว ({months}) ไม่ได้ส่งภายในกำหนด {forfeit} ระบบจะไม่นำมาคิดค่าตอบแทน และส่งย้อนหลังไม่ได้", {
+              rows: <b>{t("{n} รายการ", { n: strandedRows.length })}</b>,
+              months: strandedMonths.join(", "),
+              forfeit: <b>{t("ถือว่าไม่ประสงค์ลงเวลา")}</b>,
+            })}
+            {submittableCount > 0 && <> {t("ส่วนอีก {n} รายการในงวดที่ยังเปิดอยู่ ยังกดส่งได้ตามปกติ", { n: submittableCount })}</>}
           </span>
         </div>
       )}
@@ -2004,13 +2026,16 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       {termCeiling > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-(--hairline) bg-surface-secondary px-3 py-2 text-sm">
           <Clock size={14} className="text-muted" />
-          <span className="text-muted">ชั่วโมงที่ลงได้ทั้งเทอม (ตามภาระงาน):</span>
+          <span className="text-muted">{t("ชั่วโมงที่ลงได้ทั้งเทอม (ตามภาระงาน):")}</span>
           <span className="tabular-nums">
-            ใช้ไป <b>{logs ? usedTermHours.toFixed(2) : <SkelValue className="h-4 w-10" />}</b> / {termCeiling.toFixed(2)} ชม.
+            {t.rich("ใช้ไป {used} / {total} ชม.", {
+              used: <b>{logs ? usedTermHours.toFixed(2) : <SkelValue className="h-4 w-10" />}</b>,
+              total: termCeiling.toFixed(2),
+            })}
           </span>
           {logs ? (
             <span className={"tabular-nums " + (remainingTermHours <= 0 ? "text-danger font-medium" : "text-success")}>
-              · เหลือ {remainingTermHours.toFixed(2)} ชม.
+              · {t("เหลือ {h} ชม.", { h: remainingTermHours.toFixed(2) })}
             </span>
           ) : <SkelValue className="h-4 w-20" />}
         </div>
@@ -2018,7 +2043,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
 
       {!approved && (
         <div className="mb-4 text-xs text-muted">
-          * ปุ่มบันทึก/ส่งจะปลดล็อกหลังเจ้าหน้าที่อนุมัติเอกสารในโปรไฟล์
+          * {t("ปุ่มบันทึก/ส่งจะปลดล็อกหลังเจ้าหน้าที่อนุมัติเอกสารในโปรไฟล์")}
         </div>
       )}
 
@@ -2026,8 +2051,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         <div className="mb-4">
           <Alert
             status="warning"
-            title="ยังไม่มีตารางสอนของ section นี้ในระบบ"
-            description="ปุ่ม 'สร้างอัตโนมัติ' ต้องอ่านจากตารางสอน (วันไหน คาบไหน กี่ชั่วโมง) เพื่อสร้างรายการให้อัตโนมัติ กรุณาแจ้งอาจารย์ให้เพิ่มตารางสอนของ section นี้ก่อน หรือใช้ปุ่ม 'เพิ่มรายการ' เพื่อกรอกเอง"
+            title={t("ยังไม่มีตารางสอนของ section นี้ในระบบ")}
+            description={t("ปุ่ม 'สร้างอัตโนมัติ' ต้องอ่านจากตารางสอน (วันไหน คาบไหน กี่ชั่วโมง) เพื่อสร้างรายการให้อัตโนมัติ กรุณาแจ้งอาจารย์ให้เพิ่มตารางสอนของ section นี้ก่อน หรือใช้ปุ่ม 'เพิ่มรายการ' เพื่อกรอกเอง")}
           />
         </div>
       )}
@@ -2035,8 +2060,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       {assignments && assignments.length === 0 ? (
         <Panel>
           <EmptyState
-            title="ยังไม่พบ assignment ในรายวิชานี้"
-            description="อาจารย์อาจยังไม่ได้ยืนยันการมอบหมาย หรือคำขอยังอยู่ระหว่างพิจารณา"
+            title={t("ยังไม่พบ assignment ในรายวิชานี้")}
+            description={t("อาจารย์อาจยังไม่ได้ยืนยันการมอบหมาย หรือคำขอยังอยู่ระหว่างพิจารณา")}
           />
         </Panel>
       ) : (
@@ -2073,9 +2098,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                     <span className="text-muted">·</span>
                   </>
                 )}
-                <span>รวมชั่วโมงทั้งหมด</span>
+                <span>{t("รวมชั่วโมงทั้งหมด")}</span>
                 <span className="font-semibold tabular">{logs ? totalHours.toFixed(1) : <SkelValue className="h-4 w-8" />}</span>
-                <span className="text-muted">ชม.</span>
+                <span className="text-muted">{t("ชม.")}</span>
               </div>
               <WorklogSaveStatus
                 busy={autosaveBusy}
@@ -2090,7 +2115,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                   className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft border border-danger-soft-border rounded-md px-2 py-1 hover:opacity-90"
                 >
                   <AlertTriangle size={13} />
-                  <span>{rejectedBy}ส่งกลับ {rejectedRows.length} รายการ · ดูเหตุผล</span>
+                  <span>{t("{who}ส่งกลับ {n} รายการ · ดูเหตุผล", { who: rejectedBy, n: rejectedRows.length })}</span>
                 </button>
               )}
             </div>
@@ -2138,47 +2163,44 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       <Modal
         open={capReport !== null}
         onClose={() => setCapReport(null)}
-        title="บางวันเบิกได้ไม่เต็มตามตารางสอน"
+        title={t("บางวันเบิกได้ไม่เต็มตามตารางสอน")}
         icon={<AlertTriangle size={18} />}
         size="md"
         footer={
           <div className="flex justify-end w-full">
-            <Button variant="primary" onClick={() => setCapReport(null)}>รับทราบ</Button>
+            <Button variant="primary" onClick={() => setCapReport(null)}>{t("รับทราบ")}</Button>
           </div>
         }
       >
         {capReport && (
           <div className="flex flex-col gap-3 text-sm">
             <p>
-              ตามระเบียบของคณะ ค่าตอบแทน TA เบิกได้ไม่เกิน{" "}
-              <b>{capReport.cap.toLocaleString("th-TH")} บาทต่อวัน</b>{" "}
-              โดยนับรวมทุกรายวิชาที่คุณปฏิบัติงานในวันเดียวกัน
-              ระบบจึงลดเวลาของคาบในวันต่อไปนี้ให้พอดีเพดาน (ครั้งละ 30 นาที)
-              และข้ามคาบที่ไม่เหลือยอดให้เบิกเลย
+              {t.rich("ตามระเบียบของคณะ ค่าตอบแทน TA เบิกได้ไม่เกิน {cap} โดยนับรวมทุกรายวิชาที่คุณปฏิบัติงานในวันเดียวกัน ระบบจึงลดเวลาของคาบในวันต่อไปนี้ให้พอดีเพดาน (ครั้งละ 30 นาที) และข้ามคาบที่ไม่เหลือยอดให้เบิกเลย", {
+                cap: <b>{t("{amount} บาทต่อวัน", { amount: capReport.cap.toLocaleString(i18n.intl) })}</b>,
+              })}
             </p>
             <div className="overflow-hidden rounded-lg border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-surface-secondary text-xs text-muted">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium">วันที่</th>
-                    <th className="px-3 py-2 text-right font-medium">มีอยู่แล้ว</th>
-                    <th className="px-3 py-2 text-right font-medium">ตัดออก</th>
+                    <th className="px-3 py-2 text-left font-medium">{t("วันที่")}</th>
+                    <th className="px-3 py-2 text-right font-medium">{t("มีอยู่แล้ว")}</th>
+                    <th className="px-3 py-2 text-right font-medium">{t("ตัดออก")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {capReport.days.map(d => (
                     <tr key={d.date}>
                       <td className="px-3 py-2 whitespace-nowrap">{formatWorkDate(d.date)}</td>
-                      <td className="px-3 py-2 text-right tabular">{d.existing_baht.toLocaleString("th-TH")} บาท</td>
-                      <td className="px-3 py-2 text-right tabular">{d.hours.toFixed(1)} ชม.</td>
+                      <td className="px-3 py-2 text-right tabular">{t("{amount} บาท", { amount: d.existing_baht.toLocaleString(i18n.intl) })}</td>
+                      <td className="px-3 py-2 text-right tabular">{t("{h} ชม.", { h: d.hours.toFixed(1) })}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             <p className="text-xs text-muted">
-              &quot;มีอยู่แล้ว&quot; คือค่าตอบแทนของวันนั้นจากรายวิชาอื่นหรือรายการเดิม ก่อนสร้างรอบนี้
-              ถ้าต้องการลงเวลาวันนั้นในวิชานี้ ต้องลดชั่วโมงของวิชาอื่นในวันเดียวกันก่อน
+              {t("\"มีอยู่แล้ว\" คือค่าตอบแทนของวันนั้นจากรายวิชาอื่นหรือรายการเดิม ก่อนสร้างรอบนี้ ถ้าต้องการลงเวลาวันนั้นในวิชานี้ ต้องลดชั่วโมงของวิชาอื่นในวันเดียวกันก่อน")}
             </p>
           </div>
         )}
@@ -2187,21 +2209,21 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       <Modal
         open={showRejection}
         onClose={dismissRejection}
-        title={`${rejectedBy}ส่งบันทึกเวลากลับให้แก้ไข`}
+        title={t("{who}ส่งบันทึกเวลากลับให้แก้ไข", { who: rejectedBy })}
         icon={<AlertTriangle size={18} />}
         size="md"
         footer={
           confirmDeleteRejected ? (
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-danger">
-                ลบ {rejectedRows.length} รายการที่ถูกส่งกลับถาวร ย้อนกลับไม่ได้ ยืนยันหรือไม่?
+                {t("ลบ {n} รายการที่ถูกส่งกลับถาวร ย้อนกลับไม่ได้ ยืนยันหรือไม่?", { n: rejectedRows.length })}
               </p>
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setConfirmDeleteRejected(false)} disabled={deletingRejected}>
-                  ไม่ลบ
+                  {t("ไม่ลบ")}
                 </Button>
                 <Button variant="danger" onClick={deleteAllRejected} isPending={deletingRejected} disabled={deletingRejected}>
-                  <Trash2 size={14} /> ลบถาวร
+                  <Trash2 size={14} /> {t("ลบถาวร")}
                 </Button>
               </div>
             </div>
@@ -2212,12 +2234,12 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               onClick={() => setConfirmDeleteRejected(true)}
               disabled={deletingRejected}
             >
-              <Trash2 size={14} /> ลบทั้งหมด ({rejectedRows.length})
+              <Trash2 size={14} /> {t("ลบทั้งหมด ({n})", { n: rejectedRows.length })}
             </Button>
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={dismissRejection} disabled={deletingRejected}>ปิด</Button>
+              <Button variant="ghost" onClick={dismissRejection} disabled={deletingRejected}>{t("ปิด")}</Button>
               <Button variant="primary" onClick={dismissRejection} disabled={deletingRejected}>
-                <Pencil size={14} /> แก้ไขในตาราง
+                <Pencil size={14} /> {t("แก้ไขในตาราง")}
               </Button>
             </div>
           </div>
@@ -2225,16 +2247,18 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       >
         <div className="flex flex-col gap-3">
           <div className="text-sm">
-            {rejectedBy}ส่งบันทึกเวลา <span className="font-semibold">{rejectedRows.length}</span> รายการกลับให้แก้ไข พร้อมกับเหตุผลด้านล่าง
+            {t.rich("{who}ส่งบันทึกเวลา {n} รายการกลับให้แก้ไข พร้อมกับเหตุผลด้านล่าง", {
+              who: rejectedBy, n: <span className="font-semibold">{rejectedRows.length}</span>,
+            })}
           </div>
           <div className="rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2 text-sm text-warning-soft-foreground whitespace-pre-wrap">
-            {rejectReason || `(${rejectedBy}ไม่ได้ระบุเหตุผล)`}
+            {rejectReason || t("({who}ไม่ได้ระบุเหตุผล)", { who: rejectedBy })}
           </div>
           <div className="text-xs text-muted">
-            คุณสามารถ:
+            {t("คุณสามารถ:")}
             <ul className="list-disc list-inside mt-1 space-y-0.5">
-              <li>กด <b>แก้ไขในตาราง</b> เพื่อกลับไปแก้ไขรายการที่ถูกปฏิเสธในตารางด้านล่าง แล้วส่งอนุมัติใหม่</li>
-              <li>กด <b>ลบทั้งหมด</b> เพื่อลบรายการที่ถูกปฏิเสธออก แล้วสร้างขึ้นใหม่ (เช่น กด &quot;สร้างอัตโนมัติ&quot; อีกครั้ง)</li>
+              <li>{t.rich("กด {btn} เพื่อกลับไปแก้ไขรายการที่ถูกปฏิเสธในตารางด้านล่าง แล้วส่งอนุมัติใหม่", { btn: <b>{t("แก้ไขในตาราง")}</b> })}</li>
+              <li>{t.rich("กด {btn} เพื่อลบรายการที่ถูกปฏิเสธออก แล้วสร้างขึ้นใหม่ (เช่น กด \"สร้างอัตโนมัติ\" อีกครั้ง)", { btn: <b>{t("ลบทั้งหมด")}</b> })}</li>
             </ul>
           </div>
         </div>
@@ -2245,10 +2269,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         onClose={navGuard.cancel}
         onConfirm={navGuard.confirm}
         danger
-        title="ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?"
-        confirmLabel="ออกโดยไม่บันทึก"
-        cancelLabel="อยู่หน้านี้ต่อ"
-        message="ข้อมูลที่ยังไม่ได้บันทึกจะเก็บไว้ในเครื่องนี้ และจะเจอเมื่อกลับมาที่หน้านี้อีกครั้ง"
+        title={t("ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?")}
+        confirmLabel={t("ออกโดยไม่บันทึก")}
+        cancelLabel={t("อยู่หน้านี้ต่อ")}
+        message={t("ข้อมูลที่ยังไม่ได้บันทึกจะเก็บไว้ในเครื่องนี้ และจะเจอเมื่อกลับมาที่หน้านี้อีกครั้ง")}
       />
 
       <ConfirmDialog
@@ -2257,8 +2281,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         onConfirm={submit}
         isPending={submitting}
         size="lg"
-        title="ส่งบันทึกเวลาให้อาจารย์อนุมัติ"
-        confirmLabel={chosenCount > 0 ? `ส่งอนุมัติ (${chosenCount} รายการ)` : "เลือกเดือนที่จะส่ง"}
+        title={t("ส่งบันทึกเวลาให้อาจารย์อนุมัติ")}
+        confirmLabel={chosenCount > 0 ? t("ส่งอนุมัติ ({n} รายการ)", { n: chosenCount }) : t("เลือกเดือนที่จะส่ง")}
         confirmDisabled={chosenCount === 0}
         message={
           /* The last screen before an irreversible hand-off, so it spells out the
@@ -2269,25 +2293,27 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             <p className="text-muted">
               {showMultiSection && activeAssignment ? (
                 <>
-                  จะส่งเฉพาะ{" "}
-                  <b className="font-medium text-foreground">
-                    sec {activeAssignment.sec_no} ({activeAssignment.track === "special" ? "พิเศษ" : "ปกติ"})
-                  </b>{" "}
-                  ในเดือนที่เลือกด้านล่าง ให้อาจารย์พิจารณา
+                  {t.rich("จะส่งเฉพาะ {section} ในเดือนที่เลือกด้านล่าง ให้อาจารย์พิจารณา", {
+                    section: (
+                      <b className="font-medium text-foreground">
+                        sec {activeAssignment.sec_no} ({activeAssignment.track === "special" ? t("พิเศษ") : t("ปกติ")})
+                      </b>
+                    ),
+                  })}
                 </>
               ) : (
-                <>เลือกเดือนที่ต้องการส่งให้อาจารย์พิจารณา (รวมรายการฉบับร่างและรายการที่ถูกส่งกลับให้แก้ไข)</>
+                <>{t("เลือกเดือนที่ต้องการส่งให้อาจารย์พิจารณา (รวมรายการฉบับร่างและรายการที่ถูกส่งกลับให้แก้ไข)")}</>
               )}
-              {" "}เมื่อส่งแล้วจะแก้ไขไม่ได้จนกว่าอาจารย์จะพิจารณา
+              {" "}{t("เมื่อส่งแล้วจะแก้ไขไม่ได้จนกว่าอาจารย์จะพิจารณา")}
             </p>
             {/* One tick box per month, all ticked on open. A month left
                 unticked stays a draft — editable, and sendable later as long
                 as its period is open. */}
             <fieldset className="rounded-lg border border-hairline">
-              <legend className="sr-only">เดือนที่จะส่ง</legend>
+              <legend className="sr-only">{t("เดือนที่จะส่ง")}</legend>
               {submittableMonths.length > 1 && (
                 <div className="flex items-center justify-between gap-2 border-b border-hairline px-3 py-2 text-xs text-muted">
-                  <span>เลือกแล้ว {chosenMonths.length} จาก {submittableMonths.length} เดือน</span>
+                  <span>{t("เลือกแล้ว {n} จาก {total} เดือน", { n: chosenMonths.length, total: submittableMonths.length })}</span>
                   <button
                     type="button"
                     className="font-medium text-accent hover:underline"
@@ -2297,7 +2323,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                         : new Set(submittableMonths.map(m => m.ym)),
                     )}
                   >
-                    {chosenMonths.length === submittableMonths.length ? "ไม่เลือกทั้งหมด" : "เลือกทั้งหมด"}
+                    {chosenMonths.length === submittableMonths.length ? t("ไม่เลือกทั้งหมด") : t("เลือกทั้งหมด")}
                   </button>
                 </div>
               )}
@@ -2321,8 +2347,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                         <span className="min-w-0 flex-1">
                           <span className="block font-medium text-foreground">{formatMonthTH(m.ym)}</span>
                           <span className="block text-xs text-muted">
-                            {m.count} รายการ · {fmtHours(m.hours)} ชม.
-                            {m.rejected > 0 && <> · ถูกส่งกลับ {m.rejected} รายการ</>}
+                            {t("{n} รายการ · {h} ชม.", { n: m.count, h: fmtHours(m.hours) })}
+                            {m.rejected > 0 && <> · {t("ถูกส่งกลับ {n} รายการ", { n: m.rejected })}</>}
                           </span>
                         </span>
                       </label>
@@ -2332,18 +2358,18 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               </ul>
             </fieldset>
             {chosenCount === 0 && (
-              <p className="text-amber-700">กรุณาเลือกอย่างน้อย 1 เดือน</p>
+              <p className="text-amber-700">{t("กรุณาเลือกอย่างน้อย 1 เดือน")}</p>
             )}
             {hasUnsaved && (
               <p className="text-amber-700">
-                มีรายการที่แก้ไขแล้วแต่ยังไม่ได้บันทึก จะไม่ถูกส่งไปด้วย โปรดบันทึกก่อนหากต้องการรวมไปด้วย
+                {t("มีรายการที่แก้ไขแล้วแต่ยังไม่ได้บันทึก จะไม่ถูกส่งไปด้วย โปรดบันทึกก่อนหากต้องการรวมไปด้วย")}
               </p>
             )}
             {otherUnsent.length > 0 && (
               <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
-                กลุ่มอื่นจะไม่ถูกส่งไปด้วย —{" "}
-                {otherUnsent.map(a => `sec ${a.sec_no} (${a.submittable_count} รายการ)`).join(", ")}{" "}
-                ต้องกดส่งแยกอีกครั้ง
+                {t("กลุ่มอื่นจะไม่ถูกส่งไปด้วย — {list} ต้องกดส่งแยกอีกครั้ง", {
+                  list: otherUnsent.map(a => t("sec {sec} ({n} รายการ)", { sec: a.sec_no, n: a.submittable_count })).join(", "),
+                })}
               </p>
             )}
             {/* Roughly what this batch is worth, per month — not a promise: it
@@ -2353,7 +2379,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             {payRate?.is_lumpsum && (
               <p className="rounded-lg border border-hairline bg-surface-secondary px-3 py-2 text-xs text-ink-2">
                 <Clock size={13} className="mr-1 inline -mt-0.5" />
-                คุณอยู่ในกลุ่มที่ได้ค่าตอบแทนแบบ<b>เหมาจ่ายทั้งเทอม</b> (≈ {baht(payRate.lumpsum_baht ?? 0)}) ไม่ได้คิดตามชั่วโมงเป็นรายเดือน
+                {t.rich("คุณอยู่ในกลุ่มที่ได้ค่าตอบแทนแบบ{lumpsum} (≈ {amount}) ไม่ได้คิดตามชั่วโมงเป็นรายเดือน", {
+                  lumpsum: <b>{t("เหมาจ่ายทั้งเทอม")}</b>,
+                  amount: baht(payRate.lumpsum_baht ?? 0),
+                })}
               </p>
             )}
             {chosenEstimate && <PayEstimateCard estimate={chosenEstimate} />}
@@ -2367,9 +2396,9 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         onConfirm={() => { if (confirmDeleteId) deleteRow(confirmDeleteId); }}
         isPending={deletingId !== null}
         danger
-        title="ลบรายการบันทึกเวลา"
-        confirmLabel="ลบรายการ"
-        message="ต้องการลบรายการนี้หรือไม่? การลบจะมีผลทันทีและไม่สามารถย้อนกลับได้"
+        title={t("ลบรายการบันทึกเวลา")}
+        confirmLabel={t("ลบรายการ")}
+        message={t("ต้องการลบรายการนี้หรือไม่? การลบจะมีผลทันทีและไม่สามารถย้อนกลับได้")}
       />
 
       <ConfirmDialog
@@ -2379,23 +2408,24 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         isPending={generating}
         danger={regenDraftCount > 0}
         size="md"
-        title="สร้างตารางบันทึกเวลาอัตโนมัติ"
-        confirmLabel="สร้างอัตโนมัติ"
+        title={t("สร้างตารางบันทึกเวลาอัตโนมัติ")}
+        confirmLabel={t("สร้างอัตโนมัติ")}
         message={
           <div className="space-y-2">
             <p className="text-sm text-muted">
               {regenDraftCount > 0
-                ? `ระบบจะสร้างรายการจากตารางสอนของ section นี้ทั้งเทอม โดยจะเขียนทับ draft ที่มีอยู่ ${regenDraftCount} รายการ ต้องการดำเนินการต่อหรือไม่?`
-                : "ระบบจะสร้างรายการบันทึกเวลาจากตารางสอนของ section นี้ทั้งเทอมให้อัตโนมัติ ต้องการดำเนินการต่อหรือไม่?"}
+                ? t("ระบบจะสร้างรายการจากตารางสอนของ section นี้ทั้งเทอม โดยจะเขียนทับ draft ที่มีอยู่ {n} รายการ ต้องการดำเนินการต่อหรือไม่?", { n: regenDraftCount })
+                : t("ระบบจะสร้างรายการบันทึกเวลาจากตารางสอนของ section นี้ทั้งเทอมให้อัตโนมัติ ต้องการดำเนินการต่อหรือไม่?")}
             </p>
             {/* Months in review are left exactly as they are. Said up front so
                 "ทั้งเทอม" above is not read as touching an approved month. */}
             {keptMonths.length > 0 && (
               <p className="rounded-lg border border-hairline bg-surface-secondary px-3 py-2 text-xs text-ink-2">
-                เดือนที่ส่งอนุมัติแล้ว อนุมัติแล้ว หรือถูกส่งกลับ จะคงไว้ตามเดิม ไม่ถูกสร้างทับ:{" "}
-                <b>{keptMonths.map(formatMonthTH).join(", ")}</b>
+                {t.rich("เดือนที่ส่งอนุมัติแล้ว อนุมัติแล้ว หรือถูกส่งกลับ จะคงไว้ตามเดิม ไม่ถูกสร้างทับ: {months}", {
+                  months: <b>{keptMonths.map(m => formatMonthTH(m)).join(", ")}</b>,
+                })}
                 {rejectedRows.length > 0 && (
-                  <> หากต้องการสร้างเดือนที่ถูกส่งกลับใหม่ ให้ลบรายการที่ไม่ผ่านของเดือนนั้นก่อน</>
+                  <> {t("หากต้องการสร้างเดือนที่ถูกส่งกลับใหม่ ให้ลบรายการที่ไม่ผ่านของเดือนนั้นก่อน")}</>
                 )}
               </p>
             )}
@@ -2408,9 +2438,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0" />
                 <span>
-                  มีวันหยุด <b>{unresolvedForActiveCount} วัน</b> ของ section นี้ที่อาจารย์ยังไม่ได้กำหนดวันชดเชย
-                  ระบบจะ<b>ข้ามวันเหล่านั้นไป</b>ทั้งหมด ไม่ได้สร้างรายการให้ — ดูรายละเอียดและแจ้งอาจารย์ได้ที่หน้า
-                  &quot;วันหยุดและวันชดเชย&quot; ก่อน แล้วค่อยกลับมาสร้างใหม่ก็ได้
+                  {t.rich("มีวันหยุด {days} ของ section นี้ที่อาจารย์ยังไม่ได้กำหนดวันชดเชย ระบบจะ{skip}ทั้งหมด ไม่ได้สร้างรายการให้ — ดูรายละเอียดและแจ้งอาจารย์ได้ที่หน้า \"วันหยุดและวันชดเชย\" ก่อน แล้วค่อยกลับมาสร้างใหม่ก็ได้", {
+                    days: <b>{t("{n} วัน", { n: unresolvedForActiveCount })}</b>,
+                    skip: <b>{t("ข้ามวันเหล่านั้นไป")}</b>,
+                  })}
                 </span>
               </p>
             )}
@@ -2418,15 +2449,18 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0" />
                 <span>
-                  อาจารย์อนุมัติชั่วโมง<b>ตรวจงาน</b>ให้คุณ แต่คุณยัง<b>ไม่ได้ตั้งวัน-เวลาตรวจงาน</b>ของตัวเอง
-                  (การ์ด &quot;ตารางตรวจการบ้านของคุณ&quot; ด้านบน) — ถ้าไม่ตั้งก่อนกด ระบบจะ<b>ไม่สร้างรายการตรวจงานให้เลย</b> ลืมไว้หรือเปล่า?
+                  {t.rich("อาจารย์อนุมัติชั่วโมง{review}ให้คุณ แต่คุณยัง{notSet}ของตัวเอง (การ์ด \"ตารางตรวจการบ้านของคุณ\" ด้านบน) — ถ้าไม่ตั้งก่อนกด ระบบจะ{none} ลืมไว้หรือเปล่า?", {
+                    review: <b>{t("ตรวจงาน")}</b>,
+                    notSet: <b>{t("ไม่ได้ตั้งวัน-เวลาตรวจงาน")}</b>,
+                    none: <b>{t("ไม่สร้างรายการตรวจงานให้เลย")}</b>,
+                  })}
                 </span>
               </p>
             )}
             {generating && (
               <p className="flex items-center gap-2 text-xs text-muted">
                 <Clock size={13} className="shrink-0 animate-pulse" />
-                กำลังสร้างรายการ — กรุณารอจนกว่าจะเสร็จ อย่าปิดหรือรีเฟรชหน้านี้
+                {t("กำลังสร้างรายการ — กรุณารอจนกว่าจะเสร็จ อย่าปิดหรือรีเฟรชหน้านี้")}
               </p>
             )}
           </div>
@@ -2452,7 +2486,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           const lock = monthLockFor(iso);
           if (lock) return monthLockMessage(lock);
           if (dayBlockedByReview(iso)) {
-            return "วันนี้อยู่ก่อนรายการที่ส่งอนุมัติแล้วในเดือนนี้ เพิ่มย้อนหลังไม่ได้ (ยกเว้นวันชดเชยที่อาจารย์กำหนด)";
+            return t("วันนี้อยู่ก่อนรายการที่ส่งอนุมัติแล้วในเดือนนี้ เพิ่มย้อนหลังไม่ได้ (ยกเว้นวันชดเชยที่อาจารย์กำหนด)");
           }
           return null;
         }}
@@ -2500,15 +2534,15 @@ interface RecoveryBannerProps {
 
 // formatSavedAgo renders a Thai relative time — "เมื่อ 2 ชม.ที่แล้ว" — so
 // the TA has a sense of freshness without needing to read a timestamp.
-function formatSavedAgo(savedAt: number): string {
+function formatSavedAgo(savedAt: number, t: TFn): string {
   const diff = Math.max(0, Date.now() - savedAt);
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "เมื่อสักครู่";
-  if (min < 60) return `เมื่อ ${min} นาทีที่แล้ว`;
+  if (min < 1) return t("เมื่อสักครู่");
+  if (min < 60) return t("เมื่อ {n} นาทีที่แล้ว", { n: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `เมื่อ ${hr} ชม.ที่แล้ว`;
+  if (hr < 24) return t("เมื่อ {n} ชม.ที่แล้ว", { n: hr });
   const day = Math.floor(hr / 24);
-  return `เมื่อ ${day} วันที่แล้ว`;
+  return t("เมื่อ {n} วันที่แล้ว", { n: day });
 }
 
 // WorklogSaveStatus is the compact pill next to "รวมชั่วโมงทั้งหมด" that
@@ -2526,13 +2560,14 @@ function WorklogSaveStatus({
   savedAgo: string;
   error: string | null;
 }) {
+  const { t } = useI18n();
   if (error && !pending && !busy) {
     return (
       <Tip content={error}><span
         className="inline-flex items-center gap-1.5 text-xs text-danger-soft-foreground bg-danger-soft border border-danger-soft-border rounded-md px-2 py-1"
       >
         <CloudOff size={13} />
-        <span className="truncate max-w-[16rem]">บันทึกอัตโนมัติไม่สำเร็จ แก้ไขอีกครั้งเพื่อลองใหม่</span>
+        <span className="truncate max-w-[16rem]">{t("บันทึกอัตโนมัติไม่สำเร็จ แก้ไขอีกครั้งเพื่อลองใหม่")}</span>
       </span></Tip>
     );
   }
@@ -2540,17 +2575,17 @@ function WorklogSaveStatus({
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
         <Cloud size={13} className="animate-pulse" />
-        <span>กำลังบันทึกอัตโนมัติ…</span>
+        <span>{t("กำลังบันทึกอัตโนมัติ…")}</span>
       </span>
     );
   }
   if (pending) {
     return (
-      <Tip content="ระบบจะบันทึกอัตโนมัติเมื่อไม่มีการแก้ไขต่อเนื่อง 30 วินาที (ระหว่างนี้ร่างถูกเก็บในเครื่องแล้ว)"><span
+      <Tip content={t("ระบบจะบันทึกอัตโนมัติเมื่อไม่มีการแก้ไขต่อเนื่อง 30 วินาที (ระหว่างนี้ร่างถูกเก็บในเครื่องแล้ว)")}><span
         className="inline-flex items-center gap-1.5 text-xs text-muted"
       >
         <Cloud size={13} />
-        <span>กำลังจะบันทึกอัตโนมัติ…</span>
+        <span>{t("กำลังจะบันทึกอัตโนมัติ…")}</span>
       </span></Tip>
     );
   }
@@ -2558,7 +2593,7 @@ function WorklogSaveStatus({
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
         <Check size={13} className="text-success" />
-        <span>บันทึกล่าสุด {savedAgo}</span>
+        <span>{t("บันทึกล่าสุด {ago}", { ago: savedAgo })}</span>
       </span>
     );
   }
@@ -2566,28 +2601,29 @@ function WorklogSaveStatus({
 }
 
 function RecoveryBanner({ offer, onAccept, onDismiss }: RecoveryBannerProps) {
+  const { t } = useI18n();
   const { restorable, dropped } = offer;
   const n = restorable.length;
   const detail =
     dropped > 0
-      ? `กู้คืนได้ ${n} จาก ${n + dropped} รายการ (${dropped} รายการถูกลบไปแล้ว)`
-      : `${n} รายการ`;
+      ? t("กู้คืนได้ {n} จาก {total} รายการ ({dropped} รายการถูกลบไปแล้ว)", { n, total: n + dropped, dropped })
+      : t("{n} รายการ", { n });
   return (
     <Alert
       status="warning"
       icon={<AlertTriangle size={14} />}
-      title="พบการแก้ไขที่ยังไม่ได้บันทึกจากครั้งก่อน"
+      title={t("พบการแก้ไขที่ยังไม่ได้บันทึกจากครั้งก่อน")}
       description={
         <div className="flex flex-col gap-2">
           <div className="text-xs text-muted">
-            {detail} · {formatSavedAgo(offer.savedAt)}
+            {detail} · {formatSavedAgo(offer.savedAt, t)}
           </div>
           <div className="flex gap-2">
             <Button variant="primary" size="sm" onClick={onAccept} disabled={n === 0}>
-              กู้คืน
+              {t("กู้คืน")}
             </Button>
             <Button variant="ghost" size="sm" onClick={onDismiss}>
-              ทิ้ง
+              {t("ทิ้ง")}
             </Button>
           </div>
         </div>
@@ -2736,6 +2772,7 @@ function classWindowError(
   end: string,
   schedules: SectionScheduleSlot[] | undefined,
   dateIndex: Map<string, DateStatus>,
+  i: DateFmt,
 ): string | null {
   if (activity !== "lecture" && activity !== "lab") return null;
   if (!schedules || schedules.length === 0) return null;
@@ -2748,10 +2785,11 @@ function classWindowError(
   const e = parseHM(end);
   if (Number.isNaN(s) || Number.isNaN(e)) return null;
 
-  const label = ACTIVITY_LABEL[activity] ?? activity;
+  const { t } = i;
+  const label = ACTIVITY_LABEL[activity] ? t(ACTIVITY_LABEL[activity]) : activity;
   const sameDay = schedules.filter(x => x.day_of_week === dt.getDay() && x.kind === activity);
   if (sameDay.length === 0) {
-    return `วันที่ ${formatWorkDate(workDate)} ไม่มีคาบ${label}ของกลุ่มนี้ตามตารางสอน ลงเวลาไม่ได้`;
+    return t("วันที่ {date} ไม่มีคาบ{kind}ของกลุ่มนี้ตามตารางสอน ลงเวลาไม่ได้", { date: workDateLabel(workDate, i), kind: label });
   }
   const windows: string[] = [];
   for (const x of sameDay) {
@@ -2761,7 +2799,7 @@ function classWindowError(
     windows.push(`${(x.start_time ?? "").slice(0, 5)}–${(x.end_time ?? "").slice(0, 5)}`);
     if (s >= xs && e <= xe) return null;
   }
-  return `เวลาที่กรอกต้องอยู่ในคาบ${label}จริงของวันนี้ (${windows.join(", ")})`;
+  return t("เวลาที่กรอกต้องอยู่ในคาบ{kind}จริงของวันนี้ ({windows})", { kind: label, windows: windows.join(", ") });
 }
 
 function AddWorklogModal({
@@ -2769,6 +2807,9 @@ function AddWorklogModal({
   impacts, sectionId, tcId, blockedMonth, weeklyCaps, existingLogs, sectionSchedules,
   termStart, termEnd, reviewSlotLabels, userId, aid,
 }: AddWorklogModalProps) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const formatWorkDate = (iso: string) => workDateLabel(iso, i18n);
   // Per-date lookup rebuilt only when impacts/section change — cheap since the
   // impacts list is capped to the term's holidays (< a dozen typically).
   const dateIndex = useMemo(() => buildDateIndex(impacts, sectionId), [impacts, sectionId]);
@@ -2821,10 +2862,10 @@ function AddWorklogModal({
       // labelTH describes what the cap covers so the hint text can be
       // specific ("ช่วยสอน (บรรยาย+ปฏิบัติ)" for grad shared, else per-kind).
       labelTH: shared
-        ? "ช่วยสอน (บรรยาย+ปฏิบัติการ)"
-        : ACTIVITY_LABEL[activity] ?? activity,
+        ? t("ช่วยสอน (บรรยาย+ปฏิบัติการ)")
+        : ACTIVITY_LABEL[activity] ? t(ACTIVITY_LABEL[activity]) : activity,
     };
-  }, [weeklyCaps, existingLogs, workDate, activity]);
+  }, [weeklyCaps, existingLogs, workDate, activity, t]);
 
   // Effective max the stepper will allow. MAX_ROW_HOURS is the hard per-row
   // ceiling; when a weekly quota is in play we further clamp to how much is
@@ -2872,13 +2913,13 @@ function AddWorklogModal({
   // recovered snapshot. Cleared on save + on explicit ล้าง in the banner.
   useEffect(() => {
     if (!open || !dirty || !userId || !aid) return;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       const payload: StoredAddFormData = {
         workDate, start, end, hours, activity, parentKind, note,
       };
       writeAddForm<StoredAddFormData>(userId, aid, payload);
     }, 400);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [open, dirty, userId, aid, workDate, start, end, hours, activity, parentKind, note]);
 
   function markDirty() { if (!dirty) setDirty(true); }
@@ -2942,8 +2983,9 @@ function AddWorklogModal({
     // but it hid the actual reason. Say the week is full, with the figures.
     if (weeklyInfo && weeklyInfo.remaining <= 0.001) {
       setError(
-        `โควตา${weeklyInfo.labelTH}ของสัปดาห์นี้เต็มแล้ว (ใช้ไป ${weeklyInfo.used.toFixed(2)} / ${weeklyInfo.cap.toFixed(2)} ชม./สัปดาห์) ` +
-          "เลือกวันในสัปดาห์อื่น หรือลดชั่วโมงของรายการเดิมในสัปดาห์นี้ก่อน",
+        t("โควตา{kind}ของสัปดาห์นี้เต็มแล้ว (ใช้ไป {used} / {cap} ชม./สัปดาห์) เลือกวันในสัปดาห์อื่น หรือลดชั่วโมงของรายการเดิมในสัปดาห์นี้ก่อน", {
+          kind: weeklyInfo.labelTH, used: weeklyInfo.used.toFixed(2), cap: weeklyInfo.cap.toFixed(2),
+        }),
       );
       return;
     }
@@ -2961,16 +3003,16 @@ function AddWorklogModal({
     // identical rules client-side.
     const err = validateRow({
       ...form, id: "", assignment_id: "__new__", status: "draft",
-    });
+    }, t);
     if (err) { setError(err); return; }
     // Inside the term staff opened. Checked before everything else: a date
     // outside it is not a quota question, it is not a date the course exists on.
     if (termStart && workDate < termStart) {
-      setError(`ภาคการศึกษาเริ่ม ${formatWorkDate(termStart)} ลงเวลาก่อนหน้านั้นไม่ได้`);
+      setError(t("ภาคการศึกษาเริ่ม {date} ลงเวลาก่อนหน้านั้นไม่ได้", { date: formatWorkDate(termStart) }));
       return;
     }
     if (termEnd && workDate > termEnd) {
-      setError(`ภาคการศึกษาสิ้นสุด ${formatWorkDate(termEnd)} ลงเวลาหลังจากนั้นไม่ได้`);
+      setError(t("ภาคการศึกษาสิ้นสุด {date} ลงเวลาหลังจากนั้นไม่ได้", { date: formatWorkDate(termEnd) }));
       return;
     }
     // The month has to be able to accept the row at all — checked before the
@@ -2983,13 +3025,15 @@ function AddWorklogModal({
     // The คาบ has to exist. Mirrors the server's validateClassWindow so a TA is
     // told on the form, not after a round-trip, that no บรรยาย/ปฏิบัติการ of this
     // section runs at that hour on that day.
-    const windowErr = classWindowError(activity, workDate, start, end, sectionSchedules, dateIndex);
+    const windowErr = classWindowError(activity, workDate, start, end, sectionSchedules, dateIndex, i18n);
     if (windowErr) { setError(windowErr); return; }
     // Weekly quota preflight — mirrors the server-side enforceWeeklyActivityCap
     // check. Gives the TA a clear reason before hitting the network.
     if (weeklyInfo && hours > weeklyInfo.remaining + 0.01) {
       setError(
-        `เกินโควตา ${weeklyInfo.labelTH} ประจำสัปดาห์ (${weeklyInfo.cap.toFixed(1)} ชม./สัปดาห์) สัปดาห์นี้เหลือ ${weeklyInfo.remaining.toFixed(2)} ชม.`,
+        t("เกินโควตา {kind} ประจำสัปดาห์ ({cap} ชม./สัปดาห์) สัปดาห์นี้เหลือ {left} ชม.", {
+          kind: weeklyInfo.labelTH, cap: weeklyInfo.cap.toFixed(1), left: weeklyInfo.remaining.toFixed(2),
+        }),
       );
       return;
     }
@@ -3006,14 +3050,14 @@ function AddWorklogModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="เพิ่มรายการบันทึกเวลา"
+      title={t("เพิ่มรายการบันทึกเวลา")}
       icon={<Plus size={18} />}
       size="lg"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={isPending}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={isPending}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={handleSave} isPending={isPending} disabled={isPending}>
-            <Save size={14} /> บันทึกรายการ
+            <Save size={14} /> {t("บันทึกรายการ")}
           </Button>
         </div>
       }
@@ -3023,13 +3067,13 @@ function AddWorklogModal({
           <div className="rounded-lg bg-surface-secondary border border-(--hairline) px-3 py-2 text-xs text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
             {sectionNo && (
               <span>
-                กำลังลงเวลาให้ <span className="font-semibold text-foreground">section {sectionNo}</span>
-                {sectionTrack ? ` (${sectionTrack === "special" ? "ภาคพิเศษ" : "ภาคปกติ"})` : ""}
+                {t.rich("กำลังลงเวลาให้ {section}", { section: <span className="font-semibold text-foreground">section {sectionNo}</span> })}
+                {sectionTrack ? " (" + (sectionTrack === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ")) + ")" : ""}
               </span>
             )}
             {scope && (
               <span>
-                · ขอบเขตจากคำขอของอาจารย์: <span className="font-semibold text-foreground">{SCOPE_LABEL[scope]}</span>
+                · {t.rich("ขอบเขตจากคำขอของอาจารย์: {scope}", { scope: <span className="font-semibold text-foreground">{t(SCOPE_LABEL[scope])}</span> })}
               </span>
             )}
           </div>
@@ -3039,11 +3083,11 @@ function AddWorklogModal({
           <Alert
             status="accent"
             icon={<AlertTriangle size={14} />}
-            title="พบร่างจากครั้งก่อน"
+            title={t("พบร่างจากครั้งก่อน")}
             description={
               <div className="flex gap-2 mt-1">
-                <Button variant="primary" size="sm" onClick={applyRecovered}>ใช้ต่อ</Button>
-                <Button variant="ghost" size="sm" onClick={discardRecovered}>ล้าง</Button>
+                <Button variant="primary" size="sm" onClick={applyRecovered}>{t("ใช้ต่อ")}</Button>
+                <Button variant="ghost" size="sm" onClick={discardRecovered}>{t("ล้าง")}</Button>
               </div>
             }
           />
@@ -3054,7 +3098,7 @@ function AddWorklogModal({
             up-front instead of letting them fill time and discover a cap
             violation on save. */}
         <div className={activity === "other" ? "grid grid-cols-2 gap-3" : ""}>
-          <FieldGroup label="ประเภทกิจกรรม">
+          <FieldGroup label={t("ประเภทกิจกรรม")}>
             <Select
               value={activity}
               onChange={e => {
@@ -3069,14 +3113,14 @@ function AddWorklogModal({
               }}
             >
               {activityKeys.map(v => (
-                <option key={v} value={v}>{ACTIVITY_LABEL[v]}</option>
+                <option key={v} value={v}>{t(ACTIVITY_LABEL[v])}</option>
               ))}
             </Select>
           </FieldGroup>
           {activity === "other" && (
             <FieldGroup
-              label="ประเภทกิจกรรมหลัก"
-              hint={parentKindKeys.length === 1 ? "ล็อกไว้ตามขอบเขตของคำขอ" : undefined}
+              label={t("ประเภทกิจกรรมหลัก")}
+              hint={parentKindKeys.length === 1 ? t("ล็อกไว้ตามขอบเขตของคำขอ") : undefined}
             >
               <Select
                 value={parentKindKeys.includes(parentKind) ? parentKind : defaultParentKind}
@@ -3084,7 +3128,7 @@ function AddWorklogModal({
                 disabled={parentKindKeys.length === 1}
               >
                 {parentKindKeys.map(v => (
-                  <option key={v} value={v}>{PARENT_KIND_LABEL[v]}</option>
+                  <option key={v} value={v}>{t(PARENT_KIND_LABEL[v])}</option>
                 ))}
               </Select>
             </FieldGroup>
@@ -3102,11 +3146,13 @@ function AddWorklogModal({
             }`}
           >
             <span>
-              โควตา <span className="font-semibold">{weeklyInfo.labelTH}</span>{" "}
-              {weeklyInfo.cap.toFixed(1)} ชม./สัปดาห์
+              {t.rich("โควตา {kind} {cap} ชม./สัปดาห์", {
+                kind: <span className="font-semibold">{weeklyInfo.labelTH}</span>,
+                cap: weeklyInfo.cap.toFixed(1),
+              })}
             </span>
-            <span>· ใช้ไปแล้ว <span className="font-semibold tabular">{weeklyInfo.used.toFixed(2)}</span> ชม.</span>
-            <span>· เหลือ <span className="font-semibold tabular">{weeklyInfo.remaining.toFixed(2)}</span> ชม.</span>
+            <span>· {t.rich("ใช้ไปแล้ว {h} ชม.", { h: <span className="font-semibold tabular">{weeklyInfo.used.toFixed(2)}</span> })}</span>
+            <span>· {t.rich("เหลือ {h} ชม.", { h: <span className="font-semibold tabular">{weeklyInfo.remaining.toFixed(2)}</span> })}</span>
           </div>
         )}
 
@@ -3114,21 +3160,21 @@ function AddWorklogModal({
           <div className="rounded-lg border border-(--hairline) bg-surface-secondary px-3 py-2 text-xs text-muted">
             {reviewSlotLabels && reviewSlotLabels.length > 0 ? (
               <>
-                ลงเวลาตรวจงานได้ในช่วงที่คุณแจ้งไว้{" "}
-                <span className="font-semibold text-foreground">{reviewSlotLabels.join(", ")}</span>{" "}
-                หรือวันตรวจงานที่อาจารย์กำหนด
+                {t.rich("ลงเวลาตรวจงานได้ในช่วงที่คุณแจ้งไว้ {slots} หรือวันตรวจงานที่อาจารย์กำหนด", {
+                  slots: <span className="font-semibold text-foreground">{reviewSlotLabels.join(", ")}</span>,
+                })}
               </>
             ) : (
-              <>ยังไม่ได้กำหนด “ตารางตรวจการบ้านของคุณ” — เพิ่มช่วงเวลาก่อน จึงจะลงเวลาตรวจงานได้</>
+              <>{t("ยังไม่ได้กำหนด “ตารางตรวจการบ้านของคุณ” — เพิ่มช่วงเวลาก่อน จึงจะลงเวลาตรวจงานได้")}</>
             )}
           </div>
         )}
 
         <FieldGroup
-          label="วันที่ปฏิบัติงาน"
+          label={t("วันที่ปฏิบัติงาน")}
           hint={
             termStart && termEnd
-              ? `ภาคการศึกษา ${formatWorkDate(termStart)} – ${formatWorkDate(termEnd)}`
+              ? t("ภาคการศึกษา {start} – {end}", { start: formatWorkDate(termStart), end: formatWorkDate(termEnd) })
               : undefined
           }
         >
@@ -3143,7 +3189,7 @@ function AddWorklogModal({
                 : currentMonthStartIso()
             }
             maxValue={termEnd}
-            label="วันที่ปฏิบัติงาน"
+            label={t("วันที่ปฏิบัติงาน")}
             autoFocus
           />
         </FieldGroup>
@@ -3160,18 +3206,18 @@ function AddWorklogModal({
 
         {/* Two times fit a phone row; the third field does not. */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <FieldGroup label="เวลาเริ่ม">
-            <TimePicker value={start} onChange={v => { markDirty(); setStart(v); }} label="เวลาเริ่ม" />
+          <FieldGroup label={t("เวลาเริ่ม")}>
+            <TimePicker value={start} onChange={v => { markDirty(); setStart(v); }} label={t("เวลาเริ่ม")} />
           </FieldGroup>
-          <FieldGroup label="เวลาสิ้นสุด">
-            <TimePicker value={end} onChange={v => { markDirty(); setEnd(v); }} label="เวลาสิ้นสุด" />
+          <FieldGroup label={t("เวลาสิ้นสุด")}>
+            <TimePicker value={end} onChange={v => { markDirty(); setEnd(v); }} label={t("เวลาสิ้นสุด")} />
           </FieldGroup>
           <FieldGroup
-            label="จำนวนชั่วโมง"
+            label={t("จำนวนชั่วโมง")}
             hint={
               weeklyInfo
-                ? `สูงสุด ${effectiveMax.toFixed(1)} ชม. (เหลือในสัปดาห์นี้)`
-                : `คำนวณให้อัตโนมัติ (สูงสุด ${MAX_ROW_HOURS} ชม.)`
+                ? t("สูงสุด {h} ชม. (เหลือในสัปดาห์นี้)", { h: effectiveMax.toFixed(1) })
+                : t("คำนวณให้อัตโนมัติ (สูงสุด {h} ชม.)", { h: MAX_ROW_HOURS })
             }
           >
             <HoursStepper
@@ -3183,8 +3229,8 @@ function AddWorklogModal({
           </FieldGroup>
         </div>
 
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)" hint={`${note.length}/${NOTE_MAX} ตัวอักษร`}>
-          <TextInput value={note} maxLength={NOTE_MAX} onChange={e => { markDirty(); setNote(e.target.value); }} placeholder="รายละเอียดเพิ่มเติม" />
+        <FieldGroup label={t("หมายเหตุ (ระบุก็ได้)")} hint={t("{n}/{max} ตัวอักษร", { n: note.length, max: NOTE_MAX })}>
+          <TextInput value={note} maxLength={NOTE_MAX} onChange={e => { markDirty(); setNote(e.target.value); }} placeholder={t("รายละเอียดเพิ่มเติม")} />
         </FieldGroup>
 
         {error && (
@@ -3211,6 +3257,9 @@ function BulkDeleteModal({
   rows: WorkLog[];
   onConfirm: (months: Set<string>) => void | Promise<void>;
 }) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const formatMonthTH = (key: string) => monthLabel(key, i18n);
   // Bucket draft-only rows by month so the list shows exactly what will be
   // deletable — non-draft rows are invisible here to avoid a checkbox next
   // to "0 รายการ" that would confuse the TA.
@@ -3254,19 +3303,19 @@ function BulkDeleteModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="ลบรายการฉบับร่าง"
+      title={t("ลบรายการฉบับร่าง")}
       icon={<Trash2 size={18} />}
       size="lg"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={isPending}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={isPending}>{t("ยกเลิก")}</Button>
           <Button
             variant="danger"
             onClick={() => onConfirm(selected)}
             isPending={isPending}
             disabled={isPending || totalSelected === 0}
           >
-            <Trash2 size={14} /> ลบ {totalSelected} รายการ
+            <Trash2 size={14} /> {t("ลบ {n} รายการ", { n: totalSelected })}
           </Button>
         </div>
       }
@@ -3275,13 +3324,13 @@ function BulkDeleteModal({
         <Alert
           status="warning"
           icon={<AlertTriangle size={14} />}
-          title="ลบเฉพาะรายการฉบับร่าง"
-          description="รายการที่ส่งอนุมัติ/อนุมัติแล้วจะไม่ถูกลบ และการลบไม่สามารถย้อนกลับได้"
+          title={t("ลบเฉพาะรายการฉบับร่าง")}
+          description={t("รายการที่ส่งอนุมัติ/อนุมัติแล้วจะไม่ถูกลบ และการลบไม่สามารถย้อนกลับได้")}
         />
 
         {monthCounts.length === 0 ? (
           <div className="text-sm text-muted text-center py-6">
-            ไม่มีรายการฉบับร่างให้ลบ
+            {t("ไม่มีรายการฉบับร่างให้ลบ")}
           </div>
         ) : (
           <>
@@ -3293,7 +3342,7 @@ function BulkDeleteModal({
                 className="h-4 w-4 accent-accent"
               />
               <span className="text-sm font-medium">
-                ลบทั้งหมด ({monthCounts.reduce((s, [, n]) => s + n, 0)} รายการ)
+                {t("ลบทั้งหมด ({n} รายการ)", { n: monthCounts.reduce((s, [, n]) => s + n, 0) })}
               </span>
             </label>
             <div className="flex flex-col gap-1">
@@ -3311,7 +3360,7 @@ function BulkDeleteModal({
                     />
                     <span className="text-sm">{formatMonthTH(k)}</span>
                   </span>
-                  <span className="text-xs text-muted">{n} รายการ</span>
+                  <span className="text-xs text-muted">{t("{n} รายการ", { n })}</span>
                 </label>
               ))}
             </div>
@@ -3355,13 +3404,16 @@ function SectionStrip({
   submitting: boolean;
   canSubmitActive: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div data-tour="wl-sections" className="mb-4">
       <div className="mb-2 flex items-center gap-2 text-sm text-muted">
         <LayoutGrid size={15} className="shrink-0" />
         <span>
-          วิชานี้คุณดูแล <b className="font-medium text-foreground">{assignments.length} กลุ่ม</b>{" "}
-          บันทึกเวลาและส่งอนุมัติ <b className="font-medium text-foreground">แยกกันแต่ละกลุ่ม</b>
+          {t.rich("วิชานี้คุณดูแล {groups} บันทึกเวลาและส่งอนุมัติ {separately}", {
+            groups: <b className="font-medium text-foreground">{t("{n} กลุ่ม", { n: assignments.length })}</b>,
+            separately: <b className="font-medium text-foreground">{t("แยกกันแต่ละกลุ่ม")}</b>,
+          })}
         </span>
       </div>
 
@@ -3391,9 +3443,9 @@ function SectionStrip({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className={"text-sm font-medium " + (active ? "" : "text-muted")}>
-                    sec {a.sec_no} · {a.track === "special" ? "พิเศษ" : "ปกติ"}
+                    sec {a.sec_no} · {a.track === "special" ? t("พิเศษ") : t("ปกติ")}
                   </span>
-                  {active && <Chip tone="brand">กำลังดู</Chip>}
+                  {active && <Chip tone="brand">{t("กำลังดู")}</Chip>}
                 </div>
 
                 <div className="mt-1.5 text-sm">
@@ -3403,7 +3455,7 @@ function SectionStrip({
                 {ceiling > 0 && (
                   <>
                     <div className="mt-1 text-xs text-muted tabular">
-                      {used.toFixed(1)} / {ceiling.toFixed(1)} ชม.
+                      {t("{used} / {total} ชม.", { used: used.toFixed(1), total: ceiling.toFixed(1) })}
                     </div>
                     {/* One segment per activity, each sized against the same
                         ceiling as the number above — so the segments always
@@ -3413,7 +3465,7 @@ function SectionStrip({
                       {Object.keys(ACTIVITY_LABEL)
                         .filter(k => (a.hours_by_activity?.[k] ?? 0) > 0.001)
                         .map(k => (
-                          <Tip key={k} content={`${ACTIVITY_LABEL[k]} ${(a.hours_by_activity?.[k] ?? 0).toFixed(1)} ชม.`}><div
+                          <Tip key={k} content={t("{kind} {h} ชม.", { kind: t(ACTIVITY_LABEL[k]), h: (a.hours_by_activity?.[k] ?? 0).toFixed(1) })}><div
                             className={ACTIVITY_BAR_COLOR[k]}
                             style={{ width: `${Math.min(100, ((a.hours_by_activity?.[k] ?? 0) / ceiling) * 100)}%` }}
                           /></Tip>
@@ -3428,7 +3480,7 @@ function SectionStrip({
                         .map(k => (
                           <span key={k} className="inline-flex items-center gap-1">
                             <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + ACTIVITY_BAR_COLOR[k]} />
-                            {ACTIVITY_LABEL[k]} {a.hours_by_activity[k].toFixed(1)}
+                            {t(ACTIVITY_LABEL[k])} {a.hours_by_activity[k].toFixed(1)}
                           </span>
                         ))}
                     </div>
@@ -3446,17 +3498,17 @@ function SectionStrip({
                     isPending={submitting}
                     disabled={submitting || !canSubmitActive}
                   >
-                    <Send size={13} /> ส่งอนุมัติ sec {a.sec_no}
+                    <Send size={13} /> {t("ส่งอนุมัติ sec {sec}", { sec: a.sec_no })}
                   </LockedActionButton>
                 ) : a.unsent_count > 0 && a.submittable_count === 0 && (a.stranded_count ?? 0) === a.unsent_count ? (
                   // Nothing here can be sent any more, so the card offers the
                   // step that CAN move it instead of a button that cannot.
                   <div className="rounded-md border border-border bg-surface-secondary px-2 py-1.5 text-center text-[11px] leading-tight text-ink-3">
-                    ไม่ประสงค์ลงเวลา (เลยกำหนดแล้ว)
+                    {t("ไม่ประสงค์ลงเวลา (เลยกำหนดแล้ว)")}
                   </div>
                 ) : (
                   <Button variant="secondary" size="sm" className="w-full" onClick={() => onSelect(a.id)}>
-                    เปิดกลุ่มนี้
+                    {t("เปิดกลุ่มนี้")}
                   </Button>
                 )}
               </div>
@@ -3474,13 +3526,14 @@ function SectionStrip({
  * pile is the only one that can be forgotten.
  */
 function SectionStateLine({ a }: { a: Assignment }) {
+  const { t } = useI18n();
   if (a.unsent_count > 0) {
     const stranded = a.stranded_count ?? 0;
     // A single "unsent 10" hid the difference that decides what to do next:
     // some may be past their deadline and beyond the TA entirely.
     const parts = [
-      a.submittable_count > 0 ? `ยังไม่ได้ส่ง ${a.submittable_count} รายการ` : "",
-      stranded > 0 ? `ไม่ประสงค์ลงเวลา ${stranded}` : "",
+      a.submittable_count > 0 ? t("ยังไม่ได้ส่ง {n} รายการ", { n: a.submittable_count }) : "",
+      stranded > 0 ? t("ไม่ประสงค์ลงเวลา {n}", { n: stranded }) : "",
     ].filter(Boolean);
     const tone = a.submittable_count > 0 ? "text-amber-700" : "text-red-700";
     return (
@@ -3494,7 +3547,7 @@ function SectionStateLine({ a }: { a: Assignment }) {
     return (
       <span className="inline-flex items-center gap-1.5 text-muted">
         <Clock size={14} className="shrink-0" />
-        ส่งแล้ว {a.submitted_count} รายการ · รออาจารย์
+        {t("ส่งแล้ว {n} รายการ · รออาจารย์", { n: a.submitted_count })}
       </span>
     );
   }
@@ -3502,14 +3555,14 @@ function SectionStateLine({ a }: { a: Assignment }) {
     return (
       <span className="inline-flex items-center gap-1.5 text-success-soft-foreground">
         <CheckCircle2 size={14} className="shrink-0" />
-        อนุมัติแล้ว {a.approved_count} รายการ
+        {t("อนุมัติแล้ว {n} รายการ", { n: a.approved_count })}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5 text-muted">
       <Clock size={14} className="shrink-0" />
-      ยังไม่มีรายการ
+      {t("ยังไม่มีรายการ")}
     </span>
   );
 }
@@ -3562,6 +3615,10 @@ function MonthlyWorklogView({
   rows, loading, columns, termStart, termEnd, view, onQuickAdd,
   impacts, monthLocks, tcId, sectionId,
 }: MonthlyWorklogViewProps) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const formatMonthTH = (key: string) => monthLabel(key, i18n);
+  const formatWorkDate = (iso: string) => workDateLabel(iso, i18n);
   // Months with nothing left to do start folded.
   //
   // A settled month is a wall of green rows the TA will never act on again, and
@@ -3607,7 +3664,7 @@ function MonthlyWorklogView({
     // Month panels in the same box model as the real ones below, so the list
     // lands in place: header strip + a few rows.
     return (
-      <SkelRegion label="กำลังโหลดบันทึกเวลา" className="flex flex-col gap-3">
+      <SkelRegion label={t("กำลังโหลดบันทึกเวลา")} className="flex flex-col gap-3">
         {Array.from({ length: 3 }, (_, i) => (
           <Panel key={i} padded={false}>
             <div className="flex items-center gap-3 px-4 py-3">
@@ -3643,8 +3700,8 @@ function MonthlyWorklogView({
     return (
       <Panel>
         <EmptyState
-          title="ยังไม่มีบันทึก"
-          description={`กด "เพิ่มรายการ" เพื่อสร้างเอง หรือ "สร้างอัตโนมัติ" เพื่อสร้างจากตารางสอน`}
+          title={t("ยังไม่มีบันทึก")}
+          description={t("กด \"เพิ่มรายการ\" เพื่อสร้างเอง หรือ \"สร้างอัตโนมัติ\" เพื่อสร้างจากตารางสอน")}
         />
       </Panel>
     );
@@ -3733,20 +3790,20 @@ function MonthlyWorklogView({
                       {/* With no way back after the deadline, the warning has to
                           name the consequence, not just the date. */}
                       {deadline.daysLeft <= 0
-                        ? "⏰ วันนี้วันสุดท้าย ไม่ส่งถือว่าไม่ประสงค์ลงเวลา"
+                        ? "⏰ " + t("วันนี้วันสุดท้าย ไม่ส่งถือว่าไม่ประสงค์ลงเวลา")
                         : deadline.daysLeft <= 3
-                        ? `⏰ เหลือ ${deadline.daysLeft} วัน ไม่ส่งถือว่าไม่ประสงค์ลงเวลา`
-                        : `⏰ เหลืออีก ${deadline.daysLeft} วันต้องส่ง`}
+                        ? "⏰ " + t("เหลือ {n} วัน ไม่ส่งถือว่าไม่ประสงค์ลงเวลา", { n: deadline.daysLeft })
+                        : "⏰ " + t("เหลืออีก {n} วันต้องส่ง", { n: deadline.daysLeft })}
                     </Chip>
                   )}
                   {monthLock && (
                     <Chip tone={monthLock.financeSent ? "success" : "neutral"}>
-                      {monthLock.financeSent ? "🔒 ส่งการเงินแล้ว" : "🔒 งวดปิดรับแล้ว"}
+                      {"🔒 " + (monthLock.financeSent ? t("ส่งการเงินแล้ว") : t("งวดปิดรับแล้ว"))}
                     </Chip>
                   )}
                   {unresolvedInMonth > 0 && (
                     <Chip tone="warn">
-                      🏖 รอวันชดเชย {unresolvedInMonth}
+                      🏖 {t("รอวันชดเชย {n}", { n: unresolvedInMonth })}
                     </Chip>
                   )}
                 </div>
@@ -3760,8 +3817,8 @@ function MonthlyWorklogView({
                     all rejected: the label read draftInMonth while the condition
                     tested draft+rejected. Each state now counts its own rows. */}
                 <div className="text-xs text-muted mt-1 flex flex-wrap items-center gap-1.5">
-                  <span className="tabular">{monthRows.length} รายการ</span>
-                  <span>· รวม <span className="font-semibold text-foreground tabular">{subtotal.toFixed(1)}</span> ชม.</span>
+                  <span className="tabular">{t("{n} รายการ", { n: monthRows.length })}</span>
+                  <span>· {t.rich("รวม {h} ชม.", { h: <span className="font-semibold text-foreground tabular">{subtotal.toFixed(1)}</span> })}</span>
                   {/* บรรยาย/ปฏิบัติการ/ฯลฯ that add up to the total above —
                       only the activities actually present this month, same
                       colours as the section card's own bar. */}
@@ -3770,7 +3827,7 @@ function MonthlyWorklogView({
                     .map(k => (
                       <span key={k} className="inline-flex items-center gap-1">
                         <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + ACTIVITY_BAR_COLOR[k]} />
-                        {ACTIVITY_LABEL[k]} {hoursByActivity[k].toFixed(1)}
+                        {t(ACTIVITY_LABEL[k])} {hoursByActivity[k].toFixed(1)}
                       </span>
                     ))}
                   {/* Chip convention: a chip that counts ROWS carries the count
@@ -3786,31 +3843,31 @@ function MonthlyWorklogView({
                   {monthLock ? (
                     unsentInMonth > 0 && (
                       <span className="ml-1 rounded-full border border-border bg-surface-secondary px-2 py-0.5 font-medium text-ink-3">
-                        หมดเวลาส่ง {unsentInMonth}
+                        {t("หมดเวลาส่ง {n}", { n: unsentInMonth })}
                       </span>
                     )
                   ) : (
                     <>
                       {rejectedInMonth > 0 && (
                         <span className="ml-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700">
-                          ต้องแก้ไข {rejectedInMonth}
+                          {t("ต้องแก้ไข {n}", { n: rejectedInMonth })}
                         </span>
                       )}
                       {draftInMonth > 0 && (
                         <span className="ml-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-800">
-                          ฉบับร่าง {draftInMonth}
+                          {t("ฉบับร่าง {n}", { n: draftInMonth })}
                         </span>
                       )}
                     </>
                   )}
                   {submittedInMonth > 0 && (
                     <span className="ml-1 rounded-full bg-blue-50 px-2 py-0.5 font-medium text-blue-700 border border-blue-200">
-                      รออาจารย์ {submittedInMonth}
+                      {t("รออาจารย์ {n}", { n: submittedInMonth })}
                     </span>
                   )}
                   {approvedInMonth > 0 && (
                     <span className="ml-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 border border-emerald-200">
-                      อาจารย์อนุมัติ {approvedInMonth}
+                      {t("อาจารย์อนุมัติ {n}", { n: approvedInMonth })}
                     </span>
                   )}
                   {/* The step after the lecturer. "รอเจ้าหน้าที่ตรวจ" only once the
@@ -3820,19 +3877,19 @@ function MonthlyWorklogView({
                   {approvedInMonth > 0 && (
                     stage === "finance_sent" ? (
                       <span className="ml-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
-                        ส่งการเงินแล้ว
+                        {t("ส่งการเงินแล้ว")}
                       </span>
                     ) : stage === "exported" ? (
                       <span className="ml-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
-                        เจ้าหน้าที่ส่งเบิกจ่ายแล้ว
+                        {t("เจ้าหน้าที่ส่งเบิกจ่ายแล้ว")}
                       </span>
                     ) : stage === "staff_reviewed" ? (
                       <span className="ml-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
-                        เจ้าหน้าที่ตรวจแล้ว
+                        {t("เจ้าหน้าที่ตรวจแล้ว")}
                       </span>
                     ) : stage === "pending" && submittedInMonth === 0 && (unsentInMonth === 0 || monthLock) ? (
                       <span className="ml-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 font-medium text-blue-700">
-                        รอเจ้าหน้าที่ตรวจ
+                        {t("รอเจ้าหน้าที่ตรวจ")}
                       </span>
                     ) : null
                   )}
@@ -3841,17 +3898,17 @@ function MonthlyWorklogView({
                       facts are not confused for one another. */}
                   {unpaidMonths?.has(month) && (
                     <span className="ml-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700">
-                      งบไม่ถึง · ไม่ได้รับค่าตอบแทน
+                      {t("งบไม่ถึง · ไม่ได้รับค่าตอบแทน")}
                     </span>
                   )}
                   {partialMonths?.has(month) && (
                     <span className="ml-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
-                      งบไม่ถึง · ได้ไม่เต็มจำนวน
+                      {t("งบไม่ถึง · ได้ไม่เต็มจำนวน")}
                     </span>
                   )}
                   {zeroedTracks?.has(month) && (
                     <span className="ml-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700">
-                      งบไม่ถึง · {(zeroedTracks.get(month) ?? []).map(t => TRACK_LABEL[t] ?? t).join("และ")}ไม่ได้รับค่าตอบแทน
+                      {t("งบไม่ถึง · {tracks}ไม่ได้รับค่าตอบแทน", { tracks: joinAnd((zeroedTracks.get(month) ?? []).map(tr => (TRACK_LABEL[tr] ? t(TRACK_LABEL[tr]) : tr)), t) })}
                     </span>
                   )}
                 </div>
@@ -3870,7 +3927,7 @@ function MonthlyWorklogView({
                   }}
                   className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline px-2 py-1 rounded"
                 >
-                  <Plus size={12} /> เพิ่มในเดือนนี้
+                  <Plus size={12} /> {t("เพิ่มในเดือนนี้")}
                 </span>
               )}
             </button>
@@ -3882,14 +3939,14 @@ function MonthlyWorklogView({
                     <Alert
                       status="warning"
                       icon={<AlertTriangle size={14} />}
-                      title={`มีวันหยุด ${unresolvedInMonth} วันในเดือนนี้ที่ยังไม่ได้กำหนดวันชดเชย`}
-                      description="เข้าไปดูรายละเอียดและแจ้งอาจารย์ได้ที่หน้า 'วันหยุดและวันชดเชย'"
+                      title={t("มีวันหยุด {n} วันในเดือนนี้ที่ยังไม่ได้กำหนดวันชดเชย", { n: unresolvedInMonth })}
+                      description={t("เข้าไปดูรายละเอียดและแจ้งอาจารย์ได้ที่หน้า 'วันหยุดและวันชดเชย'")}
                     />
                   </div>
                 )}
                 {monthRows.length === 0 ? (
                   <div className="px-4 py-6 text-center text-sm text-muted">
-                    ยังไม่มีบันทึกในเดือนนี้
+                    {t("ยังไม่มีบันทึกในเดือนนี้")}
                   </div>
                 ) : (
                   <MonthTable columns={columns} rows={monthRows} dateIndex={dateIndex} />
@@ -3914,6 +3971,7 @@ function MonthTable({
   rows: WorkLog[];
   dateIndex?: Map<string, DateStatus>;
 }) {
+  const { t } = useI18n();
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[560px] text-sm border-collapse sm:min-w-0">
@@ -3953,7 +4011,7 @@ function MonthTable({
                     )}
                     {col.id === "work_date" && status?.isMakeupDay && !holiday && (
                       <div className="mt-1">
-                        <Chip tone="info">📅 วันชดเชย</Chip>
+                        <Chip tone="info">📅 {t("วันชดเชย")}</Chip>
                       </div>
                     )}
                   </td>
@@ -3986,6 +4044,7 @@ function HolidayHint({
   dateIndex: Map<string, DateStatus>;
   tcId?: string;
 }) {
+  const { t } = useI18n();
   if (!workDate) return null;
   const status = dateIndex.get(workDate);
   if (!status) return null;
@@ -3996,7 +4055,7 @@ function HolidayHint({
   // allowed.
   if (status.isMakeupDay && !holiday) {
     return (
-      <Alert status="accent" title="วันนี้เป็นวันชดเชยที่อาจารย์กำหนดไว้" />
+      <Alert status="accent" title={t("วันนี้เป็นวันชดเชยที่อาจารย์กำหนดไว้")} />
     );
   }
 
@@ -4007,8 +4066,8 @@ function HolidayHint({
       <Alert
         status="warning"
         icon={<AlertTriangle size={14} />}
-        title={`คาบนี้ถูกย้ายไปวันชดเชย ${status.shiftedTo}`}
-        description="กรุณาลงเวลาบน 'วันชดเชย' แทนที่จะเป็นวันเดิม"
+        title={t("คาบนี้ถูกย้ายไปวันชดเชย {date}", { date: status.shiftedTo })}
+        description={t("กรุณาลงเวลาบน 'วันชดเชย' แทนที่จะเป็นวันเดิม")}
       />
     );
   }
@@ -4022,7 +4081,7 @@ function HolidayHint({
     return (
       <Alert
         status="accent"
-        title={`วันนี้หยุดเฉพาะช่วง ${partialOnDate.start}–${partialOnDate.end} (${partialOnDate.name}) ช่วงเวลาที่คุณเลือกอยู่นอกช่วงหยุด จึงลงเวลาได้ตามปกติ`}
+        title={t("วันนี้หยุดเฉพาะช่วง {start}–{end} ({name}) ช่วงเวลาที่คุณเลือกอยู่นอกช่วงหยุด จึงลงเวลาได้ตามปกติ", { start: partialOnDate.start, end: partialOnDate.end, name: partialOnDate.name })}
       />
     );
   }
@@ -4037,7 +4096,9 @@ function HolidayHint({
       <Alert
         status="accent"
         icon={<AlertTriangle size={14} />}
-        title={`ช่วงเวลานี้ตรงกับวันหยุด (${holidayLabel(holiday)}) อนุญาตเฉพาะ${activity === "review" ? "การตรวจงาน" : "งานอื่นๆ ที่คู่กับบรรยาย"}`}
+        title={activity === "review"
+          ? t("ช่วงเวลานี้ตรงกับวันหยุด ({holiday}) อนุญาตเฉพาะการตรวจงาน", { holiday: holidayLabel(holiday) })
+          : t("ช่วงเวลานี้ตรงกับวันหยุด ({holiday}) อนุญาตเฉพาะงานอื่นๆ ที่คู่กับบรรยาย", { holiday: holidayLabel(holiday) })}
       />
     );
   }
@@ -4048,21 +4109,23 @@ function HolidayHint({
       status="danger"
       icon={<AlertTriangle size={14} />}
       title={isPartial
-        ? `เวลา ${startTime || "—"}–${endTime || "—"} อยู่ในช่วงวันหยุด (${holidayLabel(holiday)})`
-        : `วันนี้เป็นวันหยุด (${holiday.name}) ยังไม่ได้กำหนดวันชดเชย`}
+        ? t("เวลา {start}–{end} อยู่ในช่วงวันหยุด ({holiday})", { start: startTime || "—", end: endTime || "—", holiday: holidayLabel(holiday) })
+        : t("วันนี้เป็นวันหยุด ({name}) ยังไม่ได้กำหนดวันชดเชย", { name: holiday.name })}
       description={
         isPartial ? (
           // The cheapest fix for a partial closure is usually to move the entry a
           // few hours, not to wait on a makeup — lead with that.
           <span>
-            ลงเวลาได้เฉพาะช่วงที่ไม่คาบเกี่ยวกับ {holiday.start}–{holiday.end} หรือกำหนดวันชดเชย
-            {link && <> · <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a></>}
+            {t("ลงเวลาได้เฉพาะช่วงที่ไม่คาบเกี่ยวกับ {start}–{end} หรือกำหนดวันชดเชย", { start: holiday.start, end: holiday.end })}
+            {link && <> · <a href={link} className="text-accent hover:underline">{t("ไปหน้าวันหยุดและวันชดเชย")}</a></>}
           </span>
         ) : link ? (
           <span>
-            คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ <a href={link} className="text-accent hover:underline">ไปหน้าวันหยุดและวันชดเชย</a> เพื่อกำหนดวันชดเชย หรือแจ้งอาจารย์
+            {t.rich("คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ {link} เพื่อกำหนดวันชดเชย หรือแจ้งอาจารย์", {
+              link: <a href={link} className="text-accent hover:underline">{t("ไปหน้าวันหยุดและวันชดเชย")}</a>,
+            })}
           </span>
-        ) : "คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ ต้องกำหนดวันชดเชยก่อน"
+        ) : t("คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ ต้องกำหนดวันชดเชยก่อน")
       }
     />
   );
@@ -4093,26 +4156,26 @@ const DUTY_KINDS = ["review", "other_lecture", "other_lab"] as const;
 
 const DUTY_META: Record<string, { title: string; short: string; blurb: string; activity: string }> = {
   review: {
-    title: "ตารางตรวจการบ้านของคุณ",
-    short: "ตรวจงาน",
-    blurb: "กำหนดวันเวลาที่คุณตรวจการบ้านเป็นประจำ",
-    activity: "ตรวจงาน",
+    title: msg("ตารางตรวจการบ้านของคุณ"),
+    short: msg("ตรวจงาน"),
+    blurb: msg("กำหนดวันเวลาที่คุณตรวจการบ้านเป็นประจำ"),
+    activity: msg("ตรวจงาน"),
   },
   other_lecture: {
-    title: "ตารางงานอื่น ๆ (บรรยาย) ของคุณ",
-    short: "งานอื่นๆ (บรรยาย)",
-    blurb: "กำหนดวันเวลาที่คุณทำงานอื่นที่คู่กับคาบบรรยาย",
-    activity: "อื่นๆ",
+    title: msg("ตารางงานอื่น ๆ (บรรยาย) ของคุณ"),
+    short: msg("งานอื่นๆ (บรรยาย)"),
+    blurb: msg("กำหนดวันเวลาที่คุณทำงานอื่นที่คู่กับคาบบรรยาย"),
+    activity: msg("อื่นๆ"),
   },
   other_lab: {
-    title: "ตารางงานอื่น ๆ (ปฏิบัติการ) ของคุณ",
-    short: "งานอื่นๆ (ปฏิบัติการ)",
-    blurb: "กำหนดวันเวลาที่คุณทำงานอื่นที่คู่กับคาบปฏิบัติการ",
-    activity: "อื่นๆ",
+    title: msg("ตารางงานอื่น ๆ (ปฏิบัติการ) ของคุณ"),
+    short: msg("งานอื่นๆ (ปฏิบัติการ)"),
+    blurb: msg("กำหนดวันเวลาที่คุณทำงานอื่นที่คู่กับคาบปฏิบัติการ"),
+    activity: msg("อื่นๆ"),
   },
 };
 
-const DAY_TH_SHORT = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+const DAY_TH_SHORT = [msg("อาทิตย์"), msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์")];
 
 // Response shape for GET /assignments/:id/review-schedules. The budget is what
 // the LECTURER declared per duty — a duty they did not ask for comes back as 0
@@ -4152,6 +4215,7 @@ function DutySchedulePanels({ assignmentId }: { assignmentId: string }) {
 }
 
 function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind: string }) {
+  const { t } = useI18n();
   const meta = DUTY_META[kind];
   const { data, isLoading } = useSWR<TAReviewScheduleList>(
     assignmentId ? `/assignments/${assignmentId}/review-schedules` : null,
@@ -4169,7 +4233,7 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
     setDeleting(true);
     try {
       await api.del(`/assignments/${assignmentId}/review-schedules/${confirmDeleteId}`);
-      notify.success(`ลบ${meta.short}แล้ว`);
+      notify.success(t("ลบ{duty}แล้ว", { duty: t(meta.short) }));
       setConfirmDeleteId(null);
       await refresh();
     } catch (e) {
@@ -4190,25 +4254,29 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
       title={
         <span className="flex items-center gap-2">
           <BookOpenCheck size={16} className="text-muted" />
-          <span>{meta.title}</span>
+          <span>{t(meta.title)}</span>
           {declaredHrs > 0 && (
             <Chip tone={isFull ? "warn" : "info"}>
-              {usedHrs.toFixed(1)}/{declaredHrs.toFixed(1)} ชม./สัปดาห์
+              {t("{used}/{total} ชม./สัปดาห์", { used: usedHrs.toFixed(1), total: declaredHrs.toFixed(1) })}
             </Chip>
           )}
         </span>
       }
       info={
         <>
-          {meta.blurb} ตอนกด <b>สร้างอัตโนมัติ</b> ระบบจะขยายเป็นรายการ <b>{meta.activity}</b> ให้ตลอดเทอม
+          {t(meta.blurb)}{" "}
+          {t.rich("ตอนกด {generate} ระบบจะขยายเป็นรายการ {activity} ให้ตลอดเทอม", {
+            generate: <b>{t("สร้างอัตโนมัติ")}</b>,
+            activity: <b>{t(meta.activity)}</b>,
+          })}
           <br /><br />
-          รวมต่อสัปดาห์ต้องไม่เกินชั่วโมงที่อาจารย์ระบุไว้ในคำขอ ({declaredHrs.toFixed(1)} ชม.)
+          {t("รวมต่อสัปดาห์ต้องไม่เกินชั่วโมงที่อาจารย์ระบุไว้ในคำขอ ({h} ชม.)", { h: declaredHrs.toFixed(1) })}
         </>
       }
       actions={
         <TipWrap
           className="inline-flex"
-          content={approved && isFull ? `ครบชั่วโมงที่อาจารย์ระบุแล้ว (${declaredHrs.toFixed(1)} ชม./สัปดาห์)` : undefined}
+          content={approved && isFull ? t("ครบชั่วโมงที่อาจารย์ระบุแล้ว ({h} ชม./สัปดาห์)", { h: declaredHrs.toFixed(1) }) : undefined}
         >
         <LockedActionButton
           variant="secondary"
@@ -4216,7 +4284,7 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
           onClick={() => setEditing("new")}
           disabled={isFull}
         >
-          <Plus size={13} /> เพิ่มช่วงเวลา
+          <Plus size={13} /> {t("เพิ่มช่วงเวลา")}
         </LockedActionButton>
         </TipWrap>
       }
@@ -4226,13 +4294,13 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
         <div className="px-3"><SkelRows rows={2} columns={3} /></div>
       ) : rows.length === 0 ? (
         <div className="p-4 text-sm text-muted">
-          ยังไม่ได้ตั้งช่วงเวลา กด "เพิ่มช่วงเวลา" เพื่อกำหนดวันประจำสัปดาห์ที่คุณจะทำงานนี้
+          {t("ยังไม่ได้ตั้งช่วงเวลา กด \"เพิ่มช่วงเวลา\" เพื่อกำหนดวันประจำสัปดาห์ที่คุณจะทำงานนี้")}
         </div>
       ) : (
         <div className="divide-y divide-(--hairline)">
           {rows.map(r => (
             <div key={r.id} className="flex items-center gap-3 p-3 flex-wrap">
-              <div className="w-24 shrink-0 text-sm font-medium">{DAY_TH_SHORT[r.day_of_week]}</div>
+              <div className="w-24 shrink-0 text-sm font-medium">{DAY_TH_SHORT[r.day_of_week] ? t(DAY_TH_SHORT[r.day_of_week]) : ""}</div>
               <div className="text-sm tabular-nums text-foreground">
                 {r.start_time}–{r.end_time}
               </div>
@@ -4243,13 +4311,13 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
                 </Tip>
               )}
               <div className="ml-auto flex items-center gap-1">
-                <LockedActionButton variant="ghost" size="sm" onClick={() => setEditing(r)} isIconOnly aria-label="แก้ไข">
+                <LockedActionButton variant="ghost" size="sm" onClick={() => setEditing(r)} isIconOnly aria-label={t("แก้ไข")}>
                   <Pencil size={13} />
                 </LockedActionButton>
                 <LockedActionButton
                   variant="ghost" size="sm"
                   onClick={() => setConfirmDeleteId(r.id)}
-                  isIconOnly aria-label="ลบ"
+                  isIconOnly aria-label={t("ลบ")}
                 >
                   <Trash2 size={13} />
                 </LockedActionButton>
@@ -4277,9 +4345,9 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
         onConfirm={handleDelete}
         isPending={deleting}
         danger
-        title="ลบวันตรวจการบ้าน"
-        confirmLabel="ลบ"
-        message="รายการที่เคยสร้างไปแล้วจะไม่ถูกลบ แต่การกด 'สร้างอัตโนมัติ' ครั้งถัดไปจะไม่มีรายการของวันนี้อีก ต้องการลบหรือไม่?"
+        title={t("ลบวันตรวจการบ้าน")}
+        confirmLabel={t("ลบ")}
+        message={t("รายการที่เคยสร้างไปแล้วจะไม่ถูกลบ แต่การกด 'สร้างอัตโนมัติ' ครั้งถัดไปจะไม่มีรายการของวันนี้อีก ต้องการลบหรือไม่?")}
       />
     </Panel>
   );
@@ -4299,6 +4367,7 @@ function ReviewScheduleModal({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const { t } = useI18n();
   const meta = DUTY_META[kind];
   const [dow, setDow] = useState<number>(initial?.day_of_week ?? 1);
   // A new slot defaults to 14:00 plus whatever is LEFT of the weekly quota
@@ -4340,24 +4409,24 @@ function ReviewScheduleModal({
     return null;
   }, [busy, dow, start, end, initial]);
   const conflictKindTH: Record<BusyBlock["kind"], string> = {
-    class: "ตารางเรียนของคุณ",
-    teaching: "คาบสอนที่คุณเป็น TA",
-    review: "ตารางงานอื่นของคุณ",
+    class: t("ตารางเรียนของคุณ"),
+    teaching: t("คาบสอนที่คุณเป็น TA"),
+    review: t("ตารางงานอื่นของคุณ"),
   };
 
   async function handleSave() {
     if (parseHM(end) <= parseHM(start)) {
-      notify.error("เวลาสิ้นสุดต้องหลังเวลาเริ่ม");
+      notify.error(t("เวลาสิ้นสุดต้องหลังเวลาเริ่ม"));
       return;
     }
     if (conflict) {
       notify.error(
-        `เวลาชนกับ${conflictKindTH[conflict.kind]} (${conflict.label} ${conflict.start_time}–${conflict.end_time})`,
+        t("เวลาชนกับ{what} ({label} {start}–{end})", { what: conflictKindTH[conflict.kind], label: conflict.label, start: conflict.start_time, end: conflict.end_time }),
       );
       return;
     }
     if (overCap) {
-      notify.error(`ชั่วโมง${meta.short}รวมต่อสัปดาห์ (${projected.toFixed(1)} ชม.) เกินที่อาจารย์ระบุไว้ (${lectureHrs.toFixed(1)} ชม.)`);
+      notify.error(t("ชั่วโมง{duty}รวมต่อสัปดาห์ ({h} ชม.) เกินที่อาจารย์ระบุไว้ ({max} ชม.)", { duty: t(meta.short), h: projected.toFixed(1), max: lectureHrs.toFixed(1) }));
       return;
     }
     setSaving(true);
@@ -4365,10 +4434,10 @@ function ReviewScheduleModal({
       const body = { kind, day_of_week: dow, start_time: start, end_time: end, room, note };
       if (initial) {
         await api.patch(`/assignments/${assignmentId}/review-schedules/${initial.id}`, body);
-        notify.success(`แก้ไข${meta.short}แล้ว`);
+        notify.success(t("แก้ไข{duty}แล้ว", { duty: t(meta.short) }));
       } else {
         await api.post(`/assignments/${assignmentId}/review-schedules`, body);
-        notify.success(`เพิ่ม${meta.short}แล้ว`);
+        notify.success(t("เพิ่ม{duty}แล้ว", { duty: t(meta.short) }));
       }
       await onSaved();
     } catch (e) {
@@ -4380,47 +4449,51 @@ function ReviewScheduleModal({
     <Modal
       open
       onClose={onClose}
-      title={`${initial ? "แก้ไข" : "เพิ่ม"}ช่วงเวลา ${meta.short}`}
+      title={initial ? t("แก้ไขช่วงเวลา {duty}", { duty: t(meta.short) }) : t("เพิ่มช่วงเวลา {duty}", { duty: t(meta.short) })}
       icon={<BookOpenCheck size={18} />}
       size="md"
       footer={
         <div className="flex justify-end gap-2 w-full">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ยกเลิก</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving || overCap || !!conflict}>
-            บันทึก
+            {t("บันทึก")}
           </Button>
         </div>
       }
     >
       <div className="flex flex-col gap-3">
-        <FieldGroup label="วันของสัปดาห์">
+        <FieldGroup label={t("วันของสัปดาห์")}>
           <Select value={String(dow)} onChange={e => setDow(Number(e.target.value))}>
             {DAY_TH_SHORT.map((label, i) => (
-              <option key={i} value={i}>{label}</option>
+              <option key={i} value={i}>{t(label)}</option>
             ))}
           </Select>
         </FieldGroup>
         <div className="grid grid-cols-2 gap-3">
-          <FieldGroup label="เวลาเริ่ม">
-            <TimePicker value={start} onChange={setStart} label="เวลาเริ่ม" />
+          <FieldGroup label={t("เวลาเริ่ม")}>
+            <TimePicker value={start} onChange={setStart} label={t("เวลาเริ่ม")} />
           </FieldGroup>
-          <FieldGroup label="เวลาสิ้นสุด">
-            <TimePicker value={end} onChange={setEnd} label="เวลาสิ้นสุด" />
+          <FieldGroup label={t("เวลาสิ้นสุด")}>
+            <TimePicker value={end} onChange={setEnd} label={t("เวลาสิ้นสุด")} />
           </FieldGroup>
         </div>
-        <FieldGroup label="ห้อง (ระบุก็ได้)">
-          <TextInput value={room} onChange={e => setRoom(e.target.value)} placeholder="เช่น SC5.5 หรือ ที่บ้าน" />
+        <FieldGroup label={t("ห้อง (ระบุก็ได้)")}>
+          <TextInput value={room} onChange={e => setRoom(e.target.value)} placeholder={t("เช่น SC5.5 หรือ ที่บ้าน")} />
         </FieldGroup>
-        <FieldGroup label="หมายเหตุ (ระบุก็ได้)" hint={`${note.length}/${NOTE_MAX} ตัวอักษร`}>
-          <TextInput value={note} maxLength={NOTE_MAX} onChange={e => setNote(e.target.value)} placeholder="เช่น ตรวจการบ้านสัปดาห์ที่ 1–3" />
+        <FieldGroup label={t("หมายเหตุ (ระบุก็ได้)")} hint={t("{n}/{max} ตัวอักษร", { n: note.length, max: NOTE_MAX })}>
+          <TextInput value={note} maxLength={NOTE_MAX} onChange={e => setNote(e.target.value)} placeholder={t("เช่น ตรวจการบ้านสัปดาห์ที่ 1–3")} />
         </FieldGroup>
 
         {conflict && (
           <Alert
             status="danger"
             icon={<AlertTriangle size={14} />}
-            title={`เวลาชนกับ${conflictKindTH[conflict.kind]}`}
-            description={`${conflict.label} · ${DAY_TH_SHORT[conflict.day_of_week]} ${conflict.start_time}–${conflict.end_time} เลือกช่วงเวลาที่ไม่ทับกัน`}
+            title={t("เวลาชนกับ{what}", { what: conflictKindTH[conflict.kind] })}
+            description={t("{label} · {day} {start}–{end} เลือกช่วงเวลาที่ไม่ทับกัน", {
+              label: conflict.label,
+              day: DAY_TH_SHORT[conflict.day_of_week] ? t(DAY_TH_SHORT[conflict.day_of_week]) : "",
+              start: conflict.start_time, end: conflict.end_time,
+            })}
           />
         )}
 
@@ -4429,12 +4502,15 @@ function ReviewScheduleModal({
             <Alert
               status="danger"
               icon={<AlertTriangle size={14} />}
-              title={`เกินเพดาน รวมต่อสัปดาห์ ${projected.toFixed(1)} ชม. เกินชั่วโมงบรรยาย ${lectureHrs.toFixed(1)} ชม.`}
-              description="ลดช่วงเวลาลง หรือลบวันตรวจอื่นก่อน"
+              title={t("เกินเพดาน รวมต่อสัปดาห์ {h} ชม. เกินชั่วโมงบรรยาย {max} ชม.", { h: projected.toFixed(1), max: lectureHrs.toFixed(1) })}
+              description={t("ลดช่วงเวลาลง หรือลบวันตรวจอื่นก่อน")}
             />
           ) : (
             <div className="text-xs text-muted">
-              รวมต่อสัปดาห์หลังบันทึก: <span className="tabular-nums font-medium text-foreground">{projected.toFixed(1)}</span> / {lectureHrs.toFixed(1)} ชม. (ชั่วโมงบรรยายของ section)
+              {t.rich("รวมต่อสัปดาห์หลังบันทึก: {h} / {max} ชม. (ชั่วโมงบรรยายของ section)", {
+                h: <span className="tabular-nums font-medium text-foreground">{projected.toFixed(1)}</span>,
+                max: lectureHrs.toFixed(1),
+              })}
             </div>
           )
         )}
@@ -4466,27 +4542,33 @@ interface LecturerChange {
 function LecturerChangesNotice({ aid }: { aid: string }) {
   const { data } = useSWR<LecturerChange[]>(`/assignments/${aid}/worklog/changes`);
   const [showAll, setShowAll] = useState(false);
+  const i18n = useI18n();
+  const { t } = i18n;
+  const formatWorkDate = (iso: string) => workDateLabel(iso, i18n);
   if (!data || data.length === 0) return null;
   const list = showAll ? data : data.slice(0, 3);
   return (
     <div className="mb-3 rounded-lg border border-hairline bg-surface-secondary px-3 py-2 text-sm">
       <div className="mb-1 flex items-center gap-1.5 font-medium">
-        <Pencil size={13} /> อาจารย์ปรับแก้บันทึกเวลาของคุณ {data.length} รายการ
+        <Pencil size={13} /> {t("อาจารย์ปรับแก้บันทึกเวลาของคุณ {n} รายการ", { n: data.length })}
       </div>
       <ul className="space-y-1">
         {list.map(c => (
           <li key={c.id} className="text-xs text-ink-2">
             <b>{formatWorkDate(c.work_date)}</b>{" "}
             {c.action === "cut"
-              ? <>ตัดออก {c.before.start_time}–{c.before.end_time} ({fmtHours(c.before.hours)} ชม.)</>
-              : <>แก้จาก {c.before.start_time}–{c.before.end_time} ({fmtHours(c.before.hours)} ชม.) เป็น {c.after?.start_time}–{c.after?.end_time} ({fmtHours(c.after?.hours)} ชม.)</>}
-            {" "}· โดย {c.actor_name || (c.actor_role === "staff" ? "เจ้าหน้าที่" : "อาจารย์")} · เหตุผล: {c.reason}
+              ? t("ตัดออก {start}–{end} ({h} ชม.)", { start: c.before.start_time, end: c.before.end_time, h: fmtHours(c.before.hours) })
+              : t("แก้จาก {start}–{end} ({h} ชม.) เป็น {newStart}–{newEnd} ({newH} ชม.)", {
+                  start: c.before.start_time, end: c.before.end_time, h: fmtHours(c.before.hours),
+                  newStart: c.after?.start_time, newEnd: c.after?.end_time, newH: fmtHours(c.after?.hours),
+                })}
+            {" "}· {t("โดย {who}", { who: c.actor_name || (c.actor_role === "staff" ? t("เจ้าหน้าที่") : t("อาจารย์")) })} · {t("เหตุผล: {reason}", { reason: c.reason })}
           </li>
         ))}
       </ul>
       {data.length > 3 && (
         <button type="button" onClick={() => setShowAll(!showAll)} className="mt-1 text-xs text-accent hover:underline">
-          {showAll ? "ย่อ" : `ดูทั้งหมด ${data.length} รายการ`}
+          {showAll ? t("ย่อ") : t("ดูทั้งหมด {n} รายการ", { n: data.length })}
         </button>
       )}
     </div>

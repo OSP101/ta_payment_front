@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { Tooltip as HTooltip } from "@heroui/react";
+import { msg, useI18n } from "../lib/i18n/client";
 
 export type BlockKind = "" | "lecture" | "lab";
 
@@ -36,8 +37,8 @@ export function blockTitle(b: Pick<Block, "course_code" | "course_name" | "cours
 
 export const KIND_LABEL: Record<BlockKind, string> = {
   "": "",
-  lecture: "บรรยาย",
-  lab: "ปฏิบัติการ",
+  lecture: msg("บรรยาย"),
+  lab: msg("ปฏิบัติการ"),
 };
 
 export interface DraftRange {
@@ -61,8 +62,8 @@ interface Props {
 }
 
 // Display order (Mon..Sun) → day_of_week where Sun=0
-const DAYS_LONG = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"];
-const DAYS_SHORT = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."];
+const DAYS_LONG = [msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์"), msg("อาทิตย์")];
+const DAYS_SHORT = [msg("จ."), msg("อ."), msg("พ."), msg("พฤ."), msg("ศ."), msg("ส."), msg("อา.")];
 const DAY_INDEX = [1, 2, 3, 4, 5, 6, 0]; // maps dayIdx → day_of_week
 const DOW_TO_IDX = (() => {
   const m: number[] = [];
@@ -171,6 +172,7 @@ export default function ScheduleGrid({
   onResizeBlock,
   disabled,
 }: Props) {
+  const { t } = useI18n();
   const [drag, setDrag] = useState<DragState>({ kind: "idle" });
   // Mirror of `drag` for the pointerup handler. The parent callbacks below must
   // NOT run inside a setDrag() updater — React executes updaters during the
@@ -355,7 +357,7 @@ export default function ScheduleGrid({
       <div style={{ minWidth: MIN_TIMELINE_PX }}>
         {/* Hour header */}
         <div className="flex items-end border-b border-[var(--hairline)] bg-slate-50">
-          <div className="w-20 shrink-0 text-xs text-slate-500 py-2 px-2">เวลา →</div>
+          <div className="w-20 shrink-0 text-xs text-slate-500 py-2 px-2">{t("เวลา →")}</div>
           <div className="relative flex-1" style={{ height: 32 }}>
             {hours.map((h, i) => (
               <div key={h} className="absolute top-0 bottom-0 flex items-end pb-1"
@@ -375,8 +377,8 @@ export default function ScheduleGrid({
                 className="flex items-center justify-center text-sm font-medium text-slate-700 border-b border-[var(--hairline)] last:border-b-0"
                 style={{ height: ROW_PX }}
               >
-                <span className="hidden sm:inline">{label}</span>
-                <span className="sm:hidden">{DAYS_SHORT[dayIdx]}</span>
+                <span className="hidden sm:inline">{t(label)}</span>
+                <span className="sm:hidden">{t(DAYS_SHORT[dayIdx])}</span>
               </div>
             ))}
           </div>
@@ -433,10 +435,10 @@ export default function ScheduleGrid({
                 const startMin = parseTime(b.start_time) - START_HR * 60;
                 const endMin = parseTime(b.end_time) - START_HR * 60;
                 const laneH = (ROW_PX - 4 - CREATE_STRIP_PX) / laneCount;
-                const heading = blockTitle(b) || "คาบเรียน";
+                const heading = blockTitle(b) || t("คาบเรียน");
                 const meta = [
                   b.sec_no ? `sec ${b.sec_no}` : "",
-                  KIND_LABEL[b.kind],
+                  b.kind ? t(KIND_LABEL[b.kind]) : "",
                 ].filter(Boolean).join(" · ");
                 const tipText = `${heading}${meta ? " · " + meta : ""} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}`;
                 return (
@@ -464,7 +466,7 @@ export default function ScheduleGrid({
                             style={{ width: EDGE_HANDLE_PX, cursor: "ew-resize" }}
                           />
                           <HTooltip.Content>
-                            <div className="text-xs">ลากเพื่อขยับเวลาเริ่ม</div>
+                            <div className="text-xs">{t("ลากเพื่อขยับเวลาเริ่ม")}</div>
                           </HTooltip.Content>
                         </HTooltip>
                       )}
@@ -484,7 +486,7 @@ export default function ScheduleGrid({
                             style={{ width: EDGE_HANDLE_PX, cursor: "ew-resize" }}
                           />
                           <HTooltip.Content>
-                            <div className="text-xs">ลากเพื่อขยับเวลาสิ้นสุด</div>
+                            <div className="text-xs">{t("ลากเพื่อขยับเวลาสิ้นสุด")}</div>
                           </HTooltip.Content>
                         </HTooltip>
                       )}
@@ -555,9 +557,9 @@ export default function ScheduleGrid({
       </div>
       <div className="text-[11px] text-muted px-3 py-2 border-t border-[var(--hairline)]">
         <span className="block pointer-fine:hidden">
-          ปัดตารางไปทางซ้ายหรือขวาเพื่อดูช่วงเวลาอื่น · เพิ่มคาบด้วยปุ่ม “เพิ่มคาบเรียน” · แตะคาบเพื่อแก้ไข
+          {t("ปัดตารางไปทางซ้ายหรือขวาเพื่อดูช่วงเวลาอื่น · เพิ่มคาบด้วยปุ่ม “เพิ่มคาบเรียน” · แตะคาบเพื่อแก้ไข")}
         </span>
-        <span className="hidden pointer-fine:inline">ลากในพื้นที่ว่างเพื่อสร้างคาบใหม่ · ลากคาบเพื่อย้ายวัน/เวลา · จับขอบซ้ายหรือขวาของคาบเพื่อขยาย/หด · คลิกเพื่อแก้ไขรายละเอียด · คาบที่ซ้อนกันจะถูกจัดชั้นให้อัตโนมัติ · <span>หากเวลานั้นมีคาบอยู่แล้ว ให้ลากที่<b>แถบลายทางด้านล่างของแถว</b>เพื่อสร้างคาบซ้อนเวลาเดียวกัน</span></span>
+        <span className="hidden pointer-fine:inline">{t("ลากในพื้นที่ว่างเพื่อสร้างคาบใหม่ · ลากคาบเพื่อย้ายวัน/เวลา · จับขอบซ้ายหรือขวาของคาบเพื่อขยาย/หด · คลิกเพื่อแก้ไขรายละเอียด · คาบที่ซ้อนกันจะถูกจัดชั้นให้อัตโนมัติ")} · <span>{t.rich("หากเวลานั้นมีคาบอยู่แล้ว ให้ลากที่{strip}เพื่อสร้างคาบซ้อนเวลาเดียวกัน", { strip: <b>{t("แถบลายทางด้านล่างของแถว")}</b> })}</span></span>
       </div>
     </div>
   );

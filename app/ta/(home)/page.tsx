@@ -19,6 +19,7 @@ import {
 } from "../../components/ui";
 import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
+import { msg, useI18n } from "../../lib/i18n/client";
 type SubmissionStage =
   | "pending"
   | "exported"
@@ -54,13 +55,13 @@ interface SubmissionRow {
 }
 
 const SUBMISSION_LABEL: Record<SubmissionStage, string> = {
-  pending:      "รอดำเนินการ",
+  pending:      msg("รอดำเนินการ"),
   // Final from the TA's side: ส่งการเงิน has no staff button by design, so
   // "รอส่งการเงิน" read as a wait that never ends.
-  exported:     "เจ้าหน้าที่ส่งเอกสารเบิกจ่ายแล้ว",
-  finance_sent: "ส่งการเงินแล้ว",
-  skipped:      "ข้ามรอบนี้",
-  staff_reviewed: "เจ้าหน้าที่ตรวจแล้ว",
+  exported:     msg("เจ้าหน้าที่ส่งเอกสารเบิกจ่ายแล้ว"),
+  finance_sent: msg("ส่งการเงินแล้ว"),
+  skipped:      msg("ข้ามรอบนี้"),
+  staff_reviewed: msg("เจ้าหน้าที่ตรวจแล้ว"),
 };
 
 const SUBMISSION_TONE: Record<SubmissionStage, ChipTone> = {
@@ -94,8 +95,8 @@ function periodPastDue(r: { is_closed: boolean; due_date: string }, today: strin
 
 function submissionBadge(r: SubmissionRow, today: string): { label: string; tone: ChipTone } {
   if (r.status === "pending") {
-    if (r.starts_on > today)      return { label: "ยังไม่ถึงรอบ", tone: "neutral" };
-    if (r.worklog_total === 0)    return { label: "ไม่มีรายการเดือนนี้", tone: "neutral" };
+    if (r.starts_on > today)      return { label: msg("ยังไม่ถึงรอบ"), tone: "neutral" };
+    if (r.worklog_total === 0)    return { label: msg("ไม่มีรายการเดือนนี้"), tone: "neutral" };
     // Past the deadline the month is settled, whichever way it went: unsent
     // rows are forfeited and there is nothing left to chase. Keeping the
     // "ยังไม่ได้ส่งอนุมัติ" badge here would ask for an action that no longer
@@ -104,20 +105,20 @@ function submissionBadge(r: SubmissionRow, today: string): { label: string; tone
       // Rows sent before the deadline are still the lecturer's to approve
       // after it passes; saying "รอเจ้าหน้าที่ส่งออก" told the TA the month
       // had reached staff when it had not.
-      if (r.worklog_waiting_lecturer > 0) return { label: "รออาจารย์อนุมัติงาน", tone: "info" };
+      if (r.worklog_waiting_lecturer > 0) return { label: msg("รออาจารย์อนุมัติงาน"), tone: "info" };
       return r.worklog_waiting_ta > 0
-        ? { label: "หมดเวลาส่ง", tone: "neutral" }
-        : { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
+        ? { label: msg("หมดเวลาส่ง"), tone: "neutral" }
+        : { label: msg("รอเจ้าหน้าที่ส่งออก"), tone: "info" };
     }
     // Bounced work first: it is the only state where somebody has already
     // looked at the hours and said no, and it was reading as a plain "not sent
     // yet" — indistinguishable from a TA who simply had not got round to it.
-    if (r.worklog_rejected > 0)          return { label: "อาจารย์ตีกลับ ต้องแก้ไข", tone: "danger" };
+    if (r.worklog_rejected > 0)          return { label: msg("อาจารย์ตีกลับ ต้องแก้ไข"), tone: "danger" };
     // The TA's own move outranks the lecturer's: it is the only one they can
     // act on, and it was the one being hidden behind the lecturer's name.
-    if (r.worklog_waiting_ta > 0)        return { label: "ยังไม่ได้ส่งอนุมัติ", tone: "warn" };
-    if (r.worklog_waiting_lecturer > 0)  return { label: "รออาจารย์อนุมัติงาน", tone: "info" };
-    return { label: "รอเจ้าหน้าที่ส่งออก", tone: "info" };
+    if (r.worklog_waiting_ta > 0)        return { label: msg("ยังไม่ได้ส่งอนุมัติ"), tone: "warn" };
+    if (r.worklog_waiting_lecturer > 0)  return { label: msg("รออาจารย์อนุมัติงาน"), tone: "info" };
+    return { label: msg("รอเจ้าหน้าที่ส่งออก"), tone: "info" };
   }
   return { label: SUBMISSION_LABEL[r.status], tone: SUBMISSION_TONE[r.status] };
 }
@@ -166,9 +167,9 @@ interface TC {
 }
 
 const SEMESTER_LABELS: Record<number, string> = {
-  1: "ภาคต้น",
-  2: "ภาคปลาย",
-  3: "ภาคฤดูร้อน",
+  1: msg("ภาคต้น"),
+  2: msg("ภาคปลาย"),
+  3: msg("ภาคฤดูร้อน"),
 };
 
 
@@ -179,20 +180,11 @@ interface DocRow {
   reject_reason?: string | null;
 }
 
-/**
- * Render a 'YYYY-MM-DD' due date the way the rest of the app does — Thai
- * month, Buddhist year. Raw ISO dates read as machine output next to
- * "28 ก.ค. 2569" elsewhere, and 2026 vs 2569 invites a double-take about
- * which calendar a deadline is in.
- */
-function thDueDate(iso?: string): string {
-  if (!iso) return "-";
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
-}
+// Due dates render through fmtDate() from useI18n — "28 ก.ค. 2569" in Thai,
+// "28 Jul 2026" in English. Raw ISO dates read as machine output.
 
 export default function TAHome() {
+  const { t } = useI18n();
   const router = useRouter();
   const params = useSearchParams();
   const yearParam = params.get("year");
@@ -202,9 +194,9 @@ export default function TAHome() {
 
   const byYear = useMemo(() => {
     const map = new Map<number, Term[]>();
-    (terms ?? []).forEach(t => {
-      if (!map.has(t.academic_year)) map.set(t.academic_year, []);
-      map.get(t.academic_year)!.push(t);
+    (terms ?? []).forEach(tm => {
+      if (!map.has(tm.academic_year)) map.set(tm.academic_year, []);
+      map.get(tm.academic_year)!.push(tm);
     });
     for (const [, list] of map) list.sort((a, b) => a.semester - b.semester);
     return Array.from(map.entries()).sort((a, b) => b[0] - a[0]);
@@ -214,8 +206,8 @@ export default function TAHome() {
     id: String(y),
     label: (
       <span className="inline-flex items-center gap-2">
-        <span className="tabular">ปีการศึกษา {y}</span>
-        {list.some(t => t.is_active) && <Chip tone="success">active</Chip>}
+        <span className="tabular">{t("ปีการศึกษา {y}", { y })}</span>
+        {list.some(tm => tm.is_active) && <Chip tone="success">active</Chip>}
       </span>
     ),
     textValue: `${y}`,
@@ -233,15 +225,16 @@ export default function TAHome() {
     return byYear.find(([yr]) => yr === y)?.[1] ?? [];
   }, [byYear, defaultYear]);
 
-  const termOptions: SelectOption[] = yearTerms.map(t => ({
-    id: t.id,
+  const semLabel = (n: number) => SEMESTER_LABELS[n] ? t(SEMESTER_LABELS[n]) : t("ภาค {n}", { n });
+  const termOptions: SelectOption[] = yearTerms.map(tm => ({
+    id: tm.id,
     label: (
       <span className="inline-flex items-center gap-2">
-        <span>{SEMESTER_LABELS[t.semester] ?? `ภาค ${t.semester}`}</span>
-        {t.is_active && <Chip tone="success">active</Chip>}
+        <span>{semLabel(tm.semester)}</span>
+        {tm.is_active && <Chip tone="success">active</Chip>}
       </span>
     ),
-    textValue: SEMESTER_LABELS[t.semester] ?? `ภาค ${t.semester}`,
+    textValue: semLabel(tm.semester),
   }));
 
   const defaultTerm = useMemo(() => {
@@ -328,10 +321,10 @@ export default function TAHome() {
     if (nextTerm) sp.set("term", nextTerm);
     router.replace(`/ta?${sp.toString()}`);
   }
-  function setTerm(t: string) {
+  function setTerm(id: string) {
     const sp = new URLSearchParams();
     if (defaultYear) sp.set("year", defaultYear);
-    if (t) sp.set("term", t);
+    if (id) sp.set("term", id);
     router.replace(`/ta?${sp.toString()}`);
   }
 
@@ -340,26 +333,26 @@ export default function TAHome() {
 
   const activeTerm = yearTerms.find(t => t.id === defaultTerm);
   const termDisplay = activeTerm
-    ? `${activeTerm.academic_year}/${activeTerm.semester} — ${SEMESTER_LABELS[activeTerm.semester] ?? ""}`
+    ? `${activeTerm.academic_year}/${activeTerm.semester} — ${SEMESTER_LABELS[activeTerm.semester] ? t(SEMESTER_LABELS[activeTerm.semester]) : ""}`
     : "";
 
   return (
     <div>
       <PageHeader
-        title="หน้าหลักของฉัน"
-        description="รายวิชาที่รับเป็น TA และสิ่งที่ต้องดำเนินการในภาคเรียนนี้"
+        title={t("หน้าหลักของฉัน")}
+        description={t("รายวิชาที่รับเป็น TA และสิ่งที่ต้องดำเนินการในภาคเรียนนี้")}
         actions={
           noTerms ? null : (
             <div data-tour="ta-home-term" className="flex gap-2 items-end flex-wrap">
               <SelectField
-                label="ปีการศึกษา"
+                label={t("ปีการศึกษา")}
                 value={defaultYear}
                 onChange={setYear}
                 options={yearOptions}
                 className="min-w-[180px]"
               />
               <SelectField
-                label="ภาคเรียน"
+                label={t("ภาคเรียน")}
                 value={defaultTerm}
                 onChange={setTerm}
                 options={termOptions}
@@ -375,16 +368,16 @@ export default function TAHome() {
         <Panel>
           <EmptyState
             icon={<CalendarX2 size={28} />}
-            title="ยังไม่มีปีการศึกษา / ภาคเรียนในระบบ"
-            description="กรุณาแจ้งเจ้าหน้าที่เพื่อสร้างปีการศึกษาและภาคเรียนก่อน"
+            title={t("ยังไม่มีปีการศึกษา / ภาคเรียนในระบบ")}
+            description={t("กรุณาแจ้งเจ้าหน้าที่เพื่อสร้างปีการศึกษาและภาคเรียนก่อน")}
           />
         </Panel>
       ) : termsLoaded && yearTerms.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<CalendarClock size={28} />}
-            title="ไม่มีภาคเรียนในปีการศึกษานี้"
-            description="ลองเลือกปีการศึกษาอื่น"
+            title={t("ไม่มีภาคเรียนในปีการศึกษานี้")}
+            description={t("ลองเลือกปีการศึกษาอื่น")}
           />
         </Panel>
       ) : (
@@ -403,31 +396,31 @@ export default function TAHome() {
 
           <PendingRequestsSection requests={pendingRequests} docState={docState} />
 
-          <SectionHeading>รายวิชาที่ฉันเป็น TA</SectionHeading>
+          <SectionHeading>{t("รายวิชาที่ฉันเป็น TA")}</SectionHeading>
           <Panel padded={false} data-tour="ta-home-courses">
             {coursesError ? (
               <EmptyState
                 icon={<AlertTriangle size={28} />}
-                title="โหลดรายวิชาไม่สำเร็จ"
-                description="เกิดข้อผิดพลาดขณะดึงข้อมูล โปรดลองใหม่อีกครั้ง"
+                title={t("โหลดรายวิชาไม่สำเร็จ")}
+                description={t("เกิดข้อผิดพลาดขณะดึงข้อมูล โปรดลองใหม่อีกครั้ง")}
                 action={
                   <Button variant="secondary" size="sm" onPress={() => reloadCourses()}>
-                    <RefreshCw size={14} /> ลองใหม่
+                    <RefreshCw size={14} /> {t("ลองใหม่")}
                   </Button>
                 }
               />
             ) : coursesLoading || courses === undefined ? (
-              <SkelRegion label="กำลังโหลดรายวิชา" className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              <SkelRegion label={t("กำลังโหลดรายวิชา")} className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 3 }, (_, i) => <CourseCardSkeleton key={i} />)}
               </SkelRegion>
             ) : !courses || courses.length === 0 ? (
               <EmptyState
                 icon={<BookOpen size={28} />}
-                title="ยังไม่มีวิชาในภาคเรียนนี้"
+                title={t("ยังไม่มีวิชาในภาคเรียนนี้")}
                 description={
                   (pendingRequests?.length ?? 0) > 0
-                    ? "วิชาจะมาแสดงที่นี่เมื่อคำขอด้านบนได้รับการอนุมัติ"
-                    : "อาจารย์ยังไม่ได้เสนอชื่อคุณเป็น TA"
+                    ? t("วิชาจะมาแสดงที่นี่เมื่อคำขอด้านบนได้รับการอนุมัติ")
+                    : t("อาจารย์ยังไม่ได้เสนอชื่อคุณเป็น TA")
                 }
               />
             ) : (
@@ -464,11 +457,11 @@ export default function TAHome() {
                 href="/announcements"
                 className="text-xs font-medium text-muted underline underline-offset-2 hover:text-foreground"
               >
-                ดูทั้งหมด
+                {t("ดูทั้งหมด")}
               </Link>
             }
           >
-            ประชาสัมพันธ์
+            {t("ประชาสัมพันธ์")}
           </SectionHeading>
           {/* title={null}, not undefined: the prop defaults to "ประชาสัมพันธ์"
               when undefined, which would print the heading twice — once here
@@ -520,6 +513,7 @@ function AlertsSection({
   courses?: TC[];
   today: string;
 }) {
+  const { t, fmtDate } = useI18n();
   const rejected = (docs ?? []).filter(d => d.status === "rejected");
   // "ต้องดำเนินการ" means the TA has to do something. Waiting for staff is not
   // that. This block used to count APPROVED documents and then title the alert
@@ -564,17 +558,17 @@ function AlertsSection({
 
   return (
     <>
-      <SectionHeading>ต้องดำเนินการ</SectionHeading>
+      <SectionHeading>{t("ต้องดำเนินการ")}</SectionHeading>
       <div data-tour="ta-home-alerts" className="space-y-2">
         {rejected.length > 0 && (
           <Alert
             status="danger"
             icon={<AlertTriangle size={16} />}
-            title={`มีเอกสารถูกตีกลับ ${rejected.length} รายการ`}
-            description={rejected.map(d => d.reject_reason).filter(Boolean).join(" · ") || "เจ้าหน้าที่ขอให้แก้ไขและส่งใหม่"}
+            title={t("มีเอกสารถูกตีกลับ {n} รายการ", { n: rejected.length })}
+            description={rejected.map(d => d.reject_reason).filter(Boolean).join(" · ") || t("เจ้าหน้าที่ขอให้แก้ไขและส่งใหม่")}
             action={
               <Link href="/ta/documents" className="text-sm font-medium underline underline-offset-2">
-                ไปแก้เอกสาร
+                {t("ไปแก้เอกสาร")}
               </Link>
             }
           />
@@ -583,15 +577,15 @@ function AlertsSection({
           <Alert
             status="warning"
             icon={<FileCheck2 size={16} />}
-            title={`ยังส่งเอกสารไม่ครบ (ขาดอีก ${notSent} รายการ)`}
+            title={t("ยังส่งเอกสารไม่ครบ (ขาดอีก {n} รายการ)", { n: notSent })}
             description={
               hasCourses
-                ? `ต้องผ่านครบทั้ง ${kinds.length} ไฟล์ ก่อนจึงจะเบิกค่าตอบแทนได้`
-                : "เตรียมเอกสารไว้ล่วงหน้าได้ แม้ยังไม่ได้รับมอบหมายวิชา"
+                ? t("ต้องผ่านครบทั้ง {n} ไฟล์ ก่อนจึงจะเบิกค่าตอบแทนได้", { n: kinds.length })
+                : t("เตรียมเอกสารไว้ล่วงหน้าได้ แม้ยังไม่ได้รับมอบหมายวิชา")
             }
             action={
               <Link href="/ta/documents" className="text-sm font-medium underline underline-offset-2">
-                ไปส่งเอกสาร
+                {t("ไปส่งเอกสาร")}
               </Link>
             }
           />
@@ -601,14 +595,14 @@ function AlertsSection({
             key={"bounced" + r.period_id + r.teaching_course_id}
             status="danger"
             icon={<CalendarClock size={16} />}
-            title={`${r.course_code} อาจารย์ตีกลับบันทึกเวลา ${r.worklog_rejected} รายการ`}
-            description={`รอบ ${r.label} · แก้ไขแล้วส่งอนุมัติใหม่ภายใน ${thDueDate(r.due_date)}`}
+            title={t("{course} อาจารย์ตีกลับบันทึกเวลา {n} รายการ", { course: r.course_code, n: r.worklog_rejected })}
+            description={t("รอบ {period} · แก้ไขแล้วส่งอนุมัติใหม่ภายใน {due}", { period: r.label, due: fmtDate(r.due_date) })}
             action={
               <Link
                 href={`/ta/courses/${r.teaching_course_id}/worklog`}
                 className="text-sm font-medium underline underline-offset-2"
               >
-                ไปแก้ไข
+                {t("ไปแก้ไข")}
               </Link>
             }
           />
@@ -623,20 +617,20 @@ function AlertsSection({
             // and hides the one action that would fix it.
             title={
               r.worklog_waiting_ta > 0
-                ? `รอบ ${r.label} คุณยังไม่ได้ส่งอนุมัติ ${r.worklog_waiting_ta} รายการ`
-                : `รอบ ${r.label} รออาจารย์อนุมัติ ${r.worklog_waiting_lecturer} รายการ`
+                ? t("รอบ {period} คุณยังไม่ได้ส่งอนุมัติ {n} รายการ", { period: r.label, n: r.worklog_waiting_ta })
+                : t("รอบ {period} รออาจารย์อนุมัติ {n} รายการ", { period: r.label, n: r.worklog_waiting_lecturer })
             }
             description={
               r.worklog_waiting_ta > 0
-                ? `ครบกำหนด ${thDueDate(r.due_date)} ถ้าเลยกำหนด เดือนนี้จะถูกปิดและส่งเองไม่ได้อีก`
-                : `ครบกำหนด ${thDueDate(r.due_date)} คุณส่งครบแล้ว รออาจารย์กดอนุมัติ`
+                ? t("ครบกำหนด {due} ถ้าเลยกำหนด เดือนนี้จะถูกปิดและส่งเองไม่ได้อีก", { due: fmtDate(r.due_date) })
+                : t("ครบกำหนด {due} คุณส่งครบแล้ว รออาจารย์กดอนุมัติ", { due: fmtDate(r.due_date) })
             }
             action={
               <Link
                 href={`/ta/courses/${r.teaching_course_id}/worklog`}
                 className="text-sm font-medium underline underline-offset-2"
               >
-                เปิดบันทึกเวลา
+                {t("เปิดบันทึกเวลา")}
               </Link>
             }
           />
@@ -652,15 +646,15 @@ function AlertsSection({
           does not exist. */}
       {missed.length > 0 && (
         <>
-          <h2 className="mt-5 mb-2 text-sm font-medium text-ink-2">รอบที่ปิดไปแล้ว</h2>
+          <h2 className="mt-5 mb-2 text-sm font-medium text-ink-2">{t("รอบที่ปิดไปแล้ว")}</h2>
           <div className="space-y-2">
             {missed.map(r => (
               <Alert
                 key={"missed" + r.period_id + r.teaching_course_id}
                 status="default"
                 icon={<CalendarClock size={16} />}
-                title={`รอบ ${r.label} ถือว่าไม่ประสงค์ลงเวลา ${r.worklog_waiting_ta} รายการ`}
-                description={`ครบกำหนดไปแล้วเมื่อ ${thDueDate(r.due_date)} รายการที่ไม่ได้ส่งภายในกำหนดถือเป็นการไม่ประสงค์ลงเวลา และไม่นำมาคิดค่าตอบแทน`}
+                title={t("รอบ {period} ถือว่าไม่ประสงค์ลงเวลา {n} รายการ", { period: r.label, n: r.worklog_waiting_ta })}
+                description={t("ครบกำหนดไปแล้วเมื่อ {due} รายการที่ไม่ได้ส่งภายในกำหนดถือเป็นการไม่ประสงค์ลงเวลา และไม่นำมาคิดค่าตอบแทน", { due: fmtDate(r.due_date) })}
               />
             ))}
           </div>
@@ -677,6 +671,7 @@ function AlertsSection({
  * rather than find out at approval (TA feedback 05/10/2026).
  */
 function PendingRequestsSection({ requests, docState }: { requests?: PendingRequest[]; docState?: DocState }) {
+  const { t } = useI18n();
   if (!requests || requests.length === 0) return null;
   // Documents never hold a request up (the decision treats them as a warning),
   // but they do hold up every hour logged afterwards. Worth one line while the
@@ -684,7 +679,7 @@ function PendingRequestsSection({ requests, docState }: { requests?: PendingRequ
   const docsTodo = docState === "not_sent" || docState === "rejected";
   return (
     <>
-      <SectionHeading>วิชาที่ขอคุณเป็น TA (รออนุมัติ)</SectionHeading>
+      <SectionHeading>{t("วิชาที่ขอคุณเป็น TA (รออนุมัติ)")}</SectionHeading>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {requests.map(r => (
           <PendingRequestCard key={r.id} req={r} docsTodo={docsTodo} />
@@ -695,6 +690,7 @@ function PendingRequestsSection({ requests, docState }: { requests?: PendingRequ
 }
 
 function PendingRequestCard({ req, docsTodo }: { req: PendingRequest; docsTodo: boolean }) {
+  const { t } = useI18n();
   const term = `${req.academic_year}/${req.semester}`;
   const course = { code: req.code, alt_codes: req.alt_codes };
   return (
@@ -712,57 +708,59 @@ function PendingRequestCard({ req, docsTodo }: { req: PendingRequest; docsTodo: 
             <div className="truncate text-xs text-muted">{req.name_th}</div>
           </div>
         </Tip>
-        <Chip tone="info">รออนุมัติ</Chip>
+        <Chip tone="info">{t("รออนุมัติ")}</Chip>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-        <span>ภาคเรียน {term}</span>
-        {req.sections.length > 0 && <span>· กลุ่ม {req.sections.join(", ")}</span>}
-        <span className="min-w-0 truncate">· ผู้ขอ {req.lecturer_name}</span>
+        <span>{t("ภาคเรียน {term}", { term })}</span>
+        {req.sections.length > 0 && <span>· {t("กลุ่ม {sections}", { sections: req.sections.join(", ") })}</span>}
+        <span className="min-w-0 truncate">· {t("ผู้ขอ {name}", { name: req.lecturer_name })}</span>
       </div>
 
       {/* What it is stuck on, named by whose move it is. */}
       <div className="mt-3 rounded-lg bg-surface-secondary px-3 py-2 text-xs">
         {req.waiting_on_me ? (
           <>
-            <div className="font-medium text-warning">รอคุณบันทึกตารางเรียนภาคเรียน {term}</div>
+            <div className="font-medium text-warning">{t("รอคุณบันทึกตารางเรียนภาคเรียน {term}", { term })}</div>
             <div className="mt-0.5 text-muted">
-              ระบบจะพิจารณาคำขอให้อัตโนมัติทันทีที่บันทึกตารางเรียน
+              {t("ระบบจะพิจารณาคำขอให้อัตโนมัติทันทีที่บันทึกตารางเรียน")}
             </div>
             <Link
               href={`/ta/schedule?term_id=${req.term_id}`}
               className="mt-1.5 inline-flex items-center gap-1 font-medium text-accent underline underline-offset-2"
             >
-              ไปสร้างตารางเรียน <ArrowRight size={12} />
+              {t("ไปสร้างตารางเรียน")} <ArrowRight size={12} />
             </Link>
           </>
         ) : req.waiting_on_others > 0 ? (
           <>
             <div className="font-medium text-foreground">
-              รอ TA อีก {req.waiting_on_others} คนในคำขอเดียวกันบันทึกตารางเรียน
+              {t("รอ TA อีก {n} คนในคำขอเดียวกันบันทึกตารางเรียน", { n: req.waiting_on_others })}
             </div>
-            <div className="mt-0.5 text-muted">ส่วนของคุณครบแล้ว ไม่ต้องทำอะไรเพิ่ม</div>
+            <div className="mt-0.5 text-muted">{t("ส่วนของคุณครบแล้ว ไม่ต้องทำอะไรเพิ่ม")}</div>
           </>
         ) : (
           <>
-            <div className="font-medium text-foreground">ระบบกำลังพิจารณาคำขอ</div>
-            <div className="mt-0.5 text-muted">ส่วนของคุณครบแล้ว ผลจะแจ้งให้ทราบเร็ว ๆ นี้</div>
+            <div className="font-medium text-foreground">{t("ระบบกำลังพิจารณาคำขอ")}</div>
+            <div className="mt-0.5 text-muted">{t("ส่วนของคุณครบแล้ว ผลจะแจ้งให้ทราบเร็ว ๆ นี้")}</div>
           </>
         )}
         {docsTodo && (
           <div className="mt-2 border-t border-[var(--hairline)] pt-2 text-muted">
-            อีกขั้นที่ต้องทำ:{" "}
-            <Link href="/ta/documents" className="font-medium text-accent underline underline-offset-2">
-              ส่งเอกสารประกอบการเบิกจ่าย
-            </Link>{" "}
-            ต้องผ่านก่อนจึงบันทึกเวลาได้
+            {t.rich("อีกขั้นที่ต้องทำ: {link} ต้องผ่านก่อนจึงบันทึกเวลาได้", {
+              link: (
+                <Link href="/ta/documents" className="font-medium text-accent underline underline-offset-2">
+                  {t("ส่งเอกสารประกอบการเบิกจ่าย")}
+                </Link>
+              ),
+            })}
           </div>
         )}
       </div>
 
       <div className="mt-3 flex items-center gap-1.5 border-t border-[var(--hairline)] pt-3 text-[11px] text-muted">
         <Lock size={12} className="shrink-0" aria-hidden />
-        เปิดหน้ารายวิชาได้เมื่อคำขอได้รับการอนุมัติ
+        {t("เปิดหน้ารายวิชาได้เมื่อคำขอได้รับการอนุมัติ")}
       </div>
     </div>
   );
@@ -779,6 +777,7 @@ function CourseCard({
   submissionLoading?: boolean;
   today: string;
 }) {
+  const { t, fmtDate } = useI18n();
   const badge = submission ? submissionBadge(submission, today) : null;
   return (
     <Link
@@ -805,13 +804,13 @@ function CourseCard({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-        <span>นักศึกษา {course.num_students} คน</span>
+        <span>{t("นักศึกษา {n} คน", { n: course.num_students })}</span>
         {statusLoading && <SkelValue className="h-3 w-24" />}
         {status && (
           <>
-            <span>· อนุมัติ {hoursSplitText(status.hours_approved_regular, status.hours_approved_special)}</span>
+            <span>· {t("อนุมัติ {hours}", { hours: hoursSplitText(status.hours_approved_regular, status.hours_approved_special) })}</span>
             {status.hours_pending > 0 && (
-              <span>· รอ {hoursSplitText(status.hours_pending_regular, status.hours_pending_special)}</span>
+              <span>· {t("รอ {hours}", { hours: hoursSplitText(status.hours_pending_regular, status.hours_pending_special) })}</span>
             )}
           </>
         )}
@@ -825,11 +824,11 @@ function CourseCard({
           {/* An ESTIMATE from approved hours × rate. The real payout can be
               lower (the course budget is shared out when it runs short), so
               the figure must never read as the amount that will be paid. */}
-          <span className="mr-1 text-xs font-normal text-muted">ประมาณการ</span>
-          ฿{status.estimated_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          <span className="mr-1 text-xs font-normal text-muted">{t("ประมาณการ")}</span>
+          ฿{status.estimated_baht.toLocaleString(undefined, { maximumFractionDigits: 0 })}{/* i18n-ignore — baht symbol */}
           {(status.lumpsum_baht ?? 0) > 0 && (
             <span className="ml-1.5 text-xs font-normal text-muted">
-              + เหมาจ่ายภาคพิเศษ ฿{(status.lumpsum_baht ?? 0).toLocaleString()}/ภาค
+              {t("+ เหมาจ่ายภาคพิเศษ ฿{amount}/ภาค", { amount: (status.lumpsum_baht ?? 0).toLocaleString() })}
             </span>
           )}
           {status.estimated_baht_special > 0 && status.estimated_baht_regular > 0 && (
@@ -843,10 +842,10 @@ function CourseCard({
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--hairline)] pt-3">
         {submissionLoading ? (
           <SkelValue className="h-5 w-28 rounded-full" />
-        ) : badge ? <Chip tone={badge.tone}>{badge.label}</Chip> : <Chip tone="neutral">ยังไม่เปิดรอบเบิกจ่าย</Chip>}
+        ) : badge ? <Chip tone={badge.tone}>{t(badge.label)}</Chip> : <Chip tone="neutral">{t("ยังไม่เปิดรอบเบิกจ่าย")}</Chip>}
         {submission && (
           <span className="min-w-0 truncate text-[11px] text-muted">
-            {submission.is_closed ? "ปิดแล้ว" : `ครบกำหนด ${thDueDate(submission.due_date)}`}
+            {submission.is_closed ? t("ปิดแล้ว") : t("ครบกำหนด {due}", { due: fmtDate(submission.due_date) })}
           </span>
         )}
       </div>

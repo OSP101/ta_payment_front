@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, ArrowRight, ShieldAlert, PartyPopper, Hourglass }
 import { Panel, Button, ProgressBar } from "../components/ui";
 import { useTAApproval } from "./TAGate";
 import { useTAOnboarding } from "./useTAOnboarding";
+import { useI18n } from "../lib/i18n/client";
 
 /* -------------------------------------------------------------------------- */
 /* Onboarding checklist — inline, in the content flow                         */
@@ -36,6 +37,7 @@ interface Step {
 
 export default function OnboardingChecklistCard() {
   const { approved } = useTAApproval();
+  const { t } = useI18n();
   const { loading, docState, docsDone, docLabel, scheduleDone, doneCount, total, allDone } =
     useTAOnboarding();
 
@@ -74,12 +76,12 @@ export default function OnboardingChecklistCard() {
     if (!showDoneBar) return null;
     return (
       <div
-        className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50/70 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/30"
+        className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50/70 px-4 py-3"
         role="status"
       >
-        <PartyPopper size={18} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
-        <div className="text-sm text-emerald-900 dark:text-emerald-100">
-          <b>เตรียมพร้อมเรียบร้อย</b> ทำครบทั้ง 2 ขั้นตอนแล้ว
+        <PartyPopper size={18} className="shrink-0 text-emerald-600" />
+        <div className="text-sm text-emerald-900">
+          {t.rich("{done} ทำครบทั้ง 2 ขั้นตอนแล้ว", { done: <b>{t("เตรียมพร้อมเรียบร้อย")}</b> })}
         </div>
       </div>
     );
@@ -88,23 +90,23 @@ export default function OnboardingChecklistCard() {
   const steps: Step[] = [
     {
       done: docsDone,
-      title: "ส่งเอกสารประกอบการเบิกจ่าย",
-      description: docLabel ?? "กรอกข้อมูล + อัปโหลด 3 เอกสารให้ครบ",
+      title: t("ส่งเอกสารประกอบการเบิกจ่าย"),
+      description: docLabel ?? t("กรอกข้อมูล + อัปโหลด 3 เอกสารให้ครบ"),
       href: "/ta/documents",
-      action: "ส่งเอกสาร",
+      action: t("ส่งเอกสาร"),
     },
     {
       done: scheduleDone,
-      title: "สร้างตารางเรียนของฉัน",
-      description: "ระบุคาบเรียนบนตาราง หรือทำเครื่องหมาย WBA ถ้าไม่มีคาบประจำ",
+      title: t("สร้างตารางเรียนของฉัน"),
+      description: t("ระบุคาบเรียนบนตาราง หรือทำเครื่องหมาย WBA ถ้าไม่มีคาบประจำ"),
       href: "/ta/schedule",
-      action: "สร้างตารางเรียน",
+      action: t("สร้างตารางเรียน"),
     },
   ];
 
   return (
     <div className="mb-6">
-      <Panel className="border-amber-300 dark:border-amber-800" data-tour="ta-home-checklist">
+      <Panel className="border-amber-300" data-tour="ta-home-checklist">
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning-soft-foreground">
             <ShieldAlert size={18} />
@@ -112,7 +114,7 @@ export default function OnboardingChecklistCard() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <h2 className="text-sm font-semibold text-foreground">
-                โปรดทำให้ครบก่อนเริ่มใช้งาน
+                {t("โปรดทำให้ครบก่อนเริ่มใช้งาน")}
               </h2>
               <span className="text-xs tabular-nums text-muted">{doneCount}/{total}</span>
             </div>
@@ -120,7 +122,7 @@ export default function OnboardingChecklistCard() {
                 กล่องนี้ให้อัตโนมัติ") described the UI to itself noise once
                 the card sits in the page like everything else. */}
             <p className="mt-0.5 text-xs text-muted">
-              ต้องทำครบทั้ง 2 ขั้นตอน ระบบจึงจะเริ่มบันทึกชั่วโมงและเบิกจ่ายให้ได้
+              {t("ต้องทำครบทั้ง 2 ขั้นตอน ระบบจึงจะเริ่มบันทึกชั่วโมงและเบิกจ่ายให้ได้")}
             </p>
           </div>
         </div>
@@ -129,7 +131,7 @@ export default function OnboardingChecklistCard() {
           <ProgressBar
             value={(doneCount / total) * 100}
             tone="warn"
-            label={`ความคืบหน้าการเริ่มต้นใช้งาน ${doneCount} จาก ${total} ขั้นตอน`}
+            label={t("ความคืบหน้าการเริ่มต้นใช้งาน {done} จาก {total} ขั้นตอน", { done: doneCount, total })}
           />
         </div>
 
@@ -174,37 +176,38 @@ export default function OnboardingChecklistCard() {
  * request is also waiting on.
  */
 function DocsInReviewCard({ approved, scheduleDone }: { approved: boolean; scheduleDone: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="mb-6">
-      <Panel className="border-sky-300 dark:border-sky-800" data-tour="ta-home-checklist">
+      <Panel className="border-sky-300" data-tour="ta-home-checklist">
         <div className="flex flex-wrap items-start gap-x-3 gap-y-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-soft-foreground">
             <Hourglass size={18} />
           </div>
           <div className="min-w-0 flex-1 basis-56">
             <h2 className="text-sm font-semibold text-foreground">
-              เอกสารของคุณอยู่ระหว่างรอเจ้าหน้าที่ตรวจสอบ
+              {t("เอกสารของคุณอยู่ระหว่างรอเจ้าหน้าที่ตรวจสอบ")}
             </h2>
             <p className="mt-0.5 text-xs text-muted">
               {approved
-                ? "ส่งครบแล้ว ไม่ต้องทำอะไรเพิ่ม ระบบจะแจ้งให้ทราบเมื่อตรวจเสร็จหรือมีไฟล์ที่ต้องแก้ไข"
-                : "ส่งครบแล้ว ไม่ต้องทำอะไรเพิ่ม ระหว่างนี้ดูเมนูต่าง ๆ ได้ แต่จะบันทึกเวลาได้เมื่อเจ้าหน้าที่อนุมัติเอกสารแล้ว"}
+                ? t("ส่งครบแล้ว ไม่ต้องทำอะไรเพิ่ม ระบบจะแจ้งให้ทราบเมื่อตรวจเสร็จหรือมีไฟล์ที่ต้องแก้ไข")
+                : t("ส่งครบแล้ว ไม่ต้องทำอะไรเพิ่ม ระหว่างนี้ดูเมนูต่าง ๆ ได้ แต่จะบันทึกเวลาได้เมื่อเจ้าหน้าที่อนุมัติเอกสารแล้ว")}
             </p>
             {scheduleDone ? (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
                 <CheckCircle2 size={14} className="shrink-0 text-emerald-600" aria-hidden />
-                บันทึกตารางเรียนของภาคเรียนนี้แล้ว
+                {t("บันทึกตารางเรียนของภาคเรียนนี้แล้ว")}
               </p>
             ) : (
               <p className="mt-2 text-xs text-foreground">
-                <b>ระหว่างรอ สร้างตารางเรียนไว้ก่อนได้เลย</b> คำขอ TA ที่อาจารย์ส่งมาจะรอตารางเรียนของคุณก่อนจึงพิจารณาได้
+                {t.rich("{lead} คำขอ TA ที่อาจารย์ส่งมาจะรอตารางเรียนของคุณก่อนจึงพิจารณาได้", { lead: <b>{t("ระหว่างรอ สร้างตารางเรียนไว้ก่อนได้เลย")}</b> })}
               </p>
             )}
           </div>
           {!scheduleDone && (
             <Link href="/ta/schedule" className="ms-auto shrink-0">
-              <Button variant="primary" size="sm" aria-label="สร้างตารางเรียน">
-                สร้างตารางเรียน <ArrowRight size={13} />
+              <Button variant="primary" size="sm" aria-label={t("สร้างตารางเรียน")}>
+                {t("สร้างตารางเรียน")} <ArrowRight size={13} />
               </Button>
             </Link>
           )}

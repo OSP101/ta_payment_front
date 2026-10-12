@@ -11,6 +11,7 @@ import ShareButtons from "../../components/ShareButtons";
 import AttachmentGallery, { type Attachment } from "../../components/AttachmentGallery";
 import RichText from "../../components/RichText";
 import { Skel, SkelRegion, SkelText } from "../../components/Skeletons";
+import { msg, useI18n } from "../../lib/i18n/client";
 
 type Category = "info" | "news" | "warning" | "urgent" | "event";
 
@@ -30,22 +31,23 @@ interface Ann {
 }
 
 const CAT_META: Record<Category, { label: string; icon: React.ReactNode; tone: ChipTone }> = {
-  info:    { label: "ข้อมูลทั่วไป",     icon: <Info size={14} />,          tone: "info" },
-  news:    { label: "ข่าวประชาสัมพันธ์", icon: <Newspaper size={14} />,     tone: "brand" },
-  event:   { label: "กิจกรรม",          icon: <PartyPopper size={14} />,   tone: "success" },
-  warning: { label: "แจ้งเตือน",         icon: <AlertTriangle size={14} />, tone: "warn" },
-  urgent:  { label: "ด่วน",              icon: <Radio size={14} />,         tone: "danger" },
+  info:    { label: msg("ข้อมูลทั่วไป"), icon: <Info size={14} />,          tone: "info" },
+  news:    { label: msg("ข่าวประชาสัมพันธ์"), icon: <Newspaper size={14} />,     tone: "brand" },
+  event:   { label: msg("กิจกรรม"), icon: <PartyPopper size={14} />,   tone: "success" },
+  warning: { label: msg("แจ้งเตือน"), icon: <AlertTriangle size={14} />, tone: "warn" },
+  urgent:  { label: msg("ด่วน"), icon: <Radio size={14} />,         tone: "danger" },
 };
 
 export default function AnnouncementDetail() {
   const params = useParams<{ id: string }>();
+  const { t } = useI18n();
   const { data, error, isLoading } = useSWR<Ann>(params?.id ? `/announcements/${params.id}` : null);
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-[820px] mx-auto p-4 md:p-8">
         <Link href="/announcements" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground mb-3">
-          <ArrowLeft size={14} /> ประกาศทั้งหมด
+          <ArrowLeft size={14} /> {t("ประกาศทั้งหมด")}
         </Link>
 
         {isLoading && !data && <BodySkeleton />}
@@ -53,8 +55,8 @@ export default function AnnouncementDetail() {
           <Panel>
             <EmptyState
               icon={<Megaphone size={26} />}
-              title="ไม่พบประกาศนี้"
-              description="ประกาศอาจถูกถอนออก หรือคุณไม่มีสิทธิ์เข้าถึง"
+              title={t("ไม่พบประกาศนี้")}
+              description={t("ประกาศอาจถูกถอนออก หรือคุณไม่มีสิทธิ์เข้าถึง")}
             />
           </Panel>
         )}
@@ -84,6 +86,7 @@ function BodySkeleton() {
 }
 
 function Body({ a }: { a: Ann }) {
+  const { t, intl } = useI18n();
   const meta = CAT_META[a.category] ?? CAT_META.info;
   return (
     <article>
@@ -91,7 +94,7 @@ function Body({ a }: { a: Ann }) {
         title={a.title}
         description={
           a.published_at
-            ? new Date(a.published_at).toLocaleString("th-TH", {
+            ? new Date(a.published_at).toLocaleString(intl, {
                 dateStyle: "full", timeStyle: "short",
               })
             : undefined
@@ -99,16 +102,16 @@ function Body({ a }: { a: Ann }) {
       />
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <Chip tone={meta.tone}>
-          <span className="inline-flex items-center gap-1">{meta.icon}{meta.label}</span>
+          <span className="inline-flex items-center gap-1">{meta.icon}{t(meta.label)}</span>
         </Chip>
         {a.pinned && (
-          <Chip tone="brand"><span className="inline-flex items-center gap-1"><Pin size={11} />ปักหมุด</span></Chip>
+          <Chip tone="brand"><span className="inline-flex items-center gap-1"><Pin size={11} />{t("ปักหมุด")}</span></Chip>
         )}
         {a.expires_at && (
           <Chip tone="neutral">
             <span className="inline-flex items-center gap-1">
               <CalendarClock size={11} />
-              หมดอายุ {new Date(a.expires_at).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" })}
+              {t("หมดอายุ {date}", { date: new Date(a.expires_at).toLocaleDateString(intl, { day: "2-digit", month: "short", year: "numeric" }) })}
             </span>
           </Chip>
         )}
@@ -134,7 +137,7 @@ function Body({ a }: { a: Ann }) {
             "copy link" — colleagues can open it — but no social buttons, since
             those would post a link the recipient cannot follow. */}
         <div className="mt-5 border-t border-hairline pt-4">
-          <div className="mb-2 text-xs font-medium text-muted">แชร์ประกาศนี้</div>
+          <div className="mb-2 text-xs font-medium text-muted">{t("แชร์ประกาศนี้")}</div>
           <ShareButtons id={a.id} title={a.title} isPublic={!!a.is_public} size="sm" />
         </div>
       </Panel>

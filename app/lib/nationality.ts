@@ -5,20 +5,24 @@
 // place of the citizen-ID card. The transfer cover uses that passport number
 // as their PromptPay number.
 
+import { msg } from "./i18n/core";
+import { tc } from "./i18n/client";
+
 export type Nationality = "thai" | "foreign";
 
 export const NATIONALITY_LABEL: Record<Nationality, string> = {
-  thai: "ไทย",
-  foreign: "ต่างชาติ",
+  thai: msg("ไทย"),
+  foreign: msg("ต่างชาติ"),
 };
 
 export function isForeign(n: string | null | undefined): boolean {
   return n === "foreign";
 }
 
-/** The ID the creditor form asks this person for. */
+/** The ID the creditor form asks this person for. A msg() key — translate
+ *  with t() where it is shown. */
 export function idNumberLabel(n: string | null | undefined): string {
-  return isForeign(n) ? "เลข Passport" : "เลขบัตรประชาชน";
+  return isForeign(n) ? msg("เลข Passport") : msg("เลขบัตรประชาชน");
 }
 
 /** Passport number as stored: letters and digits, upper-cased, at most 12. */
@@ -26,11 +30,12 @@ export function passportNumber(s: string): string {
   return (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
 }
 
-/** Mirrors validateIDNumber on the server: 6–12 characters, at least one digit. */
+/** Mirrors validateIDNumber on the server: 6–12 characters, at least one digit.
+ *  Runs in the browser (form validation), so the message is translated here. */
 export function passportError(s: string): string | null {
   const p = passportNumber(s);
-  if (p.length < 6) return "เลข Passport ต้องมี 6–12 ตัวอักษร";
-  if (!/\d/.test(p)) return "เลข Passport ต้องมีตัวเลขอย่างน้อย 1 ตัว";
+  if (p.length < 6) return tc("เลข Passport ต้องมี 6–12 ตัวอักษร");
+  if (!/\d/.test(p)) return tc("เลข Passport ต้องมีตัวเลขอย่างน้อย 1 ตัว");
   return null;
 }
 

@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, MessageSquareText } from "lucide-react";
 import { Button } from "../ui";
+import { useI18n } from "../../lib/i18n/client";
 
 /** A manual link written out in full (this deployment's own origin) with a
  *  copy button, for staff to paste into LINE or an email to a newcomer. */
 export default function ShareLink({ label, path, message }: { label: string; path: string; message?: string }) {
+  const { t } = useI18n();
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState<"" | "link" | "message">("");
   useEffect(() => setOrigin(window.location.origin), []);
@@ -31,16 +33,16 @@ export default function ShareLink({ label, path, message }: { label: string; pat
         </code>
         <Button size="sm" variant="secondary" onPress={() => copy("link")} isDisabled={!origin}>
           {copied === "link" ? <Check size={14} /> : <Copy size={14} />}
-          {copied === "link" ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}
+          {copied === "link" ? t("คัดลอกแล้ว") : t("คัดลอกลิงก์")}
         </Button>
       </div>
       {message && (
         <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-muted">ข้อความพร้อมลิงก์ สำหรับส่งทางอีเมลหรือ LINE</span>
+            <span className="text-xs font-semibold text-muted">{t("ข้อความพร้อมลิงก์ สำหรับส่งทางอีเมลหรือ LINE")}</span>
             <Button size="sm" variant="secondary" onPress={() => copy("message")} isDisabled={!origin}>
               {copied === "message" ? <Check size={14} /> : <MessageSquareText size={14} />}
-              {copied === "message" ? "คัดลอกแล้ว" : "คัดลอกข้อความ"}
+              {copied === "message" ? t("คัดลอกแล้ว") : t("คัดลอกข้อความ")}
             </Button>
           </div>
           <p className="mt-2 whitespace-pre-line text-sm leading-6 text-foreground/85">

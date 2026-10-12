@@ -9,6 +9,7 @@ import { PageHeader, Panel, Chip, EmptyState, Alert, Button, IconButton } from "
 import { FormulaHelpModal } from "../../../../components/formula-help";
 import { TaPlanner, planHandoffKey, type PlanItem } from "../../../../components/TaPlanner";
 import { SkelValue } from "../../../../components/Skeletons";
+import { useI18n } from "../../../../lib/i18n/client";
 
 interface Budget {
   num_students: number;
@@ -31,6 +32,7 @@ interface Budget {
 
 export default function BudgetPage({ params }: { params: Promise<{ tcId: string }> }) {
   const { tcId } = use(params);
+  const { t } = useI18n();
   const [helpTrack, setHelpTrack] = useState<"regular" | "special" | null>(null);
 
   const router = useRouter();
@@ -61,12 +63,12 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
   return (
     <div>
       <PageHeader
-        title="โปรแกรมคำนวณงบ TA"
-        description={courseName ? `${courseName.code} ${courseName.name_th}` : "ประเมินภาระงาน จำนวน TA และงบประมาณ"}
+        title={t("โปรแกรมคำนวณงบ TA")}
+        description={courseName ? `${courseName.code} ${courseName.name_th}` : t("ประเมินภาระงาน จำนวน TA และงบประมาณ")}
         actions={
           <span data-tour="budget-help">
             <Button variant="secondary" onClick={() => setHelpTrack("regular")}>
-              <HelpCircle size={16} />วิธีคิดสูตร
+              <HelpCircle size={16} />{t("วิธีคิดสูตร")}
             </Button>
           </span>
         }
@@ -74,19 +76,19 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
 
       {notFound ? (
         <Panel>
-          <EmptyState title="ไม่พบข้อมูลงบประมาณ" description="อาจถูกลบหรือคุณไม่ได้รับผิดชอบวิชานี้" />
+          <EmptyState title={t("ไม่พบข้อมูลงบประมาณ")} description={t("อาจถูกลบหรือคุณไม่ได้รับผิดชอบวิชานี้")} />
         </Panel>
       ) : bError ? (
         <Panel>
           <Alert
             status="danger"
             icon={<CircleAlert size={16} />}
-            title="โหลดข้อมูลงบประมาณไม่สำเร็จ"
-            description={(bError as Error).message || "กรุณาลองใหม่อีกครั้ง"}
+            title={t("โหลดข้อมูลงบประมาณไม่สำเร็จ")}
+            description={(bError as Error).message || t("กรุณาลองใหม่อีกครั้ง")}
             action={
               budgetKey && (
                 <Button variant="secondary" size="sm" onPress={() => mutate(budgetKey)}>
-                  ลองใหม่
+                  {t("ลองใหม่")}
                 </Button>
               )
             }
@@ -100,8 +102,8 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             <div className="mb-4">
               <Alert
                 status="danger"
-                title="งบใช้เกินเพดาน"
-                description="โปรดตรวจสอบภาระงาน / จำนวน TA"
+                title={t("งบใช้เกินเพดาน")}
+                description={t("โปรดตรวจสอบภาระงาน / จำนวน TA")}
                 icon={<AlertTriangle size={18} />}
               />
             </div>
@@ -118,13 +120,13 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             onApplyPlan={goRequestWith}
           />
 
-          <Panel title="ที่มาของเพดานงบ" className="mb-4" data-tour="budget-info">
+          <Panel title={t("ที่มาของเพดานงบ")} className="mb-4" data-tour="budget-info">
             <div className="grid grid-cols-2 gap-4">
               <Info
-                k="หน่วยกิต"
+                k={t("หน่วยกิต")}
                 v={!b ? <SkelValue className="h-6 w-32" /> : course ? `${b.credits} (Lec ${course.lecture_hrs} / Lab ${course.lab_hrs})` : `${b.credits}`}
               />
-              <Info k="เพดานงบ/วิชา" v={b ? `${b.per_course_max.toLocaleString()} บ.` : <SkelValue className="h-6 w-24" />} />
+              <Info k={t("เพดานงบ/วิชา")} v={b ? t("{n} บ.", { n: b.per_course_max.toLocaleString() }) : <SkelValue className="h-6 w-24" />} />
               {b && b.budget_cap_baht != null && (
                 <div className="col-span-2">
                   <BudgetCapNotice cap={b.budget_cap_baht} formula={b.formula_baht} applied={b.cap_applied} />
@@ -137,7 +139,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
 
           <div data-tour="budget-tracks" className="grid gap-4 md:grid-cols-2 mb-4">
             <TrackPanel
-              title="ภาคปกติ"
+              title={t("ภาคปกติ")}
               tone="brand"
               students={b?.num_students_regular}
               workload={b?.weekly_workload_regular}
@@ -147,7 +149,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
               onHelp={() => setHelpTrack("regular")}
             />
             <TrackPanel
-              title="ภาคพิเศษ"
+              title={t("ภาคพิเศษ")}
               tone="warn"
               students={b?.num_students_special}
               workload={b?.weekly_workload_special}
@@ -158,29 +160,31 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
             />
           </div>
 
-          <Panel title="งบรวม" className="mb-4" data-tour="budget-total">
+          <Panel title={t("งบรวม")} className="mb-4" data-tour="budget-total">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Info k="ภาระงาน TA ตรี / สัปดาห์" v={b ? `${b.weekly_workload_hours.toFixed(2)} ชม.` : <InfoSkel />} />
-              <Info k="ค่าตอบแทน TA ตรี / เดือน" v={b ? `${b.monthly_pay_baht.toFixed(0)} บ.` : <InfoSkel />} />
-              <Info k="รวมทั้งเทอม (ตรี)" v={b ? `${b.term_pay_baht.toFixed(0)} บ.` : <InfoSkel />} />
-              <Info k="ใช้ไปแล้ว" v={b ? `${b.used_baht.toFixed(0)} บ.` : <InfoSkel />} />
-              <Info k="คงเหลือ" v={b ? `${b.remaining_baht.toFixed(0)} บ.` : <InfoSkel />}
+              <Info k={t("ภาระงาน TA ตรี / สัปดาห์")} v={b ? t("{h} ชม.", { h: b.weekly_workload_hours.toFixed(2) }) : <InfoSkel />} />
+              <Info k={t("ค่าตอบแทน TA ตรี / เดือน")} v={b ? t("{n} บ.", { n: b.monthly_pay_baht.toFixed(0) }) : <InfoSkel />} />
+              <Info k={t("รวมทั้งเทอม (ตรี)")} v={b ? t("{n} บ.", { n: b.term_pay_baht.toFixed(0) }) : <InfoSkel />} />
+              <Info k={t("ใช้ไปแล้ว")} v={b ? t("{n} บ.", { n: b.used_baht.toFixed(0) }) : <InfoSkel />} />
+              <Info k={t("คงเหลือ")} v={b ? t("{n} บ.", { n: b.remaining_baht.toFixed(0) }) : <InfoSkel />}
                     tone={b ? (b.over_budget ? "danger" : "success") : undefined} />
             </div>
           </Panel>
 
           <Panel
-            title={<span className="flex items-center gap-2"><Sparkles size={16} className="text-accent" />เข้าใจสูตร</span>}
-            description="งงว่าตัวเลขข้างบนคำนวณมาจากไหน? ดูวิธีคิดทีละขั้นตอนพร้อมค่าจริง"
+            title={<span className="flex items-center gap-2"><Sparkles size={16} className="text-accent" />{t("เข้าใจสูตร")}</span>}
+            description={t("งงว่าตัวเลขข้างบนคำนวณมาจากไหน? ดูวิธีคิดทีละขั้นตอนพร้อมค่าจริง")}
             actions={
               <Button variant="primary" onClick={() => setHelpTrack("regular")}>
-                <HelpCircle size={14} />ดูวิธีคิด
+                <HelpCircle size={14} />{t("ดูวิธีคิด")}
               </Button>
             }
           >
             <div className="text-sm text-muted">
-              สูตรอ้างอิงจากไฟล์ Excel <b>ค่า-TA-ภาคต้น-ปี-2560</b> ชีต <b>2_59 ป.ตรี</b>
-              คลิกปุ่ม "ดูวิธีคิด" เพื่อดูตัวอย่างการคำนวณของวิชานี้ พร้อมกราฟิกอธิบายทีละขั้น
+              {t.rich("สูตรอ้างอิงจากไฟล์ Excel {file} ชีต {sheet} คลิกปุ่ม \"ดูวิธีคิด\" เพื่อดูตัวอย่างการคำนวณของวิชานี้ พร้อมกราฟิกอธิบายทีละขั้น", {
+                file: <b>{"ค่า-TA-ภาคต้น-ปี-2560"}</b>, // i18n-ignore — the source file's name
+                sheet: <b>{"2_59 ป.ตรี"}</b>, // i18n-ignore — the sheet's name in that file
+              })}
             </div>
           </Panel>
 
@@ -199,7 +203,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
               lecHrs: b.lecture_hrs,
               labHrs: b.lab_hrs,
               students: helpTrack === "special" ? b.num_students_special : b.num_students_regular,
-              trackLabel: helpTrack === "special" ? "ภาคพิเศษ" : "ภาคปกติ",
+              trackLabel: helpTrack === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ"),
               isSpecial: helpTrack === "special",
               courseName: courseName ? `${courseName.code} — ${courseName.name_th}` : undefined,
             }}
@@ -238,6 +242,7 @@ function TrackPanel({
   months?: number;
   onHelp: () => void;
 }) {
+  const { t } = useI18n();
   const v = (n: number | undefined, fmt: (n: number) => string, w = "w-16") =>
     n === undefined ? <SkelValue className={`h-4 ${w}`} /> : fmt(n);
   return (
@@ -247,27 +252,27 @@ function TrackPanel({
           {title}
           {students === undefined
             ? <SkelValue className="h-6 w-14 rounded-full" />
-            : <Chip tone={tone}>{students} คน</Chip>}
+            : <Chip tone={tone}>{t("{n} คน", { n: students })}</Chip>}
         </span>
       }
       actions={
-        <IconButton label="ดูวิธีคิด" variant="ghost" size="sm" onClick={onHelp}>
+        <IconButton label={t("ดูวิธีคิด")} variant="ghost" size="sm" onClick={onHelp}>
           <InfoIcon size={16} />
         </IconButton>
       }
     >
       <div className="space-y-2 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted">ภาระงาน/สัปดาห์</span>
-          <span className="tabular font-medium">{v(workload, n => `${n.toFixed(2)} ชม.`)}</span>
+          <span className="text-muted">{t("ภาระงาน/สัปดาห์")}</span>
+          <span className="tabular font-medium">{v(workload, n => t("{h} ชม.", { h: n.toFixed(2) }))}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted">งบ/เดือน</span>
-          <span className="tabular font-medium">{v(monthly, n => `฿${n.toFixed(0)}`)}</span>
+          <span className="text-muted">{t("งบ/เดือน")}</span>
+          <span className="tabular font-medium">{v(monthly, n => `฿${n.toFixed(0)}`)}{/* i18n-ignore — ฿ symbol stays */}</span>
         </div>
         <div className="flex justify-between pt-2 border-t border-[var(--hairline)]">
-          <span className="text-muted">× {v(months, n => String(n), "w-4")} เดือน</span>
-          <span className="tabular font-semibold text-base">{v(term, n => `฿${n.toFixed(0)}`, "w-20")}</span>
+          <span className="text-muted">{t.rich("× {n} เดือน", { n: v(months, n => String(n), "w-4") })}</span>
+          <span className="tabular font-semibold text-base">{v(term, n => `฿${n.toFixed(0)}`, "w-20")}{/* i18n-ignore — ฿ symbol stays */}</span>
         </div>
       </div>
     </Panel>

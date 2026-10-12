@@ -9,21 +9,23 @@ import { Check, Eye, EyeOff, KeyRound, ShieldAlert, X } from "lucide-react";
 import { api, errMessage, type Me } from "../lib/api";
 import useDocumentTitle from "../lib/useDocumentTitle";
 import { Skel, SkelForm, SkelRegion, SkelValue } from "../components/Skeletons";
+import { msg, useI18n } from "../lib/i18n/client";
 
 const SPECIAL_CHAR_RE = /[!@#$%^&*()\-_=+[\]{};:,.<>/?]/;
 
 // score 0-4 from zxcvbn -> Thai label + HeroUI Meter color. Kept in one place
 // so the bar and the text under it can never drift out of sync.
 const STRENGTH_LEVELS: { label: string; color: "danger" | "warning" | "accent" | "success" }[] = [
-  { label: "อ่อนมาก", color: "danger" },
-  { label: "อ่อน", color: "danger" },
-  { label: "ปานกลาง", color: "warning" },
-  { label: "ดี", color: "accent" },
-  { label: "แข็งแรงมาก", color: "success" },
+  { label: msg("อ่อนมาก"), color: "danger" },
+  { label: msg("อ่อน"), color: "danger" },
+  { label: msg("ปานกลาง"), color: "warning" },
+  { label: msg("ดี"), color: "accent" },
+  { label: msg("แข็งแรงมาก"), color: "success" },
 ];
 
 export default function ChangePasswordPage() {
-  useDocumentTitle("เปลี่ยนรหัสผ่าน");
+  const { t } = useI18n();
+  useDocumentTitle(msg("เปลี่ยนรหัสผ่าน"));
   // Same SWR key every other page already fetches "/me" under — decides
   // whether this is the forced first-login change (no current password to
   // confirm) or a voluntary change from Account Settings (backend requires
@@ -49,11 +51,11 @@ export default function ChangePasswordPage() {
   const [loading, setLoading] = useState(false);
 
   const rules = [
-    { ok: pw.length >= 8, label: "อย่างน้อย 8 ตัวอักษร" },
-    { ok: /[A-Z]/.test(pw), label: "มีตัวพิมพ์ใหญ่ (A–Z)" },
-    { ok: /[a-z]/.test(pw), label: "มีตัวพิมพ์เล็ก (a–z)" },
-    { ok: /[0-9]/.test(pw), label: "มีตัวเลข (0–9)" },
-    { ok: SPECIAL_CHAR_RE.test(pw), label: "มีอักขระพิเศษ (!@#$%...)" },
+    { ok: pw.length >= 8, label: t("อย่างน้อย 8 ตัวอักษร") },
+    { ok: /[A-Z]/.test(pw), label: t("มีตัวพิมพ์ใหญ่ (A–Z)") },
+    { ok: /[a-z]/.test(pw), label: t("มีตัวพิมพ์เล็ก (a–z)") },
+    { ok: /[0-9]/.test(pw), label: t("มีตัวเลข (0–9)") },
+    { ok: SPECIAL_CHAR_RE.test(pw), label: t("มีอักขระพิเศษ (!@#$%...)") },
   ];
   const rulesPass = rules.every(r => r.ok);
 
@@ -66,15 +68,15 @@ export default function ChangePasswordPage() {
     const e: { currentPw: string | null; pw: string | null; pw2: string | null } = {
       currentPw: null, pw: null, pw2: null,
     };
-    if (voluntary && currentPw.length === 0) e.currentPw = "กรุณากรอกรหัสผ่านปัจจุบัน";
-    if (pw.length === 0) e.pw = "กรุณากรอกรหัสผ่านใหม่";
-    else if (!rulesPass) e.pw = "รหัสผ่านยังไม่ตรงตามเงื่อนไขทั้งหมด";
+    if (voluntary && currentPw.length === 0) e.currentPw = t("กรุณากรอกรหัสผ่านปัจจุบัน");
+    if (pw.length === 0) e.pw = t("กรุณากรอกรหัสผ่านใหม่");
+    else if (!rulesPass) e.pw = t("รหัสผ่านยังไม่ตรงตามเงื่อนไขทั้งหมด");
     else if (voluntary && currentPw.length > 0 && pw === currentPw)
-      e.pw = "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม";
-    if (pw2.length === 0) e.pw2 = "กรุณายืนยันรหัสผ่านใหม่";
-    else if (pw !== pw2) e.pw2 = "รหัสผ่านทั้งสองช่องไม่ตรงกัน";
+      e.pw = t("รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม");
+    if (pw2.length === 0) e.pw2 = t("กรุณายืนยันรหัสผ่านใหม่");
+    else if (pw !== pw2) e.pw2 = t("รหัสผ่านทั้งสองช่องไม่ตรงกัน");
     return e;
-  }, [voluntary, currentPw, pw, pw2, rulesPass]);
+  }, [voluntary, currentPw, pw, pw2, rulesPass, t]);
   const hasErrors = !!(errors.currentPw || errors.pw || errors.pw2);
 
   // Same show/hide toggle markup for all three password fields, parameterized
@@ -86,7 +88,7 @@ export default function ChangePasswordPage() {
         <IconButton
           size="sm"
           variant="ghost"
-          label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+          label={show ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
           onPress={() => setShow(!show)}
         >
           {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -127,14 +129,14 @@ export default function ChangePasswordPage() {
             <KeyRound />
           </div>
           <h1 className="mt-4 text-[22px] font-semibold text-foreground">
-            {!meReady ? <SkelValue className="h-7 w-40" /> : voluntary ? "เปลี่ยนรหัสผ่าน" : "ตั้งรหัสผ่านใหม่"}
+            {!meReady ? <SkelValue className="h-7 w-40" /> : voluntary ? t("เปลี่ยนรหัสผ่าน") : t("ตั้งรหัสผ่านใหม่")}
           </h1>
           <p className="text-sm text-muted mt-1">
             {!meReady
               ? <SkelValue className="h-3.5 w-64" />
               : voluntary
-              ? "เปลี่ยนรหัสผ่านสำหรับบัญชีของคุณ"
-              : "เพื่อความปลอดภัย โปรดตั้งรหัสผ่านใหม่ก่อนใช้งานครั้งแรก"}
+              ? t("เปลี่ยนรหัสผ่านสำหรับบัญชีของคุณ")
+              : t("เพื่อความปลอดภัย โปรดตั้งรหัสผ่านใหม่ก่อนใช้งานครั้งแรก")}
           </p>
         </div>
 
@@ -155,7 +157,7 @@ export default function ChangePasswordPage() {
                   onChange={setCurrentPw}
                   isInvalid={showErrors && !!errors.currentPw}
                 >
-                  <Label>รหัสผ่านปัจจุบัน</Label>
+                  <Label>{t("รหัสผ่านปัจจุบัน")}</Label>
                   <InputGroup>
                     <InputGroup.Input type={showCurrentPw ? "text" : "password"} autoComplete="current-password" />
                     {toggleSuffix(showCurrentPw, setShowCurrentPw)}
@@ -170,21 +172,21 @@ export default function ChangePasswordPage() {
                 onChange={setPw}
                 isInvalid={showErrors && !!errors.pw}
               >
-                <Label>รหัสผ่านใหม่</Label>
+                <Label>{t("รหัสผ่านใหม่")}</Label>
                 <InputGroup>
                   <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="new-password" />
                   {toggleSuffix(showPw, setShowPw)}
                 </InputGroup>
                 {strength !== null && (
                   <Meter
-                    aria-label="ความแข็งแรงของรหัสผ่าน"
+                    aria-label={t("ความแข็งแรงของรหัสผ่าน")}
                     className="mt-2"
                     size="sm"
                     color={STRENGTH_LEVELS[strength].color}
                     value={(strength + 1) * 20}
-                    valueLabel={STRENGTH_LEVELS[strength].label}
+                    valueLabel={t(STRENGTH_LEVELS[strength].label)}
                   >
-                    <Label className="text-xs text-muted">ความแข็งแรงของรหัสผ่าน</Label>
+                    <Label className="text-xs text-muted">{t("ความแข็งแรงของรหัสผ่าน")}</Label>
                     <Meter.Output />
                     <Meter.Track>
                       <Meter.Fill />
@@ -211,7 +213,7 @@ export default function ChangePasswordPage() {
                 onChange={setPw2}
                 isInvalid={showErrors && !!errors.pw2}
               >
-                <Label>ยืนยันรหัสผ่านใหม่</Label>
+                <Label>{t("ยืนยันรหัสผ่านใหม่")}</Label>
                 <InputGroup>
                   <InputGroup.Input type={showPw2 ? "text" : "password"} autoComplete="new-password" />
                   {toggleSuffix(showPw2, setShowPw2)}
@@ -222,7 +224,7 @@ export default function ChangePasswordPage() {
                 <Alert status="danger">
                   <Alert.Indicator><ShieldAlert size={16} /></Alert.Indicator>
                   <Alert.Content>
-                    <Alert.Title>ตั้งรหัสผ่านไม่สำเร็จ</Alert.Title>
+                    <Alert.Title>{t("ตั้งรหัสผ่านไม่สำเร็จ")}</Alert.Title>
                     <Alert.Description>{err}</Alert.Description>
                   </Alert.Content>
                 </Alert>
@@ -235,7 +237,7 @@ export default function ChangePasswordPage() {
                 <div className="flex gap-2">
                   <Link href="/account" className="flex-1">
                     <Button type="button" variant="ghost" size="lg" fullWidth isDisabled={loading}>
-                      ยกเลิก
+                      {t("ยกเลิก")}
                     </Button>
                   </Link>
                   <Button
@@ -245,7 +247,7 @@ export default function ChangePasswordPage() {
                     isPending={loading}
                     isDisabled={showErrors && hasErrors}
                   >
-                    {loading ? "กำลังบันทึก…" : "บันทึกรหัสผ่านใหม่"}
+                    {loading ? t("กำลังบันทึก…") : t("บันทึกรหัสผ่านใหม่")}
                   </Button>
                 </div>
               ) : (
@@ -256,7 +258,7 @@ export default function ChangePasswordPage() {
                   isPending={loading}
                   isDisabled={showErrors && hasErrors}
                 >
-                  {loading ? "กำลังบันทึก…" : "บันทึกรหัสผ่านใหม่"}
+                  {loading ? t("กำลังบันทึก…") : t("บันทึกรหัสผ่านใหม่")}
                 </Button>
               )}
             </form>

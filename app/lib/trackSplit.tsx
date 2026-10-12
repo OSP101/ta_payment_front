@@ -3,9 +3,14 @@
  * ภาคพิเศษ — so a single total tells the reader nothing about what will be
  * paid. Every screen that shows a figure covering both tracks names the split
  * (12/09/2026), with the same words in the same order everywhere.
+ *
+ * The *Text helpers return a finished string and run in the browser (the
+ * figures come from client-side fetches), so they translate with tc().
  */
+import { msg } from "./i18n/core";
+import { tc, useI18n } from "./i18n/client";
 
-export const TRACK_SHORT: Record<string, string> = { regular: "ปกติ", special: "พิเศษ" };
+export const TRACK_SHORT: Record<string, string> = { regular: msg("ปกติ"), special: msg("พิเศษ") };
 
 const num = (n: number, digits: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -16,20 +21,20 @@ const num = (n: number, digits: number) =>
  * plain "0.0 ชม.": there is no track to name.
  */
 export function hoursSplitText(regular: number, special: number, digits = 1): string {
-  if (regular <= 0 && special <= 0) return `${num(0, digits)} ชม.`;
+  if (regular <= 0 && special <= 0) return tc("{n} ชม.", { n: num(0, digits) });
   const parts: string[] = [];
-  if (regular > 0 || special <= 0) parts.push(`ปกติ ${num(regular, digits)}`);
-  if (special > 0) parts.push(`พิเศษ ${num(special, digits)}`);
-  return `${parts.join(" · ")} ชม.`;
+  if (regular > 0 || special <= 0) parts.push(tc("ปกติ {n}", { n: num(regular, digits) }));
+  if (special > 0) parts.push(tc("พิเศษ {n}", { n: num(special, digits) }));
+  return tc("{n} ชม.", { n: parts.join(" · ") });
 }
 
 /** "ปกติ ฿80 · พิเศษ ฿50" — same rule as the hours. */
 export function bahtSplitText(regular: number, special: number): string {
-  const b = (n: number) => `฿${Math.round(n).toLocaleString()}`;
+  const b = (n: number) => `฿${Math.round(n).toLocaleString()}`; // i18n-ignore — currency symbol
   if (regular <= 0 && special <= 0) return b(0);
   const parts: string[] = [];
-  if (regular > 0 || special <= 0) parts.push(`ปกติ ${b(regular)}`);
-  if (special > 0) parts.push(`พิเศษ ${b(special)}`);
+  if (regular > 0 || special <= 0) parts.push(tc("ปกติ {n}", { n: b(regular) }));
+  if (special > 0) parts.push(tc("พิเศษ {n}", { n: b(special) }));
   return parts.join(" · ");
 }
 
@@ -38,18 +43,20 @@ export function bahtSplitText(regular: number, special: number): string {
  * the figure is the thing on the line, so the names do not compete with it.
  */
 export function HoursSplit({
-  regular, special, digits = 1, unit = "ชม.", className = "", stacked = false,
+  regular, special, digits = 1, unit: unitKey = msg("ชม."), className = "", stacked = false,
 }: {
   regular: number; special: number; digits?: number; unit?: string; className?: string;
   /** One track per line, for a narrow cell where the inline form breaks at the dot. */
   stacked?: boolean;
 }) {
+  const { t } = useI18n();
+  const unit = unitKey && t(unitKey);
   if (regular <= 0 && special <= 0) {
     return <span className={`tabular ${className}`}>{num(0, digits)}{unit && <span className="text-muted"> {unit}</span>}</span>;
   }
   const items: [string, number][] = [];
-  if (regular > 0 || special <= 0) items.push(["ปกติ", regular]);
-  if (special > 0) items.push(["พิเศษ", special]);
+  if (regular > 0 || special <= 0) items.push([t("ปกติ"), regular]);
+  if (special > 0) items.push([t("พิเศษ"), special]);
   if (stacked) {
     return (
       <span className={`inline-flex flex-col leading-tight ${className}`}>
