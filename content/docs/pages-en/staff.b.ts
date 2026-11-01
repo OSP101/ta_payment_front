@@ -430,11 +430,10 @@ export const staffPagesEnB: DocPage[] = [
     title: "System-wide status table (staff view)",
     description: "The statuses of a monthly round from start to finish, and who can move it forward or back",
     since: "1.0",
-    keywords: ["status table", "monthly status", "workflow", "status codes", "lecturer approved", "exported", "finance sent"],
+    keywords: ["status table", "monthly status", "workflow", "status codes", "awaiting review", "exported", "finance sent"],
     blocks: [
       statusTable([
-        { status: "Not sent", tone: "neutral", meaning: "Waiting for the TA to submit for approval (system code: `pending`)" },
-        { status: "Lecturer approved", tone: "info", meaning: "Waiting for staff review (system code: `lecturer_approved`)", whoActsNext: "Staff" },
+        { status: "Awaiting review", tone: "neutral", meaning: "The TA logs and submits hours, the lecturer approves each month, then it waits for staff review. All of this happens in this status (system code: `pending`)", whoActsNext: "TA, lecturer, then staff" },
         { status: "Reviewed", tone: "warn", meaning: "Staff have reviewed it; waiting to be exported (system code: `staff_reviewed`)", whoActsNext: "Staff" },
         { status: "Exported", tone: "success", meaning: "Documents exported; can no longer be edited (system code: `exported`)" },
         { status: "Sent to finance", tone: "success", meaning: "Process complete (system code: `finance_sent`)" },

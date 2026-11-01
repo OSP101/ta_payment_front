@@ -43,7 +43,7 @@ interface Step {
 
 const STEPS: Step[] = [
   { n: 1, tone: "ta", title: msg("ลงเวลาและส่งอนุมัติ"), body: msg("ทุกเดือน ก่อนวันครบกำหนดของเดือนนั้น"), status: "pending", Icon: Clock },
-  { n: 2, tone: "lecturer", title: msg("อนุมัติบันทึกเวลา"), body: msg("ทีละคน ทีละเดือน หรือส่งกลับให้แก้"), status: "lecturer_approved", Icon: CircleCheck },
+  { n: 2, tone: "lecturer", title: msg("อนุมัติบันทึกเวลา"), body: msg("ทีละคน ทีละเดือน หรือส่งกลับให้แก้"), status: "approved", Icon: CircleCheck },
   { n: 3, tone: "staff", title: msg("ตรวจและส่งออกเอกสาร"), body: msg("ดาวน์โหลดไฟล์ ZIP แล้วเดือนนั้นจะถูกล็อก"), status: "exported", Icon: PackageCheck },
   { n: 4, tone: "paper", who: msg("ผู้ลงนาม"), title: msg("ลงนามเอกสาร"), body: msg("TA อาจารย์ และผู้รับรองเซ็นตามลำดับ"), Icon: FileSignature },
   { n: 5, tone: "paper", who: msg("การเงิน"), title: msg("ส่งการเงิน คณบดีลงนาม"), body: msg("ค่าตอบแทนเข้าบัญชีของผู้ช่วยสอน"), status: "finance_sent", Icon: Banknote },

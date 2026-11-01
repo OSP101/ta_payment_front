@@ -1,4 +1,5 @@
 "use client";
+import FooterCredit from "../components/FooterCredit";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, FieldError, InputGroup, Label, Modal, TextField } from "@heroui/react";
@@ -296,7 +297,7 @@ export default function DemoEntryPage() {
           {/* Same footer as the login page — one copyright/credit block for
               the whole app, not a second wording invented for this screen. */}
           <p className="text-center text-xs text-muted mt-6">
-            © {new Date().getFullYear()} College of Computing, Khon Kaen University
+            <FooterCredit />
           </p>
         </div>
       </main>

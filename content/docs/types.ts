@@ -67,9 +67,48 @@ export type Block =
    *  Built for a link sent to a newcomer, so the whole path reads on one page. */
   | { type: "journey"; stages: JourneyStage[] }
   /** A manual link with a copy button, for staff to paste into a message. */
-  | { type: "shareLink"; label: string; path: string; message?: string };
+  | { type: "shareLink"; label: string; path: string; message?: string }
+  /** A UML sequence diagram, drawn in the page (SequenceDiagram.tsx). The
+   *  text is in the page's own language, like every other block. */
+  | { type: "sequence"; spec: SequenceSpec };
 
 export type DiagramName = "system-map" | "money-flow";
+
+/**
+ * UML sequence diagram data. Notation follows UML 2:
+ * - "sync"  solid line, filled head — a request the sender waits on
+ * - "reply" dashed line, open head  — the answer to a sync request
+ * - "async" solid line, open head   — sent without waiting (e-mail, notice)
+ * A message whose `to` equals `from` is a self-call (the system doing work on
+ * its own). Activation bars are derived: a sync message opens one on the
+ * receiver, that receiver's next reply closes it.
+ */
+export interface SeqParticipant {
+  id: string;
+  label: string;
+  /** actor = a person (stick figure); system = our software; db = database;
+   *  external = outside the system (KKU SSO, mail server, REG). */
+  kind: "actor" | "system" | "db" | "external";
+  tone?: "ta" | "lecturer" | "staff" | "brand" | "paper";
+  /** Second line under the name, e.g. the role or the address. */
+  sub?: string;
+}
+
+export type SeqItem =
+  | { from: string; to: string; text: string; kind?: "sync" | "reply" | "async" }
+  /** A note box over one participant or spanning several. */
+  | { note: string; over: string[] }
+  /** UML combined fragment: alt (if/else), opt (if), loop, par, break. */
+  | { frag: "alt" | "opt" | "loop" | "par" | "break"; branches: { guard: string; items: SeqItem[] }[] }
+  /** A phase heading across the whole diagram ("ต้นภาคเรียน", "ทุกเดือน"). */
+  | { phase: string };
+
+export interface SequenceSpec {
+  title: string;
+  participants: SeqParticipant[];
+  items: SeqItem[];
+  caption?: string;
+}
 
 export interface StepBlock {
   title: string;
@@ -146,4 +185,5 @@ export const diagram = (name: DiagramName): Block => ({ type: "diagram", name })
 export const journey = (stages: JourneyStage[]): Block => ({ type: "journey", stages });
 /** `message` is copied with the link appended, ready to paste into LINE or email. */
 export const shareLink = (label: string, path: string, message?: string): Block => ({ type: "shareLink", label, path, message });
+export const sequence = (spec: SequenceSpec): Block => ({ type: "sequence", spec });
 export const tryInDemo = (label: string, role: "staff" | "lecturer" | "ta", tourKey?: string): Block => ({ type: "tryInDemo", label, role, tourKey });

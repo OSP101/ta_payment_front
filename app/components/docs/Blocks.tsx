@@ -6,6 +6,7 @@ import Screenshot from "./Screenshot";
 import Gif from "./Gif";
 import MoneyFlow from "./MoneyFlow";
 import SystemMap from "./SystemMap";
+import SequenceDiagram from "./SequenceDiagram";
 import Journey, { stageId } from "./Journey";
 import ShareLink from "./ShareLink";
 import { Chip, type ChipTone } from "../ui";
@@ -219,6 +220,9 @@ function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: 
 
     case "shareLink":
       return <ShareLink label={block.label} path={block.path} message={block.message} />;
+
+    case "sequence":
+      return <SequenceDiagram spec={block.spec} />;
 
     case "diagram":
       return block.name === "money-flow" ? <MoneyFlow /> : block.name === "system-map" ? <SystemMap /> : null;

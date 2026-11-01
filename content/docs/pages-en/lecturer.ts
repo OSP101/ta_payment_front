@@ -248,8 +248,8 @@ export const lecturerPagesEn: DocPage[] = [
     keywords: ["submit ta request", "request tas", "deadline", "late submission", "budget calculator", "requests open e-mail", "automatic decision"],
     blocks: [
       text(
-        "Fill in a 2-step form and submit. The system **decides immediately** against the rules, such as the TA's documents, class schedule, " +
-        "the per-TA course limit and the budget. There is no wait for staff approval.",
+        "Fill in a 2-step form and submit. The system **decides immediately** against the rules, such as the TA's class schedule, " +
+        "the per-TA course limit, the workload and teaching times that clash with other courses. There is no wait for staff approval.",
       ),
       screenshot("L-RQ-01", "The request page: deadline bar, budget calculator, steps 1 and 2, the submit button and request history"),
       screenshot("L-RQ-02-1", "The deadline bar before the deadline, showing the time left"),
@@ -371,13 +371,13 @@ export const lecturerPagesEn: DocPage[] = [
       screenshot("L-RQ-09", "The 5-field form for creating a new TA account"),
       steps([
         { title: "Click Create account", body: "The system shows a **one-time temporary password**", screenshot: "L-RQ-10" },
-        { title: "Click Copy", body: "Then send the password to the TA yourself. The system does not send it" },
+        { title: "Send the password to the TA", body: "Click **Send sign-in details by e-mail** and the system e-mails the temporary password to the TA's address. Or click **Copy** and send it to the TA yourself" },
         { title: "Click Add to this course", body: "The TA's name goes straight into a card on the form" },
       ]),
       callout(
         "info",
         "Also tell the TA that on first sign-in they must **set a new password**, then **fill in their own class schedule** " +
-        "and **send 3 document files** for staff to check. Only then can the request go ahead.",
+        "before the request can be decided, and must **send 3 document files** that staff approve before they can log hours.",
       ),
       gif("L-RQ-G4", "Creating a new TA account, copying the temporary password, then adding the TA to the course"),
     ],
@@ -414,17 +414,22 @@ export const lecturerPagesEn: DocPage[] = [
     title: "Request rejected: what to fix",
     description: "Why a request did not pass, and what to fix before submitting again",
     since: "1.0",
-    keywords: ["request rejected", "fix request", "rejection reason", "documents incomplete", "over course limit", "budget not enough", "schedule clash"],
+    keywords: ["request rejected", "fix request", "rejection reason", "over course limit", "workload", "duplicate request", "schedule clash"],
     blocks: [
       table(
         ["Reason given by the system", "What to fix"],
         [
-          ["TA documents incomplete", "Ask the TA to send the 3 document files for staff to check first"],
           ["No class schedule yet", "Ask the TA to fill in their own class schedule"],
           ["Over the per-semester course limit", "Choose another TA, or wait until that TA has room in their limit"],
-          ["Schedule clash", "Change the section or the person"],
-          ["Budget not enough", "Reduce the number of TAs or the workload so it stays within the cap"],
+          ["Already in another request for this course", "This TA already has a submitted or approved request in this course. No need to send it again"],
+          ["Workload outside the rule", "A master's or PhD TA needs a total of 10 to 12 hours a week. A bachelor's TA needs more than 0 hours a week"],
+          ["Teaching time clashes with another course the TA assists", "Change the section or the person"],
         ],
+      ),
+      callout(
+        "info",
+        "Missing TA documents and sessions that clash with the TA's own class schedule **do not cause a rejection**. The system shows them as warnings and removes the clashing sessions. " +
+        "The budget warning on the request page is only a calculation for you to see. It does not stop you submitting and is not a rule for deciding the request.",
       ),
       text("After fixing it, **submit a new request**. The system checks it immediately; there is no wait for staff."),
     ],

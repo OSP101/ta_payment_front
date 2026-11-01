@@ -11,11 +11,13 @@ import { commonPages } from "./pages/common";
 import { taPages } from "./pages/ta";
 import { lecturerPages } from "./pages/lecturer";
 import { staffPages } from "./pages/staff";
+import { flowPages } from "./pages/flows";
 import { commonPagesEn } from "./pages-en/common";
 import { taPagesEn } from "./pages-en/ta";
 import { lecturerPagesEn } from "./pages-en/lecturer";
 import { staffPagesEnA } from "./pages-en/staff.a";
 import { staffPagesEnB } from "./pages-en/staff.b";
+import { flowPagesEn } from "./pages-en/flows";
 import { DEFAULT_LOCALE, type Locale } from "../../app/lib/i18n/core";
 
 export interface MediaEntry {
@@ -56,8 +58,8 @@ export function glossaryFor(locale: Locale = DEFAULT_LOCALE): Glossary {
  *  reader-visible text differs — so links, the in-app pill and access rules
  *  work the same whichever language is served. */
 const ALL_PAGES: Record<Locale, DocPage[]> = {
-  th: [...commonPages, ...taPages, ...lecturerPages, ...staffPages],
-  en: [...commonPagesEn, ...taPagesEn, ...lecturerPagesEn, ...staffPagesEnA, ...staffPagesEnB],
+  th: [...commonPages, ...taPages, ...lecturerPages, ...staffPages, ...flowPages],
+  en: [...commonPagesEn, ...taPagesEn, ...lecturerPagesEn, ...staffPagesEnA, ...staffPagesEnB, ...flowPagesEn],
 };
 
 /** `pagesForAudience` result per language and audience, computed once —

@@ -585,7 +585,7 @@ export const staffPagesEnA: DocPage[] = [
       screenshot("S-AP-01", "The TA requests page: filters, approved and rejected counts, and the list of requests"),
       text("You can choose the **Academic year** and **Semester**. The default is the semester selected at the top, or you can choose “All years”. Search by course code, course name or lecturer name."),
       screenshot("S-AP-02", "An expanded row showing the result of each rule check"),
-      text("Expand a row to see the result of each check, such as TA documents, class schedule, the cap on courses per semester (set on the Settings page) and overlapping schedules."),
+      text("Expand a row to see the result of each check, such as TA documents, class schedule, the cap on courses per semester (set on the Settings page) and overlapping schedules. TA documents and sessions that clash with the TA's own class schedule are only warnings and do not cause a rejection."),
       statusTable([
         { status: "✓ Passed", tone: "success", meaning: "That condition passed" },
         { status: "⚠ Follow up", tone: "warn", meaning: "Passed with conditions" },
@@ -593,7 +593,7 @@ export const staffPagesEnA: DocPage[] = [
       ]),
       screenshot("S-AP-03", "A TA card in a request, with badges saying some sessions or the whole group were removed"),
       text("The **Some sessions removed** and **Whole group removed** badges mean the system has already taken out sessions that clash with the TA's own class schedule. The reason is in the yellow box."),
-      callout("tip", "If a request is rejected, ask the lecturer to fix the cause, for example get the TA to send their documents or fill in the class schedule, then **send a new request**. The system checks it again right away."),
+      callout("tip", "If a request is rejected, ask the lecturer to fix the cause, for example get the TA to fill in the class schedule or adjust the workload, then **send a new request**. The system checks it again right away."),
     ],
   },
 ];

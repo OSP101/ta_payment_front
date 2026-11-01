@@ -1,4 +1,5 @@
 "use client";
+import FooterCredit from "../components/FooterCredit";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -484,7 +485,7 @@ export default function LoginForm({
         <div className="relative flex flex-col gap-5 max-w-[340px]">
           {hasLoginNotices(notices) && <LoginNoticeCards notices={notices} tone="dark" />}
           <p className="text-xs text-white/80">
-            © {new Date().getFullYear()} College of Computing, Khon Kaen University
+            <FooterCredit onPhoto />
           </p>
         </div>
       </aside>
@@ -752,8 +753,8 @@ export default function LoginForm({
         </div>
         </div>
 
-        <p className="lg:hidden text-center text-xs text-muted pb-6">
-          © {new Date().getFullYear()} College of Computing, Khon Kaen University
+        <p className="lg:hidden px-4 text-center text-xs text-muted pb-6">
+          <FooterCredit />
         </p>
       </main>
     </div>

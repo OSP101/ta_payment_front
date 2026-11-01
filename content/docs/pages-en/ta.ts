@@ -443,14 +443,19 @@ export const taPagesEn: DocPage[] = [
     description: "One press gives you entries for the whole semester from the section's teaching schedule",
     since: "1.0",
     keywords: ["auto-generate", "generate worklog", "create entries", "whole semester", "teaching schedule", "overwrite"],
-    errors: ["ปุ่มจะใช้ไม่ได้หากมีรายการที่ส่งอนุมัติไปแล้ว", "The button is disabled if any entries have already been submitted for approval"],
+    errors: ["อาจารย์ยังไม่ได้ตั้งตารางสอนของ section นี้ในระบบ จึงยังสร้างอัตโนมัติไม่ได้", "The lecturer has not set up the teaching schedule for this section yet, so auto-generate is not available"],
     blocks: [
       text(
         "With one press, the system creates entries for the whole semester from the **section's teaching schedule**, skipping holidays, exam periods and sessions that clash with your classes. " +
         "You can then edit or delete individual days afterwards.",
       ),
-      screenshot("T-WL-03", "The auto-generate button and the window confirming it will overwrite existing entries"),
-      callout("warn", "If any entries have already been submitted for approval, this button is disabled. Generating again overwrites all existing entries."),
+      screenshot("T-WL-03", "The auto-generate button and the window confirming it will overwrite existing draft entries"),
+      callout(
+        "warn",
+        "You can press it again at any time. The system deletes only **unsent draft entries** in months that are still open, then generates the whole semester again, including days that have not come yet. " +
+        "Months that have been submitted, approved by the lecturer, or have a returned entry you can still fix are kept as they are, " +
+        "and months whose submission period has closed or whose documents have been exported are not touched. If you edited draft entries by hand, pressing it again replaces those edits.",
+      ),
       gif("T-WL-G1", "Press auto-generate and entries for the whole semester appear in each month"),
     ],
   },
@@ -551,7 +556,7 @@ export const taPagesEn: DocPage[] = [
           ["All buttons are grey, with the message “Waiting for staff to approve documents”", "Your 3 document files have not passed review yet", "Go to the documents page and see which file is still awaiting review or was returned"],
           ["A session on that day cannot be logged", "The session falls on a holiday and has no make-up day yet", "Go to the “Holidays and make-up days” page of that course"],
           ["A row is grey and cannot be edited", "That month has closed, or it has already been submitted for approval", "If you had not submitted it, it is forfeited. If you had, wait for the lecturer's review as usual"],
-          ["The auto-generate button is disabled", "Some entries in that month have already been submitted for approval", "Add or edit the remaining entries yourself"],
+          ["The auto-generate button is disabled", "The lecturer has not set up the teaching schedule for this section, or the course has no student count yet", "Ask the lecturer to add the teaching schedule, or ask staff to enter the student count. Meanwhile, press **Add entry** to fill entries in yourself"],
         ],
       ),
     ],

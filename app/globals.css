@@ -831,6 +831,10 @@ select.field {
 .docs-flow-spine>span{position:absolute;left:0;right:0;height:30%;background:linear-gradient(180deg,transparent,#0776bc,transparent);animation:docs-flow-fall 3.2s linear infinite}
 @keyframes docs-flow-fall{from{transform:translateY(-100%)}to{transform:translateY(340%)}}
 
+/* sequence diagrams (app/components/docs/SequenceDiagram.tsx) */
+.docs-seq-note{background:#fffbea;border-color:#e9d58a}
+.dark .docs-seq-note{background:rgba(234,179,8,.10);border-color:#6b5a1e}
+
 @media (prefers-reduced-motion: reduce){
   .docs-flow-link>span,.docs-flow-spine>span{display:none}
   .docs-flow-drop,.docs-flow-back{animation:none}

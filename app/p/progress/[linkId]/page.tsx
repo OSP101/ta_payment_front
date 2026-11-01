@@ -1,3 +1,4 @@
+import FooterCredit from "../../../components/FooterCredit";
 import type { Metadata } from "next";
 import { backendURL, siteURL } from "../../../lib/site";
 import PublicProgressBoard from "./PublicProgressBoard";
@@ -82,7 +83,7 @@ export default async function PublicDocumentProgressPage(
       {/* Same footer as the login page — one copyright/credit block for the
           whole app, not a second wording invented for this screen. */}
       <p className="text-center text-xs text-muted mt-6 pb-10">
-        © {new Date().getFullYear()} College of Computing, Khon Kaen University
+        <FooterCredit />
       </p>
     </div>
   );
