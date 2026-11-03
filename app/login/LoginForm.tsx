@@ -482,8 +482,12 @@ export default function LoginForm({
           </span>
         </div>
 
-        <div className="relative flex flex-col gap-5 max-w-[340px]">
-          {hasLoginNotices(notices) && <LoginNoticeCards notices={notices} tone="dark" />}
+        <div className="relative flex flex-col gap-5">
+          {hasLoginNotices(notices) && (
+            <div className="max-w-[340px]">
+              <LoginNoticeCards notices={notices} tone="dark" />
+            </div>
+          )}
           <p className="text-xs text-white/80">
             <FooterCredit onPhoto />
           </p>
