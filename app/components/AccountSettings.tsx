@@ -12,6 +12,7 @@ import ProfilePhotoCard from "./ProfilePhotoCard";
 import TwoFactorManageModal from "./TwoFactorManageModal";
 import ThemeSwitch from "./ThemeSwitch";
 import LanguageSwitch from "./LanguageSwitch";
+import TextSizeControl from "./TextSizeControl";
 import { Skel, SkelRegion, SkelValue } from "./Skeletons";
 import { msg, useI18n } from "../lib/i18n/client";
 
@@ -122,6 +123,13 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
             <div className="text-xs text-muted mt-0.5">{t("เอกสารที่ส่งออกและอีเมลยังเป็นภาษาไทยตามแบบฟอร์มของมหาวิทยาลัย")}</div>
           </div>
           <LanguageSwitch signedIn showLabels />
+        </div>
+        <div className="mt-4 pt-4 border-t border-[var(--hairline)] flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground">{t("ขนาดตัวอักษร")}</div>
+            <div className="text-xs text-muted mt-0.5">{t("ปรับได้ตั้งแต่ 90–150% และจดจำไว้ในเบราว์เซอร์นี้")}</div>
+          </div>
+          <TextSizeControl />
         </div>
       </Panel>
 

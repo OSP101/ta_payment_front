@@ -29,6 +29,7 @@ import { formatFullName } from "../lib/prefixes";
 import UserAvatar from "./UserAvatar";
 import ThemeSwitch from "./ThemeSwitch";
 import LanguageSwitch from "./LanguageSwitch";
+import TextSizeControl from "./TextSizeControl";
 import { BetaBadge, BetaNoticeModal, hasSeenBetaNotice } from "./BetaNotice";
 import useDocumentTitle from "../lib/useDocumentTitle";
 import { msg, useI18n } from "../lib/i18n/client";
@@ -710,6 +711,10 @@ function TopBar({
       {topBarScope}
       {topBarAccessory}
 
+      <div className="hidden lg:block">
+        <TextSizeControl />
+      </div>
+
       <Dropdown>
         <Button variant="ghost" aria-label={t("เมนูผู้ใช้")} className="px-1.5! gap-2! h-auto! py-1! shrink-0">
           <UserAvatar firstName={me.first_name} lastName={me.last_name} src={me.avatar_url} />
@@ -738,6 +743,10 @@ function TopBar({
           <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-3">
             <span className="text-xs text-muted">{t("ภาษา")}</span>
             <LanguageSwitch signedIn />
+          </div>
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-3">
+            <span className="text-xs text-muted">{t("ขนาดตัวอักษร")}</span>
+            <TextSizeControl />
           </div>
           <Dropdown.Menu
             onAction={(key: React.Key) => {

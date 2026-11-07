@@ -14,6 +14,7 @@ import {
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 import { Skel } from "../../components/Skeletons";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
+import type { RegSourceStatus, RegSourcesResponse } from "./regSources";
 import { budgetConfirmMessage } from "./budgetConfirm";
 import BudgetCapNotice from "../../components/BudgetCapNotice";
 import { useI18n, type TFn } from "../../lib/i18n/client";
@@ -88,6 +89,24 @@ export default function TeachingPage() {
   const [importing, setImporting] = useState(false);
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [bulkCountsOpen, setBulkCountsOpen] = useState(false);
+  const [regSources, setRegSources] = useState<RegSourceStatus[]>([]);
+  const [regChecking, setRegChecking] = useState(false);
+  const [regCheckError, setRegCheckError] = useState("");
+  async function checkRegSources() {
+    setRegChecking(true);
+    setRegCheckError("");
+    try {
+      const result = await api.get<RegSourcesResponse>("/reg-enrolment/sources");
+      setRegSources(result.sources);
+    } catch (e) {
+      setRegSources([]);
+      setRegCheckError(errMessage(e));
+    } finally { setRegChecking(false); }
+  }
+  async function openBulkCounts() {
+    await checkRegSources();
+    setBulkCountsOpen(true);
+  }
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [onlyWba, setOnlyWba] = useState(false);
   // Course whose student counts are being edited in the modal (null = closed).
@@ -117,8 +136,8 @@ export default function TeachingPage() {
                   <FileSpreadsheet size={16} /> {t("นำเข้า Excel")}
                 </Button>
               </span>
-              <Button variant="secondary" disabled={!termId} onClick={() => setBulkCountsOpen(true)}>
-                <ClipboardPaste size={16} /> {t("อัปเดตจำนวนนักศึกษา")}
+              <Button variant="secondary" disabled={!termId || regChecking} isPending={regChecking} onClick={openBulkCounts}>
+                <ClipboardPaste size={16} /> {regChecking ? t("กำลังตรวจสอบ REG ทั้งสองระบบ") : t("อัปเดตจำนวนนักศึกษา")}
               </Button>
               <Button variant="tertiary" disabled={!termId} onClick={() => setImportHistoryOpen(true)}>
                 <History size={16} /> {t("ประวัติการนำเข้า")}
@@ -231,6 +250,10 @@ export default function TeachingPage() {
 
       <BulkCountsModal
         open={bulkCountsOpen}
+        sources={regSources}
+        sourcesChecking={regChecking}
+        sourcesError={regCheckError}
+        onCheckSources={checkRegSources}
         onClose={() => setBulkCountsOpen(false)}
         termId={termId}
         termLabel={termLabel}

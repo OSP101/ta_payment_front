@@ -6,6 +6,17 @@
    dark: fire on a dark-mode laptop even with the light theme chosen. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Keep rem-based text and its surrounding controls in proportion. Percentages
+   also respect the browser's preferred default font size. */
+@media screen {
+  html[data-text-scale="90"] { font-size: 90%; }
+  html[data-text-scale="110"] { font-size: 110%; }
+  html[data-text-scale="120"] { font-size: 120%; }
+  html[data-text-scale="130"] { font-size: 130%; }
+  html[data-text-scale="140"] { font-size: 140%; }
+  html[data-text-scale="150"] { font-size: 150%; }
+}
+
 /* -------------------------------------------------------------------------- */
 /* A button must look clickable.                                              */
 /*                                                                            */

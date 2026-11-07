@@ -18,6 +18,7 @@ import PreferenceSync from "./components/PreferenceSync";
 import InlineScript from "./components/InlineScript";
 import { I18nProvider } from "./lib/i18n/client";
 import { getLocale, getMessages, getT } from "./lib/i18n/server";
+import { parseTextScale, TEXT_SCALE_COOKIE } from "./lib/textScale";
 
 const kanit = Kanit({
   variable: "--font-kanit",
@@ -61,6 +62,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // first paint. suppressHydrationWarning because that script may have
   // changed <html>'s class by the time React hydrates.
   const cookieTheme = (await cookies()).get(THEME_COOKIE)?.value;
+  const textScale = parseTextScale((await cookies()).get(TEXT_SCALE_COOKIE)?.value);
   const theme: ThemePref = isThemePref(me?.ui_theme) ? me.ui_theme
     : isThemePref(cookieTheme) ? cookieTheme : "system";
   const themeClass = theme === "system" ? "" : ` ${theme}`;
@@ -70,7 +72,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const locale = await getLocale();
   const messages = getMessages(locale);
   return (
-    <html lang={locale} suppressHydrationWarning data-theme-pref={theme}
+    <html lang={locale} suppressHydrationWarning data-theme-pref={theme} data-text-scale={textScale}
           data-theme={theme === "system" ? undefined : theme}
           className={`${kanit.variable} h-full antialiased${themeClass}`}>
       <head>

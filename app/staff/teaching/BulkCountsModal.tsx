@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mutate } from "swr";
-import { ClipboardPaste, CloudDownload, FileSpreadsheet, Save, SearchCheck, Square } from "lucide-react";
+import { ClipboardPaste, CloudDownload, FileSpreadsheet, Save, SearchCheck, Square, CheckCircle2, CircleX, RefreshCw, AlertTriangle } from "lucide-react";
 import { Tabs } from "@heroui/react";
+import type { RegSource, RegSourceStatus } from "./regSources";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { Alert, Button, Chip, Modal, TextArea, type ChipTone } from "../../components/ui";
@@ -83,13 +84,14 @@ function Change({ from, to }: { from: number | null; to: number | null }) {
 type Tab = "reg" | "excel";
 export interface ScopeCounts { requested: number; all: number }
 
-export default function BulkCountsModal({ open, onClose, termId, termLabel, scopeCounts }: {
+export default function BulkCountsModal({ open, onClose, termId, termLabel, scopeCounts, sources, sourcesChecking, sourcesError, onCheckSources }: {
   open: boolean; onClose: () => void; termId: string | null; termLabel: string;
   /** Courses that can still change, for the REG tab's scope choice. */
   scopeCounts?: ScopeCounts;
+  sources: RegSourceStatus[]; sourcesChecking: boolean; sourcesError: string; onCheckSources: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<Tab>("excel");
+  const [tab, setTab] = useState<Tab>("reg");
   // Each tab keeps its own data: switching to Excel never shows (or sends)
   // what REG returned, and the other way round.
   const [regText, setRegText] = useState("");
@@ -105,7 +107,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
 
   useEffect(() => {
     if (open) { setText(""); setRegText(""); setRegSections({}); setPreview(null); setApplied(null); setConfirmBudget(false); setAllowZero(false); }
-  }, [open]);
+  }, [open, termId]);
 
   const parsed = useMemo(() => parsePasted(tab === "reg" ? regText : text), [tab, regText, text]);
   const shown = applied ?? preview;
@@ -171,12 +173,11 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
       footer={footer}
     >
       <div className="space-y-3">
-        {!preview && <Alert status="warning" title={t("ปิดการดึงข้อมูลจาก KKU REG ชั่วคราว เนื่องจากระบบทะเบียนเปลี่ยนเว็บไซต์ อยู่ระหว่างพัฒนาใหม่ กรุณาวางข้อมูลจาก Excel แทน")} />}
         {!preview && (
           <Tabs variant="secondary" selectedKey={tab} onSelectionChange={k => setTab(String(k) as Tab)}>
             <Tabs.ListContainer>
               <Tabs.List aria-label={t("ที่มาของจำนวนนักศึกษา")}>
-                <Tabs.Tab id="reg" isDisabled>
+                <Tabs.Tab id="reg">
                   <span className="inline-flex items-center gap-1.5"><CloudDownload size={14} /> {t("ดึงจากระบบทะเบียน (REG)")}</span>
                   <Tabs.Indicator />
                 </Tabs.Tab>
@@ -189,7 +190,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
 
             <Tabs.Panel id="reg">
               <div className="space-y-3 pt-4">
-                {/* REG fetching is suspended until the integration supports the new site. */}
+                {termId && <RegFetch key={termId} termId={termId} open={open} counts={scopeCounts} sources={sources} sourcesChecking={sourcesChecking} sourcesError={sourcesError} onCheckSources={onCheckSources} onRows={setRegText} onSections={setRegSections} />}
               </div>
             </Tabs.Panel>
 
@@ -403,6 +404,8 @@ interface RegRow {
   section_counts?: SectionCount[]; error?: string;
 }
 interface RegJob {
+  source: RegSource; problem?: RegSourceStatus;
+  academic_year: number; semester: number;
   scope: RegScope;
   status: "running" | "done" | "stopped" | "failed";
   done: number; total: number; rows: RegRow[];
@@ -416,48 +419,60 @@ const hhmm = (iso: string, intl: string) =>
 
 
 /**
- * ดึงจำนวนนักศึกษาที่ลงทะเบียนจริงจาก reg.kku.ac.th (backend RegEnrolmentService).
+ * ดึงจำนวนนักศึกษาที่ลงทะเบียนจริงจาก reg4.kku.ac.th (backend RegEnrolmentService).
  * The server reads the registrar one request at a time, ~1–1.5 s apart, and
- * reads big groups of codes with one wildcard search ("CP*") limited to the
- * college — a whole term is about a minute; this polls its progress.
+ * reads groups of codes using paginated prefix searches and level filters.
+ * This page polls only our backend, never the registrar directly.
  * Staff pick the scope — usually only the courses that asked for a TA, which
  * is a fraction of the term. The result fills the REG tab's rows and goes
  * through the same ตรวจสอบ → บันทึก steps as a paste; nothing is saved until
  * staff confirm.
  */
-function RegFetch({ termId, open, counts, onRows, onSections }: {
+function RegFetch({ termId, open, counts, onRows, onSections, sources, sourcesChecking, sourcesError, onCheckSources }: {
   termId: string; open: boolean; counts?: ScopeCounts; onRows: (text: string) => void;
   onSections: (m: Record<string, SectionCount[]>) => void;
+  sources: RegSourceStatus[]; sourcesChecking: boolean; sourcesError: string; onCheckSources: () => Promise<void>;
 }) {
   const { t, intl } = useI18n();
   const [scope, setScope] = useState<RegScope>("requested");
+  const [source, setSource] = useState<RegSource>(() => sources.find(s => s.state === "in_use")?.source ?? sources.find(s => s.available)?.source ?? "new");
   const [job, setJob] = useState<RegJob | null>(null);
   const [starting, setStarting] = useState(false);
   const applied = useRef<string | null>(null);
+  const requestVersion = useRef(0);
 
   // On open, pick up a fetch that is still running (the dialog was closed
   // mid-way) so its progress shows instead of a second start.
   useEffect(() => {
     if (!open) return;
     applied.current = null;
-    api.get<{ job: RegJob | null }>(`/terms/${termId}/reg-enrolment`)
+    const version = ++requestVersion.current;
+    let active = true;
+    api.get<{ job: RegJob | null }>(`/terms/${termId}/reg-enrolment?source=${source}`)
       .then(r => {
-        if (r.job?.status === "running") { setJob(r.job); setScope(r.job.scope); }
-        else setJob(null);
+        if (!active || version !== requestVersion.current) return;
+        setJob(r.job);
+        if (r.job) setScope(r.job.scope);
       })
       .catch(() => {});
-  }, [open, termId]);
+    return () => { active = false; };
+  }, [open, termId, source]);
 
   useEffect(() => {
-    if (job?.status !== "running") return;
-    const timer = setTimeout(async () => {
+    if (!open || job?.status !== "running") return;
+    let active = true;
+    let inFlight = false;
+    const timer = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        const r = await api.get<{ job: RegJob | null }>(`/terms/${termId}/reg-enrolment`);
-        setJob(r.job);
-      } catch { /* next tick retries */ }
+        const r = await api.get<{ job: RegJob | null }>(`/terms/${termId}/reg-enrolment?source=${source}`);
+        if (active) setJob(r.job);
+      } catch { /* keep polling after a transient failure */ }
+      finally { inFlight = false; }
     }, 1500);
-    return () => clearTimeout(timer);
-  }, [job, termId]);
+    return () => { active = false; clearInterval(timer); };
+  }, [open, job?.status, termId, source]);
 
   // Fill the rows once per finished fetch — a stopped one too: what it got
   // before the stop is real and usable.
@@ -470,10 +485,13 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
   }, [job, onRows, onSections]);
 
   async function start() {
+    ++requestVersion.current;
     setStarting(true);
     try {
-      const r = await api.post<{ job: RegJob }>(`/terms/${termId}/reg-enrolment`, { scope });
+      const r = await api.post<{ job: RegJob }>(`/terms/${termId}/reg-enrolment`, { scope, source });
       applied.current = null;
+      onRows("");
+      onSections({});
       setJob(r.job);
     } catch (e) {
       notify.error(e);
@@ -486,7 +504,7 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
   async function stop() {
     setStopping(true);
     try {
-      const r = await api.del<{ job: RegJob }>(`/terms/${termId}/reg-enrolment`);
+      const r = await api.del<{ job: RegJob }>(`/terms/${termId}/reg-enrolment?source=${source}`);
       setJob(r.job);
     } catch (e) {
       notify.error(e);
@@ -498,17 +516,66 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
   const running = job?.status === "running";
   const finished = job?.status === "done" || job?.status === "stopped";
   const failed = (job?.rows ?? []).filter(r => r.error);
+  const effectiveSources = sources.map(s => job?.problem?.source === s.source && new Date(job.problem.checked_at) >= new Date(s.checked_at) ? job.problem : s);
+  const sourceStatus = effectiveSources.find(s => s.source === source);
+  const sourceOptions: Array<{ id: RegSource; title: string; host: string }> = [
+    { id: "new", title: t("REG ใหม่"), host: "reg4.kku.ac.th" },
+    { id: "legacy", title: t("REG เดิม (Mirror)"), host: "reg-mirror.kku.ac.th" },
+  ];
+  function chooseSource(next: RegSource) {
+    if (next === source) return;
+    ++requestVersion.current;
+    applied.current = null;
+    setJob(null);
+    onRows(""); onSections({});
+    setSource(next);
+  }
   const pct = job && job.total ? Math.round((job.done / job.total) * 100) : 0;
   const options: Array<{ id: RegScope; title: string; note: string; n?: number }> = [
-    { id: "requested", title: t("เฉพาะวิชาที่ขอ TA แล้ว"), note: t("แนะนำ เฉพาะวิชาที่ใช้คำนวณงบ TA ใช้เวลาไม่กี่วินาที"), n: counts?.requested },
-    { id: "all", title: t("ทุกวิชาในภาค"), note: t("ค้นแบบกลุ่ม (CP* SC* และรหัสเก่า) ทั้งภาคประมาณ 1 นาที"), n: counts?.all },
+    { id: "requested", title: t("เฉพาะวิชาที่ขอ TA แล้ว"), note: t("แนะนำ ดึงเฉพาะวิชาที่ใช้คำนวณงบ TA ลดเวลารอและจำนวนคำขอ"), n: counts?.requested },
+    { id: "all", title: t("ทุกวิชาในภาค"), note: t("ค้นเป็นกลุ่มและเว้นช่วงคำขอ ระยะเวลาขึ้นอยู่กับจำนวนกลุ่มเรียน"), n: counts?.all },
   ];
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted">
-        {t.rich("ระบบอ่านจำนวนที่ {b} (คอลัมน์ \"ลง\") ของทุกกลุ่มเรียนจาก reg.kku.ac.th แยกภาคปกติกับโครงการพิเศษ วิชาที่ส่งออกแล้วจะไม่ถูกดึง", { b: <b>{t("ลงทะเบียนจริง")}</b> })}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium">{t("เลือกเว็บไซต์ REG")}</p>
+        <Button variant="ghost" onClick={onCheckSources} disabled={sourcesChecking || running || starting} isPending={sourcesChecking}>
+          <RefreshCw size={14} /> {t("ตรวจสอบอีกครั้ง")}
+        </Button>
+      </div>
+      <p className="text-sm text-muted">{t("ตรวจการเชื่อมต่อจากเซิร์ฟเวอร์ TA ก่อนดึงข้อมูล ทั้งสองระบบใช้ปีและภาคการศึกษาที่เลือก")}</p>
+      {sourcesError && <Alert status="warning" title={t("ตรวจสอบเว็บไซต์ REG ไม่สำเร็จ")} description={t("ยังดึงจาก REG ไม่ได้ กรุณากดตรวจสอบอีกครั้ง หรือวางข้อมูลจาก Excel") + " · " + sourcesError} />}
+      <div role="radiogroup" aria-label={t("เว็บไซต์ REG ที่จะดึง")} className="space-y-2" aria-busy={sourcesChecking}>
+        {sourceOptions.map(option => {
+          const status = effectiveSources.find(s => s.source === option.id);
+          const ready = status?.available === true;
+          const on = source === option.id;
+          return (
+            <div key={option.id} className="rounded-lg border border-border p-3">
+              <button type="button" role="radio" aria-checked={on}
+                disabled={!ready || sourcesChecking || running || starting}
+                aria-describedby={`reg-source-${option.id}-detail`}
+                onClick={() => chooseSource(option.id)}
+                className="flex min-h-11 w-full items-center gap-3 text-left disabled:cursor-not-allowed">
+                <span aria-hidden className={"h-4 w-4 shrink-0 rounded-full border-2 " + (on ? "border-[var(--brand)] bg-[var(--brand)]" : "border-border")} />
+                <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{option.title}</span><span className="block break-all text-xs text-muted">{option.host}</span></span>
+                <span className="inline-flex shrink-0 items-center gap-1 text-sm">
+                  {ready ? <CheckCircle2 size={18} className="text-success-soft-foreground" aria-hidden /> : status?.state === "limited" || status?.state === "in_use" ? <AlertTriangle size={18} className="text-warning-soft-foreground" aria-hidden /> : <CircleX size={18} className="text-danger-soft-foreground" aria-hidden />}
+                  {ready ? t("พร้อมใช้งาน") : t("ดึงไม่ได้")}
+                </span>
+              </button>
+              <div id={`reg-source-${option.id}-detail`} className="mt-1 space-y-1 text-sm text-muted" aria-live="polite">
+                <p>{status ? t(status.message) : t("ยังไม่ได้ตรวจสอบเว็บไซต์นี้")}</p>
+                {!ready && <p>{status ? t(status.action) : t("กดตรวจสอบอีกครั้ง หรือวางข้อมูลจาก Excel")}</p>}
+                {status?.retry_at && <p>{t("ลองตรวจสอบอีกครั้งหลัง {time}", { time: new Date(status.retry_at).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit", second: "2-digit" }) })}</p>}
+                {status?.checked_at && <p className="text-xs">{t("ตรวจสอบเมื่อ {time}", { time: hhmm(status.checked_at, intl) })}</p>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-sm text-muted">{t("ระบบเว้นช่วงคำขอและใช้ผลเดิมได้ 10 นาที วิชาที่ส่งออกแล้วจะไม่ถูกดึง ต้องตรวจสอบยอดก่อนบันทึกทุกครั้ง")}</p>
 
       <div role="radiogroup" aria-label={t("วิชาที่จะดึง")} className="grid gap-2 sm:grid-cols-2">
         {options.map(o => {
@@ -519,7 +586,7 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
               type="button"
               role="radio"
               aria-checked={on}
-              disabled={running}
+              disabled={running || starting}
               onClick={() => setScope(o.id)}
               className={
                 "rounded-lg border p-3 text-left transition disabled:opacity-60 " +
@@ -540,7 +607,7 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" onClick={start} disabled={running || starting} isPending={starting}>
+        <Button variant="primary" onClick={start} disabled={running || starting || sourcesChecking || !sourceStatus?.available} isPending={starting}>
           <CloudDownload size={14} /> {job?.status === "stopped" ? t("ดึงต่อ") : job?.status === "done" ? t("ดึงใหม่") : t("เริ่มดึงข้อมูล")}
         </Button>
         {running && (
@@ -549,6 +616,8 @@ function RegFetch({ termId, open, counts, onRows, onSections }: {
           </Button>
         )}
       </div>
+
+      {job && <p className="text-xs text-muted">{t("ข้อมูล REG ปีการศึกษา {year} ภาค {semester}", { year: job.academic_year, semester: job.semester })}</p>}
 
       {running && job && (
         <div>
