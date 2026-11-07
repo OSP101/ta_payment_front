@@ -81,7 +81,7 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
     <div>
       <Link
         href="/staff/payouts"
-        className="mb-2 inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-[var(--brand)]"
+        className="mb-2 inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-[var(--tone-brand-ink)]"
       >
         <ArrowLeft size={16} /> {t("กลับไปรายการวิชา")}
       </Link>

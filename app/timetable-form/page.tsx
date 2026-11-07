@@ -90,10 +90,10 @@ const DAYS = [
  * a black-and-white copy colour alone says nothing.
  */
 const STYLE: Record<Block["kind"], { bg: string; fg: string; tag: string }> = {
-  own_class: { bg: "#FEE9D9", fg: "#7A3A16", tag: "เรียน" }, // i18n-ignore
-  lecture:   { bg: "#D8E4BD", fg: "#3B5323", tag: "บรรยาย" }, // i18n-ignore
-  lab:       { bg: "#CFE2F3", fg: "#12456E", tag: "ปฏิบัติการ" }, // i18n-ignore
-  review:    { bg: "#E4D9F3", fg: "#442A70", tag: "ตรวจงาน" }, // i18n-ignore
+  own_class: { bg: "var(--duty-own-class-bg, #FEE9D9)", fg: "var(--duty-own-class-fg, #7A3A16)", tag: "เรียน" }, // i18n-ignore
+  lecture:   { bg: "var(--duty-lecture-bg, #D8E4BD)", fg: "var(--duty-lecture-fg, #3B5323)", tag: "บรรยาย" }, // i18n-ignore
+  lab:       { bg: "var(--duty-lab-bg, #CFE2F3)", fg: "var(--duty-lab-fg, #12456E)", tag: "ปฏิบัติการ" }, // i18n-ignore
+  review:    { bg: "var(--duty-review-bg, #E4D9F3)", fg: "var(--duty-review-fg, #442A70)", tag: "ตรวจงาน" }, // i18n-ignore
 };
 
 const ACTIVITY_LABEL: Record<string, string> = {
@@ -246,7 +246,7 @@ function FormView({ data, formKey: key, yearMonth }: {
       <div className="mt-2 flex flex-wrap gap-3 text-[11px]">
         {(["own_class", "lecture", "lab", "review"] as const).map(k => (
           <span key={k} className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded-sm border border-black/20" style={{ background: STYLE[k].bg }} />
+            <span className="inline-block h-3 w-3 rounded-sm border border-border-strong" style={{ background: STYLE[k].bg }} />
             {k === "own_class" ? "คาบเรียนของนักศึกษา" : `งาน TA ${STYLE[k].tag}`}{/* i18n-ignore */}
           </span>
         ))}
@@ -256,7 +256,7 @@ function FormView({ data, formKey: key, yearMonth }: {
         <div className="min-w-[900px]">
           {/* Header row of hour columns */}
           <div
-            className="grid gap-px border border-black/30 bg-black/20 text-center text-[10px]"
+            className="grid gap-px border border-border-strong bg-[var(--border-strong)] text-center text-[10px]"
             style={{ gridTemplateColumns: `64px repeat(${HOURS.length}, minmax(0,1fr))` }}
           >
             <div className="bg-white px-1 py-1 font-medium">วัน / เวลา</div>{/* i18n-ignore */}
@@ -316,7 +316,7 @@ function DayRow({ label, dow, blocks }: { label: string; dow: number; blocks: Bl
   const cols = `64px repeat(${HOURS.length}, minmax(0,1fr))`;
 
   return (
-    <div className="grid gap-px border-x border-b border-black/30 bg-black/20" style={{ gridTemplateColumns: cols }}>
+    <div className="grid gap-px border-x border-b border-border-strong bg-[var(--border-strong)]" style={{ gridTemplateColumns: cols }}>
       <div className="row-span-2 flex items-center justify-center bg-white px-1 text-[11px] font-medium">
         {label}
       </div>

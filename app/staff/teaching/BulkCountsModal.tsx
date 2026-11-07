@@ -89,7 +89,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
   scopeCounts?: ScopeCounts;
 }) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<Tab>("reg");
+  const [tab, setTab] = useState<Tab>("excel");
   // Each tab keeps its own data: switching to Excel never shows (or sends)
   // what REG returned, and the other way round.
   const [regText, setRegText] = useState("");
@@ -171,11 +171,12 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
       footer={footer}
     >
       <div className="space-y-3">
+        {!preview && <Alert status="warning" title={t("ปิดการดึงข้อมูลจาก KKU REG ชั่วคราว เนื่องจากระบบทะเบียนเปลี่ยนเว็บไซต์ อยู่ระหว่างพัฒนาใหม่ กรุณาวางข้อมูลจาก Excel แทน")} />}
         {!preview && (
           <Tabs variant="secondary" selectedKey={tab} onSelectionChange={k => setTab(String(k) as Tab)}>
             <Tabs.ListContainer>
               <Tabs.List aria-label={t("ที่มาของจำนวนนักศึกษา")}>
-                <Tabs.Tab id="reg">
+                <Tabs.Tab id="reg" isDisabled>
                   <span className="inline-flex items-center gap-1.5"><CloudDownload size={14} /> {t("ดึงจากระบบทะเบียน (REG)")}</span>
                   <Tabs.Indicator />
                 </Tabs.Tab>
@@ -188,8 +189,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
 
             <Tabs.Panel id="reg">
               <div className="space-y-3 pt-4">
-                {termId && <RegFetch termId={termId} open={open} counts={scopeCounts} onRows={setRegText} onSections={setRegSections} />}
-                {regText && <ParsedRows parsed={parsed} source="reg" />}
+                {/* REG fetching is suspended until the integration supports the new site. */}
               </div>
             </Tabs.Panel>
 
@@ -296,7 +296,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
                         <td className="px-3 py-2">
                           <Chip tone={st.tone}>{t(st.label)}</Chip>
                           {r.message && <div className="text-xs text-muted mt-1 whitespace-pre-line">{r.message}</div>}
-                          {r.warn && <div className="text-xs text-warning mt-1">{r.warn}</div>}
+                          {r.warn && <div className="text-xs text-warning-soft-foreground mt-1">{r.warn}</div>}
                         </td>
                       </tr>
                     );

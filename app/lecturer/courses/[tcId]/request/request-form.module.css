@@ -1,0 +1,200 @@
+/* Local to the request form; the shared planner and other pages keep their UI. */
+.form {
+  --request-line: color-mix(in srgb, var(--ink-3) 68%, var(--panel-bg));
+  --request-divider: color-mix(in srgb, var(--ink-3) 42%, var(--panel-bg));
+  --request-heading: color-mix(in srgb, var(--ink-3) 12%, var(--panel-bg));
+  margin-bottom: 1.5rem;
+  color: var(--ink-1);
+}
+
+.form ::selection {
+  background: var(--brand);
+  color: var(--brand-fg);
+}
+
+.planner > :global(.card),
+.step {
+  border: 1.5px solid var(--request-line);
+  border-radius: 6px;
+  background: var(--panel-bg);
+  box-shadow: none;
+}
+
+.planner > :global(.card) {
+  overflow: hidden;
+}
+
+.progress {
+  margin-block: 1.25rem;
+  padding-block: 0.5rem;
+}
+
+.steps {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.step {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stepHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--request-line);
+  background: var(--request-heading);
+}
+
+.stepNumber {
+  display: grid;
+  place-items: center;
+  flex: 0 0 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--request-line);
+  border-radius: 3px;
+  background: var(--panel-bg);
+  font-weight: 600;
+}
+
+.stepBody {
+  padding: 1.25rem;
+}
+
+.scopeChoice {
+  min-width: 0;
+  padding: 0.875rem;
+  border: 1px solid var(--request-line);
+  border-radius: 4px;
+  background: var(--panel-bg);
+}
+
+.scopeChoice:hover {
+  background: var(--request-heading);
+}
+
+.scopeChoice:has(input:checked) {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px var(--brand);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+}
+
+.assignment {
+  min-width: 0;
+  border: 1.5px solid var(--request-line);
+  border-radius: 5px;
+  background: var(--panel-bg);
+  overflow: hidden;
+}
+
+.assignment + .assignment {
+  margin-top: 1.25rem;
+}
+
+.assignment[data-blocked] {
+  border-color: var(--tone-danger-ink);
+}
+
+.assignment[data-blocked] .assignmentHeader {
+  border-color: var(--tone-danger-ink);
+  background: color-mix(in srgb, var(--tone-danger-ink) 10%, var(--panel-bg));
+}
+
+.assignmentHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--request-line);
+  background: var(--request-heading);
+}
+
+.assignmentBody {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1rem;
+}
+
+.workloadSection {
+  border-top: 1px solid var(--request-line);
+}
+
+.workloadSection + .workloadSection {
+  margin-top: 1.25rem;
+}
+
+.workloadHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--request-divider);
+  background: var(--request-heading);
+}
+
+.dutyGroup {
+  padding-block: 0.875rem;
+}
+
+.dutyGroup + .dutyGroup {
+  border-top: 1px solid var(--request-divider);
+}
+
+.total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--request-divider);
+  border-radius: 4px;
+  padding: 0.875rem;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.submit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--request-line);
+}
+
+@media (max-width: 639px) {
+  .stepHeader,
+  .stepBody,
+  .assignmentHeader,
+  .assignmentBody {
+    padding: 0.875rem;
+  }
+
+  .steps {
+    gap: 1.25rem;
+  }
+
+  .submit > :last-child {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    width: 100%;
+  }
+}

@@ -3,6 +3,7 @@
 //
 // Uploads are the exception — see UPLOAD_ORIGIN below.
 
+import { editRequestHeaders, rememberEditViews, resetEditViews } from "./concurrentEdits";
 import { beginRequest, endRequest } from "./loadingBar";
 import { tc as clientTc } from "./i18n/client";
 import { interpolate, msg, type Vars } from "./i18n/core";
@@ -340,13 +341,28 @@ async function parseError(path: string, res: Response): Promise<ApiError> {
 // on, so it must not flash the top loading bar.
 const SILENT_PATHS = ["/auth/heartbeat"];
 
+/** Shared transport for JSON, uploads, and locking downloads. */
+export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const url = String(input);
+  const own = url.startsWith(apiPrefix + "/") || (!!UPLOAD_ORIGIN && url.startsWith(UPLOAD_ORIGIN + apiPrefix + "/"));
+  if (!own) return fetch(input, init);
+  const path = url.slice(url.indexOf(apiPrefix) + apiPrefix.length);
+  const protocol = await editRequestHeaders(apiPrefix, path, init);
+  const headers = new Headers(init.headers);
+  for (const [key,value] of Object.entries(protocol)) headers.set(key,value);
+  const response = await fetch(input, {...init, headers});
+  if (response.ok && (/^\/auth\/(login|logout|sso\/(exchange|confirm))/.test(path))) resetEditViews();
+  rememberEditViews(apiPrefix, response, !["GET","HEAD"].includes((init.method ?? "GET").toUpperCase()));
+  return response;
+}
+
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const tracked = !SILENT_PATHS.includes(path);
   if (tracked) beginRequest();
   try {
     let res: Response;
     try {
-      res = await fetch(`${apiPrefix}${path}`, {
+      res = await apiFetch(`${apiPrefix}${path}`, {
         ...init,
         credentials: "include",
         signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS),
@@ -401,6 +417,7 @@ async function demoFetch<T>(path: string, body: unknown): Promise<T> {
     throw new ApiError(0, humanMessage(0, ""));
   }
   if (!res.ok) throw await parseError(path, res);
+  if (path.endsWith("/auth/login")) resetEditViews();
   return (await res.json()) as T;
 }
 
@@ -553,7 +570,7 @@ export const api = {
     try {
       let res: Response;
       try {
-        res = await fetch(`${UPLOAD_ORIGIN}${apiPrefix}${path}`, {
+        res = await apiFetch(`${UPLOAD_ORIGIN}${apiPrefix}${path}`, {
           method: "POST",
           body: form,
           // Required both ways: same-origin through the rewrite, and cross-origin
@@ -615,15 +632,17 @@ export interface UploadProgress {
  * Behaviour is otherwise identical to api.upload, including the cross-origin
  * UPLOAD_ORIGIN and the credentials, so the two can be used interchangeably.
  */
-function uploadWithProgress<T>(
+async function uploadWithProgress<T>(
   path: string,
   form: FormData,
   onProgress?: (p: UploadProgress) => void,
 ): Promise<T> {
+  const protocol = await editRequestHeaders(apiPrefix,path,{method:"POST",body:form});
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${UPLOAD_ORIGIN}${apiPrefix}${path}`, true);
     // The XHR spelling of credentials: "include".
+    for (const [key,value] of Object.entries(protocol)) xhr.setRequestHeader(key,value);
     xhr.withCredentials = true;
     xhr.timeout = TIMEOUT_MS * 3;
     // Ask for text so error bodies are readable regardless of content type;
@@ -653,6 +672,7 @@ function uploadWithProgress<T>(
         reject(toApiError(path, xhr.status, body));
         return;
       }
+      rememberEditViews(apiPrefix,new Response(null,{status:xhr.status,headers:{"X-Edit-Views":xhr.getResponseHeader("X-Edit-Views") ?? "{}"}}),true);
       const ct = xhr.getResponseHeader("content-type") ?? "";
       if (xhr.status === 204 || !ct.includes("application/json") || body === "") {
         resolve(undefined as unknown as T);

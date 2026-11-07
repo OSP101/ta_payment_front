@@ -197,7 +197,7 @@ export default function ChangePasswordPage() {
                   {rules.map((r, i) => (
                     <div
                       key={i}
-                      className={"flex items-center gap-1.5 text-xs " + (r.ok ? "text-success" : "text-muted")}
+                      className={"flex items-center gap-1.5 text-xs " + (r.ok ? "text-success-soft-foreground" : "text-muted")}
                     >
                       {r.ok ? <Check size={13} /> : <X size={13} />}
                       {r.label}

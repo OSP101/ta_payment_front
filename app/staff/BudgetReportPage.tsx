@@ -1,0 +1,1723 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import useSWR, { mutate } from "swr";
+import { ScrollShadow, InputGroup, Label, TextField } from "@heroui/react";
+import {
+  FileDown, History, Merge, Download, FileText, Users, GraduationCap, Banknote, FileSignature,
+  CalendarRange, Check, ChevronDown, AlertTriangle, Eye, EyeOff, ShieldCheck,
+} from "lucide-react";
+import { toast } from "@/app/lib/toast";
+import { api } from "../lib/api";
+import { useTerm } from "./TermContext";
+import {
+  PageHeader, Button, IconButton, Chip, EmptyState, Modal, Select,
+  ConfirmDialog, Avatar, Tip, TipWrap, Alert,
+} from "../components/ui";
+import { DataTable, type DataColumn } from "../components/DataTable";
+import UserAvatar from "../components/UserAvatar";
+import { Skel, SkelRegion, SkelList } from "../components/Skeletons";
+import {
+  MonthChips, monthLabels, monthsQuery, suggestMonths,
+  type MonthCoverage, type TermMonth,
+} from "../components/monthScope";
+import { msg, useI18n, type TFn } from "../lib/i18n/client";
+
+// Both routes share the existing preview, download, history, and course-group checks.
+type ReportKind = "course_summary" | "transfer_cover";
+
+export default function BudgetReportPage({ kind }: { kind: ReportKind }) {
+  const { t } = useI18n();
+  const { termId, term, loaded: termsLoaded } = useTerm();
+  const termLabel = term ? `${term.academic_year}/${term.semester}` : "";
+  const isTransferCover = kind === "transfer_cover";
+  // เบิกจ่ายเดือน/คงเหลือ's month selection — lifted here (not local to the
+  // preview panel): CourseSummaryDownloadButton
+  // lives in the page header, outside the preview panel, and must resolve
+  // the SAME months the screen is showing so the downloaded file can never
+  // disagree with it. null = let the backend default (every term month).
+  const [selectedMonths, setSelectedMonths] = useState<string[] | null>(null);
+  return (
+    <div>
+      <PageHeader
+        title={isTransferCover ? t("ใบปะหน้าจ่ายตรง") : t("สรุปการใช้งบประมาณ")}
+        description={isTransferCover
+          ? t("ตรวจตัวเลขใบปะหน้าจ่ายตรงบนหน้าจอ ก่อนดาวน์โหลดเป็นไฟล์ Excel พร้อมตรวจสอบรหัสวิชาคู่")
+          : t("ตรวจตัวเลขสรุปรายวิชาที่ขอใช้ TA บนหน้าจอ ก่อนดาวน์โหลดเป็นไฟล์ Excel พร้อมตรวจสอบรหัสวิชาคู่")}
+        actions={
+          termId ? (
+            kind === "course_summary" ? (
+              <CourseSummaryDownloadButton termId={termId} termLabel={termLabel} selectedMonths={selectedMonths} />
+            ) : (
+              <TransferCoverDownloadButton termId={termId} termLabel={termLabel} />
+            )
+          ) : null
+        }
+      />
+      {termId ? (
+        <PreviewSection
+          termId={termId} kind={kind}
+          selectedMonths={selectedMonths} setSelectedMonths={setSelectedMonths}
+        />
+      ) : !termsLoaded && (
+        // Hold the preview area while terms load.
+        <div className="space-y-5">
+          <PreviewTableSkeleton />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* On-screen preview                                                          */
+/* -------------------------------------------------------------------------- */
+
+// Preserve the appointment-order gate for both reports.
+function PreviewSection({
+  termId, kind, selectedMonths, setSelectedMonths,
+}: {
+  termId: string; kind: ReportKind;
+  selectedMonths: string[] | null; setSelectedMonths: (v: string[] | null) => void;
+}) {
+  const router = useRouter();
+  const { t } = useI18n();
+  const { data: rounds, isLoading: roundsLoading } = useSWR<{ items: { id: string }[] }>(
+    `/exports/appointment-order/rounds?term_id=${termId}`
+  );
+  const noRounds = !roundsLoading && !rounds?.items.length;
+  // Start the report requests alongside the rounds check,
+  // rather than only once the panel mounts after it — the keys are the ones
+  // the panels below use, so SWR dedupes and the panel finds them cached.
+  const cs = kind === "course_summary";
+  useSWR(cs ? `/exports/terms/${termId}/course-summary/months` : null);
+  useSWR(cs ? `/exports/terms/${termId}/course-summary/preview${monthsQuery(selectedMonths ?? [])}` : null);
+  useSWR(!cs ? `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("undergrad")}` : null);
+  useSWR(!cs ? `/exports/terms/${termId}/transfer-cover/preview${transferCoverQuery("undergrad")}` : null);
+
+  const noRoundsNotice = (
+    <EmptyState
+      icon={<FileSignature size={26} />}
+      title={t("ยังไม่เคยออกคำสั่งแต่งตั้ง TA")}
+      description={t("ต้องออกคำสั่งแต่งตั้งอย่างน้อย 1 ครั้งก่อน จึงจะแสดงข้อมูลได้ เนื่องจากคำสั่งแต่งตั้งเป็นสิ่งยืนยันว่ารายชื่อ TA ที่ใช้งานจริงคือใคร")}
+      action={
+        <Button variant="primary" onClick={() => router.push("/staff/appointments")}>
+          <FileSignature size={16} /> {t("ไปออกคำสั่งแต่งตั้ง")}
+        </Button>
+      }
+    />
+  );
+
+  return roundsLoading ? (
+    <PreviewTableSkeleton />
+  ) : noRounds ? (
+    noRoundsNotice
+  ) : cs ? (
+    <CourseSummaryPreviewPanel
+      termId={termId} selectedMonths={selectedMonths} setSelectedMonths={setSelectedMonths}
+    />
+  ) : (
+    <TransferCoverPreviewSection termId={termId} />
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Loading skeletons                                                         */
+/* -------------------------------------------------------------------------- */
+
+// PreviewTableSkeleton stands in for a curriculum Panel + DataTable while its
+// data is still in flight — shown instead of nothing, so "loading" and "no
+// data" never look identical (a blank white area for either was the actual
+// bug report: no visual difference between "still fetching" and "empty").
+function PreviewTableSkeleton() {
+  return (
+    <SkelRegion>
+      <div className="mb-3">
+        <Skel className="h-4 w-56" />
+        <Skel className="mt-2 h-3 w-24" />
+      </div>
+      <div className="divide-y divide-hairline">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="flex items-center gap-4 py-3.5">
+            <Skel className="h-3 w-14 shrink-0" />
+            <Skel className="h-3 flex-1" />
+            <Skel className="h-3 w-20 shrink-0" />
+            <Skel className="h-3 w-24 shrink-0" />
+          </div>
+        ))}
+      </div>
+    </SkelRegion>
+  );
+}
+
+const fmtBaht = (n: number, intl: string) => n.toLocaleString(intl, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// CourseSummaryMonthAmount is one course's เบิกจ่ายเดือน figure for ONE month
+// — never summed with any other month (11/09/2026: staff asked to see each
+// month on its own, not pooled into a range).
+interface CourseSummaryMonthAmount {
+  year_month: string;
+  label: string; // "มิถุนายน"
+  regular: number;
+  special: number;
+}
+interface CourseSummaryPreviewRow {
+  course_code: string;
+  course_name_th: string;
+  credit_text: string;
+  lecturer: string;
+  claim_kind: string;
+  num_regular: number;
+  num_special: number;
+  apply_regular: number;
+  apply_special: number;
+  paid_by_month: CourseSummaryMonthAmount[];
+  ta_student_id?: string;
+  ta_name?: string;
+  ta_level_th?: string;
+}
+interface CourseSummaryPreviewSheet {
+  curriculum_code: string;
+  sheet: string;
+  rows: CourseSummaryPreviewRow[];
+}
+
+interface TAInfo {
+  student_id?: string;
+  name: string;
+  level_th?: string;
+}
+
+// courseSummaryDisplayRow — one row per course. The backend flattens one row
+// per (course, TA) pair because a printed/sortable-for-Excel table has no
+// cell-merge equivalent (see CourseSummaryPreviewRow's own comment), but that
+// made a course with several TAs read as several different courses on
+// screen, with its own totals repeated once per TA. groupCourseSummaryRows
+// below undoes that flattening for display; the TA column shows everyone at
+// once as a compact avatar stack instead.
+interface CourseSummaryDisplayRow {
+  course_code: string;
+  course_name_th: string;
+  credit_text: string;
+  lecturer: string;
+  claim_kind: string;
+  num_regular: number;
+  num_special: number;
+  apply_regular: number;
+  apply_special: number;
+  paid_by_month: CourseSummaryMonthAmount[];
+  tas: TAInfo[];
+}
+
+function groupCourseSummaryRows(rows: CourseSummaryPreviewRow[]): CourseSummaryDisplayRow[] {
+  const order: string[] = [];
+  const byCourse = new Map<string, CourseSummaryDisplayRow>();
+  for (const r of rows) {
+    let g = byCourse.get(r.course_code);
+    if (!g) {
+      g = {
+        course_code: r.course_code, course_name_th: r.course_name_th, credit_text: r.credit_text,
+        lecturer: r.lecturer, claim_kind: r.claim_kind,
+        num_regular: r.num_regular, num_special: r.num_special,
+        apply_regular: r.apply_regular, apply_special: r.apply_special,
+        paid_by_month: r.paid_by_month,
+        tas: [],
+      };
+      byCourse.set(r.course_code, g);
+      order.push(r.course_code);
+    }
+    if (r.ta_name) g.tas.push({ student_id: r.ta_student_id, name: r.ta_name, level_th: r.ta_level_th });
+  }
+  return order.map(code => byCourse.get(code)!);
+}
+
+// TAAvatarStack — the "avatar group with +N overflow" pattern GitHub reviewers,
+// Linear assignees, and Jira watchers all converge on for "several people
+// attached to one row": every TA shown at once, name + level + student id on
+// hover/focus (TipWrap already handles touch and keyboard, not just mouse),
+// collapsing to a "+N" chip past a handful so one busy course can't blow out
+// the row height for everyone else's.
+const TA_STACK_VISIBLE = 4;
+
+/** "ปกติ / พิเศษ" on one line (tables keep rows to one line); the tooltip
+ *  spells both out. A negative amount (overspent) is red. */
+function MoneyPair({ regular, special }: { regular: number; special: number }) {
+  const { t, intl } = useI18n();
+  const cls = (n: number) => (n < 0 ? "font-medium text-danger-soft-foreground" : "");
+  return (
+    <Tip content={t("ภาคปกติ {regular} บาท\nภาคพิเศษ {special} บาท", { regular: fmtBaht(regular, intl), special: fmtBaht(special, intl) })}>
+      <span className="tabular-nums">
+        <span className={cls(regular)}>{fmtBaht(regular, intl)}</span>
+        <span className="text-ink-4"> / </span>
+        <span className={special < 0 ? cls(special) : "text-ink-4"}>{fmtBaht(special, intl)}</span>
+      </span>
+    </Tip>
+  );
+}
+
+function TAAvatarStack({ tas }: { tas: TAInfo[] }) {
+  const { t } = useI18n();
+  if (tas.length === 0) {
+    return <span className="text-xs text-ink-4">{t("ยังไม่มี TA ที่อนุมัติ")}</span>;
+  }
+  const visible = tas.slice(0, TA_STACK_VISIBLE);
+  const overflow = tas.length - visible.length;
+  return (
+    <div className="flex items-center -space-x-2">
+      {visible.map((ta, i) => {
+        const [first, ...rest] = ta.name.trim().split(/\s+/);
+        return (
+          <TipWrap
+            // student_id is not reliably unique (seed/placeholder data can
+            // repeat it across TAs) — array position always is.
+            key={`${i}-${ta.student_id ?? ta.name}`}
+            content={<>{ta.name}{ta.level_th ? ` · ${ta.level_th}` : ""}{ta.student_id ? `\n${ta.student_id}` : ""}</>}
+          >
+            <UserAvatar firstName={first} lastName={rest.join(" ")} size="sm" className="ring-2 ring-surface" />
+          </TipWrap>
+        );
+      })}
+      {overflow > 0 && (
+        <TipWrap content={tas.slice(TA_STACK_VISIBLE).map(x => x.name).join("\n")}>
+          <Avatar size="sm" color="accent" className="ring-2 ring-surface">
+            <Avatar.Fallback className="text-[10px]">+{overflow}</Avatar.Fallback>
+          </Avatar>
+        </TipWrap>
+      )}
+    </div>
+  );
+}
+
+// buildCourseSummaryColumns is a function (not a static const) because the
+// เบิกจ่ายเดือน columns are now one PER SELECTED MONTH (11/09/2026, reversing
+// the SAME DAY's earlier cumulative-through-one-month design per staff's
+// follow-up: months must never be pooled into one combined figure) — the
+// column set itself depends on how many months are currently selected.
+function buildCourseSummaryColumns(
+  monthMeta: { year_month: string; label: string }[],
+  t: TFn,
+): DataColumn<CourseSummaryDisplayRow>[] {
+  const monthCols: DataColumn<CourseSummaryDisplayRow>[] = monthMeta.map(m => ({
+    id: `paid_${m.year_month}`,
+    width: 160,
+    label: t("เบิกจ่ายเดือน {month} ปกติ / พิเศษ (บาท)", { month: m.label }),
+    className: "text-right whitespace-nowrap",
+    hideOnMobile: true,
+    sortable: true,
+    sortValue: r => {
+      const p = r.paid_by_month.find(x => x.year_month === m.year_month);
+      return (p?.regular ?? 0) + (p?.special ?? 0);
+    },
+    render: r => {
+      const p = r.paid_by_month.find(x => x.year_month === m.year_month);
+      return <MoneyPair regular={p?.regular ?? 0} special={p?.special ?? 0} />;
+    },
+  }));
+
+  return [
+    {
+      id: "course_code", width: 130, label: t("รหัสวิชา"), isRowHeader: true, sortable: true,
+      sortValue: r => r.course_code, render: r => <span className="font-medium tabular-nums">{r.course_code}</span>,
+    },
+    {
+      id: "course_name_th", width: 260, label: t("ชื่อวิชา"), sortable: true,
+      sortValue: r => r.course_name_th, render: r => r.course_name_th,
+    },
+    { id: "credit_text", width: 100, label: t("หน่วยกิต"), className: "whitespace-nowrap", hideOnMobile: true, render: r => r.credit_text },
+    {
+      id: "lecturer", width: 200, label: t("อาจารย์ผู้สอน"), sortable: true,
+      sortValue: r => r.lecturer, render: r => r.lecturer,
+    },
+    {
+      id: "claim_kind", width: 120, label: t("ประเภทเบิก"), hideOnMobile: true,
+      render: r => r.claim_kind ? <Chip tone="info">{r.claim_kind}</Chip> : null,
+    },
+    {
+      id: "ta", width: 170, label: "TA", sortable: true,
+      sortValue: r => r.tas.length ? r.tas.map(x => x.name).join(", ") : "~",
+      render: r => <TAAvatarStack tas={r.tas} />,
+    },
+    {
+      id: "num", width: 150, label: t("จำนวนนักศึกษา (ปกติ/พิเศษ)"), className: "text-right whitespace-nowrap", hideOnMobile: true,
+      render: r => `${r.num_regular} / ${r.num_special}`,
+    },
+    // The budget the course is allotted, per track — what L:M reports in the
+    // .xlsx.
+    {
+      id: "apply", width: 170, label: t("ขออนุมัติเบิกจ่าย ปกติ / พิเศษ (บาท)"), className: "text-right whitespace-nowrap", sortable: true,
+      sortValue: r => r.apply_regular + r.apply_special,
+      render: r => <MoneyPair regular={r.apply_regular} special={r.apply_special} />,
+    },
+    ...monthCols,
+    // คงเหลือ — added back 11/09/2026 per staff request, reversing the
+    // 10/08/2026 decision to drop it: ขออนุมัติเบิกจ่ายข้างบน minus the SUM of
+    // every visible month column, same arithmetic the .xlsx formula uses, so
+    // the screen and the file can never disagree.
+    {
+      id: "remaining", width: 140, label: t("คงเหลือ ปกติ / พิเศษ (บาท)"), className: "text-right whitespace-nowrap", sortable: true,
+      sortValue: r => {
+        const paidReg = r.paid_by_month.reduce((s, p) => s + p.regular, 0);
+        const paidSpec = r.paid_by_month.reduce((s, p) => s + p.special, 0);
+        return (r.apply_regular - paidReg) + (r.apply_special - paidSpec);
+      },
+      render: r => {
+        const paidReg = r.paid_by_month.reduce((s, p) => s + p.regular, 0);
+        const paidSpec = r.paid_by_month.reduce((s, p) => s + p.special, 0);
+        const remainRegular = r.apply_regular - paidReg;
+        const remainSpecial = r.apply_special - paidSpec;
+        return <MoneyPair regular={remainRegular} special={remainSpecial} />;
+      },
+    },
+  ];
+}
+
+function CourseSummaryPreviewPanel({
+  termId, selectedMonths, setSelectedMonths,
+}: {
+  termId: string; selectedMonths: string[] | null; setSelectedMonths: (v: string[] | null) => void;
+}) {
+  const { t } = useI18n();
+  const { data: monthsData } = useSWR<{ months: TermMonth[] }>(`/exports/terms/${termId}/course-summary/months`);
+  const allMonths = monthsData?.months ?? [];
+  // MonthChips wants TermMonthStatus (TermMonth + issued) — this document has
+  // no per-month "already issued" concept the way ปะหน้าจ่ายตรง does, so every
+  // chip is simply never flagged issued.
+  const monthChipsData = allMonths.map(m => ({ ...m, issued: false }));
+  const effectiveSelected = selectedMonths ?? allMonths.map(m => m.year_month);
+
+  const qs = monthsQuery(selectedMonths ?? []);
+  const { data, error, isLoading, mutate: retry } = useSWR<{
+    sheets: CourseSummaryPreviewSheet[]; warnings: string[]; months: string[]; month_labels: Record<string, string>;
+  }>(`/exports/terms/${termId}/course-summary/preview${qs}`, {
+    // Toggling a month chip re-asks for the same term's numbers — keep the
+    // current tables up (DataTable dims them via `loading`) instead of
+    // dropping back to the skeleton on every click.
+    keepPreviousData: true,
+  });
+  const sheets = data?.sheets ?? [];
+  const monthMeta = (data?.months ?? []).map(ym => ({ year_month: ym, label: data?.month_labels?.[ym] ?? ym }));
+  const columns = buildCourseSummaryColumns(monthMeta, t);
+
+  return (
+    <div className="space-y-8">
+      {!monthsData ? (
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium text-ink-2">{t("เลือกเดือนที่จะแสดงเบิกจ่ายเดือน")}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {[0, 1, 2, 3, 4].map(i => <Skel key={i} className="h-7 w-20 rounded-full" />)}
+          </div>
+        </div>
+      ) : allMonths.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium text-ink-2">{t("เลือกเดือนที่จะแสดงเบิกจ่ายเดือน")}</div>
+          <MonthChips months={monthChipsData} selected={effectiveSelected} onChange={setSelectedMonths} />
+        </div>
+      )}
+      {!!data?.warnings.length && (
+        <div className="flex items-start gap-2 text-xs text-amber-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">{t("มีรายการที่ควรตรวจสอบ {n} รายการ", { n: data.warnings.length })}</div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+      {isLoading && !data ? (
+        <PreviewTableSkeleton />
+      ) : error && !data ? (
+        <Alert
+          status="danger"
+          title={t("โหลดข้อมูลไม่สำเร็จ")}
+          description={error instanceof Error ? error.message : t("กรุณาลองใหม่อีกครั้ง")}
+          action={<Button variant="secondary" onClick={() => void retry()}>{t("ลองใหม่")}</Button>}
+        />
+      ) : sheets.length === 0 ? (
+        <EmptyState
+          icon={<GraduationCap size={26} />}
+          title={t("ยังไม่มีวิชาที่ขอใช้ TA")}
+          description={t("เมื่อมีคำขอ TA ที่อนุมัติแล้วในเทอมนี้ สรุปจะมาแสดงที่นี่ แยกตามหลักสูตร")}
+        />
+      ) : (
+        sheets.map((sheet, i) => {
+          const courseRows = groupCourseSummaryRows(sheet.rows);
+          return (
+            <div key={sheet.curriculum_code} className={i > 0 ? "pt-8 border-t border-hairline" : ""}>
+              <div className="mb-3">
+                <div className="text-[15px] font-semibold text-foreground">{sheet.sheet}</div>
+                <div className="text-xs text-muted mt-0.5">{t("{n} รายวิชา", { n: courseRows.length })}</div>
+              </div>
+              <DataTable
+                ariaLabel={t("สรุปรายวิชาที่ขอใช้ TA — {sheet}", { sheet: sheet.sheet })}
+                columns={columns}
+                rows={courseRows}
+                rowKey={r => r.course_code}
+                searchFn={r => `${r.course_code} ${r.course_name_th} ${r.lecturer} ${r.tas.map(x => x.name).join(" ")}`}
+                searchPlaceholder={t("ค้นหารหัสวิชา ชื่อวิชา อาจารย์ หรือ TA")}
+                initialSort={{ column: "course_code", direction: "ascending" }}
+                // Grows with how many เบิกจ่ายเดือน columns are on screen —
+                // one money-pair column per selected month, plus ขออนุมัติ
+                // and คงเหลือ, so a 5-month term doesn't get squashed against
+                // the fixed base width the 3-money-column layout used to need.
+                minWidth={`${40 + 8 * (2 + monthMeta.length)}rem`}
+                loading={isLoading}
+                error={error}
+                onRetry={() => void retry()}
+                emptyTitle={t("ไม่มีวิชาในหลักสูตรนี้")}
+              />
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+interface TransferCoverPreviewRow {
+  name: string;
+  courses: string;
+  baht: number;
+  seniority: string;
+}
+interface TransferCoverPreviewSheet {
+  sheet_name: string;
+  track: string;
+  track_th: string;
+  rows: TransferCoverPreviewRow[];
+  total_baht: number;
+}
+
+const buildTransferCoverColumns = (t: TFn, intl: string): DataColumn<TransferCoverPreviewRow>[] => [
+  {
+    id: "name", width: 240, label: t("ชื่อ-สกุล"), isRowHeader: true, sortable: true,
+    sortValue: r => r.name, render: r => r.name,
+  },
+  { id: "courses", width: 260, label: t("รายวิชา"), render: r => r.courses },
+  {
+    id: "seniority", width: 160, label: t("หมายเหตุ"), className: "whitespace-nowrap",
+    render: r => {
+      // "ใหม่"/"เก่า" are the backend's seniority values (data).
+      const isNew = r.seniority === "ใหม่"; // i18n-ignore
+      const isOld = r.seniority === "เก่า"; // i18n-ignore
+      return (
+        <Tip content={isNew ? t("เป็น TA ครั้งแรกในภาคเรียนนี้") : isOld ? t("เคยเป็น TA ในภาคเรียนก่อนหน้า") : undefined}>
+          <span className="inline-flex"><Chip tone={isNew ? "info" : "neutral"}>{seniorityLabel(t, r.seniority)}</Chip></span>
+        </Tip>
+      );
+    },
+  },
+  {
+    id: "baht", width: 160, label: t("จำนวนเงิน (บาท)"), className: "text-right whitespace-nowrap", sortable: true,
+    sortValue: r => r.baht, render: r => <span className="tabular-nums">{fmtBaht(r.baht, intl)}</span>,
+  },
+];
+
+// The backend sends the seniority as Thai ("ใหม่" / "เก่า"); translate the two
+// known values for display and show anything else as sent.
+function seniorityLabel(t: TFn, v: string): string {
+  if (v === "ใหม่") return t("ใหม่"); // i18n-ignore
+  if (v === "เก่า") return t("เก่า"); // i18n-ignore
+  return v;
+}
+
+/** "undergrad" | "graduate" — the level split (12/08/2026): ป.ตรี กับ
+ *  บัณฑิตศึกษาทำเบิกไม่เหมือนกัน จึงเป็นคนละไฟล์เสมอ ไม่มีตัวเลือก "ทั้งสองระดับ". */
+type TransferCoverLevel = "undergrad" | "graduate";
+const transferCoverLevelLabel: Record<TransferCoverLevel, string> = {
+  undergrad: msg("ป.ตรี"), graduate: msg("บัณฑิตศึกษา"),
+};
+
+// transferCoverQuery builds the query string every transfer-cover endpoint
+// needs: level is required (no "give me both" default the way months has
+// one — see the backend's levelParam), months is optional.
+function transferCoverQuery(level: TransferCoverLevel, months?: string[]) {
+  const params = new URLSearchParams({ level });
+  if (months?.length) params.set("months", months.join(","));
+  return `?${params.toString()}`;
+}
+
+// TransferCoverPreviewSection — the level toggle (ป.ตรี / บัณฑิตศึกษา) plus
+// the coverage + preview tables for whichever level is selected. A level
+// switch is a fresh screen, not a filter on one shared table: the two files
+// have entirely different rosters and month-coverage histories.
+function TransferCoverPreviewSection({ termId }: { termId: string }) {
+  const { t } = useI18n();
+  const [level, setLevel] = useState<TransferCoverLevel>("undergrad");
+  const {data: calendar} = useSWR<{months: TermMonth[]}>(`/exports/terms/${termId}/course-summary/months`);
+  const [pickedMonth, setPickedMonth] = useState<string | null>(null);
+  const previewMonth = calendar?.months.find(m=>m.year_month===pickedMonth)?.year_month ?? calendar?.months[0]?.year_month;
+  return (
+    <div className="space-y-8">
+      {/* Boxed on purpose (28/08/2026, per staff feedback) — this cluster has
+          its OWN small tab-like control (the ป.ตรี/บัณฑิตศึกษา toggle), so
+          leaving it flat like the rest of the page read as a second,
+          competing tab strip right under the real one. The border here is
+          doing real work: telling the two apart. */}
+      <div className="rounded-xl border border-brand/20 bg-brand-soft/40 p-4">
+        <div className="inline-flex rounded-lg border border-brand/20 bg-white p-0.5 mb-4">
+          {(["undergrad", "graduate"] as const).map(l => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setLevel(l)}
+              className={
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+                (level === l ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
+              }
+            >
+              {t(transferCoverLevelLabel[l])}
+            </button>
+          ))}
+        </div>
+        <TransferCoverCoveragePanel termId={termId} level={level} />
+      </div>
+      <div className="flex flex-wrap gap-2">{calendar?.months.map(m=><Button key={m.year_month} size="sm" variant={m.year_month===previewMonth?"primary":"secondary"} onClick={()=>setPickedMonth(m.year_month)}>{m.label}</Button>)}</div>
+      {previewMonth && <TransferCoverPreviewPanel termId={termId} level={level} month={previewMonth} />}
+    </div>
+  );
+}
+
+// TransferCoverCoveragePanel — which months of the term already have a
+// document and which do not. Sits above the preview because with month
+// selection now free, "did we ever issue ตุลาคม?" is a question staff would
+// otherwise answer from memory, and the cost of getting it wrong is a TA who
+// is never paid for a month they worked. Scoped to ONE level: the two files
+// are issued on independent schedules, so issuing ป.ตรี must never make the
+// บัณฑิตศึกษา screen believe its own months are already covered. Rendered
+// inside TransferCoverPreviewSection's own boxed cluster, alongside the level
+// toggle — not from TransferCoverPreviewPanel below, which stays flat.
+function TransferCoverCoveragePanel({ termId, level }: { termId: string; level: TransferCoverLevel }) {
+  const { t } = useI18n();
+  const { data, error } = useSWR<MonthCoverage>(
+    `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery(level)}`,
+  );
+  if (!data && !error) {
+    return (
+      <div>
+        <div className="mb-2 text-xs font-medium text-ink-1">{t("สถานะการออกเอกสารรายเดือน")}</div>
+        <div className="flex flex-wrap gap-1.5">
+          {[0, 1, 2, 3, 4].map(i => <Skel key={i} className="h-6 w-20 rounded-full" />)}
+        </div>
+      </div>
+    );
+  }
+  if (!data?.months.length) return null;
+  const pending = data.months.filter(m => !m.issued);
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <span className="font-medium text-ink-1">{t("สถานะการออกเอกสารรายเดือน")}</span>
+        {data.fiscal_split.crosses && (
+          <Chip tone="warn">{t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ ต้องแยกเอกสาร")}</Chip>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {data.months.map(m => (
+          <Tip key={m.year_month} content={m.issued ? t("ออกเอกสารเดือนนี้แล้ว") : t("ยังไม่ได้ออกเอกสารเดือนนี้")}>
+            <span
+              className={
+                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs " +
+                (m.issued
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-border text-ink-3")
+              }
+            >
+              {m.issued && <Check size={12} />}
+              {m.label}
+            </span>
+          </Tip>
+        ))}
+      </div>
+      {pending.length > 0 && (
+        <p className="mt-2 text-xs text-ink-3">
+          {t("ยังไม่ได้ออกเอกสาร {n} เดือน: {months}", { n: pending.length, months: pending.map(m => m.label).join(", ") })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TransferCoverPreviewPanel({ termId, level, month }: { termId: string; level: TransferCoverLevel; month: string }) {
+  const { data, error, isLoading, mutate: retry } = useSWR<{ sheets: TransferCoverPreviewSheet[]; warnings: string[] }>(
+    `/exports/terms/${termId}/transfer-cover/preview${transferCoverQuery(level, [month])}`
+  );
+  const { t, intl } = useI18n();
+  const transferCoverColumns = useMemo(() => buildTransferCoverColumns(t, intl), [t, intl]);
+  const sheets = data?.sheets ?? [];
+  return (
+    <div className="space-y-8">
+      {!!data?.warnings.length && (
+        <div className="flex items-start gap-2 text-xs text-amber-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">{t("มีรายการที่ควรตรวจสอบ {n} รายการ", { n: data.warnings.length })}</div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+      {isLoading && !data ? (
+        <PreviewTableSkeleton />
+      ) : error && !data ? (
+        <Alert
+          status="danger"
+          title={t("โหลดข้อมูลไม่สำเร็จ")}
+          description={error instanceof Error ? error.message : t("กรุณาลองใหม่อีกครั้ง")}
+          action={<Button variant="secondary" onClick={() => void retry()}>{t("ลองใหม่")}</Button>}
+        />
+      ) : sheets.length === 0 ? (
+        <EmptyState
+          icon={<Users size={26} />}
+          title={t("ยังไม่มีข้อมูลปะหน้าจ่ายตรง")}
+          description={t("เมื่อวิชาในเทอมนี้มีบันทึกเวลาที่คิดเงินแล้ว สรุปจะมาแสดงที่นี่ แยกตามหลักสูตร")}
+        />
+      ) : (
+        sheets.map((sheet, i) => (
+          <div
+            key={`${sheet.sheet_name}-${sheet.track}`}
+            className={i > 0 ? "pt-8 border-t border-hairline" : ""}
+          >
+            <div className="mb-3">
+              <div className="text-[15px] font-semibold text-foreground">{sheet.sheet_name}</div>
+              <div className="text-xs text-muted mt-0.5">
+                {t("{track} · {n} รายการ · รวม {total} บาท", { track: sheet.track_th, n: sheet.rows.length, total: fmtBaht(sheet.total_baht, intl) })}
+              </div>
+            </div>
+            <DataTable
+              ariaLabel={t("ปะหน้าจ่ายตรง — {sheet} ({track})", { sheet: sheet.sheet_name, track: sheet.track_th })}
+              columns={transferCoverColumns}
+              rows={sheet.rows}
+              rowKey={r => `${sheet.rows.indexOf(r)}-${r.name}`}
+              searchFn={r => `${r.name} ${r.courses}`}
+              searchPlaceholder={t("ค้นหาชื่อหรือรายวิชา")}
+              initialSort={{ column: "name", direction: "ascending" }}
+              minWidth="40rem"
+              loading={isLoading}
+              error={error}
+              onRetry={() => void retry()}
+              emptyTitle={t("ไม่มีรายชื่อในหลักสูตรนี้")}
+            />
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Download buttons (moved verbatim from the appointments page, 10/08/2026)   */
+/* -------------------------------------------------------------------------- */
+
+// CourseSummaryDownloadButton — "สรุปรายวิชาที่ขอใช้ TA", the budget-request
+// workbook staff used to assemble by hand at the start of every term. This is
+// an estimate document (see BuildCourseSummaryWorkbook's own comment), so
+// warnings never block the download — they just get a confirmation step so
+// staff know what to double check (a missing student count, a course with no
+// approved TA yet) before they hand the file onward.
+function CourseSummaryDownloadButton({
+  termId, termLabel, selectedMonths,
+}: {
+  termId: string; termLabel: string; selectedMonths: string[] | null;
+}) {
+  const { t } = useI18n();
+  const [checking, setChecking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [warnings, setWarnings] = useState<string[] | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const groupGate = useCourseGroupGate(termId);
+  // Same qs the preview panel builds — null means "let the backend pick the
+  // default" (every term month), which resolves identically on both sides,
+  // so the file always matches whatever months the screen is currently
+  // showing.
+  const qs = monthsQuery(selectedMonths ?? []);
+
+  async function downloadNow() {
+    setDownloading(true);
+    try {
+      const blob = await api.get<Blob>(`/exports/terms/${termId}/course-summary.xlsx${qs}`);
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = `course-summary-${termLabel.replace("/", "-") || "term"}.xlsx`;
+      el.click();
+      URL.revokeObjectURL(url);
+      // A download just added a row to the generation ledger — refresh the
+      // history modal if it happens to be showing this term already.
+      void mutate(`/exports/terms/${termId}/course-summary/history`);
+    } catch (e) {
+      toast.danger(t("ดาวน์โหลดไม่สำเร็จ"), { description: (e as Error).message });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function checkWarningsThenDownload() {
+    setChecking(true);
+    try {
+      const res = await api.get<{ warnings: string[] }>(`/exports/terms/${termId}/course-summary/warnings${qs}`);
+      if (res.warnings.length > 0) {
+        setWarnings(res.warnings);
+      } else {
+        await downloadNow();
+      }
+    } catch (e) {
+      toast.danger(t("ตรวจสอบไม่สำเร็จ"), { description: (e as Error).message });
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  function start() {
+    if (!termId) return;
+    void groupGate.guard(() => void checkWarningsThenDownload());
+  }
+
+  return (
+    <>
+      <Button variant="secondary" disabled={!termId} isPending={checking || groupGate.checking} onClick={start}>
+        <FileDown size={16} /> {t("สรุปรายวิชาที่ขอใช้ TA")}
+      </Button>
+      {/* variant="secondary" to match its neighbour — IconButton defaults to
+          "primary" (a solid-fill circle), which next to outlined buttons in
+          the same row would read as a mismatched style. */}
+      <IconButton
+        label={t("ประวัติการสร้างเอกสาร")}
+        variant="secondary"
+        disabled={!termId}
+        onClick={() => setHistoryOpen(true)}
+      >
+        <History size={16} />
+      </IconButton>
+      <ConfirmDialog
+        open={warnings !== null}
+        onClose={() => setWarnings(null)}
+        onConfirm={() => { setWarnings(null); void downloadNow(); }}
+        isPending={downloading}
+        icon={<FileDown size={20} />}
+        title={t("มีรายการที่ควรตรวจสอบก่อนดาวน์โหลด")}
+        confirmLabel={t("ดาวน์โหลดต่อ")}
+        message={
+          <div className="space-y-2 text-sm">
+            <p className="text-muted">
+              {t("ไฟล์นี้เป็นเอกสารประมาณการ ดาวน์โหลดได้ตามปกติ แต่ตัวเลขต่อไปนี้ยังไม่ครบ:")}
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              {(warnings ?? []).map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+        }
+      />
+      {historyOpen && (
+        <CourseSummaryHistoryModal termId={termId} onClose={() => setHistoryOpen(false)} />
+      )}
+      {groupGate.modal}
+    </>
+  );
+}
+
+// CourseSummaryHistoryModal lists every generation on the ledger (who, when,
+// how many courses) with a reprint action per row. Reprint re-renders from the
+// frozen snapshot rather than recomputing — a student count or TA approval
+// corrected after the fact must not silently change a document already handed
+// to someone (see ExportService.ReprintCourseSummary).
+function CourseSummaryHistoryModal({
+  termId, onClose,
+}: {
+  termId: string; onClose: () => void;
+}) {
+  const { t, intl } = useI18n();
+  const { data: history } = useSWR<CourseSummaryExportSummary[]>(
+    `/exports/terms/${termId}/course-summary/history`
+  );
+  const [reprinting, setReprinting] = useState<string | null>(null);
+
+  async function reprint(h: CourseSummaryExportSummary) {
+    setReprinting(h.id);
+    try {
+      const blob = await api.get<Blob>(`/exports/course-summary/${h.id}/reprint`);
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = "course-summary.xlsx";
+      el.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.danger(t("ดาวน์โหลดไม่สำเร็จ"), { description: (e as Error).message });
+    } finally {
+      setReprinting(null);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t("ประวัติการสร้างเอกสารสรุปรายวิชาที่ขอใช้ TA")}
+      icon={<History size={20} />}
+      size="xl"
+      footer={<Button variant="ghost" onClick={onClose}>{t("ปิด")}</Button>}
+    >
+      {!history ? (
+        <SkelList items={3} icon={false} />
+      ) : !history.length ? (
+        <EmptyState
+          icon={<FileText size={26} />}
+          title={t("ยังไม่เคยสร้างเอกสาร")}
+          description={t("เอกสารที่สร้างแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม")}
+        />
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {history.map(h => (
+            <li key={h.id} className="py-3 flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ink-1">
+                  {new Date(h.generated_at).toLocaleString(intl, {
+                    dateStyle: "medium", timeStyle: "short",
+                  })}
+                </div>
+                <div className="text-xs text-ink-3">
+                  {t("{n} วิชา", { n: h.course_count })}
+                  {h.month_label && t(" · เบิกจ่ายเดือน {month}", { month: h.month_label })}
+                  {h.generated_by && t(" · โดย {name}", { name: h.generated_by })}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void reprint(h)}
+                disabled={reprinting !== null}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+              >
+                <Download size={12} />
+                {reprinting === h.id ? t("กำลังดาวน์โหลด…") : t("ดาวน์โหลดฉบับเดิม")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
+  );
+}
+
+interface CourseSummaryExportSummary {
+  id: string;
+  term_id: string;
+  generated_at: string;
+  generated_by?: string;
+  course_count: number;
+  /** Which months' เบิกจ่ายเดือน columns this generation showed — empty for
+   *  generations before 11/09/2026, which covered the whole term the same
+   *  way an empty month selection still does. */
+  month_label?: string;
+}
+
+interface TransferCoverBlocker {
+  kind: string;
+  ta_name: string;
+  months: string[];
+  rows?: number;
+  course_code?: string;
+}
+
+interface TransferCoverExportSummary {
+  id: string;
+  term_id: string;
+  generated_at: string;
+  generated_by?: string;
+  total_baht: number;
+  sheet_count: number;
+  /** Empty for files issued before the fiscal split existed — those were whole-term. */
+  months?: string[];
+  /** Empty for files issued before the level split (12/08/2026) — those covered both levels in one file. */
+  level?: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fiscal-year month selection                                                */
+/* -------------------------------------------------------------------------- */
+
+// TransferCoverMonthModal — the step between pressing ปะหน้าจ่ายตรง and getting
+// a file.
+//
+// It exists because งบแผ่นดิน closes 30 กันยายน while ภาคต้น teaches มิ.ย.–ต.ค.:
+// the two halves draw on different appropriations and must be claimed on
+// separate documents. Free month selection makes two new mistakes possible —
+// issuing ตุลาคม twice, or never issuing it — so the months already on the
+// ledger are shown here rather than left to memory.
+// mergeCoverage combines both levels' coverage into one for the bundle
+// button's month picker: the month LIST is structurally identical between
+// levels (same term, same TermMonths call underneath) — only "issued" and
+// "ready" can differ. A month reads issued here if EITHER level has already
+// produced a file for it, which is the useful warning ("you're about to
+// re-issue something") regardless of which level that something was.
+//
+// "ready" is also an EITHER: the bundle issues whichever level passes its own
+// gate and skips the other with a toast (see checkThenDownload). Taking it
+// from the undergrad side alone locked the whole picker whenever ป.ตรี was
+// still moving, even with the บัณฑิต file ready to go.
+function mergeCoverage(a?: MonthCoverage, b?: MonthCoverage): MonthCoverage | undefined {
+  const base = a ?? b;
+  if (!base) return undefined;
+  return {
+    ...base,
+    months: base.months.map(m => {
+      const x = a?.months.find(v => v.year_month === m.year_month);
+      const y = b?.months.find(v => v.year_month === m.year_month);
+      return {
+        ...m,
+        issued: !!(x?.issued || y?.issued),
+        ready: x?.ready !== false || y?.ready !== false,
+      };
+    }),
+  };
+}
+
+// blockerLine is one pending item as staff read it — shared by the picker's
+// "nothing ready" state and the both-levels-blocked modal.
+function blockerLine(t: TFn, b: TransferCoverBlocker): string {
+  const who = b.course_code ? `[${b.course_code}] ${b.ta_name}` : b.ta_name;
+  const months = b.months.join(", ");
+  switch (b.kind) {
+    case "waiting_ta": return t("{who} ยังไม่ส่งบันทึกเวลา ({months})", { who, months });
+    case "waiting_lecturer": return t("{who} รออาจารย์อนุมัติ ({months})", { who, months });
+    case "not_exported": return t("{who} ตรวจสอบแล้วแต่ยังไม่ได้ส่งออกใบเบิกจ่าย ({months})", { who, months });
+    default: return `${who} (${months})`;
+  }
+}
+
+function TransferCoverMonthModal({
+  termId, onClose, onConfirm, isPending, error,
+}: {
+  termId: string;
+  onClose: () => void;
+  onConfirm: (months: string[], password: string) => void;
+  isPending: boolean;
+  error?: string | null;
+}) {
+  const { t } = useI18n();
+  const [password, setPassword] = useState("");
+  const { data: ugData, isLoading: ugLoading } = useSWR<MonthCoverage>(
+    `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("undergrad")}`
+  );
+  const { data: gradData, isLoading: gradLoading } = useSWR<MonthCoverage>(
+    `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("graduate")}`
+  );
+  const isLoading = ugLoading || gradLoading;
+  const data = useMemo(() => mergeCoverage(ugData, gradData), [ugData, gradData]);
+  const all = useMemo(() => data?.months ?? [], [data]);
+  const split = data?.fiscal_split;
+  const [selected, setSelected] = useState<string[] | null>(null);
+
+  // Preselect the half that still needs issuing: the closing budget year while
+  // any of its months are outstanding, otherwise the new one. A term that does
+  // not cross the boundary just gets everything, as before.
+  const suggested = useMemo(() => { const m = all.find(m => m.ready !== false && !m.issued) ?? all.find(m => m.ready !== false); return m ? [m.year_month] : []; }, [all]);
+
+  // A month still waiting on somebody can never be part of this document, so it
+  // is filtered out of the suggestion rather than preselected and then refused.
+  const readyOf = (list: string[]) =>
+    list.filter(ym => all.find(m => m.year_month === ym)?.ready !== false);
+  const notReady = all.filter(m => m.ready === false);
+  const months = readyOf(selected ?? suggested);
+  const reissuing = months.filter(ym => all.find(m => m.year_month === ym)?.issued);
+  const notCovered = all.filter(m => !m.issued && !months.includes(m.year_month));
+
+  // A selection drawing on two budget years cannot be keyed into ERP under
+  // either of them, and nothing on the finished sheet would show the mistake —
+  // so the server refuses it outright. Mirrored here so the officer is stopped
+  // at the picker with the split spelled out, rather than after pressing.
+  const straddles = split?.crosses
+    ? months.some(m => split.before.includes(m)) && months.some(m => split.after.includes(m))
+    : false;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t("เลือกเดือนที่จะออกเอกสาร")}
+      icon={<CalendarRange size={20} />}
+      size="xl"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
+          <Button
+            variant="primary"
+            isPending={isPending}
+            disabled={months.length === 0 || straddles || password === ""}
+            onClick={() => onConfirm(months, password)}
+          >
+            <Banknote size={14} /> {t("ตรวจสอบและดาวน์โหลด")}
+          </Button>
+        </>
+      }
+    >
+      {isLoading ? (
+        <SkelRegion className="space-y-2">
+          <Skel className="h-4 w-64" />
+          <Skel className="h-9 w-full" />
+        </SkelRegion>
+      ) : all.length > 0 && all.every(m => m.ready === false) ? (
+        <div className="space-y-4 text-sm">
+          <EmptyState
+            icon={<CalendarRange size={26} />}
+            title={t("ยังออกเอกสารไม่ได้")}
+            description={t("ยังไม่มีเดือนใดที่ส่งออกใบเบิกจ่ายครบ ทั้ง ป.ตรี และบัณฑิตศึกษา ตรวจและส่งออกเอกสารของเดือนนั้นให้ครบอย่างน้อยหนึ่งเดือนก่อน แล้วจึงกลับมาออกเอกสาร")}
+          />
+          <PendingBlockers termId={termId} />
+        </div>
+      ) : all.length === 0 ? (
+        <EmptyState
+          icon={<CalendarRange size={26} />}
+          title={t("ยังไม่ได้ตั้งรอบส่งบันทึกเวลา")}
+          description={t("เอกสารนี้อ้างอิงรอบรายเดือนของภาคเรียน ตั้งรอบที่เมนูตั้งค่าก่อน แล้วจึงกลับมาออกเอกสาร")}
+        />
+      ) : (
+        <div className="space-y-4 text-sm">
+          {split?.crosses && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+              {t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — เดือน {after} ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสารจาก {before}", {
+                after: monthLabels(all, split.after).join(", "),
+                before: monthLabels(all, split.before).join(", "),
+              })}
+            </div>
+          )}
+
+          <p className="text-xs text-muted">{t("ออกใบปะหน้าจ่ายตรงครั้งละหนึ่งเดือน หลังออกชุดเบิกรวมของเดือนนั้นแล้ว")}</p>
+          <MonthChips single months={all} selected={months} onChange={setSelected} />
+
+          {straddles && (
+            <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900">
+              {t.rich("{head} — เดือนที่เลือกอยู่คร่อมวันที่ 30 ก.ย. ต้องออกเป็นคนละฉบับ เพราะการเงินคีย์เข้าระบบ ERP ต่อหนึ่งฉบับได้เพียงปีงบเดียว กดปุ่ม “งบปีเก่า” หรือ “งบปีใหม่” ด้านบนเพื่อเลือกให้ถูกชุด", {
+                head: <b>{t("เลือกข้ามปีงบประมาณในฉบับเดียวไม่ได้")}</b>,
+              })}
+            </div>
+          )}
+          {reissuing.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+              {t("เดือน {months} เคยออกเอกสารไปแล้ว การออกซ้ำจะได้ยอดเดิมอีกฉบับ ตรวจสอบก่อนว่าตั้งใจออกใหม่เพื่อแก้ไขฉบับเดิม", { months: monthLabels(all, reissuing).join(", ") })}
+            </div>
+          )}
+          {notCovered.length > 0 && (
+            <p className="text-xs text-ink-3">
+              {t("ยังไม่ได้ออกเอกสารของเดือน {months} — อย่าลืมกลับมาออกให้ครบ", { months: notCovered.map(m => m.label).join(", ") })}
+            </p>
+          )}
+
+          <StepUpPasswordField
+            value={password}
+            onChange={setPassword}
+            error={error}
+            onEnter={() => {
+              if (months.length > 0 && !straddles && password !== "" && !isPending) onConfirm(months, password);
+            }}
+          />
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+
+// StepUpPasswordField — the officer's own password, asked for again right
+// before a ปะหน้าจ่ายตรง file is handed over. The file lists every TA's full
+// citizen ID, so an unlocked session alone must not be enough to download it
+// (the server refuses without it — see transferCoverStepUp).
+function StepUpPasswordField({
+  value, onChange, error, onEnter,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  error?: string | null;
+  onEnter?: () => void;
+}) {
+  const { t } = useI18n();
+  const [show, setShow] = useState(false);
+  return (
+    <div className="rounded-lg border border-border bg-surface px-3 py-3">
+      <div className="mb-2 flex items-start gap-2 text-xs text-ink-2">
+        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-brand" />
+        <span>{t("ไฟล์นี้มีเลขบัตรประชาชนของผู้รับเงิน กรอกรหัสผ่านของคุณอีกครั้งเพื่อยืนยันก่อนดาวน์โหลด การดาวน์โหลดทุกครั้งถูกบันทึกไว้")}</span>
+      </div>
+      <TextField name="stepup-password" value={value} onChange={onChange}>
+        <Label className="text-xs">{t("รหัสผ่านของคุณ")}</Label>
+        <InputGroup>
+          <InputGroup.Input
+            type={show ? "text" : "password"}
+            autoComplete="current-password"
+            lang="en"
+            onKeyDown={e => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
+          />
+          <InputGroup.Suffix className="pr-0">
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label={show ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
+              onPress={() => setShow(!show)}
+            >
+              {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </IconButton>
+          </InputGroup.Suffix>
+        </InputGroup>
+      </TextField>
+      {error && <p className="mt-1.5 text-xs text-danger-soft-foreground">{error}</p>}
+    </div>
+  );
+}
+
+// PendingBlockers spells out what is holding every month back, so a locked
+// picker names the course and TA to chase instead of leaving staff to guess
+// (the bare message read as though the fiscal-year split were the cause).
+function PendingBlockers({ termId }: { termId: string }) {
+  const { t } = useI18n();
+  const { data: ug } = useSWR<{ blockers: TransferCoverBlocker[] }>(
+    `/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("undergrad")}`
+  );
+  const { data: grad } = useSWR<{ blockers: TransferCoverBlocker[] }>(
+    `/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("graduate")}`
+  );
+  if (!ug || !grad) return <SkelRegion><Skel className="h-16 w-full" /></SkelRegion>;
+  const groups = ([[transferCoverLevelLabel.undergrad, ug.blockers], [transferCoverLevelLabel.graduate, grad.blockers]] as const)
+    .filter(([, list]) => list.length > 0);
+  if (groups.length === 0) return null;
+  return (
+    <div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+      <div className="font-medium">{t("รายการที่ยังค้าง")}</div>
+      {groups.map(([label, list]) => (
+        <div key={label}>
+          <div className="mb-1 font-medium">{t(label)}</div>
+          <ul className="list-disc space-y-1 pl-5">
+            {list.map((b, i) => <li key={i}>{blockerLine(t, b)}</li>)}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+// TransferCoverDownloadButton — "ปะหน้าจ่ายตรง" (แจ้งโอนจ่ายตรงเข้าบัญชีบุคลากร).
+// One button, one zip download — bundling both level files (ป.ตรี, บัณฑิต)
+// so the header does not carry two near-identical buttons + two history icons
+// (12/08/2026). The two documents underneath still pass their OWN gate
+// independently: a level that is not ready is skipped (with a toast saying
+// so) rather than holding up the level that IS ready — collapsing the gates
+// back into one would recreate exactly the coupling the level split fixed.
+// Unlike CourseSummaryDownloadButton above, this is a settled/actual
+// document: the server refuses outright while a level's every course has not
+// reached finance_sent — see ExportService.TermExportBlockers.
+function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; termLabel: string }) {
+  const { t } = useI18n();
+  const [checking, setChecking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [blockers, setBlockers] = useState<{ undergrad: TransferCoverBlocker[]; graduate: TransferCoverBlocker[] } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const groupGate = useCourseGroupGate(termId);
+
+  // Throws on failure so checkThenDownload can keep the picker open with the
+  // reason under the password field — a mistyped password is the common case.
+  async function downloadNow(months: string[], skippedLevel: TransferCoverLevel | null, password: string) {
+    setDownloading(true);
+    try {
+      const blob = await api.post<Blob>(
+        `/exports/terms/${termId}/transfer-cover-bundle.zip${monthsQuery(months)}`, { password });
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      const slice = months.length ? `-${months[0]}${months.length > 1 ? `_${months[months.length - 1]}` : ""}` : "";
+      el.download = `transfer-cover-${termLabel.replace("/", "-") || "term"}${slice}.zip`;
+      el.click();
+      URL.revokeObjectURL(url);
+      // A download just added a row to both levels' generation ledgers —
+      // refresh whatever the preview tab / history modal are showing.
+      for (const lvl of ["undergrad", "graduate"] as const) {
+        void mutate(`/exports/terms/${termId}/transfer-cover/history${transferCoverQuery(lvl)}`);
+        void mutate(`/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery(lvl)}`);
+      }
+      if (skippedLevel) {
+        const gotLevel: TransferCoverLevel = skippedLevel === "undergrad" ? "graduate" : "undergrad";
+        toast.warning(t("ได้เฉพาะไฟล์{level}", { level: t(transferCoverLevelLabel[gotLevel]) }), {
+          description: t("ไฟล์{level}ยังไม่พร้อม กดปุ่มนี้อีกครั้งเพื่อดูรายการค้าง", { level: t(transferCoverLevelLabel[skippedLevel]) }),
+        });
+      }
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  // Both levels are checked for the CHOSEN months in parallel — the whole
+  // point of the split is that a graduate course mid-review must not hold up
+  // the undergrad file (or the reverse), so one blocked level never blocks
+  // the other's download; it only blocks the WHOLE bundle once both are.
+  async function checkThenDownload(months: string[], password: string) {
+    if (!termId) return;
+    setChecking(true);
+    setPickerError(null);
+    try {
+      const [ug, grad] = await Promise.all([
+        api.get<{ blockers: TransferCoverBlocker[] }>(`/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("undergrad", months)}`),
+        api.get<{ blockers: TransferCoverBlocker[] }>(`/exports/terms/${termId}/transfer-cover/blockers${transferCoverQuery("graduate", months)}`),
+      ]);
+      const ugBlocked = ug.blockers.length > 0;
+      const gradBlocked = grad.blockers.length > 0;
+      if (ugBlocked && gradBlocked) {
+        setBlockers({ undergrad: ug.blockers, graduate: grad.blockers });
+        setPickerOpen(false);
+        return;
+      }
+      await downloadNow(months, ugBlocked ? "undergrad" : gradBlocked ? "graduate" : null, password);
+      setPickerOpen(false);
+    } catch (e) {
+      setPickerError((e as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <>
+      <Button
+        variant="secondary"
+        disabled={!termId}
+        isPending={groupGate.checking}
+        onClick={() => void groupGate.guard(() => { setPickerError(null); setPickerOpen(true); })}
+      >
+        <Banknote size={16} /> {t("ปะหน้าจ่ายตรง")}
+      </Button>
+      {/* variant="secondary" to match its neighbour — IconButton defaults to
+          "primary" (a solid-fill circle), which next to outlined buttons in
+          the same row would read as a mismatched style. */}
+      <IconButton
+        label={t("ประวัติการสร้างเอกสาร")}
+        variant="secondary"
+        disabled={!termId}
+        onClick={() => setHistoryOpen(true)}
+      >
+        <History size={16} />
+      </IconButton>
+
+      <Modal
+        open={blockers !== null}
+        onClose={() => setBlockers(null)}
+        title={t("ยังสร้างเอกสารไม่ได้เลยสักไฟล์")}
+        icon={<FileDown size={20} />}
+        footer={<Button variant="primary" onClick={() => setBlockers(null)}>{t("ปิด")}</Button>}
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-muted">{t("ทั้งไฟล์ ป.ตรี และบัณฑิตยังไม่พร้อม ยังมีรายการค้างดังนี้:")}</p>
+          {blockers && ([[transferCoverLevelLabel.undergrad, blockers.undergrad], [transferCoverLevelLabel.graduate, blockers.graduate]] as const).map(([label, list]) => (
+            list.length > 0 && (
+              <div key={label}>
+                <div className="text-xs font-medium text-ink-2 mb-1">{t(label)}</div>
+                <ul className="list-disc pl-5 space-y-1">
+                  {list.map((b, i) => <li key={i}>{blockerLine(t, b)}</li>)}
+                </ul>
+              </div>
+            )
+          ))}
+        </div>
+      </Modal>
+
+      {pickerOpen && (
+        <TransferCoverMonthModal
+          termId={termId}
+          isPending={checking || downloading}
+          error={pickerError}
+          onClose={() => setPickerOpen(false)}
+          onConfirm={(months, password) => void checkThenDownload(months, password)}
+        />
+      )}
+
+      {historyOpen && (
+        <TransferCoverHistoryModal termId={termId} onClose={() => setHistoryOpen(false)} />
+      )}
+      {groupGate.modal}
+    </>
+  );
+}
+
+// TransferCoverHistoryModal lists every generation on the ledger (who, when,
+// how much, how many sheets) with a reprint action per row. Reprint re-renders
+// from the frozen snapshot rather than recomputing — a work log corrected
+// after the fact must not silently change a document finance may already
+// have acted on (see ExportService.ReprintTransferCover).
+function TransferCoverHistoryModal({
+  termId, onClose,
+}: {
+  termId: string; onClose: () => void;
+}) {
+  // The download button is one button now, but the two documents' generation
+  // histories are still separate ledgers (each level is gated and re-issued
+  // independently) — a small toggle inside the modal instead of two modals.
+  const { t, intl } = useI18n();
+  const [level, setLevel] = useState<TransferCoverLevel>("undergrad");
+  const { data: history } = useSWR<TransferCoverExportSummary[]>(
+    `/exports/terms/${termId}/transfer-cover/history${transferCoverQuery(level)}`
+  );
+  const [reprinting, setReprinting] = useState<string | null>(null);
+  // A reprint hands over the same citizen IDs as a fresh file, so it asks
+  // for the password the same way.
+  const [confirming, setConfirming] = useState<TransferCoverExportSummary | null>(null);
+  const [password, setPassword] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+
+  function askReprint(h: TransferCoverExportSummary) {
+    setPassword("");
+    setPwError(null);
+    setConfirming(h);
+  }
+
+  async function reprint() {
+    const h = confirming;
+    if (!h || !password) return;
+    setReprinting(h.id);
+    setPwError(null);
+    try {
+      const blob = await api.post<Blob>(`/exports/transfer-cover/${h.id}/reprint`, { password });
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = "transfer-cover.xlsx";
+      el.click();
+      URL.revokeObjectURL(url);
+      setConfirming(null);
+      setPassword("");
+    } catch (e) {
+      setPwError((e as Error).message);
+    } finally {
+      setReprinting(null);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t("ประวัติการสร้างเอกสารปะหน้าจ่ายตรง")}
+      icon={<History size={20} />}
+      size="xl"
+      footer={<Button variant="ghost" onClick={onClose}>{t("ปิด")}</Button>}
+    >
+      <div className="mb-3 inline-flex rounded-lg border border-border p-0.5">
+        {(["undergrad", "graduate"] as const).map(l => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => setLevel(l)}
+            className={
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+              (level === l ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
+            }
+          >
+            {t(transferCoverLevelLabel[l])}
+          </button>
+        ))}
+      </div>
+      {!history ? (
+        <SkelList items={3} icon={false} />
+      ) : !history.length ? (
+        <EmptyState
+          icon={<FileText size={26} />}
+          title={t("ยังไม่เคยสร้างเอกสาร")}
+          description={t("เอกสารที่สร้างแล้วจะมาแสดงที่นี่ พร้อมปุ่มดาวน์โหลดฉบับเดิม")}
+        />
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {history.map(h => (
+            <li key={h.id} className="py-3 flex flex-wrap items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ink-1 flex flex-wrap items-center gap-1.5">
+                  {new Date(h.generated_at).toLocaleString(intl, {
+                    dateStyle: "medium", timeStyle: "short",
+                  })}
+                  {/* Pre-level-split rows (12/08/2026) covered both files at
+                      once — flag that explicitly rather than silently
+                      claiming this was already a level-scoped generation. */}
+                  {!h.level && <Chip tone="neutral">{t("ก่อนแยกไฟล์ — ครอบคลุมทั้งสองระดับ")}</Chip>}
+                </div>
+                {/* Which slice this file was. Two files for one term now differ
+                    only by their months, so without this the history reads as
+                    the same document generated twice. */}
+                <div className="text-xs text-ink-2">
+                  {h.months?.length
+                    ? (h.months.length > 1
+                      ? t("เดือน {from} – {to}", { from: h.months[0], to: h.months[h.months.length - 1] })
+                      : t("เดือน {month}", { month: h.months[0] }))
+                    : t("ทั้งภาคเรียน")}
+                </div>
+                <div className="text-xs text-ink-3">
+                  {t("{amount} บาท · {n} ชีต", { amount: h.total_baht.toLocaleString(intl, { minimumFractionDigits: 2 }), n: h.sheet_count })}
+                  {h.generated_by && t(" · โดย {name}", { name: h.generated_by })}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => askReprint(h)}
+                disabled={reprinting !== null}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-ink-2 transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+              >
+                <Download size={12} />
+                {reprinting === h.id ? t("กำลังดาวน์โหลด…") : t("ดาวน์โหลดฉบับเดิม")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {confirming && (
+        <Modal
+          open
+          onClose={() => setConfirming(null)}
+          title={t("ยืนยันตัวตนก่อนดาวน์โหลด")}
+          icon={<ShieldCheck size={20} />}
+          size="md"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setConfirming(null)}>{t("ยกเลิก")}</Button>
+              <Button
+                variant="primary"
+                isPending={reprinting !== null}
+                disabled={password === ""}
+                onClick={() => void reprint()}
+              >
+                <Download size={14} /> {t("ดาวน์โหลดฉบับเดิม")}
+              </Button>
+            </>
+          }
+        >
+          <StepUpPasswordField
+            value={password}
+            onChange={setPassword}
+            error={pwError}
+            onEnter={() => { if (password && reprinting === null) void reprint(); }}
+          />
+        </Modal>
+      )}
+    </Modal>
+  );
+}
+
+interface CourseGroupCourseInfo {
+  id: string;
+  code: string;
+  name_th: string;
+  curriculum: string;
+}
+interface CourseGroupCandidate {
+  courses: CourseGroupCourseInfo[];
+  suggested_primary_id: string;
+  reason: string;
+}
+interface CurriculumLite {
+  code: string;
+  sheet_name: string;
+}
+
+// useCourseGroupGate — the check every download now goes through instead of
+// staff having to remember a separate "รหัสคู่" button. guard(proceed) checks
+// for unconfirmed course-group candidates (DetectCourseGroups: same name_th +
+// a matching section schedule — the exact signal a curriculum transition
+// leaves behind when the old registrar code stays open alongside the new
+// one); if none exist, proceed runs immediately, otherwise the gate modal
+// opens and proceed is held until staff dismiss it (merge everything, merge
+// some and continue, or continue without merging).
+function useCourseGroupGate(termId: string) {
+  const { t } = useI18n();
+  const [checking, setChecking] = useState(false);
+  const [open, setOpen] = useState(false);
+  const proceedRef = useRef<(() => void) | null>(null);
+
+  async function guard(proceed: () => void) {
+    if (!termId) return;
+    setChecking(true);
+    try {
+      // ?? []: the endpoint answers with an empty list now, but a nil slice on
+      // the Go side marshals to `null`, and reaching for .length on that is what
+      // broke this button for every term with no duplicate codes — the ordinary
+      // case. Belt and braces, since the cost of being wrong here is the whole
+      // download failing.
+      const candidates = await api.get<CourseGroupCandidate[] | null>(`/terms/${termId}/course-groups/candidates`);
+      if ((candidates ?? []).length > 0) {
+        proceedRef.current = proceed;
+        setOpen(true);
+      } else {
+        proceed();
+      }
+    } catch (e) {
+      toast.danger(t("ตรวจสอบรหัสวิชาคู่ไม่สำเร็จ"), { description: (e as Error).message });
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  function continueAnyway() {
+    setOpen(false);
+    const proceed = proceedRef.current;
+    proceedRef.current = null;
+    proceed?.();
+  }
+
+  const modal = open && (
+    <CourseGroupGateModal
+      termId={termId}
+      onClose={() => { setOpen(false); proceedRef.current = null; }}
+      onContinue={continueAnyway}
+    />
+  );
+
+  return { guard, checking, modal };
+}
+
+// CourseGroupGateModal — a class taught under two registrar codes (a rename,
+// a section split, or right now the curriculum transition leaving the old
+// code open for students who have not graduated) must be merged before ใบ A
+// / ใบ B print it as one row with its money and student counts added
+// together. The backend already detects candidates (DetectCourseGroups) and
+// confirms them (ConfirmCourseGroup); this modal is the review step, shown in
+// front of a download instead of behind a button staff had to remember to
+// press on their own.
+function CourseGroupGateModal({
+  termId, onClose, onContinue,
+}: {
+  termId: string; onClose: () => void; onContinue: () => void;
+}) {
+  const { t } = useI18n();
+  const candidatesKey = `/terms/${termId}/course-groups/candidates`;
+  const { data: candidates } = useSWR<CourseGroupCandidate[]>(candidatesKey);
+  const { data: curricula } = useSWR<CurriculumLite[]>("/curricula");
+  const [confirmingIdx, setConfirmingIdx] = useState<number | null>(null);
+  // Per-candidate choice, keyed by index into `candidates` — candidates
+  // disappear from the list once confirmed (DetectCourseGroups excludes
+  // anything already in course_group_members), so a stale index just means
+  // that row is gone, never a wrong one being acted on.
+  const [choices, setChoices] = useState<Record<number, { primaryId: string; curriculumCode: string }>>({});
+  // Staff read the first 2-3 candidates, missed that the list kept going below
+  // the fold, and confirmed a download thinking they'd reviewed everything —
+  // this tracks whether ScrollShadow can still see content below so the "เลื่อน
+  // ลงดู" hint only shows while it's actually true, not as a permanent fixture.
+  const [moreBelow, setMoreBelow] = useState(false);
+
+  // Nothing left to review once every candidate is merged or the list was
+  // empty to begin with — resume the download on its own instead of making
+  // staff press a second button right after their last "ยืนยันรวมวิชา".
+  useEffect(() => {
+    if (candidates && candidates.length === 0) onContinue();
+  }, [candidates, onContinue]);
+
+  function choiceFor(idx: number, c: CourseGroupCandidate) {
+    const existing = choices[idx];
+    if (existing) return existing;
+    const primary = c.courses.find(x => x.id === c.suggested_primary_id);
+    return { primaryId: c.suggested_primary_id, curriculumCode: primary?.curriculum ?? "" };
+  }
+  function setChoice(idx: number, next: { primaryId: string; curriculumCode: string }) {
+    setChoices(s => ({ ...s, [idx]: next }));
+  }
+
+  async function confirm(idx: number, c: CourseGroupCandidate) {
+    const choice = choiceFor(idx, c);
+    if (!choice.curriculumCode) {
+      toast.danger(t("กรุณาเลือกหลักสูตรก่อนยืนยัน"));
+      return;
+    }
+    setConfirmingIdx(idx);
+    try {
+      await api.post(`/terms/${termId}/course-groups`, {
+        course_ids: c.courses.map(x => x.id),
+        primary_course_id: choice.primaryId,
+        curriculum_code: choice.curriculumCode,
+      });
+      toast.success(t("รวมวิชา {codes} แล้ว", { codes: c.courses.map(x => x.code).join("/") }));
+      void mutate(candidatesKey);
+    } catch (e) {
+      toast.danger(t("ยืนยันไม่สำเร็จ"), { description: (e as Error).message });
+    } finally {
+      setConfirmingIdx(null);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={
+        candidates?.length
+          ? t("พบวิชาที่อาจเป็นรหัสคู่กัน ({n} รายการ)", { n: candidates.length })
+          : t("พบวิชาที่อาจเป็นรหัสคู่กัน")
+      }
+      icon={<Merge size={20} />}
+      size="xl"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>{t("ยกเลิกการดาวน์โหลด")}</Button>
+          <Button variant="primary" onClick={onContinue}>{t("ดาวน์โหลดต่อโดยไม่รวมที่เหลือ")}</Button>
+        </>
+      }
+    >
+      <p className="text-sm text-muted mb-3">
+        {t("ระบบพบวิชาที่ชื่อ ผู้สอน และตารางสอนตรงกัน ซึ่งอาจเป็นวิชาเดียวกันที่มีสองรหัส (เช่นช่วงเปลี่ยนผ่านหลักสูตรที่รหัสเก่ายังต้องเปิดให้นักศึกษาที่ยังไม่จบ) เลือกรวมรหัสด้านล่างเพื่อให้เอกสารพิมพ์เป็นแถวเดียว โดยนำรหัสวิชามาต่อกันและรวมจำนวนนักศึกษาเข้าด้วยกัน หรือกดดาวน์โหลดต่อเพื่อพิมพ์แยกกันตามเดิม")}
+      </p>
+      {!candidates?.length ? (
+        <div className="py-6 text-center text-sm text-muted">{t("กำลังตรวจสอบ…")}</div>
+      ) : (
+        <div className="relative">
+          <ScrollShadow
+            className="space-y-4 max-h-[60vh] pr-1"
+            onVisibilityChange={v => setMoreBelow(v === "bottom" || v === "both")}
+          >
+          {candidates.map((c, idx) => {
+            const choice = choiceFor(idx, c);
+            return (
+              <div key={c.courses.map(x => x.id).join(",")} className="rounded-lg border border-border p-3 space-y-2.5">
+                <div className="text-xs text-muted">{c.reason}</div>
+                <div className="space-y-1.5">
+                  {c.courses.map(course => (
+                    <label key={course.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`primary-${idx}`}
+                        checked={choice.primaryId === course.id}
+                        onChange={() => setChoice(idx, { ...choice, primaryId: course.id })}
+                      />
+                      <span className="font-medium tabular-nums">{course.code}</span>
+                      <span className="text-ink-2">{course.name_th}</span>
+                      {course.curriculum && <Chip tone="neutral">{course.curriculum}</Chip>}
+                    </label>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <Select
+                    value={choice.curriculumCode}
+                    onChange={e => setChoice(idx, { ...choice, curriculumCode: e.target.value })}
+                    className="max-w-[16rem]"
+                  >
+                    <option value="">{t("เลือกหลักสูตรที่จะลงชีต")}</option>
+                    {(curricula ?? []).map(cur => (
+                      <option key={cur.code} value={cur.code}>{cur.sheet_name}</option>
+                    ))}
+                  </Select>
+                  <Button
+                    variant="primary"
+                    isPending={confirmingIdx === idx}
+                    onClick={() => void confirm(idx, c)}
+                  >
+                    <Merge size={14} /> {t("ยืนยันรวมวิชา")}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          </ScrollShadow>
+          {moreBelow && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-1">
+              <span className="flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-medium text-background shadow-md">
+                {t("เลื่อนลงเพื่อดูวิชาที่เหลือ")} <ChevronDown size={12} className="animate-bounce" />
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}

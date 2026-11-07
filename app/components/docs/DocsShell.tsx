@@ -12,6 +12,7 @@ import {
 import AudienceSwitch from "./AudienceSwitch";
 import SearchDialog from "./SearchDialog";
 import BackToTop from "./BackToTop";
+import { DeveloperCredit } from "../FooterCredit";
 import type { Audience } from "../../../content/docs/types";
 import { docHref, type DocPageMeta } from "../../../content/docs/meta";
 import { APP_VERSION, DOCS_UPDATED } from "../../lib/docs/version";
@@ -338,6 +339,7 @@ export default function DocsShell({
             <footer className="mt-16 border-t border-border pt-6 pb-2 text-xs leading-6 text-muted">
               <div>{t("ปรับปรุงคู่มือล่าสุด {date} ตรงกับระบบเวอร์ชัน {version}", { date: fmtDate(DOCS_UPDATED, { long: true }), version: APP_VERSION })}</div>
               <div>{t("© {year} วิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น สงวนลิขสิทธิ์", { year: year(new Date(DOCS_UPDATED).getFullYear()) })}</div>
+              <div><DeveloperCredit /></div>
             </footer>
           </div>
         </main>

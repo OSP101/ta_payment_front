@@ -108,13 +108,13 @@ const pct = (n: number) => `${(n * 100).toFixed(3)}%`;
 
 /** Colour by duty kind — the same meaning as the printed form. */
 const KIND_BG: Record<string, string> = {
-  lecture: "#C0DD97", lab: "#B5D4F4", review: "#CECBF6", own_class: "#F5C4B3",
+  lecture: "var(--duty-lecture-bg, #C0DD97)", lab: "var(--duty-lab-bg, #B5D4F4)", review: "var(--duty-review-bg, #CECBF6)", own_class: "var(--duty-own-class-bg, #F5C4B3)",
 };
 const KIND_LABEL: Record<string, string> = {
   lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ"), review: msg("ตรวจงาน"), own_class: msg("คาบเรียนของเขา"),
 };
 const KIND_FG: Record<string, string> = {
-  lecture: "#173404", lab: "#042C53", review: "#26215C", own_class: "#4A1B0C",
+  lecture: "var(--duty-lecture-fg, #173404)", lab: "var(--duty-lab-fg, #042C53)", review: "var(--duty-review-fg, #26215C)", own_class: "var(--duty-own-class-fg, #4A1B0C)",
 };
 
 /**
@@ -418,7 +418,7 @@ export function WorklogReviewModal({
                         className={
                           "cursor-pointer rounded-lg px-2.5 py-1 text-xs " +
                           (secTab === sec
-                            ? "bg-[var(--brand-soft)] text-[var(--brand)]"
+                            ? "bg-[var(--brand-soft)] text-[var(--tone-brand-ink)]"
                             : "border border-[var(--hairline)]")
                         }
                       >
@@ -443,7 +443,7 @@ export function WorklogReviewModal({
                     // Row edits are refused once the month is exported or sent
                     // to finance, and once the period has closed
                     // (assertWorklogWritable) — ตีกลับ is the way back in.
-                    canEdit={target.periodOpen && target.status !== "exported" && target.status !== "finance_sent"}
+                    canEdit={target.status !== "exported" && target.status !== "finance_sent"}
                     pending={pending}
                     activeKey={activeKey}
                     onHover={setHoverKey}
@@ -484,7 +484,7 @@ export function WorklogReviewModal({
               rows={3}
             />
             {rejectReason.trim() === "" && (
-              <p className="text-xs text-red-600">{t("ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร")}</p>
+              <p className="text-xs text-danger-soft-foreground">{t("ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร")}</p>
             )}
           </div>
         }
@@ -788,7 +788,7 @@ function WeekTable({
                           />
                         </div>
                       </td>
-                      <td className={"px-1 py-1 text-right tabular " + (draftOK ? "" : "text-red-600")}>
+                      <td className={"px-1 py-1 text-right tabular " + (draftOK ? "" : "text-danger-soft-foreground")}>
                         {draftOK ? (draftMins / 60).toFixed(2) : "—"}
                       </td>
                       <td className="px-1 py-1">{ACTIVITY_LABEL[d.activity] ? t(ACTIVITY_LABEL[d.activity]) : d.activity}</td>
@@ -1004,7 +1004,7 @@ function CommitDialog({
               <li key={id}>
                 {fullDate(d.work_date)} {d.start_time.slice(0, 5)}–{d.end_time.slice(0, 5)} →{" "}
                 {p.action === "delete"
-                  ? <span className="text-red-600">{t("ลบ")}</span>
+                  ? <span className="text-danger-soft-foreground">{t("ลบ")}</span>
                   : t("{start}–{end} ({h} ชม.)", { start: p.start_time, end: p.end_time, h: p.hours.toFixed(2) })}
               </li>
             );
@@ -1021,7 +1021,7 @@ function CommitDialog({
             placeholder={t("เช่น ตารางสอนเปลี่ยนกลางเทอม เวลาที่ลงไว้ไม่ตรงกับคาบจริง")}
           />
           {!reasonOK && reason.length > 0 && (
-            <p className="mt-1 text-xs text-red-600">{t("ยังสั้นเกินไป ({n}/10)", { n: reason.trim().length })}</p>
+            <p className="mt-1 text-xs text-danger-soft-foreground">{t("ยังสั้นเกินไป ({n}/10)", { n: reason.trim().length })}</p>
           )}
         </div>
 

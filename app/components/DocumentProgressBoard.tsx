@@ -17,6 +17,10 @@ export interface TermProgress {
   term_id: string;
   /** 1 or 2 — see TermProgressOverview. */
   round: number;
+  year_month?: string;
+  legacy?: boolean;
+  period_closed?: boolean;
+  issued_version?: number;
   /** "" for a single-round term; "รอบ 1 · งบ 2569 (มิ.ย.–ก.ย.)" once a term has two. */
   round_label?: string;
   total_courses: number;
@@ -40,7 +44,7 @@ export interface TermProgress {
   current_role?: string;
 }
 
-interface TermProgressOverview {
+export interface TermProgressOverview {
   term_id: string;
   rounds: TermProgress[];
 }
@@ -86,12 +90,13 @@ export function DocumentProgressBoard({
   const { t } = useI18n();
   const key = termId ? `/document-progress?term_id=${termId}` : null;
   const { data } = useSWR<TermProgressOverview>(key);
-  const [activeRound, setActiveRound] = useState(1);
+  const [activeRound, setActiveRound] = useState<number | null>(null);
   // Warm the round checklist alongside the overview instead of after it: the
   // panels that read it (SignatureChecklistPanel / ViewerStageSigners) only
   // mount once the overview lands, which made the two requests a waterfall.
   // Same key those panels use, so SWR dedupes it into the one request.
-  useSWR<SignatureItem[]>(termId ? `/document-progress/checklist?term_id=${termId}&round=${activeRound}` : null);
+  const selectedRound = data?.rounds.find(r => r.round === activeRound)?.round ?? data?.rounds.find(r => r.year_month)?.round ?? data?.rounds[0]?.round;
+  useSWR<SignatureItem[]>(termId && selectedRound ? `/document-progress/checklist?term_id=${termId}&round=${selectedRound}` : null);
 
   if (!termId && !pending) return <Panel><EmptyState title={t("เลือกภาคเรียนเพื่อดูความคืบหน้า")} /></Panel>;
   if (!data) {
@@ -107,19 +112,20 @@ export function DocumentProgressBoard({
 
   const rounds = data.rounds;
   const showTabs = rounds.length > 1;
-  const current = rounds.find(r => r.round === activeRound) ?? rounds[0];
+  const current = rounds.find(r => r.round === selectedRound) ?? rounds[0];
+  if (!current) return <Panel><EmptyState title={t("ยังไม่ได้ตั้งรอบส่งเวลารายเดือน")} /></Panel>;
   const maxStage = showFinalStage ? 5 : 4;
   // A round other than the one on screen still needing work is exactly the
   // thing staff asked not to lose track of — surfaced once, above the tabs,
   // so switching to round 1's tab does not make round 2 disappear from mind.
   // …and only for the officer who has to act on it. To a TA it is a nag about
   // somebody else's desk.
-  const lagging = showTabs && canEdit ? rounds.filter(r => r.round !== activeRound && r.stage < maxStage) : [];
+  const lagging = showTabs && canEdit ? rounds.filter(r => r.round !== current.round && r.stage < maxStage && r.total_courses > 0 && (r.legacy || r.period_closed)) : [];
 
   return (
     <div className="space-y-3">
       {showTabs && (
-        <div className="inline-flex rounded-lg border border-border p-0.5">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-border p-0.5">
           {rounds.map(r => (
             <button
               key={r.round}
@@ -127,7 +133,7 @@ export function DocumentProgressBoard({
               onClick={() => setActiveRound(r.round)}
               className={
                 "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-                (activeRound === r.round ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
+                (current.round === r.round ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
               }
             >
               {r.round_label || t("รอบ {n}", { n: r.round })}
@@ -433,11 +439,11 @@ function RoundBoard({
                     className={
                       "relative z-10 grid place-items-center w-8 h-8 rounded-full transition-colors " +
                       (reached
-                        ? "bg-emerald-500 text-white"
+                        ? "bg-success text-success-foreground"
                         : blockedNext
                         ? "bg-amber-100 text-amber-700 ring-2 ring-amber-300"
                         : isNext
-                        ? "bg-white text-accent ring-2 ring-accent"
+                        ? "bg-white text-link ring-2 ring-accent"
                         : "bg-slate-200 text-slate-500") +
                       (canClick ? " cursor-pointer hover:ring-2 hover:ring-emerald-300" : " cursor-not-allowed") +
                       (isCurrent ? " ring-2 ring-emerald-400" : "")
@@ -744,7 +750,7 @@ function SignatureChecklistPanel({
                       }
                     >
                       {signed
-                        ? <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                        ? <Check size={16} className="text-success-soft-foreground shrink-0 mt-0.5" />
                         : <Circle size={16} className="text-ink-3 shrink-0 mt-0.5" />}
                       <div className="min-w-0">
                         <div className="text-xs font-medium truncate">{it.responsible || "—"}</div>
@@ -870,9 +876,9 @@ export function ViewerRoundBoard({
                     className={
                       "relative z-10 grid place-items-center w-8 h-8 rounded-full " +
                       (reached
-                        ? "bg-emerald-500 text-white"
+                        ? "bg-success text-success-foreground"
                         : isCurrent
-                        ? "bg-panel text-accent ring-2 ring-accent"
+                        ? "bg-panel text-link ring-2 ring-accent"
                         : "bg-slate-200 text-slate-500")
                     }
                   >
@@ -1042,12 +1048,12 @@ function ViewerStageSigners({
                 {g.items.map(it => (
                   <li key={signatureItemKey(it)} className="flex items-baseline gap-2 text-sm">
                     {it.signed_at
-                      ? <Check size={15} aria-hidden className="text-emerald-600 shrink-0 translate-y-0.5" />
-                      : <X size={15} aria-hidden className="text-red-600 shrink-0 translate-y-0.5" />}
-                    <span className={"min-w-0 flex-1 font-medium " + (it.signed_at ? "text-emerald-700" : "text-red-600")}>
+                      ? <Check size={15} aria-hidden className="text-success-soft-foreground shrink-0 translate-y-0.5" />
+                      : <X size={15} aria-hidden className="text-danger-soft-foreground shrink-0 translate-y-0.5" />}
+                    <span className={"min-w-0 flex-1 font-medium " + (it.signed_at ? "text-emerald-700" : "text-danger-soft-foreground")}>
                       {fullName(it.responsible) || "—"}
                     </span>
-                    <span className={"text-xs shrink-0 " + (it.signed_at ? "text-emerald-700" : "text-red-600")}>
+                    <span className={"text-xs shrink-0 " + (it.signed_at ? "text-emerald-700" : "text-danger-soft-foreground")}>
                       {it.signed_at ? t("ลงนามแล้ว · {when}", { when: fmt(it.signed_at, year) }) : t("ยังไม่ได้ลงนาม")}
                     </span>
                   </li>

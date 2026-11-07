@@ -206,7 +206,7 @@ export default function CourseExplorer({
                   <td className="py-2.5">
                     <Tip content={m.label !== m.short ? t(m.label) : undefined}>
                       <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
-                            style={{ background: `${m.color}1a`, color: m.ink }}>
+                            style={{ background: `color-mix(in srgb, ${m.color} 10%, transparent)`, color: m.ink }}>
                         <i className="size-1.5 rounded-full" style={{ background: m.color }} />{t(m.short)}
                       </span>
                     </Tip>

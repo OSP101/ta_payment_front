@@ -25,6 +25,7 @@ export interface TermMonth {
 }
 
 export interface TermMonthStatus extends TermMonth {
+  legacy?: boolean;
   /** A document covering this month has already been generated. */
   issued: boolean;
   /** false while the month still has work waiting on a TA, a lecturer, or the
@@ -98,15 +99,16 @@ export function suggestMonths(all: TermMonthStatus[], split?: FiscalSplitInfo): 
  * presets do most of the work and the chips exist for the exceptions.
  */
 export function MonthChips({
-  months, selected, onChange,
+  months, selected, onChange, single = false,
 }: {
   months: TermMonthStatus[];
   selected: string[];
   onChange: (next: string[]) => void;
+  single?: boolean;
 }) {
   const { t } = useI18n();
   function toggle(ym: string) {
-    onChange(selected.includes(ym) ? selected.filter(m => m !== ym) : [...selected, ym]);
+    onChange(single ? [ym] : selected.includes(ym) ? selected.filter(m => m !== ym) : [...selected, ym]);
   }
   return (
     <div className="flex flex-wrap gap-2">

@@ -1,3 +1,4 @@
+import { scenarioBlocks } from "../sequence-scenarios";
 import {
   type DocPage, text, callout, steps, screenshot, gif, statusTable, table, uiPath, since, goToApp, diagram,
 } from "../types";
@@ -111,6 +112,8 @@ export const commonPagesEn: DocPage[] = [
         "There is no **Forgot password** button. If you forget your password, contact staff to **reset your password**. " +
         "Or, if you have a KKU account that matches your email in the system, use Method 1 instead and skip the password altogether.",
       ),
+      ...scenarioBlocks("login", "en"),
+      ...scenarioBlocks("password", "en"),
     ],
     related: ["common:two-factor", "common:session-timeout"],
   },

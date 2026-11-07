@@ -72,7 +72,7 @@ const SOURCE_OPTIONS: { value: Holiday["source"]; label: string }[] = [
   { value: "custom", label: msg("อื่นๆ") },
 ];
 // เครื่องหมายบอกช่องที่จำเป็นต้องกรอก
-const RequiredMark = () => <span className="text-danger"> *</span>;
+const RequiredMark = () => <span className="text-danger-soft-foreground"> *</span>;
 
 const DOW = [msg("อาทิตย์"), msg("จันทร์"), msg("อังคาร"), msg("พุธ"), msg("พฤหัสบดี"), msg("ศุกร์"), msg("เสาร์")];
 

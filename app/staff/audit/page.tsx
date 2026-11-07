@@ -336,7 +336,7 @@ export default function AuditPage() {
           </Tip>
         </div>
         {!window_ && (
-          <p className="mt-2 text-xs text-danger">{t("วันสิ้นสุดอยู่ก่อนวันเริ่ม กรุณาเลือกช่วงวันใหม่")}</p>
+          <p className="mt-2 text-xs text-danger-soft-foreground">{t("วันสิ้นสุดอยู่ก่อนวันเริ่ม กรุณาเลือกช่วงวันใหม่")}</p>
         )}
 
         {hasPinned && (
@@ -476,7 +476,7 @@ function chipClass(active: boolean) {
     "outline-offset-2 focus-visible:outline-2 focus-visible:outline-(--brand)",
     active
       ? "border-(--brand) bg-(--brand) text-(--brand-fg)"
-      : "border-(--border) text-(--ink-2) hover:border-(--brand) hover:text-(--brand)",
+      : "border-(--border) text-(--ink-2) hover:border-(--brand) hover:text-(--tone-brand-ink)",
   ].join(" ");
 }
 
@@ -507,7 +507,7 @@ function CategoryChip({
 function Pinned({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
   const { t } = useI18n();
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-(--brand-soft) py-1 pl-3 pr-1 text-xs font-medium text-(--brand)">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-(--brand-soft) py-1 pl-3 pr-1 text-xs font-medium text-(--tone-brand-ink)">
       {children}
       <button type="button" aria-label={t("เลิกดูเฉพาะรายการนี้")} onClick={onClear}
         className="rounded-full p-0.5 hover:bg-(--brand) hover:text-(--brand-fg)">

@@ -166,7 +166,7 @@ function buildColumns(
       id: "ref", width: 110, label: t("อ้างอิง"), isRowHeader: true,
       className: "whitespace-nowrap font-mono text-xs",
       render: r => (
-        <button type="button" className="text-(--brand) underline decoration-dotted" onClick={() => onOpen(r)}>
+        <button type="button" className="text-(--tone-brand-ink) underline decoration-dotted" onClick={() => onOpen(r)}>
           {r.ref}
         </button>
       ),
@@ -202,7 +202,7 @@ function buildColumns(
           {r.actor_id ? (
             <>
               <Tip content={t("ดูทุกอย่างที่คนนี้ทำ")}>
-                <button type="button" className="text-(--brand) underline decoration-dotted"
+                <button type="button" className="text-(--tone-brand-ink) underline decoration-dotted"
                   onClick={() => onActor(r.actor_id!)}>
                   {r.actor_name || r.actor_id.slice(0, 8)}
                 </button>
@@ -262,7 +262,7 @@ function buildColumns(
         <div className="flex items-center justify-end gap-2.5">
           {r.request_id && (
             <Tip content={t("ทุกอย่างที่ request เดียวกันนี้ทำ")}>
-              <button type="button" aria-label={t("ตาม request")} className="text-(--ink-3) hover:text-(--brand)"
+              <button type="button" aria-label={t("ตาม request")} className="text-(--ink-3) hover:text-(--tone-brand-ink)"
                 onClick={() => onTrace({ kind: "request", id: r.request_id! })}>
                 <Link2 size={14} />
               </button>
@@ -270,14 +270,14 @@ function buildColumns(
           )}
           {r.session_id && (
             <Tip content={t("ทุกอย่างใน session (การเข้าระบบ) เดียวกัน")}>
-              <button type="button" aria-label={t("ตาม session")} className="text-(--ink-3) hover:text-(--brand)"
+              <button type="button" aria-label={t("ตาม session")} className="text-(--ink-3) hover:text-(--tone-brand-ink)"
                 onClick={() => onTrace({ kind: "session", id: r.session_id! })}>
                 <KeyRound size={14} />
               </button>
             </Tip>
           )}
           <Tip content={t("รายละเอียดและข้อมูลดิบ")}>
-            <button type="button" aria-label={t("รายละเอียด")} className="text-(--ink-3) hover:text-(--brand)"
+            <button type="button" aria-label={t("รายละเอียด")} className="text-(--ink-3) hover:text-(--tone-brand-ink)"
               onClick={() => onOpen(r)}>
               <Search size={14} />
             </button>

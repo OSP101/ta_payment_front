@@ -55,14 +55,14 @@ export default function PageDocsPill({ explicit, dataTour }: { explicit?: { audi
   // icons it replaced were easy to miss and cluttered the toolbars.
   const btnClass =
     "mt-3 inline-flex max-w-full items-center gap-2 rounded-lg border border-(--brand)/25 bg-accent-soft/50 " +
-    "px-3.5 py-2 text-sm font-medium text-(--brand) transition-colors hover:bg-accent-soft hover:border-(--brand)/50 " +
+    "px-3.5 py-2 text-sm font-medium text-(--tone-brand-ink) transition-colors hover:bg-accent-soft hover:border-(--brand)/50 " +
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--brand)";
   const inner = (
     <>
       <BookOpen size={17} className="shrink-0" />
       <span className="truncate">{label}</span>
       {bigTopic && page && page.subPageCount > 0 && (
-        <span className="shrink-0 rounded-full bg-surface/80 px-2 py-0.5 text-xs font-normal text-(--brand)/80">
+        <span className="shrink-0 rounded-full bg-surface/80 px-2 py-0.5 text-xs font-normal text-(--tone-brand-ink)/80">
           {t("{n} หัวข้อ", { n: page.subPageCount + 1 })}
         </span>
       )}

@@ -353,7 +353,7 @@ function StatusCardShell({
       <div className="min-h-22">{children}</div>
       <Link
         href={href}
-        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-link hover:underline"
       >
         {hrefLabel} <ArrowRight size={12} />
       </Link>

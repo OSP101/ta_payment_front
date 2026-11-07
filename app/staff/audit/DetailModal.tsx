@@ -208,7 +208,7 @@ function CopyChip({ value, label }: { value: string; label: string }) {
       <button
         type="button"
         onClick={() => copy(value)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-(--border) px-2.5 py-0.5 text-xs text-(--ink-2) hover:border-(--brand) hover:text-(--brand)"
+        className="inline-flex items-center gap-1.5 rounded-full border border-(--border) px-2.5 py-0.5 text-xs text-(--ink-2) hover:border-(--brand) hover:text-(--tone-brand-ink)"
       >
         <span className="text-(--ink-3)">{t(label)}</span>
         <span className="font-mono">{value}</span>
@@ -230,7 +230,7 @@ function Tech({ k, v, plain }: { k: string; v?: string | null; plain?: boolean }
             <span className={`break-all text-xs ${plain ? "" : "font-mono"}`}>{v}</span>
             <Tip content={copied ? t("คัดลอกแล้ว") : t("คัดลอก")}>
               <button type="button" aria-label={t("คัดลอก {label}", { label: t(k) })}
-                className="mt-0.5 shrink-0 text-(--ink-4) hover:text-(--brand)"
+                className="mt-0.5 shrink-0 text-(--ink-4) hover:text-(--tone-brand-ink)"
                 onClick={() => copy(v)}>
                 {copied ? <Check size={12} /> : <Copy size={12} />}
               </button>

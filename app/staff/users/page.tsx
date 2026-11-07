@@ -449,7 +449,7 @@ export default function UsersPage() {
         if (canUnlock(u)) more.push({ id: "unlock", label: t("ปลดล็อกการยืนยันรหัสผ่าน"), icon: <LockOpen className="size-4" />, run: () => setUnlocking(u) });
         if (canReset2FA(u) && u.totp_enabled) more.push({ id: "2fa", label: t("รีเซ็ต 2FA"), icon: <ShieldOff className="size-4" />, run: () => setResetting2FA(u) });
         if (canManage(u)) more.push(u.is_active
-          ? { id: "deactivate", label: t("ปิดใช้งานบัญชี"), icon: <UserX className="size-4 text-danger" />, run: () => setDeactivating(u), danger: true }
+          ? { id: "deactivate", label: t("ปิดใช้งานบัญชี"), icon: <UserX className="size-4 text-danger-soft-foreground" />, run: () => setDeactivating(u), danger: true }
           : { id: "activate", label: t("เปิดใช้งานบัญชี"), icon: <UserCheck className="size-4" />, run: () => setReactivating(u) });
         return (
           <div className="flex gap-1 justify-end">

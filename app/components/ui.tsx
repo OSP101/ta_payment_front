@@ -838,7 +838,7 @@ export function FieldGroup({
           {label}
           {required && (
             <>
-              <span aria-hidden className="text-danger"> *</span>
+              <span aria-hidden className="text-danger-soft-foreground"> *</span>
               <span className="sr-only"> {t("(จำเป็น)")}</span>
             </>
           )}
@@ -849,7 +849,7 @@ export function FieldGroup({
       {/* Plain div, not HeroUI FieldError: FieldError only renders inside a
           field marked invalid via react-aria validation, and FieldGroup is a
           context-free wrapper — the message would silently disappear. */}
-      {error && <div className="text-xs text-danger">{error}</div>}
+      {error && <div className="text-xs text-danger-soft-foreground">{error}</div>}
     </div>
   );
 }
@@ -905,7 +905,7 @@ export function SelectField({
       {label && (
         <HLabel>
           {label}
-          {isRequired && <span className="text-danger"> *</span>}
+          {isRequired && <span className="text-danger-soft-foreground"> *</span>}
         </HLabel>
       )}
       <HSelect.Trigger>

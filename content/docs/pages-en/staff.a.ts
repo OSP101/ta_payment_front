@@ -1,3 +1,5 @@
+import { scenarioBlocks } from "../sequence-scenarios";
+import {  } from "../workflow-content";
 import {
   type DocPage, shareLink, text, callout, steps, screenshot, gif, statusTable, table, uiPath, since, goToApp, tryInDemo,
 } from "../types";
@@ -198,6 +200,7 @@ export const staffPagesEnA: DocPage[] = [
       ),
       callout("info", "If any course already has TAs or approved hours, the system lists the courses whose budget would change and asks you to confirm first. It will not allow the change if any course has already had its disbursement documents exported."),
       gif("S-SE-G2", "Create an academic year, add the first semester, fill in the details, then set it as the current semester"),
+      ...scenarioBlocks("term-setup", "en"),
     ],
   },
   {
@@ -412,13 +415,7 @@ export const staffPagesEnA: DocPage[] = [
         "The system shows each course's old and new numbers first; then click **Save**. " +
         "For course codes merged into one course (e.g. CP245201 and SC363001) the system adds the numbers together. Codes it cannot find, and courses already exported, are reported and skipped.",
       ),
-      text(
-        "This window has 2 tabs. The **Fetch from registrar system (REG)** tab reads the **actually enrolled** numbers (the \"ลง\" column) of every class group from reg.kku.ac.th, " +
-        "split into regular and special programs. Choose whether to fetch **Only courses with TA requests** (recommended, fast) or **All courses in the semester**, then click **Start fetching**. " +
-        "The system sends one request at a time with pauses, and searches by group (CP*, SC* and old codes) when fetching many courses. A whole semester takes about 1 minute. It does not fetch courses already exported, and reuses results fetched within the last 10 minutes. " +
-        "Once you have the numbers, click **Check** and **Save** as before. For codes it could not fetch, enter them in the **Paste from Excel** tab. " +
-        "If a course that already has students would drop to 0 (e.g. fetched before registration opened), the system skips that course for now; you must tick a confirmation to save it as 0.",
-      ),
+      callout("warn", "Fetching enrolment counts from KKU REG is temporarily disabled following changes to the registration website. Use the Excel tab, paste the data, review the preview and confirm instead."),
       callout("info", "Click a **Course code** in the table to open that course's page on reg.kku.ac.th for the selected semester."),
       callout(
         "info",
@@ -503,6 +500,7 @@ export const staffPagesEnA: DocPage[] = [
       screenshot("S-US-05", "The disable account box: type the account's e-mail to confirm"),
       callout("warn", "The system never deletes accounts permanently; use **Disable** instead. Before disabling, you must **type that account's e-mail** to confirm, so you do not disable the wrong person. You can re-enable it at any time."),
       gif("S-US-G1", "Create a new TA account, copy the temporary password, then search for the name in the table"),
+      ...scenarioBlocks("accounts", "en"),
     ],
   },
 

@@ -343,7 +343,7 @@ export default function CoverMaker({
             className="aspect-video w-full rounded-lg border border-border bg-surface-secondary"
             aria-label={t("ตัวอย่างรูปหน้าปก")}
           />
-          {bgError && <div className="text-xs text-danger">{t(bgError)}</div>}
+          {bgError && <div className="text-xs text-danger-soft-foreground">{t(bgError)}</div>}
           <BackgroundPicker
             items={backgrounds}
             selected={bg.id}
@@ -511,7 +511,7 @@ function BackgroundPicker({
                   type="button"
                   aria-label={t("ลบพื้นหลัง {name}", { name: b.name })}
                   onClick={() => setRemove(b)}
-                  className="absolute end-1 top-1 flex size-6 items-center justify-center rounded-md bg-surface/90 text-danger opacity-100 shadow-sm transition-opacity pointer-fine:opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                  className="absolute end-1 top-1 flex size-6 items-center justify-center rounded-md bg-surface/90 text-danger-soft-foreground opacity-100 shadow-sm transition-opacity pointer-fine:opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                 >
                   <Trash2 size={12} />
                 </button>
@@ -534,7 +534,7 @@ function BackgroundPicker({
           onChange={e => { const f = e.target.files?.[0]; if (f) void pick(f); e.currentTarget.value = ""; }}
         />
       </div>
-      {error && <div className="mt-2 text-xs text-danger">{error}</div>}
+      {error && <div className="mt-2 text-xs text-danger-soft-foreground">{error}</div>}
 
       {pending && (
         <div className="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface-secondary p-3">

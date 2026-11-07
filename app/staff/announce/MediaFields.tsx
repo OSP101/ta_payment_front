@@ -79,7 +79,7 @@ export function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: 
           <Plus size={13} />{busy > 0 ? t("กำลังอัปโหลด… ({n})", { n: busy }) : t("เพิ่มไฟล์")}
         </Button>
 
-        {err && <div className="text-xs text-danger">{err}</div>}
+        {err && <div className="text-xs text-danger-soft-foreground">{err}</div>}
 
         {!!draft.attachments.length && (
           <ul className="space-y-1.5">
@@ -100,7 +100,7 @@ export function AttachmentsField({ draft, setDraft }: { draft: Draft; setDraft: 
                   className="px-1 text-ink-3 hover:text-brand disabled:opacity-30" disabled={i === draft.attachments.length - 1}>↓</button>
                 <Tip content={t("เอา {name} ออก", { name: a.filename })}><button type="button" aria-label={t("เอา {name} ออก", { name: a.filename })}
                   onClick={() => setDraft(d => ({ ...d, attachments: d.attachments.filter(x => x.storage_key !== a.storage_key) }))}
-                  className="px-1 text-ink-3 hover:text-danger">
+                  className="px-1 text-ink-3 hover:text-danger-soft-foreground">
                   <X size={13} />
                 </button></Tip>
               </li>

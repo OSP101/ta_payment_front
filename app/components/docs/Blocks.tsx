@@ -97,7 +97,7 @@ function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: 
                   <a
                     href={`#${stepId(blockIndex, i)}`}
                     aria-label={t("ลิงก์ไปยังขั้นตอน {title}", { title: s.title })}
-                    className="text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-(--brand) focus:opacity-100"
+                    className="text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-(--tone-brand-ink) focus:opacity-100"
                   >
                     #
                   </a>
@@ -208,7 +208,7 @@ function BlockView({ block, blockIndex = 0, ctx }: { block: Block; blockIndex?: 
         <Link
           href="/demo"
           target="_top"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-(--brand) px-3.5 py-2 text-sm font-medium text-(--brand) hover:bg-accent-soft/40 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-(--brand) px-3.5 py-2 text-sm font-medium text-(--tone-brand-ink) hover:bg-accent-soft/40 transition-colors"
         >
           <PlayCircle size={16} />
           {block.label}

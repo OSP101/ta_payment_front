@@ -113,7 +113,7 @@ export default function AttachmentGallery({
                 rel="noopener noreferrer"
                 className="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 transition-colors hover:border-brand"
               >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-600">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-700">
                   <FileText size={16} />
                 </span>
                 <span className="min-w-0 flex-1">

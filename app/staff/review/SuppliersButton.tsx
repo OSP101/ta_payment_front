@@ -153,7 +153,7 @@ export function SuppliersButton() {
 
           <div className="rounded-lg border border-warning/40 bg-warning-soft/40 p-3">
             <div className="flex items-start gap-2">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning-soft-foreground" />
               <p className="text-xs text-muted">
                 {t("ไฟล์นี้มีเลขบัตรประชาชน เลขที่บัญชีธนาคาร และที่อยู่ของทีเอ จึงต้องยืนยันรหัสผ่านทุกครั้ง ระบบบันทึกว่าใครดาวน์โหลดและมีใครอยู่ในไฟล์ กรุณาส่งให้ฝ่ายการเงินผ่านช่องทางของหน่วยงานเท่านั้น")}
               </p>

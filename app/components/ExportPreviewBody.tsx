@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { Download, Lock, CheckCircle2, AlertTriangle, CalendarRange } from "lucide-react";
-import { apiUrl, errMessage } from "../lib/api";
+import { apiFetch, apiUrl, errMessage } from "../lib/api";
 import { notify } from "../lib/notify";
 import { Button, Chip, Spinner, Tip } from "./ui";
 import { Skel, SkelRows, SkelRegion, SkelValue } from "./Skeletons";
@@ -15,7 +15,7 @@ import { msg, useI18n, type TFn } from "../lib/i18n/client";
 
 // Pull the download filename out of a Content-Disposition header, handling both
 // the RFC 5987 `filename*=UTF-8''…` form and the plain `filename="…"` form.
-function filenameFromCD(cd: string | null): string | null {
+export function filenameFromCD(cd: string | null): string | null {
   if (!cd) return null;
   const star = /filename\*=(?:UTF-8'')?([^;]+)/i.exec(cd);
   if (star?.[1]) {
@@ -107,12 +107,12 @@ export function ExportPreviewBody({
   const allMonths = useMemo(() => coverage?.months ?? [], [coverage]);
   const split = coverage?.fiscal_split;
   const [picked, setPicked] = useState<string[] | null>(null);
-  const suggested = useMemo(() => suggestMonths(allMonths, split), [allMonths, split]);
+  const suggested = useMemo(() => allMonths.length ? [allMonths.find(m => !m.issued)?.year_month ?? allMonths[0].year_month] : [], [allMonths]);
   const months = picked ?? suggested;
   // A term that does not straddle the boundary keeps the single whole-term
   // document it always had, so the selector only earns its space when it does.
-  const showPicker = !!split?.crosses;
-  const scope = showPicker ? months : [];
+  const showPicker = allMonths.length > 0;
+  const scope = months;
   // Months on the FAR side of the budget-year cut that have no claim yet —
   // shown after export so staff notice ตุลาคม is still owed instead of
   // reading "ส่งออกแล้ว" as "this course is fully done for the term".
@@ -142,10 +142,12 @@ export function ExportPreviewBody({
   // a new locking export (a corrected version), not a reprint.
   const archived = data?.archived ?? null;
   const alreadyExported = !!archived;
+  const legacySelection = months.length > 0 && months.every(ym => allMonths.find(m=>m.year_month===ym)?.legacy);
   const notReady = (data?.rows ?? []).filter(r => !r.profile_ready);
   const blockers = data?.blockers ?? [];
 
   async function download() {
+    if (!alreadyExported && !legacySelection) { window.location.assign("/staff/payouts"); return; }
     // Fetch the ZIP as a blob (not window.location) so a backend error surfaces
     // as a Thai toast instead of navigating the SPA to a raw JSON body, and so
     // onExported() fires only after the download actually succeeded (the old
@@ -154,7 +156,7 @@ export function ExportPreviewBody({
     try {
       // POST, not GET: the download locks the months, and a GET could be
       // triggered by a link on another site.
-      const res = await fetch(apiUrl(`/exports/course/${tcId}.zip${monthsQuery(scope)}`), {
+      const res = await apiFetch(apiUrl(`/exports/course/${tcId}.zip${monthsQuery(scope)}`), {
         method: "POST",
         credentials: "include",
       });
@@ -224,7 +226,7 @@ export function ExportPreviewBody({
   }
   if (error && !data) {
     return (
-      <div className="py-8 text-center text-sm text-danger">
+      <div className="py-8 text-center text-sm text-danger-soft-foreground">
         {t("โหลดข้อมูลไม่สำเร็จ {error}", { error: errMessage(error) })}
       </div>
     );
@@ -253,22 +255,9 @@ export function ExportPreviewBody({
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-900">
               <CalendarRange size={14} /> {t("เลือกเดือนที่จะเบิก")}
             </span>
-            <span className="text-xs text-amber-900/80">
-              {t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — {months} ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสาร", { months: monthLabels(allMonths, split!.after).join(", ") })}
-            </span>
           </div>
-          <div className="mb-2 flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setPicked(split!.before)}>
-              {t("งบปีเก่า ({n} เดือน)", { n: split!.before.length })}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setPicked(split!.after)}>
-              {t("งบปีใหม่ ({n} เดือน)", { n: split!.after.length })}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setPicked(allMonths.map(m => m.year_month))}>
-              {t("ทั้งภาคเรียน")}
-            </Button>
-          </div>
-          <MonthChips months={allMonths} selected={months} onChange={setPicked} />
+          <MonthChips single months={allMonths} selected={months} onChange={setPicked} />
+          <p className="mt-2 text-xs">{t("ตรวจตัวเลขรายวิชาของเดือนนี้ แล้วออกชุดเบิกรวมที่หน้าตรวจและส่งออกเอกสาร")}</p>
           {/* Re-issuing to correct a file is normal; billing the same month
               twice by accident is not. */}
           {months.some(ym => allMonths.find(m => m.year_month === ym)?.issued) && (
@@ -401,34 +390,11 @@ export function ExportPreviewBody({
         </table>
       </div>
 
-      {data.all_ready && !alreadyExported && (
-        <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
-          <input type="checkbox" className="mt-0.5" checked={ack} onChange={e => setAck(e.target.checked)} />
-          <span>
-            {t.rich("ตรวจสอบข้อมูลข้างต้นถูกต้องแล้ว เข้าใจว่าการดาวน์โหลดจะ{lock} (แก้ไม่ได้จนกว่าเจ้าหน้าที่จะตีกลับหรือแอดมินปลดล็อก)", { lock: <b>{t("ล็อกบันทึกเวลาของเดือนที่อนุมัติครบ")}</b> })}
-          </span>
-        </label>
-      )}
-      {alreadyExported && blockers.length === 0 && (
-        <p className="text-xs text-ink-3">
-          {outstandingAfterSplit.length > 0
-            ? t.rich("วิชานี้ส่งออก (ล็อก) งบปีเก่าแล้ว ดาวน์โหลดซ้ำได้ทันที — {left} ที่ยังไม่ได้ทำเบิก (งบปีใหม่)", { left: <b>{t("ยังเหลือ {months}", { months: outstandingAfterSplit.join(", ") })}</b> })
-            : t("เดือนที่เลือกส่งออก (ล็อก) แล้ว ดาวน์โหลดซ้ำได้ทันทีโดยไม่มีผลกระทบเพิ่มเติม")}
-        </p>
-      )}
 
-      {/* No "go fix it in the timesheet tab" hint here: once a month is exported
-          the timesheet is locked for every role, so the advice would send the
-          reader to a screen that refuses them. Unlocking is the staff/admin
-          reversal, not something this panel can offer. */}
+      {legacySelection && !alreadyExported && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ack} onChange={e=>setAck(e.target.checked)} />{t("ยืนยันการตรวจสอบเอกสารเดิมก่อนส่งออก")}</label>}
       <div className="flex justify-end pt-1">
-        <Button variant="primary" onClick={download} disabled={!canDownload} className="shrink-0">
-          {alreadyExported ? <Download size={14} /> : <Lock size={14} />}
-          {downloading
-            ? t("กำลังดาวน์โหลด…")
-            : alreadyExported
-            ? t("ดาวน์โหลดซ้ำ")
-            : t("ดาวน์โหลด ZIP (ล็อก)")}
+        <Button variant="primary" onClick={download} disabled={(alreadyExported || legacySelection) && !canDownload} className="shrink-0">
+          <Download size={16} /> {alreadyExported ? t("ดาวน์โหลดฉบับเดิม") : legacySelection ? t("ส่งออกเอกสารตามรูปแบบเดิม") : t("ไปออกชุดเบิกรวมประจำเดือน")}
         </Button>
       </div>
     </div>

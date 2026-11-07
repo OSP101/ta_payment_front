@@ -65,7 +65,7 @@ export default async function AudienceHomePage({ params }: { params: Promise<{ a
             <div className="text-[17px] font-semibold text-foreground">{t("ใช้งานครั้งแรก เริ่มที่นี่")}</div>
             <div className="text-sm text-muted mt-0.5">{start.description}</div>
           </div>
-          <ArrowRight size={18} className="shrink-0 text-(--brand) transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          <ArrowRight size={18} className="shrink-0 text-(--tone-brand-ink) transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
         </Link>
       )}
 
@@ -87,7 +87,7 @@ export default async function AudienceHomePage({ params }: { params: Promise<{ a
                   <div className="font-medium text-foreground">{p.title}</div>
                   <div className="text-sm text-muted mt-0.5">{p.description}</div>
                 </div>
-                <ArrowRight size={16} className="mt-1.5 shrink-0 text-slate-300 group-hover:text-(--brand) transition-colors" />
+                <ArrowRight size={16} className="mt-1.5 shrink-0 text-slate-300 group-hover:text-(--tone-brand-ink) transition-colors" />
               </Link>
             </li>
           ))}
@@ -105,7 +105,7 @@ export default async function AudienceHomePage({ params }: { params: Promise<{ a
                   <li key={`${p.audience}:${p.slug}`}>
                     <Link
                       href={docHref(p, audience)}
-                      className="text-sm text-foreground/85 hover:text-(--brand) hover:underline underline-offset-2"
+                      className="text-sm text-foreground/85 hover:text-(--tone-brand-ink) hover:underline underline-offset-2"
                     >
                       {p.title}
                     </Link>

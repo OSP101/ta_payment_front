@@ -200,11 +200,11 @@ export default function StaffTDBMPage() {
       sortValue: r => (isMatched(r) ? 1 : 0),
       render: r =>
         isMatched(r) ? (
-          <span className="inline-flex items-center gap-1 text-success">
+          <span className="inline-flex items-center gap-1 text-success-soft-foreground">
             <CheckCircle2 size={16} /> {t("จับคู่กับระบบ TA PAY แล้ว")}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 text-danger">
+          <span className="inline-flex items-center gap-1 text-danger-soft-foreground">
             <XCircle size={16} /> {t("ยังไม่จับคู่")}
           </span>
         ),

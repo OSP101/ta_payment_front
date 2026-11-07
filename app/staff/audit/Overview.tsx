@@ -44,7 +44,7 @@ export function Overview({
             <Skel className="h-5 w-64" />
           ) : attention.length > 0 ? (
             <>
-              <ShieldAlert size={18} className="shrink-0 text-warning" />
+              <ShieldAlert size={18} className="shrink-0 text-warning-soft-foreground" />
               <span className="font-semibold">
                 {t("มี {n} เรื่องที่ควรตรวจสอบ", { n: attention.length.toLocaleString(intl) })}
                 <span className="font-normal text-(--ink-3)"> {t(rangeLabel)}</span>
@@ -52,7 +52,7 @@ export function Overview({
             </>
           ) : (
             <>
-              <ShieldCheck size={18} className="shrink-0 text-success" />
+              <ShieldCheck size={18} className="shrink-0 text-success-soft-foreground" />
               <span className="font-semibold">
                 {t("ไม่พบเรื่องที่ต้องตรวจสอบ")}
                 <span className="font-normal text-(--ink-3)"> {t(rangeLabel)}</span>
@@ -74,7 +74,7 @@ export function Overview({
                 <button
                   type="button"
                   onClick={() => onPick(a)}
-                  className="flex w-full items-start gap-2 rounded py-2 text-left outline-offset-2 hover:text-(--brand) focus-visible:outline-2 focus-visible:outline-(--brand)"
+                  className="flex w-full items-start gap-2 rounded py-2 text-left outline-offset-2 hover:text-(--tone-brand-ink) focus-visible:outline-2 focus-visible:outline-(--brand)"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-snug">

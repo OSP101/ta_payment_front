@@ -1,4 +1,5 @@
 "use client";
+import DocumentPolicySection from "./DocumentPolicySection";
 import useSWR, { mutate } from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -57,7 +58,7 @@ export default function SettingsPage() {
   // land on the merged calendar tab instead of a 404.
   const rawTab = tabParam ?? "";
   const normalised = rawTab === "windows" || rawTab === "periods" ? "calendar" : rawTab;
-  const activeTab = ["rate", "terms", "calendar", "curricula", "admins", "email", "mail-test", "demo-access"].includes(normalised)
+  const activeTab = ["documents", "rate", "terms", "calendar", "curricula", "admins", "email", "mail-test", "demo-access"].includes(normalised)
     ? normalised
     : "rate";
   const router = useRouter();
@@ -82,6 +83,7 @@ export default function SettingsPage() {
             <Tabs.Tab id="calendar">{t("ปฏิทินเทอม")}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="curricula">{t("หลักสูตร")}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="admins">{t("ฝ่ายบริหาร")}<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="documents">{t("เอกสาร TA")}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="email">{t("อีเมลแจ้งเตือน")}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="mail-test">{t("ทดสอบอีเมล")}<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="demo-access">{t("สิทธิ์ห้องทดลอง")}<Tabs.Indicator /></Tabs.Tab>
@@ -106,6 +108,7 @@ export default function SettingsPage() {
         <Tabs.Panel id="admins" className="pt-6">
           <AdminOfficersSection />
         </Tabs.Panel>
+        <Tabs.Panel id="documents" className="pt-6"><DocumentPolicySection /></Tabs.Panel>
         <Tabs.Panel id="email" className="pt-6">
           <MailSettingsSection />
         </Tabs.Panel>
@@ -352,7 +355,7 @@ function PayRateSection() {
                   {t("ใช้ค่า rate ปัจจุบันด้านบน + วิชาตัวอย่าง 2 หน่วยกิตบรรยาย + 1 หน่วยกิตปฏิบัติ + 5 นักศึกษาภาคปกติ")}
                 </span>
               </span>
-              <span className="text-muted group-hover:text-accent transition-colors">→</span>
+              <span className="text-muted group-hover:text-link transition-colors">→</span>
             </button>
           </div>
         ) : (
@@ -895,8 +898,8 @@ function TermsSection() {
                                         {tm.course_budget_cap_baht != null
                                           ? <span className="tabular-nums">{t("ไม่เกิน {n} บ.", { n: tm.course_budget_cap_baht.toLocaleString() })}</span>
                                           : <span className="text-muted">{t("ไม่กำหนด")}</span>}
-                                        <Pencil size={13} className="text-[var(--brand)]" />
-                                        <span className="text-[var(--brand)]">{tm.course_budget_cap_baht != null ? t("แก้ไข") : t("กำหนดเพดาน")}</span>
+                                        <Pencil size={13} className="text-[var(--tone-brand-ink)]" />
+                                        <span className="text-[var(--tone-brand-ink)]">{tm.course_budget_cap_baht != null ? t("แก้ไข") : t("กำหนดเพดาน")}</span>
                                       </button>
                                     </td>
                                     <td>
@@ -1089,7 +1092,7 @@ function TermBudgetCapModal({ term, onClose }: { term: Term; onClose: () => void
                             <span className="text-sm text-muted">{t("บาท")}</span>
                           </div>
                           {invalid && amount.trim() !== "" && (
-                            <div className="mt-1 text-xs text-danger">{t("ต้องเป็นจำนวนเงินตั้งแต่ 0 บาทขึ้นไป")}</div>
+                            <div className="mt-1 text-xs text-danger-soft-foreground">{t("ต้องเป็นจำนวนเงินตั้งแต่ 0 บาทขึ้นไป")}</div>
                           )}
                         </div>
                       )}
@@ -1682,19 +1685,19 @@ function TermDeleteModal({
               <ul className="text-sm space-y-1">
                 <li className="flex justify-between">
                   <span>{t("รายวิชาที่เปิดสอนในภาคนี้")}</span>
-                  <span className={usage.teaching_courses > 0 ? "text-red-600 font-medium tabular" : "tabular"}>
+                  <span className={usage.teaching_courses > 0 ? "text-danger-soft-foreground font-medium tabular" : "tabular"}>
                     {usage.teaching_courses}
                   </span>
                 </li>
                 <li className="flex justify-between">
                   <span>{t("ตารางสอน TA")}</span>
-                  <span className={usage.class_schedules > 0 ? "text-red-600 font-medium tabular" : "tabular"}>
+                  <span className={usage.class_schedules > 0 ? "text-danger-soft-foreground font-medium tabular" : "tabular"}>
                     {usage.class_schedules}
                   </span>
                 </li>
                 <li className="flex justify-between">
                   <span>{t("ไฟล์ส่งออกที่ผูกไว้")}</span>
-                  <span className={usage.exports > 0 ? "text-red-600 font-medium tabular" : "tabular"}>
+                  <span className={usage.exports > 0 ? "text-danger-soft-foreground font-medium tabular" : "tabular"}>
                     {usage.exports}
                   </span>
                 </li>
@@ -1734,7 +1737,7 @@ function TermDeleteModal({
                   />
                 </FieldGroup>
                 {typed.trim() !== "" && !codeMatch && (
-                  <div className="text-xs text-red-600">{t("รหัสไม่ตรง")}</div>
+                  <div className="text-xs text-danger-soft-foreground">{t("รหัสไม่ตรง")}</div>
                 )}
               </>
             )}
@@ -2662,7 +2665,7 @@ function MailServerTestSection() {
             <dt className="text-muted">{t("บัญชีเข้าสู่ระบบ")}</dt>
             <dd className="break-all">
               {info.auth_user
-                ? <>{info.auth_user} {info.has_password ? <span className="text-muted">{t("(กำหนดรหัสผ่านแล้ว)")}</span> : <span className="text-danger">{t("(ยังไม่กำหนดรหัสผ่าน)")}</span>}</>
+                ? <>{info.auth_user} {info.has_password ? <span className="text-muted">{t("(กำหนดรหัสผ่านแล้ว)")}</span> : <span className="text-danger-soft-foreground">{t("(ยังไม่กำหนดรหัสผ่าน)")}</span>}</>
                 : <span className="text-muted">{t("ไม่เข้าสู่ระบบ (อนุญาตตาม IP ของเซิร์ฟเวอร์)")}</span>}
             </dd>
           </dl>
@@ -2694,12 +2697,12 @@ function MailServerTestSection() {
                   <Tip content={st.warning ? t("มีข้อควรระวัง แต่ยังส่งอีเมลได้") : st.skipped ? t("ข้ามขั้นตอนนี้") : st.ok ? t("ผ่าน") : t("ไม่ผ่าน")}>
                     <span className="inline-flex shrink-0 mt-0.5">
                       {st.warning
-                        ? <CircleAlert size={18} className="text-warning" />
+                        ? <CircleAlert size={18} className="text-warning-soft-foreground" />
                         : st.skipped
                         ? <CircleMinus size={18} className="text-muted" />
                         : st.ok
-                          ? <CircleCheck size={18} className="text-success" />
-                          : <CircleX size={18} className="text-danger" />}
+                          ? <CircleCheck size={18} className="text-success-soft-foreground" />
+                          : <CircleX size={18} className="text-danger-soft-foreground" />}
                     </span>
                   </Tip>
                   <div className="min-w-0 flex-1">

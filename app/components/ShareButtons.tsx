@@ -120,7 +120,7 @@ export default function ShareButtons({
         ))}
 
       <button type="button" onClick={copy} className={btn}>
-        {copied ? <Check size={icon} className="text-emerald-600" /> : <Link2 size={icon} />}
+        {copied ? <Check size={icon} className="text-success-soft-foreground" /> : <Link2 size={icon} />}
         {copied ? t("คัดลอกแล้ว") : t("คัดลอกลิงก์")}
       </button>
 

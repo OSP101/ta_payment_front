@@ -388,7 +388,7 @@ export default function LoginForm({
             <FieldError>{fieldErrors.email}</FieldError>
           )}
           {THAI_RE.test(email) && (
-            <p className="text-xs text-warning mt-1">
+            <p className="text-xs text-warning-soft-foreground mt-1">
               {t("ตรวจพบอักษรไทย กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN")}
             </p>
           )}
@@ -424,7 +424,7 @@ export default function LoginForm({
             <FieldError>{fieldErrors.password}</FieldError>
           )}
           {THAI_RE.test(password) && (
-            <p className="text-xs text-warning mt-1">
+            <p className="text-xs text-warning-soft-foreground mt-1">
               {t("ตรวจพบอักษรไทยในรหัสผ่าน กด Alt+Shift (หรือ ~) เพื่อสลับคีย์บอร์ดเป็น EN")}
             </p>
           )}
@@ -653,7 +653,7 @@ export default function LoginForm({
                         </div>
                         <div className="flex flex-col items-center text-center px-5 pt-6 pb-5">
                           <Avatar className="size-16">
-                            <Avatar.Fallback className="bg-accent-soft text-accent text-2xl font-semibold">
+                            <Avatar.Fallback className="bg-accent-soft text-link text-2xl font-semibold">
                               {accountInitial(first_name, email)}
                             </Avatar.Fallback>
                           </Avatar>

@@ -157,7 +157,7 @@ export default function LecturerPanel({
                     <Tip content={t("ตั้งเป็นอาจารย์ผู้รับผิดชอบหลัก")}><button
                       type="button"
                       onClick={() => makePrimary(id)}
-                      className="ms-1 inline-flex hover:text-[var(--brand)]"
+                      className="ms-1 inline-flex hover:text-[var(--tone-brand-ink)]"
                       aria-label={t("ตั้ง {name} เป็นอาจารย์ผู้รับผิดชอบหลัก", { name: nameFor(id) })}
                     >
                       <Star size={11} />
@@ -166,7 +166,7 @@ export default function LecturerPanel({
                   <Tip content={t("เอา {name} ออก", { name: nameFor(id) })}><button
                     type="button"
                     onClick={() => remove(id)}
-                    className="ms-1 inline-flex hover:text-danger"
+                    className="ms-1 inline-flex hover:text-danger-soft-foreground"
                     aria-label={t("เอา {name} ออก", { name: nameFor(id) })}
                   >
                     <X size={11} />
@@ -175,7 +175,7 @@ export default function LecturerPanel({
               ))}
             </div>
           ) : (
-            <div className="text-xs text-warning font-medium mt-2">
+            <div className="text-xs text-warning-soft-foreground font-medium mt-2">
               {t("ยังไม่ได้เลือกอาจารย์ ต้องเลือกอย่างน้อย 1 คน")}
             </div>
           )}

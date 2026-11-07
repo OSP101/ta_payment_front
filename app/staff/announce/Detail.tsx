@@ -151,7 +151,7 @@ export default function Detail({
         )}
         <span className="flex-1" />
         <Button variant="ghost" size="sm" onPress={() => setConfirm("delete")} disabled={!!busy}>
-          <Trash2 size={13} className="text-danger" /> <span className="text-danger">{t("ลบ")}</span>
+          <Trash2 size={13} className="text-danger-soft-foreground" /> <span className="text-danger-soft-foreground">{t("ลบ")}</span>
         </Button>
       </div>
 
@@ -330,7 +330,7 @@ function Meter({
       <div className="mt-1 h-2 overflow-hidden rounded-full bg-surface-secondary" role="img" aria-label={t("{label} {value} จาก {total}", { label, value, total })}>
         <div className={`h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
       </div>
-      <div className={`mt-1 text-xs ${noteBad ? "text-danger" : "text-muted"}`}>{note}</div>
+      <div className={`mt-1 text-xs ${noteBad ? "text-danger-soft-foreground" : "text-muted"}`}>{note}</div>
     </div>
   );
 }
@@ -401,7 +401,7 @@ function RecipientTable({ rows }: { rows: Recipient[] }) {
                   </td>
                   <td className="px-3 py-2 text-xs text-ink-2">
                     {r.read_at
-                      ? <span className="inline-flex items-center gap-1"><Eye size={12} className="text-emerald-600" />{fmtDateTime(r.read_at, intl)}</span>
+                      ? <span className="inline-flex items-center gap-1"><Eye size={12} className="text-success-soft-foreground" />{fmtDateTime(r.read_at, intl)}</span>
                       : <span className="text-muted">{t("ยังไม่เปิด")}</span>}
                   </td>
                 </tr>
@@ -411,7 +411,7 @@ function RecipientTable({ rows }: { rows: Recipient[] }) {
         </div>
       )}
       {shown.length > visible.length && (
-        <button type="button" className="mt-2 text-xs text-accent hover:underline" onClick={() => setShowAll(true)}>
+        <button type="button" className="mt-2 text-xs text-link hover:underline" onClick={() => setShowAll(true)}>
           {t("แสดงอีก {n} คน", { n: shown.length - visible.length })}
         </button>
       )}

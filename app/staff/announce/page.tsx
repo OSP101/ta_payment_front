@@ -305,7 +305,7 @@ function ListRow({ a, active, onSelect }: { a: Ann; active: boolean; onSelect: (
               <span className="inline-flex items-center gap-1"><Users size={11} />{t("ถึง {n} คน", { n: total })}</span>
               {total > 0 && <span className="inline-flex items-center gap-1"><Eye size={11} />{t("อ่าน {n}", { n: read })}</span>}
               {failed > 0 && (
-                <span className="inline-flex items-center gap-1 font-medium text-danger">
+                <span className="inline-flex items-center gap-1 font-medium text-danger-soft-foreground">
                   <AlertTriangle size={11} />{t("ไม่สำเร็จ {n}", { n: failed })}
                 </span>
               )}

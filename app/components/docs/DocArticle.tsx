@@ -91,7 +91,7 @@ export default async function DocArticle({
               <li key={`${p.audience}:${p.slug}`}>
                 <Link
                   href={href(p)}
-                  className="inline-block rounded-full border border-border px-3 py-1 text-xs text-foreground/80 hover:border-(--brand) hover:text-(--brand) transition-colors"
+                  className="inline-block rounded-full border border-border px-3 py-1 text-xs text-foreground/80 hover:border-(--brand) hover:text-(--tone-brand-ink) transition-colors"
                 >
                   {p.title}
                   {/* another role's page: say whose, or two "เริ่มใช้งานครั้งแรก" chips look identical */}

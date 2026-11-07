@@ -59,6 +59,7 @@ const buildNav = (s: Executive, isAdmin: boolean): NavSection[] => [
       // could not be added together.
       { step: 3, label: msg("ตรวจและส่งออกเอกสาร"), href: "/staff/payouts",
         badge: s.payout_courses_actionable, badgeLabel: msg("วิชาที่ทำได้ตอนนี้") },
+      { step: 4, label: msg("ใบปะหน้าจ่ายตรง"), href: "/staff/transfer-cover" },
     ],
   },
   {
@@ -74,12 +75,7 @@ const buildNav = (s: Executive, isAdmin: boolean): NavSection[] => [
       // is what badges mean here. Same number the page itself shows.
       { label: msg("ใบแต่งตั้งทีเอ"), href: "/staff/appointments", icon: FileSignature,
         badge: s.pending_appointments, badgeLabel: msg("รายชื่อรอออกคำสั่ง") },
-      // สรุปรายวิชาที่ขอใช้ TA / ปะหน้าจ่ายตรง / รหัสคู่ (10/08/2026) — briefly
-      // lived under ใบแต่งตั้งทีเอ ("ส่งออกเอกสาร"), split back out into its own
-      // menu: staff wanted a page they could actually READ a summary on
-      // on-screen before downloading, not just a bundle of download buttons
-      // bolted onto the appointment-order screen.
-      { label: msg("สรุปงบและปะหน้าจ่ายตรง"), href: "/staff/budget-summary", icon: Calculator },
+      { label: msg("สรุปการใช้งบประมาณ"), href: "/staff/budget-summary", icon: Calculator },
       { label: msg("จัดการผู้ใช้"), href: "/staff/users", icon: Users },
       // No badge here on purpose: badges mean "a step of the workflow is
       // waiting on you". Missing student counts are a blocker, but they are

@@ -31,6 +31,7 @@ import { Skel, SkelValue } from "../../../../components/Skeletons";
 import NationalityPicker from "../../../../components/NationalityPicker";
 import { isForeign, type Nationality } from "../../../../lib/nationality";
 import { msg, useI18n, type TFn } from "../../../../lib/i18n/client";
+import styles from "./request-form.module.css";
 
 /**
  * On a short screen the planner card fills the viewport and the numbered
@@ -1044,7 +1045,7 @@ function RequestFormSection({
   const scopeLabel = scope === "lecture" ? t("บรรยาย") : scope === "lab" ? t("ปฏิบัติการ") : t("บรรยาย+ปฏิบัติการ");
   const stepsRef = useRef<HTMLDivElement>(null);
   return (
-    <Panel className="mb-4">
+    <div className={styles.form}>
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
           <Send size={16} />
@@ -1073,7 +1074,7 @@ function RequestFormSection({
 
       {/* วางแผน TA — คิดจากตารางสอนจริงและงบที่เหลือ แนะนำจำนวน/ประเภท TA และ
           ประเมินสิ่งที่กรอกอยู่ในฟอร์ม ก่อนตัดสินใจส่ง */}
-      <div data-tour="req-calculator">
+      <div data-tour="req-calculator" className={styles.planner}>
       <TaPlanner
         tcId={tcId}
         scope={scope}
@@ -1089,8 +1090,8 @@ function RequestFormSection({
 
       {/* Step progress indicator */}
       <ScrollToFormHint targetRef={stepsRef} />
-      <div ref={stepsRef} className="rounded-xl border border-border bg-panel p-3 mb-4 overflow-x-auto scroll-mt-20">
-        <ol className="flex items-center gap-2 min-w-max">
+      <div ref={stepsRef} className={`${styles.progress} scroll-mt-20`}>
+        <ol className="flex flex-wrap items-center gap-2">
           {steps.map((s, i) => (
             <li key={s.n} className="flex items-center gap-2">
               <StepPill n={s.n} label={s.label} icon={s.icon} ok={s.ok} />
@@ -1100,7 +1101,7 @@ function RequestFormSection({
         </ol>
       </div>
 
-      <div className="space-y-4">
+      <div className={styles.steps}>
         {/* Step 1 --------------------------------------------------------- */}
         <StepPanel tourId="req-step1" n={1} title={t("ประเภทการเบิกค่าตอบแทน")} description={t("เลือกให้ตรงกับหน่วยกิตวิชา")}>
           <RadioGroup
@@ -1152,7 +1153,7 @@ function RequestFormSection({
           ) : (
             <div className="space-y-3">
               {/* Toolbar with add + create buttons */}
-              <div data-tour="req-toolbar" className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 border border-hairline px-3 py-2">
+              <div data-tour="req-toolbar" className={styles.toolbar}>
                 <div className="flex items-center gap-2 text-xs text-ink-3">
                   {t.rich("รวม TA ในวิชานี้ {n} คน", { n: <b className="text-ink-1">{!draftReady && assignments.length === 0 ? <SkelValue className="h-3 w-4" /> : assignments.length}</b> })}
                 </div>
@@ -1252,7 +1253,7 @@ function RequestFormSection({
       </div>
 
       {/* Inline footer */}
-      <div data-tour="req-submit" className="mt-4 pt-3 border-t border-hairline flex flex-wrap items-center justify-between gap-3">
+      <div data-tour="req-submit" className={styles.submit}>
         <div className="flex items-center gap-3 text-xs text-ink-3">
           <span>{t.rich("เพิ่มแล้ว {n} คน", { n: <b className="text-ink-1">{assignments.length}</b> })}</span>
           <span>{t.rich("เบิก {scope}", { scope: <b className="text-ink-1">{scopeLabel}</b> })}</span>
@@ -1345,7 +1346,7 @@ function RequestFormSection({
                   {est && (
                     <div className="tabular-nums sm:shrink-0 sm:text-right">
                       <div className="text-xs text-ink-3">{t("จะได้ประมาณ")}</div>
-                      <div className={"font-semibold " + (cut ? "text-danger" : "text-ink-1")}>
+                      <div className={"font-semibold " + (cut ? "text-danger-soft-foreground" : "text-ink-1")}>
                         {cut && (
                           <Tip content={t("ค่าตอบแทนเต็มตามภาระงานที่ระบุ งบไม่พอจึงได้รับตามยอดด้านขวา")}>
                             <s className="font-normal text-ink-3 mr-1">{fmtBahtEst(est.owed, intl)}</s>
@@ -1368,14 +1369,14 @@ function RequestFormSection({
             }>
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold">{t("งบภาคปกติที่จะใช้ (รวม TA เดิม)")}</span>
-                <span className={"tabular-nums " + (estimate.regularTotal > estimate.regularCap + 0.5 ? "text-danger font-semibold" : "")}>
+                <span className={"tabular-nums " + (estimate.regularTotal > estimate.regularCap + 0.5 ? "text-danger-soft-foreground font-semibold" : "")}>
                   {fmtBahtEst(estimate.regularTotal, intl)} / {fmtBahtEst(estimate.regularCap, intl)}
                 </span>
               </div>
               {estimate.hasSpecial && (
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold">{t("งบภาคพิเศษที่จะใช้")}</span>
-                  <span className={"tabular-nums " + (estimate.specialTotal > estimate.specialCap + 0.5 ? "text-danger font-semibold" : "")}>
+                  <span className={"tabular-nums " + (estimate.specialTotal > estimate.specialCap + 0.5 ? "text-danger-soft-foreground font-semibold" : "")}>
                     {fmtBahtEst(estimate.specialTotal, intl)} / {fmtBahtEst(estimate.specialCap, intl)}
                   </span>
                 </div>
@@ -1413,7 +1414,7 @@ function RequestFormSection({
           </p>
         </div>
       </Modal>
-    </Panel>
+    </div>
   );
 }
 
@@ -1453,14 +1454,14 @@ function StepPanel({
   tourId?: string;
 }) {
   return (
-    <Panel padded={false} data-tour={tourId}>
-      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-hairline">
+    <section className={styles.step} data-tour={tourId}>
+      <div className={styles.stepHeader}>
         <div className="flex items-start gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-brand-soft text-brand flex items-center justify-center font-semibold shrink-0">
+          <div className={styles.stepNumber}>
             {n}
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-sm">{title}</div>
+            <h2 className="font-semibold text-base">{title}</h2>
             {description && <div className="text-xs text-ink-3 mt-0.5">{description}</div>}
           </div>
         </div>
@@ -1470,14 +1471,14 @@ function StepPanel({
           </Chip>
         )}
       </div>
-      <div className="p-2 sm:p-4">{children}</div>
-    </Panel>
+      <div className={styles.stepBody}>{children}</div>
+    </section>
   );
 }
 
 function ScopeRadio({ value, label, desc }: { value: string; label: string; desc: string }) {
   return (
-    <Radio value={value} className="border border-border rounded-lg px-3 py-2 hover:bg-slate-50 data-selected:bg-brand-soft data-selected:border-brand/40">
+    <Radio value={value} className={styles.scopeChoice}>
       <Radio.Content>
         <Radio.Control>
           <Radio.Indicator />
@@ -1575,15 +1576,9 @@ function AssignmentBlock({
     .sort((x, y) => x.localeCompare(y, undefined, { numeric: true }));
 
   return (
-    <div className={
-      "rounded-lg border bg-white overflow-hidden " +
-      (blocked ? "border-red-300" : "border-hairline")
-    }>
+    <div className={styles.assignment} data-blocked={blocked || undefined}>
       {/* Header */}
-      <div className={
-        "flex items-center justify-between gap-2 px-3 py-2 border-b " +
-        (blocked ? "bg-red-50 border-red-200" : "bg-slate-50 border-hairline")
-      }>
+      <div className={styles.assignmentHeader}>
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <Chip tone={blocked ? "danger" : "brand"}>{t("คนที่ {n}", { n })}</Chip>
           {ta ? (
@@ -1604,7 +1599,7 @@ function AssignmentBlock({
         </IconButton>
       </div>
 
-      <div className="p-2 sm:p-3 space-y-3">
+      <div className={styles.assignmentBody}>
         {/* TA + level picker */}
         <div data-tour="req-ta-picker" className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
           <TaAutocomplete
@@ -1711,8 +1706,8 @@ function AssignmentBlock({
                   .filter(x => x !== sid && coGroups.get(x) === group)
                   .map(x => sections.find(s => s.id === x)?.sec_no ?? "?");
                 return (
-                  <div key={sid} className="rounded-md border border-hairline overflow-hidden">
-                    <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-brand-soft border-b border-brand/20">
+                  <div key={sid} className={styles.workloadSection}>
+                    <div className={styles.workloadHeader}>
                       <span className="text-sm font-semibold text-brand">
                         {t("กลุ่มเรียน Sec {sec}", { sec: sec?.sec_no ?? "—" })}
                       </span>
@@ -1821,7 +1816,7 @@ function AssignmentBlock({
             : t("ภาระงานรวม");
           return (
             <div data-tour="req-total" className={
-              "flex items-center justify-between rounded-md px-3 py-2 text-xs " +
+              `${styles.total} ` +
               (bad ? "bg-amber-50 text-amber-800" : total === 0 ? "bg-slate-50 text-ink-3" : "bg-brand-soft text-brand")
             }>
               <span className="flex items-center gap-1.5">
@@ -1877,7 +1872,7 @@ function UndergradWorkload({
   return (
     <div className="space-y-3">
       {showLec && (
-        <div className="rounded-md border border-hairline p-2 sm:p-3">
+        <div className={styles.dutyGroup}>
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <div className="text-xs font-medium text-ink-2">{t("1. ชั่วโมงบรรยาย (ปริญญาตรี)")}</div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -1923,7 +1918,7 @@ function UndergradWorkload({
         </div>
       )}
       {showLab && (
-        <div className="rounded-md border border-hairline p-2 sm:p-3">
+        <div className={styles.dutyGroup}>
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <div className="text-xs font-medium text-ink-2">{t("2. ชั่วโมงปฏิบัติการ")}</div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -2096,7 +2091,7 @@ function SectionPicker({
       data-tour="req-sections"
     >
       <Label className="text-sm font-medium">
-        Section <span className="text-red-500">*</span>{" "}
+        Section <span className="text-danger-soft-foreground">*</span>{" "}
         <span className="text-xs text-ink-3 font-normal">{t("(เลือกได้หลายกลุ่ม รวมกลุ่มที่สอนพร้อมกันเวลาเดียว)")}</span>
       </Label>
       <div className="flex flex-wrap gap-2 mt-1">
@@ -2135,7 +2130,7 @@ function SectionPicker({
                     <span className="text-xs text-ink-3 ml-1">· {t("ภาคพิเศษ")}</span>
                   ) : null}
                   {held && <span className="text-[10px] text-brand ml-1">· {t("อยู่ในคำขอเดิม")}</span>}
-                  {bad && <span className="text-[10px] text-red-600 ml-1">· {t("เลือกไม่ได้ ทับวิชาอื่นที่ช่วยสอน")}</span>}
+                  {bad && <span className="text-[10px] text-danger-soft-foreground ml-1">· {t("เลือกไม่ได้ ทับวิชาอื่นที่ช่วยสอน")}</span>}
                   {partial && <span className="text-[10px] text-amber-700 ml-1">· {t("ตารางเรียนทับบางส่วน")}</span>}
                 </span>
               </Checkbox.Content>
@@ -2144,14 +2139,14 @@ function SectionPicker({
         })}
       </div>
       {invalid && (
-        <div className="text-xs text-red-600 mt-1">{t("กรุณาเลือก section อย่างน้อย 1 กลุ่ม")}</div>
+        <div className="text-xs text-danger-soft-foreground mt-1">{t("กรุณาเลือก section อย่างน้อย 1 กลุ่ม")}</div>
       )}
       {blockedIds.size > 0 && (
         <div className="mt-1.5 space-y-0.5">
           {sections
             .filter(s => blockedIds.has(s.id))
             .map(s => (
-              <div key={s.id} className="text-xs text-red-600">
+              <div key={s.id} className="text-xs text-danger-soft-foreground">
                 Sec {s.sec_no}: {conflictBySection?.get(s.id)?.messages.join(" · ")}
               </div>
             ))}
@@ -2238,15 +2233,15 @@ function TaAutocomplete({
                           here read "รับสอน 0/3" while teaching it. Count this
                           course back in and say so instead. */}
                       {ta.already_in_course ? (
-                        <span className={"ml-1 font-medium " + (blocked ? "text-red-600" : "text-brand")}>
+                        <span className={"ml-1 font-medium " + (blocked ? "text-danger-soft-foreground" : "text-brand")}>
                           · {t("อยู่ในวิชานี้แล้ว · รวม {n}/{cap} วิชา", { n: booked + 1, cap: ta.course_cap ?? DEFAULT_COURSE_CAP })}
                         </span>
                       ) : (
-                        <span className={"ml-1 font-medium " + (blocked ? "text-red-600" : "text-ink-2")}>
+                        <span className={"ml-1 font-medium " + (blocked ? "text-danger-soft-foreground" : "text-ink-2")}>
                           · {t("รับสอน {n}/{cap} วิชา", { n: booked, cap: ta.course_cap ?? DEFAULT_COURSE_CAP })}
                         </span>
                       )}
-                      {blocked && <span className="ml-1 text-red-600">· {blocked}</span>}
+                      {blocked && <span className="ml-1 text-danger-soft-foreground">· {blocked}</span>}
                       {!blocked && ta.already_in_course && (
                         <span className="ml-1 text-brand">· {t("เพิ่ม section ได้")}</span>
                       )}
@@ -2362,7 +2357,7 @@ function CreateTaPanel({
   return (
     <div data-tour="req-create-ta" className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3">
       <div className="flex items-center gap-2 mb-3">
-        <UserPlus size={16} className="text-accent" />
+        <UserPlus size={16} className="text-link" />
         <div className="font-medium text-sm">
           {created ? t("สร้างบัญชี TA สำเร็จ") : t("สร้างบัญชี TA ใหม่")}
         </div>

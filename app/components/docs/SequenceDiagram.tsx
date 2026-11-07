@@ -132,6 +132,7 @@ function layout(spec: SequenceSpec) {
   for (const [id, stack] of open) for (const s of stack) bars.push({ col: col.get(id)!, from: s, to: Math.max(s, last.get(id) ?? s) });
 
   const activeAt = (p: string, row: number) => {
+    if (spec.activation === "none") return false;
     const c = col.get(p)!;
     return bars.some((b) => b.col === c && row > b.from && row <= b.to) || bars.some((b) => b.col === c && row === b.from);
   };
@@ -246,7 +247,7 @@ function Wide({ spec, t }: { spec: SequenceSpec; t: T }) {
     );
   }
 
-  for (const b of bars) {
+  for (const b of spec.activation === "none" ? [] : bars) {
     const single = b.to === b.from;
     cells.push(
       <div
@@ -453,7 +454,7 @@ function Narrow({ spec, t }: { spec: SequenceSpec; t: T }) {
 
 /* --------------------------------------------------------------- legend */
 
-function Legend({ t }: { t: T }) {
+function Legend({ t, activation }: { t: T; activation: boolean }) {
   const Line = ({ dashed, head }: { dashed?: boolean; head: "fill" | "open" }) => (
     <svg width="40" height="10" viewBox="0 0 40 10" className="shrink-0 text-foreground" aria-hidden="true">
       <line x1="0" y1="5" x2="38" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray={dashed ? "4 3" : undefined} />
@@ -467,10 +468,10 @@ function Legend({ t }: { t: T }) {
       <span className="inline-flex items-center gap-1.5"><Line head="fill" />{t("ส่งคำสั่งแล้วรอผล")}</span>
       <span className="inline-flex items-center gap-1.5"><Line dashed head="open" />{t("ตอบกลับ")}</span>
       <span className="inline-flex items-center gap-1.5"><Line head="open" />{t("แจ้งโดยไม่รอผล (อีเมล/แจ้งเตือน)")}</span>
-      <span className="inline-flex items-center gap-1.5">
+      {activation && <span className="inline-flex items-center gap-1.5">
         <span className="inline-block h-4 w-[10px] rounded-[2px] border-[1.5px] border-[var(--tone-brand-ink)] bg-white" aria-hidden="true" />
         {t("ช่วงที่กำลังทำงาน")}
-      </span>
+      </span>}
       <span className="inline-flex items-center gap-1.5">
         <span className="font-mono font-bold">alt</span>{t("เลือกทางใดทางหนึ่ง")}
         <span className="ms-2 font-mono font-bold">opt</span>{t("ทำเมื่อเข้าเงื่อนไข")}
@@ -483,11 +484,11 @@ function Legend({ t }: { t: T }) {
 export default async function SequenceDiagram({ spec }: { spec: SequenceSpec }) {
   const { t } = await getT();
   return (
-    <figure className="my-4" aria-label={spec.title}>
+    <figure className="my-4" aria-label={spec.title} data-sequence-diagram>
       <div className="mb-2 text-[15px] font-semibold text-foreground">{spec.title}</div>
       <div className="hidden md:block print:block"><Wide spec={spec} t={t} /></div>
       <div className="md:hidden print:hidden"><Narrow spec={spec} t={t} /></div>
-      <div className="hidden md:block print:block"><Legend t={t} /></div>
+      <div className="hidden md:block print:block"><Legend t={t} activation={spec.activation !== "none"} /></div>
       {spec.caption && (
         <figcaption className="mt-2 text-xs text-muted">
           <DocRichText body={spec.caption} />

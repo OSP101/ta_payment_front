@@ -174,7 +174,7 @@ function AnnouncementItem({ a, compact }: { a: Ann; compact: boolean }) {
               <button
                 type="button"
                 onClick={() => setOpen(o => !o)}
-                className="ms-1 inline-flex items-center gap-0.5 text-accent hover:underline text-xs align-middle"
+                className="ms-1 inline-flex items-center gap-0.5 text-link hover:underline text-xs align-middle"
               >
                 {open ? <>{t("ย่อ")} <ChevronUp size={12} /></> : <>{t("อ่านต่อ")} <ChevronDown size={12} /></>}
               </button>

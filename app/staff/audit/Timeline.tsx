@@ -158,8 +158,8 @@ function TimelineRow({
   ].filter(Boolean);
 
   const tone =
-    row.outcome !== "ok" || row.severity === "danger" ? "text-danger"
-    : row.severity === "warn" ? "text-warning"
+    row.outcome !== "ok" || row.severity === "danger" ? "text-danger-soft-foreground"
+    : row.severity === "warn" ? "text-warning-soft-foreground"
     : "text-(--ink-4)";
 
   return (
@@ -172,7 +172,7 @@ function TimelineRow({
         <button
           type="button"
           onClick={() => (folded ? onOpenBurst(row) : onOpen(row))}
-          className="min-w-0 flex-1 rounded text-left outline-offset-2 hover:text-(--brand) focus-visible:outline-2 focus-visible:outline-(--brand)"
+          className="min-w-0 flex-1 rounded text-left outline-offset-2 hover:text-(--tone-brand-ink) focus-visible:outline-2 focus-visible:outline-(--brand)"
         >
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-snug">
             <span className="min-w-0 break-words">

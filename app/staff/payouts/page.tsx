@@ -1,4 +1,6 @@
 "use client";
+import type { TermProgressOverview } from "../../components/DocumentProgressBoard";
+import { MonthlyPayoutPanel } from "../../components/MonthlyPayoutPanel";
 import { useMemo } from "react";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
@@ -166,12 +168,14 @@ export default function PayoutsPage() {
   const { data: periods } = useSWR<{ id: string }[]>(useTermKey("/submission-periods"));
   const noPeriods = periods !== undefined && periods.length === 0;
 
+  const {data: progress} = useSWR<TermProgressOverview>(termId ? `/document-progress?term_id=${termId}` : null);
+  const monthlyMode = !!progress?.rounds.some(r=>r.year_month);
   const split = summary?.fiscal_split;
-  const crosses = !!split?.crosses && split.after.length > 0;
+  const crosses = !monthlyMode && !!split?.crosses && split.after.length > 0;
 
   const cards = useMemo(
-    () => buildCards(queue?.items ?? [], summary?.courses ?? []),
-    [queue, summary],
+    () => buildCards(queue?.items ?? [], summary?.courses ?? []).map(c=>monthlyMode ? {...c,rounds:[]} : c),
+    [queue, summary, monthlyMode],
   );
 
   // Three groups: what an officer can move, what is exported for round 1 but
@@ -204,6 +208,8 @@ export default function PayoutsPage() {
         actions={termId ? <CertifierPicker termId={termId} /> : null}
       />
 
+      {termId && <div className="mb-6"><MonthlyPayoutPanel key={termId} termId={termId} /></div>}
+      {monthlyMode && <div className="mb-3"><h2 className="font-semibold">{t("ตรวจรายการรายวิชาทุกเดือน")}</h2><p className="text-xs text-muted">{t("ตรวจรายการภายในแต่ละวิชา แล้วออกชุดเบิกรวมตามเดือนที่เลือกด้านบน")}</p></div>}
       {loading ? (
         <div className="space-y-4">
           <Section
@@ -217,7 +223,7 @@ export default function PayoutsPage() {
           <Section
             icon={<Lock size={14} />}
             title={t("ส่งออกแล้ว")}
-            hint={t("ดาวน์โหลดซ้ำได้ · เดือนที่ส่งออกไปแล้วถูกล็อกไม่ให้แก้")}
+            hint={t("ดาวน์โหลดซ้ำได้ โดยข้อมูลเดือนที่ส่งออกแล้วจะถูกล็อก")}
             empty=""
           >
             <CourseRowsSkeleton count={2} />
@@ -228,7 +234,7 @@ export default function PayoutsPage() {
           <EmptyState
             icon={<CalendarX size={24} />}
             title={t("ยังไม่ได้สร้างรอบเบิกจ่ายของภาคเรียนนี้")}
-            description={t("วิชาจะขึ้นที่นี่ได้ต่อเมื่อมีรอบเบิกจ่ายรายเดือน สร้างรอบได้ที่ ตั้งค่า → ปฏิทินเทอม")}
+            description={t("กำหนดรอบเบิกจ่ายรายเดือนที่เมนูตั้งค่า ในหัวข้อปฏิทินเทอมก่อน จึงจะแสดงรายวิชาได้")}
             action={
               <Button variant="primary" onClick={() => router.push(`/staff/settings?tab=calendar${termId ? `&term=${termId}` : ""}`)}>
                 <CalendarClock size={14} />{t("ไปสร้างรอบเบิกจ่าย")}
@@ -253,7 +259,7 @@ export default function PayoutsPage() {
           {/* Stated once, as a fact about the TERM. Every row below then only
               has to show where it stands, not re-explain why there are two
               columns to stand in. */}
-          {crosses && <FiscalSplitNotice split={split!} owed={round2.length} />}
+          {crosses && <FiscalSplitNotice owed={round2.length} />}
 
           <Section
             tourId="payouts-act"
@@ -292,7 +298,7 @@ export default function PayoutsPage() {
             tourId="payouts-done"
             icon={<Lock size={14} />}
             title={crosses ? t("ส่งออกครบทุกรอบ ({n})", { n: done.length }) : t("ส่งออกแล้ว ({n})", { n: done.length })}
-            hint={t("ดาวน์โหลดซ้ำได้ · เดือนที่ส่งออกไปแล้วถูกล็อกไม่ให้แก้")}
+            hint={t("ดาวน์โหลดซ้ำได้ โดยข้อมูลเดือนที่ส่งออกแล้วจะถูกล็อก")}
             empty={t("ยังไม่มีวิชาที่ส่งออก")}
             count={done.length}
           >
@@ -321,27 +327,19 @@ export default function PayoutsPage() {
  * a quiet explanatory band that names the two rounds in the same words the row
  * bars and the section heading use, so the vocabulary is learned in one place.
  */
-function FiscalSplitNotice({ split, owed }: { split: FiscalSplitInfo; owed: number }) {
-  const { t, monthName } = useI18n();
+function FiscalSplitNotice({ owed }: { owed: number }) {
+  const { t } = useI18n();
   return (
     <Panel>
-      <div className="flex items-start gap-2.5 text-xs">
-        <CalendarClock size={15} className="mt-px shrink-0 text-muted" aria-hidden="true" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium">{t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — ต้องออกเอกสาร 2 รอบ")}</p>
-          <p className="text-muted">
-            {t.rich("{r1} เบิกจากงบปีที่กำลังจะปิด · {r2} เบิกจากงบปีใหม่ — คนละใบ คนละก้อนงบ วิชาหนึ่งจึงส่งรอบแรกครบแล้วแต่ยังค้างรอบสองได้", {
-              r1: <b className="font-medium">{t("รอบ {n} ({range})", { n: 1, range: roundRangeLabel(split.before, monthName) })}</b>,
-              r2: <b className="font-medium">{t("รอบ {n} ({range})", { n: 2, range: roundRangeLabel(split.after, monthName) })}</b>,
-            })}
-          </p>
-          {owed > 0 && (
-            <p className="text-amber-700">
-              {t("ตอนนี้มี {n} วิชาที่ส่งรอบ 1 ไปแล้วและยังค้างรอบ 2 อยู่", { n: owed })}
-            </p>
-          )}
-        </div>
-      </div>
+      <p className="text-sm font-medium">{t("เอกสารเดิมที่แยกตามปีงบประมาณ")}</p>
+      <p className="mt-1 text-xs text-muted">
+        {t("เอกสารที่ออกก่อนเปลี่ยนเป็นรายเดือนยังดำเนินการตามรอบเดิม โดยแยกเอกสารของปีงบประมาณเดิมและปีงบประมาณใหม่ออกจากกัน")}
+      </p>
+      {owed > 0 && (
+        <p className="mt-1 text-xs text-amber-700">
+          {t("ยังมี {n} วิชาที่ต้องดำเนินการเอกสารของปีงบประมาณใหม่ให้ครบ", { n: owed })}
+        </p>
+      )}
     </Panel>
   );
 }
@@ -577,7 +575,7 @@ function CourseRow({ card, split, onOpen, muted }: {
         <div className="tabular text-sm font-medium">{baht(card.usedBaht)}</div>
         <div className="tabular text-xs text-muted">{t("จากงบ {amount}", { amount: baht(card.maxBaht) })}</div>
         {card.overBudget ? (
-          <div className="mt-0.5 inline-flex items-center gap-1 text-xs text-red-600">
+          <div className="mt-0.5 inline-flex items-center gap-1 text-xs text-danger-soft-foreground">
             <AlertTriangle size={11} /> {t("เกินงบ")}
           </div>
         ) : card.maxBaht > 0 ? (

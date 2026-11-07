@@ -58,6 +58,7 @@ button:not(:disabled):not([aria-disabled="true"]),
   --accent: #0776BC;
   --accent-hover: #065f97;
   --accent-foreground: #ffffff;
+  --link: var(--brand);
 
   /* Text and soft fills for status colours used outside Tailwind classes —
      chart labels (app/staff/insights) and the manual's diagrams
@@ -81,6 +82,8 @@ button:not(:disabled):not([aria-disabled="true"]),
   --tone-paper-line: #d5dbe3;
   --tone-glow: #eef6fc;
   --tone-track: #dfe4ea;
+  --schedule-stripe: rgba(0, 0, 0, 0.035);
+  --schedule-minor-line: rgba(0, 0, 0, 0.03);
 }
 
 @theme {
@@ -96,6 +99,8 @@ button:not(:disabled):not([aria-disabled="true"]),
   --color-ink-3: var(--ink-3);
   --color-ink-4: var(--ink-4);
   --color-hairline: var(--hairline);
+  --color-border-strong: var(--border-strong);
+  --color-panel: var(--panel-bg);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -117,46 +122,72 @@ button:not(:disabled):not([aria-disabled="true"]),
 .dark {
   color-scheme: dark;
 
-  --brand: #1683c9;
-  --brand-hover: #2b93d6;
+  --brand: #0876ba;
+  --brand-hover: #0667a3;
   --brand-fg: #ffffff;
-  --brand-soft: rgba(22, 131, 201, 0.16);
+  --brand-soft: #173c58;
 
-  --page-bg: #0d1117;
-  --panel-bg: #161b22;
-  --border: #30363d;
-  --border-strong: #3d444d;
-  --hairline: #262c36;
-  --ink-1: #e6edf3;
-  --ink-2: #c4ccd6;
-  --ink-3: #8b949e;
-  --ink-4: #6e7681;
+  /* Distinct canvas, panel and raised layers; muted text remains readable
+     on the lightest of these surfaces, including table headers. */
+  --page-bg: #0b1220;
+  --panel-bg: #182334;
+  --border: #43546b;
+  --border-strong: #8193ac;
+  --hairline: #36465d;
+  --ink-1: #f1f5fb;
+  --ink-2: #d7e1ee;
+  --ink-3: #b5c3d6;
+  --ink-4: #a9b9ce;
 
-  --sidebar-bg: var(--panel-bg);
-  --sidebar-hover: #1f2630;
-  --sidebar-active-bg: rgba(22, 131, 201, 0.18);
-  --sidebar-active-fg: #58a6e0;
+  --sidebar-bg: #111c2c;
+  --sidebar-hover: #293b53;
+  --sidebar-active-bg: #173f60;
+  --sidebar-active-fg: #a5dcff;
 
   /* HeroUI, lined up with the tokens above so its components and ours sit
      on the same greys. */
-  --accent: #1683c9;
-  --accent-hover: #2b93d6;
+  --accent: var(--brand);
+  --accent-hover: var(--brand-hover);
   --accent-foreground: #ffffff;
   --background: var(--page-bg);
   --surface: var(--panel-bg);
-  --surface-secondary: #1c222b;
-  --surface-tertiary: #222936;
-  --overlay: #1c222b;
-  --field-background: #0d1117;
+  --foreground: var(--ink-1);
+  --surface-foreground: var(--ink-1);
+  --surface-secondary: #243249;
+  --surface-secondary-foreground: var(--ink-1);
+  --surface-tertiary: #2d3e56;
+  --surface-tertiary-foreground: var(--ink-1);
+  --overlay: var(--surface-secondary);
+  --overlay-foreground: var(--ink-1);
+  --muted: var(--ink-3);
+  --field-background: #0f1a2b;
+  --field-foreground: var(--ink-1);
+  --field-placeholder: var(--ink-4);
+  --field-border: var(--border-strong);
+  --field-border-width: 1px;
+  --field-border-focus: #7dcfff;
   --separator: var(--hairline);
-  --default: #262c36;
+  --default: #30425b;
+  --default-foreground: var(--ink-1);
+  --danger: #c93843;
+  --danger-foreground: #ffffff;
+  --danger-soft-foreground: #ffb4b8;
+  --success-soft-foreground: #8fefb2;
+  --warning-soft-foreground: #ffda83;
+  --accent-soft-foreground: #91d3ff;
+  --focus: #7dcfff;
+  --link: #91d3ff;
+  --segment: #3c5675;
+  --segment-foreground: var(--ink-1);
+  --surface-shadow: 0 2px 6px #0003;
+  --overlay-shadow: 0 0 0 1px var(--border), 0 16px 48px #0008;
 
   --tone-danger-ink: #f87171;
   --tone-warn-ink: #fbbf24;
   --tone-info-ink: #7dd3fc;
   --tone-good-ink: #4ade80;
-  --tone-muted-ink: #94a3b8;
-  --tone-brand-ink: #58a6e0;
+  --tone-muted-ink: var(--ink-3);
+  --tone-brand-ink: #91d3ff;
   --tone-ta-ink: #4ade80;
   --tone-staff-ink: #f0b44c;
   --tone-brand-soft: rgba(22, 131, 201, 0.12);
@@ -166,10 +197,37 @@ button:not(:disabled):not([aria-disabled="true"]),
   --tone-ta-line: #24573a;
   --tone-staff-soft: rgba(154, 91, 0, 0.16);
   --tone-staff-line: #6b4a17;
-  --tone-paper-soft: #1c222b;
-  --tone-paper-line: #3d444d;
+  --tone-paper-soft: var(--surface-secondary);
+  --tone-paper-line: var(--border);
   --tone-glow: rgba(22, 131, 201, 0.10);
-  --tone-track: #3d444d;
+  --tone-track: #52657f;
+  /* Chart series keep their light-theme fallbacks in the callers. */
+  --chart-brand: #65bfff;
+  --chart-lump: #aaa5ff;
+  --chart-pipeline: #74a4d1;
+  --chart-good: #4ade80;
+  --chart-green: #34d399;
+  --chart-danger: #ff969a;
+  --chart-warn: #fbbf24;
+  --chart-amber: #ffd166;
+  --chart-violet: #d8a0ff;
+  --chart-rose: #ff8eac;
+  --chart-info: #67d5f7;
+  --chart-muted: #a9b9ce;
+  --chart-empty: #70839d;
+  --schedule-stripe: #b5c3d61a;
+  --schedule-minor-line: #8193ac55;
+
+  /* Timetable colours are paired: dark screen tints with readable ink.
+     Each caller keeps its original paper colours as var() fallbacks. */
+  --duty-own-class-bg: #513128;
+  --duty-own-class-fg: #ffcfb8;
+  --duty-lecture-bg: #293e26;
+  --duty-lecture-fg: #c9eead;
+  --duty-lab-bg: #1c3b57;
+  --duty-lab-fg: #b9e0ff;
+  --duty-review-bg: #383257;
+  --duty-review-fg: #ddd2ff;
 
   /* slate */
   --color-slate-50: color-mix(in oklab, oklch(27.9% 0.041 260.031) 45%, var(--panel-bg));
@@ -239,7 +297,7 @@ button:not(:disabled):not([aria-disabled="true"]),
   --color-red-400: oklch(63.7% 0.237 25.331);
   --color-red-500: oklch(63.7% 0.237 25.331);
   --color-red-600: oklch(63.7% 0.237 25.331);
-  --color-red-700: oklch(70.4% 0.191 22.216);
+  --color-red-700: oklch(78% 0.13 22.216);
   --color-red-800: oklch(80.8% 0.114 19.571);
   --color-red-900: oklch(88.5% 0.062 18.334);
   --color-red-950: oklch(93.6% 0.032 17.717);
@@ -359,7 +417,7 @@ button:not(:disabled):not([aria-disabled="true"]),
   --color-blue-400: oklch(62.3% 0.214 259.815);
   --color-blue-500: oklch(62.3% 0.214 259.815);
   --color-blue-600: oklch(62.3% 0.214 259.815);
-  --color-blue-700: oklch(70.7% 0.165 254.624);
+  --color-blue-700: #a4ccff;
   --color-blue-800: oklch(80.9% 0.105 251.813);
   --color-blue-900: oklch(88.2% 0.059 254.128);
   --color-blue-950: oklch(93.2% 0.032 255.585);
@@ -395,7 +453,7 @@ button:not(:disabled):not([aria-disabled="true"]),
   --color-purple-400: oklch(62.7% 0.265 303.9);
   --color-purple-500: oklch(62.7% 0.265 303.9);
   --color-purple-600: oklch(62.7% 0.265 303.9);
-  --color-purple-700: oklch(71.4% 0.203 305.504);
+  --color-purple-700: #dec0ff;
   --color-purple-800: oklch(82.7% 0.119 306.383);
   --color-purple-900: oklch(90.2% 0.063 306.703);
   --color-purple-950: oklch(94.6% 0.033 307.174);
@@ -431,7 +489,7 @@ button:not(:disabled):not([aria-disabled="true"]),
   --color-rose-400: oklch(64.5% 0.246 16.439);
   --color-rose-500: oklch(64.5% 0.246 16.439);
   --color-rose-600: oklch(64.5% 0.246 16.439);
-  --color-rose-700: oklch(71.2% 0.194 13.428);
+  --color-rose-700: oklch(78% 0.13 13.428);
   --color-rose-800: oklch(81% 0.117 11.638);
   --color-rose-900: oklch(89.2% 0.058 10.001);
   --color-rose-950: oklch(94.1% 0.03 12.58);
@@ -439,7 +497,7 @@ button:not(:disabled):not([aria-disabled="true"]),
 }
 .dark .bg-white { background-color: var(--panel-bg); }
 .dark .ring-white { --tw-ring-color: var(--panel-bg); }
-.dark .btn-secondary { background: var(--panel-bg); }
+.dark .btn-secondary { background: var(--surface-secondary); }
 .dark .btn-secondary:hover:not(:disabled),
 .dark .btn-ghost:hover:not(:disabled) { background: var(--sidebar-hover); }
 .dark .field, .dark .input, .dark .card { background: var(--field-background); }
@@ -452,10 +510,35 @@ button:not(:disabled):not([aria-disabled="true"]),
 .dark .chip-success, .dark .badge-ok   { background: color-mix(in oklab, #064e3b 35%, var(--panel-bg)); color: #6ee7b7; border-color: #065f46; }
 .dark .chip-warn, .dark .badge-warn    { background: color-mix(in oklab, #78350f 35%, var(--panel-bg)); color: #fcd34d; border-color: #92400e; }
 .dark .chip-info, .dark .badge-info    { background: color-mix(in oklab, #1e3a8a 35%, var(--panel-bg)); color: #93c5fd; border-color: #1e40af; }
+.dark .btn-danger-soft:hover:not(:disabled) { background: color-mix(in oklab, #7f1d1d 55%, var(--panel-bg)); }
 .dark .chip-neutral { background: var(--surface-secondary); color: var(--ink-2); border-color: var(--border); }
-.dark .chip-brand   { border-color: rgba(22, 131, 201, 0.4); color: #58a6e0; }
+.dark .chip-brand   { border-color: #397cab; color: var(--tone-brand-ink); }
 .dark .form-error { color: #f87171; }
-.dark .link-brand { color: #58a6e0; }
+.dark .link-brand { color: var(--tone-brand-ink); }
+.dark .link-brand:hover { color: #bce6ff; }
+
+
+/* Palette steps 300–400 also serve borders and skeleton fills. Correct only
+   their text role here instead of brightening every neutral background. */
+@layer utilities {
+  :where(.dark) .text-brand { color: var(--tone-brand-ink); }
+  :where(.dark) :is(.text-slate-300, .text-gray-300, .text-zinc-300, .text-neutral-300, .text-stone-300) { color: var(--ink-2); }
+  :where(.dark) :is(.text-slate-400, .text-gray-400, .text-zinc-400, .text-neutral-400, .text-stone-400) { color: var(--ink-4); }
+  :where(.dark) :is(.text-slate-500, .text-gray-500, .text-zinc-500, .text-neutral-500, .text-stone-500) { color: var(--ink-3); }
+}
+
+.dark :is(.panel, .card) { box-shadow: 0 2px 6px #0003; }
+.dark .panel-hd { background: var(--surface-secondary); border-radius: 11px 11px 0 0; }
+.dark .sb-item[data-active="true"] { box-shadow: inset 3px 0 0 #7dcfff; }
+.dark :is(.field, .input)::placeholder { color: var(--field-placeholder); }
+.dark :is(.field, .input):focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px #7dcfff33;
+}
+.dark :is(.btn, .chip):focus-visible { outline-color: var(--focus); }
+.dark select.field {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23a9b9ce'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.24 4.38a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z'/></svg>");
+}
 .dark ::-webkit-scrollbar-thumb { background: #3d444d; }
 .dark ::-webkit-scrollbar-thumb:hover { background: #4d5562; }
 .dark .docs-flow-link, .dark .docs-flow-spine { background: var(--border); }

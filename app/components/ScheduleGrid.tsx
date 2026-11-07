@@ -411,7 +411,7 @@ export default function ScheduleGrid({
                   top: (i + 1) * ROW_PX - CREATE_STRIP_PX - 1,
                   height: CREATE_STRIP_PX,
                   background:
-                    "repeating-linear-gradient(45deg, rgba(0,0,0,0.035) 0 6px, transparent 6px 12px)",
+                    "repeating-linear-gradient(45deg, var(--schedule-stripe) 0 6px, transparent 6px 12px)",
                 }}
               />
             ))}
@@ -423,7 +423,7 @@ export default function ScheduleGrid({
             {/* half-hour minor lines */}
             {Array.from({ length: HOURS }, (_, i) => (
               <div key={"m" + i} className="absolute top-0 bottom-0 pointer-events-none"
-                   style={{ left: pct((i + 0.5) / HOURS), width: 1, background: "rgba(0,0,0,0.03)" }} />
+                   style={{ left: pct((i + 0.5) / HOURS), width: 1, background: "var(--schedule-minor-line)" }} />
             ))}
 
             {/* Existing blocks, packed into lanes per day. */}
@@ -508,8 +508,8 @@ export default function ScheduleGrid({
                   width: pct(Math.max(1, Math.abs(drag.endSlot - drag.startSlot)) / SLOTS),
                   top: drag.endDayIdx * ROW_PX + 4,
                   height: ROW_PX - 8,
-                  borderColor: "var(--brand)",
-                  background: "rgba(7,118,188,0.10)",
+                  borderColor: "var(--focus)",
+                  background: "var(--brand-soft)",
                 }}
               />
             )}

@@ -756,7 +756,7 @@ function TopBar({
               );
             })}
             <Dropdown.Item id="logout" textValue={t("ออกจากระบบ")} variant="danger">
-              <LogOut className="size-4 shrink-0 text-danger" />
+              <LogOut className="size-4 shrink-0 text-danger-soft-foreground" />
               <Label>{t("ออกจากระบบ")}</Label>
             </Dropdown.Item>
           </Dropdown.Menu>

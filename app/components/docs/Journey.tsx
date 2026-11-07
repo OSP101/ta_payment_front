@@ -84,7 +84,7 @@ export default async function Journey({
 
               {s.notice && (
                 <div className="mt-3 flex gap-2 rounded-lg bg-accent-soft/40 px-3 py-2 text-sm text-foreground/85">
-                  <BellRing size={15} className="mt-1 shrink-0 text-(--brand)" aria-hidden="true" />
+                  <BellRing size={15} className="mt-1 shrink-0 text-(--tone-brand-ink)" aria-hidden="true" />
                   <div className="min-w-0"><DocRichText body={s.notice} /></div>
                 </div>
               )}
@@ -104,7 +104,7 @@ export default async function Journey({
                     </Link>
                   )}
                   {s.more && (
-                    <Link href={moreHref(s.more)} className="inline-flex items-center gap-1 text-sm font-medium text-(--brand) hover:underline underline-offset-2">
+                    <Link href={moreHref(s.more)} className="inline-flex items-center gap-1 text-sm font-medium text-(--tone-brand-ink) hover:underline underline-offset-2">
                       {t("อ่านวิธีทำแบบละเอียด")}
                       <ArrowRight size={14} aria-hidden="true" />
                     </Link>

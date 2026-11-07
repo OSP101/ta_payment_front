@@ -125,7 +125,7 @@ export default function PublishCheck({
           }
           detail={sentence}
           action={total > 0 && (
-            <button type="button" className="text-xs text-accent hover:underline" onClick={() => setShowNames(s => !s)}>
+            <button type="button" className="text-xs text-link hover:underline" onClick={() => setShowNames(s => !s)}>
               {showNames ? t("ซ่อนรายชื่อ") : t("ดูรายชื่อ")}
             </button>
           )}

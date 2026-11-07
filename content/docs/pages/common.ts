@@ -1,3 +1,4 @@
+import { scenarioBlocks } from "../sequence-scenarios";
 import {
   type DocPage, text, callout, steps, screenshot, gif, statusTable, table, uiPath, since, goToApp, diagram,
 } from "../types";
@@ -113,6 +114,8 @@ export const commonPages: DocPage[] = [
         "ระบบไม่มีปุ่ม **ลืมรหัสผ่าน** ถ้าลืม ให้ติดต่อเจ้าหน้าที่เพื่อ **รีเซ็ตรหัสผ่าน** ให้ " +
         "หรือถ้ามีบัญชี KKU ที่ตรงกับอีเมลในระบบ ใช้วิธีที่ 1 ได้เลยโดยไม่ต้องใช้รหัสผ่าน",
       ),
+      ...scenarioBlocks("login", "th"),
+      ...scenarioBlocks("password", "th"),
     ],
     related: ["common:two-factor", "common:session-timeout"],
   },

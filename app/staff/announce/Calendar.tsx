@@ -62,7 +62,7 @@ function spanOf(a: Ann): Span | null {
 }
 
 const BAR: Record<Ann["status"], string> = {
-  live: "bg-[var(--brand-soft)] text-[var(--brand)]",
+  live: "bg-[var(--brand-soft)] text-[var(--tone-brand-ink)]",
   scheduled: "border border-dashed border-sky-400 bg-sky-50 text-sky-800",
   expired: "bg-surface-secondary text-muted line-through decoration-1",
   draft: "bg-surface-secondary text-ink-2",
@@ -295,7 +295,7 @@ export default function Calendar({
                       {/* Reference marks sit at the bottom, under the bars. */}
                       <div className="absolute inset-x-1.5 bottom-1 space-y-0.5">
                         {(hidden.get(day) ?? 0) > 0 && (
-                          <button type="button" onClick={() => setFocusDay(day)} className="block text-[10px] font-medium text-accent hover:underline">
+                          <button type="button" onClick={() => setFocusDay(day)} className="block text-[10px] font-medium text-link hover:underline">
                             {t("+{n} รายการ", { n: hidden.get(day) })}
                           </button>
                         )}

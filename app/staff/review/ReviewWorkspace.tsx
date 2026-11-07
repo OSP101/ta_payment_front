@@ -411,9 +411,9 @@ function PersonPane({ person, onChanged }: { person: Pending; onChanged: () => v
               className={
                 "rounded-full border px-2.5 py-1 text-xs transition-colors " +
                 (d.status === "approved"
-                  ? "border-success/40 bg-success-soft/40 text-success"
+                  ? "border-success/40 bg-success-soft/40 text-success-soft-foreground"
                   : d.status === "rejected"
-                  ? "border-danger/40 bg-danger-soft/40 text-danger"
+                  ? "border-danger/40 bg-danger-soft/40 text-danger-soft-foreground"
                   : "border-[var(--hairline)] bg-surface hover:bg-surface-secondary")
               }
             >
@@ -545,7 +545,7 @@ function DocPanel({
       </header>
 
       {doc.status === "rejected" && doc.reject_reason && (
-        <div className="border-b border-[var(--hairline)] bg-danger-soft/30 px-4 py-2 text-xs text-danger">
+        <div className="border-b border-[var(--hairline)] bg-danger-soft/30 px-4 py-2 text-xs text-danger-soft-foreground">
           {t("เหตุผล: {reason}", { reason: doc.reject_reason })}
         </div>
       )}
@@ -586,7 +586,7 @@ function DocPanel({
       <div className="flex min-h-[62vh] items-center justify-center bg-slate-50">
         {deleted ? (
           <div className="flex items-center gap-2 p-8 text-sm text-muted">
-            <AlertTriangle size={16} /> {t("ไฟล์ถูกลบตามนโยบายเก็บรักษา 7 วันแล้ว")}
+            <AlertTriangle size={16} /> {t("ไฟล์ถูกลบตามระยะเวลาเก็บรักษาที่กำหนดแล้ว")}
           </div>
         ) : isImage ? (
           // Images keep the capped height: object-contain already fits the
@@ -720,9 +720,9 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
 
           <div className="rounded-lg border border-warning/40 bg-warning-soft/40 p-3">
             <div className="flex items-start gap-2">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning-soft-foreground" />
               <div className="space-y-1">
-                <p className="font-medium text-foreground">{t("ไฟล์จะถูกลบอัตโนมัติภายใน 7 วัน")}</p>
+                <p className="font-medium text-foreground">{t("ไฟล์จะถูกลบอัตโนมัติตามกำหนดอายุไฟล์")}</p>
                 <p className="text-xs text-muted">
                   {t("ตามนโยบายคุ้มครองข้อมูลส่วนบุคคล กรุณาบันทึกไฟล์เก็บไว้ในระบบของหน่วยงาน ก่อนถึงกำหนด")}
                 </p>

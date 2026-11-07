@@ -1,3 +1,5 @@
+import { scenarioBlocks } from "../sequence-scenarios";
+import { workflowBlocks, concurrentEditHelp } from "../workflow-content";
 import {
   type DocPage, journey, text, callout, steps, screenshot, gif, statusTable, table, uiPath, since, goToApp, tryInDemo,
 } from "../types";
@@ -403,6 +405,8 @@ export const lecturerPagesEn: DocPage[] = [
       screenshot("L-RQ-12", "The 3 results: approved, rejected with a reason, and submitted awaiting approval"),
       callout("warn", "Once you submit, **that TA counts towards their course limit immediately**, even before the system decides. To start the form again from scratch, click **Clear form**."),
       screenshot("L-RQ-13", "The request history table. Hover over the red icon to see the reason for rejection"),
+      ...workflowBlocks("request", "en"),
+      ...concurrentEditHelp("en"),
     ],
     related: ["lecturer:request/rejected-troubleshoot"],
   },
@@ -469,6 +473,8 @@ export const lecturerPagesEn: DocPage[] = [
       callout("warn", "Once approved, the TA can no longer edit that month. If anything still needs fixing, click **Return** instead."),
       screenshot("L-RP-04", "The red bar warning that the budget is not enough"),
       callout("info", "The red budget bar means that if you approve everything the TAs logged, the course budget will not cover it. You can **still approve as usual**. The system keeps all the hours, but sessions over the budget are not claimed, and this applies equally to every TA."),
+      ...scenarioBlocks("approve-worklog", "en"),
+      ...scenarioBlocks("return-worklog", "en"),
     ],
   },
 

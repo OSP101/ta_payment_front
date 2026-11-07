@@ -16,4 +16,4 @@ export function minorVersion(v: string = APP_VERSION): string {
 /** Last date the manual's content was revised (ISO). Shown in the manual's
  *  footer (formatted per reader with fmtDate); bump it with any content
  *  change that readers should notice. */
-export const DOCS_UPDATED = "2026-09-30";
+export const DOCS_UPDATED = "2026-11-07";

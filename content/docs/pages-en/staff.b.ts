@@ -1,3 +1,5 @@
+import { scenarioBlocks } from "../sequence-scenarios";
+import { workflowBlocks, monthlyPayoutBlocks, transferCoverPage } from "../workflow-content";
 import {
   type DocPage, text, callout, steps, screenshot, gif, statusTable, table,
 } from "../types";
@@ -67,6 +69,7 @@ export const staffPagesEnB: DocPage[] = [
       screenshot("S-AO-03", "Order history and the button to download the original file"),
       gif("S-AO-G1", "Fill in the 4 fields, create the order and download the file; the status of the names changes immediately"),
       callout("tip", "If there is no signatory name yet, set the dean or deputy dean under **Settings**, tab **Executives**"),
+      ...scenarioBlocks("appointment", "en"),
     ],
     related: ["staff:settings/admins"],
   },
@@ -77,37 +80,13 @@ export const staffPagesEnB: DocPage[] = [
     order: 70,
     gettingStarted: 11,
     title: "Review and export documents (course list)",
-    description: "Month-end work: review the hours lecturers have approved, then export the documents as a ZIP",
+    description: "Review courses and issue a combined monthly package after submission closes",
     since: "1.0",
     routes: ["/staff/payouts"],
     keywords: ["export documents", "certifier", "ready to export", "payouts", "month-end", "disbursement documents", "zip", "fiscal year rounds"],
     blocks: [
-      text("Month-end work: review each course's lecturer-approved hours, then export the disbursement documents as a ZIP file. Click a course name to start"),
-      screenshot("S-PO-01", "The course list, the certifier, and the statuses awaiting your action, exported, or not your turn yet"),
-      screenshot("S-PO-03", "Choosing the certifier, and the message for an acting appointment"),
-      text("Choose whose name is printed as the certifier on this semester's disbursement documents. The default is **By position: head of department**. Your choice is saved immediately"),
-      screenshot("S-PO-02", "The status badge after each course name, telling you what that course needs next"),
-      text("The badge after a course name tells you what to do next. Each course shows one badge, chosen by the priority order in this table"),
-      statusTable([
-        { status: "N awaiting review", tone: "warn", meaning: "There are months to review" },
-        { status: "Awaiting appointment order", tone: "warn", meaning: "A TA is not yet in an appointment order", whoActsNext: "Issue the order on the TA appointments page" },
-        { status: "N more rounds to send", tone: "warn", meaning: "The semester spans two fiscal years and a round is still left to export" },
-        { status: "All rounds sent", tone: "success", meaning: "The semester spans two fiscal years and both rounds have been exported" },
-        { status: "Exported (date)", tone: "success", meaning: "Exported; you can download it again" },
-        { status: "Partly exportable", tone: "info", meaning: "You can export now, but some entries are still awaiting lecturer approval or TA submission" },
-        { status: "Ready to export", tone: "info", meaning: "Fully reviewed, waiting for you to download" },
-        { status: "Not your turn yet", tone: "neutral", meaning: "Nothing for staff to do yet" },
-      ]),
-      text("Once you download a course's ZIP, the exported months are **locked** and can no longer be edited, but you can always download them again"),
-      text("A TA who is not yet in an appointment order shows the **Awaiting appointment order** badge in the course row. Hover over the badge to see the names. Issue the next round of orders first; only then can you export that TA's documents"),
-      callout("info", "The number of courses “not your turn yet” is shown at the bottom of the page. The reason is that the TA has not submitted hours, the lecturer has not approved them, or **no appointment order has been issued** (issue it from the “TA appointments” menu)"),
-      callout(
-        "warn",
-        "**A semester that spans the end of the fiscal year (30 September) needs 2 separate rounds of documents.** " +
-        "Round 1 (June to September) is paid from the budget of the year that is closing; round 2 (October) is paid from the new year's budget. They are separate documents from separate budgets, " +
-        "so a course may have round 1 complete but round 2 still outstanding. The list page automatically puts these in a separate group, **“Round 2 not yet sent”**, " +
-        "apart from round 1's “Awaiting your action” group",
-      ),
+      ...monthlyPayoutBlocks("en"),
+      screenshot("S-PO-03", "Selecting the term certifier"),
     ],
     related: ["staff:appointments", "staff:payouts/detail"],
   },
@@ -122,7 +101,8 @@ export const staffPagesEnB: DocPage[] = [
     routes: ["/staff/payouts/[tcId]"],
     keywords: ["monthly review", "edit hours for ta", "added by ta", "return month", "work log review", "weekly timetable", "approve month"],
     blocks: [
-      text("This page follows the order of the work: **monthly review at the top, export at the bottom**"),
+      callout("info", "Use this section to review a course. Issue new documents from the monthly package panel on the course list. After closing, officers may correct existing entries with the required password and reason, but cannot add new late entries. Issued entries must follow the return workflow before correction."),
+      text("Use this page to review a course and its monthly entries. Return to the course list to issue the combined monthly package when ready."),
       screenshot("S-PO-04", "The TA table by month; each cell has View, Approve and Return buttons"),
       text(
         "Each cell is **one TA in one month**. Green means reviewed; yellow means some entries are still awaiting lecturer approval or TA submission; " +
@@ -151,8 +131,8 @@ export const staffPagesEnB: DocPage[] = [
     audience: "staff",
     section: "Step 3: Review and export documents",
     order: 72,
-    title: "Export the document ZIP (locks)",
-    description: "A summary of amounts; the system spreads the money for you when it exceeds the budget, then you download the ZIP",
+    title: "Issue monthly claim packages and download existing files",
+    description: "Check readiness, issue one month and preserve frozen amounts",
     since: "1.0",
     // No `routes:` here: this is the lower section of the SAME single-scroll
     // /staff/payouts/[tcId] page as payouts/detail (which claims the route
@@ -160,30 +140,7 @@ export const staffPagesEnB: DocPage[] = [
     // "just the export part" to disambiguate against.
     keywords: ["export zip", "spread pay", "actual pay", "budget cap", "lock month", "download zip", "export history", "amount mismatch"],
     blocks: [
-      screenshot("S-PO-07", "The export bar, the totals table, the Actual pay column and the Download ZIP button"),
-      text(
-        "This section sums up the pay of every TA. If the total exceeds the budget, the system **spreads the money automatically**, and the “Actual pay” column shows the amount after spreading. " +
-        "When everyone's data is ready, tick the **confirmation box** and press **Download ZIP (locks)**",
-      ),
-      callout("danger", "Once you download, the work logs of fully approved months are **locked immediately**. They can be edited again only if staff return them or an administrator unlocks them"),
-      text("If the download button is still disabled, the system shows the **reason** above the button, for example"),
-      table(
-        ["Message", "What to do"],
-        [
-          ["Not yet in an appointment order", "Issue the next round of appointment orders on the TA appointments page"],
-          ["Approved, but overlaps the TA's current class schedule", "First return or edit the entries that clash with the TA's own class times"],
-          ["N more rounds to send", "The semester spans two fiscal years; you also need to export the remaining round"],
-        ],
-      ),
-      callout(
-        "warn",
-        "If you download again and the amount for an already-exported month differs from last time, the system shows you the old and new amounts. " +
-        "Check that month's pay rate and work logs first, because the new set of documents will not match the set already sent to finance",
-      ),
-      screenshot("S-PO-08", "The files inside the ZIP after extracting it"),
-      gif("S-PO-G3", "Tick the confirmation, download the ZIP, and that month becomes locked"),
-      screenshot("S-PO-09", "Extra tools and the export history"),
-      text("**View/edit work logs** opens the raw work log table of every TA, where you can add, edit or delete rows one at a time. **Export history** shows who exported, when, and for how much"),
+      ...monthlyPayoutBlocks("en"),
     ],
     related: ["staff:payouts/raw-worklog"],
   },
@@ -198,6 +155,7 @@ export const staffPagesEnB: DocPage[] = [
     routes: ["/staff/worklog"],
     keywords: ["raw work log", "edit hours", "work log table", "bulk edit", "edit on behalf", "all tas"],
     blocks: [
+      callout("info", "Use this section to review a course. Issue new documents from the monthly package panel on the course list. After closing, officers may correct existing entries with the required password and reason, but cannot add new late entries. Issued entries must follow the return workflow before correction."),
       screenshot("S-WL-01", "The work log table of every TA, with Add, Edit and Delete buttons"),
       text(
         "Normally make changes in the course workspace first (click the course name on the review and export page), because that page records the reason and sends notifications for you. " +
@@ -213,33 +171,17 @@ export const staffPagesEnB: DocPage[] = [
     section: "Budget",
     order: 80,
     gettingStarted: 13,
-    title: "Budget summary and direct-payment cover sheet",
-    description: "See the budget summary on screen, then download the summary, the direct-payment cover sheet and the graduate documents",
+    title: "Budget usage summary",
+    description: "Compare monthly amounts and download budget reports",
     since: "1.0",
     routes: ["/staff/budget-summary"],
     keywords: ["budget summary", "direct payment cover sheet", "graduate documents", "remaining budget", "monthly disbursement", "excel summary", "transfer cover"],
     blocks: [
-      screenshot("S-BS-01", "The budget summary page: choose the document, choose the months, the summary table and the download button"),
-      text("Choose the document you need and the months to include. The summary table is always shown on screen for you to check before you download"),
-      screenshot("S-BS-02", "The per-course summary table: one disbursement column per month and a remaining column at the end"),
-      callout(
-        "info",
-        "There is one **Disbursed (month)** column for each month you choose. Each column splits regular and special amounts and never adds up amounts across months. " +
-        "There is a single **Remaining** column at the end of the table: the **Requested budget** minus the disbursements of all the months you chose. The Excel file works the same way",
-      ),
-      screenshot("S-BS-03", "The “Some items should be checked before downloading” box"),
-      text("If anything looks unusual, the system warns you before downloading. Choose **Download without merging the rest** to continue while leaving out the flagged items, or **Cancel download** to go back and fix them first"),
-      screenshot("S-BS-04", "Example direct-payment cover sheet with 5 columns and a note"),
-      text("The direct-payment cover sheet (ใบปะหน้าจ่ายตรง) has 5 main columns following the college's form. The **Note** column is shown on screen only and is not printed on the document"),
-      screenshot("S-BS-05", "Example graduate documents (.xls and .docx)"),
-      screenshot("S-BS-06", "Document creation history and the conditions box"),
-      callout(
-        "warn",
-        "If a document cannot be created, check 2 things: **the TA appointment order has been issued** (TA appointments page) " +
-        "and **the claim round for that month has been set** (Settings, semester calendar tab). If either is missing, the system cannot create the summary documents",
-      ),
-      gif("S-BS-G1", "Choose 2 months, the table updates, then download the summary and the cover sheet"),
+      text("Review the term budget, choose months to compare, check the on-screen totals and download the report. Viewing a summary does not issue a claim package."),
+      callout("info", "Issued months retain their frozen amounts and the first frozen lump-sum basis. Later allocations use only the remaining balance."),
+      text("For a direct-payment cover sheet, open the separate **Direct-payment cover sheet** menu and choose an issued claim month."),
     ],
+    related: ["staff:transfer-cover", "staff:payouts/list"],
   },
 
   /* ---------------------------- Tracking ---------------------------- */
@@ -255,12 +197,13 @@ export const staffPagesEnB: DocPage[] = [
     routes: ["/staff/progress"],
     keywords: ["document progress", "paper routing", "stepper", "signing checklist", "signature reminder", "send to finance", "dean signature"],
     blocks: [
+      callout("info", "Select the correct month and document version before updating. Issue the claim package before signing. Signatures are not reused across months; corrected versions require a new checklist review. Progress does not confirm a bank transfer."),
       text(
         "After exporting from the system, use this page to track **the paper documents** in order: TA signs → lecturer signs → certifier signs → send to finance → dean signs. " +
         "Everyone in the system sees the status you update here",
       ),
       screenshot("S-PG-01", "The “Courses not yet exported” condition bar (steps still disabled)"),
-      callout("warn", "You must **export documents for every course** in the semester first. This bar shows which courses are left; once all are done you can press the steps below"),
+      callout("warn", "You must **issue documents for every course in the selected month** first. This bar shows which courses are left; once all are done you can press the steps below"),
       screenshot("S-PG-02", "The 5-step bar and the note box"),
       text(
         "**Click the circle** of the step the documents have reached. Clicking the current step again moves back one step. You can add a **Note**, such as “Waiting for Dr. A to sign”. " +
@@ -271,6 +214,7 @@ export const staffPagesEnB: DocPage[] = [
       screenshot("S-PG-04-2", "Step 2, lecturer signs, with a button to e-mail a reminder to lecturers who have not signed"),
       text("Each course's signing checklist is split by role. **Click a card** to tick it as signed; click again to undo. The **e-mail a reminder to lecturers who have not signed** button goes only to those still outstanding"),
       gif("S-PG-G1", "Click the step 2 circle, add a note, save, tick a signer's card, then send the reminder e-mail"),
+      ...workflowBlocks("paper", "en"),
     ],
   },
 
@@ -461,8 +405,9 @@ export const staffPagesEnB: DocPage[] = [
         { title: "I've already exported the documents but need to change something. What do I do?", body: "Normally staff can return it themselves (unlocking one step back). If you need to go back more than one step, or it has already been sent to finance, an administrator must unlock it" },
         { title: "A TA changed study level mid-semester. Does the pay rate change immediately?", body: "It changes from the actual date of the change: hours before that date use the old rate, hours after it use the new rate. The system keeps each TA's education history, so it never applies the current level retroactively" },
         { title: "The registrar file won't import (error). What should I check?", body: "Check that the file really is .xlsx (not .xls or just a renamed extension), is within the size limit, and that its columns match the original registrar file. The preview before saving separates errors (cannot be imported) from warnings (can be imported but worth checking)" },
-        { title: "I can't create the budget summary or cover sheet. What should I check?", body: "Check 2 things: whether the TA appointment order for that round has been issued, and whether the claim round for that month has been set in the semester calendar. If either is missing, the documents cannot be created" },
+        { title: "I can't create the budget summary or cover sheet. What should I check?", body: "Check appointment orders and monthly periods. A new direct-payment cover sheet also requires an issued claim package for that month. Open the separate cover-sheet menu and resolve the reported blockers before downloading." },
       ]),
     ],
   },
+  transferCoverPage("en"),
 ];

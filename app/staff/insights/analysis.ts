@@ -73,12 +73,12 @@ export type Tone = "good" | "info" | "warn" | "danger" | "muted";
 export const STAFFING_META: Record<StaffingStatus, {
   label: string; short: string; tone: Tone; color: string; ink: string; rank: number;
 }> = {
-  over_ceiling: { label: msg("เกินเพดานต่อนักศึกษา"), short: msg("เกินเพดาน"), tone: "danger", color: "#dc2626", ink: "var(--tone-danger-ink)", rank: 0 },
-  above_guide:  { label: msg("ขอมากกว่าที่แนะนำ"),     short: msg("เกินแนะนำ"), tone: "warn",   color: "#d97706", ink: "var(--tone-warn-ink)", rank: 1 },
-  no_students:  { label: msg("ยังไม่มีจำนวนนักศึกษา"),   short: msg("ไม่มีจำนวน นศ."), tone: "warn", color: "#a16207", ink: "var(--tone-warn-ink)", rank: 2 },
-  under:        { label: msg("ขอน้อยกว่าที่แนะนำ"),      short: msg("น้อยกว่าแนะนำ"), tone: "info", color: "#0ea5e9", ink: "var(--tone-info-ink)", rank: 3 },
-  match:        { label: msg("ตามที่แนะนำ"),           short: msg("ตามแนะนำ"),   tone: "good",   color: "#16a34a", ink: "var(--tone-good-ink)", rank: 4 },
-  no_request:   { label: msg("ยังไม่ขอ TA"),           short: msg("ไม่ขอ TA"),   tone: "muted",  color: "#94a3b8", ink: "var(--tone-muted-ink)", rank: 5 },
+  over_ceiling: { label: msg("เกินเพดานต่อนักศึกษา"), short: msg("เกินเพดาน"), tone: "danger", color: "var(--chart-danger, #dc2626)", ink: "var(--tone-danger-ink)", rank: 0 },
+  above_guide:  { label: msg("ขอมากกว่าที่แนะนำ"),     short: msg("เกินแนะนำ"), tone: "warn",   color: "var(--chart-warn, #d97706)", ink: "var(--tone-warn-ink)", rank: 1 },
+  no_students:  { label: msg("ยังไม่มีจำนวนนักศึกษา"),   short: msg("ไม่มีจำนวน นศ."), tone: "warn", color: "var(--chart-warn, #a16207)", ink: "var(--tone-warn-ink)", rank: 2 },
+  under:        { label: msg("ขอน้อยกว่าที่แนะนำ"),      short: msg("น้อยกว่าแนะนำ"), tone: "info", color: "var(--chart-info, #0ea5e9)", ink: "var(--tone-info-ink)", rank: 3 },
+  match:        { label: msg("ตามที่แนะนำ"),           short: msg("ตามแนะนำ"),   tone: "good",   color: "var(--chart-green, #16a34a)", ink: "var(--tone-good-ink)", rank: 4 },
+  no_request:   { label: msg("ยังไม่ขอ TA"),           short: msg("ไม่ขอ TA"),   tone: "muted",  color: "var(--chart-muted, #94a3b8)", ink: "var(--tone-muted-ink)", rank: 5 },
 };
 
 export const PIPELINE_META: Record<PipelineKey, { label: string; who: string; href: string; step: string }> = {
@@ -92,13 +92,13 @@ export const PIPELINE_META: Record<PipelineKey, { label: string; who: string; hr
 /** Who holds a claim month — the MonthFlow buckets, in workflow order.
  *  `phrase` completes "มี n รายการ…" in the one-sentence view. */
 export const FLOW_BUCKETS = [
-  { key: "with_ta",           label: msg("TA ยังไม่ส่ง / ต้องแก้"), phrase: msg("ที่ TA ยังไม่ส่งหรือต้องแก้"),  color: "#f59e0b", done: false },
-  { key: "with_lecturer",     label: msg("รออาจารย์อนุมัติ"),       phrase: msg("ที่รออาจารย์อนุมัติ"),         color: "#a855f7", done: false },
-  { key: "await_appointment", label: msg("รอคำสั่งแต่งตั้ง"),        phrase: msg("ที่ค้างขั้นรอคำสั่งแต่งตั้ง"),    color: "#f43f5e", done: false },
-  { key: "staff_review",      label: msg("รอเจ้าหน้าที่ตรวจ"),       phrase: msg("ที่รอเจ้าหน้าที่ตรวจ"),         color: "#0ea5e9", done: false },
-  { key: "ready_export",      label: msg("รอส่งออก"),              phrase: msg("ที่ตรวจแล้วรอส่งออก"),         color: "#6366f1", done: false },
-  { key: "exported",          label: msg("ส่งออกแล้ว"),            phrase: msg("ที่ส่งออกแล้ว"),              color: "#16a34a", done: true },
-  { key: "finance_sent",      label: msg("ส่งการเงินแล้ว"),         phrase: msg("ที่ส่งการเงินแล้ว"),           color: "#15803d", done: true },
+  { key: "with_ta",           label: msg("TA ยังไม่ส่ง / ต้องแก้"), phrase: msg("ที่ TA ยังไม่ส่งหรือต้องแก้"),  color: "var(--chart-amber, #f59e0b)", done: false },
+  { key: "with_lecturer",     label: msg("รออาจารย์อนุมัติ"),       phrase: msg("ที่รออาจารย์อนุมัติ"),         color: "var(--chart-violet, #a855f7)", done: false },
+  { key: "await_appointment", label: msg("รอคำสั่งแต่งตั้ง"),        phrase: msg("ที่ค้างขั้นรอคำสั่งแต่งตั้ง"),    color: "var(--chart-rose, #f43f5e)", done: false },
+  { key: "staff_review",      label: msg("รอเจ้าหน้าที่ตรวจ"),       phrase: msg("ที่รอเจ้าหน้าที่ตรวจ"),         color: "var(--chart-info, #0ea5e9)", done: false },
+  { key: "ready_export",      label: msg("รอส่งออก"),              phrase: msg("ที่ตรวจแล้วรอส่งออก"),         color: "var(--chart-lump, #6366f1)", done: false },
+  { key: "exported",          label: msg("ส่งออกแล้ว"),            phrase: msg("ที่ส่งออกแล้ว"),              color: "var(--chart-green, #16a34a)", done: true },
+  { key: "finance_sent",      label: msg("ส่งการเงินแล้ว"),         phrase: msg("ที่ส่งการเงินแล้ว"),           color: "var(--chart-good, #15803d)", done: true },
 ] as const;
 
 /* -------------------------------------------------------------------------- */
@@ -147,10 +147,10 @@ export function capState(r: Pick<CourseStaffing, "cap_baht" | "forecast_baht" | 
 }
 
 export const CAP_META: Record<CapState, { label: string; ink: string; color: string }> = {
-  over: { label: msg("ชนเพดานงบ"), ink: "var(--tone-danger-ink)", color: "#dc2626" },
-  near: { label: msg("ใกล้เพดานงบ"), ink: "var(--tone-warn-ink)", color: "#d97706" },
-  ok:   { label: msg("ปกติ"), ink: "var(--tone-muted-ink)", color: "#0776BC" },
-  none: { label: "–", ink: "var(--tone-muted-ink)", color: "#94a3b8" },
+  over: { label: msg("ชนเพดานงบ"), ink: "var(--tone-danger-ink)", color: "var(--chart-danger, #dc2626)" },
+  near: { label: msg("ใกล้เพดานงบ"), ink: "var(--tone-warn-ink)", color: "var(--chart-warn, #d97706)" },
+  ok:   { label: msg("ปกติ"), ink: "var(--tone-muted-ink)", color: "var(--chart-brand, #0776BC)" },
+  none: { label: "–", ink: "var(--tone-muted-ink)", color: "var(--chart-muted, #94a3b8)" },
 };
 
 export interface CourseRef { id: string; code: string }
@@ -432,11 +432,11 @@ export function flowSentences(months: MonthFlow[], i: Tr) {
 }
 
 export const DOC_PARTS = [
-  { key: "approved", label: msg("ตรวจผ่าน"), color: "#16a34a" },
-  { key: "submitted", label: msg("รอตรวจ"), color: "#0ea5e9" },
-  { key: "needs_fix", label: msg("ต้องแก้ไข"), color: "#f59e0b" },
-  { key: "rejected", label: msg("ไม่ผ่าน"), color: "#dc2626" },
-  { key: "not_submitted", label: msg("ยังไม่ส่ง / ไม่ครบ"), color: "#cbd5e1" },
+  { key: "approved", label: msg("ตรวจผ่าน"), color: "var(--chart-green, #16a34a)" },
+  { key: "submitted", label: msg("รอตรวจ"), color: "var(--chart-info, #0ea5e9)" },
+  { key: "needs_fix", label: msg("ต้องแก้ไข"), color: "var(--chart-amber, #f59e0b)" },
+  { key: "rejected", label: msg("ไม่ผ่าน"), color: "var(--chart-danger, #dc2626)" },
+  { key: "not_submitted", label: msg("ยังไม่ส่ง / ไม่ครบ"), color: "var(--chart-empty, #cbd5e1)" },
 ] as const;
 
 export function docsShape(d: DocStatusCounts, t: T) {

@@ -130,7 +130,7 @@ function DisableSection({ onDisabled }: { onDisabled: () => void }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-sm font-medium text-danger">
+      <div className="flex items-center gap-2 text-sm font-medium text-danger-soft-foreground">
         <ShieldOff size={15} /> {t("ปิดใช้งาน 2FA")}
       </div>
       <p className="text-xs text-muted">

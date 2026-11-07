@@ -106,7 +106,7 @@ export function FormulaHelpModal({
       onClose={onClose}
       title={
         <span className="flex items-center gap-2">
-          <Sparkles size={18} className="text-accent" />
+          <Sparkles size={18} className="text-link" />
           {t("วิธีคิดงบ TA {track}", { track: t(trackLabel) })}
         </span>
       }
@@ -133,7 +133,7 @@ export function FormulaHelpModal({
                     (state === "now" ? "border-accent bg-accent-soft" : state === "done" ? "border-success/40 bg-success-soft/40" : "border-border bg-panel opacity-70")}>
                   <div className="flex items-center gap-1.5 text-[11px] text-muted">
                     <span className={"flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold " +
-                      (state === "done" ? "bg-success text-white" : state === "now" ? "bg-accent text-accent-foreground" : "bg-surface-secondary")}>
+                      (state === "done" ? "bg-success text-success-foreground" : state === "now" ? "bg-accent text-accent-foreground" : "bg-surface-secondary")}>
                       {state === "done" ? <Check size={10} /> : i + 1}
                     </span>
                     <Icon size={12} />
@@ -192,7 +192,7 @@ export function FormulaHelpModal({
             </div>
             <div className="space-y-2">
               <AnimatedCalc
-                icon={<BookOpen size={14} className="text-blue-600" />}
+                icon={<BookOpen size={14} className="text-link" />}
                 label={t("บรรยาย")}
                 words={[t("หน่วยกิต"), "×", t("{n} ชม.", { n: hrsPerLecCr }), "×", t("นศ. ÷ ฐาน")]}
                 nums={[`${lecCr}`, "×", `${hrsPerLecCr}`, "×", `(${students} ÷ ${baseLec})`]}
@@ -202,7 +202,7 @@ export function FormulaHelpModal({
                 delay={0}
               />
               <AnimatedCalc
-                icon={<FlaskConical size={14} className="text-purple-600" />}
+                icon={<FlaskConical size={14} className="text-purple-700" />}
                 label={t("ปฏิบัติการ")}
                 words={[t("หน่วยกิต"), "×", t("{n} ชม.", { n: hrsPerLabCr }), "×", t("นศ. ÷ ฐาน")]}
                 nums={[`${labCr}`, "×", `${hrsPerLabCr}`, "×", `(${students} ÷ ${baseLab})`]}
@@ -248,7 +248,7 @@ export function FormulaHelpModal({
               {Array.from({ length: termMonths }).map((_, i) => (
                 <div key={i} className="flex-1 rounded-md border border-success/40 bg-success-soft/50 px-2 py-1.5 text-center text-xs tabular animate-in fade-in zoom-in-95 duration-300 fill-mode-both"
                   style={{ animationDelay: `${150 + i * 150}ms` }}>
-                  <Calendar size={12} className="mx-auto mb-0.5 text-success" />
+                  <Calendar size={12} className="mx-auto mb-0.5 text-success-soft-foreground" />
                   {bahtF(monthly)}
                 </div>
               ))}
@@ -463,7 +463,7 @@ function InputChip({
   delay?: number;
 }) {
   const bg = tone === "brand" ? "bg-accent-soft" : tone === "warn" ? "bg-warning-soft" : "bg-slate-50";
-  const iconColor = tone === "brand" ? "text-accent" : tone === "warn" ? "text-warning-soft-foreground" : "text-muted";
+  const iconColor = tone === "brand" ? "text-link" : tone === "warn" ? "text-warning-soft-foreground" : "text-muted";
   return (
     <div className={`rounded-lg border border-border p-3 ${bg} animate-in fade-in zoom-in-95 duration-400 fill-mode-both`} style={{ animationDelay: `${delay}ms` }}>
       <div className={`mb-1 flex items-center gap-1.5 text-xs ${iconColor}`}>

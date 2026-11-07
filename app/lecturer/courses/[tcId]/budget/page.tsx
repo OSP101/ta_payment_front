@@ -172,7 +172,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
           </Panel>
 
           <Panel
-            title={<span className="flex items-center gap-2"><Sparkles size={16} className="text-accent" />{t("เข้าใจสูตร")}</span>}
+            title={<span className="flex items-center gap-2"><Sparkles size={16} className="text-link" />{t("เข้าใจสูตร")}</span>}
             description={t("งงว่าตัวเลขข้างบนคำนวณมาจากไหน? ดูวิธีคิดทีละขั้นตอนพร้อมค่าจริง")}
             actions={
               <Button variant="primary" onClick={() => setHelpTrack("regular")}>
@@ -219,7 +219,7 @@ function InfoSkel() {
 }
 
 function Info({ k, v, tone }: { k: string; v: React.ReactNode; tone?: "success" | "danger" }) {
-  const cls = tone === "danger" ? "text-red-600" : tone === "success" ? "text-emerald-700" : "";
+  const cls = tone === "danger" ? "text-danger-soft-foreground" : tone === "success" ? "text-emerald-700" : "";
   return (
     <div>
       <div className="text-xs text-[var(--ink-3)]">{k}</div>

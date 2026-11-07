@@ -137,7 +137,7 @@ function buildColumns(
             variant="tertiary"
             size="sm"
             aria-label={t("ดูเหตุผล")}
-            className="text-red-600 hover:bg-red-50"
+            className="text-danger-soft-foreground hover:bg-red-50"
           >
             <AlertCircle size={16} />
           </Button>
@@ -165,7 +165,7 @@ function buildColumns(
           <Tooltip delay={0}>
             <Button
               isIconOnly variant="tertiary" size="sm" aria-label={t("ยกเลิกคำขอ")}
-              className="text-red-600 hover:bg-red-50"
+              className="text-danger-soft-foreground hover:bg-red-50"
               onPress={() => onCancel(r.id)}
             >
               <Ban size={16} />

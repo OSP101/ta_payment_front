@@ -122,7 +122,8 @@ export default function Signature({ value, onChange }: Props) {
 
   return (
     <div>
-      <div className="border border-slate-300 rounded-md bg-white inline-block max-w-full">
+      {/* Keep the paper white: captured/exported strokes are always black. */}
+      <div className="border border-border rounded-md bg-[#ffffff] inline-block max-w-full">
         <canvas
           ref={canvasRef}
           width={W}

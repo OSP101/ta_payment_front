@@ -539,7 +539,7 @@ export default function OpenCourseModal({
                     setShowSpecial(true);
                     setDraft(d => ({ ...d, special_sections: d.special_sections || 1 }));
                   }}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border text-xs font-medium text-muted hover:text-accent hover:border-accent min-h-19"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border text-xs font-medium text-muted hover:text-link hover:border-accent min-h-19"
                 >
                   <Plus size={14} />{t("เปิด section ภาคพิเศษด้วย")}
                 </button>
@@ -554,7 +554,7 @@ export default function OpenCourseModal({
                           setShowSpecial(false);
                           setDraft(d => ({ ...d, special_sections: 0 }));
                         }}
-                        className="ms-auto inline-flex items-center gap-1 text-xs text-muted hover:text-danger"
+                        className="ms-auto inline-flex items-center gap-1 text-xs text-muted hover:text-danger-soft-foreground"
                         aria-label={t("ยกเลิกภาคพิเศษ")}
                       >
                         <X size={12} />{t("ยกเลิก")}
@@ -616,7 +616,7 @@ export default function OpenCourseModal({
               </span>
             </div>
             {!studentsComplete && (
-              <div className="text-xs text-warning font-medium mt-2">
+              <div className="text-xs text-warning-soft-foreground font-medium mt-2">
                 ⚠ {t("กรุณากรอกจำนวนนักศึกษาให้ครบทุก section (อย่างน้อย 1 คน) ก่อนเปิดรายวิชา")}
               </div>
             )}
@@ -671,7 +671,7 @@ function SectionSchedulesPanel({
                 {/* Per-section enrolment — stops row toggle from firing. */}
                 <label className="ms-auto flex items-center gap-1.5 text-xs"
                        onClick={e => e.stopPropagation()}>
-                  <span className={(students[sec] ?? 0) < 1 ? "text-warning font-medium" : "text-muted"}>{t("นศ.")}</span>
+                  <span className={(students[sec] ?? 0) < 1 ? "text-warning-soft-foreground font-medium" : "text-muted"}>{t("นศ.")}</span>
                   <TextInput
                     type="number" min={0} max={999} step={1}
                     value={students[sec] ?? 0}
@@ -684,7 +684,7 @@ function SectionSchedulesPanel({
                   onClick={() => setOpenSec(isOpen ? null : sec)}
                   className={
                     "text-xs shrink-0 " +
-                    (rows.length > 0 ? "text-muted" : "text-warning font-medium")
+                    (rows.length > 0 ? "text-muted" : "text-warning-soft-foreground font-medium")
                   }
                 >
                   {rows.length > 0 ? t("{n} คาบ", { n: rows.length }) : t("ต้องกำหนดตาราง")}
@@ -766,7 +766,7 @@ function LecturerPicker({
                 <Tip content={t("เอาออก")}><button
                   type="button"
                   onClick={() => onChange(selected.filter(x => x !== id))}
-                  className="ms-1 inline-flex hover:text-danger"
+                  className="ms-1 inline-flex hover:text-danger-soft-foreground"
                   aria-label={t("เอาออก")}
                 >
                   <X size={11} />
@@ -776,7 +776,7 @@ function LecturerPicker({
           })}
         </div>
       ) : (
-        <div className="text-xs text-warning font-medium mt-2">{t("ยังไม่ได้เลือกอาจารย์ ต้องเลือกอย่างน้อย 1 คน")}</div>
+        <div className="text-xs text-warning-soft-foreground font-medium mt-2">{t("ยังไม่ได้เลือกอาจารย์ ต้องเลือกอย่างน้อย 1 คน")}</div>
       )}
     </div>
   );

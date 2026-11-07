@@ -43,7 +43,7 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
   const { data, error, isLoading } = useSWR<PublicOverview>(`/public/document-progress/${linkId}`, {
     refreshInterval: 60_000,
   });
-  const [activeRound, setActiveRound] = useState(1);
+  const [activeRound, setActiveRound] = useState<number | null>(null);
   const { t } = useI18n();
 
   // The term heading, the stage route and the checklist all come from this
@@ -70,7 +70,8 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
 
   const rounds = data.rounds;
   const showTabs = rounds.length > 1;
-  const current = rounds.find(r => r.round === activeRound) ?? rounds[0];
+  const current = rounds.find(r => r.round === activeRound) ?? rounds.find(r => r.year_month) ?? rounds[0];
+  if (!current) return <Panel><EmptyState title={t("ยังไม่ได้ตั้งรอบส่งเวลารายเดือน")} /></Panel>;
 
   return (
     <div className="space-y-3">
@@ -79,7 +80,7 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
         <p className="text-sm text-ink-2 mt-0.5">{t("ความคืบหน้าการเดินเอกสารเบิกจ่ายผู้ช่วยสอน")}</p>
       </div>
       {showTabs && (
-        <div className="inline-flex rounded-lg border border-border p-0.5">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-border p-0.5">
           {rounds.map(r => (
             <button
               key={r.round}
@@ -87,7 +88,7 @@ export default function PublicProgressBoard({ linkId }: { linkId: string }) {
               onClick={() => setActiveRound(r.round)}
               className={
                 "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-                (activeRound === r.round ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
+                (current.round === r.round ? "bg-brand text-white" : "text-ink-2 hover:text-ink-1")
               }
             >
               {r.round_label || t("รอบ {n}", { n: r.round })}

@@ -36,7 +36,7 @@ export default async function EmbedHomePage({ params }: { params: Promise<{ audi
             <span className="block text-sm font-semibold text-foreground">{t("ใช้งานครั้งแรก เริ่มที่นี่")}</span>
             <span className="block text-xs text-muted">{t("ทุกขั้นตอนตามลำดับจริงในหน้าเดียว")}</span>
           </span>
-          <ArrowRight size={14} className="shrink-0 text-(--brand)" />
+          <ArrowRight size={14} className="shrink-0 text-(--tone-brand-ink)" />
         </Link>
       )}
 
@@ -52,7 +52,7 @@ export default async function EmbedHomePage({ params }: { params: Promise<{ audi
                 <span className="block text-sm font-medium text-foreground">{p.title}</span>
                 <span className="block text-xs text-muted">{p.description}</span>
               </span>
-              <ArrowRight size={14} className="mt-1.5 shrink-0 text-slate-300 group-hover:text-(--brand)" />
+              <ArrowRight size={14} className="mt-1.5 shrink-0 text-slate-300 group-hover:text-(--tone-brand-ink)" />
             </Link>
           </li>
         ))}
@@ -65,7 +65,7 @@ export default async function EmbedHomePage({ params }: { params: Promise<{ audi
             <ul className="space-y-0.5">
               {pages.map((p) => (
                 <li key={`${p.audience}:${p.slug}`}>
-                  <Link href={href(p.slug, effectiveAudience(p, audience))} className="text-sm text-foreground/85 hover:text-(--brand) hover:underline underline-offset-2">
+                  <Link href={href(p.slug, effectiveAudience(p, audience))} className="text-sm text-foreground/85 hover:text-(--tone-brand-ink) hover:underline underline-offset-2">
                     {p.title}
                   </Link>
                 </li>

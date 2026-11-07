@@ -1,3 +1,5 @@
+import { scenarioBlocks } from "../sequence-scenarios";
+import { workflowBlocks, concurrentEditHelp } from "../workflow-content";
 import {
   type DocPage, journey, text, callout, steps, screenshot, gif, statusTable, table, uiPath, since, goToApp, tryInDemo,
 } from "../types";
@@ -151,7 +153,7 @@ export const taPagesEn: DocPage[] = [
       text("Until both are done, the home page shows how many you have finished, with a button to continue. While your documents have not passed, you can open the menus but cannot save or submit anything yet."),
       screenshot("T-HM-02", "1/2 done after submitting documents, while waiting for staff review"),
       screenshot("T-HM-03", "The “Action needed” box, for example a returned document, a log the lecturer returned, or a deadline coming up"),
-      callout("warn", "A month that closed before you submitted it shows **Treated as not wishing to log hours**. It cannot be submitted late. There are no exceptions."),
+      callout("warn", "A month that closed before you submitted it shows **Treated as not wishing to log hours**. New hourly entries cannot be submitted late. Graduate special-track lump-sum eligibility is assessed separately."),
       screenshot("T-HM-05", "The “Treated as not wishing to log hours” message for a month that closed without being submitted"),
       screenshot("T-HM-04", "Course cards in 3 states: not yet submitted, awaiting lecturer approval, and returned by the lecturer"),
       text("Each card shows approved hours, hours awaiting approval, the estimated amount and this month's status. Press a card to work in that course."),
@@ -189,6 +191,7 @@ export const taPagesEn: DocPage[] = [
       ),
       text("The system opens the next step for you. If you see a **Needs revision** tag, staff have returned it. Fix only that item."),
       screenshot("T-DC-02", "All 4/4 done, awaiting review"),
+      ...scenarioBlocks("documents", "en"),
     ],
     related: ["ta:documents/step1-profile", "ta:documents/rejected"],
   },
@@ -428,7 +431,7 @@ export const taPagesEn: DocPage[] = [
         "This page is for recording your working hours day by day. Entries stay as **Draft** until you press **Submit for approval** for the lecturer to review. " +
         "Hours count towards your pay only after the lecturer approves them.",
       ),
-      callout("danger", "You must submit by **each month's deadline**. A month that closes before you submit it is treated as **not wishing to log hours**. It cannot be submitted late. There are no exceptions."),
+      callout("danger", "You must submit by **each month's deadline**. A month that closes before you submit it is treated as **not wishing to log hours**. New hourly entries cannot be submitted late. Graduate special-track lump-sum eligibility is assessed separately."),
       screenshot("T-WL-01", "An empty work log page, with the auto-generate button, the add entry button and the monthly boxes"),
       screenshot("T-WL-02", "The top of a monthly box: the deadline and the number of draft, awaiting-lecturer and approved entries"),
     ],
@@ -534,7 +537,9 @@ export const taPagesEn: DocPage[] = [
       gif("T-WL-G4", "Press Submit for approval, confirm, and the month's status changes to awaiting the lecturer"),
       screenshot("T-WL-09", "After submitting, rows show “Awaiting lecturer” and cannot be edited"),
       screenshot("T-WL-10", "A returned row in red, with the lecturer's reason and the resubmit button"),
-      callout("danger", "Don't wait until the last day. If the month closes before you submit, you **forfeit that month** and can no longer claim pay for it."),
+      callout("danger", "Don't wait until the last day. If the month closes before you submit, you **forfeit that month** for hourly work logs. Graduate special-track lump-sum eligibility is assessed separately."),
+      ...workflowBlocks("worklog", "en"),
+      ...concurrentEditHelp("en"),
     ],
     related: ["ta:worklog/troubleshoot"],
   },
@@ -555,7 +560,7 @@ export const taPagesEn: DocPage[] = [
         [
           ["All buttons are grey, with the message “Waiting for staff to approve documents”", "Your 3 document files have not passed review yet", "Go to the documents page and see which file is still awaiting review or was returned"],
           ["A session on that day cannot be logged", "The session falls on a holiday and has no make-up day yet", "Go to the “Holidays and make-up days” page of that course"],
-          ["A row is grey and cannot be edited", "That month has closed, or it has already been submitted for approval", "If you had not submitted it, it is forfeited. If you had, wait for the lecturer's review as usual"],
+          ["A row is grey and cannot be edited", "That month has closed, or it has already been submitted for approval", "New hourly entries cannot be submitted late. Submitted logs await review; lump-sum eligibility is assessed separately."],
           ["The auto-generate button is disabled", "The lecturer has not set up the teaching schedule for this section, or the course has no student count yet", "Ask the lecturer to add the teaching schedule, or ask staff to enter the student count. Meanwhile, press **Add entry** to fill entries in yourself"],
         ],
       ),
@@ -665,7 +670,7 @@ export const taPagesEn: DocPage[] = [
         { status: "Awaiting lecturer approval", tone: "info", meaning: "Submitted, waiting for the lecturer", whoActsNext: "Lecturer" },
         { status: "Awaiting staff export", tone: "warn", meaning: "The lecturer approved; waiting for staff to review and export", whoActsNext: "Staff" },
         { status: "Sent to finance", tone: "success", meaning: "The documents were exported and are now with finance" },
-        { status: "Not wishing to log hours", tone: "danger", meaning: "The month closed before it was submitted; that month is forfeited for good" },
+        { status: "Not wishing to log hours", tone: "danger", meaning: "The month closed before it was submitted; new hourly entries cannot be submitted late; lump-sum eligibility is assessed separately" },
       ]),
     ],
   },
@@ -704,7 +709,7 @@ export const taPagesEn: DocPage[] = [
     blocks: [
       steps([
         { title: "When is my pay sent?", body: "After the lecturer approves that month's hours, staff review and export the documents, then pass the claim to finance on the college's schedule. How long it takes varies from month to month. You can check on the **Payment status** page" },
-        { title: "I forgot to submit a month for approval. What can I do?", body: "Nothing can be done any more. A closed month is treated as not wishing to log hours, and the system cannot reopen it. Check the deadline at the top of each month's box ahead of time so you don't miss it" },
+        { title: "I forgot to submit a month for approval. What can I do?", body: "You cannot submit new late entries yourself. Contact the officer if an existing entry needs correction. For graduate special-track lump sums, missing logs do not automatically forfeit compensation; the officer must check eligibility and document readiness." },
         { title: "What happens if I change semester or education level partway through?", body: "The system keeps your education history (see the education history section in account settings). Pay is calculated using your education level at that time. Hours approved before the change stay the same" },
         { title: "Can I change my bank account after my documents have passed?", body: "You can edit it on the documents page if that month's export has not happened yet, but staff need to review it again. Let staff know in advance so it doesn't affect an upcoming claim round" },
         { title: "Why is my name on a TA request stuck at “Awaiting decision”?", body: "Usually because you have not created your class schedule yet. Go to the class schedule page and fill it in completely. The system decides the request as soon as you finish" },

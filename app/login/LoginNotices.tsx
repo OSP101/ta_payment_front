@@ -128,7 +128,7 @@ export default function LoginNoticeCards({ notices, tone }: { notices: LoginNoti
             </div>
             <Countdown
               closesAt={w.closes_at}
-              urgentClass={dark ? "text-amber-300" : "text-warning"}
+              urgentClass={dark ? "text-[#fcd34d]" : "text-warning-soft-foreground"}
               quiet={quiet}
             />
             <p className={`mt-2 text-sm tabular-nums ${quiet}`}>

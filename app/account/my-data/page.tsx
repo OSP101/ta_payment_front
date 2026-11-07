@@ -208,7 +208,7 @@ function SecuritySection({ exp }: { exp: MyDataExport | undefined }) {
   return (
     <Panel title={t("ความปลอดภัยและการเข้าสู่ระบบ")} className="mb-4">
       <div className="flex items-center gap-3 mb-3">
-        <ShieldCheck size={16} className={exp.profile.totp_enabled ? "text-success" : "text-muted"} />
+        <ShieldCheck size={16} className={exp.profile.totp_enabled ? "text-success-soft-foreground" : "text-muted"} />
         <div className="text-sm text-foreground">
           2FA: {exp.profile.totp_enabled ? t("เปิดใช้งานแล้ว") : t("ยังไม่เปิดใช้งาน")}
         </div>

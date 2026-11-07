@@ -252,7 +252,7 @@ export default function AvatarCropper({
           )}
         </div>
 
-        {error && <p className="text-xs text-danger">{error}</p>}
+        {error && <p className="text-xs text-danger-soft-foreground">{error}</p>}
 
         <div className="w-full max-w-72 flex items-center gap-2">
           <ZoomOut size={16} className="text-muted shrink-0" aria-hidden />

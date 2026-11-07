@@ -601,7 +601,7 @@ function TACard({
                 but has not sent would otherwise just be missing. Informational
                 only: there is nothing here to approve until it is sent. */}
             {group.draftMonths.length > 0 && (
-              <div className="mt-1.5 flex items-start gap-1 text-xs text-warning">
+              <div className="mt-1.5 flex items-start gap-1 text-xs text-warning-soft-foreground">
                 <CircleAlert size={13} className="mt-px shrink-0" />
                 <span>
                   {t("มีฉบับร่างที่ TA ยังไม่ส่ง: {months}", { months: group.draftMonths.map(m => formatMonthShortTH(m, i18n)).join(", ") })}

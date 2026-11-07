@@ -335,7 +335,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
                   {t("บันทึกชั่วโมงการทำงานประจำวัน แล้วส่งให้อาจารย์อนุมัติ")}
                 </div>
               </div>
-              <ArrowRight size={16} className="text-muted group-hover:text-accent transition-colors shrink-0" />
+              <ArrowRight size={16} className="text-muted group-hover:text-link transition-colors shrink-0" />
             </Link>
           </Panel>
         </>

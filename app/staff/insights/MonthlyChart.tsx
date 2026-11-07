@@ -112,8 +112,8 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
              aria-label={t("ยอดเบิกจ่ายสะสม {total} จากงบรวม {base} รายเดือน: {months}", { total: money(g.total, t), base: money(base, t), months: g.bands.filter(bd => bd.baht > 0).map(bd => `${thMonth(bd.ym, monthName)} ${money(bd.baht, t)}`).join(", ") })}>
           <defs>
             <pattern id="mc-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect width="6" height="6" fill="#0776BC" fillOpacity="0.18" />
-              <line x1="0" y1="0" x2="0" y2="6" stroke="#0776BC" strokeWidth="2" strokeOpacity="0.55" />
+              <rect width="6" height="6" fill="var(--chart-brand, #0776BC)" fillOpacity="0.18" />
+              <line x1="0" y1="0" x2="0" y2="6" stroke="var(--chart-brand, #0776BC)" strokeWidth="2" strokeOpacity="0.55" />
             </pattern>
           </defs>
 
@@ -133,7 +133,7 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
           ))}
           {base > 0 && (
             <g>
-              <line x1={L} x2={W - R} y1={y1(base)} y2={y1(base)} stroke="#b91c1c" strokeWidth="1.5" />
+              <line x1={L} x2={W - R} y1={y1(base)} y2={y1(base)} stroke="var(--chart-danger, #b91c1c)" strokeWidth="1.5" />
               {/* Above the line, unless that would collide with the panel title
                   at the top — then just below it. */}
               <text x={L + 4} y={y1(base) - 5 < 30 ? y1(base) + 15 : y1(base) - 5} fontSize="12" fill="var(--tone-danger-ink)">{t("งบรวม {amount}", { amount: money(base, t) })}</text>
@@ -144,17 +144,17 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
                   x2={x(new Date(Date.parse(`${a.ends_on}T00:00:00Z`) + DAY))} y2={y1(base)}
                   stroke="var(--ink-3,#64748b)" strokeWidth="1.5" strokeDasharray="5 5" />
           )}
-          <polygon points={areaPts} fill="#16a34a" fillOpacity={0.1} />
-          <polyline points={linePts} fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinejoin="round" />
+          <polygon points={areaPts} fill="var(--chart-green, #16a34a)" fillOpacity={0.1} />
+          <polyline points={linePts} fill="none" stroke="var(--chart-good, #15803d)" strokeWidth="2.5" strokeLinejoin="round" />
           {undated > 0 && (
-            <line x1={x(last.d)} x2={x(last.d)} y1={y1(last.v)} y2={y1(g.total)} stroke="#6366f1" strokeWidth="2.5" />
+            <line x1={x(last.d)} x2={x(last.d)} y1={y1(last.v)} y2={y1(g.total)} stroke="var(--chart-lump, #6366f1)" strokeWidth="2.5" />
           )}
           {g.cum.slice(1).map(p => (
-            <circle key={p.ym} cx={x(p.d)} cy={y1(p.v)} r="3.5" fill="#15803d" stroke="var(--panel-bg)" strokeWidth="1.5"
+            <circle key={p.ym} cx={x(p.d)} cy={y1(p.v)} r="3.5" fill="var(--chart-good, #15803d)" stroke="var(--panel-bg)" strokeWidth="1.5"
                     onMouseMove={e => tip.show(e, <><b>{t("สะสมถึง{month}", { month: thMonth(p.ym, monthName) })}</b><div className="tabular-nums">{money(p.v, t)}</div></>)}
                     onMouseLeave={tip.hide} />
           ))}
-          <circle cx={x(last.d)} cy={y1(g.total)} r="5" fill="#15803d" stroke="var(--panel-bg)" strokeWidth="2"
+          <circle cx={x(last.d)} cy={y1(g.total)} r="5" fill="var(--chart-good, #15803d)" stroke="var(--panel-bg)" strokeWidth="2"
                   onMouseMove={e => tip.show(e, <>
                     <b>{t("เบิกจ่ายแล้ว {amount}", { amount: money(g.total, t) })}</b>
                     {undated > 0 && <div>{t("รวมเหมาจ่ายยังไม่ระบุเดือน {amount}", { amount: money(undated, t) })}</div>}
@@ -198,10 +198,10 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
                 {bd.baht > 0 && (
                   <>
                     <rect x={cx - bw / 2} y={y2(hourly)} width={bw} height={Math.max(1, y2(0) - y2(hourly))}
-                          fill={hollow ? "url(#mc-hatch)" : "#0776BC"} stroke={hollow ? "#0776BC" : "none"} strokeDasharray={hollow ? "3 2" : undefined} />
+                          fill={hollow ? "url(#mc-hatch)" : "var(--chart-brand, #0776BC)"} stroke={hollow ? "var(--chart-brand, #0776BC)" : "none"} strokeDasharray={hollow ? "3 2" : undefined} />
                     {bd.lump > 0 && (
                       <rect x={cx - bw / 2} y={y2(bd.baht)} width={bw} height={Math.max(1, y2(hourly) - y2(bd.baht))}
-                            fill="#6366f1" fillOpacity={hollow ? 0.45 : 1} />
+                            fill="var(--chart-lump, #6366f1)" fillOpacity={hollow ? 0.45 : 1} />
                     )}
                     {bandLabels && (
                       <text x={cx} y={y2(bd.baht) - 5} fontSize="12" textAnchor="middle" fill="var(--ink-2,#334155)" className="tabular-nums">
@@ -224,14 +224,14 @@ export default function MonthlyChart({ a, b }: { a: TermAnalytics; b?: TermAnaly
         {tip.node}
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--ink-3)]">
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-[#15803d]" />{t("ยอดสะสม")}</span>
+        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-[var(--chart-good,#15803d)]" />{t("ยอดสะสม")}</span>
         {pace && <span className="inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t-2 border-dashed border-[var(--ink-3)]" />{t("เส้นอ้างอิง: ถ้าใช้เท่ากันทุกเดือน (ไม่ใช่เป้าหมาย)")}</span>}
-        {base > 0 && <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-[#b91c1c]" />{t("งบรวม")}</span>}
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block size-3 rounded-sm bg-[#0776BC]" />{t("รายชั่วโมง")}</span>
-        {a.budget_lump > 0 && <span className="inline-flex items-center gap-1.5"><i className="inline-block size-3 rounded-sm bg-[#6366f1]" />{t("เหมาจ่ายบัณฑิต ภาคพิเศษ")}</span>}
+        {base > 0 && <span className="inline-flex items-center gap-1.5"><i className="inline-block h-0.5 w-4 bg-[var(--chart-danger,#b91c1c)]" />{t("งบรวม")}</span>}
+        <span className="inline-flex items-center gap-1.5"><i className="inline-block size-3 rounded-sm bg-[var(--chart-brand,#0776BC)]" />{t("รายชั่วโมง")}</span>
+        {a.budget_lump > 0 && <span className="inline-flex items-center gap-1.5"><i className="inline-block size-3 rounded-sm bg-[var(--chart-lump,#6366f1)]" />{t("เหมาจ่ายบัณฑิต ภาคพิเศษ")}</span>}
         {g.bands.some(bd => bd.current && bd.baht > 0) && (
           <span className="inline-flex items-center gap-1.5">
-            <i className="inline-block size-3 rounded-sm border border-dashed border-[#0776BC] bg-[#0776BC]/20" />{t("เดือนปัจจุบัน ยังไม่จบเดือน")}
+            <i className="inline-block size-3 rounded-sm border border-dashed border-[var(--chart-brand,#0776BC)] bg-[var(--chart-brand,#0776BC)]/20" />{t("เดือนปัจจุบัน ยังไม่จบเดือน")}
           </span>
         )}
       </div>

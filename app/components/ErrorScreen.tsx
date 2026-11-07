@@ -60,7 +60,7 @@ export default function ErrorScreen({
           <div className="mt-4 rounded-lg border border-border bg-surface-secondary px-3 py-2">
             <div className="text-xs text-muted">{t("รหัสอ้างอิง")}</div>
             <div className="font-mono text-sm text-foreground break-all select-all">{ref}</div>
-            <button type="button" onClick={copy} className="mt-1 text-xs text-accent hover:underline">
+            <button type="button" onClick={copy} className="mt-1 text-xs text-link hover:underline">
               {copied ? t("คัดลอกแล้ว") : t("คัดลอกรหัส")}
             </button>
           </div>

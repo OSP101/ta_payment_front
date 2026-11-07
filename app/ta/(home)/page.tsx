@@ -721,13 +721,13 @@ function PendingRequestCard({ req, docsTodo }: { req: PendingRequest; docsTodo: 
       <div className="mt-3 rounded-lg bg-surface-secondary px-3 py-2 text-xs">
         {req.waiting_on_me ? (
           <>
-            <div className="font-medium text-warning">{t("รอคุณบันทึกตารางเรียนภาคเรียน {term}", { term })}</div>
+            <div className="font-medium text-warning-soft-foreground">{t("รอคุณบันทึกตารางเรียนภาคเรียน {term}", { term })}</div>
             <div className="mt-0.5 text-muted">
               {t("ระบบจะพิจารณาคำขอให้อัตโนมัติทันทีที่บันทึกตารางเรียน")}
             </div>
             <Link
               href={`/ta/schedule?term_id=${req.term_id}`}
-              className="mt-1.5 inline-flex items-center gap-1 font-medium text-accent underline underline-offset-2"
+              className="mt-1.5 inline-flex items-center gap-1 font-medium text-link underline underline-offset-2"
             >
               {t("ไปสร้างตารางเรียน")} <ArrowRight size={12} />
             </Link>
@@ -749,7 +749,7 @@ function PendingRequestCard({ req, docsTodo }: { req: PendingRequest; docsTodo: 
           <div className="mt-2 border-t border-[var(--hairline)] pt-2 text-muted">
             {t.rich("อีกขั้นที่ต้องทำ: {link} ต้องผ่านก่อนจึงบันทึกเวลาได้", {
               link: (
-                <Link href="/ta/documents" className="font-medium text-accent underline underline-offset-2">
+                <Link href="/ta/documents" className="font-medium text-link underline underline-offset-2">
                   {t("ส่งเอกสารประกอบการเบิกจ่าย")}
                 </Link>
               ),
@@ -799,7 +799,7 @@ function CourseCard({
         </Tip>
         <ArrowRight
           size={15}
-          className="mt-1 shrink-0 text-muted transition-colors group-hover:text-accent"
+          className="mt-1 shrink-0 text-muted transition-colors group-hover:text-link"
         />
       </div>
 
@@ -820,7 +820,7 @@ function CourseCard({
         <div className="mt-2 flex h-5 items-center"><SkelValue className="h-4 w-20" /></div>
       )}
       {status && (
-        <div className="mt-2 text-sm font-medium text-success">
+        <div className="mt-2 text-sm font-medium text-success-soft-foreground">
           {/* An ESTIMATE from approved hours × rate. The real payout can be
               lower (the course budget is shared out when it runs short), so
               the figure must never read as the amount that will be paid. */}

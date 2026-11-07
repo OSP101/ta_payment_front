@@ -268,7 +268,7 @@ export default function DemoEntryPage() {
                           className="w-full text-left px-4 py-3 flex items-center gap-3 disabled:opacity-60"
                         >
                           <span className="shrink-0 size-9 rounded-full bg-accent-soft flex items-center justify-center">
-                            <group.icon size={16} className="text-accent" />
+                            <group.icon size={16} className="text-link" />
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block font-medium text-foreground text-sm truncate">{acc.label}</span>

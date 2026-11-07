@@ -258,7 +258,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
                     <button
                       type="button"
                       onClick={() => setTimetableFor({ id: taId, name: taName })}
-                      className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-md border border-[var(--hairline)] px-1.5 py-0.5 text-[11px] text-muted hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                      className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-md border border-[var(--hairline)] px-1.5 py-0.5 text-[11px] text-muted hover:border-[var(--brand)] hover:text-[var(--tone-brand-ink)]"
                     >
                       <CalendarDays size={11} /> {t("ตารางเรียน/ทำงาน")}
                     </button>
@@ -378,7 +378,7 @@ export function ReviewGrid({ tcId, onChanged }: { tcId: string; onChanged?: () =
               rows={3}
             />
             {reason.trim() === "" && (
-              <p className="text-xs text-red-600">{t("ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร")}</p>
+              <p className="text-xs text-danger-soft-foreground">{t("ต้องระบุเหตุผล เพื่อให้ TA รู้ว่าต้องแก้อะไร")}</p>
             )}
           </div>
         }
@@ -451,7 +451,7 @@ function EmptyCell({ t: tl, loading }: { t?: TimelineRow; loading?: boolean }) {
       <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-2 text-center leading-tight">
         <div className="text-[11px] font-medium text-red-800">{t("ไม่มีบันทึกเวลาถึงกำหนด")}</div>
         <div className="mt-0.5 text-[11px] text-red-700">{t("ถือว่าสละสิทธิ์เดือนนี้")}</div>
-        <div className="mt-0.5 text-[10px] text-red-600/80">{t("ครบกำหนด {date}", { date: shortDue(tl.due_date, monthName) })}</div>
+        <div className="mt-0.5 text-[10px] text-danger-soft-foreground/80">{t("ครบกำหนด {date}", { date: shortDue(tl.due_date, monthName) })}</div>
       </div>
     );
   }
@@ -552,7 +552,7 @@ function Cell({
             <button
               type="button"
               onClick={onOpen}
-              className="flex-1 whitespace-nowrap rounded-md border border-[var(--hairline)] bg-surface px-1 py-0.5 text-[11px] hover:border-[var(--brand)] hover:text-[var(--brand)]"
+              className="flex-1 whitespace-nowrap rounded-md border border-[var(--hairline)] bg-surface px-1 py-0.5 text-[11px] hover:border-[var(--brand)] hover:text-[var(--tone-brand-ink)]"
             >
               {t("ดู")}
             </button>

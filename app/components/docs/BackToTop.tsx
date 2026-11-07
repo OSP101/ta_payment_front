@@ -39,7 +39,7 @@ export default function BackToTop() {
           onClick={toTop}
           aria-label={t("กลับขึ้นบนสุด")}
           tabIndex={show ? 0 : -1}
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-foreground shadow-lg shadow-slate-900/10 hover:border-(--brand) hover:text-(--brand) transition-colors"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-foreground shadow-lg shadow-slate-900/10 hover:border-(--brand) hover:text-(--tone-brand-ink) transition-colors"
         >
           <ArrowUp size={20} aria-hidden="true" />
         </button>

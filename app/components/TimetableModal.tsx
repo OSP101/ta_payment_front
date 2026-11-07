@@ -58,10 +58,10 @@ interface FormData {
  * reader moving between the two is never re-learning anything.
  */
 const STYLE: Record<Block["kind"], { bg: string; fg: string; tag: string; label: string }> = {
-  own_class: { bg: "#F5C4B3", fg: "#4A1B0C", tag: msg("เรียน"), label: msg("คาบเรียนของเขา") },
-  lecture:   { bg: "#C0DD97", fg: "#173404", tag: msg("บรรยาย"), label: msg("บรรยาย") },
-  lab:       { bg: "#B5D4F4", fg: "#042C53", tag: msg("ปฏิบัติการ"), label: msg("ปฏิบัติการ") },
-  review:    { bg: "#CECBF6", fg: "#26215C", tag: msg("ตรวจงาน"), label: msg("ตรวจงาน") },
+  own_class: { bg: "var(--duty-own-class-bg, #F5C4B3)", fg: "var(--duty-own-class-fg, #4A1B0C)", tag: msg("เรียน"), label: msg("คาบเรียนของเขา") },
+  lecture:   { bg: "var(--duty-lecture-bg, #C0DD97)", fg: "var(--duty-lecture-fg, #173404)", tag: msg("บรรยาย"), label: msg("บรรยาย") },
+  lab:       { bg: "var(--duty-lab-bg, #B5D4F4)", fg: "var(--duty-lab-fg, #042C53)", tag: msg("ปฏิบัติการ"), label: msg("ปฏิบัติการ") },
+  review:    { bg: "var(--duty-review-bg, #CECBF6)", fg: "var(--duty-review-fg, #26215C)", tag: msg("ตรวจงาน"), label: msg("ตรวจงาน") },
 };
 
 // Same window as the paper form: evening grading really does run to 21:00.

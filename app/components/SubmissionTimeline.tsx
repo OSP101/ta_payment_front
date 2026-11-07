@@ -134,7 +134,7 @@ export function SubmissionTimeline({
                 className={
                   "absolute left-0 top-0 grid place-items-center w-6 h-6 rounded-full " +
                   (done
-                    ? "bg-emerald-500 text-white"
+                    ? "bg-success text-success-foreground"
                     : active
                     ? "bg-brand text-white"
                     : "bg-slate-200 text-slate-500")

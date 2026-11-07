@@ -168,9 +168,10 @@ export default function StaffDashboard() {
                 <ShortcutRow href="/staff/approvals" title={msg("อนุมัติคำขอ TA")} />
                 <ShortcutRow href="/staff/review" title={msg("ตรวจสอบแบบฟอร์มใบแจ้งหนี้")} />
                 <ShortcutRow href="/staff/payouts" title={msg("ตรวจและส่งออกเอกสาร")} />
+                <ShortcutRow href="/staff/transfer-cover" title={msg("ใบปะหน้าจ่ายตรง")} />
                 <ShortcutRow href="/staff/teaching" title={msg("วิชาที่เปิดสอน")} />
                 <ShortcutRow href="/staff/appointments" title={msg("ใบแต่งตั้งทีเอ")} />
-                <ShortcutRow href="/staff/budget-summary" title={msg("สรุปงบและปะหน้าจ่ายตรง")} />
+                <ShortcutRow href="/staff/budget-summary" title={msg("สรุปการใช้งบประมาณ")} />
               </ul>
             </Panel>
             <Panel title={t("คู่มือระบบ")} description={t("ลิงก์เอกสารและเวิร์กโฟลว์")}>
@@ -204,7 +205,7 @@ function TodoPanel({ todos, loading }: { todos: Todo[]; loading: boolean }) {
   if (todos.length === 0) {
     return (
       <div className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50/70 px-4 py-3">
-        <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+        <CheckCircle2 size={18} className="text-success-soft-foreground shrink-0" />
         <div className="text-sm text-emerald-900">
           {t.rich("{b} ทุกขั้นตอนดำเนินการครบแล้ว", { b: <b>{t("ไม่มีงานค้าง")}</b> })}
         </div>
@@ -269,7 +270,7 @@ function ShortcutRow({ href, title, hint }: { href: string; title: string; hint?
           <div className="text-sm font-medium text-[var(--ink-1)]">{t(title)}</div>
           {hint && <div className="text-xs text-[var(--ink-3)] mt-0.5">{hint}</div>}
         </div>
-        <ArrowUpRight size={16} className="text-[var(--ink-4)] group-hover:text-[var(--brand)]" />
+        <ArrowUpRight size={16} className="text-[var(--ink-4)] group-hover:text-[var(--tone-brand-ink)]" />
       </Link>
     </li>
   );

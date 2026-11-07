@@ -2,6 +2,7 @@
 // audience's pages — the staff manual included — to anyone who loads any
 // page's JS, gate or no gate. Client code works from `./meta` instead.
 import "server-only";
+import { completeFunctionDiagrams } from "./function-sequences";
 import type { Audience, DocPage } from "./types";
 import { effectiveAudience, docHref, type DocPageMeta } from "./meta";
 import mediaData from "./media.json";
@@ -58,8 +59,8 @@ export function glossaryFor(locale: Locale = DEFAULT_LOCALE): Glossary {
  *  reader-visible text differs — so links, the in-app pill and access rules
  *  work the same whichever language is served. */
 const ALL_PAGES: Record<Locale, DocPage[]> = {
-  th: [...commonPages, ...taPages, ...lecturerPages, ...staffPages, ...flowPages],
-  en: [...commonPagesEn, ...taPagesEn, ...lecturerPagesEn, ...staffPagesEnA, ...staffPagesEnB, ...flowPagesEn],
+  th: completeFunctionDiagrams([...commonPages, ...taPages, ...lecturerPages, ...staffPages, ...flowPages], "th"),
+  en: completeFunctionDiagrams([...commonPagesEn, ...taPagesEn, ...lecturerPagesEn, ...staffPagesEnA, ...staffPagesEnB, ...flowPagesEn], "en"),
 };
 
 /** `pagesForAudience` result per language and audience, computed once —

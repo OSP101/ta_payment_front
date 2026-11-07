@@ -377,7 +377,7 @@ function makeCourseColumns(
           {c.lecturer_names}
         </span></Tip>
       ) : (
-        <span className="text-warning text-xs">{t("ยังไม่ผูกอาจารย์")}</span>
+        <span className="text-warning-soft-foreground text-xs">{t("ยังไม่ผูกอาจารย์")}</span>
       ),
     },
     {
@@ -502,7 +502,7 @@ function DeleteCourseButton({ course }: { course: TC }) {
         label={t("ลบรายวิชา {code}", { code: course.code })}
         variant="ghost"
         size="sm"
-        className="text-danger hover:bg-danger/10"
+        className="text-danger-soft-foreground hover:bg-danger/10"
         onClick={() => setConfirm(true)}
         disabled={deleting}
       >

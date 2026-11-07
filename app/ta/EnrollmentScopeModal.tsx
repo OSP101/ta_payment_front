@@ -184,7 +184,7 @@ export function EnrollmentScopeSwitcher() {
       >
         <GraduationCap size={13} />
         {current ? `${STUDY_LEVEL_TH[current.study_level] ? t(STUDY_LEVEL_TH[current.study_level]) : current.study_level} · ${current.student_id}` : t("เลือกช่วงการศึกษา")}
-        <span className="text-accent font-medium">{t("เปลี่ยน")}</span>
+        <span className="text-link font-medium">{t("เปลี่ยน")}</span>
       </button>
       {open && <EnrollmentScopeModal me={me} onClose={() => setOpen(false)} />}
     </>

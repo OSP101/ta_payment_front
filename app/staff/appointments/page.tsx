@@ -274,7 +274,7 @@ function HeldBackPanel({
                     <Fragment key={w.ta_id}>
                       <span className="whitespace-nowrap">
                         {remindedRecently(w.reminded_at) && (
-                          <Check size={12} className="me-0.5 inline align-[-1px] text-emerald-600" aria-label={t("เตือนแล้ว")} />
+                          <Check size={12} className="me-0.5 inline align-[-1px] text-success-soft-foreground" aria-label={t("เตือนแล้ว")} />
                         )}
                         {w.name}
                       </span>

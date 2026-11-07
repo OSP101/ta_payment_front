@@ -2034,7 +2034,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             })}
           </span>
           {logs ? (
-            <span className={"tabular-nums " + (remainingTermHours <= 0 ? "text-danger font-medium" : "text-success")}>
+            <span className={"tabular-nums " + (remainingTermHours <= 0 ? "text-danger-soft-foreground font-medium" : "text-success-soft-foreground")}>
               · {t("เหลือ {h} ชม.", { h: remainingTermHours.toFixed(2) })}
             </span>
           ) : <SkelValue className="h-4 w-20" />}
@@ -2215,7 +2215,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
         footer={
           confirmDeleteRejected ? (
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-danger">
+              <p className="text-sm text-danger-soft-foreground">
                 {t("ลบ {n} รายการที่ถูกส่งกลับถาวร ย้อนกลับไม่ได้ ยืนยันหรือไม่?", { n: rejectedRows.length })}
               </p>
               <div className="flex justify-end gap-2">
@@ -2316,7 +2316,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
                   <span>{t("เลือกแล้ว {n} จาก {total} เดือน", { n: chosenMonths.length, total: submittableMonths.length })}</span>
                   <button
                     type="button"
-                    className="font-medium text-accent hover:underline"
+                    className="font-medium text-link hover:underline"
                     onClick={() => setSubmitMonths(
                       chosenMonths.length === submittableMonths.length
                         ? new Set()
@@ -2592,7 +2592,7 @@ function WorklogSaveStatus({
   if (savedAgo) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
-        <Check size={13} className="text-success" />
+        <Check size={13} className="text-success-soft-foreground" />
         <span>{t("บันทึกล่าสุด {ago}", { ago: savedAgo })}</span>
       </span>
     );
@@ -3925,7 +3925,7 @@ function MonthlyWorklogView({
                       onQuickAdd(`${month}-01`);
                     }
                   }}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline px-2 py-1 rounded"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-link hover:underline px-2 py-1 rounded"
                 >
                   <Plus size={12} /> {t("เพิ่มในเดือนนี้")}
                 </span>
@@ -4117,12 +4117,12 @@ function HolidayHint({
           // few hours, not to wait on a makeup — lead with that.
           <span>
             {t("ลงเวลาได้เฉพาะช่วงที่ไม่คาบเกี่ยวกับ {start}–{end} หรือกำหนดวันชดเชย", { start: holiday.start, end: holiday.end })}
-            {link && <> · <a href={link} className="text-accent hover:underline">{t("ไปหน้าวันหยุดและวันชดเชย")}</a></>}
+            {link && <> · <a href={link} className="text-link hover:underline">{t("ไปหน้าวันหยุดและวันชดเชย")}</a></>}
           </span>
         ) : link ? (
           <span>
             {t.rich("คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ {link} เพื่อกำหนดวันชดเชย หรือแจ้งอาจารย์", {
-              link: <a href={link} className="text-accent hover:underline">{t("ไปหน้าวันหยุดและวันชดเชย")}</a>,
+              link: <a href={link} className="text-link hover:underline">{t("ไปหน้าวันหยุดและวันชดเชย")}</a>,
             })}
           </span>
         ) : t("คุณจะลงเวลาคาบเรียนวันนี้ไม่ได้ ต้องกำหนดวันชดเชยก่อน")
@@ -4567,7 +4567,7 @@ function LecturerChangesNotice({ aid }: { aid: string }) {
         ))}
       </ul>
       {data.length > 3 && (
-        <button type="button" onClick={() => setShowAll(!showAll)} className="mt-1 text-xs text-accent hover:underline">
+        <button type="button" onClick={() => setShowAll(!showAll)} className="mt-1 text-xs text-link hover:underline">
           {showAll ? t("ย่อ") : t("ดูทั้งหมด {n} รายการ", { n: data.length })}
         </button>
       )}

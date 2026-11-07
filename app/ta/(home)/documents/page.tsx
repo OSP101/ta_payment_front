@@ -120,12 +120,12 @@ function PdfDropZone({
                 : "cursor-pointer border-slate-300 hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]")
         }
       >
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--tone-brand-ink)]">
           {file ? <FileText size={20} /> : <Upload size={20} />}
         </div>
         <div className="min-w-0 flex-1">
           {over ? (
-            <div className="text-sm font-medium text-[var(--brand)]">{t("ปล่อยเพื่อเลือกไฟล์นี้")}</div>
+            <div className="text-sm font-medium text-[var(--tone-brand-ink)]">{t("ปล่อยเพื่อเลือกไฟล์นี้")}</div>
           ) : file ? (
             <>
               <div className="truncate text-sm font-medium">{file.name}</div>
@@ -136,7 +136,7 @@ function PdfDropZone({
           ) : (
             <>
               <div className="text-sm font-medium">
-                {t.rich("ลากไฟล์ PDF มาวางที่นี่ หรือ {pick}", { pick: <span className="text-[var(--brand)] underline underline-offset-2">{t("คลิกเพื่อเลือกไฟล์")}</span> })}
+                {t.rich("ลากไฟล์ PDF มาวางที่นี่ หรือ {pick}", { pick: <span className="text-[var(--tone-brand-ink)] underline underline-offset-2">{t("คลิกเพื่อเลือกไฟล์")}</span> })}
               </div>
               <div className="text-xs text-muted">{t("รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน {max} MB", { max: MAX_UPLOAD_MB })}</div>
             </>
@@ -817,7 +817,7 @@ function ProfileStep({
   return (
     <div>
       <p className="mb-3 text-xs text-muted">
-        {t.rich("ช่องที่มีเครื่องหมาย {star} ต้องกรอกทุกช่อง", { star: <span className="text-danger">*</span> })}
+        {t.rich("ช่องที่มีเครื่องหมาย {star} ต้องกรอกทุกช่อง", { star: <span className="text-danger-soft-foreground">*</span> })}
       </p>
       <div className="grid md:grid-cols-2 gap-3">
         <FieldGroup required label={t("คำนำหน้าชื่อ")} hint={t("ระบบใช้ค่านี้วงกลมในแบบแจ้งเจ้าหนี้อัตโนมัติ")}>
@@ -1121,7 +1121,7 @@ function CreditorFormStep({
         </div>
         <div className="border border-[var(--hairline)] rounded-md overflow-hidden bg-slate-100">
           {previewErr ? (
-            <div className="p-4 text-sm text-danger">{previewErr}</div>
+            <div className="p-4 text-sm text-danger-soft-foreground">{previewErr}</div>
           ) : previewURL ? (
             <PdfFrame
               src={previewURL}
@@ -1337,11 +1337,11 @@ function SubmittedDoc({ doc }: { doc: Doc }) {
             <div className="text-xs text-muted mt-0.5">{t("ส่งเมื่อ {date}", { date: shortDate(doc.uploaded_at, intl) })}</div>
           )}
           {doc.reject_reason && (
-            <div className="text-xs text-danger mt-0.5">{t("เหตุผล: {reason}", { reason: doc.reject_reason })}</div>
+            <div className="text-xs text-danger-soft-foreground mt-0.5">{t("เหตุผล: {reason}", { reason: doc.reject_reason })}</div>
           )}
           {removed && (
             <div className="text-xs text-muted mt-0.5">
-              {t("ไฟล์ถูกลบตามนโยบายเก็บรักษา 7 วันหลังอนุมัติแล้ว")}
+              {t("ไฟล์ถูกลบตามระยะเวลาเก็บรักษาที่กำหนดแล้ว")}
             </div>
           )}
         </div>

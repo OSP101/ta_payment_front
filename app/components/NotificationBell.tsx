@@ -69,7 +69,7 @@ export default function NotificationBell({
         {show && (
           <span
             aria-hidden
-            className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center leading-none"
+            className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-danger text-danger-foreground text-[10px] font-semibold flex items-center justify-center leading-none"
           >
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
@@ -84,12 +84,12 @@ export default function NotificationBell({
               <button
                 type="button"
                 onClick={markAll}
-                className="text-xs text-accent hover:underline inline-flex items-center gap-1"
+                className="text-xs text-link hover:underline inline-flex items-center gap-1"
               >
                 <Check size={11} /> {t("อ่านทั้งหมด")}
               </button>
             )}
-            <Link href={seeAllHref} className="text-xs text-accent hover:underline ms-2">
+            <Link href={seeAllHref} className="text-xs text-link hover:underline ms-2">
               {t("ดูทั้งหมด")}
             </Link>
           </div>

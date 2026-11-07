@@ -154,7 +154,7 @@ export function CourseSubmissionPanel({
   if (error) {
     return (
       <Panel title={title}>
-        <div className="text-sm text-danger py-4">{t("โหลดสถานะไม่สำเร็จ")}</div>
+        <div className="text-sm text-danger-soft-foreground py-4">{t("โหลดสถานะไม่สำเร็จ")}</div>
       </Panel>
     );
   }

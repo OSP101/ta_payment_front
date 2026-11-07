@@ -1,3 +1,5 @@
+import { scenarioBlocks } from "../sequence-scenarios";
+import { workflowBlocks, concurrentEditHelp } from "../workflow-content";
 import {
   type DocPage, journey, text, callout, steps, screenshot, gif, statusTable, table, uiPath, since, goToApp, tryInDemo,
 } from "../types";
@@ -403,6 +405,8 @@ export const lecturerPages: DocPage[] = [
       screenshot("L-RQ-12", "ผลการตัดสิน 3 แบบ อนุมัติ ปฏิเสธพร้อมเหตุผล และส่งแล้วรออนุมัติ"),
       callout("warn", "กดส่งแล้ว **TA คนนั้นถูกนับเข้าโควตาจำนวนวิชาทันที** แม้ระบบยังไม่ตัดสิน ถ้าต้องการเริ่มกรอกใหม่ทั้งหมด กด **ล้างฟอร์ม**"),
       screenshot("L-RQ-13", "ตารางประวัติคำขอ วางเมาส์บนไอคอนสีแดงเพื่อดูเหตุผลที่ปฏิเสธ"),
+      ...workflowBlocks("request", "th"),
+      ...concurrentEditHelp("th"),
     ],
     related: ["lecturer:request/rejected-troubleshoot"],
   },
@@ -469,6 +473,8 @@ export const lecturerPages: DocPage[] = [
       callout("warn", "อนุมัติแล้ว TA จะแก้เดือนนั้นไม่ได้อีก ถ้ายังมีจุดต้องแก้ ให้กด **ส่งกลับ** แทน"),
       screenshot("L-RP-04", "แถบแดงเตือนงบไม่พอ"),
       callout("info", "แถบแดงเรื่องงบ แปลว่าถ้าอนุมัติครบตามที่ TA ลงไว้ งบของวิชาจะไม่พอ คุณยัง **อนุมัติได้ตามปกติ** ระบบเก็บชั่วโมงไว้ครบ แต่คาบที่เกินงบจะไม่ถูกนำไปเบิก และมีผลกับ TA ทุกคนเท่ากัน"),
+      ...scenarioBlocks("approve-worklog", "th"),
+      ...scenarioBlocks("return-worklog", "th"),
     ],
   },
 

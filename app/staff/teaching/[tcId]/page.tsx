@@ -107,7 +107,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
     <div>
       <Link
         href="/staff/teaching"
-        className="mb-2 inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-[var(--brand)]"
+        className="mb-2 inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-[var(--tone-brand-ink)]"
       >
         <ArrowLeft size={16} /> {t("กลับไปรายการวิชา")}
       </Link>
@@ -240,14 +240,14 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
       <div data-tour="course-danger" className="mt-6 rounded-lg border border-danger/30 bg-danger/5 p-4">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-danger">{t("ลบรายวิชานี้")}</div>
+            <div className="text-sm font-semibold text-danger-soft-foreground">{t("ลบรายวิชานี้")}</div>
             <div className="text-xs text-muted mt-0.5">
               {t("ลบได้เฉพาะวิชาที่เปิดผิด/ยังไม่มีข้อมูล ถ้ามี TA, บันทึกเวลา หรือส่งออกแล้ว ระบบจะไม่ให้ลบ")}
             </div>
           </div>
           <Button
             variant="ghost"
-            className="ms-auto text-danger hover:bg-danger/10"
+            className="ms-auto text-danger-soft-foreground hover:bg-danger/10"
             onClick={() => setConfirmDelete(true)}
             disabled={deleting}
           >

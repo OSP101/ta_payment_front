@@ -28,6 +28,7 @@ export interface StaffWorkLog {
   track: string;
   level: string;
   locked: boolean;
+  period_closed?: boolean;
 }
 interface StaffAssignment {
   assignment_id: string;
@@ -311,7 +312,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
   // lecturer on the course — the same bar the monthly batch-edit dialog sets.
   // The server enforces this; the dialog is here so the requirement is asked for
   // up front rather than discovered as an error.
-  const needsStepUp = row.status === "approved";
+  const needsStepUp = row.status === "approved" || row.period_closed === true;
   const [stepUpOpen, setStepUpOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [password, setPassword] = useState("");
@@ -402,7 +403,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
         <td className="px-3 py-2 align-middle"><StatusChip status={row.status} /></td>
         <td className="px-3 py-2 align-middle text-right whitespace-nowrap pr-4">
           {row.locked ? (
-            <Tip content={t("งวดของเดือนนี้ปิดแล้ว หรือส่งออก/ส่งการเงินไปแล้ว แก้ไขย้อนหลังไม่ได้")}><span>
+            <Tip content={t("เดือนนี้ส่งออกหรือส่งการเงินแล้ว ต้องตีกลับก่อนแก้ไข")}><span>
               <Chip tone="warn"><Lock size={11} /> {t("ล็อก")}</Chip>
             </span></Tip>
           ) : (
@@ -503,7 +504,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
                   placeholder={t("เช่น ลงเวลาผิดจากใบลงชื่อจริงของวันนั้น")}
                 />
                 {!reasonOK && reason.length > 0 && (
-                  <p className="mt-1 text-xs text-red-600">{t("ยังสั้นเกินไป ({n}/10)", { n: reason.trim().length })}</p>
+                  <p className="mt-1 text-xs text-danger-soft-foreground">{t("ยังสั้นเกินไป ({n}/10)", { n: reason.trim().length })}</p>
                 )}
               </div>
               <label className="block text-xs text-ink-2">

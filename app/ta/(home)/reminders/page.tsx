@@ -213,7 +213,7 @@ function TimelineLoader({ periodId, tcId }: { periodId: string; tcId: string }) 
   const { data, error } = useSWR<SubmissionTimelineData>(
     me?.id ? `/submission-periods/${periodId}/courses/${tcId}/tas/${me.id}/timeline` : null,
   );
-  if (error) return <div className="text-xs text-danger px-2">{t("โหลดขั้นตอนไม่สำเร็จ")}</div>;
+  if (error) return <div className="text-xs text-danger-soft-foreground px-2">{t("โหลดขั้นตอนไม่สำเร็จ")}</div>;
   if (!data) {
     return (
       <SkelRegion label={t("กำลังโหลดขั้นตอน")} className="rounded-xl border border-hairline px-4 py-3 flex flex-col gap-3">

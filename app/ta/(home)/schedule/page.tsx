@@ -127,7 +127,7 @@ function SaveStatus({
   if (savedAgo) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
-        <Check size={13} className="text-success" />
+        <Check size={13} className="text-success-soft-foreground" />
         <span>{t("บันทึกล่าสุด {ago}", { ago: savedAgo })}</span>
       </span>
     );
@@ -616,7 +616,7 @@ export default function TASchedulePage() {
         {/* Wait for /me: before it lands canWba is false for everyone, and
             the eligibility warning flashed at graduate students too. */}
         {me && !canWba && !isWba && (
-          <p className="text-xs text-warning mt-1">
+          <p className="text-xs text-warning-soft-foreground mt-1">
             {t("โหมด WBA ใช้ได้เฉพาะนักศึกษาปริญญาตรีชั้นปีที่ 4 ขึ้นไป หรือนักศึกษาระดับบัณฑิตศึกษา")}
             {me?.study_level === "undergrad" && (me?.study_year ?? 0) < 1
               ? " " + t("ระบบยังคำนวณชั้นปีของคุณไม่ได้ กรุณากรอกรหัสนักศึกษาในแบบฟอร์มข้อมูลส่วนตัวก่อน")

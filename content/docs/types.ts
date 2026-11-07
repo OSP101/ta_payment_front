@@ -104,6 +104,8 @@ export type SeqItem =
   | { phase: string };
 
 export interface SequenceSpec {
+  /** User-manual summaries may omit execution bars rather than infer their duration. */
+  activation?: "auto" | "none";
   title: string;
   participants: SeqParticipant[];
   items: SeqItem[];

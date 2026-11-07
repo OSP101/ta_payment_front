@@ -60,7 +60,7 @@ export default function OnThisPage({ entries }: { entries: TocEntry[] }) {
                 className={
                   "-ms-px block border-s-2 py-1 ps-3 leading-5 transition-colors " +
                   (isActive
-                    ? "border-(--brand) text-(--brand) font-medium"
+                    ? "border-(--brand) text-(--tone-brand-ink) font-medium"
                     : "border-transparent text-muted hover:text-foreground")
                 }
               >

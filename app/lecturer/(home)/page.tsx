@@ -711,7 +711,7 @@ function CourseCard({
   const budgetTone: "success" | "warn" | "danger" =
     over || pctRaw >= 90 ? "danger" : pctRaw >= 70 ? "warn" : "success";
   const barFill = { success: "bg-success", warn: "bg-warning", danger: "bg-danger" }[budgetTone];
-  const barText = { success: "text-success", warn: "text-warning", danger: "text-danger" }[budgetTone];
+  const barText = { success: "text-success-soft-foreground", warn: "text-warning-soft-foreground", danger: "text-danger-soft-foreground" }[budgetTone];
   const pendingPeople = ov?.ta_pending_count ?? 0;
 
   // min-w-0 on the card: a grid item defaults to min-width:auto and refuses to
@@ -736,7 +736,7 @@ function CourseCard({
         </Tip>
         <ArrowRight
           size={15}
-          className="mt-1 shrink-0 text-muted transition-colors group-hover:text-accent"
+          className="mt-1 shrink-0 text-muted transition-colors group-hover:text-link"
         />
       </div>
 

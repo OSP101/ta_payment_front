@@ -62,7 +62,7 @@ export function CopyCodeButton({ code }: { code: string }) {
         }}
         className={
           "tap-target ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md align-middle transition " +
-          (done ? "text-success" : "text-muted hover:bg-surface-secondary hover:text-foreground")
+          (done ? "text-success-soft-foreground" : "text-muted hover:bg-surface-secondary hover:text-foreground")
         }
       >
         {done ? <Check size={13} /> : <Copy size={13} />}
@@ -87,7 +87,7 @@ export function CourseCode({ c, className = "", reg, copyable }: {
         target="_blank"
         rel="noopener noreferrer"
         onClick={e => e.stopPropagation()}
-        className="underline decoration-dotted underline-offset-4 hover:text-[var(--brand)] hover:decoration-solid"
+        className="underline decoration-dotted underline-offset-4 hover:text-[var(--tone-brand-ink)] hover:decoration-solid"
       >
         {code}
       </a>

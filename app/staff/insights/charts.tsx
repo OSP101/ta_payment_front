@@ -93,9 +93,9 @@ export function BudgetStack({ b }: { b: BudgetView }) {
   const scale = Math.max(b.base, b.projectedHigh, 1);
   const paid = Math.max(0, b.used - b.lump);
   const segs = [
-    { key: "paid", label: t("เบิกจ่ายแล้ว (รายชั่วโมง)"), v: paid, color: "#0776BC" },
-    { key: "lump", label: t("เหมาจ่ายบัณฑิต ภาคพิเศษ"), v: b.lump, color: "#6366f1" },
-    { key: "pipe", label: t("บันทึกแล้ว รออนุมัติ/ตรวจ"), v: b.pipeline, color: "#7cb9e8", hatch: true },
+    { key: "paid", label: t("เบิกจ่ายแล้ว (รายชั่วโมง)"), v: paid, color: "var(--chart-brand, #0776BC)" },
+    { key: "lump", label: t("เหมาจ่ายบัณฑิต ภาคพิเศษ"), v: b.lump, color: "var(--chart-lump, #6366f1)" },
+    { key: "pipe", label: t("บันทึกแล้ว รออนุมัติ/ตรวจ"), v: b.pipeline, color: "var(--chart-pipeline, #7cb9e8)", hatch: true },
     { key: "left", label: t("ยังไม่ผูกพัน"), v: b.uncommitted, color: "var(--tone-track)" },
   ].filter(s => s.v > 0.5);
   const timeX = b.elapsedPct != null ? (b.elapsedPct / 100) * (b.base / scale) * 100 : null;
@@ -111,7 +111,7 @@ export function BudgetStack({ b }: { b: BudgetView }) {
                  style={{
                    width: `${(s.v / scale) * 100}%`,
                    background: s.hatch
-                     ? `repeating-linear-gradient(135deg, ${s.color}, ${s.color} 5px, ${s.color}99 5px, ${s.color}99 10px)`
+                     ? `repeating-linear-gradient(135deg, ${s.color}, ${s.color} 5px, color-mix(in srgb, ${s.color} 60%, transparent) 5px, color-mix(in srgb, ${s.color} 60%, transparent) 10px)`
                      : s.color,
                  }}
                  onMouseMove={e => tip.show(e, <><b>{s.label}</b><div className="tabular-nums">{t("{amount} · {pct}% ของงบรวม", { amount: money(s.v, t), pct: Math.round((s.v / Math.max(b.base, 1)) * 100) })}</div></>)}
@@ -234,8 +234,8 @@ export function StaffingScatter({
         <div ref={tip.ref} className="relative">
           <svg width={W} height={H} className="block max-w-full" role="group"
                aria-label={t("กราฟจำนวนนักศึกษาเทียบจำนวน TA ที่ขอ {n} วิชา พร้อมเส้นเกณฑ์ 1 ต่อ {guide} และเพดาน 1 ต่อ {ceiling}", { n: pts.length, guide: plan.students_per_ta, ceiling: plan.min_students_per_ta })}>
-            <path d={above(plan.students_per_ta)} fill="#d97706" fillOpacity={0.06} />
-            <path d={above(plan.min_students_per_ta)} fill="#dc2626" fillOpacity={0.07} />
+            <path d={above(plan.students_per_ta)} fill="var(--chart-warn, #d97706)" fillOpacity={0.06} />
+            <path d={above(plan.min_students_per_ta)} fill="var(--chart-danger, #dc2626)" fillOpacity={0.07} />
             {yticks.map(v => (
               <g key={`y${v}`}>
                 <line x1={L} x2={W - R} y1={sy(v)} y2={sy(v)} stroke="var(--hairline,#eef0f3)" />
@@ -250,9 +250,9 @@ export function StaffingScatter({
             <text x={13} y={(T + H - B) / 2} fontSize="12" textAnchor="middle" fill="var(--ink-3,#64748b)"
                   transform={`rotate(-90 13 ${(T + H - B) / 2})`}>{t("TA ที่ขอ (คน)")}</text>
 
-            <line {...guide} stroke="#16a34a" strokeWidth={1.75} />
+            <line {...guide} stroke="var(--chart-green, #16a34a)" strokeWidth={1.75} />
             <LineLabel l={guide} at={0.42} color="var(--tone-good-ink)" text={t("แนะนำ 1:{n}", { n: plan.students_per_ta })} />
-            <line {...ceil} stroke="#dc2626" strokeWidth={1.5} strokeDasharray="6 4" />
+            <line {...ceil} stroke="var(--chart-danger, #dc2626)" strokeWidth={1.5} strokeDasharray="6 4" />
             <LineLabel l={ceil} at={0.3} color="var(--tone-danger-ink)" text={t("เพดาน 1:{n}", { n: plan.min_students_per_ta })} />
 
             {placed.map(({ r, dx }) => {
@@ -320,7 +320,7 @@ export function StaffingRows({ rows, selected, onSelect }: {
                 <div className="text-sm font-semibold text-[var(--ink-1)]">
                   {r.code}{" "}
                   <Tip content={m.label !== m.short ? t(m.label) : undefined}>
-                    <span tabIndex={-1} className="ms-1 rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: `${m.color}1a`, color: m.ink }}>{t(m.short)}</span>
+                    <span tabIndex={-1} className="ms-1 rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: `color-mix(in srgb, ${m.color} 10%, transparent)`, color: m.ink }}>{t(m.short)}</span>
                   </Tip>
                 </div>
                 <div className="text-xs text-[var(--ink-3)] tabular-nums">
@@ -330,17 +330,17 @@ export function StaffingRows({ rows, selected, onSelect }: {
               <div className="relative h-4" aria-hidden>
                 <div className="absolute inset-y-1 start-0 end-0 rounded-full bg-[var(--hairline,#eef0f3)]" />
                 <div className="absolute inset-y-1 start-0 rounded-full" style={{ width: pct(r.requested), background: m.color }} />
-                <i className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-[#15803d]" style={{ left: pct(r.recommended) }} />
-                <i className="absolute -top-1 -bottom-1 w-0 border-s-2 border-dashed border-[#b91c1c]" style={{ left: pct(r.ceiling) }} />
+                <i className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-[var(--chart-good,#15803d)]" style={{ left: pct(r.recommended) }} />
+                <i className="absolute -top-1 -bottom-1 w-0 border-s-2 border-dashed border-[var(--chart-danger,#b91c1c)]" style={{ left: pct(r.ceiling) }} />
               </div>
             </button>
           </li>
         );
       })}
       <li className="flex flex-wrap gap-x-4 gap-y-1 pt-2 text-xs text-[var(--ink-3)]">
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2 w-4 rounded-full bg-[#0776BC]" />{t("TA ที่ขอ (สีตามผลการเทียบ)")}</span>
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-3 w-0.5 bg-[#15803d]" />{t("ที่ระบบแนะนำ")}</span>
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-3 w-0 border-s-2 border-dashed border-[#b91c1c]" />{t("เพดานต่อนักศึกษา")}</span>
+        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2 w-4 rounded-full bg-[var(--chart-brand,#0776BC)]" />{t("TA ที่ขอ (สีตามผลการเทียบ)")}</span>
+        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-3 w-0.5 bg-[var(--chart-good,#15803d)]" />{t("ที่ระบบแนะนำ")}</span>
+        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-3 w-0 border-s-2 border-dashed border-[var(--chart-danger,#b91c1c)]" />{t("เพดานต่อนักศึกษา")}</span>
       </li>
     </ul>
   );
@@ -359,7 +359,7 @@ export function StatusLegend({ counts, onPick, picked }: {
         return (
           <Tip key={k} content={m.label !== m.short ? t(m.label) : undefined}>
           <button type="button" onClick={() => onPick?.(on ? "" : k)} aria-pressed={on}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${on ? "border-[var(--ink-2)] bg-[var(--ink-1)] text-white" : "border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--ink-2)]"}`}>
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${on ? "border-[var(--ink-2)] bg-foreground text-background" : "border-[var(--border)] hover:border-[var(--border-strong)] text-[var(--ink-2)]"}`}>
             <svg width="12" height="12" viewBox="-7 -7 14 14" aria-hidden><Mark shape={SHAPES[k]} x={0} y={0} r={4.5} color={m.color} /></svg>
             {t(m.short)} <b className="tabular-nums">{counts[k]}</b>
           </button>
@@ -499,7 +499,7 @@ export function Donut({ parts, center, sub, size = 132 }: {
  *  past 100%. Colour follows capState's line, so it never disagrees with it. */
 export function MiniBar({ value, max, warnAt, over }: { value: number; max: number; warnAt: number; over?: boolean }) {
   const p = max > 0 ? value / max : 0;
-  const c = over || p > 1 ? "#dc2626" : p >= warnAt ? "#d97706" : "#0776BC";
+  const c = over || p > 1 ? "var(--chart-danger, #dc2626)" : p >= warnAt ? "var(--chart-warn, #d97706)" : "var(--chart-brand, #0776BC)";
   return (
     <div className="h-2 w-full min-w-[56px] overflow-hidden rounded-full bg-[var(--hairline,#eef0f3)]">
       <div className="h-full rounded-full" style={{ width: `${Math.min(100, p * 100)}%`, background: c }} />

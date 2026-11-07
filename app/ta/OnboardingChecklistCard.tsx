@@ -79,7 +79,7 @@ export default function OnboardingChecklistCard() {
         className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50/70 px-4 py-3"
         role="status"
       >
-        <PartyPopper size={18} className="shrink-0 text-emerald-600" />
+        <PartyPopper size={18} className="shrink-0 text-success-soft-foreground" />
         <div className="text-sm text-emerald-900">
           {t.rich("{done} ทำครบทั้ง 2 ขั้นตอนแล้ว", { done: <b>{t("เตรียมพร้อมเรียบร้อย")}</b> })}
         </div>
@@ -139,7 +139,7 @@ export default function OnboardingChecklistCard() {
           {steps.map(s => (
             <li key={s.href} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
               {s.done
-                ? <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" aria-hidden />
+                ? <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-success-soft-foreground" aria-hidden />
                 : <Circle size={18} className="mt-0.5 shrink-0 text-muted" aria-hidden />}
               {/* basis-56 keeps the text from shrinking to make room for the
                   button: on a phone the two then no longer fit side by side and
@@ -195,7 +195,7 @@ function DocsInReviewCard({ approved, scheduleDone }: { approved: boolean; sched
             </p>
             {scheduleDone ? (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-                <CheckCircle2 size={14} className="shrink-0 text-emerald-600" aria-hidden />
+                <CheckCircle2 size={14} className="shrink-0 text-success-soft-foreground" aria-hidden />
                 {t("บันทึกตารางเรียนของภาคเรียนนี้แล้ว")}
               </p>
             ) : (

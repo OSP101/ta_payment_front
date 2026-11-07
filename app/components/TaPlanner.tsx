@@ -519,7 +519,7 @@ export function TaPlanner({
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold">
-                <Sparkles size={14} className="text-accent" />
+                <Sparkles size={14} className="text-link" />
                 {variant === "budget" && regular.existingTAs > 0 ? t("ถ้าจะขอ TA เพิ่ม") : t("แผนที่แนะนำสำหรับวิชานี้")}
               </div>
               <span className="text-[11px] text-muted">
@@ -558,7 +558,7 @@ export function TaPlanner({
             {model.advice.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs text-ink-2">
                 {model.advice.map((a, i) => (
-                  <li key={i} className="flex gap-1.5"><Info size={13} className="mt-0.5 shrink-0 text-accent" /><span>{a}</span></li>
+                  <li key={i} className="flex gap-1.5"><Info size={13} className="mt-0.5 shrink-0 text-link" /><span>{a}</span></li>
                 ))}
               </ul>
             )}
@@ -1129,7 +1129,7 @@ function PoolCard({ label, tone, pool, weeks }: { label: string; tone: "brand" |
             </>
           ) : t("ยังไม่มี TA ที่อนุมัติ")}
         </span>
-        <span className={"font-semibold tabular-nums " + (pool.free <= 0 ? "text-danger" : "text-ink-1")}>
+        <span className={"font-semibold tabular-nums " + (pool.free <= 0 ? "text-danger-soft-foreground" : "text-ink-1")}>
           {t("เหลือ {amount}", { amount: baht(pool.free) })}
         </span>
       </div>
@@ -1354,7 +1354,7 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
         {o.fits ? t("พอดีงบ — เบิกได้เต็ม") : t("เกินงบ {amount} — จะถูกตัดตามสัดส่วน", { amount: baht(Math.max(0, -o.regularLeft) + Math.max(0, -o.specialLeft)) })}
       </div>
       <button type="button" onClick={() => setMore(m => !m)} aria-expanded={more}
-        className="mt-2 flex items-center gap-1 self-start text-[11px] font-medium text-accent hover:underline">
+        className="mt-2 flex items-center gap-1 self-start text-[11px] font-medium text-link hover:underline">
         <ChevronDown size={12} className={"transition-transform " + (more ? "rotate-180" : "")} />
         {more ? t("ซ่อนรายละเอียด") : t("ดูรายละเอียดแผนนี้")}
       </button>
@@ -1570,7 +1570,7 @@ function ExistingCard({ f }: { f: PlanFacts }) {
 
 function Row({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: "danger" }) {
   return (
-    <div className={"flex items-baseline justify-between gap-3 " + (strong ? "font-semibold " : "") + (tone === "danger" ? "text-danger" : "")}>
+    <div className={"flex items-baseline justify-between gap-3 " + (strong ? "font-semibold " : "") + (tone === "danger" ? "text-danger-soft-foreground" : "")}>
       <span className="text-muted">{label}</span>
       <span className="tabular-nums">{value}</span>
     </div>

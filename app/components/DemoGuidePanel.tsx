@@ -83,7 +83,7 @@ function SubStepRow({ sub, lines, expanded, onToggle, currentEmail, onGoTo, onSw
         className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-sm"
       >
         {sub.done ? (
-          <CheckCircle2 size={14} className="shrink-0 text-success" />
+          <CheckCircle2 size={14} className="shrink-0 text-success-soft-foreground" />
         ) : (
           <span className="shrink-0 size-3.5 rounded-full border border-border" />
         )}
@@ -223,13 +223,13 @@ function StepBody({
           {t("กดให้ระบบทำขั้นตอนนี้แทน")}
         </Button>
         {state.status === "done" && state.message && (
-          <div className="flex items-start gap-1.5 text-sm text-success">
+          <div className="flex items-start gap-1.5 text-sm text-success-soft-foreground">
             <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
             <span>{state.message}</span>
           </div>
         )}
         {state.status === "error" && state.message && (
-          <div className="flex items-start gap-1.5 text-sm text-danger">
+          <div className="flex items-start gap-1.5 text-sm text-danger-soft-foreground">
             <AlertCircle size={16} className="shrink-0 mt-0.5" />
             <span>{state.message}</span>
           </div>
@@ -282,7 +282,7 @@ function StepBody({
                 />
               ))}
               {done && guide._after && (
-                <div className="flex flex-col gap-1 text-xs text-warning bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
+                <div className="flex flex-col gap-1 text-xs text-warning-soft-foreground bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
                   {guide._after.map((line, i) => (
                     <span key={i}>{guideText(t, line)}</span>
                   ))}
@@ -321,13 +321,13 @@ function StepBody({
       )}
 
       {state.status === "done" && state.message && (
-        <div className="flex items-start gap-1.5 text-sm text-success">
+        <div className="flex items-start gap-1.5 text-sm text-success-soft-foreground">
           <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
           <span>{state.message}</span>
         </div>
       )}
       {state.status === "error" && state.message && (
-        <div className="flex items-start gap-1.5 text-sm text-danger">
+        <div className="flex items-start gap-1.5 text-sm text-danger-soft-foreground">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <span>{state.message}</span>
         </div>
@@ -335,7 +335,7 @@ function StepBody({
       {done && relatedPath && isStaffViewer && (
         <Link
           href={relatedPath}
-          className="inline-flex w-fit items-center gap-1 text-sm font-medium text-accent hover:underline"
+          className="inline-flex w-fit items-center gap-1 text-sm font-medium text-link hover:underline"
         >
           {t("ดูผลจริงที่หน้านี้")}
           <ArrowUpRight size={13} />
@@ -515,7 +515,7 @@ export default function DemoGuidePanel() {
               <Accordion.Heading>
                 <Accordion.Trigger>
                   {done ? (
-                    <CheckCircle2 size={16} className="mr-2.5 shrink-0 text-success" />
+                    <CheckCircle2 size={16} className="mr-2.5 shrink-0 text-success-soft-foreground" />
                   ) : (
                     <span className="mr-2.5 size-4 shrink-0" />
                   )}
@@ -572,7 +572,7 @@ export default function DemoGuidePanel() {
         ) : (
           <>
             <div className="flex items-center gap-2 border-b border-border px-4 h-14 shrink-0">
-              <FlaskConical size={17} className="text-accent shrink-0" />
+              <FlaskConical size={17} className="text-link shrink-0" />
               <div className="font-semibold text-sm text-foreground truncate">{t("เครื่องจำลองเหตุการณ์")}</div>
               <Tip content={t("ย่อแผงเครื่องจำลองเหตุการณ์")}><button
                 type="button"

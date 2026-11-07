@@ -137,7 +137,7 @@ function RequestList({
                 scheduler retries automatically, but staff need to see a
                 request that has been stuck for a while. */}
             {r.status === "approved" && !r.scrub_completed_at && (
-              <div className="text-xs text-danger mt-1">
+              <div className="text-xs text-danger-soft-foreground mt-1">
                 {t("⚠ ลบไฟล์เอกสาร/รูปโปรไฟล์ยังไม่สำเร็จ — ระบบจะลองใหม่อัตโนมัติ")}
                 {r.scrub_error && <> ({r.scrub_error})</>}
               </div>

@@ -189,7 +189,7 @@ export default function TermDashboard({
         </div>
         <div className="p-5">
           <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]">
+            <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--tone-brand-ink)]">
               <Sparkles size={15} />
             </span>
             <h2 id="dash-decisions" className="text-base font-semibold text-[var(--ink-1)]">{t("ข้อสังเกตที่ต้องตัดสินใจหรือติดตาม")}</h2>
@@ -219,7 +219,7 @@ export default function TermDashboard({
           )}
           {insights.length > 5 && (
             <button type="button" onClick={() => setShowAllInsights(v => !v)} aria-expanded={showAllInsights}
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--brand)] hover:underline">
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--tone-brand-ink)] hover:underline">
               <ChevronDown size={14} className={showAllInsights ? "rotate-180" : ""} />
               {showAllInsights ? t("ย่อ") : t("ดูทั้งหมด {n} ข้อ", { n: insights.length })}
             </button>
@@ -409,7 +409,7 @@ export default function TermDashboard({
                  description={t("แต่ละรายการคือ TA หนึ่งคนในหนึ่งวิชาของเดือนนั้น แยกตามผู้ที่ต้องดำเนินการต่อ")} className="min-w-0"
                  actions={flow.months.length > 0 && !flow.chart ? (
                    <button type="button" onClick={() => setFlowAsChart(v => !v)} aria-pressed={flowAsChart}
-                           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--brand)] hover:bg-slate-50">
+                           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--tone-brand-ink)] hover:bg-slate-50">
                      {flowAsChart ? <><AlignLeft size={14} />{t("ดูเป็นข้อความ")}</> : <><BarChart3 size={14} />{t("ดูเป็นกราฟ")}</>}
                    </button>
                  ) : undefined}>
@@ -500,7 +500,7 @@ function QuestionNav() {
         { id: "q-courses", label: msg("รายวิชา"), icon: Table2 },
       ].map(n => (
         <a key={n.id} href={`#${n.id}`}
-           className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-surface px-3 py-1 text-xs text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--brand)]">
+           className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-surface px-3 py-1 text-xs text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--tone-brand-ink)]">
           <n.icon size={14} />{t(n.label)}
         </a>
       ))}
@@ -547,7 +547,7 @@ function DashboardSkeleton() {
         </div>
         <div className="p-5">
           <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]">
+            <span className="inline-flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft,#e7f3fb)] text-[var(--tone-brand-ink)]">
               <Sparkles size={15} />
             </span>
             <h2 className="text-base font-semibold text-[var(--ink-1)]">{t("ข้อสังเกตที่ต้องตัดสินใจหรือติดตาม")}</h2>
@@ -668,7 +668,7 @@ function Kpi({ icon, label, value, unit, sub, delta, tone, title }: {
   icon: React.ReactNode; label: string; value: React.ReactNode; unit: string; sub?: string; delta?: string;
   tone?: "warn"; title?: string;
 }) {
-  const iconCls = tone === "warn" ? "bg-amber-100 text-amber-800" : "bg-[var(--brand-soft,#e7f3fb)] text-[var(--brand)]";
+  const iconCls = tone === "warn" ? "bg-amber-100 text-amber-800" : "bg-[var(--brand-soft,#e7f3fb)] text-[var(--tone-brand-ink)]";
   return (
     <Tip content={title}><div className="relative flex flex-col rounded-xl border border-[var(--border)] bg-surface p-4">
       <div className="flex items-start gap-3">
@@ -765,7 +765,7 @@ function DeadlineCard({ a }: { a: TermAnalytics }) {
   // Amber when the reminder window the office configured has started.
   const urgent = d.days_left <= d.remind_days;
   return (
-    <div className={`rounded-xl border p-4 ${urgent ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white" : "border-[var(--border)] bg-surface"}`}>
+    <div className={`rounded-xl border p-4 ${urgent ? "border-amber-300 bg-gradient-to-br from-amber-50 to-[var(--panel-bg)]" : "border-[var(--border)] bg-surface"}`}>
       <div className="flex items-start gap-3">
         <div className={`flex size-14 shrink-0 flex-col items-center justify-center rounded-xl text-white ${urgent ? "bg-[#b45309]" : "bg-[var(--brand)]"}`}>
           <span className="text-xl font-bold leading-none tabular-nums">{d.days_left}</span>

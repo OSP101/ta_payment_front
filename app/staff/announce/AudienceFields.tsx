@@ -188,7 +188,7 @@ export function AudienceSection({
       {audience.failed ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-900">
           {t("นับจำนวนผู้รับไม่สำเร็จ")}
-          <button type="button" className="font-medium text-accent hover:underline" onClick={audience.retry}>{t("ลองอีกครั้ง")}</button>
+          <button type="button" className="font-medium text-link hover:underline" onClick={audience.retry}>{t("ลองอีกครั้ง")}</button>
         </div>
       ) : (
         <AudienceSummary sentence={describeRule(draft, filterOpts, t)} preview={preview} loading={loading} isPublic={draft.isPublic} />
@@ -248,7 +248,7 @@ function AudienceSummary({
           {preview.total > names.length && (
             <>
               {" "}
-              <button type="button" className="text-accent hover:underline" onClick={() => setShowAll(true)}>
+              <button type="button" className="text-link hover:underline" onClick={() => setShowAll(true)}>
                 {t("และอีก {n} คน", { n: preview.total - names.length })}
               </button>
             </>

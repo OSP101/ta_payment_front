@@ -164,10 +164,10 @@ export function ClaimSheetDownload({ tcId, courseCode }: { tcId: string; courseC
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium">{t("เลือกเดือน")}</span>
                 <span className="flex gap-3">
-                  <button type="button" className="text-accent hover:underline" onClick={() => setPicked(new Set(months.map(m => m.year_month)))}>
+                  <button type="button" className="text-link hover:underline" onClick={() => setPicked(new Set(months.map(m => m.year_month)))}>
                     {t("เลือกทั้งหมด")}
                   </button>
-                  <button type="button" className="text-accent hover:underline" onClick={() => setPicked(new Set())}>
+                  <button type="button" className="text-link hover:underline" onClick={() => setPicked(new Set())}>
                     {t("ล้าง")}
                   </button>
                 </span>

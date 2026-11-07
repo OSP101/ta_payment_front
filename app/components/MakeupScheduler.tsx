@@ -327,7 +327,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             </div>
                           ) : sec.makeup ? (
                             <div className="flex items-center gap-2 flex-wrap">
-                              <CheckCircle2 size={16} className="text-success" />
+                              <CheckCircle2 size={16} className="text-success-soft-foreground" />
                               <span className="text-sm font-medium">
                                 {t("ชดเชย: {date}", { date: formatThaiDate(sec.makeup.makeup_date!) })}
                               </span>
@@ -342,7 +342,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <AlertTriangle size={16} className="text-warning" />
+                              <AlertTriangle size={16} className="text-warning-soft-foreground" />
                               <span className="text-sm text-warning-soft-foreground">
                                 {isTA ? t("ยังไม่ได้กำหนดวันชดเชย คุณจะลงเวลาคาบนี้ไม่ได้") : t("ยังไม่ได้กำหนดวันชดเชย")}
                               </span>
@@ -422,7 +422,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                   <span className="text-muted">
                     {t.rich("งดวันที่ {off} → ชดเชย {on}", {
                       off: <span className="font-medium text-foreground">{formatThaiDate(makeup.original_date)}</span>,
-                      on: <span className="font-medium text-success">{formatThaiDate(makeup.makeup_date)}</span>,
+                      on: <span className="font-medium text-success-soft-foreground">{formatThaiDate(makeup.makeup_date)}</span>,
                     })}
                   </span>
                   {makeup.start_time && makeup.end_time && (
@@ -612,7 +612,7 @@ function MakeupFormModal({
     >
       <div className="flex flex-col gap-3">
         {armed && oldMakeupDate && (
-          <div role="alert" className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-sm text-danger">
+          <div role="alert" className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-sm text-danger-soft-foreground">
             {t.rich("รายการชั่วโมงฉบับร่างของ TA ในวันชดเชยเดิม ({date}) จะถูกลบ กด {confirm} อีกครั้งเพื่อบันทึก ระบบจะไม่ยอมแก้ถ้ามีชั่วโมงที่ส่งอนุมัติแล้ว", {
               date: formatThaiDate(oldMakeupDate),
               confirm: <b>{t("ยืนยันแก้ไขวันชดเชย")}</b>,

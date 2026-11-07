@@ -218,7 +218,7 @@ export default function TARequestsPage() {
 
         <div className="p-4">
           {error ? (
-            <div className="py-10 text-center text-sm text-red-600">{t("โหลดข้อมูลไม่สำเร็จ")}</div>
+            <div className="py-10 text-center text-sm text-danger-soft-foreground">{t("โหลดข้อมูลไม่สำเร็จ")}</div>
           ) : !listReady ? (
             <RequestListSkeleton />
           ) : filtered.length === 0 ? (
