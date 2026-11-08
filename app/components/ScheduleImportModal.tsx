@@ -1,6 +1,13 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, FileUp, Plus, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  FileUp,
+  List,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { api, type Term } from "../lib/api";
 import { icsToBlocks, applyClassKinds, type ClassKindRow } from "../lib/ics";
 import {
@@ -8,7 +15,7 @@ import {
   scheduleImportErrors,
   type ScheduleImportResult,
 } from "../lib/scheduleImport";
-import type { Block, BlockKind } from "./ScheduleGrid";
+import ScheduleGrid, { type Block, type BlockKind } from "./ScheduleGrid";
 import { useI18n, msg } from "../lib/i18n/client";
 import {
   Alert,
@@ -53,6 +60,9 @@ export default function ScheduleImportModal({
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [termConfirmed, setTermConfirmed] = useState(false);
+  const [view, setView] = useState<"grid" | "details">("grid");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const editorRef = useRef<HTMLElement | null>(null);
   const request = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -63,6 +73,8 @@ export default function ScheduleImportModal({
     setBusy(false);
     setConfirmed(false);
     setTermConfirmed(false);
+    setView("grid");
+    setSelectedId(null);
     if (fileRef.current) fileRef.current.value = "";
     return () => {
       request.current++;
@@ -81,6 +93,13 @@ export default function ScheduleImportModal({
     () => scheduleImportErrors(result?.blocks ?? []),
     [result],
   );
+  useEffect(() => {
+    if (view !== "grid" || !selectedId) return;
+    editorRef.current?.scrollIntoView({ block: "nearest" });
+    editorRef.current
+      ?.querySelector<HTMLElement>("select, input")
+      ?.focus({ preventScroll: true });
+  }, [selectedId, view]);
   const yearBE =
     term &&
     (term.academic_year < 2400 ? term.academic_year + 543 : term.academic_year);
@@ -103,6 +122,7 @@ export default function ScheduleImportModal({
     setBusy(true);
     setConfirmed(false);
     setTermConfirmed(false);
+    setSelectedId(null);
     try {
       if (picked.size > MAX_BYTES)
         throw new Error(t("ไฟล์ต้องมีขนาดไม่เกิน 10 MB"));
@@ -164,12 +184,15 @@ export default function ScheduleImportModal({
   }
   function remove(id: string) {
     setConfirmed(false);
+    if (selectedId === id) setSelectedId(null);
     setResult(
       (r) => r && { ...r, blocks: r.blocks.filter((b) => b.id !== id) },
     );
   }
   function add() {
     setConfirmed(false);
+    const id = `manual-${crypto.randomUUID()}`;
+    setSelectedId(id);
     setResult(
       (r) =>
         r && {
@@ -177,7 +200,7 @@ export default function ScheduleImportModal({
           blocks: [
             ...r.blocks,
             {
-              id: `manual-${crypto.randomUUID()}`,
+              id,
               term_id: termId,
               course_code: "",
               course_name: "",
@@ -199,7 +222,7 @@ export default function ScheduleImportModal({
       onClose={onClose}
       title={t("นำเข้าตารางเรียนจาก REG")}
       icon={<FileUp size={18} />}
-      size="2xl"
+      size={result ? "3xl" : "2xl"}
       placement="top"
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-3">
@@ -338,139 +361,214 @@ export default function ScheduleImportModal({
                 </label>
               </div>
             )}
+            <div
+              role="group"
+              aria-label={t("มุมมองข้อมูลตารางเรียน")}
+              className="flex flex-wrap gap-2"
+            >
+              <Button
+                variant={view === "grid" ? "primary" : "secondary"}
+                aria-pressed={view === "grid"}
+                onClick={() => {
+                  setSelectedId(null);
+                  setView("grid");
+                }}
+              >
+                <CalendarDays size={16} />
+                {t("ตารางเรียน")}
+              </Button>
+              <Button
+                variant={view === "details" ? "primary" : "secondary"}
+                aria-pressed={view === "details"}
+                onClick={() => setView("details")}
+              >
+                <List size={16} />
+                {t("รายละเอียดแต่ละคาบ")}
+              </Button>
+            </div>
+            {view === "grid" && (
+              <>
+                <ScheduleGrid
+                  blocks={result.blocks}
+                  readOnly
+                  onCreateDraft={() => {}}
+                  onSelectBlock={setSelectedId}
+                />
+                {errors.size > 0 && (
+                  <div className="flex flex-col gap-2" role="alert">
+                    {result.blocks.map(
+                      (b, i) =>
+                        errors.has(b.id) && (
+                          <div
+                            key={b.id}
+                            className="flex flex-wrap items-center gap-2 text-sm"
+                          >
+                            <Button
+                              variant="ghost"
+                              onClick={() => setSelectedId(b.id)}
+                            >
+                              {t("แก้ไขคาบที่ {n}", { n: i + 1 })}
+                            </Button>
+                            <span className="text-danger">
+                              {t(errors.get(b.id)!)}
+                            </span>
+                          </div>
+                        ),
+                    )}
+                  </div>
+                )}
+                {selectedId && (
+                  <div className="flex justify-end">
+                    <Button variant="ghost" onClick={() => setSelectedId(null)}>
+                      {t("ปิดรายละเอียดคาบ")}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
             <div className="flex flex-col gap-4">
-              {result.blocks.map((b, i) => (
-                <section
-                  key={b.id}
-                  aria-label={t("คาบที่ {n}", { n: i + 1 })}
-                  className="rounded-md border border-[var(--hairline)] p-3 sm:p-4"
-                >
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium">
-                        {t("คาบที่ {n}", { n: i + 1 })}
-                      </span>
-                      {result.reviewIds?.includes(b.id) && (
-                        <Chip tone="warn">
-                          {t("ตรวจเวลาที่ไม่ตรงครึ่งชั่วโมง")}
-                        </Chip>
-                      )}
-                    </div>
-                    <IconButton
-                      label={t("ลบคาบที่ {n}", { n: i + 1 })}
-                      onClick={() => remove(b.id)}
+              {result.blocks.map(
+                (b, i) =>
+                  (view === "details" || selectedId === b.id) && (
+                    <section
+                      key={b.id}
+                      ref={view === "grid" ? editorRef : undefined}
+                      aria-label={t("คาบที่ {n}", { n: i + 1 })}
+                      className="rounded-md border border-[var(--hairline)] p-3 sm:p-4"
                     >
-                      <Trash2 size={16} />
-                    </IconButton>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <FieldGroup label={t("วัน")}>
-                      <Select
-                        aria-label={t("วัน คาบที่ {n}", { n: i + 1 })}
-                        value={b.day_of_week}
-                        onChange={(e) =>
-                          update(b.id, { day_of_week: +e.target.value })
-                        }
-                      >
-                        {[1, 2, 3, 4, 5, 6, 0].map((d) => (
-                          <option key={d} value={d}>
-                            {t(DAYS[d])}
-                          </option>
-                        ))}
-                      </Select>
-                    </FieldGroup>
-                    <FieldGroup label={t("เวลาเริ่ม")}>
-                      <TimePicker
-                        label={t("เวลาเริ่ม คาบที่ {n}", { n: i + 1 })}
-                        value={b.start_time}
-                        onChange={(v) => update(b.id, { start_time: v })}
-                        minValue="08:00"
-                        maxValue="20:00"
-                      />
-                    </FieldGroup>
-                    <FieldGroup label={t("เวลาสิ้นสุด")}>
-                      <TimePicker
-                        label={t("เวลาสิ้นสุด คาบที่ {n}", { n: i + 1 })}
-                        value={b.end_time}
-                        onChange={(v) => update(b.id, { end_time: v })}
-                        minValue="08:00"
-                        maxValue="20:00"
-                      />
-                    </FieldGroup>
-                    <FieldGroup label={t("รหัสวิชา")}>
-                      <TextInput
-                        aria-label={t("รหัสวิชา คาบที่ {n}", { n: i + 1 })}
-                        value={b.course_code}
-                        maxLength={16}
-                        onChange={(e) =>
-                          update(b.id, {
-                            course_code: e.target.value.toUpperCase(),
-                          })
-                        }
-                      />
-                    </FieldGroup>
-                    <FieldGroup label={t("กลุ่ม")}>
-                      <TextInput
-                        aria-label={t("กลุ่ม คาบที่ {n}", { n: i + 1 })}
-                        value={b.sec_no}
-                        inputMode="numeric"
-                        maxLength={8}
-                        onChange={(e) =>
-                          update(b.id, { sec_no: e.target.value })
-                        }
-                      />
-                    </FieldGroup>
-                    <FieldGroup label={t("ประเภท")}>
-                      <Select
-                        aria-label={t("ประเภท คาบที่ {n}", { n: i + 1 })}
-                        value={b.kind}
-                        onChange={(e) =>
-                          update(b.id, { kind: e.target.value as BlockKind })
-                        }
-                      >
-                        <option value="">{t("ไม่ระบุ")}</option>
-                        <option value="lecture">{t("บรรยาย")}</option>
-                        <option value="lab">{t("ปฏิบัติการ")}</option>
-                      </Select>
-                    </FieldGroup>
-                    <div className="sm:col-span-2">
-                      <FieldGroup label={t("ชื่อวิชา")}>
-                        <TextInput
-                          aria-label={t("ชื่อวิชา คาบที่ {n}", { n: i + 1 })}
-                          value={b.course_name}
-                          maxLength={120}
-                          onChange={(e) =>
-                            update(b.id, { course_name: e.target.value })
-                          }
-                        />
-                      </FieldGroup>
-                    </div>
-                    <FieldGroup label={t("ห้อง / หมายเหตุ")}>
-                      <TextInput
-                        aria-label={t("ห้อง คาบที่ {n}", { n: i + 1 })}
-                        value={b.note}
-                        maxLength={200}
-                        onChange={(e) => update(b.id, { note: e.target.value })}
-                      />
-                    </FieldGroup>
-                  </div>
-                  {result.rawById?.[b.id] && (
-                    <details className="mt-3 text-sm text-muted">
-                      <summary className="cursor-pointer">
-                        {t("ข้อความที่อ่านจากต้นฉบับ")}
-                      </summary>
-                      <p className="mt-2 whitespace-pre-wrap break-words">
-                        {result.rawById[b.id]}
-                      </p>
-                    </details>
-                  )}
-                  {errors.has(b.id) && (
-                    <p role="alert" className="mt-3 text-sm text-danger">
-                      {t(errors.get(b.id)!)}
-                    </p>
-                  )}
-                </section>
-              ))}
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium">
+                            {t("คาบที่ {n}", { n: i + 1 })}
+                          </span>
+                          {result.reviewIds?.includes(b.id) && (
+                            <Chip tone="warn">
+                              {t("ตรวจเวลาที่ไม่ตรงครึ่งชั่วโมง")}
+                            </Chip>
+                          )}
+                        </div>
+                        <IconButton
+                          label={t("ลบคาบที่ {n}", { n: i + 1 })}
+                          onClick={() => remove(b.id)}
+                        >
+                          <Trash2 size={16} />
+                        </IconButton>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <FieldGroup label={t("วัน")}>
+                          <Select
+                            aria-label={t("วัน คาบที่ {n}", { n: i + 1 })}
+                            value={b.day_of_week}
+                            onChange={(e) =>
+                              update(b.id, { day_of_week: +e.target.value })
+                            }
+                          >
+                            {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                              <option key={d} value={d}>
+                                {t(DAYS[d])}
+                              </option>
+                            ))}
+                          </Select>
+                        </FieldGroup>
+                        <FieldGroup label={t("เวลาเริ่ม")}>
+                          <TimePicker
+                            label={t("เวลาเริ่ม คาบที่ {n}", { n: i + 1 })}
+                            value={b.start_time}
+                            onChange={(v) => update(b.id, { start_time: v })}
+                            minValue="08:00"
+                            maxValue="20:00"
+                          />
+                        </FieldGroup>
+                        <FieldGroup label={t("เวลาสิ้นสุด")}>
+                          <TimePicker
+                            label={t("เวลาสิ้นสุด คาบที่ {n}", { n: i + 1 })}
+                            value={b.end_time}
+                            onChange={(v) => update(b.id, { end_time: v })}
+                            minValue="08:00"
+                            maxValue="20:00"
+                          />
+                        </FieldGroup>
+                        <FieldGroup label={t("รหัสวิชา")}>
+                          <TextInput
+                            aria-label={t("รหัสวิชา คาบที่ {n}", { n: i + 1 })}
+                            value={b.course_code}
+                            maxLength={16}
+                            onChange={(e) =>
+                              update(b.id, {
+                                course_code: e.target.value.toUpperCase(),
+                              })
+                            }
+                          />
+                        </FieldGroup>
+                        <FieldGroup label={t("กลุ่ม")}>
+                          <TextInput
+                            aria-label={t("กลุ่ม คาบที่ {n}", { n: i + 1 })}
+                            value={b.sec_no}
+                            inputMode="numeric"
+                            maxLength={8}
+                            onChange={(e) =>
+                              update(b.id, { sec_no: e.target.value })
+                            }
+                          />
+                        </FieldGroup>
+                        <FieldGroup label={t("ประเภท")}>
+                          <Select
+                            aria-label={t("ประเภท คาบที่ {n}", { n: i + 1 })}
+                            value={b.kind}
+                            onChange={(e) =>
+                              update(b.id, {
+                                kind: e.target.value as BlockKind,
+                              })
+                            }
+                          >
+                            <option value="">{t("ไม่ระบุ")}</option>
+                            <option value="lecture">{t("บรรยาย")}</option>
+                            <option value="lab">{t("ปฏิบัติการ")}</option>
+                          </Select>
+                        </FieldGroup>
+                        <div className="sm:col-span-2">
+                          <FieldGroup label={t("ชื่อวิชา")}>
+                            <TextInput
+                              aria-label={t("ชื่อวิชา คาบที่ {n}", {
+                                n: i + 1,
+                              })}
+                              value={b.course_name}
+                              maxLength={120}
+                              onChange={(e) =>
+                                update(b.id, { course_name: e.target.value })
+                              }
+                            />
+                          </FieldGroup>
+                        </div>
+                        <FieldGroup label={t("ห้อง / หมายเหตุ")}>
+                          <TextInput
+                            aria-label={t("ห้อง คาบที่ {n}", { n: i + 1 })}
+                            value={b.note}
+                            maxLength={200}
+                            onChange={(e) =>
+                              update(b.id, { note: e.target.value })
+                            }
+                          />
+                        </FieldGroup>
+                      </div>
+                      {result.rawById?.[b.id] && (
+                        <details className="mt-3 text-sm text-muted">
+                          <summary className="cursor-pointer">
+                            {t("ข้อความที่อ่านจากต้นฉบับ")}
+                          </summary>
+                          <p className="mt-2 whitespace-pre-wrap break-words">
+                            {result.rawById[b.id]}
+                          </p>
+                        </details>
+                      )}
+                      {errors.has(b.id) && (
+                        <p role="alert" className="mt-3 text-sm text-danger">
+                          {t(errors.get(b.id)!)}
+                        </p>
+                      )}
+                    </section>
+                  ),
+              )}
             </div>
             <Button variant="ghost" onClick={add}>
               <Plus size={16} />

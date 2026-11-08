@@ -59,6 +59,8 @@ interface Props {
   /** Called after a drag-to-resize of an existing block. */
   onResizeBlock?: (id: string, start: string, end: string) => void;
   disabled?: boolean;
+  /** Preview mode: allow selecting a class, without creating, dragging or resizing. */
+  readOnly?: boolean;
 }
 
 // Display order (Mon..Sun) → day_of_week where Sun=0
@@ -171,8 +173,10 @@ export default function ScheduleGrid({
   onMoveBlock,
   onResizeBlock,
   disabled,
+  readOnly = false,
 }: Props) {
   const { t } = useI18n();
+  const interactionDisabled = disabled || readOnly;
   const [drag, setDrag] = useState<DragState>({ kind: "idle" });
   // Mirror of `drag` for the pointerup handler. The parent callbacks below must
   // NOT run inside a setDrag() updater — React executes updaters during the
@@ -293,7 +297,7 @@ export default function ScheduleGrid({
   }, [drag.kind]);
 
   function onTimelinePointerDown(e: React.PointerEvent) {
-    if (disabled) return;
+    if (interactionDisabled) return;
     const target = e.target as HTMLElement;
     // Block-body / resize-handle clicks are handled by their own listeners below.
     if (target.closest("[data-block]") || target.closest("[data-handle]")) return;
@@ -313,7 +317,7 @@ export default function ScheduleGrid({
   }
 
   function startMove(e: React.PointerEvent, b: Block) {
-    if (disabled) return;
+    if (interactionDisabled) return;
     e.stopPropagation();
     if (e.button !== 0) return;
     const { dayIdx: pointerDayIdx, slot: pointerSlot } = coordFromEvent(e);
@@ -332,7 +336,7 @@ export default function ScheduleGrid({
   }
 
   function startResize(e: React.PointerEvent, b: Block, edge: "left" | "right") {
-    if (disabled) return;
+    if (interactionDisabled) return;
     e.stopPropagation();
     if (e.button !== 0) return;
     const dayIdx = DOW_TO_IDX[b.day_of_week] ?? 0;
@@ -360,9 +364,10 @@ export default function ScheduleGrid({
           <div className="w-20 shrink-0 text-xs text-slate-500 py-2 px-2">{t("เวลา →")}</div>
           <div className="relative flex-1" style={{ height: 32 }}>
             {hours.map((h, i) => (
-              <div key={h} className="absolute top-0 bottom-0 flex items-end pb-1"
+              <div key={h} className="absolute top-0 bottom-0 flex items-end pb-2"
                    style={{ left: pct(i / HOURS) }}>
-                <span className="text-xs text-slate-500 tabular-nums -translate-x-1/2">{timeStr(h, 0)}</span>
+                <span className="text-xs font-medium text-slate-700 tabular-nums -translate-x-1/2">{timeStr(h, 0)}</span>
+                <span aria-hidden className="absolute bottom-0 h-1.5 w-0.5 -translate-x-1/2" style={{ background: "var(--schedule-hour-line)" }} />
               </div>
             ))}
           </div>
@@ -387,7 +392,7 @@ export default function ScheduleGrid({
             className="relative flex-1 select-none"
             style={{
               height: ROW_PX * DAYS_LONG.length,
-              cursor: disabled ? "default" : drag.kind === "creating" ? "grabbing" : "crosshair",
+              cursor: interactionDisabled ? "default" : drag.kind === "creating" ? "grabbing" : "crosshair",
             }}
             onPointerDown={onTimelinePointerDown}
           >
@@ -402,7 +407,7 @@ export default function ScheduleGrid({
             {/* The reserved create strip, tinted so it reads as usable canvas
                 rather than as padding. Pointer events pass through to the
                 timeline underneath, which starts the create-drag. */}
-            {!disabled && DAYS_LONG.map((_, i) => (
+            {!interactionDisabled && DAYS_LONG.map((_, i) => (
               <div
                 key={"strip" + i}
                 aria-hidden
@@ -416,14 +421,14 @@ export default function ScheduleGrid({
               />
             ))}
             {/* hour grid lines */}
-            {Array.from({ length: HOURS - 1 }, (_, i) => (
+            {hours.map((_, i) => (
               <div key={"h" + i} className="absolute top-0 bottom-0 pointer-events-none"
-                   style={{ left: pct((i + 1) / HOURS), width: 1, background: "var(--hairline)" }} />
+                   style={{ left: pct(i / HOURS), width: 2, transform: "translateX(-50%)", background: "var(--schedule-hour-line)" }} />
             ))}
             {/* half-hour minor lines */}
             {Array.from({ length: HOURS }, (_, i) => (
               <div key={"m" + i} className="absolute top-0 bottom-0 pointer-events-none"
-                   style={{ left: pct((i + 0.5) / HOURS), width: 1, background: "var(--schedule-minor-line)" }} />
+                   style={{ left: pct((i + 0.5) / HOURS), borderLeft: "1px dashed var(--schedule-minor-line)" }} />
             ))}
 
             {/* Existing blocks, packed into lanes per day. */}
@@ -445,6 +450,8 @@ export default function ScheduleGrid({
                   <HTooltip key={b.id} delay={200}>
                     <HTooltip.Trigger
                       data-block
+                      data-block-id={b.id}
+                      onClick={readOnly && !disabled ? () => onSelectBlock(b.id) : undefined}
                       onPointerDown={e => startMove(e, b)}
                       className="absolute touch-none rounded-md text-white text-xs overflow-hidden hover:brightness-110 shadow-sm"
                       style={{
@@ -453,11 +460,11 @@ export default function ScheduleGrid({
                         top: dayIdx * ROW_PX + 2 + lane * laneH,
                         height: laneH - 2,
                         background: "var(--brand)",
-                        cursor: disabled ? "default" : "grab",
+                        cursor: disabled ? "default" : readOnly ? "pointer" : "grab",
                       }}
                     >
                       {/* left resize handle */}
-                      {!disabled && (
+                      {!interactionDisabled && (
                         <HTooltip delay={200}>
                           <HTooltip.Trigger
                             data-handle
@@ -477,7 +484,7 @@ export default function ScheduleGrid({
                         </div>
                       </div>
                       {/* right resize handle */}
-                      {!disabled && (
+                      {!interactionDisabled && (
                         <HTooltip delay={200}>
                           <HTooltip.Trigger
                             data-handle
@@ -556,10 +563,12 @@ export default function ScheduleGrid({
         </div>
       </div>
       <div className="text-[11px] text-muted px-3 py-2 border-t border-[var(--hairline)]">
+        {readOnly ? t("คลิกหรือแตะคาบเพื่อแก้ไขรายละเอียด เลื่อนตารางแนวนอนเพื่อดูช่วงเวลาอื่น") : <>
         <span className="block pointer-fine:hidden">
           {t("ปัดตารางไปทางซ้ายหรือขวาเพื่อดูช่วงเวลาอื่น · เพิ่มคาบด้วยปุ่ม “เพิ่มคาบเรียน” · แตะคาบเพื่อแก้ไข")}
         </span>
         <span className="hidden pointer-fine:inline">{t("ลากในพื้นที่ว่างเพื่อสร้างคาบใหม่ · ลากคาบเพื่อย้ายวัน/เวลา · จับขอบซ้ายหรือขวาของคาบเพื่อขยาย/หด · คลิกเพื่อแก้ไขรายละเอียด · คาบที่ซ้อนกันจะถูกจัดชั้นให้อัตโนมัติ")} · <span>{t.rich("หากเวลานั้นมีคาบอยู่แล้ว ให้ลากที่{strip}เพื่อสร้างคาบซ้อนเวลาเดียวกัน", { strip: <b>{t("แถบลายทางด้านล่างของแถว")}</b> })}</span></span>
+        </>}
       </div>
     </div>
   );

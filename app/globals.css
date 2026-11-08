@@ -94,7 +94,8 @@ button:not(:disabled):not([aria-disabled="true"]),
   --tone-glow: #eef6fc;
   --tone-track: #dfe4ea;
   --schedule-stripe: rgba(0, 0, 0, 0.035);
-  --schedule-minor-line: rgba(0, 0, 0, 0.03);
+  --schedule-hour-line: #8495ab;
+  --schedule-minor-line: #8495ab55;
 }
 
 @theme {
@@ -227,7 +228,8 @@ button:not(:disabled):not([aria-disabled="true"]),
   --chart-muted: #a9b9ce;
   --chart-empty: #70839d;
   --schedule-stripe: #b5c3d61a;
-  --schedule-minor-line: #8193ac55;
+  --schedule-hour-line: #71849c;
+  --schedule-minor-line: #8193ac40;
 
   /* Timetable colours are paired: dark screen tints with readable ink.
      Each caller keeps its original paper colours as var() fallbacks. */

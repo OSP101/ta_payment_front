@@ -64,7 +64,9 @@ try {
   const page = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
   });
-  await page.route('**/api/v1/auth/heartbeat', r => r.fulfill({json:{ok:true}}));
+  await page.route("**/api/v1/auth/heartbeat", (r) =>
+    r.fulfill({ json: { ok: true } }),
+  );
   const runtimeErrors = [];
   page.on("pageerror", (e) => runtimeErrors.push(e.message));
   await page.route("**/api/v1/class-kinds?*", (r) => r.fulfill({ json: [] }));
@@ -79,6 +81,11 @@ try {
       exact: true,
     });
   const sections = () => page.locator('section[aria-label^="คาบที่"]');
+  const timetable = () => page.getByRole("dialog").locator("[data-block]");
+  const gridView = () =>
+    page.getByRole("button", { name: "ตารางเรียน", exact: true });
+  const detailView = () =>
+    page.getByRole("button", { name: "รายละเอียดแต่ละคาบ", exact: true });
   await expect(submit()).toBeDisabled();
   for (let i = 0; i < 5; i++) {
     if (i)
@@ -88,7 +95,35 @@ try {
     await upload().setInputFiles(
       path.join(fixtureDir, `repstudenttime${i ? ` (${i})` : ""}.pdf`),
     );
-    await expect(sections()).toHaveCount(i < 2 ? 10 : 12, { timeout: 60000 });
+    await expect(timetable()).toHaveCount(i < 2 ? 10 : 12, { timeout: 60000 });
+    await expect(gridView()).toHaveAttribute("aria-pressed", "true");
+    await expect(sections()).toHaveCount(0);
+    await expect(page.getByRole("dialog").locator("[data-handle]")).toHaveCount(
+      0,
+    );
+    if (i === 0) {
+      await timetable().first().click();
+      await expect(sections()).toHaveCount(1);
+      await page
+        .getByLabel("ชื่อวิชา คาบที่ 1", { exact: true })
+        .fill("แก้จากมุมมองตาราง");
+      await expect(timetable().first()).toContainText("แก้จากมุมมองตาราง");
+      if (process.env.REG_CAPTURE) {
+        await mkdir("/tmp/reg-pdf-study", { recursive: true });
+        await gridView().scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: "/tmp/reg-pdf-study/import-grid-desktop.png",
+        });
+        await page.setViewportSize({ width: 390, height: 844 });
+        await gridView().scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: "/tmp/reg-pdf-study/import-grid-mobile.png",
+        });
+        await page.setViewportSize({ width: 1440, height: 1000 });
+      }
+    }
+    await detailView().click();
+    await expect(sections()).toHaveCount(i < 2 ? 10 : 12);
     await expect(submit()).toBeDisabled();
     const fixture = JSON.parse(
       await readFile(`scripts/fixtures/reg-pdf/sample-${i}.json`, "utf8"),
@@ -99,8 +134,18 @@ try {
     ).toHaveValue(first[2]);
     if (i === 0) {
       await mkdir("/tmp/reg-pdf-study", { recursive: true });
-      if (process.env.REG_CAPTURE) await page.screenshot({ path: "/tmp/reg-pdf-study/import-desktop.png" });
+      if (process.env.REG_CAPTURE)
+        await page.screenshot({
+          path: "/tmp/reg-pdf-study/import-desktop.png",
+        });
       await ack().check();
+      await gridView().click();
+      await expect(ack()).toBeChecked();
+      await expect(timetable().first()).toContainText("แก้จากมุมมองตาราง");
+      await detailView().click();
+      await expect(
+        page.getByLabel("ชื่อวิชา คาบที่ 1", { exact: true }),
+      ).toHaveValue("แก้จากมุมมองตาราง");
       await expect(submit()).toBeEnabled();
       await page.getByLabel("ห้อง คาบที่ 1", { exact: true }).fill("CP-test");
       await expect(ack()).not.toBeChecked();
@@ -143,7 +188,8 @@ try {
     if (i === 1) {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.getByRole("dialog").evaluate((el) => (el.scrollTop = 0));
-      if (process.env.REG_CAPTURE) await page.screenshot({ path: "/tmp/reg-pdf-study/import-mobile.png" });
+      if (process.env.REG_CAPTURE)
+        await page.screenshot({ path: "/tmp/reg-pdf-study/import-mobile.png" });
       const overflow = await page
         .getByRole("dialog")
         .evaluate((el) => el.scrollWidth > el.clientWidth + 2);
@@ -182,6 +228,8 @@ try {
       "BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART:20261109T010000Z\nDTEND:20261109T030000Z\nSUMMARY:LI101001 (3) 1.\nEND:VEVENT\nEND:VCALENDAR",
     ),
   });
+  await expect(timetable()).toHaveCount(1);
+  await detailView().click();
   await expect(sections()).toHaveCount(1);
   await expect(submit()).toBeDisabled();
   await ack().check();
@@ -265,11 +313,20 @@ try {
   await upload().setInputFiles(path.join(fixtureDir, "repstudenttime.pdf"));
   await expect.poll(() => !!deferred).toBe(true);
   await upload().setInputFiles(path.join(fixtureDir, "repstudenttime (2).pdf"));
+  await expect(timetable()).toHaveCount(12);
+  await detailView().click();
   await expect(sections()).toHaveCount(12);
-  const oldResponse = page.waitForResponse(r => r.request() === deferred.request());
+  const oldResponse = page.waitForResponse(
+    (r) => r.request() === deferred.request(),
+  );
   release();
   await (await oldResponse).finished();
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
   await expect(
     page.getByLabel("รหัสวิชา คาบที่ 1", { exact: true }),
   ).toHaveValue("342118");
@@ -277,7 +334,7 @@ try {
   await expect(submit()).toBeDisabled();
   expect(runtimeErrors).toEqual([]);
   console.log(
-    "PASS: five real PDFs, browser worker, editable fields/minutes, mandatory/revoked confirmation, term mismatch, desktop/mobile, ICS, malformed file, drag/resize and stale-result protection.",
+    "PASS: five real PDFs, browser worker, editable fields/minutes, mandatory/revoked confirmation, term mismatch, desktop/mobile, timetable/detail switching, click-to-edit, shared changes, ICS, malformed file, drag/resize and stale-result protection.",
   );
 } catch (e) {
   console.error(log.slice(-14000));
@@ -288,7 +345,10 @@ try {
   // Let Next's file watcher regenerate dev route types before stopping it.
   // Otherwise tsc would retain a reference to this now-removed temporary route.
   for (let i = 0; i < 100; i++) {
-    const validator = await readFile('.next/dev/types/validator.ts', 'utf8').catch(() => '');
+    const validator = await readFile(
+      ".next/dev/types/validator.ts",
+      "utf8",
+    ).catch(() => "");
     if (!validator.includes(route)) break;
     await pause(100);
   }

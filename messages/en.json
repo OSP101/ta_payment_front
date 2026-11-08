@@ -5092,5 +5092,10 @@
  "PDF มีเกิน 10 หน้า กรุณาเลือกเฉพาะตารางเรียนของภาคการศึกษานี้": "The PDF has more than 10 pages. Choose only this semester’s timetable.",
  "วิธีเร็วสุด: อัปโหลด PDF หรือ ICS": "Quickest way: upload PDF or ICS",
  "ดาวน์โหลดตารางเรียน PDF หรือ ICS จากระบบทะเบียน <b>reg.kku.ac.th</b> แล้วอัปโหลดที่นี่ ตรวจและแก้ไขวัน เวลา วิชา กลุ่ม และห้องก่อนยืนยันนำเข้า ข้อมูลที่ยืนยันจะแทนที่ตารางเดิมของภาคเรียนที่เลือก": "Download your timetable as PDF or ICS from <b>reg.kku.ac.th</b> and upload it here. Review and edit the day, time, course, section and room before confirming. The confirmed data replaces the selected semester’s timetable.",
- "กลุ่ม": "Section"
+ "กลุ่ม": "Section",
+ "มุมมองข้อมูลตารางเรียน": "Timetable view",
+ "รายละเอียดแต่ละคาบ": "Session details",
+ "แก้ไขคาบที่ {n}": "Edit session {n}",
+ "ปิดรายละเอียดคาบ": "Close session details",
+ "คลิกหรือแตะคาบเพื่อแก้ไขรายละเอียด เลื่อนตารางแนวนอนเพื่อดูช่วงเวลาอื่น": "Click or tap a session to edit its details. Scroll horizontally to see other times."
 }
