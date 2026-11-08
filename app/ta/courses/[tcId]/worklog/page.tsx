@@ -2,7 +2,7 @@
 import { Fragment, use, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid } from "lucide-react";
+import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid, Lock, CalendarOff, CalendarDays, ChevronRight } from "lucide-react";
 import { api, type Me } from "../../../../lib/api";
 import { PayEstimateCard, type PayEstimate, type PayEstimateMonth } from "../../../../components/PayEstimate";
 import { notify } from "../../../../lib/notify";
@@ -1683,7 +1683,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     ? (activeAssignment.track === "special"
       ? t("พิเศษ sec {sec}", { sec: activeAssignment.sec_no })
       : t("ปกติ sec {sec}", { sec: activeAssignment.sec_no }))
-    : "—";
+    : "-";
 
   const columns: DataColumn<WorkLog>[] = [
     {
@@ -2367,7 +2367,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             )}
             {otherUnsent.length > 0 && (
               <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
-                {t("กลุ่มอื่นจะไม่ถูกส่งไปด้วย — {list} ต้องกดส่งแยกอีกครั้ง", {
+                {t("กลุ่มอื่นจะไม่ถูกส่งไปด้วย {list} ต้องกดส่งแยกอีกครั้ง", {
                   list: otherUnsent.map(a => t("sec {sec} ({n} รายการ)", { sec: a.sec_no, n: a.submittable_count })).join(", "),
                 })}
               </p>
@@ -2438,7 +2438,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0" />
                 <span>
-                  {t.rich("มีวันหยุด {days} ของ section นี้ที่อาจารย์ยังไม่ได้กำหนดวันชดเชย ระบบจะ{skip}ทั้งหมด ไม่ได้สร้างรายการให้ — ดูรายละเอียดและแจ้งอาจารย์ได้ที่หน้า \"วันหยุดและวันชดเชย\" ก่อน แล้วค่อยกลับมาสร้างใหม่ก็ได้", {
+                  {t.rich("มีวันหยุด {days} ของ section นี้ที่อาจารย์ยังไม่ได้กำหนดวันชดเชย ระบบจะ{skip}ทั้งหมด ไม่ได้สร้างรายการให้ ดูรายละเอียดและแจ้งอาจารย์ได้ที่หน้า \"วันหยุดและวันชดเชย\" ก่อน แล้วค่อยกลับมาสร้างใหม่ก็ได้", {
                     days: <b>{t("{n} วัน", { n: unresolvedForActiveCount })}</b>,
                     skip: <b>{t("ข้ามวันเหล่านั้นไป")}</b>,
                   })}
@@ -2449,7 +2449,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0" />
                 <span>
-                  {t.rich("อาจารย์อนุมัติชั่วโมง{review}ให้คุณ แต่คุณยัง{notSet}ของตัวเอง (การ์ด \"ตารางตรวจการบ้านของคุณ\" ด้านบน) — ถ้าไม่ตั้งก่อนกด ระบบจะ{none} ลืมไว้หรือเปล่า?", {
+                  {t.rich("อาจารย์อนุมัติชั่วโมง{review}ให้คุณ แต่คุณยัง{notSet}ของตัวเอง (การ์ด \"ตารางตรวจการบ้านของคุณ\" ด้านบน) ถ้าไม่ตั้งก่อนกด ระบบจะ{none} ลืมไว้หรือเปล่า?", {
                     review: <b>{t("ตรวจงาน")}</b>,
                     notSet: <b>{t("ไม่ได้ตั้งวัน-เวลาตรวจงาน")}</b>,
                     none: <b>{t("ไม่สร้างรายการตรวจงานให้เลย")}</b>,
@@ -2460,7 +2460,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             {generating && (
               <p className="flex items-center gap-2 text-xs text-muted">
                 <Clock size={13} className="shrink-0 animate-pulse" />
-                {t("กำลังสร้างรายการ — กรุณารอจนกว่าจะเสร็จ อย่าปิดหรือรีเฟรชหน้านี้")}
+                {t("กำลังสร้างรายการ กรุณารอจนกว่าจะเสร็จ อย่าปิดหรือรีเฟรชหน้านี้")}
               </p>
             )}
           </div>
@@ -3165,7 +3165,7 @@ function AddWorklogModal({
                 })}
               </>
             ) : (
-              <>{t("ยังไม่ได้กำหนด “ตารางตรวจการบ้านของคุณ” — เพิ่มช่วงเวลาก่อน จึงจะลงเวลาตรวจงานได้")}</>
+              <>{t("ยังไม่ได้กำหนด “ตารางตรวจการบ้านของคุณ” เพิ่มช่วงเวลาก่อน จึงจะลงเวลาตรวจงานได้")}</>
             )}
           </div>
         )}
@@ -3778,7 +3778,7 @@ function MonthlyWorklogView({
               aria-expanded={!isCollapsed}
             >
               <span className={"inline-block transition-transform " + (isCollapsed ? "" : "rotate-90")}>
-                ▶
+                <ChevronRight size={16} aria-hidden="true" />
               </span>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
@@ -3790,20 +3790,21 @@ function MonthlyWorklogView({
                       {/* With no way back after the deadline, the warning has to
                           name the consequence, not just the date. */}
                       {deadline.daysLeft <= 0
-                        ? "⏰ " + t("วันนี้วันสุดท้าย ไม่ส่งถือว่าไม่ประสงค์ลงเวลา")
+                        ? "" + t("วันนี้วันสุดท้าย ไม่ส่งถือว่าไม่ประสงค์ลงเวลา")
                         : deadline.daysLeft <= 3
-                        ? "⏰ " + t("เหลือ {n} วัน ไม่ส่งถือว่าไม่ประสงค์ลงเวลา", { n: deadline.daysLeft })
-                        : "⏰ " + t("เหลืออีก {n} วันต้องส่ง", { n: deadline.daysLeft })}
+                        ? "" + t("เหลือ {n} วัน ไม่ส่งถือว่าไม่ประสงค์ลงเวลา", { n: deadline.daysLeft })
+                        : "" + t("เหลืออีก {n} วันต้องส่ง", { n: deadline.daysLeft })}
                     </Chip>
                   )}
                   {monthLock && (
                     <Chip tone={monthLock.financeSent ? "success" : "neutral"}>
-                      {"🔒 " + (monthLock.financeSent ? t("ส่งการเงินแล้ว") : t("งวดปิดรับแล้ว"))}
+                      <Lock size={12} aria-hidden="true" />
+                      {monthLock.financeSent ? t("ส่งการเงินแล้ว") : t("งวดปิดรับแล้ว")}
                     </Chip>
                   )}
                   {unresolvedInMonth > 0 && (
                     <Chip tone="warn">
-                      🏖 {t("รอวันชดเชย {n}", { n: unresolvedInMonth })}
+                      <CalendarOff size={12} aria-hidden="true" /> {t("รอวันชดเชย {n}", { n: unresolvedInMonth })}
                     </Chip>
                   )}
                 </div>
@@ -4006,12 +4007,12 @@ function MonthTable({
                     {col.render(r)}
                     {col.id === "work_date" && holiday && (
                       <div className="mt-1">
-                        <Chip tone="danger">🏖 {holidayLabel(holiday)}</Chip>
+                        <Chip tone="danger"><CalendarOff size={12} aria-hidden="true" /> {holidayLabel(holiday)}</Chip>
                       </div>
                     )}
                     {col.id === "work_date" && status?.isMakeupDay && !holiday && (
                       <div className="mt-1">
-                        <Chip tone="info">📅 {t("วันชดเชย")}</Chip>
+                        <Chip tone="info"><CalendarDays size={12} aria-hidden="true" /> {t("วันชดเชย")}</Chip>
                       </div>
                     )}
                   </td>
@@ -4109,7 +4110,7 @@ function HolidayHint({
       status="danger"
       icon={<AlertTriangle size={14} />}
       title={isPartial
-        ? t("เวลา {start}–{end} อยู่ในช่วงวันหยุด ({holiday})", { start: startTime || "—", end: endTime || "—", holiday: holidayLabel(holiday) })
+        ? t("เวลา {start}–{end} อยู่ในช่วงวันหยุด ({holiday})", { start: startTime || "-", end: endTime || "-", holiday: holidayLabel(holiday) })
         : t("วันนี้เป็นวันหยุด ({name}) ยังไม่ได้กำหนดวันชดเชย", { name: holiday.name })}
       description={
         isPartial ? (
@@ -4307,7 +4308,7 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
               {r.room && <div className="text-xs text-muted">· {r.room}</div>}
               {r.note && (
                 <Tip content={r.note}>
-                  <div className="text-xs text-muted truncate flex-1">— {r.note}</div>
+                  <div className="text-xs text-muted truncate flex-1">- {r.note}</div>
                 </Tip>
               )}
               <div className="ml-auto flex items-center gap-1">

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "docs:media": "node scripts/docs-media-checklist.mjs"
+    "docs:media": "node scripts/docs-media-checklist.mjs",
+    "test:schedule-import": "node --test scripts/schedule-import.test.mjs",
+    "test:schedule-import:browser": "node scripts/schedule-import.browser.test.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.2",
@@ -15,6 +17,7 @@
     "driver.js": "^1.8.0",
     "lucide-react": "^1.23.0",
     "next": "16.2.12",
+    "pdfjs-dist": "5.7.284",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "server-only": "^0.0.1",
@@ -22,6 +25,7 @@
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -102,7 +102,7 @@ export function parseTime(t: string) {
   return h * 60 + m;
 }
 function slotToTime(slot: number) {
-  const min = Math.round(slot) * SLOT_MIN;
+  const min = Math.round(slot * SLOT_MIN);
   return timeStr(START_HR + Math.floor(min / 60), min % 60);
 }
 function clamp(v: number, lo: number, hi: number) {
@@ -317,12 +317,12 @@ export default function ScheduleGrid({
     e.stopPropagation();
     if (e.button !== 0) return;
     const { dayIdx: pointerDayIdx, slot: pointerSlot } = coordFromEvent(e);
-    const startSlot = Math.round((parseTime(b.start_time) - START_HR * 60) / SLOT_MIN);
-    const endSlot = Math.round((parseTime(b.end_time) - START_HR * 60) / SLOT_MIN);
+    const startSlot = (parseTime(b.start_time) - START_HR * 60) / SLOT_MIN;
+    const endSlot = (parseTime(b.end_time) - START_HR * 60) / SLOT_MIN;
     setDrag({
       kind: "moving",
       id: b.id,
-      grabSlots: clamp(pointerSlot - startSlot, 0, endSlot - startSlot),
+      grabSlots: pointerSlot - startSlot,
       durationSlots: endSlot - startSlot,
       startDayIdx: pointerDayIdx,
       dayIdx: pointerDayIdx,
@@ -336,8 +336,8 @@ export default function ScheduleGrid({
     e.stopPropagation();
     if (e.button !== 0) return;
     const dayIdx = DOW_TO_IDX[b.day_of_week] ?? 0;
-    const startSlot = Math.round((parseTime(b.start_time) - START_HR * 60) / SLOT_MIN);
-    const endSlot = Math.round((parseTime(b.end_time) - START_HR * 60) / SLOT_MIN);
+    const startSlot = (parseTime(b.start_time) - START_HR * 60) / SLOT_MIN;
+    const endSlot = (parseTime(b.end_time) - START_HR * 60) / SLOT_MIN;
     setDrag({
       kind: "resizing",
       id: b.id,

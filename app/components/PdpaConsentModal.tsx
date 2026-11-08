@@ -67,7 +67,7 @@ export default function PdpaConsentModal({ onAccepted }: { onAccepted: () => voi
               </HModal.Icon>
               <HModal.Heading>{t("ประกาศเกี่ยวกับการเก็บรวบรวมและใช้ข้อมูลส่วนบุคคล")}</HModal.Heading>
               <p className="text-sm leading-5 text-muted">
-                {t("ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA) — โปรดอ่านก่อนกรอกข้อมูล")}
+                {t("ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA) โปรดอ่านก่อนกรอกข้อมูล")}
               </p>
             </HModal.Header>
             <HModal.Body>

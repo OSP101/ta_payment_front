@@ -617,7 +617,7 @@ export default function OpenCourseModal({
             </div>
             {!studentsComplete && (
               <div className="text-xs text-warning-soft-foreground font-medium mt-2">
-                ⚠ {t("กรุณากรอกจำนวนนักศึกษาให้ครบทุก section (อย่างน้อย 1 คน) ก่อนเปิดรายวิชา")}
+                {t("กรุณากรอกจำนวนนักศึกษาให้ครบทุก section (อย่างน้อย 1 คน) ก่อนเปิดรายวิชา")}
               </div>
             )}
           </StepCard>

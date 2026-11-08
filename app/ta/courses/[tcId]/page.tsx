@@ -164,7 +164,7 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
           <div data-tour="ta-course-stats" className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <StatCard
               label={t("สถานะ")}
-              value={statusLoading ? <SkelValue className="h-7 w-20" /> : myStatus ? t(STAGE_LABEL[myStatus.stage]) : "—"}
+              value={statusLoading ? <SkelValue className="h-7 w-20" /> : myStatus ? t(STAGE_LABEL[myStatus.stage]) : "-"}
               icon={<CalendarClock size={18} />}
               tone={myStatus?.stage === "rejected" ? "danger" : myStatus?.stage === "approved" ? "success" : myStatus?.stage === "submitted" ? "warn" : "brand"}
             />

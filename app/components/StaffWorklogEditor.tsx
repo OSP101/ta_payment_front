@@ -399,7 +399,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
             </span>
           </div>
         </td>
-        <td className="px-3 py-2 align-middle text-ink-2">{row.note || "—"}</td>
+        <td className="px-3 py-2 align-middle text-ink-2">{row.note || "-"}</td>
         <td className="px-3 py-2 align-middle"><StatusChip status={row.status} /></td>
         <td className="px-3 py-2 align-middle text-right whitespace-nowrap pr-4">
           {row.locked ? (
@@ -461,7 +461,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
               onChange={e => setDraft({ ...draft, parent_kind: (e.target.value || null) as "lecture" | "lab" | null })}
               className="w-32"
             >
-              <option value="">{t("— คู่กับ —")}</option>
+              <option value="">{t("คู่กับ")}</option>
               <option value="lecture">{t("คู่บรรยาย")}</option>
               <option value="lab">{t("คู่ปฏิบัติการ")}</option>
             </Select>
@@ -608,7 +608,7 @@ function NewRow({
           </Select>
           {activity === "other" && (
             <Select value={parentKind} onChange={e => setParentKind(e.target.value as "lecture" | "lab" | "")} className="w-32">
-              <option value="">{t("— คู่กับ —")}</option>
+              <option value="">{t("คู่กับ")}</option>
               <option value="lecture">{t("คู่บรรยาย")}</option>
               <option value="lab">{t("คู่ปฏิบัติการ")}</option>
             </Select>

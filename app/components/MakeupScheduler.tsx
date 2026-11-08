@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
-  CalendarOff, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MapPin, Bell, Send, Ban,
+  Clock, CalendarOff, CheckCircle2, AlertTriangle, Plus, Pencil, Trash2, MapPin, Bell, Send, Ban,
 } from "lucide-react";
 import { api, ApiError, type Me } from "../lib/api";
 import { notify } from "../lib/notify";
@@ -274,7 +274,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                       <span className="text-base">{formatThaiDate(imp.original_date)}</span>
                       <span className="text-xs text-muted">({t(DOW_TH[imp.day_of_week])})</span>
                       <Chip tone="danger">{imp.holiday_name_th}</Chip>
-                      {holidayWindowLabel(imp) && <Chip tone="info">🕒 {holidayWindowLabel(imp)}</Chip>}
+                      {holidayWindowLabel(imp) && <Chip tone="info"><Clock size={12} aria-hidden="true" /> {holidayWindowLabel(imp)}</Chip>}
                     </span>
                   }
                   description={holidayWindowLabel(imp)
@@ -322,7 +322,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                               <Ban size={16} className="text-muted" />
                               <span className="text-sm font-medium text-muted">{t("ไม่มีการชดเชย")}</span>
                               {sec.makeup.note && (
-                                <span className="text-xs text-muted">— {sec.makeup.note}</span>
+                                <span className="text-xs text-muted">- {sec.makeup.note}</span>
                               )}
                             </div>
                           ) : sec.makeup ? (
@@ -337,7 +337,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                                 </span>
                               )}
                               {sec.makeup.note && (
-                                <span className="text-xs text-muted">— {sec.makeup.note}</span>
+                                <span className="text-xs text-muted">- {sec.makeup.note}</span>
                               )}
                             </div>
                           ) : (
@@ -428,7 +428,7 @@ export function MakeupScheduler({ tcId, viewer }: { tcId: string; viewer: Viewer
                   {makeup.start_time && makeup.end_time && (
                     <span className="text-xs text-muted tabular-nums"> · {makeup.start_time.slice(0, 5)}–{makeup.end_time.slice(0, 5)}</span>
                   )}
-                  {makeup.note && <span className="text-xs text-muted"> — {makeup.note}</span>}
+                  {makeup.note && <span className="text-xs text-muted"> - {makeup.note}</span>}
                 </div>
                 {!readOnly && (
                   <IconButton
@@ -889,7 +889,7 @@ function ManualMakeupModal({
             onChange={e => setKind(e.target.value as "lecture" | "lab" | "")}
             disabled={!originalDate || periods.length === 0}
           >
-            <option value="">{originalDate ? t("— เลือกคาบ —") : t("— เลือกวันเดิมก่อน —")}</option>
+            <option value="">{originalDate ? t("เลือกคาบ") : t("เลือกวันเดิมก่อน")}</option>
             {periods.map(p => (
               <option key={p.id} value={p.kind}>
                 {t(KIND_LABEL[p.kind])} {p.start_time.slice(0, 5)}–{p.end_time.slice(0, 5)}

@@ -81,7 +81,7 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
         title={t("ตั้งค่ารายวิชา")}
         // A non-breaking space holds the description's line while loading, so
         // the whole page doesn't shift down when the course name lands.
-        description={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : "\u00a0"}
+        description={tc ? `${courseCodeLabel(tc)} - ${tc.name_th}` : "\u00a0"}
       />
 
       {locked && (
@@ -110,7 +110,7 @@ export default function CourseSettingsPage({ params }: { params: Promise<{ tcId:
           <ReadOnly label={t("ภาคพิเศษ")} value={tc ? t("{n} คน", { n: tc.num_students_special }) : <SkelValue className="h-4 w-14" />} />
           <ReadOnly
             label={t("จำนวน Section")}
-            value={!tc ? <SkelValue className="h-4 w-14" /> : tc.sections ? `${tc.sections.length} sec` : "—"}
+            value={!tc ? <SkelValue className="h-4 w-14" /> : tc.sections ? `${tc.sections.length} sec` : "-"}
           />
         </div>
       </Panel>
@@ -410,7 +410,7 @@ function ReadOnly({
     <div className={cls}>
       <div className="text-xs text-muted">{label}</div>
       <div className={`mt-1 text-sm font-medium ${tabular ? "tabular" : ""}`}>
-        {value ?? <span className="text-muted">—</span>}
+        {value ?? <span className="text-muted">-</span>}
       </div>
     </div>
   );

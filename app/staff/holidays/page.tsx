@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { Plus, Trash2, Pencil, Upload, AlertTriangle, CalendarOff, ChevronDown, Info } from "lucide-react";
+import { Plus, Trash2, Pencil, Upload, AlertTriangle, Clock, CalendarOff, ChevronDown, Info } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { Skel, SkelRegion } from "../../components/Skeletons";
@@ -164,7 +164,7 @@ export default function StaffHolidaysPage() {
         status="accent"
         icon={<Info size={14} />}
         title={t("วันหยุดส่วนใหญ่ซิงก์เข้ามาอัตโนมัติจากระบบ TDBM ของวิทยาลัย")}
-        description={t("ระบบดึงวันหยุด (และวันสอนชดเชยที่อาจารย์ยื่น) จาก TDBM ให้อัตโนมัติทุกชั่วโมง ไม่ต้องกดซิงก์เอง — ใช้หน้านี้เพิ่มวันหยุดที่ TDBM ไม่มี (เช่น กิจกรรมเฉพาะของคณะ) หรือแก้ไขช่วงเวลาของวันหยุดครึ่งวัน")}
+        description={t("ระบบดึงวันหยุด (และวันสอนชดเชยที่อาจารย์ยื่น) จาก TDBM ให้อัตโนมัติทุกชั่วโมง ไม่ต้องกดซิงก์เอง ใช้หน้านี้เพิ่มวันหยุดที่ TDBM ไม่มี (เช่น กิจกรรมเฉพาะของคณะ) หรือแก้ไขช่วงเวลาของวันหยุดครึ่งวัน")}
       />
 
       <div className="mt-4">
@@ -288,7 +288,7 @@ function MonthSection({
                   {/* Only labelled when partial: tagging every national holiday
                       "ทั้งวัน" would bury the handful of rows that aren't. */}
                   {h.start_time && h.end_time && (
-                    <Chip tone="info">🕒 {t(windowLabel(h))}</Chip>
+                    <Chip tone="info"><Clock size={12} aria-hidden="true" /> {t(windowLabel(h))}</Chip>
                   )}
                 </div>
               </div>

@@ -534,7 +534,7 @@ export const lecturerPagesEn: DocPage[] = [
     section: "Executive",
     order: 60,
     title: "Executive view",
-    description: "Is the budget enough, is each course requesting a sensible number of TAs, and where is work waiting — for lecturers with executive access",
+    description: "Is the budget enough, is each course requesting a sensible number of TAs, and where is work waiting; for lecturers with executive access",
     since: "1.1",
     routes: ["/executive"],
     keywords: ["executive", "executive view", "executive dashboard", "is the budget enough", "too many tas", "download excel", "compare semesters", "budget forecast"],

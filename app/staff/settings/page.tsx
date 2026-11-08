@@ -282,7 +282,7 @@ function PayRateSection() {
           <p className="mt-1 text-xs text-muted">
             {isAdmin
               ? t("ระบบยังคำนวณด้วยอัตราปัจจุบันด้านล่างจนถึงวันเริ่มใช้ของแต่ละเวอร์ชัน")
-              : t("ระบบยังคำนวณด้วยอัตราปัจจุบันด้านล่างจนถึงวันเริ่มใช้ของแต่ละเวอร์ชัน — ถ้าตั้งวันผิด แจ้งผู้ดูแลระบบให้ยกเลิก")}
+              : t("ระบบยังคำนวณด้วยอัตราปัจจุบันด้านล่างจนถึงวันเริ่มใช้ของแต่ละเวอร์ชัน ถ้าตั้งวันผิด แจ้งผู้ดูแลระบบให้ยกเลิก")}
           </p>
           <ul className="mt-3 space-y-2">
             {scheduled!.map(r => (
@@ -427,7 +427,7 @@ function PayRateSection() {
               status="accent"
               icon={<CalendarDays size={16} />}
               title={t("ตั้งอัตราล่วงหน้า")}
-              description={t("เวอร์ชันนี้จะเริ่มมีผลวันที่ {date} — ก่อนถึงวันนั้นระบบยังคำนวณด้วยอัตราปัจจุบัน", { date: fmtDate(draft.effective_from) })}
+              description={t("เวอร์ชันนี้จะเริ่มมีผลวันที่ {date} ก่อนถึงวันนั้นระบบยังคำนวณด้วยอัตราปัจจุบัน", { date: fmtDate(draft.effective_from) })}
             />
           )}
           {effectiveFromPast && (
@@ -905,7 +905,7 @@ function TermsSection() {
                                     <td>
                                       {tm.is_active
                                         ? <Chip tone="success">active</Chip>
-                                        : <Chip tone="neutral">—</Chip>}
+                                        : <Chip tone="neutral">-</Chip>}
                                     </td>
                                     <td className="actions">
                                       <div className="inline-flex gap-1">
@@ -2186,7 +2186,7 @@ function WindowReadinessPanel({ termId }: { termId: string }) {
       {showCourses && missingCourses.length > 0 && (
         <div className="text-xs">
           <div className="text-muted mb-1">
-            {t.rich("อาจารย์ของวิชาเหล่านี้จะไม่ได้รับอีเมลและจะไม่เห็นวิชาที่หน้าแรก — ผูกอาจารย์ผู้สอนที่หน้า {link} แล้วระบบจะส่งอีเมลให้เองภายใน 1 ชั่วโมง", {
+            {t.rich("อาจารย์ของวิชาเหล่านี้จะไม่ได้รับอีเมลและจะไม่เห็นวิชาที่หน้าแรก ผูกอาจารย์ผู้สอนที่หน้า {link} แล้วระบบจะส่งอีเมลให้เองภายใน 1 ชั่วโมง", {
               link: <a href="/staff/teaching" className="underline">{t("วิชาที่เปิดสอน")}</a>,
             })}
           </div>
@@ -2821,7 +2821,7 @@ function CurriculaSection() {
   return (
     <Panel
       title={t("หลักสูตร")}
-      description={t("ชื่อชีตและชื่อเต็มของแต่ละหลักสูตร ใช้พิมพ์ในเอกสารสรุปรายวิชาที่ขอใช้ TA และปะหน้าจ่ายตรง — แก้ตรงนี้เมื่อคณะเปลี่ยนชื่อหลักสูตร (เช่น IT → ITII) โดยไม่ต้องแก้โค้ด")}
+      description={t("ชื่อชีตและชื่อเต็มของแต่ละหลักสูตร ใช้พิมพ์ในเอกสารสรุปรายวิชาที่ขอใช้ TA และปะหน้าจ่ายตรง แก้ตรงนี้เมื่อคณะเปลี่ยนชื่อหลักสูตร (เช่น IT → ITII) โดยไม่ต้องแก้โค้ด")}
     >
       {data && rows.length === 0 ? (
         <div className="text-sm text-muted py-4">{t("ยังไม่มีหลักสูตรในระบบ")}</div>
@@ -3000,7 +3000,7 @@ function AdminOfficersSection() {
   return (
     <Panel
       title={t("ตำแหน่งฝ่ายบริหาร")}
-      description={t("ตำแหน่งเป็นรายการคงที่ (คณบดี / รองคณบดี / หัวหน้าสาขา ฯลฯ) — มอบหมายอาจารย์เข้าดำรงตำแหน่งได้ที่นี่ ผู้ดำรงตำแหน่งที่เปิดใช้งานอยู่จะเห็นแดชบอร์ดผู้บริหารโดยอัตโนมัติ")}
+      description={t("ตำแหน่งเป็นรายการคงที่ (คณบดี / รองคณบดี / หัวหน้าสาขา ฯลฯ) มอบหมายอาจารย์เข้าดำรงตำแหน่งได้ที่นี่ ผู้ดำรงตำแหน่งที่เปิดใช้งานอยู่จะเห็นแดชบอร์ดผู้บริหารโดยอัตโนมัติ")}
     >
       {data && rows.length === 0 ? (
         <div className="text-sm text-muted py-4">{t("ยังไม่มีข้อมูลตำแหน่งฝ่ายบริหารในระบบ")}</div>
@@ -3241,7 +3241,7 @@ function AdminOfficerFormModal({
             </Autocomplete.Popover>
           </Autocomplete>
           <div className="text-xs text-muted">
-            {t("เลือกจากบัญชีผู้ใช้ที่มีอยู่ในระบบ — ชื่อและคำนำหน้าจะตรงกับบัญชีเสมอ")}
+            {t("เลือกจากบัญชีผู้ใช้ที่มีอยู่ในระบบ ชื่อและคำนำหน้าจะตรงกับบัญชีเสมอ")}
           </div>
         </div>
 
@@ -3269,7 +3269,7 @@ function AdminOfficerFormModal({
           <div className="text-xs text-muted uppercase tracking-wider mb-1">{t("ตัวอย่างการปรากฏในเอกสาร")}</div>
           <div className="text-sm">
             <div className="font-medium">
-              {(draft.academic_prefix || "") + (draft.full_name || t("— ยังไม่เลือกบัญชี —"))}
+              {(draft.academic_prefix || "") + (draft.full_name || t("ยังไม่เลือกบัญชี"))}
             </div>
             <div className="text-muted">{editing?.title}</div>
           </div>
@@ -3347,7 +3347,7 @@ function DemoTestersSection() {
   return (
     <Panel
       title={t("สิทธิ์เข้าใช้งานห้องทดลอง")}
-      description={t("กำหนดว่าอีเมลไหนเข้า \"โหมดทดลอง\" ได้บ้าง และเห็นบทบาทไหนบ้าง — เจ้าหน้าที่เห็นทุกบทบาท อาจารย์เห็นเฉพาะบทบาทอาจารย์และ TA ส่วน TA เห็นเฉพาะบทบาท TA ของตัวเอง อีเมลที่ไม่อยู่ในรายการนี้เข้าห้องทดลองไม่ได้เลย")}
+      description={t("กำหนดว่าอีเมลไหนเข้า \"โหมดทดลอง\" ได้บ้าง และเห็นบทบาทไหนบ้าง เจ้าหน้าที่เห็นทุกบทบาท อาจารย์เห็นเฉพาะบทบาทอาจารย์และ TA ส่วน TA เห็นเฉพาะบทบาท TA ของตัวเอง อีเมลที่ไม่อยู่ในรายการนี้เข้าห้องทดลองไม่ได้เลย")}
       actions={
         <Button variant="primary" onClick={() => setFormOpen(true)}>
           <Plus size={14} />{t("เพิ่มผู้มีสิทธิ์")}
@@ -3384,7 +3384,7 @@ function DemoTestersSection() {
                 <tr key={tester.email}>
                   <td className="font-medium">{tester.email}</td>
                   <td><Chip tone={TIER_TONE[tester.tier]}>{t(TIER_LABELS[tester.tier])}</Chip></td>
-                  <td className="text-muted text-sm">{tester.note || <span className="text-muted">—</span>}</td>
+                  <td className="text-muted text-sm">{tester.note || <span className="text-muted">-</span>}</td>
                   <td className="text-muted text-sm">{tester.added_by}</td>
                   <td className="actions">
                     <Button variant="danger-soft" size="sm" onClick={() => setDeleteTarget(tester)}>
@@ -3415,7 +3415,7 @@ function DemoTestersSection() {
         title={t("ยืนยันยกเลิกสิทธิ์เข้าห้องทดลอง?")}
         description={
           deleteTarget
-            ? t("ยกเลิกสิทธิ์ของ \"{email}\" — คำขอเข้าห้องทดลองครั้งถัดไปของอีเมลนี้จะถูกปฏิเสธ และหากกำลังทดลองอยู่ ระบบจะบล็อกการเข้าสู่ระบบครั้งถัดไปทันที", { email: deleteTarget.email })
+            ? t("ยกเลิกสิทธิ์ของ \"{email}\" คำขอเข้าห้องทดลองครั้งถัดไปของอีเมลนี้จะถูกปฏิเสธ และหากกำลังทดลองอยู่ ระบบจะบล็อกการเข้าสู่ระบบครั้งถัดไปทันที", { email: deleteTarget.email })
             : ""
         }
         variant="danger"

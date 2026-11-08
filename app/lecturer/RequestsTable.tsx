@@ -159,7 +159,7 @@ function buildColumns(
           >
             <Eye size={16} />
           </Button>
-          <Tooltip.Content className="text-xs">{t("ดูรายละเอียด — ใครถูกส่งไปในรอบนี้บ้าง")}</Tooltip.Content>
+          <Tooltip.Content className="text-xs">{t("ดูรายละเอียด ใครถูกส่งไปในรอบนี้บ้าง")}</Tooltip.Content>
         </Tooltip>
         {r.can_cancel && (
           <Tooltip delay={0}>

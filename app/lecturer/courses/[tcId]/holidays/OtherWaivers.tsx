@@ -73,7 +73,7 @@ export function OtherWaivers({ tcId }: { tcId: string }) {
                   date: <span className="font-medium text-foreground">{fmtDate(m.original_date)}</span>,
                 })}</span>
                 <span className="inline-flex items-center gap-1 text-muted"> · <Ban size={12} /> {t("ไม่มีการชดเชย")}</span>
-                {m.note && <span className="text-xs text-muted"> — {m.note}</span>}
+                {m.note && <span className="text-xs text-muted"> - {m.note}</span>}
               </div>
               <IconButton label={t("ยกเลิกการไม่มีการชดเชย")} variant="ghost" size="sm" onClick={() => setTarget(m)}>
                 <Undo2 size={14} />

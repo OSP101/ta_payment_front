@@ -79,7 +79,7 @@ export function PayEstimateCard({ estimate }: { estimate: PayEstimate }) {
       </div>
       {(estimate.capped || estimate.footnote) && (
         <div className="mt-1 text-[11px] text-muted">
-          {estimate.capped && t("แต่ละเดือนไม่เกินเพดานที่ประกาศกำหนดไว้ — ")}
+          {estimate.capped && t("แต่ละเดือนไม่เกินเพดานที่ประกาศกำหนดไว้")}
           {estimate.footnote}
         </div>
       )}

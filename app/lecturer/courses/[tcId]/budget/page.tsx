@@ -205,7 +205,7 @@ export default function BudgetPage({ params }: { params: Promise<{ tcId: string 
               students: helpTrack === "special" ? b.num_students_special : b.num_students_regular,
               trackLabel: helpTrack === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ"),
               isSpecial: helpTrack === "special",
-              courseName: courseName ? `${courseName.code} — ${courseName.name_th}` : undefined,
+              courseName: courseName ? `${courseName.code} - ${courseName.name_th}` : undefined,
             }}
           />}
         </>

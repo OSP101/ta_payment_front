@@ -822,7 +822,7 @@ function ProfileStep({
       <div className="grid md:grid-cols-2 gap-3">
         <FieldGroup required label={t("คำนำหน้าชื่อ")} hint={t("ระบบใช้ค่านี้วงกลมในแบบแจ้งเจ้าหนี้อัตโนมัติ")}>
           <SelectField
-            placeholder={t("— เลือกคำนำหน้า —")}
+            placeholder={t("เลือกคำนำหน้า")}
             value={form.prefix}
             onChange={v => setForm({ ...form, prefix: v })}
             options={prefixOptions}
@@ -919,7 +919,7 @@ function ProfileStep({
           hint={bank ? t("เลขที่บัญชีของ{bank}ต้องมี {expected} หลัก", { bank: bank.name, expected: bank.accountLen.join(" " + t("หรือ") + " ") }) : t("เลือกจากรายการ เพื่อให้ระบบตรวจสอบความยาวเลขที่บัญชีให้อัตโนมัติ")}
         >
           <SelectField
-            placeholder={t("— เลือกธนาคาร —")}
+            placeholder={t("เลือกธนาคาร")}
             value={form.bank_name}
             onChange={v => setForm({ ...form, bank_name: v })}
             options={bankOptions}

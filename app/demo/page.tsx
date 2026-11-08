@@ -167,7 +167,7 @@ export default function DemoEntryPage() {
                 })}
               </p>
               <p>
-                {t("เราอยากให้คุณลองใช้งานเครื่องมือต่าง ๆ ตามขั้นตอนที่ระบบแนะนำ เพื่อให้คุ้นเคยกับระบบก่อนใช้งานจริง และช่วยเราหาจุดบกพร่องในช่วงเปิดทดลองใช้งาน (BETA) — หากพบปัญหาหรือมีข้อเสนอแนะระหว่างเล่น รบกวนส่งฟีดแบ็คกลับมาให้เราด้วย จะเป็นประโยชน์มากในการปรับปรุงระบบ")}
+                {t("เราอยากให้คุณลองใช้งานเครื่องมือต่าง ๆ ตามขั้นตอนที่ระบบแนะนำ เพื่อให้คุ้นเคยกับระบบก่อนใช้งานจริง และช่วยเราหาจุดบกพร่องในช่วงเปิดทดลองใช้งาน (BETA) หากพบปัญหาหรือมีข้อเสนอแนะระหว่างเล่น รบกวนส่งฟีดแบ็คกลับมาให้เราด้วย จะเป็นประโยชน์มากในการปรับปรุงระบบ")}
               </p>
             </Modal.Body>
             <Modal.Footer>
@@ -215,7 +215,7 @@ export default function DemoEntryPage() {
                 </div>
                 <div className="text-warning-soft-foreground/80 text-xs mt-0.5">
                   {t.rich("ระดับสิทธิ์: {tier}", { tier: <span className="font-medium">{t(TIER_INFO[workspace.tier].label)}</span> })}
-                  {" — "}{t(TIER_INFO[workspace.tier].detail)}
+                  {" - "}{t(TIER_INFO[workspace.tier].detail)}
                 </div>
                 <div className="text-warning-soft-foreground/70 text-xs mt-1">
                   {t("ข้อมูลทั้งหมดที่นี่เป็นข้อมูลจำลอง ไม่ใช่ข้อมูลจริง และแยกขาดจากระบบจริงทั้งหมด")}
@@ -241,7 +241,7 @@ export default function DemoEntryPage() {
                     {touched && emailError && <FieldError>{emailError}</FieldError>}
                   </TextField>
                   <p className="text-xs text-muted -mt-2">
-                    {t("ใช้แค่แยกห้องทดลองของคุณจากคนอื่น — ไม่ต้องยืนยันอีเมล และไม่ผูกกับบัญชีจริงของคุณ")}
+                    {t("ใช้แค่แยกห้องทดลองของคุณจากคนอื่น ไม่ต้องยืนยันอีเมล และไม่ผูกกับบัญชีจริงของคุณ")}
                   </p>
                   <Button type="submit" size="lg" fullWidth isPending={loading}>
                     <LogIn />

@@ -165,7 +165,7 @@ export default function ImportHistoryModal({
                 {detail.warnings?.length > 0 && (
                   <div>
                     <p className="text-xs font-medium mb-1 text-(--ink-2)">
-                      {t("รายการที่เตือน (ไม่มีตารางเรียน — ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)")}
+                      {t("รายการที่เตือน (ไม่มีตารางเรียน ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)")}
                     </p>
                     <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
                       {detail.warnings.map((w, i) => <li key={i} className="text-(--ink-3)">• {w}</li>)}

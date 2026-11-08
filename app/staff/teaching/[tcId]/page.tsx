@@ -114,7 +114,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
 
       {tc ? (
         <PageHeader
-          title={`${courseCodeLabel(tc)} — ${tc.name_th}`}
+          title={`${courseCodeLabel(tc)} - ${tc.name_th}`}
           description={tc.alt_codes?.length
             ? t("เปิดภายใต้ {codes} รหัส งบและจำนวนนักศึกษารวมกัน · {credits} ({lec}-{lab}-{self}) · นักศึกษา {n} คน (ปกติ {reg} · พิเศษ {spc})", {
                 codes: tc.alt_codes.length + 1, credits: tc.credits, lec: tc.lecture_hrs, lab: tc.lab_hrs, self: tc.self_hrs,

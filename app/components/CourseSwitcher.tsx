@@ -40,7 +40,7 @@ export default function CourseSwitcher({
     course?.term_id ? `${siblingsPath}?term_id=${course.term_id}` : null,
   );
 
-  const label = course ? `${courseCodeLabel(course)} — ${course.name_th}` : "…";
+  const label = course ? `${courseCodeLabel(course)} - ${course.name_th}` : "…";
 
   // Only one course (or list still loading) → show the name as static text.
   if (!siblings || siblings.length <= 1) {
@@ -97,7 +97,7 @@ export default function CourseSwitcher({
               <ListBox.Item key={c.id} id={c.id} textValue={`${courseCodeLabel(c)} ${c.name_th}`}>
                 <div className="flex items-center gap-2 min-w-0">
                   <BookOpen size={15} className="shrink-0 text-muted" />
-                  <Label className="truncate">{courseCodeLabel(c)} — {c.name_th}</Label>
+                  <Label className="truncate">{courseCodeLabel(c)} - {c.name_th}</Label>
                 </div>
                 <ListBox.ItemIndicator />
               </ListBox.Item>

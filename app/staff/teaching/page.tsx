@@ -676,7 +676,7 @@ function StudentCountsModal({ course, onClose }: { course: TC | null; onClose: (
                 />
               ) : (
                 <div className="h-9 rounded-lg border border-border bg-surface-secondary px-3 flex items-center justify-center text-muted select-none">
-                  —
+                  -
                 </div>
               )}
             </FieldGroup>

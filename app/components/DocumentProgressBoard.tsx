@@ -145,7 +145,7 @@ export function DocumentProgressBoard({
         <Alert
           status="warning"
           title={t("เทอมนี้ยังเหลือ {rounds} ที่ยังไม่เสร็จ", { rounds: lagging.map(r => r.round_label || t("รอบ {n}", { n: r.round })).join(", ") })}
-          description={t("อย่าลืมกลับมาเดินเอกสารรอบนี้ให้ครบด้วย — คลิกที่แท็บด้านบนเพื่อสลับไปดู")}
+          description={t("อย่าลืมกลับมาเดินเอกสารรอบนี้ให้ครบด้วย คลิกที่แท็บด้านบนเพื่อสลับไปดู")}
         />
       )}
       {canEdit && (
@@ -224,7 +224,7 @@ function ShareLinkPanel({ termId }: { termId: string }) {
     setBusy(true);
     try {
       await api.del(`/document-progress/${termId}/share-link`);
-      notify.success(t("ยกเลิกลิงก์แล้ว — ลิงก์เดิมใช้ดูไม่ได้อีกต่อไป"));
+      notify.success(t("ยกเลิกลิงก์แล้ว ลิงก์เดิมใช้ดูไม่ได้อีกต่อไป"));
       setConfirmRevoke(false);
       if (key) mutate(key);
     } catch (e) {
@@ -264,7 +264,7 @@ function ShareLinkPanel({ termId }: { termId: string }) {
                 : t("ใครก็เปิดดูได้โดยไม่ต้องเข้าสู่ระบบ · สร้างเมื่อ {when}", { when: fmt(data.created_at, year) })}
             </div>
           ) : (
-            <div className="text-xs text-muted">{t("ยังไม่มีลิงก์ — สร้างแล้วนำไปประกาศให้อาจารย์และผู้ช่วยสอนดูความคืบหน้าได้")}</div>
+            <div className="text-xs text-muted">{t("ยังไม่มีลิงก์ สร้างแล้วนำไปประกาศให้อาจารย์และผู้ช่วยสอนดูความคืบหน้าได้")}</div>
           )}
         </div>
         {isLoading ? (
@@ -753,7 +753,7 @@ function SignatureChecklistPanel({
                         ? <Check size={16} className="text-success-soft-foreground shrink-0 mt-0.5" />
                         : <Circle size={16} className="text-ink-3 shrink-0 mt-0.5" />}
                       <div className="min-w-0">
-                        <div className="text-xs font-medium truncate">{it.responsible || "—"}</div>
+                        <div className="text-xs font-medium truncate">{it.responsible || "-"}</div>
                         <div className={"text-[11px] " + (signed ? "text-emerald-700" : "text-amber-700")}>
                           {signed ? t("เซ็นแล้ว · {when}", { when: fmt(it.signed_at, year) }) : t("ยังไม่เซ็น")}
                         </div>
@@ -1051,7 +1051,7 @@ function ViewerStageSigners({
                       ? <Check size={15} aria-hidden className="text-success-soft-foreground shrink-0 translate-y-0.5" />
                       : <X size={15} aria-hidden className="text-danger-soft-foreground shrink-0 translate-y-0.5" />}
                     <span className={"min-w-0 flex-1 font-medium " + (it.signed_at ? "text-emerald-700" : "text-danger-soft-foreground")}>
-                      {fullName(it.responsible) || "—"}
+                      {fullName(it.responsible) || "-"}
                     </span>
                     <span className={"text-xs shrink-0 " + (it.signed_at ? "text-emerald-700" : "text-danger-soft-foreground")}>
                       {it.signed_at ? t("ลงนามแล้ว · {when}", { when: fmt(it.signed_at, year) }) : t("ยังไม่ได้ลงนาม")}

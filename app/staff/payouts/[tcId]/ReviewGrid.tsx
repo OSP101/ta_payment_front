@@ -428,7 +428,7 @@ function EmptyCell({ t: tl, loading }: { t?: TimelineRow; loading?: boolean }) {
   // The timeline is fetched separately from the grid; until it lands, hold the
   // cell's space rather than showing "—" and swapping it for a reason chip.
   if (!tl && loading) return <Skel className="h-9 w-full rounded-lg" />;
-  if (!tl) return <div className="py-2 text-center text-muted">—</div>;
+  if (!tl) return <div className="py-2 text-center text-muted">-</div>;
 
   if (tl.status === "finance_sent") {
     return (

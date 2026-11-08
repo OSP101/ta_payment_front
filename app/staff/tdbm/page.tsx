@@ -175,10 +175,10 @@ export default function StaffTDBMPage() {
       // the sync fetched real data, whether or not we could match it — is in
       // the tooltip.
       render: r => (
-        <Tip content={`TDBM: ${r.course_code ?? "—"}${r.section_label ? ` ${r.section_label}` : ""}${r.semester_type ? ` (${r.semester_type})` : ""}`}>
+        <Tip content={`TDBM: ${r.course_code ?? "-"}${r.section_label ? ` ${r.section_label}` : ""}${r.semester_type ? ` (${r.semester_type})` : ""}`}>
           <span>
             <span className="font-medium">
-              {r.matched_course_code ?? r.course_code ?? <span className="text-muted">—</span>}
+              {r.matched_course_code ?? r.course_code ?? <span className="text-muted">-</span>}
             </span>
             {r.matched_sec_no && <span className="text-muted"> {t("กลุ่ม {n}", { n: r.matched_sec_no })}</span>}
             {r.matched_course_name && <span className="ms-2 text-xs text-muted">{r.matched_course_name}</span>}
@@ -188,7 +188,7 @@ export default function StaffTDBMPage() {
     },
     {
       id: "teacher", width: 200, label: t("อาจารย์ (เจ้าของวิชา)"),
-      render: r => r.owner_teacher_name ?? <span className="text-muted">—</span>,
+      render: r => r.owner_teacher_name ?? <span className="text-muted">-</span>,
     },
     {
       id: "duration", width: 100, label: t("ชั่วโมง"), sortable: true, className: "text-right", hideOnMobile: true,
@@ -241,7 +241,7 @@ export default function StaffTDBMPage() {
     <div>
       <PageHeader
         title={t("ข้อมูลจาก TDBM")}
-        description={t("รายการวันสอนชดเชยที่ระบบดึงมาจาก TDBM (ระบบลงเวลาชดเชยของอาจารย์) จริง — หน้านี้ไว้ตรวจสอบว่าซิงก์สำเร็จ ไม่ใช่หน้าจัดการ การแก้ไข/อนุมัติยังทำในระบบ TDBM เอง")}
+        description={t("รายการวันสอนชดเชยที่ระบบดึงมาจาก TDBM (ระบบลงเวลาชดเชยของอาจารย์) จริง หน้านี้ไว้ตรวจสอบว่าซิงก์สำเร็จ ไม่ใช่หน้าจัดการ การแก้ไข/อนุมัติยังทำในระบบ TDBM เอง")}
         actions={
           <Button variant="secondary" onClick={handleSyncNow} isPending={syncing} disabled={syncing}>
             <RefreshCw size={14} /> {t("ซิงก์ตอนนี้")}
@@ -253,13 +253,13 @@ export default function StaffTDBMPage() {
         <Panel className="p-4">
           <div className="text-xs text-muted">{t("ภาคเรียนที่ดู")}</div>
           <div className="mt-1 text-lg font-semibold tabular-nums">
-            {!loaded ? <SkelValue className="h-6 w-16" /> : term ? `${term.academic_year}/${term.semester}` : "—"}
+            {!loaded ? <SkelValue className="h-6 w-16" /> : term ? `${term.academic_year}/${term.semester}` : "-"}
           </div>
         </Panel>
         <Panel className="p-4">
           <div className="text-xs text-muted">{t("รายการวันสอนชดเชยที่ดึงมาได้")}</div>
           <div className="mt-1 text-lg font-semibold tabular-nums">
-            {rows ? t("{n} รายการ", { n: rows.length }) : (listKey || !loaded) && !error ? <SkelValue className="h-6 w-24" /> : "—"}
+            {rows ? t("{n} รายการ", { n: rows.length }) : (listKey || !loaded) && !error ? <SkelValue className="h-6 w-24" /> : "-"}
             {rows && rows.length > 0 && (
               <span className="ml-2 text-sm font-normal text-muted">{t("จับคู่กลุ่มเรียนได้ {n} รายการ", { n: matchedCount })}</span>
             )}
@@ -292,7 +292,7 @@ export default function StaffTDBMPage() {
           <Alert
             status="warning"
             title={t("ยังไม่มีข้อมูลวันสอนชดเชยสำหรับภาคเรียนนี้")}
-            description={t("อาจเป็นเพราะยังไม่มีอาจารย์ยื่นคำขอในภาคเรียนนี้ใน TDBM หรือยังไม่เคยซิงก์สำเร็จ — ลองกด “ซิงก์ตอนนี้” ด้านบน")}
+            description={t("อาจเป็นเพราะยังไม่มีอาจารย์ยื่นคำขอในภาคเรียนนี้ใน TDBM หรือยังไม่เคยซิงก์สำเร็จ ลองกด “ซิงก์ตอนนี้” ด้านบน")}
           />
         </div>
       )}
@@ -315,7 +315,7 @@ export default function StaffTDBMPage() {
           {t("วันหยุดในภาคเรียนนี้")} {holidays && <span className="font-normal text-muted">{t("({n} วัน)", { n: holidays.length })}</span>}
         </h2>
         <p className="mt-0.5 text-xs text-muted">
-          {t("วันหยุดทั้งหมดในช่วงวันที่ของภาคเรียนนี้ (ไม่ใช่แค่ที่มาจาก TDBM) — ไว้เทียบกับรายการวันสอนชดเชยด้านล่างว่าวันไหนยังไม่มีใครยื่นชดเชย")}
+          {t("วันหยุดทั้งหมดในช่วงวันที่ของภาคเรียนนี้ (ไม่ใช่แค่ที่มาจาก TDBM) ไว้เทียบกับรายการวันสอนชดเชยด้านล่างว่าวันไหนยังไม่มีใครยื่นชดเชย")}
         </p>
         <div className="mt-2">
           <DataTable
@@ -356,7 +356,7 @@ export default function StaffTDBMPage() {
       </div>
 
       <div className="mt-6 flex items-center gap-2 text-xs text-muted">
-        <Database size={13} /> {t("ซิงก์อัตโนมัติทุกชั่วโมง และทันทีเมื่อ TDBM แจ้งมา (webhook) — ไม่ต้องกด “ซิงก์ตอนนี้” เอง เว้นแต่ต้องการเช็คทันที")}
+        <Database size={13} /> {t("ซิงก์อัตโนมัติทุกชั่วโมง และทันทีเมื่อ TDBM แจ้งมา (webhook) ไม่ต้องกด “ซิงก์ตอนนี้” เอง เว้นแต่ต้องการเช็คทันที")}
       </div>
     </div>
   );

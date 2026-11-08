@@ -2,11 +2,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { useSearchParams } from "next/navigation";
-import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, Upload, FileUp, Lock, Printer } from "lucide-react";
+import { Save, Plus, Trash2, Pencil, AlertTriangle, Clock, Calendar, Layers, Cloud, CloudOff, Check, FileUp, Lock, Printer } from "lucide-react";
 import useIsDemo from "../../../lib/useIsDemo";
 import { api, ApiError, type Term, type Me } from "../../../lib/api";
 import { notify } from "../../../lib/notify";
-import { icsToBlocks, applyClassKinds, suggestKinds, type IcsImportResult, type ClassKindRow } from "../../../lib/ics";
+import type { IcsImportResult } from "../../../lib/ics";
+import ScheduleImportModal from "../../../components/ScheduleImportModal";
 import TermSelect from "../../../components/TermSelect";
 import ScheduleGrid, {
   type Block, type BlockKind, type DraftRange,
@@ -14,7 +15,7 @@ import ScheduleGrid, {
 } from "../../../components/ScheduleGrid";
 import {
   PageHeader, Panel, Select, Modal, Button, IconButton, TextInput, FieldGroup, EmptyState, Alert, ConfirmDialog, TipWrap, Tip,
-  TimePicker, Chip,
+  TimePicker,
 } from "../../../components/ui";
 import { SkelValue } from "../../../components/Skeletons";
 import { msg, useI18n } from "../../../lib/i18n/client";
@@ -48,10 +49,8 @@ const NOTE_MAX = 200;
 const COURSE_CODE_RE = /^[A-Za-z0-9]*$/;
 const SEC_NO_RE = /^[0-9]*$/;
 
-// Full-value rule, checked on save. KKU course codes are either six digits
-// (old style, e.g. 322201) or SC/CP plus six digits (new style, e.g.
-// SC363001, CP020002). Kept in sync with staff/teaching/OpenCourseModal.tsx.
-const COURSE_CODE_FORMAT = /^(?:SC|CP)?[0-9]{6}$/;
+// Student timetables also contain GE/LI courses outside this faculty.
+const COURSE_CODE_FORMAT = /^[A-Za-z]*[0-9]{6}$/;
 
 function parseHM(t: string): number { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
 function inRange(t: string): boolean {
@@ -299,9 +298,8 @@ export default function TASchedulePage() {
     setLocal(prev => prev.filter(b => b.id !== id));
   }
 
-  // Replace all local blocks with the .ics import result. This intentionally
-  // drops any is_wba row too — user confirmed "replace all" over "merge", and
-  // an .ics with regular classes is inherently incompatible with WBA mode.
+  // Apply only the rows explicitly reviewed and confirmed in the import dialog.
+  // Regular imported classes replace the current timetable, including WBA mode.
   function applyImport(result: IcsImportResult) {
     markDirty();
     setLocal(result.blocks.map(b => ({ ...b, term_id: termId })));
@@ -488,7 +486,7 @@ export default function TASchedulePage() {
             </Button>
             <span data-tour="sch-ics">
               <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={frozen}>
-                <FileUp size={14} /> {t("อัปโหลด .ics")}
+                <FileUp size={14} /> {t("อัปโหลด PDF / ICS")}
               </Button>
             </span>
             <span data-tour="sch-add">
@@ -705,9 +703,10 @@ export default function TASchedulePage() {
         confirmLabel={t("ยืนยันบันทึก")}
       />
 
-      <IcsImportModal
+      <ScheduleImportModal
         open={importOpen}
         termId={termId}
+        term={terms?.find(tm => tm.id === termId)}
         onClose={() => setImportOpen(false)}
         onImport={applyImport}
       />
@@ -928,7 +927,7 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
         <div className="grid grid-cols-2 gap-3">
           <FieldGroup label={t("ประเภท")}>
             <Select value={kind} onChange={e => setKind(e.target.value as BlockKind)}>
-              <option value="">{t("— ไม่ระบุ —")}</option>
+              <option value="">{t("ไม่ระบุ")}</option>
               <option value="lecture">{t("บรรยาย")}</option>
               <option value="lab">{t("ปฏิบัติการ")}</option>
             </Select>
@@ -994,240 +993,5 @@ function BlockEditor({ mode, block, termId, onClose, onSave, onDelete, checkOver
       confirmLabel={t("ลบ")}
     />
     </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// IcsImportModal — pick a KKU REG .ics file, preview parsed blocks, confirm.
-// Confirm replaces all local blocks for the current term (user chose "replace
-// all" over "merge" — grid state is fully rewritten from the file).
-// ---------------------------------------------------------------------------
-
-interface IcsImportModalProps {
-  open: boolean;
-  termId: string;
-  onClose: () => void;
-  onImport: (result: IcsImportResult) => void;
-}
-
-function IcsImportModal({ open, termId, onClose, onImport }: IcsImportModalProps) {
-  const { t } = useI18n();
-  const [fileName, setFileName] = useState<string>("");
-  const [result, setResult] = useState<IcsImportResult | null>(null);
-  // Blocks whose ประเภท came from suggestKinds (a guess, not the timetable) —
-  // flagged in the preview until the TA confirms or changes them.
-  const [guessed, setGuessed] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
-  const [parsing, setParsing] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  // Reset every time the modal opens so a stale preview from a previous file
-  // never bleeds into a new import session.
-  useEffect(() => {
-    if (!open) return;
-    setFileName("");
-    setResult(null);
-    setGuessed(new Set());
-    setError(null);
-    setParsing(false);
-    if (fileRef.current) fileRef.current.value = "";
-  }, [open]);
-
-  async function handleFile(file: File) {
-    setParsing(true);
-    setError(null);
-    setResult(null);
-    setFileName(file.name);
-    try {
-      const text = await file.text();
-      let parsed = icsToBlocks(text, termId);
-      // .ics ของ REG ไม่มีข้อมูลว่าคาบไหนบรรยาย/ปฏิบัติการ — เทียบกับตารางสอน
-      // ที่นำเข้าจากไฟล์ทะเบียนในระบบ (ซึ่งระบุ Lec/Lab ไว้) เพื่อเติมให้อัตโนมัติ
-      try {
-        const table = await api.get<ClassKindRow[]>(`/class-kinds?term_id=${termId}`);
-        parsed = applyClassKinds(parsed, table ?? []);
-      } catch {
-        // ดึงตารางไม่ได้ก็ยังนำเข้าได้ตามปกติ แค่ต้องเลือกประเภทเอง
-      }
-      const suggested = suggestKinds(parsed);
-      parsed = suggested.result;
-      setGuessed(suggested.guessed);
-      if (parsed.eventsTotal === 0) {
-        setError(t("ไม่พบเหตุการณ์ในไฟล์ (VEVENT) โปรดตรวจว่าไฟล์เป็น .ics ที่ถูกต้อง"));
-      } else if (parsed.blocks.length === 0) {
-        setError(t("อ่านไฟล์ได้แต่ไม่พบคาบเรียนที่นำเข้าได้ ทั้งหมดอาจเป็นเหตุการณ์สอบหรืออยู่นอกช่วง 08:00–20:00"));
-      }
-      setResult(parsed);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("อ่านไฟล์ไม่สำเร็จ"));
-    } finally {
-      setParsing(false);
-    }
-  }
-
-  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
-  }
-
-  function setKind(id: string, kind: BlockKind) {
-    setResult(r => r && { ...r, blocks: r.blocks.map(b => b.id === id ? { ...b, kind } : b) });
-    setGuessed(g => { const n = new Set(g); n.delete(id); return n; });
-  }
-
-  // Same rule the page's save() enforces — refuse here so the TA fixes the
-  // ประเภท in the preview instead of importing a timetable that can't be saved.
-  const duplicateIds = useMemo(() => {
-    const ids = new Set<string>();
-    const blocks = result?.blocks ?? [];
-    blocks.forEach((a, i) => blocks.slice(i + 1).forEach(b => {
-      if (isDuplicateBlock(a, b)) { ids.add(a.id); ids.add(b.id); }
-    }));
-    return ids;
-  }, [result]);
-
-  const canImport = !!result && result.blocks.length > 0 && duplicateIds.size === 0 && !parsing && !!termId;
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={t("อัปโหลดตารางเรียนจาก KKU REG (.ics)")}
-      icon={<FileUp size={18} />}
-      size="xl"
-      footer={
-        <div className="flex flex-wrap items-center justify-between w-full gap-2">
-          <div className="text-xs text-muted">
-            {result && result.blocks.length > 0
-              ? t("จะแทนที่คาบเรียนทั้งหมดในภาคการศึกษานี้ด้วย {n} คาบที่นำเข้า", { n: result.blocks.length })
-              : ""}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>{t("ยกเลิก")}</Button>
-            <Button
-              variant="primary"
-              onClick={() => result && onImport(result)}
-              disabled={!canImport}
-            >
-              <Upload size={14} /> {t("นำเข้า")}
-            </Button>
-          </div>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted">
-          {t("ดาวน์โหลดไฟล์ตารางเรียน (.ics) จากระบบทะเบียน (reg.kku.ac.th) แล้วเลือกไฟล์ที่นี่ ระบบจะดึงคาบเรียนประจำสัปดาห์ให้อัตโนมัติ")}
-        </p>
-
-        <label className="flex flex-col gap-2 rounded-md border border-dashed border-[var(--hairline)] p-4 hover:bg-slate-50 cursor-pointer">
-          <div className="flex items-center gap-2 text-sm">
-            <FileUp size={16} className="text-muted" />
-            <span className="font-medium">{fileName || t("เลือกไฟล์ .ics")}</span>
-            {parsing && <span className="text-xs text-muted">— {t("กำลังอ่าน…")}</span>}
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".ics,text/calendar"
-            onChange={onPick}
-            className="text-xs text-muted file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border file:border-[var(--hairline)] file:bg-white file:text-sm file:font-medium file:cursor-pointer hover:file:bg-slate-50"
-          />
-        </label>
-
-        {error && (
-          <Alert status="danger" icon={<AlertTriangle size={14} />} title={error} />
-        )}
-
-        {result && (
-          <IcsPreview result={result} guessed={guessed} duplicateIds={duplicateIds} onKindChange={setKind} />
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-interface IcsPreviewProps {
-  result: IcsImportResult;
-  guessed: Set<string>;
-  duplicateIds: Set<string>;
-  onKindChange: (id: string, kind: BlockKind) => void;
-}
-
-function IcsPreview({ result, guessed, duplicateIds, onKindChange }: IcsPreviewProps) {
-  const { t } = useI18n();
-  const summaryBits: string[] = [];
-  if (result.blocks.length) summaryBits.push(t("คาบเรียนรายสัปดาห์ {n} คาบ", { n: result.blocks.length }));
-  if (result.duplicatesCollapsed) summaryBits.push(t("รวมเหตุการณ์ซ้ำ {n} รายการ", { n: result.duplicatesCollapsed }));
-  if (result.examSkipped) summaryBits.push(t("ข้ามการสอบ {n} รายการ", { n: result.examSkipped }));
-  if (result.outOfRangeSkipped) summaryBits.push(t("ข้ามเวลานอกช่วง {n} รายการ", { n: result.outOfRangeSkipped }));
-  if (result.malformedSkipped) summaryBits.push(t("ข้ามข้อมูลไม่สมบูรณ์ {n} รายการ", { n: result.malformedSkipped }));
-  if (result.kindResolved) summaryBits.push(t("ระบุประเภทให้อัตโนมัติ {n} คาบ", { n: result.kindResolved }));
-  const unresolved = result.blocks.filter(b => !b.kind).length;
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="text-xs text-muted">{summaryBits.join(" · ")}</div>
-      {result.blocks.length > 0 && (
-        <div className="max-h-72 overflow-auto rounded-md border border-[var(--hairline)]">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-muted sticky top-0">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">{t("วัน")}</th>
-                <th className="text-left px-3 py-2 font-medium">{t("เวลา")}</th>
-                <th className="text-left px-3 py-2 font-medium">{t("รหัสวิชา")}</th>
-                <th className="text-left px-3 py-2 font-medium">Sec</th>
-                <th className="text-left px-3 py-2 font-medium">{t("ประเภท")}</th>
-                <th className="text-left px-3 py-2 font-medium">{t("ห้อง")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--hairline)]">
-              {result.blocks.map(b => (
-                <tr key={b.id} className={duplicateIds.has(b.id) ? "bg-red-50" : undefined}>
-                  <td className="px-3 py-1.5">{t(DOW_LABEL[b.day_of_week])}</td>
-                  <td className="px-3 py-1.5 tabular-nums">{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</td>
-                  <td className="px-3 py-1.5 font-medium">{b.course_code}</td>
-                  <td className="px-3 py-1.5 tabular-nums">{b.sec_no}</td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <Select
-                        aria-label={t("ประเภทคาบ {code} {day} {time}", { code: b.course_code, day: t(DOW_LABEL[b.day_of_week]), time: fmtTime(b.start_time) })}
-                        value={b.kind}
-                        onChange={e => onKindChange(b.id, e.target.value as BlockKind)}
-                      >
-                        <option value="">{t("ไม่ระบุ")}</option>
-                        <option value="lecture">{t("บรรยาย")}</option>
-                        <option value="lab">{t("ปฏิบัติการ")}</option>
-                      </Select>
-                      {guessed.has(b.id) && <Chip tone="warn">{t("โปรดตรวจ")}</Chip>}
-                    </div>
-                  </td>
-                  <Tip content={b.note}>
-                    <td className="px-3 py-1.5 text-muted truncate max-w-[16rem]">{b.note}</td>
-                  </Tip>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {duplicateIds.size > 0 && (
-        <Alert
-          status="danger"
-          icon={<AlertTriangle size={14} />}
-          title={t("มีวิชาที่ลงประเภทเดียวกันซ้ำ (แถวสีแดง) วิชาหนึ่งมีคาบบรรยายและคาบปฏิบัติการได้อย่างละ 1 คาบ กรุณาแก้ประเภทก่อนนำเข้า")}
-        />
-      )}
-      {guessed.size > 0 && (
-        <p className="text-xs text-muted">
-          {t("คาบที่ติดป้าย “โปรดตรวจ” ระบบเดาจากลำดับเวลา (วิชาเดียวกันเรียนสองคาบในวันเดียว คาบแรกเป็นบรรยาย คาบหลังเป็นปฏิบัติการ) กรุณาตรวจก่อนนำเข้า")}
-        </p>
-      )}
-      <p className="text-xs text-muted">
-        {unresolved === 0
-          ? t("ระบุประเภท (บรรยาย/ปฏิบัติการ) ครบทุกคาบแล้ว แก้ไขภายหลังได้")
-          : t("ไฟล์ .ics ของระบบทะเบียนไม่ได้ระบุประเภทคาบ ระบบจึงเทียบกับตารางสอนในระบบให้ ยังเหลือ {n} คาบที่ไม่ระบุประเภท เลือกได้ในตารางด้านบน หรือเว้นไว้ก็บันทึกได้", { n: unresolved })}
-      </p>
-    </div>
   );
 }

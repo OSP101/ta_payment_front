@@ -212,7 +212,7 @@ function StepBody({
         <div className="flex items-start gap-1.5 text-xs text-muted bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
           <ActorIcon size={13} className="shrink-0 mt-0.5" />
           <span>
-            {t.rich("ขั้นตอนของ{actor} — ไม่ใช่ขั้นตอนของ บัญชีนี้ {noNeed} กดปุ่มด้านล่างให้ระบบทำแทน แล้วจะไปขั้นตอนถัดไปให้อัตโนมัติ", {
+            {t.rich("ขั้นตอนนี้เป็นของ{actor} บัญชีนี้{noNeed} กดปุ่มด้านล่างให้ระบบทำแทน แล้วจะไปขั้นตอนถัดไปให้อัตโนมัติ", {
               actor: <span className="font-medium text-foreground">{t(ACTOR_LABEL[actorRole])}</span>,
               noNeed: <span className="font-medium text-foreground">{t("ไม่ต้องทำเอง")}</span>,
             })}
@@ -245,7 +245,7 @@ function StepBody({
         <div className="flex items-start gap-1.5 text-xs text-muted bg-surface-secondary/60 border border-border rounded-md px-2.5 py-1.5">
           <ActorIcon size={13} className="shrink-0 mt-0.5" />
           <span>
-            {t.rich("ขั้นตอนของ{actor} — ทำงานได้ตามปกติ แต่บัญชีนี้เข้าหน้าจริงของขั้นตอนนี้ไม่ได้ จึงไม่พาไปหน้า", {
+            {t.rich("ขั้นตอนของ{actor} ทำงานได้ตามปกติ แต่บัญชีนี้เข้าหน้าจริงของขั้นตอนนี้ไม่ได้ จึงไม่พาไปหน้า", {
               actor: <span className="font-medium text-foreground">{t(ACTOR_LABEL[actorRole])}</span>,
             })}
           </span>
@@ -616,7 +616,7 @@ export default function DemoGuidePanel() {
                 </Tabs.Panel>
                 <Tabs.Panel id="problems" className="pt-3">
                   <p className="text-xs text-muted mb-3">
-                    {t("เคสเหล่านี้จำลองสิ่งที่ผิดพลาดจริง เพื่อดูว่าระบบปฏิเสธถูกต้องหรือไม่ — กดซ้ำได้เสมอ ไม่ต้องเรียงลำดับ")}
+                    {t("เคสเหล่านี้จำลองสิ่งที่ผิดพลาดจริง เพื่อดูว่าระบบปฏิเสธถูกต้องหรือไม่ กดซ้ำได้เสมอ ไม่ต้องเรียงลำดับ")}
                   </p>
                   {renderList(engine.problems, engine.runProblem)}
                 </Tabs.Panel>

@@ -789,7 +789,7 @@ function WeekTable({
                         </div>
                       </td>
                       <td className={"px-1 py-1 text-right tabular " + (draftOK ? "" : "text-danger-soft-foreground")}>
-                        {draftOK ? (draftMins / 60).toFixed(2) : "—"}
+                        {draftOK ? (draftMins / 60).toFixed(2) : "-"}
                       </td>
                       <td className="px-1 py-1">{ACTIVITY_LABEL[d.activity] ? t(ACTIVITY_LABEL[d.activity]) : d.activity}</td>
                       <td className="whitespace-nowrap px-1 py-1">
@@ -849,7 +849,7 @@ function WeekTable({
                         )}
                       </td>
                       <td className="px-1 py-1 text-muted">
-                        {(p?.action === "update" ? p.note : d.note) || "—"}
+                        {(p?.action === "update" ? p.note : d.note) || "-"}
                       </td>
                       <td className="px-1 py-1">
                         {d.source === "manual" ? (

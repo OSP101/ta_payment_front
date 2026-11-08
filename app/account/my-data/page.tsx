@@ -65,10 +65,10 @@ function ProfileSection({ exp }: { exp: MyDataExport | undefined }) {
       <div className="grid md:grid-cols-2 gap-3 text-sm">
         <Field label={t("อีเมล")} value={p?.email} />
         <Field label={t("ชื่อ-นามสกุล")} value={p && `${p.title ?? ""} ${p.first_name} ${p.last_name}`.trim()} />
-        <Field label={t("เบอร์โทรศัพท์")} value={p && (p.phone ?? "—")} />
-        <Field label={t("รหัสนักศึกษา")} value={p && (p.student_id ?? "—")} />
-        <Field label={t("หน่วยงาน")} value={p && (p.department ?? "—")} />
-        <Field label={t("บทบาท")} value={p && (p.roles.join(", ") || "—")} />
+        <Field label={t("เบอร์โทรศัพท์")} value={p && (p.phone ?? "-")} />
+        <Field label={t("รหัสนักศึกษา")} value={p && (p.student_id ?? "-")} />
+        <Field label={t("หน่วยงาน")} value={p && (p.department ?? "-")} />
+        <Field label={t("บทบาท")} value={p && (p.roles.join(", ") || "-")} />
       </div>
     </Panel>
   );
@@ -233,8 +233,8 @@ function SecuritySection({ exp }: { exp: MyDataExport | undefined }) {
             {exp.sessions.map(s => (
               <tr key={s.id} className="border-t border-[var(--hairline)]">
                 <td className="py-1.5 pr-3 whitespace-nowrap">{new Date(s.created_at).toLocaleString(intl)}</td>
-                <td className="py-1.5 pr-3 font-mono">{s.ip ?? "—"}</td>
-                <Tip content={s.user_agent}><td className="py-1.5 pr-3 truncate max-w-[240px]">{s.user_agent ?? "—"}</td></Tip>
+                <td className="py-1.5 pr-3 font-mono">{s.ip ?? "-"}</td>
+                <Tip content={s.user_agent}><td className="py-1.5 pr-3 truncate max-w-[240px]">{s.user_agent ?? "-"}</td></Tip>
                 <td className="py-1.5">
                   {s.revoked_at ? <Chip tone="neutral">{t("สิ้นสุดแล้ว")}</Chip> : <Chip tone="success">{t("ใช้งานอยู่")}</Chip>}
                 </td>

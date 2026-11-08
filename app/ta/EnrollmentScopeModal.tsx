@@ -109,7 +109,7 @@ export function EnrollmentScopeModal({ me, onClose }: { me: Me; onClose?: () => 
               </HModal.Icon>
               <HModal.Heading>{t("เลือกช่วงการศึกษาที่จะดูข้อมูล")}</HModal.Heading>
               <p className="text-sm leading-5 text-muted">
-                {t("บัญชีนี้มีข้อมูลมากกว่า 1 ช่วงการศึกษา (รหัสนักศึกษาเปลี่ยนตอนเปลี่ยนระดับ) — เลือกช่วงที่ต้องการดูสำหรับการเข้าใช้งานครั้งนี้")}
+                {t("บัญชีนี้มีข้อมูลมากกว่า 1 ช่วงการศึกษา (รหัสนักศึกษาเปลี่ยนตอนเปลี่ยนระดับ) เลือกช่วงที่ต้องการดูสำหรับการเข้าใช้งานครั้งนี้")}
               </p>
             </HModal.Header>
             <HModal.Body>
@@ -128,7 +128,7 @@ export function EnrollmentScopeModal({ me, onClose }: { me: Me; onClose?: () => 
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-medium">
-                          {e.student_id} — {STUDY_LEVEL_TH[e.study_level] ? t(STUDY_LEVEL_TH[e.study_level]) : e.study_level}
+                          {e.student_id} - {STUDY_LEVEL_TH[e.study_level] ? t(STUDY_LEVEL_TH[e.study_level]) : e.study_level}
                         </span>
                         {isActive && (
                           <span className="text-xs font-medium text-[var(--success,#16a34a)]">{t("ปัจจุบัน")}</span>

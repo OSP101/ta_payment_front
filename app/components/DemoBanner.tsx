@@ -116,7 +116,7 @@ export default function DemoBanner() {
       >
         <FlaskConical size={14} className="shrink-0" />
         <span>
-          {t("โหมดทดลอง — ข้อมูลทั้งหมดในหน้านี้เป็นข้อมูลจำลอง ไม่ใช่ข้อมูลจริง")}
+          {t("โหมดทดลอง ข้อมูลทั้งหมดในหน้านี้เป็นข้อมูลจำลอง ไม่ใช่ข้อมูลจริง")}
         </span>
         {me && (
           <span className="text-warning-soft-foreground/70">

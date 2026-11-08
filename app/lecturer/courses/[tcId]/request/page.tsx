@@ -501,17 +501,17 @@ function GradSpecialAlert({ g }: { g: GradSpecialFacts }) {
       status={g.over ? "danger" : "warning"}
       icon={<Wallet size={18} />}
       title={g.over
-        ? t("TA บัณฑิตศึกษาใน section ภาคพิเศษ — งบภาคพิเศษไม่พอ")
+        ? t("TA บัณฑิตศึกษาใน section ภาคพิเศษ งบภาคพิเศษไม่พอ")
         : t("TA บัณฑิตศึกษาใน section ภาคพิเศษ ได้เหมาจ่ายทั้งเทอม")}
       description={
         <>
-          {t.rich("{who} จะได้ค่าตอบแทนเหมาจ่าย {lump}/คน/เทอม (ไม่คิดรายชั่วโมง) หักจากงบภาคพิเศษของวิชานี้ก่อนใคร — งบภาคพิเศษมี {cap}", {
+          {t.rich("{who} จะได้ค่าตอบแทนเหมาจ่าย {lump}/คน/เทอม (ไม่คิดรายชั่วโมง) หักจากงบภาคพิเศษของวิชานี้ก่อนใคร งบภาคพิเศษมี {cap}", {
             who: <b>{who}</b>, lump: fmt(g.lump), cap: fmt(g.cap),
           })}
           {g.already > 0 && <> {t("ผูกไว้แล้ว {n} จากคำขอก่อนหน้า", { n: fmt(g.already) })}</>}
           {" "}{t("รวมเป็น {n}", { n: fmt(g.committed) })}{" "}
           {g.over ? (
-            t.rich("{over} — TA ปริญญาตรีทุกคนใน section ภาคพิเศษ จะเบิกชั่วโมงไม่ได้เลย ถ้าไม่ตั้งใจ ให้ย้าย TA คนนี้ไป section ภาคปกติ หรือเลือก TA ปริญญาตรีแทน", {
+            t.rich("{over} TA ปริญญาตรีทุกคนใน section ภาคพิเศษ จะเบิกชั่วโมงไม่ได้เลย ถ้าไม่ตั้งใจ ให้ย้าย TA คนนี้ไป section ภาคปกติ หรือเลือก TA ปริญญาตรีแทน", {
               over: <b>{t("เกินงบ {n}", { n: fmt(g.committed - g.cap) })}</b>,
             })
           ) : (
@@ -1319,7 +1319,7 @@ function RequestFormSection({
       >
         <div className="space-y-3 text-sm">
           <p className="text-ink-2">
-            {t.rich("ตรวจสอบรายชื่อและภาระงานก่อนส่ง — เบิก {scope}", { scope: <b>{scopeLabel}</b> })}
+            {t.rich("ตรวจสอบรายชื่อและภาระงานก่อนส่ง เบิก {scope}", { scope: <b>{scopeLabel}</b> })}
           </p>
           <ul className="space-y-2">
             {assignments.map((a, i) => {
@@ -1383,10 +1383,10 @@ function RequestFormSection({
               )}
               <div className="pt-0.5 text-ink-2">
                 {estimate.verdict === "over"
-                  ? t.rich("เกินงบ {over} — ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขที่ขีดฆ่าคือค่างานเต็ม) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า หรือย้อนกลับไปลดจำนวนคน/ชั่วโมง", { over: <b>{fmtBahtEst(estimate.over, intl)}</b> })
+                  ? t.rich("เกินงบ {over} ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขที่ขีดฆ่าคือค่างานเต็ม) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า หรือย้อนกลับไปลดจำนวนคน/ชั่วโมง", { over: <b>{fmtBahtEst(estimate.over, intl)}</b> })
                   : estimate.verdict === "tight"
-                    ? t("พอดีงบแบบตึง ๆ — ถ้ามีคาบชดเชยเพิ่มระหว่างเทอมอาจเกินได้เล็กน้อย")
-                    : t("อยู่ในงบ — ตัวเลขเป็นประมาณการจากจำนวนคาบสอนจริงตามปฏิทิน")}
+                    ? t("พอดีงบแบบตึง ๆ ถ้ามีคาบชดเชยเพิ่มระหว่างเทอมอาจเกินได้เล็กน้อย")
+                    : t("อยู่ในงบ ตัวเลขเป็นประมาณการจากจำนวนคาบสอนจริงตามปฏิทิน")}
               </div>
             </div>
           )}
@@ -1709,7 +1709,7 @@ function AssignmentBlock({
                   <div key={sid} className={styles.workloadSection}>
                     <div className={styles.workloadHeader}>
                       <span className="text-sm font-semibold text-brand">
-                        {t("กลุ่มเรียน Sec {sec}", { sec: sec?.sec_no ?? "—" })}
+                        {t("กลุ่มเรียน Sec {sec}", { sec: sec?.sec_no ?? "-" })}
                       </span>
                       {sec?.track === "special" && <Chip tone="warn">{t("ภาคพิเศษ")}</Chip>}
                       {mates.length > 0 && (
@@ -2106,7 +2106,7 @@ function SectionPicker({
               key={s.id}
               value={s.id}
               isDisabled={held || blockedIds.has(s.id)}
-              aria-label={bad || partial ? `Sec ${s.sec_no} — ${conflictMsgs?.join("; ")}` : `Sec ${s.sec_no}`}
+              aria-label={bad || partial ? `Sec ${s.sec_no} - ${conflictMsgs?.join("; ")}` : `Sec ${s.sec_no}`}
               className={
                 "border rounded-lg px-3 py-1.5 transition-colors " +
                 (held

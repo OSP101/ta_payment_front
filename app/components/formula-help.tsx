@@ -186,7 +186,7 @@ export function FormulaHelpModal({
         {(all || step === 1) && (
           <HelpStep number={2} title={t("คำนวณภาระงานต่อสัปดาห์")} icon={<Sigma size={18} />} delay={all ? 80 : 0} playKey={`${step}-${all}`}>
             <div className="mb-3 text-xs text-muted">
-              {t.rich("คณะกำหนดฐานไว้ว่า บรรยาย 1 หน่วยกิต = {lec} ชม./สัปดาห์ เมื่อมีนักศึกษา {baseLec} คน · ปฏิบัติการ 1 หน่วยกิต = {lab} ชม./สัปดาห์ เมื่อมีนักศึกษา {baseLab} คน — วิชาที่มีนักศึกษามากหรือน้อยกว่าฐาน ภาระงานจะเพิ่ม/ลดตามสัดส่วน", {
+              {t.rich("คณะกำหนดฐานไว้ว่า บรรยาย 1 หน่วยกิต = {lec} ชม./สัปดาห์ เมื่อมีนักศึกษา {baseLec} คน · ปฏิบัติการ 1 หน่วยกิต = {lab} ชม./สัปดาห์ เมื่อมีนักศึกษา {baseLab} คน วิชาที่มีนักศึกษามากหรือน้อยกว่าฐาน ภาระงานจะเพิ่ม/ลดตามสัดส่วน", {
                 lec: <b>{hrsPerLecCr}</b>, baseLec, lab: <b>{hrsPerLabCr}</b>, baseLab,
               })}
             </div>

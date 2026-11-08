@@ -586,7 +586,7 @@ export const staffPagesEnA: DocPage[] = [
       text("Expand a row to see the result of each check, such as TA documents, class schedule, the cap on courses per semester (set on the Settings page) and overlapping schedules. TA documents and sessions that clash with the TA's own class schedule are only warnings and do not cause a rejection."),
       statusTable([
         { status: "✓ Passed", tone: "success", meaning: "That condition passed" },
-        { status: "⚠ Follow up", tone: "warn", meaning: "Passed with conditions" },
+        { status: "Follow up", tone: "warn", meaning: "Passed with conditions" },
         { status: "✕ Failed", tone: "danger", meaning: "Caused the request to be rejected" },
       ]),
       screenshot("S-AP-03", "A TA card in a request, with badges saying some sessions or the whole group were removed"),

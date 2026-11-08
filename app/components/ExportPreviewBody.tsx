@@ -246,7 +246,7 @@ export function ExportPreviewBody({
       )}
       {error && (
         <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
-          {t("อัปเดตข้อมูลไม่สำเร็จ {error} — ตัวเลขด้านล่างเป็นของเดือนที่เลือกไว้ก่อนหน้า", { error: errMessage(error) })}
+          {t("อัปเดตข้อมูลไม่สำเร็จ {error} ตัวเลขด้านล่างเป็นของเดือนที่เลือกไว้ก่อนหน้า", { error: errMessage(error) })}
         </div>
       )}
       {showPicker && (
@@ -315,7 +315,7 @@ export function ExportPreviewBody({
           <ul className="mt-1 list-disc pl-4 space-y-0.5">
             {blockers.map((b, i) => (
               <li key={i}>
-                {b.ta_name} — {blockerText(b, t)}{b.months.length > 0 ? ` (${b.months.join(", ")})` : ""}
+                {b.ta_name} - {blockerText(b, t)}{b.months.length > 0 ? ` (${b.months.join(", ")})` : ""}
               </li>
             ))}
           </ul>
@@ -406,10 +406,10 @@ function blockerText(b: ExportBlocker, t: TFn) {
   if (b.kind === "waiting_lecturer") return t("รออาจารย์อนุมัติ {n} รายการ", { n: b.rows ?? 0 });
   // Approved hours that now overlap the TA's own class timetable (the TA edited
   // it after the hours were approved). Reject or edit those rows first.
-  if (b.kind === "class_clash") return t("อนุมัติแล้วแต่ตรงกับตารางเรียนปัจจุบันของ TA {n} รายการ — ตีกลับหรือแก้ไขก่อน", { n: b.rows ?? 0 });
+  if (b.kind === "class_clash") return t("อนุมัติแล้วแต่ตรงกับตารางเรียนปัจจุบันของ TA {n} รายการ ตีกลับหรือแก้ไขก่อน", { n: b.rows ?? 0 });
   // Not a review the officer can do: the review queue does not list this TA
   // until an appointment order names them.
-  if (b.kind === "not_appointed") return t("ยังไม่อยู่ในคำสั่งแต่งตั้ง — ออกคำสั่งรอบถัดไปก่อน");
+  if (b.kind === "not_appointed") return t("ยังไม่อยู่ในคำสั่งแต่งตั้ง ออกคำสั่งรอบถัดไปก่อน");
   // The TA's own documents: staff approve them on the TA documents screen.
   if (b.kind === "profile") return t("เอกสาร TA ยังไม่พร้อม: {issue}", { issue: b.issue ?? "" });
   return t("ยังไม่ได้ตรวจสอบเบิกจ่าย");

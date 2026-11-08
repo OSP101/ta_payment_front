@@ -163,7 +163,7 @@ export function WorkloadEditModal({
       title={t("แก้ไขภาระงาน · {name}", { name: taName })}>
       <div className="space-y-3">
         <p className="text-xs text-muted">
-          {t("แก้ไขชั่วโมงที่ประกาศไว้สำหรับ TA คนนี้ — ไม่กระทบบันทึกเวลาที่มีอยู่แล้ว มีผลกับการสร้างบันทึกเวลาและการตรวจสอบโควตาครั้งถัดไปเท่านั้น")}
+          {t("แก้ไขชั่วโมงที่ประกาศไว้สำหรับ TA คนนี้ ไม่กระทบบันทึกเวลาที่มีอยู่แล้ว มีผลกับการสร้างบันทึกเวลาและการตรวจสอบโควตาครั้งถัดไปเท่านั้น")}
         </p>
         {isLoading ? (
           // One AssignmentCard's outline: chip row, a 2-column grid of hour

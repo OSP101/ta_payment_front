@@ -211,14 +211,14 @@ export default function Setup2FAPage() {
                       <Smartphone size={13} className="shrink-0 mt-0.5" />
                       <span>
                         <span className="text-foreground font-medium">Google Authenticator</span>{" "}
-                        {t("— ใช้งานง่าย มีทั้ง Android และ iOS")}
+                        {t("ใช้งานง่าย มีทั้ง Android และ iOS")}
                       </span>
                     </div>
                     <div className="flex items-start gap-2 text-xs text-muted">
                       <Smartphone size={13} className="shrink-0 mt-0.5" />
                       <span>
                         <span className="text-foreground font-medium">Microsoft Authenticator</span>{" "}
-                        {t("— มี Android และ iOS เช่นกัน สำรองรหัสขึ้นคลาวด์ได้")}
+                        {t("มี Android และ iOS เช่นกัน สำรองรหัสขึ้นคลาวด์ได้")}
                       </span>
                     </div>
                   </div>
@@ -259,7 +259,7 @@ export default function Setup2FAPage() {
                   </InputOTP>
                   {codeErr && <FieldError>{codeErr}</FieldError>}
                   <Description className="text-center">
-                    {t("ยังไม่ได้เปิดใช้งาน — กรอกรหัสให้ถูกต้องก่อนจึงจะเปิดใช้งานจริง")}
+                    {t("ยังไม่ได้เปิดใช้งาน กรอกรหัสให้ถูกต้องก่อนจึงจะเปิดใช้งานจริง")}
                   </Description>
                 </div>
 

@@ -333,7 +333,7 @@ export default function TAHome() {
 
   const activeTerm = yearTerms.find(t => t.id === defaultTerm);
   const termDisplay = activeTerm
-    ? `${activeTerm.academic_year}/${activeTerm.semester} — ${SEMESTER_LABELS[activeTerm.semester] ? t(SEMESTER_LABELS[activeTerm.semester]) : ""}`
+    ? `${activeTerm.academic_year}/${activeTerm.semester} - ${SEMESTER_LABELS[activeTerm.semester] ? t(SEMESTER_LABELS[activeTerm.semester]) : ""}`
     : "";
 
   return (

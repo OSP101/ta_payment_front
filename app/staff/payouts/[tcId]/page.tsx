@@ -87,7 +87,7 @@ export default function CoursePayoutWorkspace({ params }: { params: Promise<{ tc
       </Link>
 
       <PageHeader
-        title={tc ? `${courseCodeLabel(tc)} — ${tc.name_th}` : <SkelValue className="h-7 w-72 max-w-full" />}
+        title={tc ? `${courseCodeLabel(tc)} - ${tc.name_th}` : <SkelValue className="h-7 w-72 max-w-full" />}
         description={t("ตรวจรายเดือนด้านบน แล้วส่งออกด้านล่าง")}
       />
 

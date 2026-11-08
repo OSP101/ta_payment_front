@@ -510,7 +510,7 @@ export function TaPlanner({
             <div className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger-soft/40 p-3 text-xs text-danger-soft-foreground">
               <TriangleAlert size={14} className="mt-0.5 shrink-0" />
               <span>
-                {t.rich("{full} โดย TA ที่อนุมัติไปก่อนหน้า — TA ที่ขอเพิ่มจะทำให้ทุกคนถูกตัดตามสัดส่วน ถ้ายังจำเป็นต้องขอเพิ่ม ให้ลดชั่วโมงของทุกคนลง หรือปรึกษาเจ้าหน้าที่เรื่องงบก่อนส่ง", {
+                {t.rich("{full} โดย TA ที่อนุมัติไปก่อนหน้า TA ที่ขอเพิ่มจะทำให้ทุกคนถูกตัดตามสัดส่วน ถ้ายังจำเป็นต้องขอเพิ่ม ให้ลดชั่วโมงของทุกคนลง หรือปรึกษาเจ้าหน้าที่เรื่องงบก่อนส่ง", {
                   full: <b>{t("งบของวิชานี้ถูกใช้เต็มแล้ว")}</b>,
                 })}
               </span>
@@ -523,7 +523,7 @@ export function TaPlanner({
                 {variant === "budget" && regular.existingTAs > 0 ? t("ถ้าจะขอ TA เพิ่ม") : t("แผนที่แนะนำสำหรับวิชานี้")}
               </div>
               <span className="text-[11px] text-muted">
-                {t("ปรับตามงบของวิชานี้ — ให้ครบตามเกณฑ์ก่อน แล้วเพิ่มชั่วโมงต่อคน แล้วค่อยเพิ่มคน")}
+                {t("ปรับตามงบของวิชานี้ ให้ครบตามเกณฑ์ก่อน แล้วเพิ่มชั่วโมงต่อคน แล้วค่อยเพิ่มคน")}
               </span>
             </div>
             {/* One framed group per budget pool, each with its own colour, name
@@ -991,30 +991,30 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
     const need = wantUg - regular.existingTAs;
     const perHead = regular.free / need;
     advice.push(
-      t("นศ. {students} คน ตามเกณฑ์ 1 ต่อ {perTA} ควรมี TA ป.ตรี {want} คน แต่ที่ภาระงานมาตรฐานงบรับได้ {fit} คน ระบบไม่ลดค่าตอบแทนต่อคนต่ำกว่ามาตรฐานเพื่อแลกจำนวน — ถ้าต้องการ {want} คน แต่ละคนจะได้ไม่เกิน ≈ {term}/เทอม (≈ {month}/เดือน) ซึ่งต่ำกว่างานที่ทำจริง ควรปรึกษาเจ้าหน้าที่เรื่องงบก่อน", {
+      t("นศ. {students} คน ตามเกณฑ์ 1 ต่อ {perTA} ควรมี TA ป.ตรี {want} คน แต่ที่ภาระงานมาตรฐานงบรับได้ {fit} คน ระบบไม่ลดค่าตอบแทนต่อคนต่ำกว่ามาตรฐานเพื่อแลกจำนวน ถ้าต้องการ {want} คน แต่ละคนจะได้ไม่เกิน ≈ {term}/เทอม (≈ {month}/เดือน) ซึ่งต่ำกว่างานที่ทำจริง ควรปรึกษาเจ้าหน้าที่เรื่องงบก่อน", {
         students: regularStudents, perTA, want: wantUg, fit: maxUgWith(0) + regular.existingTAs, term: baht(perHead), month: baht(perHead / months),
       }),
     );
   }
   if (R && !R.best.fits) {
-    advice.push(t("งบปกติที่เหลือ {free} ไม่พอแม้ TA 1 คนที่ภาระงานขั้นต่ำ (≈ {cost}) — ถ้าส่งคำขอ TA จะถูกตัดตามสัดส่วน", { free: baht(regular.free), cost: baht(R.best.spent) }));
+    advice.push(t("งบปกติที่เหลือ {free} ไม่พอแม้ TA 1 คนที่ภาระงานขั้นต่ำ (≈ {cost}) ถ้าส่งคำขอ TA จะถูกตัดตามสัดส่วน", { free: baht(regular.free), cost: baht(R.best.spent) }));
   }
   if (hasSpecial) {
     const secs = specialSecs.map(s => s.sec_no).join(", ");
     if (specialCoSits) {
       if (specialExhausted) {
         advice.push(f.tracks.special.existing_lump_baht > 0
-          ? t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ แต่งบพิเศษ {cap} ถูกใช้เต็มแล้ว (เหมาจ่ายบัณฑิต {lump}) — แผนจึงตั้งตรวจงานฝั่งพิเศษเป็น 0 เพราะจะไม่ได้เงิน คาบเรียนยังดูแลไปพร้อมกันได้โดยเบิกจากงบปกติ", { secs, cap: baht(special.cap), lump: baht(f.tracks.special.existing_lump_baht) })
-          : t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ แต่งบพิเศษ {cap} ถูกใช้เต็มแล้ว — แผนจึงตั้งตรวจงานฝั่งพิเศษเป็น 0 เพราะจะไม่ได้เงิน คาบเรียนยังดูแลไปพร้อมกันได้โดยเบิกจากงบปกติ", { secs, cap: baht(special.cap) }),
+          ? t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ แต่งบพิเศษ {cap} ถูกใช้เต็มแล้ว (เหมาจ่ายบัณฑิต {lump}) แผนจึงตั้งตรวจงานฝั่งพิเศษเป็น 0 เพราะจะไม่ได้เงิน คาบเรียนยังดูแลไปพร้อมกันได้โดยเบิกจากงบปกติ", { secs, cap: baht(special.cap), lump: baht(f.tracks.special.existing_lump_baht) })
+          : t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ แต่งบพิเศษ {cap} ถูกใช้เต็มแล้ว แผนจึงตั้งตรวจงานฝั่งพิเศษเป็น 0 เพราะจะไม่ได้เงิน คาบเรียนยังดูแลไปพร้อมกันได้โดยเบิกจากงบปกติ", { secs, cap: baht(special.cap) }),
         );
       } else {
         advice.push(
-          t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ — ให้ TA ภาคปกติดูแลไปพร้อมกัน คาบเรียนไม่คิดเงินซ้ำ งบพิเศษ {cap} จะถูกใช้เฉพาะตรวจงานฝั่งพิเศษ", { secs, cap: baht(special.cap) }),
+          t("sec ภาคพิเศษ ({secs}) สอนเวลาเดียวกับ sec ปกติ ให้ TA ภาคปกติดูแลไปพร้อมกัน คาบเรียนไม่คิดเงินซ้ำ งบพิเศษ {cap} จะถูกใช้เฉพาะตรวจงานฝั่งพิเศษ", { secs, cap: baht(special.cap) }),
         );
       }
     } else if (special.free <= 0 && f.tracks.special.existing_lump_baht > 0) {
       advice.push(
-        t("งบภาคพิเศษ {cap} ถูกใช้เต็มแล้วด้วยเหมาจ่ายของ TA บัณฑิตที่อนุมัติไว้ ({lump}) — TA ป.ตรีที่เพิ่มใน sec ภาคพิเศษจะเบิกชั่วโมงไม่ได้เลย", { cap: baht(special.cap), lump: baht(f.tracks.special.existing_lump_baht) }),
+        t("งบภาคพิเศษ {cap} ถูกใช้เต็มแล้วด้วยเหมาจ่ายของ TA บัณฑิตที่อนุมัติไว้ ({lump}) TA ป.ตรีที่เพิ่มใน sec ภาคพิเศษจะเบิกชั่วโมงไม่ได้เลย", { cap: baht(special.cap), lump: baht(f.tracks.special.existing_lump_baht) }),
       );
     } else if (ugSpecialOnly.cost.special > special.free) {
       const maxHrsWeek = special.free / f.rates.undergrad_special / Math.max(1, f.class_weeks);
@@ -1025,8 +1025,8 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
     if (f.rates.graduate_special_lumpsum > special.free) {
       const v = { lump: baht(f.rates.graduate_special_lumpsum), free: baht(special.free) };
       advice.push(special.existingTAs > 0
-        ? t("อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษเพิ่ม — เหมาจ่าย {lump}/คน/เทอม มากกว่างบพิเศษที่เหลือ ({free}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย", v)
-        : t("อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษของวิชานี้ — เหมาจ่าย {lump}/คน/เทอม มากกว่างบพิเศษที่มี ({free}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย", v),
+        ? t("อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษเพิ่ม เหมาจ่าย {lump}/คน/เทอม มากกว่างบพิเศษที่เหลือ ({free}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย", v)
+        : t("อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษของวิชานี้ เหมาจ่าย {lump}/คน/เทอม มากกว่างบพิเศษที่มี ({free}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย", v),
       );
     }
   }
@@ -1281,8 +1281,8 @@ function ManualPoolCard({ label, tone, inp, onChange, res, months, rateNote, gra
         (res.total === 0 ? "bg-surface-secondary text-muted" : over ? "bg-danger-soft text-danger-soft-foreground" : "bg-success-soft text-success-soft-foreground")
       }>
         {res.total === 0 ? <><Users size={12} /> {t("ใส่จำนวน TA เพื่อดูว่างบพอไหม")}</>
-          : over ? <><TriangleAlert size={12} /> {t("เกินงบ — จะถูกตัดตามสัดส่วน")}</>
-          : <><CircleCheck size={12} /> {t("พอดีงบ — เบิกได้เต็ม")}</>}
+          : over ? <><TriangleAlert size={12} /> {t("เกินงบ จะถูกตัดตามสัดส่วน")}</>
+          : <><CircleCheck size={12} /> {t("พอดีงบ เบิกได้เต็ม")}</>}
       </div>
     </div>
   );
@@ -1351,7 +1351,7 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
         (o.fits ? "bg-success-soft text-success-soft-foreground" : "bg-danger-soft text-danger-soft-foreground")
       }>
         {o.fits ? <CircleCheck size={12} /> : <TriangleAlert size={12} />}
-        {o.fits ? t("พอดีงบ — เบิกได้เต็ม") : t("เกินงบ {amount} — จะถูกตัดตามสัดส่วน", { amount: baht(Math.max(0, -o.regularLeft) + Math.max(0, -o.specialLeft)) })}
+        {o.fits ? t("พอดีงบ เบิกได้เต็ม") : t("เกินงบ {amount} จะถูกตัดตามสัดส่วน", { amount: baht(Math.max(0, -o.regularLeft) + Math.max(0, -o.specialLeft)) })}
       </div>
       <button type="button" onClick={() => setMore(m => !m)} aria-expanded={more}
         className="mt-2 flex items-center gap-1 self-start text-[11px] font-medium text-link hover:underline">
@@ -1390,7 +1390,7 @@ function OptionDetail({ o, total }: { o: Option; total: number }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <Stat label={t("TA ทั้งหมด")} value={t("{n} คน", { n: heads })} />
         <Stat label={t("นศ. ที่ดูแล")} value={t("{n} คน", { n: o.students })} />
-        <Stat label={t("นศ. ต่อ TA")} value={heads > 0 ? t("≈ {n} คน", { n: hrs1(ratio) }) : "—"} />
+        <Stat label={t("นศ. ต่อ TA")} value={heads > 0 ? t("≈ {n} คน", { n: hrs1(ratio) }) : "-"} />
       </div>
 
       {o.sittings.map(s => {
@@ -1406,8 +1406,8 @@ function OptionDetail({ o, total }: { o: Option; total: number }) {
                 {" · "}{t("≈ {ratio} นศ./TA", { ratio: hrs1(n > 0 ? s.students / n : 0) })}
               </span>
             </div>
-            {s.ugPlan && <PersonPlan title={t("ป.ตรี {n} คน — แต่ละคน", { n: s.ug })} p={s.ugPlan} />}
-            {s.gradPlan && <PersonPlan title={t("บัณฑิต {n} คน — แต่ละคน", { n: s.grad })} p={s.gradPlan} />}
+            {s.ugPlan && <PersonPlan title={t("ป.ตรี {n} คน แต่ละคน", { n: s.ug })} p={s.ugPlan} />}
+            {s.gradPlan && <PersonPlan title={t("บัณฑิต {n} คน แต่ละคน", { n: s.grad })} p={s.gradPlan} />}
           </div>
         );
       })}
@@ -1451,7 +1451,7 @@ function DraftCard({ ev, regular, special, hasSpecial, months }: { ev: DraftEval
     }>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold">
-          <Users size={14} /> {t("TA ที่กำลังจะขอ ({n} คน) — ประมาณการ", { n: ev.people.length })}
+          <Users size={14} /> {t("TA ที่กำลังจะขอ ({n} คน) ประมาณการ", { n: ev.people.length })}
         </div>
         <Tip content={ev.verdict === "tight" ? t("งบภาคปกติ (รวม TA เดิม) เหลือไม่ถึง 5% ของเพดาน") : undefined}>
           <span>
@@ -1491,7 +1491,7 @@ function DraftCard({ ev, regular, special, hasSpecial, months }: { ev: DraftEval
         <div className="mt-2 flex items-start gap-1.5 text-[11px] text-danger-soft-foreground">
           <Wallet size={12} className="mt-0.5 shrink-0" />
           <span>
-            {t("เกินงบ {amount} — ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขหลังลูกศร) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า หรือลดจำนวนคน/ชั่วโมงตรวจงานให้พอดี", { amount: baht(ev.overRegular + ev.overSpecial) })}
+            {t("เกินงบ {amount} ระบบจะจ่ายตามสัดส่วนที่แต่ละคนทำ (ตัวเลขหลังลูกศร) ส่งได้ แต่ควรแจ้ง TA ล่วงหน้า หรือลดจำนวนคน/ชั่วโมงตรวจงานให้พอดี", { amount: baht(ev.overRegular + ev.overSpecial) })}
           </span>
         </div>
       )}
@@ -1514,7 +1514,7 @@ function ExistingCard({ f }: { f: PlanFacts }) {
     <div className="rounded-xl border border-border bg-panel p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold">
-          <Users size={14} /> {t("TA ที่อนุมัติแล้ว ({n} คน) — เงินที่แต่ละคนจะได้", { n: f.existing.length })}
+          <Users size={14} /> {t("TA ที่อนุมัติแล้ว ({n} คน) เงินที่แต่ละคนจะได้", { n: f.existing.length })}
         </div>
         <span className="text-[11px] text-muted">{t("จากงานที่ลงเวลาไว้ถึงตอนนี้ (รวมที่รออนุมัติ)")}</span>
       </div>
@@ -1561,7 +1561,7 @@ function ExistingCard({ f }: { f: PlanFacts }) {
       </div>
       {short && (
         <div className="mt-1 text-[11px] text-muted">
-          {t("งบไม่พอสำหรับงานทั้งหมด ระบบแบ่งตามสัดส่วนที่แต่ละคนทำ — เลือกว่าจะให้ส่วนที่ขาดตกเดือนไหนได้ในหน้า “อนุมัติรายงาน TA”")}
+          {t("งบไม่พอสำหรับงานทั้งหมด ระบบแบ่งตามสัดส่วนที่แต่ละคนทำ เลือกว่าจะให้ส่วนที่ขาดตกเดือนไหนได้ในหน้า “อนุมัติรายงาน TA”")}
         </div>
       )}
     </div>

@@ -449,7 +449,7 @@ function CourseSummaryPreviewPanel({
                 <div className="text-xs text-muted mt-0.5">{t("{n} รายวิชา", { n: courseRows.length })}</div>
               </div>
               <DataTable
-                ariaLabel={t("สรุปรายวิชาที่ขอใช้ TA — {sheet}", { sheet: sheet.sheet })}
+                ariaLabel={t("สรุปรายวิชาที่ขอใช้ TA {sheet}", { sheet: sheet.sheet })}
                 columns={columns}
                 rows={courseRows}
                 rowKey={r => r.course_code}
@@ -686,7 +686,7 @@ function TransferCoverPreviewPanel({ termId, level, month }: { termId: string; l
               </div>
             </div>
             <DataTable
-              ariaLabel={t("ปะหน้าจ่ายตรง — {sheet} ({track})", { sheet: sheet.sheet_name, track: sheet.track_th })}
+              ariaLabel={t("ปะหน้าจ่ายตรง {sheet} ({track})", { sheet: sheet.sheet_name, track: sheet.track_th })}
               columns={transferCoverColumns}
               rows={sheet.rows}
               rowKey={r => `${sheet.rows.indexOf(r)}-${r.name}`}
@@ -1076,7 +1076,7 @@ function TransferCoverMonthModal({
         <div className="space-y-4 text-sm">
           {split?.crosses && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
-              {t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) — เดือน {after} ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสารจาก {before}", {
+              {t("ภาคเรียนนี้คร่อมสิ้นปีงบประมาณ (30 ก.ย.) เดือน {after} ต้องเบิกจากงบปีใหม่ จึงต้องแยกเอกสารจาก {before}", {
                 after: monthLabels(all, split.after).join(", "),
                 before: monthLabels(all, split.before).join(", "),
               })}
@@ -1088,7 +1088,7 @@ function TransferCoverMonthModal({
 
           {straddles && (
             <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900">
-              {t.rich("{head} — เดือนที่เลือกอยู่คร่อมวันที่ 30 ก.ย. ต้องออกเป็นคนละฉบับ เพราะการเงินคีย์เข้าระบบ ERP ต่อหนึ่งฉบับได้เพียงปีงบเดียว กดปุ่ม “งบปีเก่า” หรือ “งบปีใหม่” ด้านบนเพื่อเลือกให้ถูกชุด", {
+              {t.rich("{head} เดือนที่เลือกอยู่คร่อมวันที่ 30 ก.ย. ต้องออกเป็นคนละฉบับ เพราะการเงินคีย์เข้าระบบ ERP ต่อหนึ่งฉบับได้เพียงปีงบเดียว กดปุ่ม “งบปีเก่า” หรือ “งบปีใหม่” ด้านบนเพื่อเลือกให้ถูกชุด", {
                 head: <b>{t("เลือกข้ามปีงบประมาณในฉบับเดียวไม่ได้")}</b>,
               })}
             </div>
@@ -1100,7 +1100,7 @@ function TransferCoverMonthModal({
           )}
           {notCovered.length > 0 && (
             <p className="text-xs text-ink-3">
-              {t("ยังไม่ได้ออกเอกสารของเดือน {months} — อย่าลืมกลับมาออกให้ครบ", { months: notCovered.map(m => m.label).join(", ") })}
+              {t("ยังไม่ได้ออกเอกสารของเดือน {months} อย่าลืมกลับมาออกให้ครบ", { months: notCovered.map(m => m.label).join(", ") })}
             </p>
           )}
 
@@ -1435,7 +1435,7 @@ function TransferCoverHistoryModal({
                   {/* Pre-level-split rows (12/08/2026) covered both files at
                       once — flag that explicitly rather than silently
                       claiming this was already a level-scoped generation. */}
-                  {!h.level && <Chip tone="neutral">{t("ก่อนแยกไฟล์ — ครอบคลุมทั้งสองระดับ")}</Chip>}
+                  {!h.level && <Chip tone="neutral">{t("ก่อนแยกไฟล์ ครอบคลุมทั้งสองระดับ")}</Chip>}
                 </div>
                 {/* Which slice this file was. Two files for one term now differ
                     only by their months, so without this the history reads as

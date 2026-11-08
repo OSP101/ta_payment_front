@@ -749,7 +749,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
             <div className="min-w-0 flex-1">
               <div className="text-sm text-foreground">{t("รูปโปรไฟล์ (ไม่บังคับ)")}</div>
               <div className="text-xs text-muted mt-0.5">
-                {t("JPEG, PNG, WebP ขนาดไม่เกิน 12MB — ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก")}
+                {t("JPEG, PNG, WebP ขนาดไม่เกิน 12MB ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก")}
               </div>
             </div>
             <input
@@ -977,7 +977,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
               <div className="min-w-0 flex-1">
                 <div className="text-sm text-foreground">{t("รูปโปรไฟล์")}</div>
                 <div className="text-xs text-muted mt-0.5">
-                  {t("JPEG, PNG, WebP ขนาดไม่เกิน 12MB — ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก")}
+                  {t("JPEG, PNG, WebP ขนาดไม่เกิน 12MB ครอบตัด/ซูม/หมุน/กลับด้านได้ก่อนบันทึก")}
                 </div>
               </div>
               <input
@@ -1033,7 +1033,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
                 {user.roles.map(r => <Chip key={r} tone="neutral">{t(ROLE_LABEL[r] ?? r)}</Chip>)}
               </div>
               <div className="text-xs text-muted mt-1.5">
-                {t("เปลี่ยนบทบาทหลังสร้างบัญชีไม่ได้ — หากต้องการเปลี่ยน ให้สร้างบัญชีใหม่ด้วยบทบาทที่ถูกต้อง")}
+                {t("เปลี่ยนบทบาทหลังสร้างบัญชีไม่ได้ หากต้องการเปลี่ยน ให้สร้างบัญชีใหม่ด้วยบทบาทที่ถูกต้อง")}
               </div>
             </div>
             {/* สิทธิ์ผู้บริหารไม่ได้ติ๊กตรงนี้อีกต่อไป — มาจากการถือตำแหน่งฝ่ายบริหาร
@@ -1043,7 +1043,7 @@ function EditUserModal({ user, onClose }: { user: User; onClose: () => void }) {
               <div className="text-sm rounded-lg border border-border bg-surface px-3 py-2.5">
                 <span className="font-medium">{t("สิทธิ์ผู้บริหาร: มี")}</span>
                 <span className="block text-xs text-muted mt-0.5">
-                  {t("มาจากการดำรงตำแหน่งฝ่ายบริหารที่เปิดใช้งานอยู่ — จัดการที่หน้า \"ตั้งค่า > ฝ่ายบริหาร\"")}
+                  {t("มาจากการดำรงตำแหน่งฝ่ายบริหารที่เปิดใช้งานอยู่ จัดการที่หน้า \"ตั้งค่า > ฝ่ายบริหาร\"")}
                 </span>
               </div>
             )}
@@ -1452,7 +1452,7 @@ function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => 
     <Modal
       open
       onClose={onClose}
-      title={t("ประวัติการศึกษา — {name}", { name: formatFullName(user) })}
+      title={t("ประวัติการศึกษา {name}", { name: formatFullName(user) })}
       size="lg"
       footer={<Button variant="ghost" onClick={onClose}>{t("ปิด")}</Button>}
     >
@@ -1471,7 +1471,7 @@ function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => 
                 <div key={e.id} className="rounded-lg border border-border px-3 py-2 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-medium">
-                      {e.student_id} — {t(STUDY_LEVELS.find(l => l.value === e.study_level)?.label ?? e.study_level)}
+                      {e.student_id} - {t(STUDY_LEVELS.find(l => l.value === e.study_level)?.label ?? e.study_level)}
                     </div>
                     <div className="text-xs text-muted">
                       {new Date(e.started_at).toLocaleDateString(intl)}
@@ -1490,7 +1490,7 @@ function EnrollmentHistoryModal({ user, onClose }: { user: User; onClose: () => 
         {adding ? (
           <div className="border-t border-border pt-4 space-y-3">
             <div className="text-xs text-muted">
-              {t("บันทึกการเปลี่ยนระดับ — ช่วงเดิมที่ยัง active อยู่จะถูกปิดโดยอัตโนมัติ")}
+              {t("บันทึกการเปลี่ยนระดับ ช่วงเดิมที่ยัง active อยู่จะถูกปิดโดยอัตโนมัติ")}
             </div>
             <VField label={t("รหัสนักศึกษาใหม่")} required placeholder="XXXXXXXXX-X"
               value={form.student_id} onChange={v => setForm({ ...form, student_id: formatStudentID(v) })}

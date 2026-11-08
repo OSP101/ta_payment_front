@@ -34,6 +34,6 @@ export function thaiDate(iso?: string | null, locale: Locale = "th"): string {
  *  0.983333), so printing it raw shows six decimals; two is what every
  *  money figure is rounded to. Trailing zeros are dropped ("3", "0.98"). */
 export function fmtHours(h: number | null | undefined): string {
-  if (h === null || h === undefined || !Number.isFinite(h)) return "—";
+  if (h === null || h === undefined || !Number.isFinite(h)) return "-";
   return String(Number(h.toFixed(2)));
 }

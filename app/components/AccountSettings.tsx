@@ -42,9 +42,9 @@ export default function AccountSettings({ me }: { me: Me | undefined }) {
               anything about the row it sat on. */}
           {/* Before /me lands the values are placeholders, not "—" — a dash
               reads as "we have no name for you". */}
-          <InfoRow icon={<User size={16} />} label={t("ชื่อ-นามสกุล")} value={me ? formatFullName(me) || "—" : undefined} />
-          <InfoRow icon={<Mail size={16} />} label={t("อีเมล")} value={me ? me.email ?? "—" : undefined} />
-          <InfoRow icon={<Phone size={16} />} label={t("เบอร์โทรศัพท์")} value={me ? me.phone ?? "—" : undefined} />
+          <InfoRow icon={<User size={16} />} label={t("ชื่อ-นามสกุล")} value={me ? formatFullName(me) || "-" : undefined} />
+          <InfoRow icon={<Mail size={16} />} label={t("อีเมล")} value={me ? me.email ?? "-" : undefined} />
+          <InfoRow icon={<Phone size={16} />} label={t("เบอร์โทรศัพท์")} value={me ? me.phone ?? "-" : undefined} />
           {/* Only students have one; a lecturer's account would otherwise show
               a row that reads "—" forever. */}
           {me?.study_level && (
@@ -222,7 +222,7 @@ function EducationHistoryPanel({ userId }: { userId: string }) {
   return (
     <Panel
       title={t("ประวัติการศึกษา")}
-      description={t("ระดับการศึกษาและรหัสนักศึกษาของคุณในแต่ละช่วง — แก้ไขได้โดยเจ้าหน้าที่เท่านั้น")}
+      description={t("ระดับการศึกษาและรหัสนักศึกษาของคุณในแต่ละช่วง แก้ไขได้โดยเจ้าหน้าที่เท่านั้น")}
       className="mb-4"
     >
       {isLoading ? (
@@ -234,7 +234,7 @@ function EducationHistoryPanel({ userId }: { userId: string }) {
           {items.map(e => (
             <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--hairline)] px-3 py-2">
               <div>
-                <div className="text-sm font-medium">{e.student_id} — {t(studyLabel(e.study_level))}</div>
+                <div className="text-sm font-medium">{e.student_id} - {t(studyLabel(e.study_level))}</div>
                 <div className="text-xs text-muted">
                   {new Date(e.started_at).toLocaleDateString(intl)}
                   {" – "}
@@ -251,7 +251,7 @@ function EducationHistoryPanel({ userId }: { userId: string }) {
 }
 
 function studyLabel(v: string | undefined): string {
-  if (!v) return "—";
+  if (!v) return "-";
   return ({
     undergrad: msg("ปริญญาตรี"),
     master: msg("ปริญญาโท"),

@@ -703,7 +703,7 @@ function ResultView({ r }: { r: CommitResult }) {
       {(r.warnings?.length ?? 0) > 0 && (
         <div>
           <p className="text-xs font-medium mb-1 text-(--ink-2)">
-            {t("รายการที่เตือน (ไม่มีตารางเรียน — ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)")}
+            {t("รายการที่เตือน (ไม่มีตารางเรียน ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)")}
           </p>
           <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
             {r.warnings!.map((w, i) => (
