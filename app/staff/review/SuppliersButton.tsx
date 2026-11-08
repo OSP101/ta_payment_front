@@ -35,7 +35,7 @@ export function SuppliersButton() {
   const { t } = useI18n();
   const { termId, termLabel } = useTerm();
   const [open, setOpen] = useState(false);
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -49,11 +49,11 @@ export function SuppliersButton() {
   const gaps = ready.filter(c => c.incomplete).length;
 
   async function submit() {
-    if (busy || !password || ready.length === 0) return;
+    if (busy || !code || ready.length === 0) return;
     setBusy(true);
     setErr(null);
     try {
-      const blob = await api.post<Blob>(`/ta-review/suppliers.xlsx?term=${termId}`, { password });
+      const blob = await api.post<Blob>(`/ta-review/suppliers.xlsx?term=${termId}`, { code });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -65,7 +65,7 @@ export function SuppliersButton() {
       notify.success(t("ดาวน์โหลดไฟล์ Suppliers ของทีเอใหม่ {n} คนแล้ว", { n: ready.length }));
       setOpen(false);
     } catch (e) {
-      // Inline, not a toast: focus is in the password field.
+      // Inline, not a toast: focus is in the code field.
       setErr(e instanceof Error ? e.message : t("ดาวน์โหลดไม่สำเร็จ"));
     } finally {
       setBusy(false);
@@ -79,7 +79,7 @@ export function SuppliersButton() {
           size="sm"
           variant="secondary"
           isDisabled={!termId}
-          onPress={() => { setPassword(""); setErr(null); setOpen(true); }}
+          onPress={() => { setCode(""); setErr(null); setOpen(true); }}
         >
           <FileSpreadsheet size={14} /> {t("ไฟล์ Suppliers ทีเอใหม่")}
         </Button>
@@ -96,7 +96,7 @@ export function SuppliersButton() {
             <Button variant="ghost" onPress={() => setOpen(false)} isDisabled={busy}>
               {t("ยกเลิก")}
             </Button>
-            <Button onPress={submit} isDisabled={busy || !password || ready.length === 0} isPending={busy}>
+            <Button onPress={submit} isDisabled={busy || !code || ready.length === 0} isPending={busy}>
               <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
             </Button>
           </>
@@ -155,21 +155,21 @@ export function SuppliersButton() {
             <div className="flex items-start gap-2">
               <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning-soft-foreground" />
               <p className="text-xs text-muted">
-                {t("ไฟล์นี้มีเลขบัตรประชาชน เลขที่บัญชีธนาคาร และที่อยู่ของทีเอ จึงต้องยืนยันรหัสผ่านทุกครั้ง ระบบบันทึกว่าใครดาวน์โหลดและมีใครอยู่ในไฟล์ กรุณาส่งให้ฝ่ายการเงินผ่านช่องทางของหน่วยงานเท่านั้น")}
+                {t("ไฟล์นี้มีเลขบัตรประชาชน เลขที่บัญชีธนาคาร และที่อยู่ของทีเอ จึงต้องยืนยันรหัส TOTP 6 หลักทุกครั้ง ระบบบันทึกว่าใครดาวน์โหลดและมีใครอยู่ในไฟล์ กรุณาส่งให้ฝ่ายการเงินผ่านช่องทางของหน่วยงานเท่านั้น")}
               </p>
             </div>
           </div>
 
           <TextField
-            name="officer-password-suppliers"
+            name="officer-code-suppliers"
             isRequired
-            value={password}
-            onChange={v => { setPassword(v); if (err) setErr(null); }}
+            value={code}
+            onChange={v => { setCode(v); if (err) setErr(null); }}
             isInvalid={!!err}
           >
-            <Label>{t("รหัสผ่านของคุณ")}</Label>
+            <Label>{t("รหัส TOTP 6 หลักของคุณ")}</Label>
             <InputGroup>
-              <InputGroup.Input type="password" autoComplete="current-password" />
+              <InputGroup.Input type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
             </InputGroup>
             {err && <FieldError>{err}</FieldError>}
           </TextField>

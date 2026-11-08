@@ -15,6 +15,7 @@ import { DataTable, type DataColumn, type DataFilter } from "../../components/Da
 import { Skel } from "../../components/Skeletons";
 import { CourseCode, courseCodeLabel } from "../../lib/courseCode";
 import type { RegSourceStatus, RegSourcesResponse } from "./regSources";
+import { REG_FETCH_ENABLED } from "./regSources";
 import { budgetConfirmMessage } from "./budgetConfirm";
 import BudgetCapNotice from "../../components/BudgetCapNotice";
 import { useI18n, type TFn } from "../../lib/i18n/client";
@@ -93,6 +94,7 @@ export default function TeachingPage() {
   const [regChecking, setRegChecking] = useState(false);
   const [regCheckError, setRegCheckError] = useState("");
   async function checkRegSources() {
+    if (!REG_FETCH_ENABLED) return;
     setRegChecking(true);
     setRegCheckError("");
     try {
@@ -104,7 +106,7 @@ export default function TeachingPage() {
     } finally { setRegChecking(false); }
   }
   async function openBulkCounts() {
-    await checkRegSources();
+    if (REG_FETCH_ENABLED) await checkRegSources();
     setBulkCountsOpen(true);
   }
   const [onlyMissing, setOnlyMissing] = useState(false);

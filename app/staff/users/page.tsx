@@ -186,7 +186,7 @@ function formatStudentID(s: string): string {
 
 /** HeroUI validated text field. Errors shown only when `show` is true. */
 function VField({
-  label, value, onChange, error, show, type = "text", placeholder, required, autoFocus,
+  label, value, onChange, error, show, type = "text", placeholder, required, autoFocus, inputMode, maxLength, autoComplete,
 }: {
   label: React.ReactNode;
   value: string;
@@ -197,6 +197,9 @@ function VField({
   placeholder?: string;
   required?: boolean;
   autoFocus?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  maxLength?: number;
+  autoComplete?: string;
 }) {
   const { t } = useI18n();
   const invalid = show && !!error;
@@ -209,7 +212,7 @@ function VField({
       autoFocus={autoFocus}
     >
       <HLabel>{label}</HLabel>
-      <HInput type={type} placeholder={placeholder} />
+      <HInput type={type} placeholder={placeholder} inputMode={inputMode} maxLength={maxLength} autoComplete={autoComplete} />
       {invalid && <HFieldError>{t(error!)}</HFieldError>}
     </HTextField>
   );
@@ -446,7 +449,7 @@ export default function UsersPage() {
           more.push({ id: "history", label: t("ประวัติการศึกษา"), icon: <GraduationCap className="size-4" />, run: () => setHistoryFor(u) });
           more.push({ id: "timetable", label: t("ตารางเรียน"), icon: <CalendarDays className="size-4" />, run: () => setTimetableFor(u) });
         }
-        if (canUnlock(u)) more.push({ id: "unlock", label: t("ปลดล็อกการยืนยันรหัสผ่าน"), icon: <LockOpen className="size-4" />, run: () => setUnlocking(u) });
+        if (canUnlock(u)) more.push({ id: "unlock", label: t("ปลดล็อกการยืนยัน TOTP"), icon: <LockOpen className="size-4" />, run: () => setUnlocking(u) });
         if (canReset2FA(u) && u.totp_enabled) more.push({ id: "2fa", label: t("รีเซ็ต 2FA"), icon: <ShieldOff className="size-4" />, run: () => setResetting2FA(u) });
         if (canManage(u)) more.push(u.is_active
           ? { id: "deactivate", label: t("ปิดใช้งานบัญชี"), icon: <UserX className="size-4 text-danger-soft-foreground" />, run: () => setDeactivating(u), danger: true }
@@ -1091,7 +1094,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
   const foreign = !!data?.foreign;
   const idLabel = foreign ? t("เลข Passport") : t("เลขบัตรประชาชน");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ student_id: "", national_id: "", prefix: "", reason: "", password: "" });
+  const [form, setForm] = useState({ student_id: "", national_id: "", prefix: "", reason: "", code: "" });
   const [showErrors, setShowErrors] = useState(false);
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1100,7 +1103,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
   const nidDigits = foreign ? passportNumber(form.national_id) : form.national_id.replace(/\D/g, "");
   // The creditor form prints the prefix and the citizen ID, so correcting
   // either rebuilds it — and the rebuilt file carries the full ID and bank
-  // details, hence the officer's own password, like every such download.
+  // details, hence the officer's own code, like every such download.
   const rebuildsForm = !!data?.has_profile && (nidDigits !== "" || form.prefix !== "");
   const errors = {
     student_id: form.student_id.trim() === "" ? null : vStudentID(form.student_id),
@@ -1109,12 +1112,12 @@ function TAIdentityFix({ userId }: { userId: string }) {
       : nidDigits.length === 13 ? null : t("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก"),
     reason: vRequired(form.reason, msg("กรุณาระบุเหตุผล เช่น ผู้ช่วยสอนแสดงบัตรนักศึกษาที่ห้องธุรการ")),
     nothing: form.student_id.trim() === "" && nidDigits === "" && form.prefix === "" ? msg("กรอกอย่างน้อย 1 ช่องที่ต้องการแก้") : null,
-    password: rebuildsForm && form.password === "" ? msg("กรอกรหัสผ่านของคุณเพื่อดาวน์โหลดแบบฟอร์มเจ้าหนี้ฉบับใหม่") : null,
+    code: rebuildsForm && form.code === "" ? msg("กรอกรหัส TOTP 6 หลักของคุณเพื่อดาวน์โหลดแบบฟอร์มเจ้าหนี้ฉบับใหม่") : null,
   };
   const hasErrors = Object.values(errors).some(Boolean);
 
-  async function rebuildCreditorForm(password: string) {
-    const pdf = await api.post<Blob>(`/users/${userId}/creditor-form/regenerate`, { password });
+  async function rebuildCreditorForm(code: string) {
+    const pdf = await api.post<Blob>(`/users/${userId}/creditor-form/regenerate`, { code });
     const url = URL.createObjectURL(pdf);
     const a = document.createElement("a");
     a.href = url;
@@ -1125,15 +1128,15 @@ function TAIdentityFix({ userId }: { userId: string }) {
   }
 
   const [regenOpen, setRegenOpen] = useState(false);
-  const [regenPw, setRegenPw] = useState("");
+  const [regenCode, setRegenCode] = useState("");
   const [regenErr, setRegenErr] = useState<string | null>(null);
   const [regenPending, setRegenPending] = useState(false);
   async function regenOnly() {
-    if (!regenPw) { setRegenErr(t("กรอกรหัสผ่านของคุณ")); return; }
+    if (!regenCode) { setRegenErr(t("กรอกรหัส TOTP 6 หลักของคุณ")); return; }
     setRegenPending(true); setRegenErr(null);
     try {
-      await rebuildCreditorForm(regenPw);
-      setRegenOpen(false); setRegenPw("");
+      await rebuildCreditorForm(regenCode);
+      setRegenOpen(false); setRegenCode("");
     } catch (e) {
       setRegenErr(errMessage(e));
     } finally {
@@ -1157,14 +1160,14 @@ function TAIdentityFix({ userId }: { userId: string }) {
       notify.success(t("แก้ไขข้อมูลผู้ช่วยสอนแล้ว และแจ้งผู้ช่วยสอนแล้ว"));
       if (rebuildsForm) {
         try {
-          await rebuildCreditorForm(form.password);
+          await rebuildCreditorForm(form.code);
         } catch (e) {
           // The correction itself is saved; only the rebuild failed — the
           // separate "สร้างแบบฟอร์มเจ้าหนี้ใหม่" button retries it.
           notify.error(t("บันทึกการแก้ไขแล้ว แต่สร้างแบบฟอร์มเจ้าหนี้ใหม่ไม่สำเร็จ: {error}", { error: errMessage(e) }));
         }
       }
-      setForm({ student_id: "", national_id: "", prefix: "", reason: "", password: "" });
+      setForm({ student_id: "", national_id: "", prefix: "", reason: "", code: "" });
       setShowErrors(false);
       setOpen(false);
     } catch (e) {
@@ -1206,11 +1209,11 @@ function TAIdentityFix({ userId }: { userId: string }) {
           <p className="text-xs text-muted">
             {t("สร้างแบบฟอร์มเจ้าหนี้ใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้ โดยใช้คำนำหน้า ชื่อ-นามสกุล และเลขบัตรปัจจุบันในระบบ (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่า แล้วดาวน์โหลดทันที")}
           </p>
-          <VField label={t("รหัสผ่านของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="password" required
-            value={regenPw} onChange={setRegenPw} error={regenErr} show={!!regenErr}
+          <VField label={t("รหัส TOTP 6 หลักของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" required
+            value={regenCode} onChange={setRegenCode} error={regenErr} show={!!regenErr}
           />
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" onClick={() => { setRegenOpen(false); setRegenPw(""); setRegenErr(null); }}>{t("ยกเลิก")}</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setRegenOpen(false); setRegenCode(""); setRegenErr(null); }}>{t("ยกเลิก")}</Button>
             <Button variant="primary" size="sm" onClick={regenOnly} disabled={regenPending} isPending={regenPending}>{t("สร้างและดาวน์โหลด")}</Button>
           </div>
         </div>
@@ -1254,15 +1257,15 @@ function TAIdentityFix({ userId }: { userId: string }) {
               <p className="text-xs text-muted">
                 {t("เลขบัตรและคำนำหน้าอยู่ในแบบฟอร์มเจ้าหนี้ ระบบจะสร้างแบบฟอร์มฉบับใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้ (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่าในระบบ และดาวน์โหลดให้ทันที")}
               </p>
-              <VField label={t("รหัสผ่านของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="password" required
-                value={form.password} onChange={v => setForm({ ...form, password: v })}
-                error={errors.password} show={showErrors}
+              <VField label={t("รหัส TOTP 6 หลักของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" required
+                value={form.code} onChange={v => setForm({ ...form, code: v })}
+                error={errors.code} show={showErrors}
               />
             </>
           )}
           {err && <Alert status="danger" title={t("แก้ไขไม่สำเร็จ")} description={err} />}
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); setErr(null); setShowErrors(false); setForm(f => ({ ...f, password: "" })); }}>{t("ยกเลิก")}</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); setErr(null); setShowErrors(false); setForm(f => ({ ...f, code: "" })); }}>{t("ยกเลิก")}</Button>
             <Button variant="primary" size="sm" onClick={save} disabled={pending} isPending={pending}>{t("บันทึกการแก้ไข")}</Button>
           </div>
         </div>
@@ -1730,7 +1733,7 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
     try {
       const res = await api.post<{ was_locked: boolean }>(`/users/${user.id}/unlock-password-gate`);
       notify.success(res.was_locked
-        ? t("ปลดล็อกเรียบร้อยแล้ว ผู้ใช้ยืนยันรหัสผ่านได้ทันที")
+        ? t("ปลดล็อกเรียบร้อยแล้ว ผู้ใช้ยืนยัน TOTP ได้ทันที")
         : t("บัญชีนี้ไม่ได้ถูกล็อกอยู่ จึงไม่มีอะไรต้องปลด"));
       onClose();
     } catch (e) {
@@ -1745,7 +1748,7 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
     <Modal
       open
       onClose={onClose}
-      title={t("ปลดล็อกการยืนยันรหัสผ่าน")}
+      title={t("ปลดล็อกการยืนยัน TOTP")}
       size="md"
       footer={<>
         <Button variant="ghost" onClick={onClose} disabled={pending}>{t("ยกเลิก")}</Button>
@@ -1756,7 +1759,7 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
     >
       <div className="space-y-3">
         <p className="text-sm">
-          {t.rich("ล้างการนับรหัสผ่านผิดของ {name} ({email}) เพื่อให้กลับมายืนยันตัวตนตอนดาวน์โหลดเอกสารหรือแก้ไขเวลาปฏิบัติงานได้ทันที โดยไม่ต้องรอจนครบ 15 นาที", {
+          {t.rich("ล้างการนับรหัส TOTP ผิดของ {name} ({email}) เพื่อให้กลับมายืนยันตัวตนตอนดาวน์โหลดเอกสารหรือแก้ไขเวลาปฏิบัติงานได้ทันที โดยไม่ต้องรอจนครบ 15 นาที", {
             name: <span className="font-medium">{user.first_name} {user.last_name}</span>,
             email: user.email,
           })}
@@ -1775,24 +1778,24 @@ function UnlockPasswordGateModal({ user, onClose }: { user: User; onClose: () =>
 /* -------------------------------------------------------------------------- */
 
 // Admin, or staff for TA/lecturer accounts (see canReset2FA above). Requires
-// the ACTING officer's own password, unlike
+// the ACTING officer's own TOTP code, unlike
 // UnlockPasswordGateModal above — resetting 2FA removes a security control
 // entirely, not just a temporary rate-limit, so it gets the stronger gate.
 function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
   const { t } = useI18n();
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (!password) {
-      setErr(t("กรุณากรอกรหัสผ่านของคุณเพื่อยืนยัน"));
+    if (!code) {
+      setErr(t("กรุณากรอกรหัส TOTP 6 หลักของคุณเพื่อยืนยัน"));
       return;
     }
     setPending(true);
     setErr(null);
     try {
-      await mfaAdminReset(user.id, password);
+      await mfaAdminReset(user.id, code);
       notify.success(t("รีเซ็ต 2FA ของ {name} แล้ว", { name: `${user.first_name} ${user.last_name}` }));
       refreshUsers();
       onClose();
@@ -1828,12 +1831,12 @@ function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
           {t("ใช้เมื่อผู้ใช้ทำอุปกรณ์ยืนยันตัวตนหายและไม่มีรหัสสำรองเหลืออยู่")}
         </p>
         <VField
-          label={t("รหัสผ่านของคุณ (ยืนยันตัวตน)")}
-          value={password}
-          onChange={setPassword}
+          label={t("รหัส TOTP 6 หลักของคุณ (ยืนยันตัวตน)")}
+          value={code}
+          onChange={setCode}
           error={err}
           show={!!err}
-          type="password"
+          type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code"
           required
         />
       </div>

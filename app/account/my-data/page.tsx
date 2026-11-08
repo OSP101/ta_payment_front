@@ -83,12 +83,12 @@ function Field({ label, value }: { label: string; value: string | undefined }) {
   );
 }
 
-/** Password-gated full citizen-ID reveal — mirrors TwoFactorManageModal's
- *  password-field pattern. Only the last 4 digits are ever fetched by
+/** Code-gated full citizen-ID reveal — mirrors TwoFactorManageModal's
+ *  code-field pattern. Only the last 4 digits are ever fetched by
  *  default (MyDataExport); the full number is a deliberately separate,
  *  friction-ful action via POST /me/citizen-id/reveal. */
 function CitizenIdSection() {
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -96,16 +96,16 @@ function CitizenIdSection() {
   const { t } = useI18n();
 
   async function reveal() {
-    if (!password) {
-      setErr(t("กรุณากรอกรหัสผ่าน"));
+    if (!code) {
+      setErr(t("กรุณากรอกรหัส TOTP 6 หลัก"));
       return;
     }
     setPending(true);
     setErr(null);
     try {
-      const res = await citizenIdReveal(password);
+      const res = await citizenIdReveal(code);
       setRevealed(res.national_id);
-      setPassword("");
+      setCode("");
     } catch (e) {
       setErr(errMessage(e));
     } finally {
@@ -135,15 +135,15 @@ function CitizenIdSection() {
 
       {!revealed && (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-          <TextField name="reveal-password" value={password} onChange={v => { setPassword(v); setErr(null); }} className="flex-1">
-            <Label className="text-xs">{t("รหัสผ่านปัจจุบัน")}</Label>
+          <TextField name="reveal-code" value={code} onChange={v => { setCode(v); setErr(null); }} className="flex-1">
+            <Label className="text-xs">{t("รหัส TOTP 6 หลักจากแอป Authenticator")}</Label>
             <InputGroup>
-              <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="current-password" lang="en" />
+              <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="one-time-code" inputMode="numeric" maxLength={6} lang="en" />
               <InputGroup.Suffix className="pr-0">
                 <IconButton
                   size="sm"
                   variant="ghost"
-                  label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
+                  label={showPw ? t("ซ่อนรหัส TOTP 6 หลัก") : t("แสดงรหัส TOTP 6 หลัก")}
                   onPress={() => setShowPw(!showPw)}
                 >
                   {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

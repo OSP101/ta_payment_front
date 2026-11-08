@@ -273,6 +273,9 @@ const REAUTH_PATHS = [
   // showing the inline FieldError /setup-2fa is built to render, discarding
   // the in-progress QR scan.
   "/me/2fa/",
+  "/me/password",
+  "/me/citizen-id/reveal",
+  "/staff/worklogs",
 ];
 function isReauthPath(path: string): boolean {
   if (path.endsWith("/auth/heartbeat")) return false;
@@ -284,6 +287,7 @@ function isReauthPath(path: string): boolean {
   // The ปะหน้าจ่ายตรง downloads re-ask the officer's password too (the file
   // carries full citizen IDs) — a typo there must stay in the picker.
   return REAUTH_PATHS.some(p => path.startsWith(p) || path.includes(p))
+    || /\/submission-periods\/.*\/worklog-batch(?:\?|$)/.test(path)
     || path.endsWith("/zip-token") || path.endsWith("/2fa/reset")
     // Staff rebuilding a TA's creditor form re-type their own password: a typo
     // must stay in the users screen, not log them out.
@@ -811,14 +815,14 @@ export interface MFASetupResult {
 export const mfaSetup = () => api.post<MFASetupResult>("/me/2fa/setup");
 export const mfaEnable = (code: string) =>
   api.post<{ recovery_codes: string[] }>("/me/2fa/enable", { code });
-export const mfaDisable = (password: string, code: string) =>
-  api.post<{ ok: true }>("/me/2fa/disable", { password, code });
-export const mfaRegenerateRecoveryCodes = (password: string) =>
-  api.post<{ recovery_codes: string[] }>("/me/2fa/recovery-codes", { password });
+export const mfaDisable = (code: string) =>
+  api.post<{ ok: true }>("/me/2fa/disable", { code });
+export const mfaRegenerateRecoveryCodes = (code: string) =>
+  api.post<{ recovery_codes: string[] }>("/me/2fa/recovery-codes", { code });
 /** Admin-only — see router.go's RequireRole(rbac.RoleAdmin) on this route and
  *  MFAService.AdminReset's doc comment for why staff cannot call this. */
-export const mfaAdminReset = (userId: string, password: string) =>
-  api.post<{ ok: true }>(`/users/${userId}/2fa/reset`, { password });
+export const mfaAdminReset = (userId: string, code: string) =>
+  api.post<{ ok: true }>(`/users/${userId}/2fa/reset`, { code });
 
 /** Records that the TA accepted the PDPA notice shown by PdpaConsentModal
  *  before the profile form unlocks — see internal/service/pdpa_consent.go. */
@@ -860,8 +864,8 @@ export const dataExport = () => api.get<MyDataExport>("/me/data-export");
 
 /** Password-gated — reuses DocsService.RevealCitizenID's audited decrypt
  *  path with actor == target == the caller. */
-export const citizenIdReveal = (password: string) =>
-  api.post<{ national_id: string }>("/me/citizen-id/reveal", { password });
+export const citizenIdReveal = (code: string) =>
+  api.post<{ national_id: string }>("/me/citizen-id/reveal", { code });
 
 export interface DataDeletionRequest {
   id: string;

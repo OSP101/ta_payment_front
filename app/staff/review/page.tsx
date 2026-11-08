@@ -58,7 +58,7 @@ export default function ReviewPage() {
   // between people without returning to this list.
   const [workspaceFor, setWorkspaceFor] = useState<string | null>(null);
 
-  // Password-gated re-download state. Non-null when the confirm modal is
+  // Code-gated re-download state. Non-null when the confirm modal is
   // open; carries just the target user id so the modal is self-contained.
   const [redownloadFor, setRedownloadFor] = useState<Pending | null>(null);
 
@@ -363,7 +363,7 @@ function DecidedTable({
   error?: unknown;
   onRetry?: () => void;
   bucket: Bucket;
-  /** Only set for the approved bucket — the parent handles password gating. */
+  /** Only set for the approved bucket — the parent handles code gating. */
   onRedownload?: (u: Pending) => void;
 }) {
   const { t, intl } = useI18n();
@@ -524,7 +524,7 @@ function DownloadCell({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Re-download confirm — password-gated because the ZIP contains PII          */
+/* Re-download confirm — code-gated because the ZIP contains PII          */
 /* -------------------------------------------------------------------------- */
 
 function RedownloadModal({
@@ -535,16 +535,16 @@ function RedownloadModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Clear the form whenever the modal opens against a new user so a stale
-  // password can't be reused across rows.
+  // code can't be reused across rows.
   useMemo(() => {
     if (target) {
-      setPassword("");
+      setCode("");
       setShowPw(false);
       setErr(null);
     }
@@ -552,8 +552,8 @@ function RedownloadModal({
 
   async function submit() {
     if (!target || busy) return;
-    if (!password) {
-      setErr(t("กรุณากรอกรหัสผ่าน"));
+    if (!code) {
+      setErr(t("กรุณากรอกรหัส TOTP 6 หลัก"));
       return;
     }
     setBusy(true);
@@ -561,7 +561,7 @@ function RedownloadModal({
     try {
       const res = await api.post<{ zip_token: string }>(
         `/ta-review/${target.user_id}/zip-token`,
-        { password },
+        { code },
       );
       window.location.assign(
         apiUrl(`/ta-review/${target.user_id}/download.zip?token=${encodeURIComponent(res.zip_token)}`),
@@ -571,7 +571,7 @@ function RedownloadModal({
     } catch (e) {
       // Show the server's message inline so the officer can retry without
       // losing modal state; a toast would be easy to miss with focus on
-      // the password field.
+      // the code field.
       const msg = e instanceof Error ? e.message : t("ยืนยันไม่สำเร็จ");
       setErr(msg);
     } finally {
@@ -589,7 +589,7 @@ function RedownloadModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>{t("ยกเลิก")}</Button>
-          <Button variant="primary" onClick={submit} disabled={busy || !password} isPending={busy}>
+          <Button variant="primary" onClick={submit} disabled={busy || !code} isPending={busy}>
             <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
           </Button>
         </>
@@ -598,7 +598,7 @@ function RedownloadModal({
       {target && (
         <div className="space-y-4">
           <div className="text-sm text-muted">
-            {t.rich("เอกสารของ {name} มีข้อมูลส่วนบุคคล (เลขบัตร ปชช. / เลขบัญชี) กรุณากรอกรหัสผ่านของคุณเพื่อยืนยันตัวตน", {
+            {t.rich("เอกสารของ {name} มีข้อมูลส่วนบุคคล (เลขบัตร ปชช. / เลขบัญชี) กรุณากรอกรหัส TOTP 6 หลักของคุณเพื่อยืนยันตัวตน", {
               name: <span className="font-medium text-foreground">{target.full_name}</span>,
             })}
           </div>
@@ -618,17 +618,17 @@ function RedownloadModal({
             />
           )}
           <TextField
-            name="officer-password"
+            name="officer-code"
             isRequired
-            value={password}
-            onChange={v => { setPassword(v); if (err) setErr(null); }}
+            value={code}
+            onChange={v => { setCode(v); if (err) setErr(null); }}
             isInvalid={!!err}
           >
-            <Label>{t("รหัสผ่าน")}</Label>
+            <Label>{t("รหัส TOTP 6 หลัก")}</Label>
             <InputGroup>
               <InputGroup.Input
                 type={showPw ? "text" : "password"}
-                autoComplete="current-password"
+                autoComplete="one-time-code" inputMode="numeric" maxLength={6}
                 autoFocus
                 onKeyDown={e => { if (e.key === "Enter") submit(); }}
               />
@@ -637,7 +637,7 @@ function RedownloadModal({
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowPw(v => !v)}
-                  label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
+                  label={showPw ? t("ซ่อนรหัส TOTP 6 หลัก") : t("แสดงรหัส TOTP 6 หลัก")}
                 >
                   {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                 </IconButton>

@@ -1,3 +1,6 @@
+// Suspended for handover. Re-enable only together with the backend gate.
+export const REG_FETCH_ENABLED = false;
+
 export type RegSource = "new" | "legacy";
 
 export interface RegSourceStatus {

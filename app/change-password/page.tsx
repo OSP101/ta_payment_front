@@ -27,23 +27,21 @@ export default function ChangePasswordPage() {
   const { t } = useI18n();
   useDocumentTitle(msg("เปลี่ยนรหัสผ่าน"));
   // Same SWR key every other page already fetches "/me" under — decides
-  // whether this is the forced first-login change (no current password to
-  // confirm) or a voluntary change from Account Settings (backend requires
-  // current_password for that one — see AuthHandler.ChangePassword).
+  // whether this is the forced first-login change or a voluntary change
+  // from Account Settings, which requires a fresh TOTP code.
   const { data: me, error: meError } = useSWR<Me>("/me");
   const voluntary = !!me && !me.must_change_password;
-  // Heading, the current-password field and the cancel button all depend on
+  // Heading, the TOTP field and the cancel button all depend on
   // which flow this is — until /me answers, hold their place instead of
   // drawing the forced flow and swapping to the voluntary one a beat later.
   // A failed /me keeps the old fallback (the forced flow).
   const meReady = !!me || !!meError;
 
-  const [currentPw, setCurrentPw] = useState("");
+  const [code, setCode] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   // Each field toggles its own visibility independently — revealing the new
   // password shouldn't also reveal the current/confirm fields.
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showPw2, setShowPw2] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
@@ -65,19 +63,17 @@ export default function ChangePasswordPage() {
   const strength = useMemo(() => (pw ? zxcvbn(pw).score : null), [pw]);
 
   const errors = useMemo(() => {
-    const e: { currentPw: string | null; pw: string | null; pw2: string | null } = {
-      currentPw: null, pw: null, pw2: null,
+    const e: { code: string | null; pw: string | null; pw2: string | null } = {
+      code: null, pw: null, pw2: null,
     };
-    if (voluntary && currentPw.length === 0) e.currentPw = t("กรุณากรอกรหัสผ่านปัจจุบัน");
+    if (voluntary && !/^\d{6}$/.test(code)) e.code = t("กรุณากรอกรหัส TOTP 6 หลัก");
     if (pw.length === 0) e.pw = t("กรุณากรอกรหัสผ่านใหม่");
     else if (!rulesPass) e.pw = t("รหัสผ่านยังไม่ตรงตามเงื่อนไขทั้งหมด");
-    else if (voluntary && currentPw.length > 0 && pw === currentPw)
-      e.pw = t("รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม");
     if (pw2.length === 0) e.pw2 = t("กรุณายืนยันรหัสผ่านใหม่");
     else if (pw !== pw2) e.pw2 = t("รหัสผ่านทั้งสองช่องไม่ตรงกัน");
     return e;
-  }, [voluntary, currentPw, pw, pw2, rulesPass, t]);
-  const hasErrors = !!(errors.currentPw || errors.pw || errors.pw2);
+  }, [voluntary, code, pw, pw2, rulesPass, t]);
+  const hasErrors = !!(errors.code || errors.pw || errors.pw2);
 
   // Same show/hide toggle markup for all three password fields, parameterized
   // by each field's own state so they stay visually consistent without being
@@ -105,7 +101,7 @@ export default function ChangePasswordPage() {
     setLoading(true);
     try {
       await api.post("/me/password", {
-        ...(voluntary ? { current_password: currentPw } : {}),
+        ...(voluntary ? { code } : {}),
         new_password: pw,
       });
       // A changed password now ends the session it was changed from too (see
@@ -151,18 +147,17 @@ export default function ChangePasswordPage() {
             <form onSubmit={onSubmit} className="flex flex-col gap-4">
               {voluntary && (
                 <TextField
-                  name="currentPw"
+                  name="code"
                   isRequired
-                  value={currentPw}
-                  onChange={setCurrentPw}
-                  isInvalid={showErrors && !!errors.currentPw}
+                  value={code}
+                  onChange={setCode}
+                  isInvalid={showErrors && !!errors.code}
                 >
-                  <Label>{t("รหัสผ่านปัจจุบัน")}</Label>
+                  <Label>{t("รหัส TOTP 6 หลักจากแอป Authenticator")}</Label>
                   <InputGroup>
-                    <InputGroup.Input type={showCurrentPw ? "text" : "password"} autoComplete="current-password" />
-                    {toggleSuffix(showCurrentPw, setShowCurrentPw)}
+                    <InputGroup.Input type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
                   </InputGroup>
-                  {showErrors && errors.currentPw && <FieldError>{errors.currentPw}</FieldError>}
+                  {showErrors && errors.code && <FieldError>{errors.code}</FieldError>}
                 </TextField>
               )}
               <TextField

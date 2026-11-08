@@ -20,7 +20,7 @@ export function courseCodeLabel(c: HasCodes): string {
 }
 
 /**
- * The registrar's class search (reg.kku.ac.th → ตารางสอน/ข้อมูลรายวิชา) for one
+ * The legacy mirror's class search (reg-mirror.kku.ac.th) for one
  * code and term. Its form POSTs to class_info_1.asp, but the classic-ASP page
  * reads the same fields from the query string, so a plain link opens the
  * result list directly: every section with รับ / ลง / เหลือ — the real
@@ -28,12 +28,12 @@ export function courseCodeLabel(c: HasCodes): string {
  */
 export function regClassInfoUrl(code: string, year: number, semester: number): string {
   const q = new URLSearchParams({
-    avs5931099: "2", backto: "home",
+    backto: "home",
     coursestatus: "O00", facultyid: "all", maxrow: "50",
     Acadyear: String(year), Semester: String(semester),
     coursecode: code, coursename: "", cmd: "2",
   });
-  return `https://reg.kku.ac.th/registrar/class_info_1.asp?${q}`;
+  return `https://reg-mirror.kku.ac.th/registrar/class_info_1.asp?${q}`;
 }
 
 /** A small "copy this code" button: the icon turns into a tick for a moment
@@ -81,7 +81,7 @@ export function CourseCode({ c, className = "", reg, copyable }: {
   const alt = c.alt_codes ?? [];
   const show = (code: string) => <>{link(code)}{copyable && <CopyCodeButton code={code} />}</>;
   const link = (code: string) => !reg ? code : (
-    <Tip content={t("เปิด {code} ในระบบทะเบียน (reg.kku.ac.th) ภาค {term}", { code, term: `${reg.year}/${reg.semester}` })}>
+    <Tip content={t("เปิด {code} ใน REG เดิม (Mirror) ภาค {term}", { code, term: `${reg.year}/${reg.semester}` })}>
       <a
         href={regClassInfoUrl(code, reg.year, reg.semester)}
         target="_blank"

@@ -308,19 +308,19 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
     (draft.note ?? "") !== (row.note ?? "");
 
   // An approved row is the lecturer's signed-off record and live money, so
-  // changing it needs the editor's password and a reason that is sent to every
+  // changing it needs the editor's code and a reason that is sent to every
   // lecturer on the course — the same bar the monthly batch-edit dialog sets.
   // The server enforces this; the dialog is here so the requirement is asked for
   // up front rather than discovered as an error.
   const needsStepUp = row.status === "approved" || row.period_closed === true;
   const [stepUpOpen, setStepUpOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const reasonOK = reason.trim().length >= 10;
 
   function closeStepUp() {
     setStepUpOpen(false);
-    setPassword("");
+    setCode("");
   }
 
   function save() {
@@ -331,7 +331,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
     void submit();
   }
 
-  async function submit(stepUp?: { password: string; reason: string }) {
+  async function submit(stepUp?: { code: string; reason: string }) {
     setBusy(true);
     try {
       await api.put(`/staff/worklogs`, {
@@ -351,11 +351,11 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
       setEditing(false);
       setStepUpOpen(false);
       setReason("");
-      setPassword("");
+      setCode("");
       onChanged();
     } catch (e) {
       notify.error(errMessage(e));
-      setPassword("");
+      setCode("");
     } finally {
       setBusy(false);
     }
@@ -508,12 +508,12 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
                 )}
               </div>
               <label className="block text-xs text-ink-2">
-                {t("รหัสผ่านของคุณ")}
+                {t("รหัส TOTP 6 หลักของคุณ")}
                 <TextInput
                   className="mt-1 w-full"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code"
+                  value={code}
+                  onChange={e => setCode(e.target.value)}
                   placeholder={t("ยืนยันว่าเป็นคุณจริง")}
                 />
               </label>
@@ -522,8 +522,8 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
                 <Button
                   variant="primary"
                   size="sm"
-                  isDisabled={busy || !reasonOK || password === ""}
-                  onPress={() => void submit({ password, reason: reason.trim() })}
+                  isDisabled={busy || !reasonOK || code === ""}
+                  onPress={() => void submit({ code, reason: reason.trim() })}
                 >
                   {busy ? <Spinner size="sm" /> : <ShieldCheck size={14} />} {t("บันทึกการแก้ไข")}
                 </Button>

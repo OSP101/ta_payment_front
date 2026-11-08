@@ -4,6 +4,7 @@ import { mutate } from "swr";
 import { ClipboardPaste, CloudDownload, FileSpreadsheet, Save, SearchCheck, Square, CheckCircle2, CircleX, RefreshCw, AlertTriangle } from "lucide-react";
 import { Tabs } from "@heroui/react";
 import type { RegSource, RegSourceStatus } from "./regSources";
+import { REG_FETCH_ENABLED } from "./regSources";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import { Alert, Button, Chip, Modal, TextArea, type ChipTone } from "../../components/ui";
@@ -91,7 +92,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
   sources: RegSourceStatus[]; sourcesChecking: boolean; sourcesError: string; onCheckSources: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<Tab>("reg");
+  const [tab, setTab] = useState<Tab>(REG_FETCH_ENABLED ? "reg" : "excel");
   // Each tab keeps its own data: switching to Excel never shows (or sends)
   // what REG returned, and the other way round.
   const [regText, setRegText] = useState("");
@@ -109,7 +110,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
     if (open) { setText(""); setRegText(""); setRegSections({}); setPreview(null); setApplied(null); setConfirmBudget(false); setAllowZero(false); }
   }, [open, termId]);
 
-  const parsed = useMemo(() => parsePasted(tab === "reg" ? regText : text), [tab, regText, text]);
+  const parsed = useMemo(() => parsePasted(REG_FETCH_ENABLED && tab === "reg" ? regText : text), [tab, regText, text]);
   const shown = applied ?? preview;
   const toUpdate = (preview ?? []).filter(r => r.status === "update").length;
   const needConfirm = (preview ?? []).filter(r => r.status === "confirm").length;
@@ -119,7 +120,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
     if (!termId || parsed.rows.length === 0) return;
     setPending(true);
     try {
-      const rows = tab === "reg"
+      const rows = REG_FETCH_ENABLED && tab === "reg"
         ? parsed.rows.map(row => ({ ...row, sections: regSections[row.code.toUpperCase()] }))
         : parsed.rows;
       const res = await api.post<{ items: Result[] }>(`/terms/${termId}/num-students/bulk`, {
@@ -174,13 +175,13 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
     >
       <div className="space-y-3">
         {!preview && (
-          <Tabs variant="secondary" selectedKey={tab} onSelectionChange={k => setTab(String(k) as Tab)}>
+          <Tabs variant="secondary" selectedKey={REG_FETCH_ENABLED ? tab : "excel"} onSelectionChange={k => setTab(String(k) as Tab)}>
             <Tabs.ListContainer>
               <Tabs.List aria-label={t("ที่มาของจำนวนนักศึกษา")}>
-                <Tabs.Tab id="reg">
+                {REG_FETCH_ENABLED && <Tabs.Tab id="reg">
                   <span className="inline-flex items-center gap-1.5"><CloudDownload size={14} /> {t("ดึงจากระบบทะเบียน (REG)")}</span>
                   <Tabs.Indicator />
-                </Tabs.Tab>
+                </Tabs.Tab>}
                 <Tabs.Tab id="excel">
                   <span className="inline-flex items-center gap-1.5"><FileSpreadsheet size={14} /> {t("วางจาก Excel")}</span>
                   <Tabs.Indicator />
@@ -188,11 +189,11 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
               </Tabs.List>
             </Tabs.ListContainer>
 
-            <Tabs.Panel id="reg">
+            {REG_FETCH_ENABLED && <Tabs.Panel id="reg">
               <div className="space-y-3 pt-4">
                 {termId && <RegFetch key={termId} termId={termId} open={open} counts={scopeCounts} sources={sources} sourcesChecking={sourcesChecking} sourcesError={sourcesError} onCheckSources={onCheckSources} onRows={setRegText} onSections={setRegSections} />}
               </div>
-            </Tabs.Panel>
+            </Tabs.Panel>}
 
             <Tabs.Panel id="excel">
               <div className="space-y-3 pt-4">
@@ -307,7 +308,7 @@ export default function BulkCountsModal({ open, onClose, termId, termLabel, scop
             </div>
             {!applied && (
               <Button variant="ghost" size="sm" onClick={() => { setPreview(null); setConfirmBudget(false); setAllowZero(false); }}>
-                {tab === "reg" ? t("กลับไปหน้าดึงข้อมูล") : t("แก้ข้อมูลที่วาง")}
+                {REG_FETCH_ENABLED && tab === "reg" ? t("กลับไปหน้าดึงข้อมูล") : t("แก้ข้อมูลที่วาง")}
               </Button>
             )}
           </>

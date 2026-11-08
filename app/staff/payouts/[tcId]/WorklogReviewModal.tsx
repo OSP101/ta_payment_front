@@ -34,7 +34,7 @@ import { msg, useI18n } from "../../../lib/i18n/client";
  * here for.
  *
  * Editing is a batch, not a field. See ApplyStaffEditBatch: one reason, one
- * password, up to three images, applied to the whole month — because an officer
+ * code, up to three images, applied to the whole month — because an officer
  * fixing five rows has one explanation, and asking five times teaches them to
  * type "แก้ไข" five times instead of explaining once.
  */
@@ -904,7 +904,7 @@ function WeekTable({
 /* -------------------------------------------------------------------------- */
 
 /**
- * The commit gate. Reason, evidence and password in one dialog, because the
+ * The commit gate. Reason, evidence and code in one dialog, because the
  * server refuses the batch without all three — asking for them one at a time
  * would just move the refusal later.
  */
@@ -920,12 +920,12 @@ function CommitDialog({
   const { t } = useI18n();
   const fullDate = useFullDate();
   const [reason, setReason] = useState("");
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const { data: me } = useSWR<Me>("/me");
 
-  // Reason text only — never the password, never the File objects (not
+  // Reason text only — never the code, never the File objects (not
   // serializable, and re-attaching evidence is a small ask compared to
   // retyping the explanation). See staffBatchAid above for why this exists.
   const reasonAid = staffBatchReasonAid(tcId, taId, yearMonth);
@@ -967,7 +967,7 @@ function CommitDialog({
         };
       });
       const fd = new FormData();
-      fd.append("payload", JSON.stringify({ year_month: yearMonth, reason, password, changes }));
+      fd.append("payload", JSON.stringify({ year_month: yearMonth, reason, code, changes }));
       for (const f of files) fd.append("file", f);
 
       const res = await api.upload<{ applied: number; failed: number; errors?: string[] }>(
@@ -1055,12 +1055,12 @@ function CommitDialog({
         </div>
 
         <label className="block text-xs text-ink-2">
-          {t("รหัสผ่านของคุณ")}
+          {t("รหัส TOTP 6 หลักของคุณ")}
           <TextInput
             className="mt-1 w-full"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
+            type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code"
+            value={code}
+            onChange={e => setCode(e.target.value)}
             placeholder={t("ยืนยันว่าเป็นคุณจริง")}
           />
         </label>
@@ -1070,7 +1070,7 @@ function CommitDialog({
           <Button
             variant="primary"
             size="sm"
-            isDisabled={busy || !reasonOK || password === ""}
+            isDisabled={busy || !reasonOK || code === ""}
             onPress={submit}
           >
             {busy ? <Spinner size="sm" /> : <ShieldCheck size={14} />} {t("บันทึกการแก้ไข")}

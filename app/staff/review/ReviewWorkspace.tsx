@@ -635,18 +635,18 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
   const approvedCount = approvedHere.length;
 
   const [confirming, setConfirming] = useState(false);
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (busy || !password) return;
+    if (busy || !code) return;
     setBusy(true);
     setErr(null);
     try {
       const res = await api.post<{ zip_token: string; ta_count: number }>(
         "/ta-review/download-all-token",
-        { password, user_ids: approvedHere.map(p => p.user_id) },
+        { code, user_ids: approvedHere.map(p => p.user_id) },
       );
       window.location.assign(
         apiUrl(`/ta-review/download-all.zip?token=${encodeURIComponent(res.zip_token)}`),
@@ -654,7 +654,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
       notify.success(t("กำลังดาวน์โหลดเอกสารของ {n} คน…", { n: res.ta_count }));
       setConfirming(false);
     } catch (e) {
-      // Inline, not a toast: focus is in the password field, and a toast at the
+      // Inline, not a toast: focus is in the code field, and a toast at the
       // top of a full-screen modal is easy to miss.
       setErr(e instanceof Error ? e.message : t("ดาวน์โหลดไม่สำเร็จ"));
     } finally {
@@ -673,7 +673,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
         <Button
           size="sm"
           isDisabled={approvedCount === 0}
-          onPress={() => { setPassword(""); setErr(null); setConfirming(true); }}
+          onPress={() => { setCode(""); setErr(null); setConfirming(true); }}
         >
           <Download size={14} /> {t("ดาวน์โหลดเอกสารทั้งหมด")}
         </Button>
@@ -690,7 +690,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
             <Button variant="ghost" onPress={() => setConfirming(false)} isDisabled={busy}>
               {t("ยกเลิก")}
             </Button>
-            <Button onPress={submit} isDisabled={busy || !password} isPending={busy}>
+            <Button onPress={submit} isDisabled={busy || !code} isPending={busy}>
               <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
             </Button>
           </>
@@ -731,20 +731,20 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
           </div>
 
           <TextField
-            name="officer-password-all"
+            name="officer-code-all"
             isRequired
-            value={password}
-            onChange={v => { setPassword(v); if (err) setErr(null); }}
+            value={code}
+            onChange={v => { setCode(v); if (err) setErr(null); }}
             isInvalid={!!err}
           >
-            <Label>{t("รหัสผ่านของคุณ")}</Label>
+            <Label>{t("รหัส TOTP 6 หลักของคุณ")}</Label>
             <InputGroup>
-              <InputGroup.Input type="password" autoComplete="current-password" autoFocus />
+              <InputGroup.Input type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" autoFocus />
             </InputGroup>
             {err && <FieldError>{err}</FieldError>}
           </TextField>
           <p className="text-xs text-muted">
-            {t("ไฟล์นี้รวมข้อมูลส่วนบุคคลของหลายคนไว้ด้วยกัน จึงต้องยืนยันรหัสผ่านทุกครั้ง และระบบบันทึกไว้ว่าใครดาวน์โหลด และมีใครอยู่ในไฟล์")}
+            {t("ไฟล์นี้รวมข้อมูลส่วนบุคคลของหลายคนไว้ด้วยกัน จึงต้องยืนยันรหัส TOTP 6 หลักทุกครั้ง และระบบบันทึกไว้ว่าใครดาวน์โหลด และมีใครอยู่ในไฟล์")}
           </p>
         </div>
       </Modal>

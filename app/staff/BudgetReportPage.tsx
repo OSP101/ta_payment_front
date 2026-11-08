@@ -991,12 +991,12 @@ function TransferCoverMonthModal({
 }: {
   termId: string;
   onClose: () => void;
-  onConfirm: (months: string[], password: string) => void;
+  onConfirm: (months: string[], code: string) => void;
   isPending: boolean;
   error?: string | null;
 }) {
   const { t } = useI18n();
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const { data: ugData, isLoading: ugLoading } = useSWR<MonthCoverage>(
     `/exports/terms/${termId}/transfer-cover/coverage${transferCoverQuery("undergrad")}`
   );
@@ -1044,8 +1044,8 @@ function TransferCoverMonthModal({
           <Button
             variant="primary"
             isPending={isPending}
-            disabled={months.length === 0 || straddles || password === ""}
-            onClick={() => onConfirm(months, password)}
+            disabled={months.length === 0 || straddles || code === ""}
+            onClick={() => onConfirm(months, code)}
           >
             <Banknote size={14} /> {t("ตรวจสอบและดาวน์โหลด")}
           </Button>
@@ -1104,12 +1104,12 @@ function TransferCoverMonthModal({
             </p>
           )}
 
-          <StepUpPasswordField
-            value={password}
-            onChange={setPassword}
+          <StepUpCodeField
+            value={code}
+            onChange={setCode}
             error={error}
             onEnter={() => {
-              if (months.length > 0 && !straddles && password !== "" && !isPending) onConfirm(months, password);
+              if (months.length > 0 && !straddles && code !== "" && !isPending) onConfirm(months, code);
             }}
           />
         </div>
@@ -1119,11 +1119,11 @@ function TransferCoverMonthModal({
 }
 
 
-// StepUpPasswordField — the officer's own password, asked for again right
+// StepUpCodeField — the officer's own code, asked for again right
 // before a ปะหน้าจ่ายตรง file is handed over. The file lists every TA's full
 // citizen ID, so an unlocked session alone must not be enough to download it
 // (the server refuses without it — see transferCoverStepUp).
-function StepUpPasswordField({
+function StepUpCodeField({
   value, onChange, error, onEnter,
 }: {
   value: string;
@@ -1137,14 +1137,14 @@ function StepUpPasswordField({
     <div className="rounded-lg border border-border bg-surface px-3 py-3">
       <div className="mb-2 flex items-start gap-2 text-xs text-ink-2">
         <ShieldCheck size={14} className="mt-0.5 shrink-0 text-brand" />
-        <span>{t("ไฟล์นี้มีเลขบัตรประชาชนของผู้รับเงิน กรอกรหัสผ่านของคุณอีกครั้งเพื่อยืนยันก่อนดาวน์โหลด การดาวน์โหลดทุกครั้งถูกบันทึกไว้")}</span>
+        <span>{t("ไฟล์นี้มีเลขบัตรประชาชนของผู้รับเงิน กรอกรหัส TOTP 6 หลักของคุณอีกครั้งเพื่อยืนยันก่อนดาวน์โหลด การดาวน์โหลดทุกครั้งถูกบันทึกไว้")}</span>
       </div>
-      <TextField name="stepup-password" value={value} onChange={onChange}>
-        <Label className="text-xs">{t("รหัสผ่านของคุณ")}</Label>
+      <TextField name="stepup-code" value={value} onChange={onChange}>
+        <Label className="text-xs">{t("รหัส TOTP 6 หลักของคุณ")}</Label>
         <InputGroup>
           <InputGroup.Input
             type={show ? "text" : "password"}
-            autoComplete="current-password"
+            autoComplete="one-time-code" inputMode="numeric" maxLength={6}
             lang="en"
             onKeyDown={e => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
           />
@@ -1152,7 +1152,7 @@ function StepUpPasswordField({
             <IconButton
               size="sm"
               variant="ghost"
-              label={show ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
+              label={show ? t("ซ่อนรหัส TOTP 6 หลัก") : t("แสดงรหัส TOTP 6 หลัก")}
               onPress={() => setShow(!show)}
             >
               {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -1217,12 +1217,12 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
   const groupGate = useCourseGroupGate(termId);
 
   // Throws on failure so checkThenDownload can keep the picker open with the
-  // reason under the password field — a mistyped password is the common case.
-  async function downloadNow(months: string[], skippedLevel: TransferCoverLevel | null, password: string) {
+  // reason under the code field — a mistyped code is the common case.
+  async function downloadNow(months: string[], skippedLevel: TransferCoverLevel | null, code: string) {
     setDownloading(true);
     try {
       const blob = await api.post<Blob>(
-        `/exports/terms/${termId}/transfer-cover-bundle.zip${monthsQuery(months)}`, { password });
+        `/exports/terms/${termId}/transfer-cover-bundle.zip${monthsQuery(months)}`, { code });
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
       el.href = url;
@@ -1251,7 +1251,7 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
   // point of the split is that a graduate course mid-review must not hold up
   // the undergrad file (or the reverse), so one blocked level never blocks
   // the other's download; it only blocks the WHOLE bundle once both are.
-  async function checkThenDownload(months: string[], password: string) {
+  async function checkThenDownload(months: string[], code: string) {
     if (!termId) return;
     setChecking(true);
     setPickerError(null);
@@ -1267,7 +1267,7 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
         setPickerOpen(false);
         return;
       }
-      await downloadNow(months, ugBlocked ? "undergrad" : gradBlocked ? "graduate" : null, password);
+      await downloadNow(months, ugBlocked ? "undergrad" : gradBlocked ? "graduate" : null, code);
       setPickerOpen(false);
     } catch (e) {
       setPickerError((e as Error).message);
@@ -1326,7 +1326,7 @@ function TransferCoverDownloadButton({ termId, termLabel }: { termId: string; te
           isPending={checking || downloading}
           error={pickerError}
           onClose={() => setPickerOpen(false)}
-          onConfirm={(months, password) => void checkThenDownload(months, password)}
+          onConfirm={(months, code) => void checkThenDownload(months, code)}
         />
       )}
 
@@ -1358,24 +1358,24 @@ function TransferCoverHistoryModal({
   );
   const [reprinting, setReprinting] = useState<string | null>(null);
   // A reprint hands over the same citizen IDs as a fresh file, so it asks
-  // for the password the same way.
+  // for the code the same way.
   const [confirming, setConfirming] = useState<TransferCoverExportSummary | null>(null);
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
 
   function askReprint(h: TransferCoverExportSummary) {
-    setPassword("");
+    setCode("");
     setPwError(null);
     setConfirming(h);
   }
 
   async function reprint() {
     const h = confirming;
-    if (!h || !password) return;
+    if (!h || !code) return;
     setReprinting(h.id);
     setPwError(null);
     try {
-      const blob = await api.post<Blob>(`/exports/transfer-cover/${h.id}/reprint`, { password });
+      const blob = await api.post<Blob>(`/exports/transfer-cover/${h.id}/reprint`, { code });
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
       el.href = url;
@@ -1383,7 +1383,7 @@ function TransferCoverHistoryModal({
       el.click();
       URL.revokeObjectURL(url);
       setConfirming(null);
-      setPassword("");
+      setCode("");
     } catch (e) {
       setPwError((e as Error).message);
     } finally {
@@ -1478,7 +1478,7 @@ function TransferCoverHistoryModal({
               <Button
                 variant="primary"
                 isPending={reprinting !== null}
-                disabled={password === ""}
+                disabled={code === ""}
                 onClick={() => void reprint()}
               >
                 <Download size={14} /> {t("ดาวน์โหลดฉบับเดิม")}
@@ -1486,11 +1486,11 @@ function TransferCoverHistoryModal({
             </>
           }
         >
-          <StepUpPasswordField
-            value={password}
-            onChange={setPassword}
+          <StepUpCodeField
+            value={code}
+            onChange={setCode}
             error={pwError}
-            onEnter={() => { if (password && reprinting === null) void reprint(); }}
+            onEnter={() => { if (code && reprinting === null) void reprint(); }}
           />
         </Modal>
       )}

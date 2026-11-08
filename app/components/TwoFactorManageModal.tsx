@@ -8,13 +8,7 @@ import { notify } from "../lib/notify";
 import { Alert, Button, IconButton, Modal } from "./ui";
 import { useI18n } from "../lib/i18n/client";
 
-/**
- * The two things a user with 2FA already enabled can do to it — both live in
- * one modal since neither is common enough to earn its own screen. Both
- * require the account password (same re-auth gate every other sensitive
- * account action uses); disabling additionally requires a current code,
- * proving both factors to remove either.
- */
+/** Both account-security actions require a fresh TOTP from the authenticator. */
 export default function TwoFactorManageModal({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   return (
@@ -30,23 +24,23 @@ export default function TwoFactorManageModal({ onClose }: { onClose: () => void 
 
 function RegenerateSection() {
   const { t } = useI18n();
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [pending, setPending] = useState(false);
   const [codes, setCodes] = useState<string[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (!password) {
-      setErr(t("กรุณากรอกรหัสผ่าน"));
+    if (!code) {
+      setErr(t("กรุณากรอกรหัส TOTP 6 หลัก"));
       return;
     }
     setPending(true);
     setErr(null);
     try {
-      const res = await mfaRegenerateRecoveryCodes(password);
+      const res = await mfaRegenerateRecoveryCodes(code);
       setCodes(res.recovery_codes);
-      setPassword("");
+      setCode("");
       mutate("/me");
       notify.success(t("สร้างรหัสสำรองชุดใหม่แล้ว รหัสชุดเดิมใช้ไม่ได้อีกต่อไป"));
     } catch (e) {
@@ -75,15 +69,15 @@ function RegenerateSection() {
         </div>
       ) : (
         <div className="flex items-end gap-2">
-          <TextField name="regen-password" value={password} onChange={v => { setPassword(v); setErr(null); }} className="flex-1">
-            <Label className="text-xs">{t("รหัสผ่านปัจจุบัน")}</Label>
+          <TextField name="regen-code" value={code} onChange={v => { setCode(v); setErr(null); }} className="flex-1">
+            <Label className="text-xs">{t("รหัส TOTP 6 หลักจากแอป Authenticator")}</Label>
             <InputGroup>
-              <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="current-password" lang="en" />
+              <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="one-time-code" inputMode="numeric" maxLength={6} lang="en" />
               <InputGroup.Suffix className="pr-0">
                 <IconButton
                   size="sm"
                   variant="ghost"
-                  label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
+                  label={showPw ? t("ซ่อนรหัส TOTP 6 หลัก") : t("แสดงรหัส TOTP 6 หลัก")}
                   onPress={() => setShowPw(!showPw)}
                 >
                   {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -103,21 +97,19 @@ function RegenerateSection() {
 
 function DisableSection({ onDisabled }: { onDisabled: () => void }) {
   const { t } = useI18n();
-  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
-  const [showPw, setShowPw] = useState(false);
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (!password || !code) {
-      setErr(t("กรอกรหัสผ่านและรหัสยืนยันให้ครบ"));
+    if (!code) {
+      setErr(t("กรุณากรอกรหัส TOTP 6 หลัก"));
       return;
     }
     setPending(true);
     setErr(null);
     try {
-      await mfaDisable(password, code);
+      await mfaDisable(code);
       mutate("/me");
       notify.success(t("ปิดใช้งาน 2FA แล้ว"));
       onDisabled();
@@ -136,26 +128,10 @@ function DisableSection({ onDisabled }: { onDisabled: () => void }) {
       <p className="text-xs text-muted">
         {t("บัญชีจะเข้าสู่ระบบด้วยรหัสผ่านเพียงอย่างเดียวหลังจากนี้")}
       </p>
-      <TextField name="disable-password" value={password} onChange={v => { setPassword(v); setErr(null); }}>
-        <Label className="text-xs">{t("รหัสผ่านปัจจุบัน")}</Label>
-        <InputGroup>
-          <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="current-password" lang="en" />
-          <InputGroup.Suffix className="pr-0">
-            <IconButton
-              size="sm"
-              variant="ghost"
-              label={showPw ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
-              onPress={() => setShowPw(!showPw)}
-            >
-              {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </IconButton>
-          </InputGroup.Suffix>
-        </InputGroup>
-      </TextField>
       <TextField name="disable-code" value={code} onChange={v => { setCode(v); setErr(null); }}>
-        <Label className="text-xs">{t("รหัสยืนยัน 6 หลัก หรือรหัสสำรอง")}</Label>
+        <Label className="text-xs">{t("รหัส TOTP 6 หลักจากแอป Authenticator")}</Label>
         <InputGroup>
-          <InputGroup.Input placeholder="123456" autoComplete="one-time-code" lang="en" />
+          <InputGroup.Input placeholder="123456" inputMode="numeric" maxLength={6} autoComplete="one-time-code" lang="en" />
         </InputGroup>
       </TextField>
       {err && <Alert status="danger" title={t("ปิดใช้งาน 2FA ไม่สำเร็จ")} description={err} />}
