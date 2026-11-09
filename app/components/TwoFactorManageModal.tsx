@@ -1,11 +1,11 @@
 "use client";
+import TotpField from "./TotpField";
 import { useState } from "react";
 import { mutate } from "swr";
-import { Eye, EyeOff, KeyRound, RefreshCw, ShieldOff } from "lucide-react";
-import { InputGroup, Label, TextField } from "@heroui/react";
+import { KeyRound, RefreshCw, ShieldOff } from "lucide-react";
 import { errMessage, mfaDisable, mfaRegenerateRecoveryCodes } from "../lib/api";
 import { notify } from "../lib/notify";
-import { Alert, Button, IconButton, Modal } from "./ui";
+import { Alert, Button, Modal } from "./ui";
 import { useI18n } from "../lib/i18n/client";
 
 /** Both account-security actions require a fresh TOTP from the authenticator. */
@@ -25,13 +25,12 @@ export default function TwoFactorManageModal({ onClose }: { onClose: () => void 
 function RegenerateSection() {
   const { t } = useI18n();
   const [code, setCode] = useState("");
-  const [showPw, setShowPw] = useState(false);
   const [pending, setPending] = useState(false);
   const [codes, setCodes] = useState<string[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (!code) {
+    if (code.length !== 6) {
       setErr(t("กรุณากรอกรหัส TOTP 6 หลัก"));
       return;
     }
@@ -68,23 +67,8 @@ function RegenerateSection() {
           ))}
         </div>
       ) : (
-        <div className="flex items-end gap-2">
-          <TextField name="regen-code" value={code} onChange={v => { setCode(v); setErr(null); }} className="flex-1">
-            <Label className="text-xs">{t("รหัส TOTP 6 หลักจากแอป Authenticator")}</Label>
-            <InputGroup>
-              <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="one-time-code" inputMode="numeric" maxLength={6} lang="en" />
-              <InputGroup.Suffix className="pr-0">
-                <IconButton
-                  size="sm"
-                  variant="ghost"
-                  label={showPw ? t("ซ่อนรหัส TOTP 6 หลัก") : t("แสดงรหัส TOTP 6 หลัก")}
-                  onPress={() => setShowPw(!showPw)}
-                >
-                  {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </IconButton>
-              </InputGroup.Suffix>
-            </InputGroup>
-          </TextField>
+        <div className="flex flex-wrap items-end gap-3">
+          <TotpField label={t("รหัส TOTP 6 หลักจากแอป Authenticator")} value={code} onChange={v => { setCode(v); setErr(null); }} className="flex-1" />
           <Button variant="secondary" onClick={submit} disabled={pending} isPending={pending}>
             {t("สร้างใหม่")}
           </Button>
@@ -102,7 +86,7 @@ function DisableSection({ onDisabled }: { onDisabled: () => void }) {
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (!code) {
+    if (code.length !== 6) {
       setErr(t("กรุณากรอกรหัส TOTP 6 หลัก"));
       return;
     }
@@ -128,12 +112,7 @@ function DisableSection({ onDisabled }: { onDisabled: () => void }) {
       <p className="text-xs text-muted">
         {t("บัญชีจะเข้าสู่ระบบด้วยรหัสผ่านเพียงอย่างเดียวหลังจากนี้")}
       </p>
-      <TextField name="disable-code" value={code} onChange={v => { setCode(v); setErr(null); }}>
-        <Label className="text-xs">{t("รหัส TOTP 6 หลักจากแอป Authenticator")}</Label>
-        <InputGroup>
-          <InputGroup.Input placeholder="123456" inputMode="numeric" maxLength={6} autoComplete="one-time-code" lang="en" />
-        </InputGroup>
-      </TextField>
+      <TotpField label={t("รหัส TOTP 6 หลักจากแอป Authenticator")} value={code} onChange={v => { setCode(v); setErr(null); }} />
       {err && <Alert status="danger" title={t("ปิดใช้งาน 2FA ไม่สำเร็จ")} description={err} />}
       <Button variant="danger" onClick={submit} disabled={pending} isPending={pending}>
         <KeyRound size={14} /> {t("ปิดใช้งาน 2FA")}

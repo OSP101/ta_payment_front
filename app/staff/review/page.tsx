@@ -1,22 +1,23 @@
 "use client";
+import TotpField from "../../components/TotpField";
 import useSWR, { mutate } from "swr";
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Tabs, InputGroup, Label, TextField, FieldError } from "@heroui/react";
+import { Tabs } from "@heroui/react";
 import {
-  Clock, CheckCircle2, Download, Clock3, Trash2, Eye, EyeOff, Shield, ChevronRight, Lock,
+  Clock, CheckCircle2, Download, Clock3, Trash2, Shield, ChevronRight, Lock,
   AlertTriangle,
 } from "lucide-react";
 import { api, apiUrl } from "../../lib/api";
 import { notify } from "../../lib/notify";
 import {
-  PageHeader, Button, IconButton, StatusChip, Alert, TabLabel, Modal, Chip, SearchField, Tip,
+  PageHeader, Button, StatusChip, Alert, TabLabel, Modal, Chip, SearchField, Tip,
 } from "../../components/ui";
 import { DataTable, type DataColumn } from "../../components/DataTable";
 import { Skel, SkelRegion } from "../../components/Skeletons";
 import { ReviewWorkspace } from "./ReviewWorkspace";
 import { SuppliersButton } from "./SuppliersButton";
-import { fmtDate, daysUntil, type Pending } from "./types";
+import { fmtDate, daysUntil, reviewStatus, type Pending } from "./types";
 import { msg, useI18n } from "../../lib/i18n/client";
 
 type Bucket = "pending" | "approved";
@@ -265,10 +266,7 @@ function PendingList({
                     <span className="block truncate text-xs text-muted">{u.email}</span>
                   </span>
                 </Tip>
-                {/* The queue mixes two states — never looked at yet, and sent
-                    back and waiting on the TA. Without the chip they were
-                    indistinguishable until the officer opened the row. */}
-                <StatusChip status={u.status} />
+                <StatusChip status={reviewStatus(u)} />
                 <ChevronRight size={16} className="shrink-0 text-muted" />
               </button>
             </li>
@@ -536,7 +534,6 @@ function RedownloadModal({
 }) {
   const { t } = useI18n();
   const [code, setCode] = useState("");
-  const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -545,14 +542,13 @@ function RedownloadModal({
   useMemo(() => {
     if (target) {
       setCode("");
-      setShowPw(false);
       setErr(null);
     }
   }, [target]);
 
   async function submit() {
     if (!target || busy) return;
-    if (!code) {
+    if (code.length !== 6) {
       setErr(t("กรุณากรอกรหัส TOTP 6 หลัก"));
       return;
     }
@@ -589,7 +585,7 @@ function RedownloadModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>{t("ยกเลิก")}</Button>
-          <Button variant="primary" onClick={submit} disabled={busy || !code} isPending={busy}>
+          <Button variant="primary" onClick={submit} disabled={busy || code.length !== 6} isPending={busy}>
             <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
           </Button>
         </>
@@ -617,34 +613,7 @@ function RedownloadModal({
               }
             />
           )}
-          <TextField
-            name="officer-code"
-            isRequired
-            value={code}
-            onChange={v => { setCode(v); if (err) setErr(null); }}
-            isInvalid={!!err}
-          >
-            <Label>{t("รหัส TOTP 6 หลัก")}</Label>
-            <InputGroup>
-              <InputGroup.Input
-                type={showPw ? "text" : "password"}
-                autoComplete="one-time-code" inputMode="numeric" maxLength={6}
-                autoFocus
-                onKeyDown={e => { if (e.key === "Enter") submit(); }}
-              />
-              <InputGroup.Suffix className="pr-0">
-                <IconButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowPw(v => !v)}
-                  label={showPw ? t("ซ่อนรหัส TOTP 6 หลัก") : t("แสดงรหัส TOTP 6 หลัก")}
-                >
-                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-                </IconButton>
-              </InputGroup.Suffix>
-            </InputGroup>
-            {err && <FieldError>{err}</FieldError>}
-          </TextField>
+          <TotpField label={t("รหัส TOTP 6 หลัก")} value={code} onChange={v => { setCode(v); if (err) setErr(null); }} error={err} autoFocus onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void submit(); } }} />
         </div>
       )}
     </Modal>

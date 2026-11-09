@@ -465,6 +465,7 @@ export function StatusChip({ status }: { status: string }) {
     draft:     { tone: "neutral", label: msg("ฉบับร่าง") },
     rejected:  { tone: "danger",  label: msg("ไม่ผ่าน") },
     cancelled: { tone: "neutral", label: msg("ยกเลิก@status") },
+    resubmitted: { tone: "info", label: msg("รอตรวจการแก้ไข") },
     needs_fix: { tone: "warn",    label: msg("ให้แก้ไข") },
   };
   const m = map[status] ?? { tone: "neutral" as ChipTone, label: status };

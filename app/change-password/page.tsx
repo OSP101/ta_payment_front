@@ -1,4 +1,5 @@
 "use client";
+import TotpField from "../components/TotpField";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
@@ -146,19 +147,7 @@ export default function ChangePasswordPage() {
             ) : (
             <form onSubmit={onSubmit} className="flex flex-col gap-4">
               {voluntary && (
-                <TextField
-                  name="code"
-                  isRequired
-                  value={code}
-                  onChange={setCode}
-                  isInvalid={showErrors && !!errors.code}
-                >
-                  <Label>{t("รหัส TOTP 6 หลักจากแอป Authenticator")}</Label>
-                  <InputGroup>
-                    <InputGroup.Input type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
-                  </InputGroup>
-                  {showErrors && errors.code && <FieldError>{errors.code}</FieldError>}
-                </TextField>
+                <TotpField label={t("รหัส TOTP 6 หลักจากแอป Authenticator")} value={code} onChange={setCode} required error={showErrors ? errors.code : null} />
               )}
               <TextField
                 name="pw"

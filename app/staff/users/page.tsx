@@ -1,4 +1,5 @@
 "use client";
+import TotpField from "../../components/TotpField";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
@@ -186,7 +187,7 @@ function formatStudentID(s: string): string {
 
 /** HeroUI validated text field. Errors shown only when `show` is true. */
 function VField({
-  label, value, onChange, error, show, type = "text", placeholder, required, autoFocus, inputMode, maxLength, autoComplete,
+  label, value, onChange, error, show, type = "text", placeholder, required, autoFocus, inputMode, maxLength, autoComplete, totp,
 }: {
   label: React.ReactNode;
   value: string;
@@ -200,9 +201,14 @@ function VField({
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   maxLength?: number;
   autoComplete?: string;
+  totp?: boolean;
 }) {
   const { t } = useI18n();
   const invalid = show && !!error;
+  if (totp) return (
+    <TotpField label={label} value={value} onChange={onChange}
+      error={invalid ? t(error!) : null} required={required} autoFocus={autoFocus} />
+  );
   return (
     <HTextField
       value={value}
@@ -1112,7 +1118,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
       : nidDigits.length === 13 ? null : t("เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก"),
     reason: vRequired(form.reason, msg("กรุณาระบุเหตุผล เช่น ผู้ช่วยสอนแสดงบัตรนักศึกษาที่ห้องธุรการ")),
     nothing: form.student_id.trim() === "" && nidDigits === "" && form.prefix === "" ? msg("กรอกอย่างน้อย 1 ช่องที่ต้องการแก้") : null,
-    code: rebuildsForm && form.code === "" ? msg("กรอกรหัส TOTP 6 หลักของคุณเพื่อดาวน์โหลดแบบฟอร์มเจ้าหนี้ฉบับใหม่") : null,
+    code: rebuildsForm && form.code.length !== 6 ? msg("กรอกรหัส TOTP 6 หลักของคุณเพื่อดาวน์โหลดแบบฟอร์มเจ้าหนี้ฉบับใหม่") : null,
   };
   const hasErrors = Object.values(errors).some(Boolean);
 
@@ -1132,7 +1138,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
   const [regenErr, setRegenErr] = useState<string | null>(null);
   const [regenPending, setRegenPending] = useState(false);
   async function regenOnly() {
-    if (!regenCode) { setRegenErr(t("กรอกรหัส TOTP 6 หลักของคุณ")); return; }
+    if (regenCode.length !== 6) { setRegenErr(t("กรอกรหัส TOTP 6 หลักของคุณ")); return; }
     setRegenPending(true); setRegenErr(null);
     try {
       await rebuildCreditorForm(regenCode);
@@ -1209,7 +1215,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
           <p className="text-xs text-muted">
             {t("สร้างแบบฟอร์มเจ้าหนี้ใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้ โดยใช้คำนำหน้า ชื่อ-นามสกุล และเลขบัตรปัจจุบันในระบบ (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่า แล้วดาวน์โหลดทันที")}
           </p>
-          <VField label={t("รหัส TOTP 6 หลักของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" required
+          <VField label={t("รหัส TOTP 6 หลักของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="text" inputMode="numeric" maxLength={6} totp required
             value={regenCode} onChange={setRegenCode} error={regenErr} show={!!regenErr}
           />
           <div className="flex gap-2 justify-end">
@@ -1257,7 +1263,7 @@ function TAIdentityFix({ userId }: { userId: string }) {
               <p className="text-xs text-muted">
                 {t("เลขบัตรและคำนำหน้าอยู่ในแบบฟอร์มเจ้าหนี้ ระบบจะสร้างแบบฟอร์มฉบับใหม่จากฉบับที่ผู้ช่วยสอนเซ็นไว้ (ข้อมูลธนาคารและลายเซ็นคงเดิม) แทนฉบับเก่าในระบบ และดาวน์โหลดให้ทันที")}
               </p>
-              <VField label={t("รหัส TOTP 6 หลักของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" required
+              <VField label={t("รหัส TOTP 6 หลักของคุณ (ยืนยันก่อนดาวน์โหลด)")} type="text" inputMode="numeric" maxLength={6} totp required
                 value={form.code} onChange={v => setForm({ ...form, code: v })}
                 error={errors.code} show={showErrors}
               />
@@ -1788,7 +1794,7 @@ function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (!code) {
+    if (code.length !== 6) {
       setErr(t("กรุณากรอกรหัส TOTP 6 หลักของคุณเพื่อยืนยัน"));
       return;
     }
@@ -1836,7 +1842,7 @@ function Reset2FAModal({ user, onClose }: { user: User; onClose: () => void }) {
           onChange={setCode}
           error={err}
           show={!!err}
-          type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code"
+          type="text" inputMode="numeric" maxLength={6} totp
           required
         />
       </div>

@@ -1,7 +1,7 @@
 "use client";
+import TotpField from "../../components/TotpField";
 import { useState } from "react";
 import useSWR from "swr";
-import { InputGroup, Label, TextField, FieldError } from "@heroui/react";
 import { FileSpreadsheet, Download, AlertTriangle } from "lucide-react";
 import { api } from "../../lib/api";
 import { notify } from "../../lib/notify";
@@ -49,7 +49,7 @@ export function SuppliersButton() {
   const gaps = ready.filter(c => c.incomplete).length;
 
   async function submit() {
-    if (busy || !code || ready.length === 0) return;
+    if (busy || code.length !== 6 || ready.length === 0) return;
     setBusy(true);
     setErr(null);
     try {
@@ -96,7 +96,7 @@ export function SuppliersButton() {
             <Button variant="ghost" onPress={() => setOpen(false)} isDisabled={busy}>
               {t("ยกเลิก")}
             </Button>
-            <Button onPress={submit} isDisabled={busy || !code || ready.length === 0} isPending={busy}>
+            <Button onPress={submit} isDisabled={busy || code.length !== 6 || ready.length === 0} isPending={busy}>
               <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
             </Button>
           </>
@@ -160,19 +160,7 @@ export function SuppliersButton() {
             </div>
           </div>
 
-          <TextField
-            name="officer-code-suppliers"
-            isRequired
-            value={code}
-            onChange={v => { setCode(v); if (err) setErr(null); }}
-            isInvalid={!!err}
-          >
-            <Label>{t("รหัส TOTP 6 หลักของคุณ")}</Label>
-            <InputGroup>
-              <InputGroup.Input type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" />
-            </InputGroup>
-            {err && <FieldError>{err}</FieldError>}
-          </TextField>
+          <TotpField label={t("รหัส TOTP 6 หลักของคุณ")} value={code} onChange={v => { setCode(v); if (err) setErr(null); }} error={err} required />
         </div>
       </Modal>
     </>

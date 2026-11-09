@@ -43,6 +43,7 @@ const ACCEPT_ATTR = ".pdf,application/pdf";
 // rejected. Matches the server-side kinds/limits so the user never uploads
 // something the server will reject anyway.
 function validateUploadFile(f: File, t: TFn): string | null {
+  if (f.size === 0) return t("ไฟล์ว่าง กรุณาเลือกไฟล์ใหม่");
   if (f.size > MAX_UPLOAD_BYTES) {
     const mb = (f.size / (1024 * 1024)).toFixed(2);
     return t("ไฟล์ใหญ่เกิน {max} MB ({mb} MB) โปรดย่อขนาดก่อนอัปโหลด", { max: MAX_UPLOAD_MB, mb });
@@ -105,7 +106,7 @@ function PdfDropZone({
         onDrop={e => {
           e.preventDefault();
           depth.current = 0; setOver(false);
-          if (e.dataTransfer.files.length > 1) notify.error(t("วางได้ครั้งละ 1 ไฟล์"));
+          if (e.dataTransfer.files.length > 1) { notify.error(t("วางได้ครั้งละ 1 ไฟล์")); return; }
           take(e.dataTransfer.files?.[0]);
         }}
         className={
@@ -157,6 +158,7 @@ function PdfDropZone({
         ref={inputRef}
         type="file"
         accept={ACCEPT_ATTR}
+        disabled={disabled}
         className="hidden"
         onChange={e => {
           take(e.target.files?.[0]);
@@ -449,6 +451,9 @@ export default function ProfilePage() {
   // the officer had just APPROVED. Nothing they did there was wrong, and re-saving
   // it bumps the submission round for no reason.
   const profileNeedsFix = data?.status === "rejected";
+  // Step 1 supplies the creditor form. A rejection of another attachment
+  // must not reopen the bank details/signature behind an approved form.
+  const profileLocked = data?.status === "approved" || findDoc(docs, "creditor_form")?.status === "approved";
 
   // Steps follow nationality: a foreign TA sends the tax-ID card and passport
   // in place of the citizen-ID card (ta_required_doc_kinds on the server).
@@ -595,10 +600,17 @@ export default function ProfilePage() {
                 {/* The form seeds from /me/profile and the doc steps read
                     /me/documents — an empty form (or "not uploaded") shown
                     first and then overwritten reads as a flicker. */}
-                {step.id === "profile" && !data ? (
+                {step.id === "profile" && (!data || !docs) ? (
                   <SkelForm fields={6} />
                 ) : step.id !== "profile" && !docs ? (
                   <SkelList items={1} icon bordered />
+                ) : step.id === "profile" && profileLocked ? (
+                  <Alert
+                    status="success"
+                    icon={<CheckCircle2 size={18} />}
+                    title={t("ข้อมูลส่วนตัว บัญชี และลายเซ็นได้รับการอนุมัติแล้ว")}
+                    description={t("ไม่สามารถแก้ไขข้อมูลส่วนนี้ได้ หากต้องการแก้ไข กรุณาติดต่อเจ้าหน้าที่เพื่อตีกลับแบบแจ้งเจ้าหนี้ก่อน")}
+                  />
                 ) : step.id === "profile" ? (
                   <ProfileStep
                     form={form}
@@ -615,6 +627,8 @@ export default function ProfilePage() {
                     // mutate()-triggered re-fetch causes on its own.
                     onPdpaAccepted={() => {}}
                   />
+                ) : data?.status === "approved" || findDoc(docs, step.id as DocKind)?.status === "approved" ? (
+                  findDoc(docs, step.id as DocKind) ? <SubmittedDoc doc={findDoc(docs, step.id as DocKind)!} /> : null
                 ) : step.id === "creditor_form" ? (
                   <CreditorFormStep
                     form={form}
@@ -1015,6 +1029,7 @@ function CreditorFormStep({
 }: { form: Profile; doc: Doc | undefined; profileReady: boolean; onDone: () => void }) {
   const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
+  const submitting = useRef(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -1054,6 +1069,8 @@ function CreditorFormStep({
   }, [formKey, profileReady, showGrid]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function confirm() {
+    if (submitting.current) return;
+    submitting.current = true;
     setConfirming(true);
     try {
       await api.post("/me/creditor-form/confirm", form);
@@ -1063,12 +1080,14 @@ function CreditorFormStep({
     } catch (e) {
       notify.error(e);
     } finally {
+      submitting.current = false;
       setConfirming(false);
     }
   }
 
   async function upload() {
-    if (!file) return;
+    if (!file || submitting.current) return;
+    submitting.current = true;
     setUploading(true);
     const name = file.name;
     setUploadProgress({ phase: "sending", percent: 0, loaded: 0, total: file.size });
@@ -1084,6 +1103,7 @@ function CreditorFormStep({
     } catch (e) {
       notify.error(e);
     } finally {
+      submitting.current = false;
       setUploading(false);
       setUploadProgress(null);
     }
@@ -1139,7 +1159,7 @@ function CreditorFormStep({
       {doc && <SubmittedDoc doc={doc} />}
 
       <div className="flex flex-wrap gap-2 items-center">
-        <Button variant="primary" onClick={confirm} disabled={confirming}>
+        <Button variant="primary" onClick={confirm} disabled={confirming || uploading} isPending={confirming}>
           <CheckCircle2 size={14} /> {confirming ? t("กำลังบันทึก…") : t("ยืนยันและบันทึกเอกสารนี้")}
         </Button>
         {/* The button IS the anchor. Nested inside one, the press handler eats
@@ -1169,9 +1189,9 @@ function CreditorFormStep({
             label={doc ? t("อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)") : t("ไฟล์ที่กรอกเอง")}
             file={file}
             onPick={setFile}
-            disabled={uploading}
+            disabled={uploading || confirming}
           />
-          <Button variant="secondary" onClick={upload} disabled={!file || uploading} isPending={uploading}>
+          <Button variant="secondary" onClick={upload} disabled={!file || uploading || confirming} isPending={uploading}>
             <Upload size={14} /> {uploading ? t("กำลังอัปโหลด…") : t("อัปโหลดไฟล์ที่กรอกเอง")}
           </Button>
         </div>
@@ -1192,6 +1212,7 @@ function DocStep({
   const { t } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const submitting = useRef(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   // Blob URL for the chosen file so the TA can SEE what they are about to
   // send. Uploading the wrong document is the mistake this catches — an
@@ -1210,7 +1231,8 @@ function DocStep({
   }
 
   async function upload() {
-    if (!file) return;
+    if (!file || submitting.current) return;
+    submitting.current = true;
     setUploading(true);
     const name = file.name;
     setUploadProgress({ phase: "sending", percent: 0, loaded: 0, total: file.size });
@@ -1226,7 +1248,7 @@ function DocStep({
     } catch (e) {
       notify.error(e);
     }
-    finally { setUploading(false); setUploadProgress(null); }
+    finally { submitting.current = false; setUploading(false); setUploadProgress(null); }
   }
 
   return (
@@ -1266,6 +1288,7 @@ function DocStep({
             <button
               type="button"
               onClick={() => setChosen(null)}
+              disabled={uploading}
               className="ml-auto text-xs text-muted underline underline-offset-2 hover:text-foreground"
             >
               {t("เลือกไฟล์ใหม่")}

@@ -5,6 +5,7 @@ export interface Pending {
   full_name: string;
   email: string;
   status: string;
+  revision_pending?: boolean;
   submitted_at?: string;
   verified_at?: string;
   /** Earliest expires_at across the TA's three approved required docs.
@@ -112,4 +113,9 @@ export function daysUntil(iso: string): number {
   if (Number.isNaN(target)) return 0;
   const ms = target - Date.now();
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
+}
+
+/** Display state only; approval and rejection keep using the stored profile status. */
+export function reviewStatus(person: Pending): string {
+  return person.revision_pending ? "resubmitted" : person.status;
 }

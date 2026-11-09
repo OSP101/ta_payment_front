@@ -74,7 +74,7 @@ function Countdown({ closesAt, urgentClass, quiet }: {
   const days = total === null ? null : Math.floor(total / 86400);
   const parts: [string, string][] = [
     [days === null ? "--" : String(days), t("วัน")],
-    [total === null ? "--" : pad(Math.floor((total % 86400) / 3600)), t("ชม.")],
+    [total === null ? "--" : pad(Math.floor((total % 86400) / 3600)), t("ชั่วโมง")],
     [total === null ? "--" : pad(Math.floor((total % 3600) / 60)), t("นาที")],
     [total === null ? "--" : pad(total % 60), t("วินาที")],
   ];

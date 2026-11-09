@@ -5097,5 +5097,9 @@
  "รายละเอียดแต่ละคาบ": "Session details",
  "แก้ไขคาบที่ {n}": "Edit session {n}",
  "ปิดรายละเอียดคาบ": "Close session details",
- "คลิกหรือแตะคาบเพื่อแก้ไขรายละเอียด เลื่อนตารางแนวนอนเพื่อดูช่วงเวลาอื่น": "Click or tap a session to edit its details. Scroll horizontally to see other times."
+ "คลิกหรือแตะคาบเพื่อแก้ไขรายละเอียด เลื่อนตารางแนวนอนเพื่อดูช่วงเวลาอื่น": "Click or tap a session to edit its details. Scroll horizontally to see other times.",
+ "รอตรวจการแก้ไข": "Awaiting revision review",
+ "ไฟล์ว่าง กรุณาเลือกไฟล์ใหม่": "The file is empty. Please choose another file.",
+ "ข้อมูลส่วนตัว บัญชี และลายเซ็นได้รับการอนุมัติแล้ว": "Your personal details, bank account and signature have been approved",
+ "ไม่สามารถแก้ไขข้อมูลส่วนนี้ได้ หากต้องการแก้ไข กรุณาติดต่อเจ้าหน้าที่เพื่อตีกลับแบบแจ้งเจ้าหนี้ก่อน": "These details are locked. To make changes, contact staff to return the creditor form for correction first."
 }

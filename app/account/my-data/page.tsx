@@ -1,15 +1,15 @@
 "use client";
+import TotpField from "../../components/TotpField";
 import { useState } from "react";
 import useSWR from "swr";
-import { Eye, EyeOff, Download, IdCard, ShieldCheck, FileText, Trash2 } from "lucide-react";
-import { InputGroup, Label, TextField } from "@heroui/react";
+import { Download, IdCard, ShieldCheck, FileText, Trash2 } from "lucide-react";
 import {
   errMessage, type Me,
   dataExport, citizenIdReveal, requestDataDeletion,
   type MyDataExport, type DataDeletionRequest,
 } from "../../lib/api";
 import { notify } from "../../lib/notify";
-import { PageHeader, Panel, Button, IconButton, TextArea, Alert, Chip, StatusChip, Tip } from "../../components/ui";
+import { PageHeader, Panel, Button, TextArea, Alert, Chip, StatusChip, Tip } from "../../components/ui";
 import { Skel, SkelList, SkelRegion, SkelRows, SkelValue } from "../../components/Skeletons";
 import { msg, useI18n } from "../../lib/i18n/client";
 
@@ -89,14 +89,13 @@ function Field({ label, value }: { label: string; value: string | undefined }) {
  *  friction-ful action via POST /me/citizen-id/reveal. */
 function CitizenIdSection() {
   const [code, setCode] = useState("");
-  const [showPw, setShowPw] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const { t } = useI18n();
 
   async function reveal() {
-    if (!code) {
+    if (code.length !== 6) {
       setErr(t("กรุณากรอกรหัส TOTP 6 หลัก"));
       return;
     }
@@ -135,22 +134,7 @@ function CitizenIdSection() {
 
       {!revealed && (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-          <TextField name="reveal-code" value={code} onChange={v => { setCode(v); setErr(null); }} className="flex-1">
-            <Label className="text-xs">{t("รหัส TOTP 6 หลักจากแอป Authenticator")}</Label>
-            <InputGroup>
-              <InputGroup.Input type={showPw ? "text" : "password"} autoComplete="one-time-code" inputMode="numeric" maxLength={6} lang="en" />
-              <InputGroup.Suffix className="pr-0">
-                <IconButton
-                  size="sm"
-                  variant="ghost"
-                  label={showPw ? t("ซ่อนรหัส TOTP 6 หลัก") : t("แสดงรหัส TOTP 6 หลัก")}
-                  onPress={() => setShowPw(!showPw)}
-                >
-                  {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </IconButton>
-              </InputGroup.Suffix>
-            </InputGroup>
-          </TextField>
+          <TotpField label={t("รหัส TOTP 6 หลักจากแอป Authenticator")} value={code} onChange={v => { setCode(v); setErr(null); }} className="flex-1" />
           <Button variant="secondary" className="w-full sm:w-auto" onClick={reveal} disabled={pending} isPending={pending}>
             {t("แสดงเลขบัตรเต็ม")}
           </Button>

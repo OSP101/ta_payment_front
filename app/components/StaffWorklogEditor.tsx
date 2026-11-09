@@ -1,4 +1,5 @@
 "use client";
+import { TotpInput } from "./TotpField";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { Save, Trash2, Plus, Lock, X, Pencil, ShieldCheck } from "lucide-react";
@@ -509,20 +510,14 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
               </div>
               <label className="block text-xs text-ink-2">
                 {t("รหัส TOTP 6 หลักของคุณ")}
-                <TextInput
-                  className="mt-1 w-full"
-                  type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code"
-                  value={code}
-                  onChange={e => setCode(e.target.value)}
-                  placeholder={t("ยืนยันว่าเป็นคุณจริง")}
-                />
+                <TotpInput className="mt-1" aria-label={t("รหัส TOTP 6 หลักของคุณ")} value={code} onChange={setCode} />
               </label>
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" size="sm" onPress={closeStepUp}>{t("ยกเลิก")}</Button>
                 <Button
                   variant="primary"
                   size="sm"
-                  isDisabled={busy || !reasonOK || code === ""}
+                  isDisabled={busy || !reasonOK || code.length !== 6}
                   onPress={() => void submit({ code, reason: reason.trim() })}
                 >
                   {busy ? <Spinner size="sm" /> : <ShieldCheck size={14} />} {t("บันทึกการแก้ไข")}

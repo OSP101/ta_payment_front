@@ -1,8 +1,9 @@
 "use client";
+import TotpField from "../../components/TotpField";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import {
-  Modal as HModal, Select as HSelect, InputGroup, Label, TextField, FieldError,
+  Modal as HModal, Select as HSelect,
 } from "@heroui/react";
 import {
   Users, Check, X, Download, AlertTriangle, FileText,
@@ -19,6 +20,7 @@ import {
 import {
   DOC_KIND_LABEL, DOC_KIND_PRINT_ORDER, byPrintOrder, REJECT_PRESETS, OTHER_PRESET,
   type Pending, type Doc, type Profile,
+  reviewStatus,
 } from "./types";
 import { useI18n, type TFn } from "../../lib/i18n/client";
 
@@ -182,10 +184,10 @@ export function ReviewWorkspace({
     if (sort === "name") {
       copy.sort((a, b) => a.full_name.localeCompare(b.full_name, "th"));
     } else {
-      const rank = (s: string) => (s === "submitted" ? 0 : s === "needs_fix" ? 1 : 2);
+      const rank = (s: string) => (s === "submitted" ? 0 : s === "resubmitted" ? 1 : s === "needs_fix" ? 2 : 3);
       copy.sort(
         (a, b) =>
-          rank(a.status) - rank(b.status) ||
+          rank(reviewStatus(a)) - rank(reviewStatus(b)) ||
           a.full_name.localeCompare(b.full_name, "th"),
       );
     }
@@ -285,6 +287,7 @@ function SubmitterRail({
   const { t } = useI18n();
   const STATUS_LABEL: Record<string, string> = {
     submitted: t("รอตรวจ"),
+    resubmitted: t("รอตรวจการแก้ไข"),
     needs_fix: t("ส่งกลับให้แก้"),
     approved: t("อนุมัติแล้ว"),
     rejected: t("ไม่อนุมัติ"),
@@ -314,14 +317,15 @@ function SubmitterRail({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {people.map(p => {
-          const showHeader = sort === "status" && p.status !== lastStatus;
-          lastStatus = p.status;
+          const status = reviewStatus(p);
+          const showHeader = sort === "status" && status !== lastStatus;
+          lastStatus = status;
           const active = p.user_id === selected;
           return (
             <div key={p.user_id}>
               {showHeader && (
                 <div className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  {STATUS_LABEL[p.status] ?? p.status}
+                  {STATUS_LABEL[status] ?? status}
                 </div>
               )}
               <button
@@ -640,7 +644,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (busy || !code) return;
+    if (busy || code.length !== 6) return;
     setBusy(true);
     setErr(null);
     try {
@@ -690,7 +694,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
             <Button variant="ghost" onPress={() => setConfirming(false)} isDisabled={busy}>
               {t("ยกเลิก")}
             </Button>
-            <Button onPress={submit} isDisabled={busy || !code} isPending={busy}>
+            <Button onPress={submit} isDisabled={busy || code.length !== 6} isPending={busy}>
               <Download size={14} /> {t("ยืนยันและดาวน์โหลด")}
             </Button>
           </>
@@ -730,19 +734,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
             </div>
           </div>
 
-          <TextField
-            name="officer-code-all"
-            isRequired
-            value={code}
-            onChange={v => { setCode(v); if (err) setErr(null); }}
-            isInvalid={!!err}
-          >
-            <Label>{t("รหัส TOTP 6 หลักของคุณ")}</Label>
-            <InputGroup>
-              <InputGroup.Input type="text" inputMode="numeric" maxLength={6} autoComplete="one-time-code" autoFocus />
-            </InputGroup>
-            {err && <FieldError>{err}</FieldError>}
-          </TextField>
+          <TotpField label={t("รหัส TOTP 6 หลักของคุณ")} value={code} onChange={v => { setCode(v); if (err) setErr(null); }} error={err} autoFocus required />
           <p className="text-xs text-muted">
             {t("ไฟล์นี้รวมข้อมูลส่วนบุคคลของหลายคนไว้ด้วยกัน จึงต้องยืนยันรหัส TOTP 6 หลักทุกครั้ง และระบบบันทึกไว้ว่าใครดาวน์โหลด และมีใครอยู่ในไฟล์")}
           </p>

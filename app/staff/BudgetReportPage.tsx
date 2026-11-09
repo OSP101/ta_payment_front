@@ -1,11 +1,12 @@
 "use client";
+import TotpField from "../components/TotpField";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
-import { ScrollShadow, InputGroup, Label, TextField } from "@heroui/react";
+import { ScrollShadow } from "@heroui/react";
 import {
   FileDown, History, Merge, Download, FileText, Users, GraduationCap, Banknote, FileSignature,
-  CalendarRange, Check, ChevronDown, AlertTriangle, Eye, EyeOff, ShieldCheck,
+  CalendarRange, Check, ChevronDown, AlertTriangle, ShieldCheck,
 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
 import { api } from "../lib/api";
@@ -1044,7 +1045,7 @@ function TransferCoverMonthModal({
           <Button
             variant="primary"
             isPending={isPending}
-            disabled={months.length === 0 || straddles || code === ""}
+            disabled={months.length === 0 || straddles || code.length !== 6}
             onClick={() => onConfirm(months, code)}
           >
             <Banknote size={14} /> {t("ตรวจสอบและดาวน์โหลด")}
@@ -1109,7 +1110,7 @@ function TransferCoverMonthModal({
             onChange={setCode}
             error={error}
             onEnter={() => {
-              if (months.length > 0 && !straddles && code !== "" && !isPending) onConfirm(months, code);
+              if (months.length > 0 && !straddles && code.length === 6 && !isPending) onConfirm(months, code);
             }}
           />
         </div>
@@ -1132,35 +1133,19 @@ function StepUpCodeField({
   onEnter?: () => void;
 }) {
   const { t } = useI18n();
-  const [show, setShow] = useState(false);
   return (
     <div className="rounded-lg border border-border bg-surface px-3 py-3">
       <div className="mb-2 flex items-start gap-2 text-xs text-ink-2">
         <ShieldCheck size={14} className="mt-0.5 shrink-0 text-brand" />
         <span>{t("ไฟล์นี้มีเลขบัตรประชาชนของผู้รับเงิน กรอกรหัส TOTP 6 หลักของคุณอีกครั้งเพื่อยืนยันก่อนดาวน์โหลด การดาวน์โหลดทุกครั้งถูกบันทึกไว้")}</span>
       </div>
-      <TextField name="stepup-code" value={value} onChange={onChange}>
-        <Label className="text-xs">{t("รหัส TOTP 6 หลักของคุณ")}</Label>
-        <InputGroup>
-          <InputGroup.Input
-            type={show ? "text" : "password"}
-            autoComplete="one-time-code" inputMode="numeric" maxLength={6}
-            lang="en"
-            onKeyDown={e => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
-          />
-          <InputGroup.Suffix className="pr-0">
-            <IconButton
-              size="sm"
-              variant="ghost"
-              label={show ? t("ซ่อนรหัส TOTP 6 หลัก") : t("แสดงรหัส TOTP 6 หลัก")}
-              onPress={() => setShow(!show)}
-            >
-              {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </IconButton>
-          </InputGroup.Suffix>
-        </InputGroup>
-      </TextField>
-      {error && <p className="mt-1.5 text-xs text-danger-soft-foreground">{error}</p>}
+      <TotpField
+        label={t("รหัส TOTP 6 หลักของคุณ")}
+        value={value}
+        onChange={onChange}
+        error={error}
+        onKeyDown={e => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
+      />
     </div>
   );
 }
@@ -1371,7 +1356,7 @@ function TransferCoverHistoryModal({
 
   async function reprint() {
     const h = confirming;
-    if (!h || !code) return;
+    if (!h || code.length !== 6) return;
     setReprinting(h.id);
     setPwError(null);
     try {
@@ -1478,7 +1463,7 @@ function TransferCoverHistoryModal({
               <Button
                 variant="primary"
                 isPending={reprinting !== null}
-                disabled={code === ""}
+                disabled={code.length !== 6}
                 onClick={() => void reprint()}
               >
                 <Download size={14} /> {t("ดาวน์โหลดฉบับเดิม")}
@@ -1490,7 +1475,7 @@ function TransferCoverHistoryModal({
             value={code}
             onChange={setCode}
             error={pwError}
-            onEnter={() => { if (code && reprinting === null) void reprint(); }}
+            onEnter={() => { if (code.length === 6 && reprinting === null) void reprint(); }}
           />
         </Modal>
       )}
