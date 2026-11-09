@@ -242,14 +242,21 @@ export function SectionReview({
   // Same composite key the page has always used, so its invalidation after a
   // decision (k[0] === "worklogs") still reaches this view.
   const paths = sections.map(s => `/assignments/${s.id}/worklog`);
-  const { data: perAssignment, isLoading, mutate: reloadLogs } = useSWR<WorkLog[][]>(
+  const { data: review, isLoading, mutate: reloadLogs } = useSWR<{
+    assignment_id: string; entries: WorkLog[] | null; changes: WorkLogChange[] | null;
+  }[]>(
     paths.length ? ["worklogs", ...paths] : null,
-    async ([, ...ks]: string[]) => Promise.all(ks.map(k => api.get<WorkLog[]>(k))),
-  );
-  const changePaths = sections.map(s => `/assignments/${s.id}/worklog/changes`);
-  const { data: perChanges, mutate: reloadChanges } = useSWR<WorkLogChange[][]>(
-    changePaths.length ? ["worklog-changes", ...changePaths] : null,
-    async ([, ...ks]: string[]) => Promise.all(ks.map(k => api.get<WorkLogChange[]>(k))),
+    async () => {
+      const result = [];
+      // Bounded API batches keep query strings and per-request work finite.
+      for (let i = 0; i < sections.length; i += 100) {
+        const ids = sections.slice(i, i + 100).map(s => s.id).join(",");
+        result.push(...await api.get<{
+          assignment_id: string; entries: WorkLog[] | null; changes: WorkLogChange[] | null;
+        }[]>(`/worklog/read-batch?assignment_ids=${encodeURIComponent(ids)}`));
+      }
+      return result;
+    },
   );
   const { data: course } = useSWR<CourseWithSchedules>(`/teaching-courses/${tcId}`);
   const { data: impacts } = useSWR<HolidayImpactsResponse>(`/teaching-courses/${tcId}/holiday-impacts`);
@@ -261,10 +268,10 @@ export function SectionReview({
   useEffect(() => { onRejectingChange?.(rejectingKey !== null); }, [rejectingKey, onRejectingChange]);
 
   async function afterChange() {
-    await Promise.all([reloadLogs(), reloadChanges(), onChanged()]);
+    await Promise.all([reloadLogs(), onChanged()]);
   }
 
-  if (isLoading && !perAssignment) {
+  if (isLoading && !review) {
     return (
       <div className="border-t border-(--hairline) px-4 py-3" role="status" aria-busy="true">
         <span className="sr-only">{t("กำลังโหลด")}</span>
@@ -273,8 +280,8 @@ export function SectionReview({
       </div>
     );
   }
-  const logs = (perAssignment ?? []).flat().filter(r => r.status !== "draft");
-  const changes = (perChanges ?? []).flat();
+  const logs = (review ?? []).flatMap(r => r.entries ?? []).filter(r => r.status !== "draft");
+  const changes = (review ?? []).flatMap(r => r.changes ?? []);
 
   return (
     <div className="border-t border-(--hairline)">

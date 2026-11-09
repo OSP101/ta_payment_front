@@ -8,6 +8,7 @@
  * else. The client's IP is deliberately not passed on.
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { BodyReadError, readLimitedText } from "../../lib/boundedBody.mjs";
 
 // Error envelopes are a few KB; anything near this is not one.
 const MAX_BYTES = 256 * 1024;
@@ -24,7 +25,7 @@ function target(): Target | null {
   try {
     const dsn = new URL(raw);
     const projectId = dsn.pathname.replace(/^\/+|\/+$/g, "");
-    if (!dsn.username || !/^\d+$/.test(projectId)) return null;
+    if (!["http:", "https:"].includes(dsn.protocol) || !dsn.username || !/^\d+$/.test(projectId)) return null;
     return {
       key: dsn.username,
       projectId,
@@ -44,8 +45,11 @@ export async function POST(req: NextRequest) {
   if (Number(req.headers.get("content-length") ?? 0) > MAX_BYTES) {
     return new NextResponse(null, { status: 413 });
   }
-  const body = await req.text();
-  if (body.length > MAX_BYTES) return new NextResponse(null, { status: 413 });
+  let body: string;
+  try { body = await readLimitedText(req.body, MAX_BYTES); }
+  catch (error) {
+    return new NextResponse(null, { status: error instanceof BodyReadError ? error.status : 400 });
+  }
 
   // First line of an envelope is its JSON header, carrying the DSN the
   // browser SDK was initialised with.
@@ -72,6 +76,8 @@ export async function POST(req: NextRequest) {
       },
       body,
       signal: AbortSignal.timeout(5000),
+      redirect: "error",
+      cache: "no-store",
     });
     return new NextResponse(null, { status: res.ok ? 200 : 502 });
   } catch {

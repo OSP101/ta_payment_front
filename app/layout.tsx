@@ -6,8 +6,7 @@ import { Kanit } from "next/font/google";
 import "./globals.css";
 import SWRProvider from "./components/SWRProvider";
 import SessionActivityGuard from "./components/SessionActivityGuard";
-import DemoBanner from "./components/DemoBanner";
-import DemoGuidePanel from "./components/DemoGuidePanel";
+import DemoFeatures from "./components/DemoFeatures";
 import TopLoadingBar from "./components/TopLoadingBar";
 import StaffWatermark from "./components/StaffWatermark";
 import ErrorReportingUser from "./components/ErrorReportingUser";
@@ -86,17 +85,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <TopLoadingBar />
         <I18nProvider locale={locale} messages={messages}>
         <SWRProvider>
-          <DemoBanner />
+          <Suspense fallback={null}><DemoFeatures /></Suspense>
           <SessionActivityGuard />
           {children}
-          {/* DemoGuidePanel pulls in useScenarioEngine, which calls
-              useSearchParams() unconditionally (before its own `if
-              (!active) return null`, since hooks can't be conditional) —
-              Suspense here is what lets /_not-found and other fully-static
-              routes prerender instead of failing the build. */}
-          <Suspense fallback={null}>
-            <DemoGuidePanel />
-          </Suspense>
           <StaffWatermark initial={staffMe} />
           <PreferenceSync theme={theme} locale={locale} signedIn={!!me} />
           {errorReporting && <ErrorReportingUser id={me?.id ?? null} role={me ? actingRole(me.roles) : null} />}

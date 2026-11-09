@@ -3,12 +3,13 @@
 # Built by deploy/docker-compose.yml with context = this directory.
 # Three stages: install deps -> `next build` (standalone) -> tiny runtime.
 
-FROM node:22-alpine AS deps
+ARG NODE_IMAGE=node:22-alpine
+FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 
-FROM node:22-alpine AS build
+FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -32,14 +33,14 @@ RUN npx sentry-cli sourcemaps inject .next/static \
 
 # Not part of the app image. deploy/scripts/deploy.sh builds this stage (from
 # the same cache) and runs it once per deploy to upload the maps to GlitchTip.
-FROM node:22-alpine AS sourcemaps
+FROM ${NODE_IMAGE} AS sourcemaps
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /sourcemaps /sourcemaps
 ENTRYPOINT ["npx", "sentry-cli"]
 CMD ["sourcemaps", "upload", "/sourcemaps"]
 
-FROM node:22-alpine AS runtime
+FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

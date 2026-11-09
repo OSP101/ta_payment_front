@@ -1,5 +1,6 @@
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { backendSessionHeaders } from "./backendSessionHeaders.mjs";
 import { redirect } from "next/navigation";
 import { api, type Me } from "./api";
 
@@ -46,7 +47,7 @@ export const getMe = cache(async (): Promise<Me | null> => {
   if (!session) return null;
   try {
     const res = await fetch(`${session.apiBase}/me`, {
-      headers: { Cookie: session.cookieHeader },
+      headers: backendSessionHeaders(session.cookieHeader, await headers()),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -105,7 +106,7 @@ export async function getTAProfileStatus(): Promise<string | null> {
   if (!session) return null;
   try {
     const res = await fetch(`${session.apiBase}/me/profile`, {
-      headers: { Cookie: session.cookieHeader },
+      headers: backendSessionHeaders(session.cookieHeader, await headers()),
       cache: "no-store",
     });
     if (res.status === 404) return null;
