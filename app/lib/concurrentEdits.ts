@@ -1,21 +1,64 @@
-// Tokens represent the FIRST data read by this browser, not the latest SWR
-// refresh. Replacing them on a background refresh could silently permit an
-// old open form to overwrite somebody else's change.
-const readViews = new Map<string, string>();
-const ownWrites = new Map<string, string>();
+// Keep the latest successful read/write together. A background revalidation
+// replaces the data on screen, so its edit snapshot must advance as well.
+// Snapshots are PostgreSQL xmin:xmax:in-progress lists, signed by the server.
+// Comparing visibility prevents a slow older response from rolling us back.
+const editViews = new Map<string, string>();
 const intents = new Map<string, {key: string; at: number}>();
 
-export function resetEditViews() { readViews.clear(); ownWrites.clear(); intents.clear(); }
+type Snapshot = { max: bigint; active: Set<bigint> };
+function snapshot(token: string): Snapshot | undefined {
+  try {
+    const encoded = token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(encoded);
+    if (!/^\d+:\d+:(?:\d+(?:,\d+)*)?$/.test(raw)) return;
+    const [, max, active] = raw.split(":");
+    return { max: BigInt(max), active: new Set(active ? active.split(",").map(BigInt) : []) };
+  } catch { return; }
+}
+
+function atLeastAsRecent(candidate: string, current: string): boolean {
+  const next = snapshot(candidate);
+  const previous = snapshot(current);
+  // Unknown formats remain opaque. The server still validates every token.
+  if (!next || !previous) return true;
+  if (next.max < previous.max) return false;
+  // A transaction visible in the current view must remain visible in the next.
+  for (const id of next.active) {
+    if (id < previous.max && !previous.active.has(id)) return false;
+  }
+  return true;
+}
+
+export function resetEditViews() { editViews.clear(); intents.clear(); }
 
 export function rememberEditViews(prefix: string, response: Response, write: boolean) {
   if (typeof window === "undefined" || !response.ok) return;
   let views: Record<string, string>;
   try { views = JSON.parse(response.headers.get("X-Edit-Views") ?? "{}"); } catch { return; }
+  if (!views || typeof views !== "object" || Array.isArray(views)) return;
+  const marker = `${prefix}|`;
   for (const [scope, token] of Object.entries(views)) {
-    if (typeof token !== "string") continue;
-    const key = `${prefix}|${scope}`;
-    if (write) { if (!scope.endsWith(":*")) ownWrites.set(key, token); }
-    else if (!readViews.has(key)) readViews.set(key, token);
+    if (typeof token !== "string" || !token) continue;
+    // A collection write does not mean its other rows have been reviewed.
+    if (write && scope.endsWith(":*")) continue;
+    const key = marker + scope;
+    const current = editViews.get(key);
+    if (current && !atLeastAsRecent(token, current)) continue;
+    if (!scope.endsWith(":*") && !scope.startsWith("table:")) {
+      const collection = editViews.get(marker + scope.split(":")[0] + ":*");
+      if (collection && !atLeastAsRecent(token, collection)) continue;
+    }
+    editViews.set(key, token);
+    if (scope.endsWith(":*")) {
+      // The server prefers an exact token over a collection token. An old exact
+      // token (including one from our last write) must not mask a fresh list.
+      const family = marker + scope.slice(0, -1);
+      for (const [otherKey, otherToken] of editViews) {
+        if (otherKey !== key && otherKey.startsWith(family) && atLeastAsRecent(token, otherToken)) {
+          editViews.delete(otherKey);
+        }
+      }
+    }
   }
 }
 
@@ -25,8 +68,7 @@ export async function editRequestHeaders(prefix: string, path: string, init: Req
   if (method === "GET" || method === "HEAD") return {};
   const views: Record<string, string> = {};
   const marker = `${prefix}|`;
-  for (const [key, token] of readViews) if (key.startsWith(marker)) views[key.slice(marker.length)] = token;
-  for (const [key, token] of ownWrites) if (key.startsWith(marker)) views[key.slice(marker.length)] = token;
+  for (const [key, token] of editViews) if (key.startsWith(marker)) views[key.slice(marker.length)] = token;
   // Keep below the server's header limit. Collection snapshots are retained;
   // exact rows are the most recently visited when many courses are opened.
   const entries = Object.entries(views);
