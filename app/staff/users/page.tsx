@@ -672,7 +672,7 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
 
   async function submit() {
     setShowErrors(true);
-    if (hasErrors) return;
+    if (pending || hasErrors) return;
     setPending(true); setErr(null);
     try {
       const body = {
@@ -686,12 +686,15 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
         nationality: form.role === "ta" ? form.nationality : undefined,
       };
       const res = await api.post<{ user: User; temp_password: string }>("/users", body);
-      refreshUsers();
       // The account exists now, so the staged picture can finally go somewhere.
       // A failure here must not hide the temp password the user still needs —
       // it's reported alongside success, not in place of it.
       if (photoBlob) {
         try {
+          // Creation returns an envelope, so its response does not carry an
+          // exact edit snapshot for the new user. Read it before the upload
+          // rather than racing a background list refresh with the old snapshot.
+          await api.get<User>(`/users/${res.user.id}`);
           const photoForm = new FormData();
           photoForm.append("file", photoBlob, "avatar.jpg");
           await api.upload(`/users/${res.user.id}/avatar`, photoForm);
@@ -701,6 +704,9 @@ function CreateUserModal({ open, onClose }: { open: boolean; onClose: () => void
       }
       setCreatedId(res.user.id);
       setTempPassword(res.temp_password);
+      // Revalidate only after the picture has finished saving. Otherwise the
+      // list caches the newly created account without its avatar.
+      void refreshUsers().catch(notify.error);
     } catch (e) {
       setErr((e as Error).message);
       notify.error(e);

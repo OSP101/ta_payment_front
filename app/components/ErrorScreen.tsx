@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import { TriangleAlert } from "lucide-react";
 import { Button } from "./ui";
 import { useI18n } from "../lib/i18n/client";
+import { isChunkFailure, reloadAfterChunkFailure } from "../lib/chunkRecovery";
 
 /**
  * What a user sees when a page crashes (app/error.tsx, app/global-error.tsx).
@@ -24,6 +25,11 @@ export default function ErrorScreen({
   const { t } = useI18n();
   const [ref, setRef] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const chunkFailure = isChunkFailure(`${error.name} ${error.message}`);
+
+  useEffect(() => {
+    if (chunkFailure) reloadAfterChunkFailure();
+  }, [chunkFailure]);
 
   useEffect(() => {
     if (Sentry.isInitialized()) {
@@ -66,7 +72,7 @@ export default function ErrorScreen({
           </div>
         )}
         <div className="mt-6 flex justify-center gap-2">
-          <Button variant="primary" onPress={retry}>{t("ลองอีกครั้ง")}</Button>
+          <Button variant="primary" onPress={chunkFailure ? () => window.location.reload() : retry}>{t("ลองอีกครั้ง")}</Button>
           <Button variant="secondary" onPress={() => window.location.assign("/")}>{t("กลับหน้าหลัก")}</Button>
         </div>
       </div>

@@ -15,6 +15,7 @@ import { browserConfigFromEnv, CONFIG_META } from "./lib/errorReporting";
 import { isThemePref, THEME_BOOT_SCRIPT, THEME_COOKIE, type ThemePref } from "./lib/preferences";
 import PreferenceSync from "./components/PreferenceSync";
 import InlineScript from "./components/InlineScript";
+import { buildChunkRecoveryScript } from "./lib/chunkRecovery";
 import { I18nProvider } from "./lib/i18n/client";
 import { getLocale, getMessages, getT } from "./lib/i18n/server";
 import { parseTextScale, TEXT_SCALE_COOKIE } from "./lib/textScale";
@@ -65,7 +66,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const theme: ThemePref = isThemePref(me?.ui_theme) ? me.ui_theme
     : isThemePref(cookieTheme) ? cookieTheme : "system";
   const themeClass = theme === "system" ? "" : ` ${theme}`;
-  const nonce = theme === "system" ? (await headers()).get("x-nonce") ?? undefined : undefined;
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   // Language: same precedence as the theme (account, then cookie, then Thai).
   // Thai readers get an empty dictionary — the keys are the Thai text.
   const locale = await getLocale();
@@ -75,6 +76,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           data-theme={theme === "system" ? undefined : theme}
           className={`${kanit.variable} h-full antialiased${themeClass}`}>
       <head>
+        <InlineScript nonce={nonce} html={buildChunkRecoveryScript()} />
         {theme === "system" && <InlineScript nonce={nonce} html={THEME_BOOT_SCRIPT} />}
         {errorReporting && <meta name={CONFIG_META} content={JSON.stringify(errorReporting)} />}
       </head>

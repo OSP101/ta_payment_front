@@ -52,6 +52,9 @@ export function proxy(req: NextRequest) {
 
   const headers = new Headers(req.headers);
   headers.set("x-nonce", nonce);
+  // Next extracts the framework script nonce from the request CSP, not x-nonce.
+  // Forward the same policy that the browser will enforce on the response.
+  headers.set("Content-Security-Policy", csp);
   // The requested path, for server layouts that must send a signed-out
   // reader to /login?next=<this exact page> (a layout's params stop at its
   // own segment, so /docs/lecturer/start would otherwise come back as

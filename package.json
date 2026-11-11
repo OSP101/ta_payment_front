@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "docs:media": "node scripts/docs-media-checklist.mjs",
+    "test:chunk-recovery": "node --test scripts/chunk-recovery.test.mjs",
+    "test:users:browser": "node scripts/users-avatar.browser.test.mjs",
     "test:schedule-import": "node --test scripts/schedule-import.test.mjs",
     "test:schedule-import:browser": "node scripts/schedule-import.browser.test.mjs",
     "test:reg-review:bulk": "node --test scripts/reg-review-bulk.test.mjs",

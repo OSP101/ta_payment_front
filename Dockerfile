@@ -20,7 +20,10 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 # same value at runtime for the server-side fetches in app/lib.
 ARG API_URL=http://backend:8080
 ENV API_URL=$API_URL
-RUN npm run build
+# One ID per built image enables Next's version-skew navigation protection.
+# CI can supply a release ID; local Docker builds receive a unique fallback.
+ARG NEXT_DEPLOYMENT_ID=""
+RUN NEXT_DEPLOYMENT_ID="${NEXT_DEPLOYMENT_ID:-$(node -p 'crypto.randomUUID()')}" npm run build
 # Source maps for error reports (GlitchTip). `inject` stamps a debug id into
 # every browser bundle and its map, which is how GlitchTip pairs a crashed
 # file with its map regardless of release names. The stamped bundles + maps
