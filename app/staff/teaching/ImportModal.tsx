@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./reg-review.css";
 import REGReviewEditor, { type REGReview } from "./REGReviewEditor";
 import { mutate } from "swr";
@@ -151,6 +151,42 @@ export default function ImportModal({
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<CommitResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [validationState, setValidationState] = useState<"idle" | "waiting" | "checking" | "failed">("idle");
+  const review = preview?.review;
+
+  // Reuse the server's complete validation rules after a short typing pause.
+  // Only the snapshot still being edited may receive the result: slower older
+  // requests must never replace newer values, acknowledgements or confirmation.
+  useEffect(() => {
+    if (!open || phase !== "preview" || !file || !termId || !review || review.validation_hash || pending) {
+      setValidationState("idle");
+      return;
+    }
+    let current = true;
+    setValidationState("waiting");
+    const timer = setTimeout(async () => {
+      setValidationState("checking");
+      setErr(null);
+      try {
+        const form = new FormData();
+        form.append("term_id", termId);
+        form.append("file", file);
+        form.append("review", JSON.stringify(review));
+        const res = await api.upload<Preview>("/teaching-courses/import?dry_run=1", form);
+        if (!res.review?.validation_hash) throw new Error(t("ตรวจสอบข้อมูลไม่สำเร็จ กรุณากดตรวจสอบอีกครั้ง"));
+        if (current) {
+          setPreview(previous => previous?.review === review ? { ...previous, review: res.review } : previous);
+          setValidationState("idle");
+        }
+      } catch (error) {
+        if (current) {
+          setValidationState("failed");
+          setErr((error as Error).message);
+        }
+      }
+    }, 700);
+    return () => { current = false; clearTimeout(timer); };
+  }, [open, phase, file, termId, review, pending, t]);
 
   function reset() {
     setPhase("upload");
@@ -322,7 +358,7 @@ export default function ImportModal({
       )}
 
       {phase === "preview" && preview && (
-        preview.review ? <REGReviewEditor review={preview.review} disabled={pending} onChange={review => setPreview({ ...preview, review })} /> : <PreviewTable
+        preview.review ? <REGReviewEditor review={preview.review} disabled={pending} validationState={validationState} onRefreshLecturers={() => loadPreview(preview.review)} onChange={review => setPreview({ ...preview, review })} /> : <PreviewTable
           p={preview} decisions={decisions} setDecisions={setDecisions}
           merges={merges} setMerges={setMerges}
         />

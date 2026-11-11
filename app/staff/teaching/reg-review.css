@@ -180,3 +180,29 @@
   .reg-review-confirm { font-size: 11px; }
   .reg-review-footer-status { display: none; }
 }
+
+.reg-lecturer-help { padding: 12px; border: 1px solid var(--reg-warning-line); border-radius: 6px; background: var(--reg-warning-bg); color: var(--reg-warning-text); font-size: 13px; line-height: 1.7; }
+.reg-lecturer-help > * + * { margin-top: 10px; }
+.reg-lecturer-help ul { padding-left: 20px; list-style: disc; }
+.reg-lecturer-help li + li { margin-top: 7px; }
+.reg-help-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.reg-help-actions a { text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+.reg-help-actions a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.reg-bulk-tools { margin-bottom: 0; }
+.reg-bulk-form { display: grid; gap: 16px; min-width: 0; margin: 0; padding: 0; border: 0; font-size: 13px; }
+.reg-bulk-scope, .reg-bulk-preview { display: grid; gap: 8px; min-width: 0; }
+.reg-bulk-scope-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.reg-bulk-course-options { max-height: 180px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--reg-line); border-radius: 6px; }
+.reg-bulk-course-options > label { display: flex; align-items: start; gap: 8px; padding: 10px; }
+.reg-bulk-course-options > label + label { border-top: 1px solid var(--reg-line); }
+.reg-bulk-course-options > label:has(input:checked) { background: var(--accent-soft); }
+.reg-bulk-course-options small { display: block; margin-top: 4px; color: var(--reg-secondary); overflow-wrap: anywhere; }
+.reg-bulk-choice { display: flex; align-items: start; gap: 8px; line-height: 1.65; }
+.reg-bulk-choice input, .reg-bulk-course-options input { flex: none; width: 16px; height: 16px; margin-top: 3px; }
+.reg-bulk-kinds { display: grid; gap: 10px; }
+.reg-bulk-preview-scroll { max-height: 260px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--reg-line); border-radius: 6px; background: var(--reg-canvas); }
+.reg-bulk-preview-scroll > * { padding: 10px 12px; overflow-wrap: anywhere; }
+.reg-bulk-preview-scroll > * + * { border-top: 1px solid var(--reg-line); }
+.reg-bulk-preview-scroll p { margin-top: 4px; white-space: pre-wrap; line-height: 1.65; }
+.reg-bulk-result { padding: 10px; color: var(--reg-text); background: var(--accent-soft); border-radius: 6px; font-size: 13px; }
+.reg-bulk-form > button { justify-self: start; }

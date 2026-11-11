@@ -1,7 +1,7 @@
 "use client";
 
 import { Autocomplete, Label, ListBox, SearchField, useFilter } from "@heroui/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../../lib/i18n/client";
 
 export interface REGSearchOption {
@@ -13,13 +13,15 @@ export interface REGSearchOption {
 /** Search is local UI state: it never replaces a selected UUID/course code. */
 export default function REGSearchSelect({
   label, hideLabel = false, placeholder, searchLabel, emptyText,
-  value, options, disabled, onChange,
+  value, options, disabled, onChange, openRequest = 0,
 }: {
   label: string; hideLabel?: boolean; placeholder: string; searchLabel: string; emptyText: string;
   value: string; options: REGSearchOption[]; disabled: boolean; onChange: (id: string) => void;
+  openRequest?: number;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  useEffect(() => { if (openRequest > 0) setOpen(true); }, [openRequest]);
   const { contains } = useFilter({ sensitivity: "base" });
   const selected = options.find(option => option.id === value);
   return <Autocomplete
