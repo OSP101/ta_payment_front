@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import "./reg-review.css";
 import REGReviewEditor, { type REGReview } from "./REGReviewEditor";
 import { mutate } from "swr";
 import { toast } from "@/app/lib/toast";
@@ -251,7 +252,22 @@ export default function ImportModal({
       icon={<FileSpreadsheet size={18} />}
       title={t("นำเข้ารายวิชา · {term}", { term: termLabel })}
       size={phase === "upload" ? "2xl" : "full"}
-      footer={
+      layout={phase === "preview" && preview?.review ? "workspace" : "default"}
+      footer={phase === "preview" && preview?.review ?
+        <div className="reg-review-footer">
+          <div>
+            <p className="reg-review-footer-status">{t("นำเข้า")} {preview.review.courses.filter(c => !c.skip).length} {t("วิชา")} · {preview.review.ready ? t("ตรวจครบแล้ว") : t("แก้ไขและยืนยันรายการให้ครบก่อนบันทึก")}</p>
+            <label className="reg-review-confirm"><input type="checkbox" checked={preview.review.confirmed}
+              disabled={pending || !preview.review.ready || !preview.review.validation_hash}
+              onChange={e => setPreview({ ...preview, review: { ...preview.review!, confirmed: e.target.checked } })} />
+              <span>{t("ฉันตรวจค่าที่แก้ไขและรายการที่ยืนยันครบแล้ว และยืนยันให้บันทึกข้อมูลชุดนี้ในภาคการศึกษาที่เลือก")}</span></label>
+          </div>
+          <div className="reg-review-actions">
+            <Button variant="tertiary" disabled={pending} onPress={() => handleClose()}>{t("ยกเลิก")}</Button>
+            <Button variant="secondary" disabled={pending} isPending={pending} onPress={() => loadPreview(preview.review)}>{t("ตรวจสอบอีกครั้ง")}</Button>
+            <Button variant="primary" onPress={commit} disabled={pending || !preview.review.ready || !preview.review.confirmed || !preview.review.validation_hash || !preview.review.courses.some(c => !c.skip)}><CheckCircle2 size={15} />{t("ยืนยันนำเข้า")}</Button>
+          </div>
+        </div> : (
         <div className="flex flex-wrap items-center justify-between w-full gap-2">
           <div className="text-xs text-muted">
             {phase === "preview" && preview && (preview.review ? <span>{t("นำเข้า")} {preview.review.courses.filter(c => !c.skip).length} {t("วิชา")} · {t("บันทึกทั้งชุดหลังตรวจสอบครบ")}</span> : <PreviewSummary p={preview} decisions={decisions} merges={merges} />)}
@@ -277,10 +293,11 @@ export default function ImportModal({
             )}
           </div>
         </div>
-      }
+      )}
+
     >
       {err && (
-        <div className="mb-3">
+        <div className={phase === "preview" && preview?.review ? "reg-review-global-error" : "mb-3"}>
           <Alert status="danger" title={t("เกิดข้อผิดพลาด")} description={err} />
         </div>
       )}
@@ -305,16 +322,7 @@ export default function ImportModal({
       )}
 
       {phase === "preview" && preview && (
-        preview.review ? <div className="space-y-5">
-          <REGReviewEditor review={preview.review} disabled={pending} onChange={review => setPreview({ ...preview, review })} />
-          <div className="space-y-3 border-t border-(--hairline) pt-4">
-            <Button variant="secondary" disabled={pending} onClick={() => loadPreview(preview.review)}>{pending ? t("กำลังตรวจสอบ…") : t("ตรวจสอบอีกครั้ง")}</Button>
-            <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={preview.review.confirmed}
-              disabled={pending || !preview.review.ready || !preview.review.validation_hash}
-              onChange={e => setPreview({ ...preview, review: { ...preview.review!, confirmed: e.target.checked } })} />
-              {t("ฉันตรวจค่าที่แก้ไขและรายการที่ยืนยันครบแล้ว และยืนยันให้บันทึกข้อมูลชุดนี้ในภาคการศึกษาที่เลือก")}</label>
-          </div>
-        </div> : <PreviewTable
+        preview.review ? <REGReviewEditor review={preview.review} disabled={pending} onChange={review => setPreview({ ...preview, review })} /> : <PreviewTable
           p={preview} decisions={decisions} setDecisions={setDecisions}
           merges={merges} setMerges={setMerges}
         />

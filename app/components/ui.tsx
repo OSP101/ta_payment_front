@@ -942,6 +942,7 @@ export function Modal({
   footer,
   icon,
   placement,
+  layout = "default",
 }: {
   open: boolean;
   onClose: () => void;
@@ -954,6 +955,8 @@ export function Modal({
    *  which is right for confirmations but wrong for anything the on-screen
    *  keyboard must not cover — a search box's results, for one. */
   placement?: "auto" | "center" | "top" | "bottom";
+  /** Workspace children own their scroll regions; opt in for dense editors. */
+  layout?: "default" | "workspace";
 }) {
   const { t } = useI18n();
   const sizeCls = {
@@ -975,7 +978,7 @@ export function Modal({
     <HModal>
       <HModal.Backdrop isOpen={open} onOpenChange={o => { if (!o) onClose(); }}>
         <HModal.Container size={size === "full" ? "full" : undefined} placement={placement}>
-          <HModal.Dialog className={sizeCls}>
+          <HModal.Dialog className={[sizeCls, layout === "workspace" ? "reg-review-workspace" : ""].filter(Boolean).join(" ")}>
             <HModal.CloseTrigger aria-label={t("ปิด")} />
             {(title || icon) && (
               <HModal.Header>
