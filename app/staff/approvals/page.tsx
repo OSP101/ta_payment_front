@@ -3,13 +3,14 @@ import useSWR from "swr";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2, XCircle, ChevronDown, Users, BookOpenCheck, FileCheck2, CalendarCheck2,
-  ShieldCheck, ShieldAlert, ClipboardList, UserCog, Clock, GraduationCap,
+  ShieldCheck, ShieldAlert, ClipboardList, UserCog, Clock, GraduationCap, Mail,
 } from "lucide-react";
 import { Accordion } from "@heroui/react";
 import { useTerm } from "../TermContext";
 import {
-  PageHeader, Panel, Chip, SearchField, SelectField, Tip,
+  PageHeader, Panel, Chip, SearchField, SelectField, Tip, Button,
 } from "../../components/ui";
+import { api, errMessage } from "../../lib/api";
 import { ChecksBlock } from "./ChecksBlock";
 import { TAListBlock } from "./TAListBlock";
 import { Skel, SkelRegion, SkelValue } from "../../components/Skeletons";
@@ -110,6 +111,12 @@ export default function TARequestsPage() {
   const [year, setYear] = useState<string>("");
   const [sem, setSem] = useState<string>("");
   const [q, setQ] = useState("");
+  const [status, setStatus] = useState("");
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const [reminderResult, setReminderResult] = useState<{
+    sent: string[]; skipped: { name: string; reason: string }[]; error?: string;
+  } | null>(null);
 
   // Re-seed on every term change, not just the first load: the switcher is a
   // deliberate act, so it should win over a filter the officer widened earlier.
@@ -127,7 +134,7 @@ export default function TARequestsPage() {
   }, [term, termId]);
   const listReady = !!data && loaded && (!term || firstSeedDone);
 
-  const filtered = useMemo(() => {
+  const scoped = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter(r => {
       if (year && String(r.academic_year) !== year) return false;
@@ -142,9 +149,42 @@ export default function TARequestsPage() {
     });
   }, [rows, year, sem, q]);
 
-  const approvedCount = filtered.filter(r => r.status === "approved").length;
-  const rejectedCount = filtered.filter(r => r.status === "rejected").length;
-  const waitingCount = filtered.filter(r => r.status === "submitted").length;
+  const filtered = useMemo(() => scoped.filter(r => !status || r.status === status), [scoped, status]);
+  const pending = filtered.filter(r => r.status === "submitted");
+
+  async function remind() {
+    if (sendingRef.current || pending.length === 0) return;
+    sendingRef.current = true;
+    setSending(true);
+    setReminderResult(null);
+    const result: { sent: string[]; skipped: { name: string; reason: string }[]; error?: string } = { sent: [], skipped: [] };
+    // Keep the exact visible request IDs: widening the year/term filter must
+    // never turn a search for one TA into a reminder to the entire term.
+    const byTerm = new Map<string, string[]>();
+    for (const r of pending) byTerm.set(r.term_id, [...(byTerm.get(r.term_id) ?? []), r.id]);
+    try {
+      for (const [term_id, ids] of byTerm) {
+        for (let i = 0; i < ids.length; i += 200) {
+          const res = await api.post<{ sent: string[]; skipped: { name: string; reason: string }[] }>(
+            "/exports/appointment-order/remind-timetable",
+            { term_id, request_ids: ids.slice(i, i + 200) },
+          );
+          result.sent.push(...res.sent);
+          result.skipped.push(...res.skipped);
+        }
+      }
+    } catch (e) {
+      result.error = errMessage(e);
+    } finally {
+      setReminderResult(result);
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }
+
+  const approvedCount = scoped.filter(r => r.status === "approved").length;
+  const rejectedCount = scoped.filter(r => r.status === "rejected").length;
+  const waitingCount = scoped.filter(r => r.status === "submitted").length;
 
   return (
     <div>
@@ -201,6 +241,20 @@ export default function TARequestsPage() {
               })),
             ]}
           />
+          <SelectField
+            className="min-w-[10rem]"
+            label={<span className="text-xs">{t("สถานะคำขอ")}</span>}
+            value={status}
+            onChange={setStatus}
+            options={[
+              { id: "", label: t("ทุกสถานะ") },
+              { id: "approved", label: t("สำเร็จ (อนุมัติ)") },
+              { id: "submitted", label: t("รอผล (รอตารางเรียน)") },
+              { id: "rejected", label: t("ปฏิเสธ@status") },
+              { id: "cancelled", label: t("ยกเลิก@status") },
+              { id: "draft", label: t("ฉบับร่าง") },
+            ]}
+          />
           <SearchField
             value={q}
             onChange={setQ}
@@ -216,6 +270,33 @@ export default function TARequestsPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-(--hairline) px-4 py-3">
+          <p className="max-w-prose text-xs text-(--ink-3)">
+            {t("เตือนเฉพาะคำขอรอผลที่ตรงกับตัวกรอง ให้ TA บันทึกตารางเรียนเพื่อให้ระบบพิจารณาอัตโนมัติ เตือนซ้ำได้ทุก 24 ชั่วโมง")}
+          </p>
+          <Button variant="secondary" size="sm" isPending={sending}
+            disabled={!listReady || !!error || sending || pending.length === 0} onPress={remind}>
+            <Mail size={14} /> {t("ส่งอีเมลเตือนคำขอรอผล ({n})", { n: listReady ? pending.length : 0 })}
+          </Button>
+        </div>
+        {reminderResult && (
+          <div role="status" aria-live="polite" className="space-y-2 border-b border-(--hairline) px-4 py-3 text-sm">
+            <p>{t("ส่งอีเมลเตือนแล้ว {n} รายการ", { n: reminderResult.sent.length })}</p>
+            {reminderResult.sent.length > 0 && <p className="text-(--ink-2)">{reminderResult.sent.join(", ")}</p>}
+            {reminderResult.skipped.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-(--ink-2)">{t("ข้าม {n} รายการ (ดูเหตุผล)", { n: reminderResult.skipped.length })}</summary>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {reminderResult.skipped.map((s, i) => <li key={i}>{s.name}: {t(s.reason)}</li>)}
+                </ul>
+              </details>
+            )}
+            {reminderResult.error && <p role="alert" className="text-danger-soft-foreground">{t("ส่งอีเมลเตือนบางรายการไม่สำเร็จ: {reason}", { reason: reminderResult.error })}</p>}
+            {!reminderResult.error && reminderResult.sent.length === 0 && reminderResult.skipped.length === 0 && (
+              <p className="text-(--ink-2)">{t("ไม่มี TA ที่ต้องเตือน คำขออาจเปลี่ยนสถานะหรือบันทึกตารางเรียนแล้ว")}</p>
+            )}
+          </div>
+        )}
         <div className="p-4">
           {error ? (
             <div className="py-10 text-center text-sm text-danger-soft-foreground">{t("โหลดข้อมูลไม่สำเร็จ")}</div>

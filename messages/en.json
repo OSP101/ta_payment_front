@@ -5101,5 +5101,15 @@
  "รอตรวจการแก้ไข": "Awaiting revision review",
  "ไฟล์ว่าง กรุณาเลือกไฟล์ใหม่": "The file is empty. Please choose another file.",
  "ข้อมูลส่วนตัว บัญชี และลายเซ็นได้รับการอนุมัติแล้ว": "Your personal details, bank account and signature have been approved",
- "ไม่สามารถแก้ไขข้อมูลส่วนนี้ได้ หากต้องการแก้ไข กรุณาติดต่อเจ้าหน้าที่เพื่อตีกลับแบบแจ้งเจ้าหนี้ก่อน": "These details are locked. To make changes, contact staff to return the creditor form for correction first."
+ "ไม่สามารถแก้ไขข้อมูลส่วนนี้ได้ หากต้องการแก้ไข กรุณาติดต่อเจ้าหน้าที่เพื่อตีกลับแบบแจ้งเจ้าหนี้ก่อน": "These details are locked. To make changes, contact staff to return the creditor form for correction first.",
+ "สถานะคำขอ": "Request status",
+ "สำเร็จ (อนุมัติ)": "Completed (approved)",
+ "รอผล (รอตารางเรียน)": "Pending (awaiting timetable)",
+ "เตือนเฉพาะคำขอรอผลที่ตรงกับตัวกรอง ให้ TA บันทึกตารางเรียนเพื่อให้ระบบพิจารณาอัตโนมัติ เตือนซ้ำได้ทุก 24 ชั่วโมง": "Remind TAs on pending requests matching these filters to enter their class timetable for automatic review. Reminders can be repeated every 24 hours.",
+ "ส่งอีเมลเตือนคำขอรอผล ({n})": "Email reminders for pending requests ({n})",
+ "ส่งอีเมลเตือนแล้ว {n} รายการ": "Sent {n} email reminders",
+ "ข้าม {n} รายการ (ดูเหตุผล)": "Skipped {n} reminders (view reasons)",
+ "ส่งอีเมลเตือนบางรายการไม่สำเร็จ: {reason}": "Some email reminders could not be sent: {reason}",
+ "ไม่มี TA ที่ต้องเตือน คำขออาจเปลี่ยนสถานะหรือบันทึกตารางเรียนแล้ว": "No TAs need a reminder. The request status may have changed or the timetable may already be entered.",
+ "ส่งอีเมลไม่สำเร็จ กรุณาลองใหม่": "Email could not be sent. Please try again."
 }
