@@ -22,6 +22,9 @@ import { budgetConfirmMessage } from "../budgetConfirm";
 import { msg, useI18n } from "../../../lib/i18n/client";
 
 interface SectionRow {
+  reg_reserved_for?: string;
+  reg_pending_schedule?: boolean;
+  reg_pending_reason?: string;
   id: string;
   sec_no: string;
   track: "regular" | "special" | string;
@@ -209,7 +212,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         open={addOpen && !locked}
         onClose={() => setAddOpen(false)}
         tcId={tcId}
-        existingSecNos={sortedSecs.map(s => s.sec_no)}
+        existingSections={sortedSecs}
       />
 
       <SectionFormModal
@@ -217,7 +220,7 @@ export default function StaffTeachingCoursePage({ params }: { params: Promise<{ 
         onClose={() => setEditTarget(null)}
         tcId={tcId}
         section={editTarget ?? undefined}
-        existingSecNos={sortedSecs.filter(s => s.id !== editTarget?.id).map(s => s.sec_no)}
+        existingSections={sortedSecs.filter(s => s.id !== editTarget?.id)}
       />
 
       <DeleteSectionDialog
@@ -394,6 +397,9 @@ function SectionScheduleBlock({
           </div>
         )}
       </div>
+      {section.reg_pending_schedule && <Alert status="warning" title={t("ตารางจาก REG ยังไม่ครบ จึงยังส่งคำขอ TA ไม่ได้")}
+        description={section.reg_pending_reason || t("กรุณาเติมคาบที่ขาดให้ครบแล้วบันทึกตารางใหม่")} />}
+      {section.reg_reserved_for && <p className="break-words whitespace-pre-wrap text-sm text-muted">{t("สำหรับจาก REG")}: {section.reg_reserved_for}</p>}
       <SectionScheduleEditor value={rows} onChange={setRows} disabled={locked} />
       {err && <Alert status="danger" icon={<CircleAlert size={14} />} title={t("บันทึกไม่สำเร็จ")} description={err} />}
     </div>
@@ -408,14 +414,14 @@ function SectionScheduleBlock({
 // which the API cannot change after creation (PATCH /sections takes sec_no,
 // room and num_students only). Two near-identical modals would drift.
 function SectionFormModal({
-  open, onClose, tcId, section, existingSecNos,
+  open, onClose, tcId, section, existingSections,
 }: {
   open: boolean;
   onClose: () => void;
   tcId: string;
   /** Present when editing; absent when adding. */
   section?: SectionRow;
-  existingSecNos: string[];
+  existingSections: Pick<SectionRow, "sec_no" | "track">[];
 }) {
   const { t } = useI18n();
   const editing = !!section;
@@ -438,7 +444,7 @@ function SectionFormModal({
     setErr(null);
   }, [open, section]);
 
-  const duplicate = secNo.trim() !== "" && existingSecNos.includes(secNo.trim());
+  const duplicate = secNo.trim() !== "" && existingSections.some(s => s.sec_no === secNo.trim() && s.track === track);
   const canSave = secNo.trim() !== "" && !duplicate && !saving;
 
   async function save(confirm = false) {
@@ -509,7 +515,7 @@ function SectionFormModal({
           <FieldGroup
             label={t("เลข Section")}
             hint={t("ตัวเลขเท่านั้น เช่น 1, 2, 3")}
-            error={duplicate ? t("เลข {sec} มีอยู่แล้วในรายวิชา", { sec: secNo.trim() }) : undefined}
+            error={duplicate ? t("เลข {sec} มีอยู่แล้วในประเภทภาคที่เลือก", { sec: secNo.trim() }) : undefined}
           >
             <TextInput
               value={secNo}

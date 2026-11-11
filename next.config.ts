@@ -21,10 +21,11 @@ const nextConfig: NextConfig = {
     // and never reached the API at all. Measured: 9.5 MB proxied in 65 ms,
     // 10 MB timed out after 30 s with the request never reaching Fiber.
     //
-    // 16 MB leaves headroom for the multipart envelope without inviting anything
-    // larger; the real limit is still enforced server-side, which is where a
-    // refusal produces a message the user can act on.
-    proxyClientMaxBodySize: "16mb",
+    // REG review sends a source workbook (up to 20 MB) together with reviewed
+    // JSON (up to 10 MB). Match Fiber's 32 MB envelope so Next cannot truncate
+    // the file or corrections before the API validates them. Individual file
+    // and JSON limits remain enforced by the backend.
+    proxyClientMaxBodySize: "32mb",
   },
   async redirects() {
     return [

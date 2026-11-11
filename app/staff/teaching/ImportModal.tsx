@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import REGReviewEditor, { type REGReview } from "./REGReviewEditor";
 import { mutate } from "swr";
 import { toast } from "@/app/lib/toast";
 import {
@@ -7,7 +8,7 @@ import {
   ChevronRight, Loader2, GitMerge,
 } from "lucide-react";
 import { api } from "../../lib/api";
-import { Modal, Button, Chip, FieldGroup, Alert, Tip } from "../../components/ui";
+import { Modal, Button, Chip, FieldGroup, Alert, Tip, ConfirmDialog } from "../../components/ui";
 import { pickPrimaryCode } from "../../lib/courseCode";
 import { useI18n } from "../../lib/i18n/client";
 
@@ -50,6 +51,7 @@ interface MergeGroup {
 }
 
 interface Preview {
+  review?: REGReview;
   filename: string;
   courses: PreviewCourse[];
   new_count: number;
@@ -139,6 +141,7 @@ export default function ImportModal({
   termLabel: string;
 }) {
   const { t } = useI18n();
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -159,9 +162,11 @@ export default function ImportModal({
     setErr(null);
   }
 
-  function handleClose() {
+  function handleClose(discard = false) {
+    if (!discard && phase === "preview" && preview?.review && !pending) { setDiscardOpen(true); return; }
+    setDiscardOpen(false);
     if (pending) return;
-    if (phase === "done") {
+    if (phase === "done" || preview?.review) {
       // Trigger the parent list to refresh SWR for this term.
       mutate((k: string) => typeof k === "string" && k.startsWith("/teaching-courses"));
     }
@@ -169,14 +174,17 @@ export default function ImportModal({
     onClose();
   }
 
-  async function loadPreview() {
+  async function loadPreview(review?: REGReview) {
     if (!file || !termId) return;
+    if (!/\.xlsx?$/i.test(file.name)) { setErr(t("กรุณาเลือกไฟล์ REG แบบ .xls หรือ .xlsx")); return; }
+    if (file.size > 20 * 1024 * 1024) { setErr(t("ไฟล์ใหญ่เกิน 20 MB")); return; }
     setPending(true);
     setErr(null);
     try {
       const form = new FormData();
       form.append("term_id", termId);
       form.append("file", file);
+      if (review) form.append("review", JSON.stringify(review));
       const res = await api.upload<Preview>("/teaching-courses/import?dry_run=1", form);
       setPreview(res);
       // Default decision for unmatched courses is "proceed" — the least
@@ -197,6 +205,7 @@ export default function ImportModal({
 
   async function commit() {
     if (!file || !termId || !preview) return;
+    if (preview.review && (!preview.review.ready || !preview.review.confirmed || !preview.review.validation_hash)) return;
     setPending(true);
     setErr(null);
     setPhase("committing");
@@ -212,6 +221,7 @@ export default function ImportModal({
       const form = new FormData();
       form.append("term_id", termId);
       form.append("file", file);
+      if (preview.review) form.append("review", JSON.stringify(preview.review));
       if (skipCodes.length > 0) form.append("skip_codes", skipCodes.join(","));
       if (proceedCodes.length > 0) form.append("proceed_codes", proceedCodes.join(","));
       const payload = mergePayload(merges);
@@ -234,23 +244,24 @@ export default function ImportModal({
   }
 
   return (
+    <>
     <Modal
       open={open}
-      onClose={handleClose}
+      onClose={() => handleClose()}
       icon={<FileSpreadsheet size={18} />}
       title={t("นำเข้ารายวิชา · {term}", { term: termLabel })}
-      size="2xl"
+      size={phase === "upload" ? "2xl" : "full"}
       footer={
         <div className="flex flex-wrap items-center justify-between w-full gap-2">
           <div className="text-xs text-muted">
-            {phase === "preview" && preview && <PreviewSummary p={preview} decisions={decisions} merges={merges} />}
+            {phase === "preview" && preview && (preview.review ? <span>{t("นำเข้า")} {preview.review.courses.filter(c => !c.skip).length} {t("วิชา")} · {t("บันทึกทั้งชุดหลังตรวจสอบครบ")}</span> : <PreviewSummary p={preview} decisions={decisions} merges={merges} />)}
           </div>
           <div className="flex gap-2">
-            <Button variant="tertiary" onPress={handleClose} disabled={pending}>
+            <Button variant="tertiary" onPress={() => handleClose()} disabled={pending}>
               {phase === "done" ? t("ปิด") : t("ยกเลิก")}
             </Button>
             {phase === "upload" && (
-              <Button variant="primary" onPress={loadPreview} disabled={!file || pending} isPending={pending}>
+              <Button variant="primary" onPress={() => loadPreview()} disabled={!file || pending} isPending={pending}>
                 <ChevronRight size={14} /> {t("อ่านไฟล์")}
               </Button>
             )}
@@ -258,7 +269,7 @@ export default function ImportModal({
               <Button
                 variant="primary"
                 onPress={commit}
-                disabled={pending || !hasWorkToDo(preview, decisions, merges)}
+                disabled={pending || (preview.review ? (!preview.review.ready || !preview.review.confirmed || !preview.review.validation_hash || !preview.review.courses.some(c => !c.skip)) : !hasWorkToDo(preview, decisions, merges))}
                 isPending={pending}
               >
                 <CheckCircle2 size={14} /> {t("ยืนยันนำเข้า")}
@@ -277,11 +288,11 @@ export default function ImportModal({
       {phase === "upload" && (
         <FieldGroup
           label={t("ไฟล์ Excel")}
-          hint={t("ไฟล์ 'รายวิชาที่เปิดสอน-<เทอม>-<ปี>.xlsx' จากระบบทะเบียน ระบบสร้างวิชาจากไฟล์โดยตรง (อ่านชีต 'Normalized' หรือไฟล์ดิบ 'sysTitle' ก็ได้)")}
+          hint={t("ใช้ไฟล์ดิบจาก REG (.xls หรือ .xlsx) โดยไม่ต้องตัดคอลัมน์หรือแตกบรรทัด ระบบให้ตรวจแก้ข้อมูลก่อนบันทึก")}
         >
           <input
             type="file"
-            accept=".xlsx"
+            accept=".xls,.xlsx" aria-label={t("ไฟล์รายวิชาจาก REG (.xls หรือ .xlsx)")}
             onChange={e => setFile(e.target.files?.[0] ?? null)}
             className="block w-full rounded-md border border-(--hairline) bg-white px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-slate-700"
           />
@@ -294,7 +305,16 @@ export default function ImportModal({
       )}
 
       {phase === "preview" && preview && (
-        <PreviewTable
+        preview.review ? <div className="space-y-5">
+          <REGReviewEditor review={preview.review} disabled={pending} onChange={review => setPreview({ ...preview, review })} />
+          <div className="space-y-3 border-t border-(--hairline) pt-4">
+            <Button variant="secondary" disabled={pending} onClick={() => loadPreview(preview.review)}>{pending ? t("กำลังตรวจสอบ…") : t("ตรวจสอบอีกครั้ง")}</Button>
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={preview.review.confirmed}
+              disabled={pending || !preview.review.ready || !preview.review.validation_hash}
+              onChange={e => setPreview({ ...preview, review: { ...preview.review!, confirmed: e.target.checked } })} />
+              {t("ฉันตรวจค่าที่แก้ไขและรายการที่ยืนยันครบแล้ว และยืนยันให้บันทึกข้อมูลชุดนี้ในภาคการศึกษาที่เลือก")}</label>
+          </div>
+        </div> : <PreviewTable
           p={preview} decisions={decisions} setDecisions={setDecisions}
           merges={merges} setMerges={setMerges}
         />
@@ -311,6 +331,10 @@ export default function ImportModal({
         <ResultView r={result} />
       )}
     </Modal>
+    <ConfirmDialog open={discardOpen} onClose={() => setDiscardOpen(false)} onConfirm={() => handleClose(true)}
+      title={t("ออกจากการตรวจสอบไฟล์?")} message={t("ค่าที่แก้ไขและรายการที่ยืนยันในรอบนี้จะหาย ยังไม่มีการบันทึกลงระบบ")}
+      confirmLabel={t("ออกจากการตรวจสอบ")} cancelLabel={t("ตรวจสอบต่อ")} />
+    </>
   );
 }
 
@@ -681,7 +705,7 @@ function ResultView({ r }: { r: CommitResult }) {
           so it must not read as one next to a genuine data error. */}
       <div className="flex flex-wrap gap-2">
         <SummaryChip tone="success" label={t("นำเข้าสำเร็จ")} count={r.created_ids?.length ?? 0} />
-        {warningCount > 0 && <SummaryChip tone="warn" label={t("เตือน (ไม่มีตารางเรียน)")} count={warningCount} />}
+        {warningCount > 0 && <SummaryChip tone="warn" label={t("รายการเตือน")} count={warningCount} />}
         <SummaryChip tone={errorCount > 0 ? "danger" : "neutral"} label={t("ผิดพลาด")} count={errorCount} />
       </div>
       {(r.merged_codes?.length ?? 0) > 0 && (
@@ -703,7 +727,7 @@ function ResultView({ r }: { r: CommitResult }) {
       {(r.warnings?.length ?? 0) > 0 && (
         <div>
           <p className="text-xs font-medium mb-1 text-(--ink-2)">
-            {t("รายการที่เตือน (ไม่มีตารางเรียน ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)")}
+            {t("รายการเตือนและข้อมูลสำหรับติดตามหลังนำเข้า")}
           </p>
           <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
             {r.warnings!.map((w, i) => (

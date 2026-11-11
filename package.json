@@ -8,7 +8,8 @@
     "start": "next start",
     "docs:media": "node scripts/docs-media-checklist.mjs",
     "test:schedule-import": "node --test scripts/schedule-import.test.mjs",
-    "test:schedule-import:browser": "node scripts/schedule-import.browser.test.mjs"
+    "test:schedule-import:browser": "node scripts/schedule-import.browser.test.mjs",
+    "test:reg-review:browser": "node scripts/reg-review.browser.test.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.2",

@@ -28,6 +28,7 @@ interface HistoryRow {
 }
 
 interface HistoryDetail extends HistoryRow {
+  review_data?: unknown;
   created_codes: string[];
   skipped_codes: string[];
   merged_codes: string[];
@@ -136,6 +137,10 @@ export default function ImportHistoryModal({
                   )}
                   <Chip tone={detail.error_count > 0 ? "danger" : "neutral"}>{t("ผิดพลาด {n}", { n: detail.error_count })}</Chip>
                 </div>
+                {detail.review_data != null && <Button variant="secondary" size="sm" onPress={() => {
+                  const url = URL.createObjectURL(new Blob([JSON.stringify(detail.review_data, null, 2)], { type: "application/json" }));
+                  const anchor = document.createElement("a"); anchor.href = url; anchor.download = `reg-review-${detail.id}.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+                }}>{t("ดาวน์โหลดต้นฉบับและค่าที่ตรวจสอบ")}</Button>}
                 {detail.created_codes?.length > 0 && (
                   <div>
                     <p className="text-xs font-medium mb-1 text-(--ink-2)">{t("รหัสวิชาที่สร้าง")}</p>
@@ -165,7 +170,7 @@ export default function ImportHistoryModal({
                 {detail.warnings?.length > 0 && (
                   <div>
                     <p className="text-xs font-medium mb-1 text-(--ink-2)">
-                      {t("รายการที่เตือน (ไม่มีตารางเรียน ปกติสำหรับวิชาโครงงาน/สหกิจ/วิทยานิพนธ์)")}
+                      {t("รายการเตือนและข้อมูลสำหรับติดตามหลังนำเข้า")}
                     </p>
                     <ul className="text-xs space-y-1 max-h-48 overflow-y-auto rounded border border-(--hairline) p-2">
                       {detail.warnings.map((w, i) => <li key={i} className="text-(--ink-3)">• {w}</li>)}
