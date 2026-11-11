@@ -341,7 +341,7 @@ export default function ImportModal({
       {phase === "upload" && (
         <FieldGroup
           label={t("ไฟล์ Excel")}
-          hint={t("ใช้ไฟล์ดิบจาก REG (.xls หรือ .xlsx) โดยไม่ต้องตัดคอลัมน์หรือแตกบรรทัด ระบบให้ตรวจแก้ข้อมูลก่อนบันทึก")}
+          hint={t("รองรับไฟล์ดิบ REG (.xls หรือ .xlsx) และตารางรายวิชาหลักสูตร GIS (.xlsx) รวมถึงเซลล์รวมและตารางหลายบรรทัด ตรวจแก้ข้อมูลก่อนบันทึก")}
         >
           <input
             type="file"
