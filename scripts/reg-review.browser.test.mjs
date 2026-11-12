@@ -32,7 +32,7 @@ const dir = path.resolve("app", route);
 await mkdir(dir);
 await writeFile(path.join(dir, "page.tsx"), `"use client";
 import {useState} from 'react';import ImportModal from '../staff/teaching/ImportModal';
-export default function Test(){const [open,setOpen]=useState(true);return <main><button onClick={()=>setOpen(true)}>Open import</button><ImportModal open={open} onClose={()=>setOpen(false)} termId="test-term" termLabel="ภาคปลาย 2569" /></main>}`);
+export default function Test(){const [open,setOpen]=useState(true);return <main><button onClick={()=>setOpen(true)}>Open import</button><ImportModal draftOwner="browser-test-owner" onResume={()=>setOpen(true)} open={open} onClose={()=>setOpen(false)} termId="test-term" termLabel="ภาคปลาย 2569" /></main>}`);
 let log = "", browser;
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "--port", String(port)], { env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" }, stdio: ["ignore", "pipe", "pipe"] });
 server.stdout.on("data", d => log += d); server.stderr.on("data", d => log += d);
@@ -140,6 +140,18 @@ try {
     await page.getByRole('button',{name:'ตรวจสอบอีกครั้ง',exact:true}).click();
     await expect(page.getByText('ตรวจสอบไม่สำเร็จ กดตรวจสอบอีกครั้ง',{exact:true})).toHaveCount(0);
     await expect(capacity).toHaveValue('7');
+    await page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('focus')); });
+    await expect(capacity).toHaveValue('7');
+    // Wait for the durable write, then simulate browser tab discard/reload.
+    await expect.poll(()=>page.evaluate(async()=>{
+      const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('ta-reg-import-drafts-v1',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+      const all=await new Promise(resolve=>{const r=db.transaction('drafts').objectStore('drafts').getAll();r.onsuccess=()=>resolve(r.result)});db.close();
+      return all.some(d=>d.preview.review.courses[0].sections[0].students===7);
+    })).toBe(true);
+    await page.reload();
+    await expect(capacity).toHaveValue('7');
+    await expect(commit()).toBeDisabled();
+
     await showPane('details');
     await expect(page.getByRole("heading", { name: /Section 1 · ภาคปกติ/ })).toHaveCount(1);
     await expect(page.getByRole("heading", { name: /Section 1 · ภาคพิเศษ/ })).toHaveCount(1);

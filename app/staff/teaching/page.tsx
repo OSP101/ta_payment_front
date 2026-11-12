@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import useSWR, { mutate } from "swr";
 import { Save, ClipboardPaste, CalendarPlus, CalendarOff, Settings, BookPlus, CheckCircle2, FileSpreadsheet, Trash2, Pencil, Users, SquareArrowOutUpRight, History } from "lucide-react";
 import { toast } from "@/app/lib/toast";
-import { api, errMessage } from "../../lib/api";
+import { api, errMessage, type Me } from "../../lib/api";
 import { useTerm, useTermKey } from "../TermContext";
 import { notify } from "../../lib/notify";
 import {
@@ -32,6 +32,7 @@ import { useI18n, type TFn } from "../../lib/i18n/client";
 const OpenCourseModal = dynamic(() => import("./OpenCourseModal"), { ssr: false });
 const ImportModal = dynamic(() => import("./ImportModal"), { ssr: false });
 const ImportHistoryModal = dynamic(() => import("./ImportHistoryModal"), { ssr: false });
+const MergeExistingCoursesModal = dynamic(() => import("./MergeExistingCoursesModal"), { ssr: false });
 const BulkCountsModal = dynamic(() => import("./BulkCountsModal"), { ssr: false });
 
 interface TC {
@@ -76,7 +77,7 @@ export default function TeachingPage() {
   // default to terms[0] ("the newest term that exists"), which is not the same
   // thing as the active term the dashboard showed.
   const { t } = useI18n();
-  const { terms, termId, term, loaded } = useTerm();
+  const { terms, termId, term, loaded, onBeforeSwitch } = useTerm();
 
   // Gate: the whole teaching flow depends on at least one academic term existing.
   // `loaded` distinguishes "still loading" from "confirmed none created yet".
@@ -86,8 +87,11 @@ export default function TeachingPage() {
   // refetch overlay until the new term's courses arrive.
   const { data: courses, isLoading: coursesLoading } =
     useSWR<TC[]>(useTermKey("/teaching-courses"), { keepPreviousData: true });
+  const [mergeExistingOpen, setMergeExistingOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const { data: importOwner } = useSWR<Me>("/me");
+  useEffect(() => onBeforeSwitch(() => !importing && !mergeExistingOpen), [onBeforeSwitch, importing, mergeExistingOpen]);
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [bulkCountsOpen, setBulkCountsOpen] = useState(false);
   const [regSources, setRegSources] = useState<RegSourceStatus[]>([]);
@@ -141,6 +145,7 @@ export default function TeachingPage() {
               <Button variant="secondary" disabled={!termId || regChecking} isPending={regChecking} onClick={openBulkCounts}>
                 <ClipboardPaste size={16} /> {regChecking ? t("กำลังตรวจสอบ REG ทั้งสองระบบ") : t("อัปเดตจำนวนนักศึกษา")}
               </Button>
+              <Button variant="secondary" disabled={!termId || !courses?.length} onPress={() => setMergeExistingOpen(true)}>{t("รวมวิชาที่เปิดแล้ว")}</Button>
               <Button variant="tertiary" disabled={!termId} onClick={() => setImportHistoryOpen(true)}>
                 <History size={16} /> {t("ประวัติการนำเข้า")}
               </Button>
@@ -243,7 +248,10 @@ export default function TeachingPage() {
         pickLecturers
       />
 
+      {mergeExistingOpen && <MergeExistingCoursesModal termId={termId} courses={courses ?? []} onClose={() => setMergeExistingOpen(false)} onMerged={() => { setMergeExistingOpen(false); void mutate((k: unknown) => typeof k === "string" && k.startsWith("/teaching-courses")); toast.success(t("รวมวิชาเรียบร้อยแล้ว")); }} />}
       <ImportModal
+        draftOwner={importOwner?.id}
+        onResume={() => setImporting(true)}
         open={importing}
         onClose={() => setImporting(false)}
         termId={termId}

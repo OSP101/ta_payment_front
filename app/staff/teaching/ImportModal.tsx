@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./reg-review.css";
+import { draftTabID, readImportDraft, writeImportDraft } from "./regImportDraft";
 import REGReviewEditor, { type REGReview } from "./REGReviewEditor";
 import { mutate } from "swr";
 import { toast } from "@/app/lib/toast";
@@ -134,8 +135,10 @@ type Phase = "upload" | "preview" | "committing" | "done";
 type UnmatchedDecision = "proceed" | "skip";
 
 export default function ImportModal({
-  open, onClose, termId, termLabel,
+  open, onClose, termId, termLabel, draftOwner, onResume,
 }: {
+  draftOwner?: string;
+  onResume?: () => void;
   open: boolean;
   onClose: () => void;
   termId: string;
@@ -152,6 +155,39 @@ export default function ImportModal({
   const [result, setResult] = useState<CommitResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [validationState, setValidationState] = useState<"idle" | "waiting" | "checking" | "failed">("idle");
+  const [draftKey, setDraftKey] = useState("");
+  const [draftReady, setDraftReady] = useState("");
+  const restoredKeyRef = useRef("");
+  const resumeRef = useRef(onResume);
+  resumeRef.current = onResume;
+  useEffect(() => {
+    if (!draftOwner || !termId) return;
+    try { setDraftKey(`${draftTabID()}:${draftOwner}:${termId}`); }
+    catch { setErr(t("เบราว์เซอร์ไม่อนุญาตให้เก็บฉบับร่าง กรุณาอย่ารีโหลดหน้าระหว่างตรวจข้อมูล")); }
+  }, [draftOwner, termId, t]);
+  useEffect(() => {
+    if (!draftKey) return;
+    if (restoredKeyRef.current && restoredKeyRef.current !== draftKey) {
+      setFile(null); setPreview(null); setDecisions({}); setMerges({}); setPhase("upload");
+    }
+    restoredKeyRef.current = draftKey;
+    let active = true;
+    readImportDraft<{ file: File; preview: Preview; decisions: Record<string, UnmatchedDecision>; merges: MergeChoices; saved: number }>(draftKey).then(draft => {
+      if (!active) return;
+      if (draft && Date.now() - draft.saved < 24 * 60 * 60 * 1000) {
+        setFile(draft.file);
+        setPreview(draft.preview.review ? { ...draft.preview, review: { ...draft.preview.review, confirmed: false, ready: false, validation_hash: "" } } : draft.preview);
+        setDecisions(draft.decisions); setMerges(draft.merges); setPhase("preview");
+        resumeRef.current?.();
+      }
+      setDraftReady(draftKey);
+    }).catch(() => { if (active) { setDraftReady(draftKey); setErr(t("เก็บฉบับร่างไม่ได้ กรุณาอย่ารีโหลดหน้าระหว่างตรวจข้อมูล")); } });
+    return () => { active = false; };
+  }, [draftKey, t]);
+  useEffect(() => {
+    if (!draftKey || draftReady !== draftKey || !file || !preview || phase !== "preview") return;
+    void writeImportDraft(draftKey, { file, preview, decisions, merges, saved: Date.now() }).catch(() => setErr(t("เก็บฉบับร่างไม่ได้ กรุณาอย่ารีโหลดหน้าระหว่างตรวจข้อมูล")));
+  }, [draftKey, draftReady, file, preview, decisions, merges, phase, t]);
   const review = preview?.review;
 
   // Reuse the server's complete validation rules after a short typing pause.
@@ -189,6 +225,7 @@ export default function ImportModal({
   }, [open, phase, file, termId, review, pending, t]);
 
   function reset() {
+    if (draftKey) void writeImportDraft(draftKey, null).catch(() => {});
     setPhase("upload");
     setFile(null);
     setPreview(null);
@@ -265,6 +302,7 @@ export default function ImportModal({
       if (payload.length > 0) form.append("merges", JSON.stringify(payload));
       const res = await api.upload<CommitResult>("/teaching-courses/import", form);
       setResult(res);
+      if (draftKey) void writeImportDraft(draftKey, null).catch(() => {});
       setPhase("done");
       const merged = res.merged_codes?.length ?? 0;
       toast.success(t("นำเข้าเรียบร้อยแล้ว"), {
