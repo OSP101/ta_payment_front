@@ -43,7 +43,8 @@ export function browserConfigFromEnv(): BrowserConfig | null {
  *  share-link parameters all travel there. */
 export function stripQuery(url: string): string {
   const cut = url.search(/[?#]/);
-  return cut === -1 ? url : url.slice(0, cut);
+  return (cut === -1 ? url : url.slice(0, cut))
+    .replace(/(\/(?:p|public)\/)[^\s]*/g, "$1[redacted]");
 }
 
 /** Masks runs of 10+ digits: a citizen ID is 13, a bank account 10-12, a
@@ -53,14 +54,25 @@ export function stripQuery(url: string): string {
 export function maskDigits(text: string): string {
   // Not inside a longer token: the 12-digit tail of a UUID (a request id,
   // a record id) is preceded by "-" and must survive.
-  return text.replace(/(?<![\w-])\d[\d -]{8,}\d(?![\w-])/g, (m) => (m.replace(/\D/g, "").length >= 10 ? "[ตัวเลขถูกซ่อน]" : m)); // i18n-ignore — goes into the error report, not shown to the reader
+  return text
+    .replace(/\?[^\s"\\]+/g, "?[redacted]")
+    .replace(/(\/(?:p|public)\/)[^\s"\\?]+/g, "$1[redacted]")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email redacted]")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[token redacted]")
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[redacted]@")
+    .replace(/(?<![\w-])\d[\d -]{8,}\d(?![\w-])/g, (m) => (m.replace(/\D/g, "").length >= 10 ? "[ตัวเลขถูกซ่อน]" : m)); // i18n-ignore — goes into the error report, not shown to the reader
 }
 
 /** Last pass over every event before it leaves the process. */
 export function scrubEvent(event: ErrorEvent): ErrorEvent {
+  // Arbitrary extras and captured local variables can contain form data.
+  event.extra = undefined;
+  if (event.transaction) event.transaction = stripQuery(event.transaction);
   if (event.message) event.message = maskDigits(event.message);
   for (const ex of event.exception?.values ?? []) {
     if (ex.value) ex.value = maskDigits(ex.value);
+    for (const frame of ex.stacktrace?.frames ?? []) delete frame.vars;
   }
   if (event.request) {
     const ua = event.request.headers?.["User-Agent"] ?? event.request.headers?.["user-agent"];
@@ -82,16 +94,17 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
 }
 
 export function scrubBreadcrumb(b: Breadcrumb): Breadcrumb | null {
+  if (b.category === "console") return null;
+  // DOM click labels can contain names, account numbers, or document titles.
+  if (b.category?.startsWith("ui.")) return { category: b.category, level: b.level, timestamp: b.timestamp, message: "UI interaction" };
   // The tunnel's own requests are noise in every trail.
   if (typeof b.data?.url === "string" && b.data.url.includes(TUNNEL_PATH)) return null;
   if (b.data) {
-    const data = { ...b.data };
+    const allowed = new Set(["url", "from", "to", "method", "status_code", "duration_ms", "request_id", "trace_id", "edge_request_id", "status", "failure_kind", "route"]);
+    const data = Object.fromEntries(Object.entries(b.data).filter(([key, value]) => allowed.has(key) && ["string", "number", "boolean"].includes(typeof value)));
     for (const k of ["url", "from", "to"]) {
       if (typeof data[k] === "string") data[k] = stripQuery(data[k] as string);
     }
-    // fetch/xhr breadcrumbs can carry request/response bodies in newer SDKs.
-    delete data.request_body;
-    delete data.response_body;
     b = { ...b, data };
   }
   if (typeof b.message === "string") {

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "docs:media": "node scripts/docs-media-checklist.mjs",
+    "test:telemetry": "node --test scripts/api-telemetry.test.mjs",
     "test:chunk-recovery": "node --test scripts/chunk-recovery.test.mjs",
     "test:users:browser": "node scripts/users-avatar.browser.test.mjs",
     "test:schedule-import": "node --test scripts/schedule-import.test.mjs",

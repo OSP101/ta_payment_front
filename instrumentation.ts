@@ -30,14 +30,25 @@ export async function register() {
 }
 
 export const onRequestError: Instrumentation.onRequestError = async (err, request, context) => {
-  if (!enabled) return;
-  const Sentry = await import("@sentry/nextjs");
+  const { maskDigits } = await import("./app/lib/errorReporting");
   // The browser only ever sees a server render failure as this digest
   // (app/error.tsx tags its own report with it), so tagging the server-side
   // report the same way is what links the two in GlitchTip.
   const digest = typeof err === "object" && err !== null && "digest" in err ? String(err.digest) : undefined;
+  const edgeHeader = request.headers["x-edge-request-id"];
+  const edgeId = typeof edgeHeader === "string" && /^[a-f0-9]{32}$/.test(edgeHeader) ? edgeHeader : undefined;
+  console.error(JSON.stringify({
+    time: new Date().toISOString(), level: "ERROR", service: "ta-payment-web", msg: "render_failed",
+    environment: process.env.SENTRY_ENVIRONMENT || "production", release: process.env.SENTRY_RELEASE,
+    route: context.routePath, route_type: context.routeType, digest, edge_request_id: edgeId,
+    error: maskDigits(err instanceof Error ? err.message : "server rendering failed"),
+    stack: err instanceof Error && err.stack ? maskDigits(err.stack).slice(0, 8192) : undefined,
+  }));
+  if (!enabled) return;
+  const Sentry = await import("@sentry/nextjs");
   Sentry.withScope((scope) => {
     if (digest) scope.setTag("digest", digest);
+    if (edgeId) scope.setTag("edge_request_id", edgeId);
     Sentry.captureRequestError(err, request, context);
   });
 };

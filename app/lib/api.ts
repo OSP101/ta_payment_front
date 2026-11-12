@@ -7,6 +7,7 @@ import { editRequestHeaders, rememberEditViews, resetEditViews } from "./concurr
 import { beginRequest, endRequest } from "./loadingBar";
 import { tc as clientTc } from "./i18n/client";
 import { interpolate, msg, type Vars } from "./i18n/core";
+import { recordAPI, responseReference, type DiagnosticReference } from "./apiTelemetry";
 
 // This module is also loaded on the server (lib/session → getMe), where the
 // client-only tc() must not be called; there the Thai key is returned as is.
@@ -18,6 +19,7 @@ export type ApiErrorBody = { error: string };
 
 /** Typed error carrying the HTTP status so callers/UI can branch on it. */
 export class ApiError extends Error {
+  reference?: DiagnosticReference;
   status: number;
   /** Machine-readable code the backend may send in the `error` field. */
   code?: string;
@@ -335,6 +337,7 @@ function toApiError(path: string, status: number, body: string): ApiError {
 
 async function parseError(path: string, res: Response): Promise<ApiError> {
   const err = toApiError(path, res.status, await res.text().catch(() => ""));
+  err.reference = responseReference(res.headers);
   const retry = Number(res.headers.get("retry-after"));
   if (res.status === 429 && Number.isFinite(retry) && retry > 0) err.retryAfter = retry;
   return err;
@@ -354,7 +357,15 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
   const protocol = await editRequestHeaders(apiPrefix, path, init);
   const headers = new Headers(init.headers);
   for (const [key,value] of Object.entries(protocol)) headers.set(key,value);
-  const response = await fetch(input, {...init, headers});
+  const started = performance.now();
+  let response: Response;
+  try {
+    response = await fetch(input, {...init, headers});
+  } catch (error) {
+    recordAPI(path, init.method ?? "GET", started, undefined, error);
+    throw error;
+  }
+  recordAPI(path, init.method ?? "GET", started, response);
   if (response.ok && (/^\/auth\/(login|logout|sso\/(exchange|confirm))/.test(path))) resetEditViews();
   rememberEditViews(apiPrefix, response, !["GET","HEAD"].includes((init.method ?? "GET").toUpperCase()));
   return response;
@@ -644,6 +655,7 @@ async function uploadWithProgress<T>(
   const protocol = await editRequestHeaders(apiPrefix,path,{method:"POST",body:form});
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    const started = performance.now();
     xhr.open("POST", `${UPLOAD_ORIGIN}${apiPrefix}${path}`, true);
     // The XHR spelling of credentials: "include".
     for (const [key,value] of Object.entries(protocol)) xhr.setRequestHeader(key,value);
@@ -672,8 +684,17 @@ async function uploadWithProgress<T>(
 
     xhr.onload = () => {
       const body = xhr.responseText ?? "";
+      const headers = new Headers();
+      for (const key of ["X-Request-Id", "X-Trace-Id", "X-Edge-Request-Id"]) {
+        const value = xhr.getResponseHeader(key);
+        if (value) headers.set(key, value);
+      }
+      const diagnostic = new Response(null, { status: xhr.status || 502, headers });
+      recordAPI(path, "POST", started, diagnostic);
       if (xhr.status < 200 || xhr.status >= 300) {
-        reject(toApiError(path, xhr.status, body));
+        const error = toApiError(path, xhr.status, body);
+        error.reference = responseReference(headers);
+        reject(error);
         return;
       }
       rememberEditViews(apiPrefix,new Response(null,{status:xhr.status,headers:{"X-Edit-Views":xhr.getResponseHeader("X-Edit-Views") ?? "{}"}}),true);
@@ -690,8 +711,8 @@ async function uploadWithProgress<T>(
     };
     // A CORS rejection also lands here with status 0 — indistinguishable from
     // an offline browser by design, so the generic "cannot connect" is right.
-    xhr.onerror = () => reject(new ApiError(0, humanMessage(0, "")));
-    xhr.ontimeout = () => reject(new ApiError(408, humanMessage(408, "")));
+    xhr.onerror = () => { recordAPI(path, "POST", started, undefined, new Error("network")); reject(new ApiError(0, humanMessage(0, ""))); };
+    xhr.ontimeout = () => { recordAPI(path, "POST", started, undefined, new DOMException("timeout", "TimeoutError")); reject(new ApiError(408, humanMessage(408, ""))); };
     xhr.onabort = () => reject(new ApiError(0, tc("ยกเลิกการอัปโหลดแล้ว")));
 
     xhr.send(form);
@@ -700,7 +721,10 @@ async function uploadWithProgress<T>(
 
 /** Extract a user-safe message from any thrown value. */
 export function errMessage(e: unknown): string {
-  if (e instanceof ApiError) return e.message;
+  if (e instanceof ApiError) {
+    const reference = e.reference?.requestId ?? e.reference?.edgeRequestId;
+    return reference && e.status >= 500 ? `${e.message} (${tc("รหัสอ้างอิง")}: ${reference})` : e.message;
+  }
   // A non-API Error is a browser/JS failure ("Failed to fetch", "Cannot read
   // properties of undefined") — meaningless to a user. Only pass through a
   // message someone wrote in Thai for them.

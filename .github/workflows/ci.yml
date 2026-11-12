@@ -46,6 +46,9 @@ jobs:
       - name: Request body and client IP regressions
         run: node --test scripts/request-body.test.mjs scripts/client-ip.test.mjs
 
+      - name: API telemetry privacy regressions
+        run: node --test scripts/api-telemetry.test.mjs
+
       - name: Build
         run: npm run build
 
