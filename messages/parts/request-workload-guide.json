@@ -75,5 +75,16 @@
   "หัวข้อที่ {n} จาก {total}": "Topic {n} of {total}",
   "กรุณาเปิดอ่านหัวข้อที่ยังไม่มีเครื่องหมายถูกให้ครบก่อนยืนยัน": "Open all topics that do not have a check mark before confirming.",
   "เข้าใจแล้ว": "Got it",
-  "ถัดไป": "Next"
+  "ถัดไป": "Next",
+  "บัณฑิตศึกษา: ภาคปกติและโครงการพิเศษคิดค่าตอบแทนต่างกัน": "Graduate TAs: regular and special-program pay are calculated differently",
+  "50 บาทต่อชั่วโมง": "50 baht per hour",
+  "กรอกชั่วโมงงานของภาคปกติให้ตรงกับที่มอบหมายในคำขอ เพื่อให้ระบบคำนวณและสร้างเวลาอัตโนมัติ จากนั้น TA ตรวจเวลาที่ทำจริงก่อนส่ง โดยเบิกจ่ายจากชั่วโมงที่ได้รับอนุมัติ": "Enter the assigned regular-program hours so the system can calculate and generate worklog entries. The TA checks actual working time before submitting; payment is based on approved hours.",
+  "เหมาจ่ายทั้งเทอม": "A lump sum for the whole term",
+  "ค่าตอบแทนใช้ยอดเหมาจ่ายของเทอมตามที่ระบบกำหนด จึงไม่ต้องกรอกเวลาของโครงการพิเศษเพื่อนำไปคูณอัตรารายชั่วโมง": "Pay uses the configured term lump sum. Special-program hours therefore do not need to be entered for an hourly calculation.",
+  "บัณฑิตศึกษาลงเวลาเพื่อคำนวณค่าตอบแทนเฉพาะภาคปกติ": "Graduate TAs enter payable worklogs for regular-program work only",
+  "หาก TA ดูแลทั้งภาคปกติและโครงการพิเศษ ให้กรอกและสร้างเวลาของภาคปกติเท่านั้น ส่วนโครงการพิเศษแยกคิดเป็นเงินเหมาจ่ายทั้งเทอม ไม่ต้องลงเวลาซ้ำเพื่อคิดเงินรายชั่วโมง": "For TAs covering both programs, enter and generate regular-program worklogs only. Special-program pay is a separate term lump sum; do not log those hours again for hourly payment.",
+  "ตัวอย่าง: ภาคปกติได้รับอนุมัติ 8 ชั่วโมง คิดเป็น 8 × 50 = 400 บาท ส่วนโครงการพิเศษใช้ยอดเหมาจ่ายของเทอมแยกต่างหาก": "Example: 8 approved regular-program hours × 50 = 400 baht. Special-program pay uses its separate term lump sum.",
+  "การกำหนดภาระงานในคำขอกับการลงเวลาเพื่อเบิกจ่ายเป็นคนละส่วน บัณฑิตศึกษายังต้องกรอกรายละเอียดภาระงานตามที่ฟอร์มคำขอกำหนด แต่ชั่วโมงที่นำไปคำนวณเงินให้แยกภาคปกติกับโครงการพิเศษตามข้างต้น": "Request workload declarations and payable worklogs serve different purposes. Graduate requests still require the duty details shown in the form; payable time follows the regular/special-program distinction above.",
+  "ขั้นตอนจากคำขอสู่การลงเวลา": "From the request to worklog entries",
+  "โครงการพิเศษ": "Special program"
 }

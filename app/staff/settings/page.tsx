@@ -7,7 +7,7 @@ import { Plus, Trash2, Save, Pencil, X, Check, CircleAlert, HelpCircle, Sparkles
 import {
   Tabs, Pagination, Accordion, Switch,
   DatePicker, DateField, Calendar, I18nProvider,
-  Autocomplete, ListBox, useFilter, Label, Description,
+  Autocomplete, ListBox, Label, Description,
   SearchField as HSearchField,
   type Key,
 } from "@heroui/react";
@@ -2770,8 +2770,7 @@ interface AdminOfficer {
   linked_active?: boolean | null;
 }
 
-// The pool an officer's name is picked from — any non-TA account. Only the
-// fields the picker needs to search and display; see /users (UserService.List).
+// Active lecturers returned by the database search for administrative seats.
 interface LinkableUser {
   id: string;
   email: string;
@@ -3104,39 +3103,41 @@ function AdminOfficerFormModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Any non-TA account can hold a seat — dean/vice-dean are lecturers, the
-  // claim-form certifier is often staff. Fetched whole (the college has ~40
-  // such accounts) rather than server-searched, same tradeoff as TaAutocomplete.
-  const { data: usersData } = useSWR<{ items: LinkableUser[] }>(
-    open ? "/users?limit=500&status=active" : null,
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [pickedUser, setPickedUser] = useState<LinkableUser | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Filter before pagination in the database so lecturers outside the initial
+  // page remain searchable. SWR keeps responses isolated by search term.
+  const { data: usersData, error: usersError, isLoading: usersLoading } = useSWR<{ items: LinkableUser[] }>(
+    open ? `/users?role=lecturer&status=active&limit=50&q=${encodeURIComponent(debouncedSearch)}` : null,
   );
-  const candidates = useMemo(() => {
-    const list = (usersData?.items ?? []).filter(u => u.roles.some(r => r !== "ta"));
-    // The currently-linked account stays pickable even if it no longer
-    // qualifies (deactivated, or switched to a TA-only role since) — otherwise
-    // opening this seat would show a blank picker for no visible reason.
-    if (editing?.user_id && !list.some(u => u.id === editing.user_id)) {
-      list.unshift({
-        id: editing.user_id,
-        email: editing.linked_email ?? "",
-        first_name: editing.full_name,
-        last_name: "",
-        roles: [],
-        is_active: editing.linked_active ?? true,
-      });
-    }
-    return list;
-  }, [usersData, editing]);
-  const { contains } = useFilter({ sensitivity: "base" });
-  const selectedUser = candidates.find(u => u.id === draft.user_id) ?? null;
+  const searching = usersLoading || search.trim() !== debouncedSearch;
+  const candidates = useMemo(() => searching || usersError ? [] :
+    (usersData?.items ?? []).filter(u => u.is_active && u.roles.includes("lecturer")),
+  [usersData, searching, usersError]);
+  // Keep the existing holder's label separate from the search results: an old
+  // non-lecturer assignment must never be injected into the selectable list.
+  const selectedUser = pickedUser ?? (editing && draft.user_id === editing.user_id ? {
+    first_name: editing.full_name, last_name: "", email: editing.linked_email,
+  } : null);
 
   useEffect(() => {
     if (!editing) return;
     setDraft(editing);
+    setSearch("");
+    setDebouncedSearch("");
+    setPickedUser(null);
     setError(null);
   }, [editing]);
 
   function pickUser(u: LinkableUser) {
+    setPickedUser(u);
     setDraft(d => ({
       ...d,
       user_id: u.id,
@@ -3188,11 +3189,16 @@ function AdminOfficerFormModal({
         <div className="flex flex-col gap-1.5">
           <Autocomplete
             selectionMode="single"
+            allowsEmptyCollection
             value={draft.user_id || null}
             onChange={(k: Key | null) => {
               const id = k ? String(k) : "";
               const u = candidates.find(x => x.id === id);
               if (u) pickUser(u);
+              else if (!id) {
+                setPickedUser(null);
+                setDraft(d => ({ ...d, user_id: "", full_name: "", academic_prefix: "" }));
+              }
             }}
             className="w-full"
             placeholder={t("พิมพ์ชื่อหรืออีเมลเพื่อค้นหา…")}
@@ -3200,8 +3206,8 @@ function AdminOfficerFormModal({
             <Label>{t("ชื่อ-นามสกุล")}</Label>
             <Autocomplete.Trigger>
               <Autocomplete.Value>
-                {({ defaultChildren, isPlaceholder }) => {
-                  if (isPlaceholder || !selectedUser) return defaultChildren;
+                {({ defaultChildren }) => {
+                  if (!selectedUser) return defaultChildren;
                   return (
                     <span className="truncate">
                       {selectedUser.first_name} {selectedUser.last_name}
@@ -3216,7 +3222,7 @@ function AdminOfficerFormModal({
               <Autocomplete.Indicator />
             </Autocomplete.Trigger>
             <Autocomplete.Popover>
-              <Autocomplete.Filter filter={contains}>
+              <Autocomplete.Filter inputValue={search} onInputChange={setSearch} filter={() => true}>
                 <HSearchField autoFocus name="admin-officer-user-search" variant="secondary">
                   <HSearchField.Group>
                     <HSearchField.SearchIcon />
@@ -3225,7 +3231,9 @@ function AdminOfficerFormModal({
                   </HSearchField.Group>
                 </HSearchField>
                 <ListBox renderEmptyState={() => (
-                  <div className="text-sm text-muted p-3 text-center">{t("ไม่พบบัญชีที่ตรงกัน")}</div>
+                  <div className="text-sm text-muted p-3 text-center" role="status">
+                    {searching ? t("กำลังค้นหา…") : usersError ? t("โหลดรายชื่ออาจารย์ไม่สำเร็จ กรุณาลองใหม่") : t("ไม่พบบัญชีที่ตรงกัน")}
+                  </div>
                 )}>
                   {candidates.map(u => (
                     <ListBox.Item key={u.id} id={u.id} textValue={`${u.first_name} ${u.last_name} ${u.email}`}>

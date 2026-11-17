@@ -32,6 +32,9 @@ try {
   await sections.press('ArrowRight');
   await expect(dialog.getByRole('tab', { name: 'TA ใช้ข้อมูลอย่างไร', exact: true })).toBeFocused();
   await expect(dialog.getByRole('tabpanel', { name: 'TA ใช้ข้อมูลอย่างไร', exact: true })).toContainText('ไม่สามารถเพิ่มชั่วโมงเกินที่กำหนดเองได้');
+  await expect(dialog.getByRole('tabpanel', { name: 'TA ใช้ข้อมูลอย่างไร', exact: true })).toContainText('50 บาทต่อชั่วโมง');
+  await expect(dialog.getByRole('tabpanel', { name: 'TA ใช้ข้อมูลอย่างไร', exact: true })).toContainText('เหมาจ่ายทั้งเทอม');
+  await expect(dialog.getByRole('tabpanel', { name: 'TA ใช้ข้อมูลอย่างไร', exact: true })).toContainText('บัณฑิตศึกษาลงเวลาเพื่อคำนวณค่าตอบแทนเฉพาะภาคปกติ');
   await dialog.getByRole('tab', { name: 'แผนแนะนำ', exact: true }).click();
   await expect(dialog.getByRole('tabpanel', { name: 'แผนแนะนำ', exact: true })).toContainText('ขอ TA น้อยกว่าหรือมากกว่าจำนวนที่ระบบแนะนำได้');
   const bounds = await dialog.boundingBox(); assert.ok(bounds.width <= viewport.width && bounds.x >= 0);
