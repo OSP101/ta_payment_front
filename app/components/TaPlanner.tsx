@@ -370,7 +370,7 @@ export interface DraftEstimate {
 }
 
 export function TaPlanner({
-  tcId, schedules, drafts, scope, onApplyPlan, onDraftEstimate, variant = "request",
+  tcId, schedules, drafts, scope, onApplyPlan, onDraftEstimate, onOpenGuide, variant = "request",
 }: {
   tcId: string;
   /** Section timetables from /teaching-courses/:id — to detect shared sittings. */
@@ -379,6 +379,7 @@ export function TaPlanner({
   scope: Scope;
   onApplyPlan?: (items: PlanItem[]) => void;
   onDraftEstimate?: (est: DraftEstimate | null) => void;
+  onOpenGuide?: () => void;
   /**
    * "request": collapsible card above the form, evaluates the form's drafts.
    * "budget": the standalone budget page — always open, also lists the
@@ -427,7 +428,7 @@ export function TaPlanner({
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold">
-              {variant === "budget" ? t("งบ TA ของวิชานี้") : t("วางแผน TA ให้พอดีงบ")}{" "}
+              {variant === "budget" ? t("งบ TA ของวิชานี้") : t("ตัวช่วยวางแผน TA · เลือกใช้ได้")}{" "}
               <span className="font-normal text-muted">{t("(ประมาณการจากตารางสอนจริง)")}</span>
             </div>
             <div className="text-xs"><SkelValue className="h-3 w-64 max-w-full" /></div>
@@ -449,7 +450,7 @@ export function TaPlanner({
 
   return (
     <Panel className="mb-4" padded={false}>
-      <button type="button" onClick={() => collapsible && setOpen(o => !o)}
+      <button type="button" aria-expanded={open} onClick={() => collapsible && setOpen(o => !o)}
         className={"flex w-full items-center gap-2 px-4 py-3 text-left " + (collapsible ? "" : "cursor-default")}>
         {collapsible && <ChevronDown size={16} className={"text-muted transition-transform " + (open ? "" : "-rotate-90")} />}
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
@@ -457,7 +458,7 @@ export function TaPlanner({
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">
-            {variant === "budget" ? t("งบ TA ของวิชานี้") : t("วางแผน TA ให้พอดีงบ")}{" "}
+            {variant === "budget" ? t("งบ TA ของวิชานี้") : t("ตัวช่วยวางแผน TA · เลือกใช้ได้")}{" "}
             <span className="font-normal text-muted">{t("(ประมาณการจากตารางสอนจริง)")}</span>
           </div>
           <div className="text-xs text-muted">
@@ -478,6 +479,11 @@ export function TaPlanner({
 
       {open && (
         <div className="border-t border-hairline px-4 py-4 space-y-4">
+          {variant === "request" && <div className="text-sm space-y-1">
+            <p className="font-medium">{t("อาจารย์ขอน้อยกว่าหรือมากกว่าจำนวนแนะนำได้")}</p>
+            <p className="text-ink-3">{t("แผนด้านล่างเป็นแนวทางเริ่มต้น ปรับจำนวนและภาระงานได้เอง โดยระบบตรวจงบประมาณและเงื่อนไขชั่วโมงแยกต่างหาก")}</p>
+            {onOpenGuide && <Button size="sm" variant="ghost" onClick={onOpenGuide}><Info size={14} />{t("แผนแนะนำปรับอะไรได้บ้าง?")}</Button>}
+          </div>}
           {/* 1. The two pools — what there is to plan with */}
           <div className={"grid gap-3 " + (hasSpecial ? "sm:grid-cols-2" : "")}>
             <PoolCard label={t("ภาคปกติ")} tone="brand" pool={regular} weeks={f.class_weeks} />
@@ -489,7 +495,7 @@ export function TaPlanner({
           {/* Two ways in: the plan the system works out, or the lecturer's own
               numbers on the same cost model. The plan comes first. */}
           <div className="flex gap-1 rounded-lg bg-surface-secondary p-1 text-xs w-fit" role="tablist">
-            {([["plan", t("แผนที่แนะนำ")], ["manual", t("คำนวณเอง")]] as const).map(([k, label]) => (
+            {([["plan", t("แผนตัวอย่างที่ระบบแนะนำ")], ["manual", t("ลองคำนวณทางเลือกอื่น")]] as const).map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={tab === k}
                 onClick={() => setTab(k)}
                 className={"rounded-md px-3 py-1 transition-colors " + (tab === k ? "bg-panel font-semibold shadow-sm" : "text-muted hover:text-ink-1")}>
@@ -520,10 +526,10 @@ export function TaPlanner({
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold">
                 <Sparkles size={14} className="text-link" />
-                {variant === "budget" && regular.existingTAs > 0 ? t("ถ้าจะขอ TA เพิ่ม") : t("แผนที่แนะนำสำหรับวิชานี้")}
+                {variant === "budget" && regular.existingTAs > 0 ? t("ถ้าจะขอ TA เพิ่ม") : t("แผนแนะนำสำหรับวิชานี้ · ปรับแก้ได้")}
               </div>
               <span className="text-[11px] text-muted">
-                {t("ปรับตามงบของวิชานี้ ให้ครบตามเกณฑ์ก่อน แล้วเพิ่มชั่วโมงต่อคน แล้วค่อยเพิ่มคน")}
+                {t("จำนวนแนะนำไม่ใช่จำนวนขั้นต่ำหรือสูงสุดของคำขอ")}
               </span>
             </div>
             {/* One framed group per budget pool, each with its own colour, name
@@ -538,7 +544,7 @@ export function TaPlanner({
             >
               {options.slice(0, 4).map(o => (
                 <OptionCard key={o.key} o={o} hasSpecial={hasSpecial}
-                  applyLabel={variant === "budget" ? t("ไปกรอกคำขอด้วยแผนนี้") : t("ใส่แผนนี้ลงฟอร์ม")}
+                  applyLabel={variant === "budget" ? t("ไปกรอกคำขอด้วยแผนนี้") : t("นำแผนนี้ไปปรับใช้")}
                   onApply={onApplyPlan ? () => onApplyPlan(o.items) : undefined} />
               ))}
             </PoolGroup>
@@ -550,7 +556,7 @@ export function TaPlanner({
               >
                 {specialOptions.map(o => (
                   <OptionCard key={o.key} o={o} hasSpecial={hasSpecial} specialOnly
-                    applyLabel={variant === "budget" ? t("ไปกรอกคำขอด้วยแผนนี้") : t("ใส่แผนนี้ลงฟอร์ม")}
+                    applyLabel={variant === "budget" ? t("ไปกรอกคำขอด้วยแผนนี้") : t("นำแผนนี้ไปปรับใช้")}
                     onApply={onApplyPlan ? () => onApplyPlan(o.items) : undefined} />
                 ))}
               </PoolGroup>
@@ -1309,7 +1315,7 @@ function PoolGroup({ tone, label, sublabel, children }: {
         <Chip tone={tone}>{label}</Chip>
         <span className="text-[11px] text-muted">{sublabel}</span>
       </div>
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">{children}</div>
+      <div className="grid gap-3 lg:grid-cols-2">{children}</div>
     </section>
   );
 }
@@ -1321,7 +1327,7 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
 }) {
   const { t } = useI18n();
   const total = o.cost.regular + o.cost.special + o.cost.lump;
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(!!o.recommended);
   return (
     <div className={
       "flex flex-col rounded-xl border p-3 " +
@@ -1361,7 +1367,7 @@ function OptionCard({ o, hasSpecial, onApply, applyLabel, specialOnly }: {
       {more && <OptionDetail o={o} total={total} />}
       {onApply && (
         <div className="mt-2">
-          <Button size="sm" variant={o.recommended ? "primary" : "secondary"} onClick={onApply} fullWidth>
+          <Button size="sm" variant="secondary" onClick={onApply} fullWidth>
             <Plus size={14} /> {applyLabel}
           </Button>
         </div>

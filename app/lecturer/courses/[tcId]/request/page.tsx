@@ -4,7 +4,7 @@ import Link from "next/link";
 import useSWR, { mutate } from "swr";
 import {
   Plus, Send, Trash2, ClipboardList, Wallet, CheckCircle2, AlertCircle, Info,
-  UserPlus, Copy, Files, CalendarClock, CalendarOff, Clock, ChevronDown, UserCog,
+  UserPlus, Copy, Files, CalendarClock, CalendarOff, Clock, UserCog,
 } from "lucide-react";
 import {
   RadioGroup, Radio, Description, Label,
@@ -32,50 +32,7 @@ import NationalityPicker from "../../../../components/NationalityPicker";
 import { isForeign, type Nationality } from "../../../../lib/nationality";
 import { msg, useI18n, type TFn } from "../../../../lib/i18n/client";
 import styles from "./request-form.module.css";
-
-/**
- * On a short screen the planner card fills the viewport and the numbered
- * steps below it are out of sight — nothing says "the form is further down".
- * A floating arrow points there until the steps scroll into view, then goes
- * away for good (it is a hint, not a control worth keeping).
- */
-function ScrollToFormHint({ targetRef }: { targetRef: React.RefObject<HTMLDivElement | null> }) {
-  const { t } = useI18n();
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    const el = targetRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([entry]) => {
-      const belowFold = !entry.isIntersecting && entry.boundingClientRect.top > 0;
-      // The planner above starts as a short loading skeleton, so the steps
-      // can sit inside the viewport for a moment before the card grows and
-      // pushes them down. Only a reach AFTER the user scrolled counts as
-      // "seen"; until then just track whether they are below the fold.
-      if (!belowFold && window.scrollY > 40) {
-        setShow(false);
-        io.disconnect();
-        return;
-      }
-      setShow(belowFold);
-    }, { threshold: 0.1 });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [targetRef]);
-  if (!show) return null;
-  return (
-    <div className="fixed inset-x-0 bottom-6 z-20 flex justify-center pointer-events-none">
-      <button
-        type="button"
-        onClick={() => targetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-        className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-accent text-accent-foreground pl-4 pr-3 py-2 text-sm font-medium shadow-lg hover:opacity-90 transition-opacity"
-        aria-label={t("เลื่อนลงไปกรอกรายละเอียดคำขอ")}
-      >
-        {t("เลื่อนลงเพื่อกรอกรายละเอียดคำขอ")}
-        <ChevronDown size={16} className="animate-bounce" />
-      </button>
-    </div>
-  );
-}
+import RequestWorkloadGuide, { requestGuidePreferenceKey, type WorkloadGuideTopic } from "./RequestWorkloadGuide";
 
 const fmtBahtEst = (n: number, intl: string) => `฿${Math.round(n).toLocaleString(intl)}`; // i18n-ignore — ฿ symbol stays
 
@@ -572,6 +529,47 @@ function RequestFormSection({
 
   const [scope, setScope] = useState<"lecture" | "lab" | "both">(defaultScope);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [activePerson, setActivePerson] = useState(0);
+  const [personCount, setPersonCount] = useState("0");
+  const [resizeTo, setResizeTo] = useState<number | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [guideTopic, setGuideTopic] = useState<WorkloadGuideTopic | null>(null);
+  const [guideRequired, setGuideRequired] = useState(false);
+  const { data: guideViewer } = useSWR<Me>("/me");
+  const guideEntry = useRef<string | null>(null);
+  useEffect(() => {
+    if (!guideViewer?.id) return;
+    const entry = `${tcId}:${guideViewer.id}`;
+    if (guideEntry.current === entry) return;
+    guideEntry.current = entry;
+    let skip = false;
+    try { skip = localStorage.getItem(requestGuidePreferenceKey(guideViewer.id)) === "1"; } catch { /* Show the guide if storage is unavailable. */ }
+    setGuideRequired(!skip);
+    setGuideTopic(skip ? null : "hours");
+    return () => { guideEntry.current = null; };
+  }, [tcId, guideViewer?.id]);
+  function completeGuide(doNotShowAgain: boolean) {
+    if (guideViewer?.id) {
+      try {
+        const key = requestGuidePreferenceKey(guideViewer.id);
+        if (doNotShowAgain) localStorage.setItem(key, "1");
+        else localStorage.removeItem(key);
+      } catch { notify.error(t("เบราว์เซอร์ไม่อนุญาตให้จำการตั้งค่าคู่มือ")); }
+    }
+    setGuideRequired(false);
+    setGuideTopic(null);
+  }
+  const [proposedPlan, setProposedPlan] = useState<PlanItem[] | null>(null);
+  const [beforePlan, setBeforePlan] = useState<Assignment[] | null>(null);
+  const [bookNotice, setBookNotice] = useState("");
+  const bookRef = useRef<HTMLDivElement>(null);
+  function openBook() {
+    requestAnimationFrame(() => bookRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+  useEffect(() => {
+    setPersonCount(String(assignments.length));
+    setActivePerson(i => Math.max(0, Math.min(i, assignments.length - 1)));
+  }, [assignments.length]);
   // "ล้างฟอร์ม" also deletes the saved server draft (the autosave effect), so
   // it asks first — there is no undo.
   const [confirmClear, setConfirmClear] = useState(false);
@@ -800,20 +798,34 @@ function RequestFormSection({
       };
     });
   }, [assignments, allTas]);
-  // A plan from the planner becomes empty-named rows with the hours filled in;
-  // the lecturer then only picks who. Appended, never replacing what they typed.
+  // Preview replacement before applying a plan; keep a deep snapshot for undo.
+  // Names stay blank so a suggested role cannot silently assign a real person.
   const applyPlan = useCallback((items: PlanItem[]) => {
-    setAssignments(prev => [
-      ...prev,
-      ...items.map(it => ({
-        section_ids: [...it.section_ids],
-        ta_id: "",
-        level: it.level,
-        section_workloads: { ...it.workloads },
-      })),
-    ]);
-    notify.success(t("เพิ่ม {n} รายการลงฟอร์มแล้ว เลือกชื่อ TA ให้แต่ละคน", { n: items.length }));
-  }, [t]);
+    if (items.length) setProposedPlan(items);
+  }, []);
+  function acceptPlan() {
+    if (!proposedPlan) return;
+    setBeforePlan(structuredClone(assignments));
+    setAssignments(proposedPlan.map(it => ({
+      section_ids: [...it.section_ids], ta_id: "", level: it.level,
+      section_workloads: structuredClone(it.workloads),
+    })));
+    setActivePerson(0);
+    setBookNotice(t("นำแผนมาใช้แล้ว เลือกชื่อ TA และปรับจำนวนหรือภาระงานต่อได้"));
+    setProposedPlan(null);
+    openBook();
+  }
+  function resizeAssignments(count: number) {
+    if (!Number.isSafeInteger(count) || count < 0) { setPersonCount(String(assignments.length)); return; }
+    if (count < assignments.length) { setResizeTo(count); return; }
+    if (count === assignments.length) return;
+    setAssignments(prev => [...prev, ...Array.from({ length: count - prev.length }, () => ({
+      ta_id: "", level: "undergrad", section_ids: firstSectionId ? [firstSectionId] : [],
+      section_workloads: firstSectionId ? { [firstSectionId]: emptyWorkload() } : {},
+    }))]);
+    setActivePerson(assignments.length);
+    setBookNotice(t("เพิ่มหน้า TA แล้ว กรุณาเลือกชื่อและกำหนดภาระงาน"));
+  }
 
   // A plan handed over from the budget page: applied once, then forgotten, so
   // a reload does not add the rows twice.
@@ -836,6 +848,9 @@ function RequestFormSection({
   /* --- helpers --------------------------------------------------------- */
   function addAssignment(secId?: string, taId = "", level = "undergrad") {
     const initial = secId ?? firstSectionId;
+    setActivePerson(assignments.length);
+    setBookNotice(t("เพิ่มหน้า TA แล้ว กรุณาเลือกชื่อและกำหนดภาระงาน"));
+    openBook();
     setAssignments(a => [...a, {
       section_ids: initial ? [initial] : [],
       ta_id: taId,
@@ -849,8 +864,12 @@ function RequestFormSection({
   // workload carry over — ta_id starts blank because it is, by definition, a
   // different person.
   function addAssignmentCopyingPrevious() {
-    const prev = assignments[assignments.length - 1];
+    const prev = assignments[activePerson];
     if (!prev) return addAssignment();
+    setActivePerson(assignments.length);
+    setCopying(false);
+    openBook();
+    setBookNotice(t("คัดลอกรายการงานและชั่วโมงแล้ว กรุณาเลือกชื่อ TA คนใหม่และตรวจ Section"));
     setAssignments(a => [...a, {
       section_ids: [...prev.section_ids],
       ta_id: "",
@@ -861,6 +880,7 @@ function RequestFormSection({
     }]);
   }
   function removeAssignment(idx: number) {
+    setActivePerson(current => current > idx ? current - 1 : current);
     setAssignments(a => a.filter((_, i) => i !== idx));
   }
   function updateAssign(idx: number, patch: Partial<Assignment>) {
@@ -1037,16 +1057,15 @@ function RequestFormSection({
   }
 
   const steps = [
-    { n: 1, label: t("ประเภทการเบิก"), icon: <Wallet size={14} />, ok: true },
-    { n: 2, label: t("เลือก TA"), icon: <ClipboardList size={14} />, ok: taChosen },
-    { n: 3, label: t("ภาระงาน"), icon: <CheckCircle2 size={14} />, ok: workloadOk },
+    { n: 1, label: t("ตั้งค่าคำขอ"), icon: <Wallet size={14} />, ok: true },
+    { n: 2, label: t("ภาระงานรายคน"), icon: <ClipboardList size={14} />, ok: taChosen },
+    { n: 3, label: t("ตรวจสรุปก่อนส่ง"), icon: <CheckCircle2 size={14} />, ok: workloadOk },
   ];
 
   const scopeLabel = scope === "lecture" ? t("บรรยาย") : scope === "lab" ? t("ปฏิบัติการ") : t("บรรยาย+ปฏิบัติการ");
-  const stepsRef = useRef<HTMLDivElement>(null);
   return (
     <div className={styles.form}>
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="w-8 h-8 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
           <Send size={16} />
         </div>
@@ -1054,6 +1073,7 @@ function RequestFormSection({
           <div className="font-semibold">{t("ส่งคำขอผู้ช่วยสอน")}</div>
           <div className="text-xs text-muted">{t("ทำทีละขั้นตามหมายเลข แล้วกด “ส่งคำขอ” ด้านล่าง")}</div>
         </div>
+        <Button size="sm" variant="secondary" onClick={() => setGuideTopic("hours")}><Info size={14} />{t("วิธีกรอกคำขอและชั่วโมง TA")}</Button>
         {draftSavedAt && assignments.length > 0 && (
           <Tip content={t("ระบบเก็บสิ่งที่กรอกไว้ให้อัตโนมัติ เปิดจากเครื่องไหนก็ได้ค่าเดิม")}><div className="ml-auto text-xs text-muted flex items-center gap-1 shrink-0">
             <CheckCircle2 size={12} /> {t("บันทึกร่างแล้ว {time}", { time: draftSavedAt.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" }) })}
@@ -1072,25 +1092,8 @@ function RequestFormSection({
         </div>
       )}
 
-      {/* วางแผน TA — คิดจากตารางสอนจริงและงบที่เหลือ แนะนำจำนวน/ประเภท TA และ
-          ประเมินสิ่งที่กรอกอยู่ในฟอร์ม ก่อนตัดสินใจส่ง */}
-      <div data-tour="req-calculator" className={styles.planner}>
-      <TaPlanner
-        tcId={tcId}
-        scope={scope}
-        schedules={plannerSchedules}
-        drafts={plannerDrafts}
-        onApplyPlan={applyPlan}
-        onDraftEstimate={setEstimate}
-      />
-      </div>
-
-      {/* เตือนเฉพาะกรณีงบจริงเกินเพดานแล้ว — ตัวเลขปกติอยู่ในเครื่องคิดเลขข้างบน */}
-      {budget?.over_budget && <BudgetForecast budget={budget} />}
-
       {/* Step progress indicator */}
-      <ScrollToFormHint targetRef={stepsRef} />
-      <div ref={stepsRef} className={`${styles.progress} scroll-mt-20`}>
+      <div className={`${styles.progress} scroll-mt-20`}>
         <ol className="flex flex-wrap items-center gap-2">
           {steps.map((s, i) => (
             <li key={s.n} className="flex items-center gap-2">
@@ -1103,7 +1106,7 @@ function RequestFormSection({
 
       <div className={styles.steps}>
         {/* Step 1 --------------------------------------------------------- */}
-        <StepPanel tourId="req-step1" n={1} title={t("ประเภทการเบิกค่าตอบแทน")} description={t("เลือกให้ตรงกับหน่วยกิตวิชา")}>
+        <StepPanel tourId="req-step1" n={1} title={t("ตั้งค่าคำขอ")} description={t("เลือกประเภทการเบิกและจำนวน TA ที่ต้องการขอ")}>
           <RadioGroup
             value={scope}
             onChange={v => setScope(v as "lecture" | "lab" | "both")}
@@ -1117,14 +1120,46 @@ function RequestFormSection({
               <ScopeRadio value="both" label={t("บรรยาย + ปฏิบัติการ")} desc="Lec. + Lab" />
             </div>
           </RadioGroup>
+          <div className={styles.countSetup}>
+            <label htmlFor="request-person-count" className="font-medium text-sm">{t("จำนวน TA ที่อาจารย์ต้องการขอ")}</label>
+            <div className={styles.countControls}>
+              <Button variant="secondary" onClick={() => resizeAssignments(Math.max(0, assignments.length - 1))} disabled={!assignments.length || !draftReady} aria-label={t("ลดจำนวน TA")}>−</Button>
+              <TextInput id="request-person-count" type="number" min={0} step={1} value={personCount}
+                onChange={e => setPersonCount(e.target.value)}
+                onBlur={() => resizeAssignments(personCount.trim() ? Number(personCount) : assignments.length)}
+                onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                disabled={!draftReady} className="w-24 text-center" />
+              <Button variant="secondary" onClick={() => resizeAssignments(assignments.length + 1)} disabled={!draftReady} aria-label={t("เพิ่มจำนวน TA")}>+</Button>
+              <span>{t("คน")}</span>
+            </div>
+            <p className="text-sm text-ink-3">{t("อาจารย์กำหนดจำนวนได้เอง ขอน้อยกว่าหรือมากกว่าคำแนะนำได้")}</p>
+          </div>
+      {/* วางแผน TA — คิดจากตารางสอนจริงและงบที่เหลือ แนะนำจำนวน/ประเภท TA และ
+          ประเมินสิ่งที่กรอกอยู่ในฟอร์ม ก่อนตัดสินใจส่ง */}
+      <div data-tour="req-calculator" className={styles.planner}>
+      <TaPlanner
+        tcId={tcId}
+        scope={scope}
+        schedules={plannerSchedules}
+        drafts={plannerDrafts}
+        onApplyPlan={applyPlan}
+        onDraftEstimate={setEstimate}
+        onOpenGuide={() => setGuideTopic("plans")}
+      />
+      </div>
+
+      {/* เตือนเฉพาะกรณีงบจริงเกินเพดานแล้ว — ตัวเลขปกติอยู่ในเครื่องคิดเลขข้างบน */}
+      {budget?.over_budget && <BudgetForecast budget={budget} />}
+
+
         </StepPanel>
 
         {/* Step 2 --------------------------------------------------------- */}
         <StepPanel
           tourId="req-step2"
           n={2}
-          title={t("เพิ่มรายชื่อ TA และกำหนดภาระงาน")}
-          description={t("เพิ่ม TA ทีละคน เลือก section และกรอกภาระงานของแต่ละคน")}
+          title={t("กำหนดภาระงานรายคน")}
+          description={t("เปิดทีละคน เลือก TA และ Section แล้วกรอกชั่วโมงแยกตามกิจกรรม")}
           status={
             // No verdict while the saved draft is still loading — it may well
             // hold the rows "ยังไม่ได้เพิ่ม TA" would deny.
@@ -1169,9 +1204,9 @@ function RequestFormSection({
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={addAssignmentCopyingPrevious}
+                      onClick={() => setCopying(true)}
                     >
-                      <Copy size={14} /> {t("คัดลอกจากคนก่อนหน้า")}
+                      <Copy size={14} /> {t("เพิ่มคนใหม่ด้วยงานแบบเดียวกัน")}
                     </Button>
                   )}
                   <Button
@@ -1207,14 +1242,27 @@ function RequestFormSection({
                   {t("ยังไม่ได้เพิ่ม TA กดปุ่ม \"เพิ่ม TA\" ด้านบน")}
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div ref={bookRef} className={styles.notebook}>
+                  <nav className={styles.personNav} aria-label={t("เลือกหน้าภาระงาน TA")}>
+                    {assignments.map((a, i) => {
+                      const ta = allTas.find(x => x.id === a.ta_id);
+                      return <button key={i} type="button" aria-current={activePerson === i ? "page" : undefined}
+                        aria-controls={`request-person-${i}`} onClick={() => { setActivePerson(i); setBookNotice(""); }}>
+                        <strong>{t("คนที่ {n}", { n: i + 1 })}</strong>
+                        <span>{ta ? `${ta.first_name} ${ta.last_name}` : t("ยังไม่ได้เลือก TA")}</span>
+                        <small>{t("{h} ชม./สัปดาห์", { h: sumWorkload(a, secs).toFixed(1) })}</small>
+                      </button>;
+                    })}
+                  </nav>
+                  <div className={styles.personPage}>
+                  <p className={styles.bookNotice} role="status">{bookNotice}</p>
                   {assignments.map((a, idx) => {
                     const takenElsewhere = new Set(
                       assignments.filter((_, i) => i !== idx).map(x => x.ta_id).filter(Boolean),
                     );
                     return (
+                      <div key={idx} id={`request-person-${idx}`} hidden={activePerson !== idx}>
                       <AssignmentBlock
-                        key={idx}
                         idx={idx}
                         n={idx + 1}
                         assignment={a}
@@ -1226,14 +1274,40 @@ function RequestFormSection({
                         onConflicts={reportConflicts}
                         onUpdate={updateAssign}
                         onWorkload={updateWorkload}
-                        onRemove={() => removeAssignment(idx)}
+                        onRemove={() => setResizeTo(-(idx + 1))}
+                        onOpenGuide={setGuideTopic}
                       />
+                      </div>
                     );
                   })}
+                  </div>
                 </div>
               )}
             </div>
           )}
+        </StepPanel>
+
+        <StepPanel n={3} title={t("ตรวจสรุปก่อนส่ง")} description={t("ตรวจรายชื่อ กลุ่มเรียน ชั่วโมง และค่าตอบแทนประมาณการของทุกคน")}>
+          {assignments.length === 0 ? <p className="text-sm text-ink-3">{t("เพิ่ม TA เพื่อดูสรุปคำขอ")}</p> : (
+            <div className={styles.summaryScroll}>
+              <table className={styles.summaryTable}>
+                <thead><tr><th>{t("ผู้ช่วยสอน")}</th><th>Section</th><th>{t("ชั่วโมงต่อสัปดาห์")}</th><th>{t("ประมาณการต่อเทอม")}</th><th>{t("แก้ไข")}</th></tr></thead>
+                <tbody>{assignments.map((a, i) => {
+                  const ta = allTas.find(x => x.id === a.ta_id);
+                  const est = estimate?.people.find(p => p.index === i);
+                  return <tr key={i}><td><strong>{t("คนที่ {n}", { n: i + 1 })}</strong><div>{ta ? `${ta.first_name} ${ta.last_name}` : t("ยังไม่ได้เลือก TA")}</div></td>
+                    <td>{a.section_ids.map(id => secs.find(s => s.id === id)?.sec_no).filter(Boolean).join(", ") || "—"}</td>
+                    <td>{t("{h} ชม./สัปดาห์", { h: sumWorkload(a, secs).toFixed(1) })}</td>
+                    <td>{est ? fmtBahtEst(est.share, intl) : "—"}</td>
+                    <td><Button size="sm" variant="secondary" onClick={() => { setActivePerson(i); openBook(); }}>{t("ดูภาระงาน")}</Button></td></tr>;
+                })}</tbody>
+              </table>
+            </div>
+          )}
+          <div className="flex justify-between flex-wrap gap-2 text-sm mt-4"><strong>{t("รวม TA ในวิชานี้ {n} คน", { n: assignments.length })}</strong>
+            <span>{t("{h} ชม./สัปดาห์", { h: assignments.reduce((sum, a) => sum + sumWorkload(a, secs), 0).toFixed(1) })}</span>
+          </div>
+          {submitBlockReason && <p className="mt-3 text-sm text-ink-3" role="status">{submitBlockReason}</p>}
         </StepPanel>
 
         {waitingOnSchedule.length > 0 && (
@@ -1298,6 +1372,30 @@ function RequestFormSection({
           </TipWrap>
         </div>
       </div>
+
+      <RequestWorkloadGuide key={`${tcId}:${guideViewer?.id ?? "pending"}`} topic={guideTopic} onTopicChange={setGuideTopic} required={guideRequired}
+        onClose={() => { if (!guideRequired) setGuideTopic(null); }} onComplete={completeGuide} level={assignments[activePerson]?.level} />
+      <ConfirmDialog open={copying} onClose={() => setCopying(false)} onConfirm={addAssignmentCopyingPrevious}
+        title={t("เพิ่มคนใหม่ด้วยงานแบบเดียวกัน")}
+        message={t("คัดลอกภาระงานและ Section จากคนที่ {n} โดยเว้นชื่อ TA ว่าง และเปิดหน้าคนใหม่ให้ตรวจแก้ไข", { n: activePerson + 1 })}
+        confirmLabel={t("สร้างและเปิดหน้าคนใหม่")} />
+      <ConfirmDialog open={resizeTo !== null} onClose={() => { setResizeTo(null); setPersonCount(String(assignments.length)); }}
+        onConfirm={() => {
+          if (resizeTo === null) return;
+          if (resizeTo < 0) removeAssignment(-resizeTo - 1);
+          else setAssignments(a => a.slice(0, resizeTo));
+          setResizeTo(null);
+        }} danger title={t("ยืนยันการนำ TA ออกจากคำขอ")}
+        message={resizeTo !== null && resizeTo < 0
+          ? t("จะนำคนที่ {n} และภาระงานของคนนั้นออกจากฉบับร่าง", { n: -resizeTo })
+          : resizeTo === 0 ? t("จะนำ TA ทุกคนและภาระงานทั้งหมดออกจากฉบับร่าง")
+          : t("จะเก็บคนที่ 1 ถึง {n} และนำคนถัดไปพร้อมภาระงานออกจากฉบับร่าง", { n: resizeTo ?? 0 })}
+        confirmLabel={t("ยืนยันนำออก")} />
+      <ConfirmDialog open={proposedPlan !== null} onClose={() => setProposedPlan(null)} onConfirm={acceptPlan}
+        title={t("นำแผนแนะนำไปปรับใช้")}
+        message={t("จะใช้แผน TA {n} คนแทนรายการในฟอร์ม กรุณาเลือกชื่อ TA ใหม่ และปรับจำนวนหรือภาระงานต่อได้ สามารถคืนรายการก่อนใช้แผนได้", { n: proposedPlan?.length ?? 0 })}
+        confirmLabel={t("ใช้แผนและเปิดหน้าคนแรก")} />
+      {beforePlan && <div className="mt-3"><Button variant="secondary" onClick={() => { setAssignments(beforePlan); setActivePerson(0); setBeforePlan(null); setBookNotice(t("คืนรายการก่อนใช้แผนแล้ว")); }}>{t("คืนรายการก่อนใช้แผน")}</Button></div>}
 
       <Modal
         open={confirming}
@@ -1514,7 +1612,7 @@ function sumWorkload(a: Assignment, sections: Section[]): number {
 }
 
 function AssignmentBlock({
-  idx, n, assignment: a, sections, tas, scope, weeklyCap, tcId, onConflicts, onUpdate, onWorkload, onRemove,
+  idx, n, assignment: a, sections, tas, scope, weeklyCap, tcId, onConflicts, onUpdate, onWorkload, onRemove, onOpenGuide,
 }: {
   idx: number;
   n: number;
@@ -1529,6 +1627,7 @@ function AssignmentBlock({
   onUpdate: (idx: number, patch: Partial<Assignment>) => void;
   onWorkload: (idx: number, sectionId: string, patch: Partial<WorkloadFields>) => void;
   onRemove: () => void;
+  onOpenGuide: (topic: WorkloadGuideTopic) => void;
 }) {
   const { t } = useI18n();
   const isGrad = a.level === "master" || a.level === "phd";
@@ -1631,6 +1730,7 @@ function AssignmentBlock({
             </div>
           </div>
         )}
+        <div className={styles.guideHelp}><Button size="sm" variant="ghost" onClick={() => onOpenGuide("sections")}><Info size={14} />{t("ทำไมต้องกรอกแยก Section?")}</Button></div>
         <SectionPicker
           sections={sections}
           value={a.section_ids}
@@ -1681,6 +1781,7 @@ function AssignmentBlock({
         {/* Workload section — disabled visually and via pointer-events while
             a schedule conflict is unresolved so the lecturer must fix the
             picking before entering hours. */}
+        <div className={styles.guideHelp}><Button size="sm" variant="ghost" onClick={() => onOpenGuide("hours")}><Info size={14} />{t("ชั่วโมงแต่ละงานคืออะไร?")}</Button></div>
         <div data-tour="req-workload" className={blocked ? "opacity-50 pointer-events-none select-none" : ""}>
           {a.section_ids.length === 0 ? (
             <div className="text-xs text-ink-3 py-3 text-center border border-dashed border-hairline rounded-md">
@@ -1690,6 +1791,7 @@ function AssignmentBlock({
             <div className="space-y-3">
               <div className="text-xs font-medium text-ink-2">
                 {t("ชั่วโมงทำงานต่อสัปดาห์ กำหนดแยกแต่ละกลุ่มเรียน")}
+                <p className="font-normal text-ink-3 mt-1">{t("เลือกงานที่ TA คนนี้ทำ แล้วกรอกเวลาของงานนั้นใน 1 สัปดาห์ ระบบรวมชั่วโมงให้")}</p>
               </div>
               {/* Course order (Sec 1, 2, 3), not tick order: ticking Sec 2 before
                   Sec 1 put Sec 2's card first and lecturers filled the wrong one. */}
@@ -2029,7 +2131,8 @@ function CheckHrs({
         )}
       </div>
       <div className={"flex flex-wrap items-center gap-2 pl-2 sm:pl-6 " + (enabled && !disabled ? "" : "opacity-50 pointer-events-none")}>
-        <HourInput value={hrs} onChange={onH} maxValue={max ?? 99} />
+        <HourInput value={hrs} onChange={onH} maxValue={max ?? 99} label={t("{activity} (ชม./สัปดาห์)", { activity: label })} />
+        <span className="text-xs text-ink-3">{t("ชม./สัปดาห์")}</span>
         {onD && (
           <TextInput
             value={desc ?? ""}
@@ -2050,7 +2153,7 @@ function HrsRow({
   return (
     <FieldGroup label={label}>
       <div className="flex flex-wrap items-center gap-2">
-        <HourInput value={hrs} onChange={onH} maxValue={max} />
+        <HourInput value={hrs} onChange={onH} maxValue={max} label={t("{activity} (ชม./สัปดาห์)", { activity: label })} />
         <TextInput
           value={desc}
           onChange={e => onD(e.target.value)}
@@ -2262,8 +2365,8 @@ function TaAutocomplete({
 }
 
 function HourInput({
-  value, onChange, maxValue,
-}: { value: number; onChange: (v: number) => void; maxValue?: number }) {
+  value, onChange, maxValue, label,
+}: { value: number; onChange: (v: number) => void; maxValue?: number; label?: string }) {
   const { t } = useI18n();
   return (
     <NumberField
@@ -2274,7 +2377,7 @@ function HourInput({
       step={0.5}
       formatOptions={{ maximumFractionDigits: 1 }}
       className="w-32 shrink-0"
-      aria-label={t("ชั่วโมง/สัปดาห์")}
+      aria-label={label ?? t("ชั่วโมง/สัปดาห์")}
     >
       <NumberField.Group>
         <NumberField.DecrementButton />

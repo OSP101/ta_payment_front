@@ -943,6 +943,7 @@ export function Modal({
   icon,
   placement,
   layout = "default",
+  dismissible = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -957,6 +958,8 @@ export function Modal({
   placement?: "auto" | "center" | "top" | "bottom";
   /** Workspace children own their scroll regions; opt in for dense editors. */
   layout?: "default" | "workspace";
+  /** Require an explicit action inside the modal before dismissing it. */
+  dismissible?: boolean;
 }) {
   const { t } = useI18n();
   const sizeCls = {
@@ -976,10 +979,11 @@ export function Modal({
   }[size];
   return (
     <HModal>
-      <HModal.Backdrop isOpen={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <HModal.Backdrop isOpen={open} isDismissable={dismissible} isKeyboardDismissDisabled={!dismissible}
+        onOpenChange={o => { if (!o && dismissible) onClose(); }}>
         <HModal.Container size={size === "full" ? "full" : undefined} placement={placement}>
           <HModal.Dialog className={[sizeCls, layout === "workspace" ? "reg-review-workspace" : ""].filter(Boolean).join(" ")}>
-            <HModal.CloseTrigger aria-label={t("ปิด")} />
+            {dismissible && <HModal.CloseTrigger aria-label={t("ปิด")} />}
             {(title || icon) && (
               <HModal.Header>
                 {icon && (

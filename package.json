@@ -15,7 +15,12 @@
     "test:merge-existing:browser": "node scripts/merge-existing.browser.test.mjs",
     "test:reg-review:bulk": "node --test scripts/reg-review-bulk.test.mjs",
     "test:reg-review:browser": "node scripts/reg-review.browser.test.mjs",
-    "test:approvals:browser": "node scripts/approvals.browser.test.mjs"
+    "test:approvals:browser": "node scripts/approvals.browser.test.mjs",
+    "test:audit-email:browser": "node scripts/email-audit.browser.test.mjs",
+    "dev:request-playground": "node scripts/request-form-playground.mjs",
+    "test:request-form:browser": "node scripts/request-form.browser.test.mjs",
+    "test:request-guide:browser": "node scripts/request-guide.browser.test.mjs",
+    "test:request-guide-gate:browser": "node scripts/request-guide-gate.browser.test.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.2",

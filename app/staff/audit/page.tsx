@@ -1,13 +1,14 @@
 "use client";
 import useSWR from "swr";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, KeyRound, Layers, Link2, ListChecks, Search, User, X } from "lucide-react";
+import { Download, KeyRound, Layers, Link2, ListChecks, Mail, Search, User, X } from "lucide-react";
 import {
   Alert, Button, DatePicker, PageHeader, Panel, SearchField, SelectField, Tip,
 } from "../../components/ui";
 import { api } from "../../lib/api";
 import { localDateISO } from "../../lib/dates";
 import { notify } from "../../lib/notify";
+import { EmailActivity } from "./EmailActivity";
 import { DetailModal } from "./DetailModal";
 import { InvestigateTable, type ExpertFilters } from "./InvestigateTable";
 import { Overview } from "./Overview";
@@ -16,7 +17,7 @@ import type { Attention, Catalog, Row, Session, Summary, Trace } from "./types";
 import { msg, useI18n } from "../../lib/i18n/client";
 
 /* -------------------------------------------------------------------------- *
- * The audit trail, read two ways.
+ * The audit trail, with simple, investigation and email delivery views.
  *
  * "ดูง่าย" is for the person whose job is the money, not the server: is
  * anything wrong, who is in the system, and what happened — as sentences, a day
@@ -30,7 +31,7 @@ import { msg, useI18n } from "../../lib/i18n/client";
  * catalog, so a row reads the same here, in the export, and in a search.
  * -------------------------------------------------------------------------- */
 
-type Mode = "simple" | "expert";
+type Mode = "simple" | "expert" | "email";
 
 const PAGE_SIZE = 50;
 const MODE_KEY = "audit.mode";
@@ -87,16 +88,23 @@ export default function AuditPage() {
   /** A pinned trace: every row from one request, one session, or one burst. */
   const [trace, setTrace] = useState<Trace | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
+  const [emailState, setEmailState] = useState("");
+  const [emailJob, setEmailJob] = useState("");
   const [exporting, setExporting] = useState(false);
 
   // The choice of view is the reader's own and should survive a reload. Read
   // after mount, so the first paint matches what the server rendered.
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(MODE_KEY) === "expert") setModeState("expert");
+      const saved = window.localStorage.getItem(MODE_KEY);
+      if (saved === "expert" || saved === "email") setModeState(saved);
     } catch { /* storage unavailable: stay on the default view */ }
   }, []);
   const setMode = (m: Mode) => {
+    if (m === "email" || mode === "email") {
+      setTrace(null);
+      setExpert(NO_EXPERT_FILTERS);
+    }
     setModeState(m);
     setPage(1);
     try { window.localStorage.setItem(MODE_KEY, m); } catch { /* not remembered, still works */ }
@@ -139,6 +147,12 @@ export default function AuditPage() {
     p.set("from", window_.from);
     if (window_.to) p.set("to", window_.to);
     if (query) p.set("q", query);
+    if (mode === "email") {
+      p.set("entity", "mail_delivery");
+      if (emailState) p.set("action", `mail.delivery.${emailState}`);
+      if (emailJob) p.set("mail_job_id", emailJob);
+      return p;
+    }
     if (expert.action) p.set("action", expert.action);
     if (expert.actor) p.set("actor_id", expert.actor);
     if (mode === "simple") {
@@ -150,7 +164,7 @@ export default function AuditPage() {
       if (expert.role) p.set("role", expert.role);
     }
     return p;
-  }, [window_, trace, query, expert, mode, category, only]);
+  }, [window_, trace, query, expert, mode, category, only, emailState, emailJob]);
 
   const listKey = useMemo(() => {
     if (!questionParams) return null;
@@ -172,7 +186,7 @@ export default function AuditPage() {
       revalidateOnFocus: false,
       // Every filter / page step is a new key; hold the old rows on screen
       // instead of blanking back to a skeleton.
-      keepPreviousData: true,
+      keepPreviousData: mode !== "email",
     });
 
   const summaryKey = window_
@@ -206,12 +220,13 @@ export default function AuditPage() {
   const goToPage = useCallback((p: number) => { setPage(p); toListTop(); }, [toListTop]);
 
   const pickActor = useCallback((id: string) => {
+    setModeState(m => m === "email" ? "expert" : m);
     setTrace(null);
     setExpert(f => ({ ...f, actor: id }));
     setPage(1);
     toListTop();
   }, [toListTop]);
-  const pickTrace = useCallback((t: Trace) => { setTrace(t); setPage(1); toListTop(); }, [toListTop]);
+  const pickTrace = useCallback((t: Trace) => { setModeState(m => m === "email" ? "expert" : m); setTrace(t); setPage(1); toListTop(); }, [toListTop]);
   const openRow = useCallback((r: Row) => setDetail(r), []);
 
   const pickAttention = (a: Attention) => {
@@ -254,7 +269,7 @@ export default function AuditPage() {
     (summary !== undefined && (summary as Partial<Summary>).events === undefined) ||
     (data?.items?.[0] !== undefined && (data.items[0] as Partial<Row>).ref === undefined);
 
-  const hasPinned = !!trace || !!expert.actor || !!expert.action;
+  const hasPinned = mode !== "email" && (!!trace || !!expert.actor || !!expert.action);
   // The numbers on the chips count the whole window. Beside a search or a
   // pinned person they would promise more rows than the list below can show.
   const showCounts = !query && !only && !expert.actor && !expert.action;
@@ -279,7 +294,7 @@ export default function AuditPage() {
         title={t("บันทึกการใช้งานระบบ")}
         description={t("ใครทำอะไร กับอะไร เมื่อไร จากเครื่องไหน ย้อนดูได้ทั้งหมด เก็บไว้ 5 ปี และแก้ไขย้อนหลังไม่ได้")}
         actions={
-          <div role="group" aria-label={t("รูปแบบการแสดงผล")} className="flex gap-1 rounded-full border border-(--border) p-1">
+          <div role="group" aria-label={t("รูปแบบการแสดงผล")} className="flex flex-wrap gap-1 rounded-full border border-(--border) p-1">
             <Tip content={t("อ่านเป็นประโยค เรียงตามวัน เหมาะกับการดูภาพรวม")}>
               <button type="button" aria-pressed={mode === "simple"} onClick={() => setMode("simple")}
                 className={modeClass(mode === "simple")}>
@@ -292,6 +307,9 @@ export default function AuditPage() {
                 <Search size={14} /> {t("สืบสวน")}
               </button>
             </Tip>
+            <button type="button" aria-pressed={mode === "email"} onClick={() => setMode("email")} className={modeClass(mode === "email")}>
+              <Mail size={14} /> {t("ติดตามอีเมล")}
+            </button>
           </div>
         }
       />
@@ -325,7 +343,7 @@ export default function AuditPage() {
             value={typed}
             onChange={v => { setTyped(v); setPage(1); }}
             ariaLabel={t("ค้นหาในบันทึกการใช้งาน")}
-            placeholder={t("ชื่อคน รหัสวิชา คำที่เห็นในรายการ IP หรือเลขอ้างอิง AL-…")}
+            placeholder={mode === "email" ? t("ค้นหาชื่อผู้รับ อีเมล หัวข้อ หรือเลขคิว") : t("ชื่อคน รหัสวิชา คำที่เห็นในรายการ IP หรือเลขอ้างอิง AL-…")}
             className="min-w-56 flex-1"
           />
           <Tip content={t("ดาวน์โหลดรายการตามตัวกรองนี้เป็นไฟล์ CSV เปิดด้วย Excel ได้ (สูงสุด 10,000 แถวต่อไฟล์)")}>
@@ -370,7 +388,13 @@ export default function AuditPage() {
         )}
       </Panel>
 
-      {mode === "simple" ? (
+      {mode === "email" ? (
+        <div ref={listTop} className="scroll-mt-20">
+          <EmailActivity rows={data?.items} total={data?.total ?? 0} page={page} pageSize={PAGE_SIZE}
+            loading={loading} error={error} onRetry={() => revalidate()} onPage={goToPage} onOpen={openRow}
+            state={emailState} onState={ask(setEmailState)} job={emailJob} onJob={ask(setEmailJob)} />
+        </div>
+      ) : mode === "simple" ? (
         <>
           <Overview
             summary={summary}
