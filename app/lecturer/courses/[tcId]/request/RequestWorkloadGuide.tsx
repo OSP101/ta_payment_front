@@ -1,18 +1,19 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { BookOpen, Check } from "lucide-react";
+import { Ban, BookOpen, Check } from "lucide-react";
 import { Button, Modal } from "../../../../components/ui";
 import { msg, useI18n } from "../../../../lib/i18n/client";
 import styles from "./request-form.module.css";
 
 export const requestGuidePreferenceKey = (userId: string) => `ta-payment:request-guide:v1:${userId}`;
 
-export type WorkloadGuideTopic = "hours" | "sections" | "worklog" | "plans";
+export type WorkloadGuideTopic = "hours" | "sections" | "worklog" | "cancellation" | "plans";
 const topics: { id: WorkloadGuideTopic; label: string }[] = [
   { id: "hours", label: msg("ชั่วโมงแต่ละงาน") },
   { id: "sections", label: msg("ทำไมแยก Section") },
   { id: "worklog", label: msg("TA ใช้ข้อมูลอย่างไร") },
+  { id: "cancellation", label: msg("แก้ไข / ยกเลิก") },
   { id: "plans", label: msg("แผนแนะนำ") },
 ];
 const lectureDuties = [
@@ -125,6 +126,22 @@ export default function RequestWorkloadGuide({ topic, onTopicChange, onClose, on
           <li><strong>{t("TA ตรวจเวลาที่ทำจริงก่อนส่งลงเวลา")}</strong><p>{t("TA ลงเวลาได้ตามกิจกรรมและเพดานที่ได้รับอนุมัติ ไม่สามารถเพิ่มชั่วโมงเกินที่กำหนดเองได้ การสร้างเวลาอัตโนมัติยังต้องตรวจให้ตรงกับการทำงานจริง")}</p></li>
         </ol>
         <div className={styles.guideCallout}><strong>{t("ข้อมูลถูกตั้งแต่คำขอ ช่วยลดความล่าช้าในการเบิกจ่าย")}</strong><p>{t("แม้ต้องกรอกมากกว่าระบบเดิม แต่รายละเอียดนี้ช่วยตรวจสอบงานได้เร็ว ลดข้อมูลผิดและการส่งกลับไปแก้ไข จึงช่วยให้กระบวนการจ่ายค่าตอบแทนเดินต่อได้เร็วขึ้น")}</p></div>
+      </section>
+
+      <section role="tabpanel" id={`${id}-cancellation-panel`} aria-labelledby={`${id}-cancellation-tab`} hidden={selected !== "cancellation"}>
+        <h3>{t("ต้องการแก้คำขอที่ส่งแล้ว ต้องยกเลิกแล้วส่งใหม่")}</h3>
+        <p>{t("คำขอที่ส่งเข้าระบบแล้วไม่มีปุ่มแก้ไข หากต้องการเปลี่ยน Section กิจกรรม หรือชั่วโมงของ TA คนใด ต้องยกเลิกคำขอของคนนั้นก่อน แล้วส่งคำขอใหม่ด้วยข้อมูลที่ถูกต้อง ส่วนฉบับร่างที่ยังไม่ได้ส่งยังปรับแก้ในฟอร์มได้")}</p>
+        <div className={styles.guideCallout}><strong>{t("ออกหนังสือแต่งตั้งแล้ว ยกเลิกคำขอไม่ได้")}</strong><p>{t("อาจารย์ยกเลิกได้เฉพาะคำขอที่ยังไม่ได้ออกหนังสือแต่งตั้งให้ TA คนนั้น หากออกหนังสือแล้ว ให้ติดต่อเจ้าหน้าที่เพื่อสอบถามการดำเนินการแก้ไข")}</p></div>
+        <h4>{t("ยกเลิกตรงไหน และส่งใหม่อย่างไร?")}</h4>
+        <ol className={styles.guideSteps}>
+          <li><strong>{t("เลื่อนลงไปที่ประวัติคำขอ TA ใต้ฟอร์ม")}</strong><p>{t("ในหน้าคำขอผู้ช่วยสอนของรายวิชานี้ เลื่อนลงผ่านปุ่มส่งคำขอ จะพบตารางรายการคำขอที่ส่งแล้ว ใช้ช่องค้นหาชื่อ TA เพื่อหาคนที่ต้องการแก้ไข")}</p></li>
+          <li><strong>{t("ตรวจชื่อ TA แล้วกดปุ่มยกเลิกท้ายแถว")}</strong><p>{t("เลือกเฉพาะแถวของ TA คนที่ต้องการแก้ไข กดปุ่มยกเลิกคำขอรูปวงกลมมีขีดทับ ซึ่งอยู่ข้างปุ่มดูรายละเอียดรูปตา บนมือถือให้ดูที่ท้ายการ์ดของคนนั้น")}</p><p className="flex items-center gap-2 mt-2"><Ban size={16} aria-hidden="true" /><span>{t("ชื่อปุ่ม: ยกเลิกคำขอ / ข้อความเมื่อชี้เมาส์: ยกเลิกคำขอนี้")}</span></p></li>
+          <li><strong>{t("ตรวจหน้าต่างยืนยัน แล้วกดยืนยันยกเลิก")}</strong><p>{t("ระบบจะแสดงหน้าต่าง “ยกเลิกคำขอ TA นี้?” ตรวจว่ากำลังยกเลิกคนที่ถูกต้อง แล้วกด “ยืนยันยกเลิก” รอให้รายการนั้นเปลี่ยนเป็นสถานะ “ยกเลิก” ก่อนส่งใหม่")}</p></li>
+          <li><strong>{t("กลับไปเพิ่ม TA คนเดิม แล้วส่งข้อมูลใหม่")}</strong><p>{t("กลับขึ้นไปที่ส่วน “กำหนดภาระงานรายคน” กด “เพิ่ม TA” เลือกชื่อ TA คนเดิม ระบุ Section กิจกรรม และชั่วโมงที่แก้ไขแล้ว จากนั้นตรวจสรุปและกด “ส่งคำขอ” อีกครั้ง ใช้บัญชี TA เดิมได้ ไม่ต้องสร้างบัญชีใหม่")}</p></li>
+        </ol>
+        <p className={styles.guideFootnote}>{t("ยกเลิกเฉพาะคำขอของ TA คนที่ต้องการแก้ไข ไม่ต้องยกเลิก TA คนอื่นที่ส่งพร้อมกัน คำขอเดิมจะเป็นประวัติการยกเลิก ส่วนข้อมูลที่ส่งใหม่จะเป็นคำขอใหม่")}</p>
+        <h4>{t("ถ้าไม่พบปุ่มยกเลิก หรือระบบแจ้งว่ายกเลิกไม่ได้")}</h4>
+        <p>{t("ให้ติดต่อเจ้าหน้าที่ พร้อมแจ้งรายวิชา ชื่อ TA และข้อมูลที่ต้องการแก้ไข ระบบตรวจสถานะและข้อมูลที่ผูกกับคำขอด้วย เช่น มีการลงเวลาทำงานแล้ว หรือมีเอกสารเบิกจ่ายออกแล้ว อาจยกเลิกไม่ได้แม้ยังไม่ออกหนังสือแต่งตั้ง")}</p>
       </section>
 
       <section role="tabpanel" id={`${id}-plans-panel`} aria-labelledby={`${id}-plans-tab`} hidden={selected !== "plans"}>

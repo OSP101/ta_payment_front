@@ -110,7 +110,7 @@ function PdfDropZone({
           take(e.dataTransfer.files?.[0]);
         }}
         className={
-          "flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-4 transition outline-none " +
+          "flex flex-wrap items-center gap-3 rounded-xl border-2 border-dashed px-4 py-5 transition outline-none " +
           "focus-visible:ring-2 focus-visible:ring-[var(--brand)] " +
           (disabled
             ? "cursor-not-allowed opacity-60 border-[var(--hairline)]"
@@ -118,13 +118,13 @@ function PdfDropZone({
               ? "cursor-copy border-[var(--brand)] bg-[var(--brand-soft)]"
               : file
                 ? "cursor-pointer border-[var(--brand)]/40 bg-surface-secondary hover:bg-[var(--brand-soft)]"
-                : "cursor-pointer border-slate-300 hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]")
+                : "cursor-pointer border-[var(--brand)] bg-[var(--brand-soft)] hover:bg-surface-secondary")
         }
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--tone-brand-ink)]">
           {file ? <FileText size={20} /> : <Upload size={20} />}
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-40">
           {over ? (
             <div className="text-sm font-medium text-[var(--tone-brand-ink)]">{t("ปล่อยเพื่อเลือกไฟล์นี้")}</div>
           ) : file ? (
@@ -136,13 +136,15 @@ function PdfDropZone({
             </>
           ) : (
             <>
-              <div className="text-sm font-medium">
-                {t.rich("ลากไฟล์ PDF มาวางที่นี่ หรือ {pick}", { pick: <span className="text-[var(--tone-brand-ink)] underline underline-offset-2">{t("คลิกเพื่อเลือกไฟล์")}</span> })}
-              </div>
+              <div className="text-sm font-medium">{t("เลือกเอกสารจากเครื่อง หรือลากไฟล์มาวางที่นี่")}</div>
               <div className="text-xs text-muted">{t("รับเฉพาะไฟล์ PDF · ขนาดไม่เกิน {max} MB", { max: MAX_UPLOAD_MB })}</div>
             </>
           )}
         </div>
+        <span className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-[var(--brand-fg)]">
+          <Upload size={18} aria-hidden="true" />
+          {file ? t("เปลี่ยนไฟล์ PDF") : t("เลือกไฟล์ PDF")}
+        </span>
         {file && !disabled && (
           <Tip content={t("เอาไฟล์ที่เลือกออก")}><button
             type="button"
@@ -231,8 +233,8 @@ const ALL_STEPS: Array<Omit<StepMeta, "n"> & { only?: "thai" | "foreign" }> = [
   { id: "national_id",   title: msg("สำเนาบัตรประชาชน"),                subtitle: msg("รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อบนสำเนา ก่อนอัปโหลด"),          icon: CreditCard, only: "thai" },
   // ชาวต่างชาติ: สำเนา Passport แทนสำเนาบัตรประชาชน (เจ้าหน้าที่, 06/10/2026)
   { id: "passport",      title: msg("สำเนา Passport"),                  subtitle: msg("หน้าที่มีรูปถ่ายและข้อมูลส่วนตัว รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อ"), icon: IdCard, only: "foreign" },
-  { id: "bank_book",     title: msg("หน้าสมุดบัญชี"),                    subtitle: msg("หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลขบัตร ปชช."), icon: BookOpen, only: "thai" },
-  { id: "bank_book",     title: msg("หน้าสมุดบัญชี"),                    subtitle: msg("หน้าที่มีเลขที่บัญชีและชื่อบัญชี · ต้องผูกพร้อมเพย์กับเลข Passport"), icon: BookOpen, only: "foreign" },
+  { id: "bank_book",     title: msg("หน้าสมุดบัญชี"),                    subtitle: msg("ต้องเขียน “สำเนาถูกต้อง” และเซ็นชื่อบนสำเนา · เห็นเลขที่บัญชีและชื่อบัญชีชัดเจน · ต้องผูกพร้อมเพย์กับเลขบัตร ปชช."), icon: BookOpen, only: "thai" },
+  { id: "bank_book",     title: msg("หน้าสมุดบัญชี"),                    subtitle: msg("ต้องเขียน “สำเนาถูกต้อง” และเซ็นชื่อบนสำเนา · เห็นเลขที่บัญชีและชื่อบัญชีชัดเจน · ต้องผูกพร้อมเพย์กับเลข Passport"), icon: BookOpen, only: "foreign" },
 ];
 
 /** The steps this TA works through, numbered. Mirrors ta_required_doc_kinds. */
@@ -1184,15 +1186,15 @@ function CreditorFormStep({
         <div className="text-xs text-muted mb-2">
           {t("หากระบบกรอกไม่ตรง คุณกรอกลงในฟอร์มเปล่าเอง แล้วสแกนเป็นไฟล์ PDF มาแนบที่นี่แทนได้")}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+        <div className="grid grid-cols-1 gap-3">
           <PdfDropZone
-            label={doc ? t("อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)") : t("ไฟล์ที่กรอกเอง")}
+            label={doc ? t("เลือกเอกสารใหม่เพื่อแทนที่ไฟล์เดิม") : t("เลือกแบบแจ้งเจ้าหนี้ที่กรอกและลงนามแล้ว")}
             file={file}
             onPick={setFile}
             disabled={uploading || confirming}
           />
-          <Button variant="secondary" onClick={upload} disabled={!file || uploading || confirming} isPending={uploading}>
-            <Upload size={14} /> {uploading ? t("กำลังอัปโหลด…") : t("อัปโหลดไฟล์ที่กรอกเอง")}
+          <Button variant="primary" size="lg" className="min-h-12 w-full whitespace-normal sm:w-auto sm:justify-self-end" onClick={upload} disabled={!file || uploading || confirming} isPending={uploading}>
+            <Upload size={20} aria-hidden="true" /> {uploading ? t("กำลังส่งเอกสาร…") : t("ส่งแบบแจ้งเจ้าหนี้ให้เจ้าหน้าที่ตรวจ")}
           </Button>
         </div>
       </div>
@@ -1261,15 +1263,38 @@ function DocStep({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-        <PdfDropZone
-          label={doc ? t("อัปโหลดใหม่ (จะแทนที่ไฟล์เดิม)") : t("เลือกไฟล์")}
-          file={file}
-          onPick={setChosen}
-          disabled={uploading}
-        />
-        <Button variant="primary" onClick={upload} disabled={!file || uploading} isPending={uploading}>
-          <Upload size={14} /> {uploading ? t("กำลังอัปโหลด…") : t("อัปโหลด")}
+      {kind === "bank_book" && (
+        <div className="mb-3">
+          <Alert
+            status="warning"
+            title={t("รับรอง “สำเนาถูกต้อง” พร้อมเซ็นชื่อบนสำเนา ก่อนอัปโหลด")}
+            description={t("ต้องเขียน “สำเนาถูกต้อง” และลงลายมือชื่อบนสำเนาหน้าสมุดบัญชี ก่อนสแกนเป็น PDF และอัปโหลด")}
+          />
+        </div>
+      )}
+
+      <PdfDropZone
+        label={doc ? t("เลือกเอกสารใหม่เพื่อแทนที่ไฟล์เดิม") : t("เลือกเอกสารที่ต้องการส่ง")}
+        file={file}
+        onPick={setChosen}
+        disabled={uploading}
+      />
+      <div className="mt-4 flex flex-col gap-3 rounded-xl bg-surface-secondary p-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted" role="status">
+          {file
+            ? t("เลือกไฟล์แล้ว ตรวจตัวอย่างด้านล่าง แล้วกดส่งเอกสารให้เจ้าหน้าที่ตรวจ")
+            : t("เลือกไฟล์ PDF ก่อน แล้วกดส่งเอกสารให้เจ้าหน้าที่ตรวจ")}
+        </p>
+        <Button
+          variant="primary"
+          size="lg"
+          className="min-h-12 w-full shrink-0 whitespace-normal px-6 sm:w-auto"
+          onClick={upload}
+          disabled={!file || uploading}
+          isPending={uploading}
+        >
+          <Upload size={20} aria-hidden="true" />
+          {uploading ? t("กำลังส่งเอกสาร…") : doc ? t("ส่งเอกสารใหม่แทนไฟล์เดิม") : t("ส่งเอกสารให้เจ้าหน้าที่ตรวจ")}
         </Button>
       </div>
 
@@ -1280,7 +1305,7 @@ function DocStep({
         <div className="mt-3 rounded-lg border border-[var(--hairline)] overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--hairline)] bg-surface-secondary px-3 py-2">
             <FileText size={14} className="text-muted" />
-            <span className="text-xs font-medium">{t("ตรวจก่อนอัปโหลด")}</span>
+            <span className="text-xs font-medium">{t("ตรวจเอกสารก่อนกดส่ง")}</span>
             <span className="truncate text-xs text-muted">{file.name}</span>
             <span className="text-xs text-muted">
               · {(file.size / 1024).toFixed(0)} KB

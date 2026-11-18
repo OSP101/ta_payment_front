@@ -20,7 +20,23 @@ try {
   const done = dialog.getByRole('button', { name: 'เข้าใจแล้ว', exact: true });
   const optOut = dialog.getByRole('checkbox', { name: 'เข้าใจแล้ว ไม่แสดงอัตโนมัติอีกบนเบราว์เซอร์นี้', exact: true });
   const next = dialog.getByRole('button', { name: 'ถัดไป', exact: true });
-  const completeTopics = async () => { for (let i = 0; i < 3; i++) await next.click(); await expect(done).toBeEnabled(); };
+  let capturedCancellation = false;
+  const completeTopics = async () => {
+   for (let i = 0; i < 4; i++) {
+    await next.click();
+    if (i === 2) {
+     const cancellation = dialog.getByRole('tabpanel', { name: 'แก้ไข / ยกเลิก', exact: true });
+     await expect(cancellation).toBeVisible();
+     for (const text of ['ออกหนังสือแต่งตั้งแล้ว ยกเลิกคำขอไม่ได้', 'เลื่อนลงไปที่ประวัติคำขอ TA ใต้ฟอร์ม', 'ยืนยันยกเลิก', 'ไม่ต้องยกเลิก TA คนอื่น', 'ใช้บัญชี TA เดิมได้ ไม่ต้องสร้างบัญชีใหม่']) await expect(cancellation).toContainText(text);
+     await expect(optOut).toHaveCount(0);
+     if (!capturedCancellation) {
+      await page.screenshot({ path: `/tmp/request-cancellation-guide-${viewport.width}.png`, animations: 'disabled' });
+      capturedCancellation = true;
+     }
+    }
+   }
+   await expect(done).toBeEnabled();
+  };
   await expect(dialog).toBeVisible({ timeout: 60000 });
   await expect(done).toHaveCount(0); await expect(optOut).toHaveCount(0);
   await expect(dialog.getByRole('group', { name: 'การนำทางคู่มือ' }).getByRole('button')).toHaveCount(1);
@@ -43,12 +59,12 @@ try {
   await done.click(); await expect(dialog).not.toBeVisible();
   assert.equal(await page.evaluate(k => localStorage.getItem(k), key), null);
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }); await expect(dialog).toBeVisible(); await expect(done).toHaveCount(0); await expect(optOut).toHaveCount(0);
-  await expect(dialog.getByRole('status')).toContainText('1 จาก 4');
+  await expect(dialog.getByRole('status')).toContainText('1 จาก 5');
   await completeTopics(); await optOut.check();
   await page.screenshot({ path: `/tmp/request-guide-gate-${viewport.width}.png`, animations: 'disabled' });
   await done.click();
   assert.equal(await page.evaluate(k => localStorage.getItem(k), key), '1');
-  const meLoaded = page.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/me');
+  const meLoaded = page.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/me', { timeout: 90000 });
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 }); await meLoaded;
   await expect(page.getByRole('navigation', { name: 'เลือกหน้าภาระงาน TA' }).getByRole('button')).toHaveCount(2);
   await expect(dialog).not.toBeVisible();

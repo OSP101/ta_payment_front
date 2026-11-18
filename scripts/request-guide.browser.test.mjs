@@ -35,6 +35,13 @@ try {
   await expect(dialog.getByRole('tabpanel', { name: 'TA ใช้ข้อมูลอย่างไร', exact: true })).toContainText('50 บาทต่อชั่วโมง');
   await expect(dialog.getByRole('tabpanel', { name: 'TA ใช้ข้อมูลอย่างไร', exact: true })).toContainText('เหมาจ่ายทั้งเทอม');
   await expect(dialog.getByRole('tabpanel', { name: 'TA ใช้ข้อมูลอย่างไร', exact: true })).toContainText('บัณฑิตศึกษาลงเวลาเพื่อคำนวณค่าตอบแทนเฉพาะภาคปกติ');
+  await dialog.getByRole('tab', { name: 'แก้ไข / ยกเลิก', exact: true }).click();
+  const cancellation = dialog.getByRole('tabpanel', { name: 'แก้ไข / ยกเลิก', exact: true });
+  await expect(cancellation).toContainText('ออกหนังสือแต่งตั้งแล้ว ยกเลิกคำขอไม่ได้');
+  await expect(cancellation).toContainText('เลื่อนลงไปที่ประวัติคำขอ TA ใต้ฟอร์ม');
+  await expect(cancellation).toContainText('ยืนยันยกเลิก');
+  await expect(cancellation).toContainText('ใช้บัญชี TA เดิมได้ ไม่ต้องสร้างบัญชีใหม่');
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
   await dialog.getByRole('tab', { name: 'แผนแนะนำ', exact: true }).click();
   await expect(dialog.getByRole('tabpanel', { name: 'แผนแนะนำ', exact: true })).toContainText('ขอ TA น้อยกว่าหรือมากกว่าจำนวนที่ระบบแนะนำได้');
   const bounds = await dialog.boundingBox(); assert.ok(bounds.width <= viewport.width && bounds.x >= 0);
@@ -71,5 +78,5 @@ try {
  await expect(graduatePanel).toContainText('เตรียมการสอน');
  await graduate.close();
  assert.deepEqual(errors, []);
- console.log('PASS: four guide topics, contextual entry points, keyboard tabs, Escape/focus restoration, unchanged drafts, desktop and mobile');
+ console.log('PASS: five guide topics, contextual entry points, keyboard tabs, Escape/focus restoration, unchanged drafts, desktop and mobile');
 } finally { await browser.close(); }
