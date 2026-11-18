@@ -8,6 +8,7 @@ import { PageHeader, Panel, Button, Chip, Alert, Tip, type ChipTone } from "../.
 import { DataTable, type DataColumn, type DataFilter } from "../../components/DataTable";
 import { useTerm } from "../TermContext";
 import { Skel, SkelValue } from "../../components/Skeletons";
+import MakeupReview, { type MatchOption } from "./MakeupReview";
 import { msg, useI18n, type TFn } from "../../lib/i18n/client";
 
 interface Holiday {
@@ -42,6 +43,11 @@ interface TDBMExtraTeaching {
   matched_sec_no?: string;
   original_holiday_date?: string;
   original_holiday_name?: string;
+  matched_section_id?: string;
+  original_kind?: string;
+  match_method?: string;
+  resolution_reason?: string;
+  match_options?: MatchOption[];
   synced_at: string;
 }
 
@@ -97,9 +103,8 @@ export default function StaffTDBMPage() {
   const [syncing, setSyncing] = useState(false);
 
   const listKey = term ? `/tdbm/extra-teachings?academic_year=${term.academic_year}&semester=${term.semester}` : null;
-  // keepPreviousData: a term switch keeps the old rows (under DataTable's
-  // refetch overlay) until the new term's land, instead of blanking the table.
-  const { data: rows, isLoading, error } = useSWR<TDBMExtraTeaching[]>(listKey, { keepPreviousData: true });
+  // Do not carry actionable rows across terms while the new term loads.
+  const { data: rows, isLoading, error } = useSWR<TDBMExtraTeaching[]>(listKey);
   const { data: syncLog } = useSWR<TDBMSyncLogEntry[]>("/tdbm/sync-log?limit=10");
   // No year filter — /staff/holidays' own year picker aside, a term can span
   // two calendar years (e.g. Aug–Jan), so filtering by the TERM's date range
@@ -163,9 +168,10 @@ export default function StaffTDBMPage() {
           <span className="whitespace-nowrap">
             {formatDateShort(r.original_holiday_date)}
             {r.original_holiday_name && <span className="ml-1.5 text-muted">({r.original_holiday_name})</span>}
+            <span className="mt-1 block whitespace-normal text-xs text-muted">{r.original_kind === "lecture" ? t("บรรยาย") : r.original_kind === "lab" ? t("ปฏิบัติการ") : ""} · {r.match_method === "manual" ? t("เจ้าหน้าที่ยืนยันคู่แล้ว") : t("จับคู่อัตโนมัติ โปรดตรวจสอบคาบเดิม")}</span>
           </span>
         ) : (
-          <span className="text-muted">{t("ยังไม่ทราบ")}</span>
+          <span className="inline-block max-w-xs whitespace-normal text-muted">{r.resolution_reason ? t(r.resolution_reason) : t("รอจับคู่คาบวันหยุด")}</span>
         ),
     },
     {
@@ -213,6 +219,16 @@ export default function StaffTDBMPage() {
 
   const filters: DataFilter<TDBMExtraTeaching>[] = [
     {
+      id: "holiday", placeholder: t("การจับคู่คาบวันหยุด"),
+      options: [
+        { id: "", label: t("ทุกรายการ") },
+        { id: "pending", label: t("รอจับคู่คาบวันหยุด") },
+        { id: "automatic", label: t("จับคู่อัตโนมัติ") },
+        { id: "manual", label: t("เจ้าหน้าที่ยืนยันคู่แล้ว") },
+      ],
+      predicate: (r, v) => v === "pending" ? !r.original_holiday_date && r.opt_status !== "C" : r.match_method === v,
+    },
+    {
       id: "match", placeholder: t("สถานะจับคู่"),
       options: [
         { id: "", label: t("ทุกรายการ") },
@@ -241,7 +257,7 @@ export default function StaffTDBMPage() {
     <div>
       <PageHeader
         title={t("ข้อมูลจาก TDBM")}
-        description={t("รายการวันสอนชดเชยที่ระบบดึงมาจาก TDBM (ระบบลงเวลาชดเชยของอาจารย์) จริง หน้านี้ไว้ตรวจสอบว่าซิงก์สำเร็จ ไม่ใช่หน้าจัดการ การแก้ไข/อนุมัติยังทำในระบบ TDBM เอง")}
+        description={t("ตรวจสอบรายการสอนชดเชยจาก TDBM และจับคู่กับคาบวันหยุดเดิมใน TA PAY การแก้ไขเวลาสอนและอนุมัติคำขอยังทำใน TDBM")}
         actions={
           <Button variant="secondary" onClick={handleSyncNow} isPending={syncing} disabled={syncing}>
             <RefreshCw size={14} /> {t("ซิงก์ตอนนี้")}
@@ -333,6 +349,10 @@ export default function StaffTDBMPage() {
           />
         </div>
       </div>
+
+      {term && rows && !isLoading && <MakeupReview key={listKey} rows={rows}
+        academicYear={term.academic_year} semester={term.semester}
+        onSaved={async () => { await mutate(listKey); }} />}
 
       <div className="mt-6">
         <h2 className="text-sm font-semibold">{t("วันสอนชดเชยที่ TDBM ส่งมา")}</h2>
