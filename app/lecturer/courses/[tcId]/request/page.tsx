@@ -71,9 +71,8 @@ interface Section {
 
 /**
  * Partition sections into groups that meet at the same time — co-teaching.
- * Mirrors TARequestService.detectCotaughtGroups so the form's totals agree
- * with the verdict the server will reach. Those sections are one sitting, so
- * their declared hours are the SAME hours and must be counted once.
+ * Mirrors TARequestService.detectCotaughtGroups for billing feasibility and
+ * legacy requests. New request eligibility sums every declared section.
  */
 function cotaughtGroups(sections: Section[], picked: string[]): Map<string, number> {
   const chosen = sections.filter(s => picked.includes(s.id));
@@ -116,6 +115,7 @@ interface TA {
    *  this course they already cover. Picking them then ADDS sections to that
    *  request instead of filing a second one. */
   existing_request_id?: string;
+  existing_workload_rule_version?: number;
   held_section_ids?: string[];
 }
 
@@ -160,6 +160,7 @@ interface Assignment {
   level: string;
   /** Declared hours keyed by section id. */
   section_workloads: Record<string, WorkloadFields>;
+  workload_rule_version?: number;
 }
 
 interface RequestWindow {
@@ -672,6 +673,20 @@ function RequestFormSection({
     return daily * WORKING_DAYS_PER_WEEK;
   }, [course?.sections, payCaps]);
 
+  useEffect(() => {
+    if (!allTas.length) return;
+    setAssignments(current => {
+      let changed = false;
+      const next = current.map(a => {
+        const version = allTas.find(ta => ta.id === a.ta_id)?.existing_workload_rule_version ?? 2;
+        if (a.workload_rule_version === version) return a;
+        changed = true;
+        return { ...a, workload_rule_version: version };
+      });
+      return changed ? next : current;
+    });
+  }, [allTas, draftReady]);
+
   const secs = course?.sections ?? [];
 
   // Every section's declared hours must fit inside how long THAT SECTION
@@ -701,7 +716,7 @@ function RequestFormSection({
 
   const workloadOk = assignments.length > 0 && sectionCapsOk && assignments.every(a => {
     const t = sumWorkload(a, secs);
-    if (t > weeklyCapFor(a)) return false; // ลงบันทึกเวลาจริงไม่ได้ตามเพดาน ชม./วัน
+    if (payableWorkload(a, secs) > weeklyCapFor(a)) return false; // ลงบันทึกเวลาจริงไม่ได้ตามเพดาน ชม./วัน
     if (a.level === "master" || a.level === "phd") return t >= GRAD_MIN_HRS && t <= GRAD_MAX_HRS;
     return t > 0;
   });
@@ -887,6 +902,9 @@ function RequestFormSection({
     setAssignments(a => a.map((x, i) => {
       if (i !== idx) return x;
       const next = { ...x, ...patch };
+      if (patch.ta_id !== undefined) {
+        next.workload_rule_version = allTas.find(ta => ta.id === patch.ta_id)?.existing_workload_rule_version ?? 2;
+      }
       // The level decides WHICH fields carry the hours. When picking a TA flips
       // the level (a plan row planned as ป.ตรี filled by a master's student, or
       // the reverse), move the declared hours across instead of leaving them
@@ -1590,13 +1608,14 @@ function ScopeRadio({ value, label, desc }: { value: string; label: string; desc
   );
 }
 
-/**
- * Total weekly hours this TA actually works, counting each co-taught group
- * once. Two sections meeting in the same slot are one sitting — billing both
- * would double-count time the person spends once. Matches the server's
- * billableWeeklyTotal.
- */
+/** Eligibility includes every section on new requests; keep legacy requests on their saved rule. */
 function sumWorkload(a: Assignment, sections: Section[]): number {
+  if (a.workload_rule_version === 1) return payableWorkload(a, sections);
+  return a.section_ids.reduce((total, sid) => total + sectionHours(workloadOf(a, sid), a.level), 0);
+}
+
+/** Feasibility of real logged time still counts a shared sitting once. */
+function payableWorkload(a: Assignment, sections: Section[]): number {
   const groups = cotaughtGroups(sections, a.section_ids);
   const counted = new Set<number>();
   let total = 0;
@@ -1633,7 +1652,7 @@ function AssignmentBlock({
   const isGrad = a.level === "master" || a.level === "phd";
   const total = sumWorkload(a, sections);
   // Which of the picked sections are taught together. Drives the "billed once"
-  // badge and keeps the total from double-counting a single sitting.
+  // badge; eligibility and payable-time feasibility use separate totals.
   const coGroups = useMemo(
     () => cotaughtGroups(sections, a.section_ids),
     [sections, a.section_ids],
@@ -1826,7 +1845,7 @@ function AssignmentBlock({
                           // Grad regulation bounds the TA's TOTAL at 12 h/week,
                           // so ช่วยสอน/เตรียมการสอน/อื่นๆ may each only grow by
                           // what the total has left — computed across
-                          // sections, counting a co-taught group once.
+                          // sections, including every section on new requests.
                           // ตรวจการบ้าน (grade_hrs) additionally carries its
                           // own flat gradReviewHourCap ceiling (2h/week,
                           // mirrored from the backend's
@@ -1897,11 +1916,16 @@ function AssignmentBlock({
         </div>
 
         {/* Total footer */}
+        <p className="text-sm text-ink-2 mt-3">
+          {a.workload_rule_version === 1
+            ? t("คำขอเดิมใช้กฎเดิม: ชั่วโมงของ Sec ที่สอนพร้อมกันนับครั้งเดียวในการตรวจภาระงาน")
+            : t("ชั่วโมงรวมสำหรับตรวจเกณฑ์ภาระงานจะบวกทุก Sec ตามที่กรอก ส่วนค่าตอบแทนของคาบที่สอนพร้อมกันนับเพียงครั้งเดียว เพราะเป็นการทำงานในช่วงเวลาเดียวกัน")}
+        </p>
         {(() => {
           const gradUnder = isGrad && total < GRAD_MIN_HRS;
           const gradOver = isGrad && total > GRAD_MAX_HRS;
           // เกินเพดานรายวันตามประกาศ → ลงบันทึกเวลาจริงไม่ได้ ต้องบล็อก
-          const overDaily = total > weeklyCap;
+          const overDaily = payableWorkload(a, sections) > weeklyCap;
           const bad = gradUnder || gradOver || overDaily || (!isGrad && total === 0);
           const msg = overDaily
             ? t("เกิน {weekly} ชม./สัปดาห์ ที่ลงบันทึกเวลาได้จริง (เพดาน {daily} ชม./วัน ตามประกาศ × {days} วันทำการ)", {
