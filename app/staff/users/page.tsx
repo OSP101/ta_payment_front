@@ -1,4 +1,5 @@
 "use client";
+import TADataResetModal from "./TADataResetModal";
 import TotpField from "../../components/TotpField";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
@@ -9,7 +10,7 @@ import {
   TextField as HTextField,
   type SortDescriptor,
 } from "@heroui/react";
-import { CalendarDays, Camera, Copy, Files, GraduationCap, KeyRound, LockOpen, MoreHorizontal, Pencil, Plus, ShieldAlert, ShieldOff, Trash2, UserCheck, UserX } from "lucide-react";
+import { CalendarDays, Camera, Copy, Files, GraduationCap, KeyRound, LockOpen, MoreHorizontal, Pencil, Plus, RotateCcw, ShieldAlert, ShieldOff, Trash2, UserCheck, UserX } from "lucide-react";
 import { Button as HButton, Dropdown, Label } from "@heroui/react";
 import { api, errMessage, mfaAdminReset, type Enrollment, type Me, type Term } from "../../lib/api";
 import { STUDENT_ID_PATTERN, THAI_BANKS } from "../../lib/banks";
@@ -325,6 +326,7 @@ export default function UsersPage() {
   const [unlocking, setUnlocking] = useState<User | null>(null);
   const [resetting2FA, setResetting2FA] = useState<User | null>(null);
   const [historyFor, setHistoryFor] = useState<User | null>(null);
+  const [resetDataFor, setResetDataFor] = useState<User | null>(null);
   const [timetableFor, setTimetableFor] = useState<User | null>(null);
 
   // The password-gate unlock is admin-only, and the API additionally refuses an
@@ -452,6 +454,7 @@ export default function UsersPage() {
         const ta = u.roles.includes("ta");
         const more: Array<{ id: string; label: string; icon: React.ReactNode; run: () => void; danger?: boolean }> = [];
         if (ta) {
+          more.push({ id: "reset-data", label: t("รีเซ็ตข้อมูล TA"), icon: <RotateCcw className="size-4" />, run: () => setResetDataFor(u), danger: true });
           more.push({ id: "history", label: t("ประวัติการศึกษา"), icon: <GraduationCap className="size-4" />, run: () => setHistoryFor(u) });
           more.push({ id: "timetable", label: t("ตารางเรียน"), icon: <CalendarDays className="size-4" />, run: () => setTimetableFor(u) });
         }
@@ -573,6 +576,7 @@ export default function UsersPage() {
       {unlocking && <UnlockPasswordGateModal user={unlocking} onClose={() => setUnlocking(null)} />}
       {resetting2FA && <Reset2FAModal user={resetting2FA} onClose={() => setResetting2FA(null)} />}
       {historyFor && <EnrollmentHistoryModal user={historyFor} onClose={() => setHistoryFor(null)} />}
+      {resetDataFor && <TADataResetModal user={resetDataFor} onClose={() => setResetDataFor(null)} />}
       {timetableFor && <TimetableCorrectionModal user={timetableFor} onClose={() => setTimetableFor(null)} />}
     </div>
   );
