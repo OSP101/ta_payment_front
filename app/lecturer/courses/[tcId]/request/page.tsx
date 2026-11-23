@@ -10,7 +10,7 @@ import {
   RadioGroup, Radio, Description, Label,
   NumberField,
   Checkbox, CheckboxGroup,
-  Autocomplete, ListBox, SearchField, useFilter,
+  Autocomplete, ListBox, SearchField,
   EmptyState as HEmptyState,
   Input as HInput,
   Label as HLabel,
@@ -97,7 +97,7 @@ function cotaughtGroups(sections: Section[], picked: string[]): Map<string, numb
   return groups;
 }
 interface TA {
-  id: string; first_name: string; last_name: string; email: string; study_level?: string;
+  id: string; first_name: string; last_name: string; email: string; student_id?: string; study_level?: string;
   // From /ta-requests/candidates — how many courses this TA is already booked
   // for this term (a submitted request books the slot, not just an approved
   // one), whether that hits the per-term course cap, and whether they are already on
@@ -502,19 +502,17 @@ function RequestFormSection({
   late?: boolean;
   onSubmitted: () => void;
 }) {
-  // Candidates carry each TA's approved-course count so we can keep those who
-  // already hit the 3-course cap out of the picker (prevents over-quota requests
-  // up front, instead of a reject at submit time).
+  // Keep selected candidates independently of paginated search results: draft
+  // labels, billing rules and adding sections must not depend on the current query.
   const { t, intl } = useI18n();
   const candidatesKey = tcId ? `/ta-requests/candidates?teaching_course_id=${tcId}` : null;
-  const { data: tas } = useSWR<{ items: TA[] }>(candidatesKey);
+  const [knownTas, setKnownTas] = useState<Record<string, TA>>({});
+  const rememberTa = useCallback((ta: TA) => setKnownTas(prev => ({ ...prev, [ta.id]: ta })), []);
   // เพดาน ชม./วัน ตามประกาศ — ใช้กันไม่ให้กรอกภาระงานที่ลงบันทึกเวลาจริงไม่ได้
   const { data: payCaps } = useSWR<PayRateCaps>("/settings/pay-rate");
-  // Every TA stays in the list. Those who cannot be added are shown disabled
-  // with the reason attached, because hiding them was actively harmful: a
-  // lecturer who could not find someone assumed they had no account and went
-  // off to create a duplicate, which then failed on the unique email.
-  const allTas = useMemo(() => tas?.items ?? [], [tas]);
+  // Only resolved selections are needed by the form's calculations. The picker
+  // searches all TAs, including those at quota, and explains disabled results.
+  const allTas = useMemo(() => Object.values(knownTas), [knownTas]);
 
   // Q&A rule 3: default reimburse_scope from the course's credit hours.
   //   lecture-only → "lecture"; lab-only → "lab"; both → "both".
@@ -530,6 +528,22 @@ function RequestFormSection({
 
   const [scope, setScope] = useState<"lecture" | "lab" | "both">(defaultScope);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const selectedIds = [...new Set(assignments.map(a => a.ta_id).filter(Boolean))].sort().join(",");
+  const selectedKey = candidatesKey && selectedIds ? `${candidatesKey}&ids=${encodeURIComponent(selectedIds)}` : null;
+  const { data: selectedTas, error: selectedError, mutate: refreshSelected } = useSWR<{ items: TA[] }>(selectedKey, async (key: string) => {
+    // Keep large drafts within the API's bounded ID lookup size.
+    const [base, encodedIds] = key.split("&ids=");
+    const ids = decodeURIComponent(encodedIds).split(",");
+    const batches: Promise<{ items: TA[] }>[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      batches.push(api.get(`${base}&ids=${encodeURIComponent(ids.slice(i, i + 100).join(","))}`));
+    }
+    return { items: (await Promise.all(batches)).flatMap(batch => batch.items) };
+  });
+  useEffect(() => {
+    if (selectedTas) setKnownTas(prev => ({ ...prev, ...Object.fromEntries(selectedTas.items.map(ta => [ta.id, ta])) }));
+  }, [selectedTas]);
+  const selectedPending = assignments.some(a => a.ta_id && !knownTas[a.ta_id]);
   const [activePerson, setActivePerson] = useState(0);
   const [personCount, setPersonCount] = useState("0");
   const [resizeTo, setResizeTo] = useState<number | null>(null);
@@ -678,7 +692,9 @@ function RequestFormSection({
     setAssignments(current => {
       let changed = false;
       const next = current.map(a => {
-        const version = allTas.find(ta => ta.id === a.ta_id)?.existing_workload_rule_version ?? 2;
+        const candidate = allTas.find(ta => ta.id === a.ta_id);
+        if (!candidate) return a;
+        const version = candidate.existing_workload_rule_version ?? 2;
         if (a.workload_rule_version === version) return a;
         changed = true;
         return { ...a, workload_rule_version: version };
@@ -736,11 +752,13 @@ function RequestFormSection({
     return a.section_ids.some(sid => blocking.has(sid));
   });
 
-  const canSubmit = taChosen && workloadOk && sectionChosen && !anyScheduleConflict;
+  const canSubmit = taChosen && !selectedPending && !selectedError && workloadOk && sectionChosen && !anyScheduleConflict;
   // Why ส่งคำขอ is greyed out, in the same order as step 2's status line.
   const submitBlockReason =
     canSubmit ? undefined
     : assignments.length === 0 ? t("ยังไม่ได้เพิ่ม TA")
+    : selectedError ? t("โหลดข้อมูล TA ที่เลือกไว้ไม่สำเร็จ")
+    : selectedPending ? t("กำลังโหลดข้อมูล TA ที่เลือกไว้")
     : !taChosen ? t("ยังไม่ได้เลือก TA ให้ครบทุกแถว")
     : !sectionChosen ? t("ยังไม่ได้เลือก section ให้ครบทุกคน")
     : anyScheduleConflict ? t("มี TA ที่ตารางทับซ้อนกับรายวิชาอื่น กรุณาเอาชื่อออกก่อน")
@@ -1004,13 +1022,13 @@ function RequestFormSection({
           done.add(a);
         } catch (e) {
           setAssignments(prev => prev.filter(x => !done.has(x)));
-          if (candidatesKey) mutate(candidatesKey);
+          void refreshSelected();
           mutate("/ta-requests");
           throw e;
         }
       }
       if (trimmedNotes.length) notify.info(trimmedNotes.join("\n"));
-      if (candidatesKey) mutate(candidatesKey);
+      void refreshSelected();
 
       if (rejected.length) {
         // Under the auto-decide model, business-rule failures come back as a
@@ -1244,13 +1262,17 @@ function RequestFormSection({
                   onCreated={ta => {
                     // Refresh candidates so the new TA (0 courses → not at quota)
                     // appears immediately, then auto-add + close the panel.
-                    if (candidatesKey) mutate(candidatesKey);
+                    rememberTa(ta);
+                    void refreshSelected();
                     addAssignment(undefined, ta.id, ta.study_level ?? "undergrad");
                     setCreatingTa(false);
                   }}
                 />
               )}
 
+              {selectedError && <Alert status="danger" title={t("โหลดข้อมูล TA ที่เลือกไว้ไม่สำเร็จ")} description={t("กรุณาลองใหม่ก่อนส่งคำขอ")}
+                action={<Button size="sm" variant="secondary" onClick={() => void refreshSelected()}>{t("ลองใหม่")}</Button>}
+              />}
               {/* Unified assignment list */}
               {assignments.length === 0 && !draftReady ? (
                 // Saved draft still loading — same footprint as the empty box.
@@ -1286,6 +1308,10 @@ function RequestFormSection({
                         assignment={a}
                         sections={course?.sections ?? []}
                         tas={allTas.filter(x => !takenElsewhere.has(x.id))}
+                        selectedPositions={Object.fromEntries(assignments.flatMap((entry, i) =>
+                          i !== idx && entry.ta_id ? [[entry.ta_id, i + 1]] : []
+                        ))}
+                        onCandidate={rememberTa}
                         scope={scope}
                         weeklyCap={weeklyCapFor(a)}
                         tcId={tcId}
@@ -1631,13 +1657,15 @@ function payableWorkload(a: Assignment, sections: Section[]): number {
 }
 
 function AssignmentBlock({
-  idx, n, assignment: a, sections, tas, scope, weeklyCap, tcId, onConflicts, onUpdate, onWorkload, onRemove, onOpenGuide,
+  idx, n, assignment: a, sections, tas, selectedPositions, onCandidate, scope, weeklyCap, tcId, onConflicts, onUpdate, onWorkload, onRemove, onOpenGuide,
 }: {
   idx: number;
   n: number;
   assignment: Assignment;
   sections: Section[];
   tas: TA[];
+  selectedPositions: Record<string, number>;
+  onCandidate: (ta: TA) => void;
   scope: "lecture" | "lab" | "both";
   /** เพดาน ชม./สัปดาห์ = เพดาน ชม./วัน ตามประกาศ × วันทำการ */
   weeklyCap: number;
@@ -1722,6 +1750,9 @@ function AssignmentBlock({
         <div data-tour="req-ta-picker" className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3">
           <TaAutocomplete
             tas={tas}
+            tcId={tcId}
+            selectedPositions={selectedPositions}
+            onCandidate={onCandidate}
             value={a.ta_id}
             onChange={(taId, level) => onUpdate(idx, { ta_id: taId, level })}
           />
@@ -2284,40 +2315,81 @@ function SectionPicker({
 }
 
 function TaAutocomplete({
-  tas, value, onChange,
+  tas, tcId, selectedPositions, onCandidate, value, onChange,
 }: {
   tas: TA[];
+  tcId: string;
+  selectedPositions: Record<string, number>;
+  onCandidate: (ta: TA) => void;
   value: string;
   onChange: (taId: string, level: string) => void;
 }) {
   const { t } = useI18n();
-  const { contains } = useFilter({ sensitivity: "base" });
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [results, setResults] = useState<TA[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  // Each effect owns its request: cleanup aborts it and ignores late replies.
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    let active = true;
+    setLoading(true);
+    setFailed(false);
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ teaching_course_id: tcId, q: query.trim(), limit: "30", offset: String(offset) });
+      api.get<{ items: TA[]; has_more: boolean }>(`/ta-requests/candidates?${params}`, { signal: controller.signal })
+        .then(data => {
+          if (!active) return;
+          setResults(prev => offset === 0 ? data.items : [...new Map([...prev, ...data.items].map(ta => [ta.id, ta])).values()]);
+          setHasMore(data.has_more);
+        })
+        .catch(() => { if (active) setFailed(true); })
+        .finally(() => { if (active) setLoading(false); });
+    }, query ? 250 : 0);
+    return () => { active = false; clearTimeout(timer); controller.abort(); };
+  }, [open, query, offset, retry, tcId]);
+  // Keep people selected on another page searchable. Hiding them made an
+  // existing account look absent and encouraged duplicate account creation.
+  const visibleTas = results;
   const selected = tas.find(x => x.id === value) ?? null;
   // Blocked TAs stay in the collection so they remain searchable; react-aria
   // renders them dimmed and unselectable via disabledKeys.
   const disabledKeys = useMemo(
-    () => tas.filter(x => taBlockedReason(x, t) !== null).map(x => x.id),
-    [tas, t],
+    () => visibleTas.filter(x => !!selectedPositions[x.id] || taBlockedReason(x, t) !== null).map(x => x.id),
+    [visibleTas, selectedPositions, t],
   );
 
   return (
     <Autocomplete
       selectionMode="single"
+      allowsEmptyCollection
+      isOpen={open}
+      onOpenChange={next => {
+        if (next === open) return;
+        setOpen(next);
+        if (next) { setQuery(""); setOffset(0); setResults([]); setLoading(true); }
+      }}
       value={value || null}
       disabledKeys={disabledKeys}
       onChange={(k: Key | null) => {
         const id = k ? String(k) : "";
-        const ta = tas.find(x => x.id === id);
+        const ta = results.find(x => x.id === id) ?? tas.find(x => x.id === id);
+        if (ta) onCandidate(ta);
         onChange(id, ta?.study_level ?? "undergrad");
       }}
       className="w-full"
-      placeholder={t("พิมพ์ชื่อหรืออีเมลเพื่อค้นหา…")}
+      placeholder={t("พิมพ์ชื่อ อีเมล หรือรหัสนักศึกษาเพื่อค้นหา…")}
     >
       <Label>{t("เลือก TA")}</Label>
       <Autocomplete.Trigger>
         <Autocomplete.Value>
-          {({ defaultChildren, isPlaceholder }) => {
-            if (isPlaceholder || !selected) return defaultChildren;
+          {({ defaultChildren }) => {
+            if (!selected) return defaultChildren;
             return (
               <span className="truncate">
                 {selected.first_name} {selected.last_name}
@@ -2330,23 +2402,26 @@ function TaAutocomplete({
         <Autocomplete.Indicator />
       </Autocomplete.Trigger>
       <Autocomplete.Popover>
-        <Autocomplete.Filter filter={contains}>
-          <SearchField autoFocus name="ta-search" variant="secondary">
+        <Autocomplete.Filter inputValue={query} onInputChange={next => {
+          if (next === query) return;
+          setQuery(next); setOffset(0); setResults([]); setHasMore(false); setLoading(true); setFailed(false);
+        }}>
+          <SearchField autoFocus name="ta-search" aria-label={t("ค้นหา TA…")} variant="secondary">
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input placeholder={t("ค้นหา TA…")} />
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
-          <ListBox renderEmptyState={() => <HEmptyState>{t("ไม่พบ TA ที่ตรงกัน")}</HEmptyState>}>
-            {tas.map(ta => {
-              const blocked = taBlockedReason(ta, t);
+          <ListBox aria-busy={loading} renderEmptyState={() => <HEmptyState>{loading ? t("กำลังค้นหา TA…") : failed ? t("ค้นหา TA ไม่สำเร็จ กรุณาลองใหม่") : t("ไม่พบ TA ที่ตรงกัน")}</HEmptyState>}>
+            {visibleTas.map(ta => {
+              const blocked = selectedPositions[ta.id] ? t("เพิ่มแล้วในคนที่ {n}", { n: selectedPositions[ta.id] }) : taBlockedReason(ta, t);
               const booked = ta.approved_course_count ?? 0;
               return (
                 <ListBox.Item
                   key={ta.id}
                   id={ta.id}
-                  textValue={`${ta.first_name} ${ta.last_name} ${ta.email}`}
+                  textValue={`${ta.first_name} ${ta.last_name} ${ta.email} ${ta.student_id ?? ""}`}
                 >
                   <div className="flex flex-col min-w-0">
                     <Label>{ta.first_name} {ta.last_name}</Label>
@@ -2382,6 +2457,11 @@ function TaAutocomplete({
               );
             })}
           </ListBox>
+          <div role="status" aria-live="polite" className="text-xs text-ink-3 px-3 py-2">
+            {loading && results.length > 0 && t("กำลังค้นหา TA…")}
+            {failed && <Button size="sm" variant="secondary" onClick={() => setRetry(n => n + 1)}>{t("ลองใหม่")}</Button>}
+            {!loading && !failed && hasMore && <Button size="sm" variant="secondary" onClick={() => setOffset(n => n + 30)}>{t("โหลดเพิ่ม")}</Button>}
+          </div>
         </Autocomplete.Filter>
       </Autocomplete.Popover>
     </Autocomplete>

@@ -13,9 +13,11 @@ try{
  for(let i=0;;i++){if(i>120||server.exitCode!==null)throw Error(log);try{if((await fetch(`http://localhost:${port}/${route}`,{signal:AbortSignal.timeout(3000)})).ok)break}catch{}await pause(500)}
  browser=await chromium.launch({channel:'chrome'});
  for(const viewport of [{width:1440,height:1000},{width:390,height:844}]){
-  const page=await browser.newPage({viewport});const errors=[];page.on('pageerror',e=>errors.push(e.message));let blocked=false,fail=true;const commits=[];
+  const page=await browser.newPage({viewport});const errors=[];page.on('pageerror',e=>errors.push(e.message));let blocked=false,fail=true,previewFails=false;const commits=[];
   await page.route('**/api/v1/teaching-courses/*/merge-existing*',async r=>{
    const body=r.request().postDataJSON();if(r.request().url().includes('commit=1')){commits.push(body);if(fail){fail=false;await r.fulfill({status:409,json:{error:'ข้อมูลเปลี่ยน กรุณาตรวจตัวอย่างใหม่'}})}else await r.fulfill({json:{target,source,blockers:[],token:'snapshot'}});return}
+   await pause(200);
+   if(previewFails){previewFails=false;await r.fulfill({status:500,json:{error:'ตรวจสอบไม่สำเร็จ กรุณาลองอีกครั้ง'}});return}
    await r.fulfill({json:{target,source,token:'snapshot',blockers:blocked?['มีคำขอ TA ผูกอยู่แล้ว']:body.mappings.length===2?[]:['กำหนดวิธีจัดการให้ครบทุก Section']}});
   });
   await page.goto(`http://localhost:${port}/${route}`);
@@ -24,12 +26,17 @@ try{
   await page.getByRole('button',{name:'ดูข้อมูลก่อนรวม',exact:true}).click();
   const commit=page.getByRole('button',{name:'ยืนยันรวมวิชา',exact:true});await expect(commit).toBeDisabled();
   await page.getByLabel('จัดการ Section 1 regular',{exact:true}).selectOption(ids.a);
+  await expect(page.getByRole('checkbox')).toBeDisabled();blocked=true;
   await page.getByLabel('จัดการ Section 2 special',{exact:true}).selectOption('');
-  blocked=true;await page.getByRole('button',{name:'ตรวจตัวอย่างอีกครั้ง',exact:true}).click();await expect(page.getByText('มีคำขอ TA ผูกอยู่แล้ว',{exact:true})).toBeVisible();await expect(commit).toBeDisabled();
+  await expect(page.getByText('มีคำขอ TA ผูกอยู่แล้ว',{exact:true})).toBeVisible();await expect(commit).toBeDisabled();
   blocked=false;await page.getByRole('button',{name:'ตรวจตัวอย่างอีกครั้ง',exact:true}).click();
   const approve=page.getByRole('checkbox');await expect(approve).toBeEnabled();await approve.check();
-  await page.getByLabel('จัดการ Section 1 regular',{exact:true}).selectOption('');await expect(commit).toBeDisabled();await expect(approve).not.toBeChecked();
-  await page.getByLabel('จัดการ Section 1 regular',{exact:true}).selectOption(ids.a);await page.getByRole('button',{name:'ตรวจตัวอย่างอีกครั้ง',exact:true}).click();await approve.check();
+  await page.getByLabel('จัดการ Section 1 regular',{exact:true}).selectOption('?');await expect(approve).toBeDisabled();await expect(commit).toBeDisabled();await expect(approve).not.toBeChecked();
+  previewFails=true;await page.getByLabel('จัดการ Section 1 regular',{exact:true}).selectOption(ids.a);await expect(approve).toBeDisabled();
+  await expect(page.getByText('ตรวจสอบไม่สำเร็จ กรุณาลองอีกครั้ง',{exact:true})).toBeVisible();await expect(approve).toBeDisabled();
+  await page.getByRole('button',{name:'ตรวจตัวอย่างอีกครั้ง',exact:true}).click();await approve.check();
+  await page.getByLabel('จัดการ Section 1 regular',{exact:true}).selectOption('');await expect(approve).not.toBeChecked();await expect(approve).toBeEnabled();
+  await page.getByLabel('จัดการ Section 1 regular',{exact:true}).selectOption(ids.a);await expect(approve).toBeEnabled();await approve.check();
   await page.screenshot({path:`/tmp/merge-existing-${viewport.width}.png`,fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('horizontal overflow');
   await commit.click();await expect(page.getByText('ข้อมูลเปลี่ยน กรุณาตรวจตัวอย่างใหม่',{exact:true})).toBeVisible();await expect(commit).toBeDisabled();
@@ -37,5 +44,5 @@ try{
   if(commits.length!==2||commits.some(c=>!c.confirmed||c.token!=='snapshot'||c.source_id!==ids.source||c.mappings.find(m=>m.source===ids.b)?.target!==ids.a||c.mappings.find(m=>m.source===ids.c)?.target!==null))throw Error('incorrect merge payload');
   if(errors.length)throw Error(errors.join('\n'));await page.close();
  }
- console.log('PASS existing-course merge: explicit mapping, separate sections, usage blockers, invalidation after changes, stale-response retry, payload, desktop/mobile');
+ console.log('PASS existing-course merge: automatic validation, incomplete choices, failed preview retry, explicit mapping, separate sections, usage blockers, invalidation after changes, stale-response retry, payload, desktop/mobile');
 }finally{await browser?.close();server.kill('SIGTERM');if(server.exitCode===null)await new Promise(resolve=>server.once('exit',resolve));await rm(dir,{recursive:true,force:true});await rm(`.next/dev/types/app/${route}`,{recursive:true,force:true});await rm('.next/dev/types/validator.ts',{force:true});}

@@ -1,0 +1,6 @@
+{
+  "กำลังตรวจสอบข้อมูลก่อนยืนยัน": "Checking the data before confirmation",
+  "ตรวจสอบผ่านแล้ว สามารถติ๊กยืนยันได้": "Checks passed. You can now select the confirmation checkbox.",
+  "เลือกวิธีจัดการให้ครบทุก Section ระบบจะตรวจสอบและเปิดช่องยืนยันให้อัตโนมัติ": "Choose how to handle every Section. The system will check your choices and enable confirmation automatically.",
+  "ยังยืนยันไม่ได้ กรุณาตรวจรายการที่ต้องจัดการ แล้วกดตรวจตัวอย่างอีกครั้ง": "Confirmation is unavailable. Review any blockers, then check the preview again."
+}

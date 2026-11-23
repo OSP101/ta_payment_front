@@ -380,7 +380,7 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
       res = await apiFetch(`${apiPrefix}${path}`, {
         ...init,
         credentials: "include",
-        signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+        signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
         headers: {
           "Content-Type": "application/json",
           ...(init.headers as Record<string, string> | undefined),
@@ -575,7 +575,7 @@ export const demoRemoveTester = (email: string) =>
   api.del<{ ok: true }>(`/demo-testers/${encodeURIComponent(email)}`);
 
 export const api = {
-  get: <T>(path: string) => req<T>(path),
+  get: <T>(path: string, options?: { signal?: AbortSignal }) => req<T>(path, options),
   post: <T>(path: string, body?: unknown) => req<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown) => req<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) => req<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),

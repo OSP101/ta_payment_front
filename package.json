@@ -20,6 +20,7 @@
     "test:tdbm-review:browser": "node scripts/tdbm-review.browser.test.mjs",
     "dev:request-playground": "node scripts/request-form-playground.mjs",
     "test:request-form:browser": "node scripts/request-form.browser.test.mjs",
+    "test:ta-candidate-search:browser": "node scripts/ta-candidate-search.browser.test.mjs",
     "test:request-guide:browser": "node scripts/request-guide.browser.test.mjs",
     "test:request-guide-gate:browser": "node scripts/request-guide-gate.browser.test.mjs"
   },

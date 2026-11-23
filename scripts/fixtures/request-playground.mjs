@@ -20,7 +20,14 @@ export function createPlaygroundAPI() {
     if (path === '/me' || path === '/me/preferences' || path === '/auth/heartbeat') return json(lecturer);
     if (path === '/settings/pay-rate') return json({ ...plan.rates, ug_regular_daily_hour_cap: 7, ug_special_daily_hour_cap: 6, grad_regular_daily_hour_cap: 6 });
     if (path === '/ta-request/windows') return json([{ id: 'window', term_id: 'term-playground', opens_at: new Date(Date.now() - 86400000).toISOString(), closes_at: new Date(Date.now() + 30 * 86400000).toISOString(), is_open: true }]);
-    if (path === '/ta-requests/candidates') return json({ items: candidates });
+    if (path === '/ta-requests/candidates') {
+      const ids = url.searchParams.get('ids')?.split(',');
+      const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+      const limit = Number(url.searchParams.get('limit') || 30);
+      const offset = Number(url.searchParams.get('offset') || 0);
+      const matches = candidates.filter(ta => ids ? ids.includes(ta.id) : `${ta.first_name} ${ta.last_name} ${ta.email} ${ta.student_id || ''}`.toLowerCase().includes(q));
+      return json({ items: ids ? matches : matches.slice(offset, offset + limit), has_more: !ids && offset + limit < matches.length });
+    }
     if (path === '/ta-requests/preview-conflicts') return json({ conflicts: sections.map(s => ({ section_id: s.id, messages: [], blocked_kinds: [], cross_conflict: false })) });
     if (path === `/teaching-courses/${courseId}`) return json({ id: courseId, code: 'CP-DEMO', name_th: 'รายวิชาสำหรับทดลองคำขอ TA', term_id: 'term-playground', lecture_hrs: 2, lab_hrs: 2, has_missing_schedule: false, sections, lecturers: [{ ...lecturer, is_primary: true }] });
     if (path.endsWith('/ta-plan')) return json(plan);

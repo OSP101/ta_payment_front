@@ -5362,5 +5362,18 @@
  "เหตุผลที่รีเซ็ต": "Reason for reset",
  "บันทึกไว้ในประวัติการใช้งานเพื่อใช้อ้างอิง": "Recorded in the audit history for reference",
  "ตรวจสอบรายการแล้ว และยืนยันให้ TA ส่งข้อมูลที่เลือกใหม่": "I have reviewed the selection and confirm that the TA must resubmit it.",
- "รีเซ็ตข้อมูลไม่สำเร็จ": "Could not reset data"
+ "รีเซ็ตข้อมูลไม่สำเร็จ": "Could not reset data",
+ "กำลังตรวจสอบข้อมูลก่อนยืนยัน": "Checking the data before confirmation",
+ "ตรวจสอบผ่านแล้ว สามารถติ๊กยืนยันได้": "Checks passed. You can now select the confirmation checkbox.",
+ "เลือกวิธีจัดการให้ครบทุก Section ระบบจะตรวจสอบและเปิดช่องยืนยันให้อัตโนมัติ": "Choose how to handle every Section. The system will check your choices and enable confirmation automatically.",
+ "ยังยืนยันไม่ได้ กรุณาตรวจรายการที่ต้องจัดการ แล้วกดตรวจตัวอย่างอีกครั้ง": "Confirmation is unavailable. Review any blockers, then check the preview again.",
+  "กำลังโหลดข้อมูล TA ที่เลือกไว้": "Loading selected TAs…",
+  "โหลดข้อมูล TA ที่เลือกไว้ไม่สำเร็จ": "Could not load selected TAs",
+  "กรุณาลองใหม่ก่อนส่งคำขอ": "Please retry before submitting the request",
+  "พิมพ์ชื่อ อีเมล หรือรหัสนักศึกษาเพื่อค้นหา…": "Search by name, email, or student ID…",
+  "กำลังค้นหา TA…": "Searching TAs…",
+  "ค้นหา TA ไม่สำเร็จ กรุณาลองใหม่": "Could not search TAs. Please try again.",
+  "โหลดเพิ่ม": "Load more",
+  "เลือกไว้ในคำขอนี้แล้ว": "Already selected in this request",
+  "เพิ่มแล้วในคนที่ {n}": "Already added as person {n}"
 }
