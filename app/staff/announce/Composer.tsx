@@ -18,7 +18,7 @@ import { AudienceSection, describeRule, useAudiencePreview, useFilterOptions } f
 import PublishCheck from "./PublishCheck";
 import Section from "./Section";
 import {
-  CATEGORIES, CAT_META, CategoryChip, LIST_KEY, buildPayload, fmtDateTime, fromLocalParts,
+  CATEGORIES, CAT_META, CategoryChip, LIST_KEY, buildPayload, emptyDraft, fmtDateTime, fromLocalParts,
   mailSubject, plainText, ruleOf, todayLocal,
   type Ann, type Category, type Draft,
 } from "./shared";
@@ -32,7 +32,7 @@ const storeKey = (id?: string) => `ta-announce-unsaved:${id ?? "new"}`;
 function readStored(id?: string): Draft | null {
   try {
     const raw = window.localStorage.getItem(storeKey(id));
-    return raw ? (JSON.parse(raw) as Draft) : null;
+    return raw ? ({ ...emptyDraft, ...JSON.parse(raw) } as Draft) : null;
   } catch {
     return null;
   }
@@ -81,7 +81,7 @@ const TEMPLATES: { label: string; apply: Partial<Draft> }[] = [
     },
   },
   {
-    label: msg("ประกาศทั่วไปถึงทุกคน"),
+    label: msg("ประกาศทั่วไปถึงทุกกลุ่ม"),
     apply: { category: "info", audience: ["ta", "lecturer", "staff", "admin"], targetFilters: [], title: "", body: "" },
   },
 ];
@@ -389,7 +389,7 @@ export default function Composer({
             <Panel title={t("ผู้รับจะเห็นแบบนี้")} description={t("หน้าประกาศในระบบ")}>
               <CardPreview draft={draft} />
             </Panel>
-            <Panel title={t("แจ้งเตือนและอีเมล")} description={t("ข้อความย่อที่ส่งออกไปพร้อมลิงก์เปิดอ่าน")}>
+            <Panel title={draft.sendEmail ? t("แจ้งเตือนและอีเมล") : t("แจ้งเตือนในระบบ")} description={t("ข้อความย่อที่ส่งออกไปพร้อมลิงก์เปิดอ่าน")}>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
                   <Bell size={14} className="mt-1 shrink-0 text-muted" />
@@ -401,7 +401,7 @@ export default function Composer({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted">
-                  <Mail size={13} className="shrink-0" /> {t("อีเมลใช้หัวเรื่องและข้อความเดียวกัน")}
+                  <Mail size={13} className="shrink-0" /> {draft.sendEmail ? t("อีเมลใช้หัวเรื่องและข้อความเดียวกัน") : t("ไม่ส่งอีเมลสำหรับประกาศนี้")}
                 </div>
               </div>
             </Panel>
@@ -477,7 +477,7 @@ export default function Composer({
 /** Order-independent form of a rule, for "did the audience change". */
 function normRule(r: ReturnType<typeof ruleOf>): string {
   return JSON.stringify([
-    [...r.roles].sort(), [...r.course_ids].sort(), [...r.user_ids].sort(), [...r.filters].sort(),
+    [...r.roles].sort(), [...r.course_ids].sort(), [...r.user_ids].sort(), [...r.filters].sort(), r.term_id,
   ]);
 }
 

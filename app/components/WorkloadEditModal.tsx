@@ -23,7 +23,7 @@ import { msg, useI18n } from "../lib/i18n/client";
  * so it lives here rather than under either route.
  *
  * Existing work_logs are NOT touched by a correction — it only changes what
- * a future Generate run or approval recheck reads. The 10-12h/week
+ * a future Generate run or approval recheck reads. The up-to-12h/week
  * graduate-regulation total that gates NEW requests is deliberately not
  * re-enforced here (some existing assignments predate it and would become
  * uncorrectable if it were) — the total is shown for context only.

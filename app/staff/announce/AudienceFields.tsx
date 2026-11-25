@@ -2,9 +2,9 @@
 import useSWR from "swr";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Globe, Users, X } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, type Term } from "../../lib/api";
 import { Skel } from "../../components/Skeletons";
-import { TextInput, Tip } from "../../components/ui";
+import { Select, TextInput, Tip } from "../../components/ui";
 import { useI18n, type TFn } from "../../lib/i18n/client";
 import Section from "./Section";
 import {
@@ -77,10 +77,10 @@ export function describeRule(d: Draft, filters: FilterOption[], t: TFn): string 
   const hasGroup = rule.roles.length > 0 || rule.course_ids.length > 0 || rule.filters.length > 0;
   const parts: string[] = [];
   if (hasGroup) {
-    const allRoles = rule.roles.length === 0 || rule.roles.length === ROLES.length;
+    const allRoles = rule.roles.length === 0;
     let who: string;
     if (allRoles) {
-      who = rule.course_ids.length ? t("อาจารย์และผู้ช่วยสอน") : rule.filters.length ? t("ทุกคน") : t("ทุกคนในระบบ");
+      who = rule.course_ids.length ? t("อาจารย์และผู้ช่วยสอน") : rule.filters.length ? t("ทุกคน") : t("ทุกกลุ่มที่เลือก");
     } else {
       who = rule.roles.map(r => t(roleLabel(r))).join(t(" และ"));
     }
@@ -119,6 +119,11 @@ export function AudienceSection({
   const { t } = useI18n();
   const { preview, loading } = audience;
   const filterOpts = useFilterOptions();
+  const { data: terms, error: termsError } = useSWR<Term[]>("/terms");
+  useEffect(() => {
+    const active = terms?.find(term => term.is_active) ?? terms?.[0];
+    if (active) setDraft(d => d.targetTermId ? d : { ...d, targetTermId: active.id });
+  }, [terms, setDraft]);
   const allRoles = draft.audience.length === ROLES.length;
   const toggleRole = (r: string) => setDraft(d => ({
     ...d,
@@ -131,6 +136,18 @@ export function AudienceSection({
       title={t("ส่งถึงใคร")}
       summary={preview && !preview.empty ? t("{n} คน", { n: preview.total }) : undefined}
     >
+      <div>
+        <label className="mb-1.5 block text-sm font-medium" htmlFor="announcement-term">{t("ภาคการศึกษาของกลุ่มเป้าหมาย")}</label>
+        <Select id="announcement-term" value={draft.targetTermId || ""} disabled={!terms?.length} onChange={e => {
+          const id = e.target.value;
+          setDraft(d => ({ ...d, targetTermId: id, targetCourses: [] }));
+        }}>
+          {!draft.targetTermId && <option value="">{t("ภาคการศึกษาปัจจุบัน")}</option>}
+          {terms?.map(term => <option key={term.id} value={term.id}>{term.academic_year}/{term.semester}</option>)}
+        </Select>
+        {termsError && <p role="alert" className="mt-1 text-xs text-danger">{t("โหลดภาคการศึกษาไม่สำเร็จ กรุณาลองใหม่")}</p>}
+        <p className="mt-1.5 text-xs text-muted">{t("ผู้ช่วยสอนต้องมีชื่อในคำขอที่อาจารย์ส่งแล้วของเทอมนี้ รวมที่รออนุมัติและอนุมัติแล้ว ไม่รวมรายชื่อที่ถอนออก")}</p>
+      </div>
       <div>
         <div className="mb-1.5 text-sm font-medium text-foreground">{t("กลุ่มผู้รับ")}</div>
         <div className="flex flex-wrap gap-2">
@@ -184,6 +201,19 @@ export function AudienceSection({
       </div>
 
       <PeoplePicker draft={draft} setDraft={setDraft} />
+
+      <fieldset className="space-y-2">
+        <legend className="mb-1.5 text-sm font-medium">{t("ช่องทางเผยแพร่")}</legend>
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input type="radio" name="announcement-channel" checked={!draft.sendEmail} onChange={() => setDraft(d => ({ ...d, sendEmail: false }))} />
+          {t("ในระบบเท่านั้น")}
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input type="radio" name="announcement-channel" checked={draft.sendEmail} onChange={() => setDraft(d => ({ ...d, sendEmail: true }))} />
+          {t("ในระบบพร้อมอีเมล")}
+        </label>
+        <p className="text-xs text-muted">{t("ทั้งสองแบบแสดงประกาศและแจ้งเตือนในระบบ การส่งซ้ำและเตือนผู้ที่ยังไม่อ่านจะใช้ช่องทางเดียวกัน")}</p>
+      </fieldset>
 
       {audience.failed ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-900">
@@ -274,7 +304,7 @@ function CoursePicker({ draft, setDraft }: { draft: Draft; setDraft: SetDraft })
   const [q, setQ] = useState("");
   const search = useDebounced(q, 300);
   const { data } = useSWR<{ id: string; code: string; name_th: string }[]>(
-    search.trim().length >= 2 ? `/teaching-courses` : null,
+    search.trim().length >= 2 ? `/teaching-courses${draft.targetTermId ? `?term_id=${encodeURIComponent(draft.targetTermId)}` : ""}` : null,
   );
   const matches = useMemo(() => (data ?? [])
     .filter(c => `${c.code} ${c.name_th}`.toLowerCase().includes(search.trim().toLowerCase()))

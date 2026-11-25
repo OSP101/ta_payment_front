@@ -31,7 +31,7 @@
   "ตัวอย่าง: ตรวจงาน 1 ชั่วโมง + เช็คชื่อ 1 ชั่วโมง + สอนปฏิบัติการ 2 ชั่วโมง เท่ากับ 4 ชั่วโมงต่อสัปดาห์สำหรับ Section นี้": "Example: 1 hour grading + 1 hour attendance + 2 hours teaching the lab = 4 hours per week for this section.",
   "ตัวอย่างภาระงานบัณฑิตศึกษา: ช่วยสอน 6 ชั่วโมง + เตรียมการสอน 2 ชั่วโมง + ตรวจการบ้าน 2 ชั่วโมง เท่ากับ 10 ชั่วโมงต่อสัปดาห์": "Graduate example: 6 hours teaching assistance + 2 hours preparation + 2 hours grading = 10 hours per week.",
   "TA ปริญญาโท / ปริญญาเอก": "Master's / doctoral TAs",
-  "ฟอร์มบัณฑิตศึกษาตรวจภาระงานรวม 10–12 ชั่วโมงต่อสัปดาห์ตามเงื่อนไขเดิมของระบบ โดยรายละเอียดงานและการเบิกจ่ายให้ยึดช่องและประมาณการที่แสดงในฟอร์ม": "The graduate form checks a total workload of 10–12 hours per week under the existing system rules. Follow the fields and displayed estimates for duty and payment details.",
+  "ฟอร์มบัณฑิตศึกษาไม่กำหนดชั่วโมงขั้นต่ำ โดยภาระงานรวมต้องไม่เกิน 12 ชั่วโมงต่อสัปดาห์ รายละเอียดงานและการเบิกจ่ายให้ยึดช่องและประมาณการที่แสดงในฟอร์ม": "The graduate form has no minimum workload; the total must not exceed 12 hours per week. Follow the fields and displayed estimates for duty and payment details.",
   "ชั่วโมงบรรยาย (ปริญญาตรี)": "Lecture duties (undergraduate)",
   "ชั่วโมงปฏิบัติการ": "Lab duties",
   "ตัวเลขด้านบนเป็นตัวอย่างวิธีกรอก เพดานของแต่ละช่องอ้างอิงตารางสอนและเงื่อนไขที่ระบบแสดง ไม่ต้องกรอกให้เต็มเพดานทุกช่อง": "These numbers illustrate how to enter hours. Field limits follow the timetable and displayed rules; you do not need to fill every field to its limit.",

@@ -181,11 +181,10 @@ type WindowState =
   | { phase: "ontime"; window: RequestWindow; remainingMs: number }
   | { phase: "late"; window: RequestWindow; closedAt: number };
 
-const GRAD_MIN_HRS = 10;
 const GRAD_MAX_HRS = 12;
 // Mirrors the backend's gradReviewHourCap (ta_request.go) — ตรวจการบ้าน
 // (grade_hrs) is the only duty grad TAs can log through this form, capped
-// flat regardless of how much of the 10-12h total is still remaining.
+// flat regardless of how much of the 12h total is still remaining.
 const GRAD_REVIEW_HOUR_CAP = 2;
 // ประกาศ 731/2565 + 1080/2565 คุมเป็น "ชม./วัน" แต่ฟอร์มกรอกเป็น "ชม./สัปดาห์"
 // จึงแปลงด้วยจำนวนวันทำการ (ต้องตรงกับ workingDaysPerWeek ฝั่ง backend ไม่งั้น
@@ -218,7 +217,7 @@ const isGradLevel = (l: string) => l === "master" || l === "phd";
  * Carry declared hours across the undergrad ↔ graduate field split.
  * ป.ตรี: attendance + lab (+lab_other) are class time, check_work is grading,
  * ug_other is other. บัณฑิต: help_teach is class time, grade_hrs is grading
- * (≤ 2), other_hrs is other, prep_hrs tops the total up to the 10 h floor.
+ * (≤ 2), other_hrs is other, preparation hours are not added automatically.
  */
 function remapWorkloadLevel(w: WorkloadFields, toGrad: boolean, hrs: { lecture: number; lab: number }): WorkloadFields {
   const out = emptyWorkload();
@@ -228,8 +227,6 @@ function remapWorkloadLevel(w: WorkloadFields, toGrad: boolean, hrs: { lecture: 
     out.grade_desc = out.grade_hrs > 0 ? "ตรวจการบ้าน" : ""; // i18n-ignore — stored duty text, sent to the API
     out.other_hrs = w.ug_other_hrs;
     out.other_desc = w.ug_other_desc;
-    out.prep_hrs = Math.max(0, GRAD_MIN_HRS - (out.help_teach_hrs + out.grade_hrs + out.other_hrs));
-    out.prep_desc = out.prep_hrs > 0 ? "เตรียมการสอน" : ""; // i18n-ignore — stored duty text, sent to the API
   } else {
     // Class time goes back onto the section's own timetable: the lab first
     // (it is the whole period), the rest as เช็คชื่อ within the lecture.
@@ -252,7 +249,7 @@ function workloadOf(a: Assignment, sectionId: string): WorkloadFields {
 /** Weekly hours for one section, using only the fields its level applies to. */
 function sectionHours(w: WorkloadFields, level: string): number {
   if (level === "master" || level === "phd") {
-    // prep_hrs/other_hrs count toward the 10-12h regulation TOTAL (this sum)
+    // prep_hrs/other_hrs count toward the 12h regulation TOTAL (this sum)
     // but are otherwise administrative-only — see the isGrad workload block
     // below and authz.go's AllowOther/WeeklyCapOther.
     return w.help_teach_hrs + w.prep_hrs + w.grade_hrs + w.other_hrs;
@@ -671,12 +668,11 @@ function RequestFormSection({
   const firstSectionId = course?.sections?.[0]?.id ?? "";
 
   const taChosen = assignments.length > 0 && assignments.every(a => a.ta_id);
-  // Grad TAs must land in [10, 12] hr/week (regulation for บัณฑิตศึกษา);
-  // undergrad just needs > 0. The >12 side is prevented via per-field caps so
-  // here we only need to gate the lower bound.
+  // Grad TAs must stay at or below 12 hr/week (regulation for บัณฑิตศึกษา);
+  // undergrad still needs a positive total.
   const weeklyCapFor = useCallback((a: Assignment) => {
     // บัณฑิตศึกษา: เพดานรายวันไม่เกี่ยวกับการส่งคำขอ (ย้ายไปคุมที่ฟังก์ชันลงเวลา
-    // งานแทนแล้ว) — ตอนส่งคำขอคุมแค่ 10–12 ชม./สัปดาห์ ผ่าน GRAD_MIN/MAX_HRS
+    // งานแทนแล้ว) — ตอนส่งคำขอคุมแค่ ไม่เกิน 12 ชม./สัปดาห์ ผ่าน GRAD_MAX_HRS
     if (a.level === "master" || a.level === "phd") return Infinity;
     const tracks = (course?.sections ?? [])
       .filter(s => a.section_ids.includes(s.id))
@@ -712,7 +708,7 @@ function RequestFormSection({
   const sectionCapsOk = assignments.every(a =>
     a.section_ids.every(sid => {
       const w = workloadOf(a, sid);
-      if (a.level === "master" || a.level === "phd") return true; // grad uses the 10–12 total
+      if (a.level === "master" || a.level === "phd") return true; // grad uses the 12-hour ceiling
       const hrs = sectionWeeklyHours(secs.find(x => x.id === sid));
       // ปฏิบัติการ is either-or; declaring both is refused server-side.
       if (w.lab_hrs > 0.001 && w.lab_other_hrs > 0.001) return false;
@@ -733,7 +729,7 @@ function RequestFormSection({
   const workloadOk = assignments.length > 0 && sectionCapsOk && assignments.every(a => {
     const t = sumWorkload(a, secs);
     if (payableWorkload(a, secs) > weeklyCapFor(a)) return false; // ลงบันทึกเวลาจริงไม่ได้ตามเพดาน ชม./วัน
-    if (a.level === "master" || a.level === "phd") return t >= GRAD_MIN_HRS && t <= GRAD_MAX_HRS;
+    if (a.level === "master" || a.level === "phd") return t <= GRAD_MAX_HRS;
     return t > 0;
   });
   const sectionChosen = assignments.length > 0 && assignments.every(a => a.section_ids.length > 0);
@@ -1888,9 +1884,8 @@ function AssignmentBlock({
                           // billable/loggable worklog duty — ตรวจการบ้าน,
                           // ≤2h/week, same as undergrad's simplicity. But
                           // เตรียมการสอน/อื่นๆ (prep_hrs/other_hrs) stay on
-                          // THIS form — lecturers still need them to reach
-                          // the 10-12h graduate-school regulation total
-                          // without artificially inflating ช่วยสอน. They are
+                          // THIS form to describe additional workload
+                          // within the 12h graduate-school ceiling. They are
                           // administrative only from here on: never turned
                           // into a worklog duty card or a payable hour (see
                           // AllowOther/WeeklyCapOther in authz.go, hardcoded
@@ -1910,7 +1905,7 @@ function AssignmentBlock({
                                   onD={v => onWorkload(idx, sid, { grade_desc: v })} />
                               </div>
                               {/* <div className="text-[11px] text-ink-3">
-                                สองรายการถัดไปใช้เพื่อให้ครบ 10–12 ชม./สัปดาห์ตามระเบียบบัณฑิตศึกษาเท่านั้น
+                                สองรายการถัดไปใช้ระบุภาระงานเพิ่มเติม โดยชั่วโมงรวมต้องไม่เกิน 12 ชม./สัปดาห์
                                 — ไม่ถูกนำไปสร้างตารางลงเวลาหรือคำนวณค่าตอบแทน
                               </div> */}
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1953,23 +1948,20 @@ function AssignmentBlock({
             : t("ชั่วโมงรวมสำหรับตรวจเกณฑ์ภาระงานจะบวกทุก Sec ตามที่กรอก ส่วนค่าตอบแทนของคาบที่สอนพร้อมกันนับเพียงครั้งเดียว เพราะเป็นการทำงานในช่วงเวลาเดียวกัน")}
         </p>
         {(() => {
-          const gradUnder = isGrad && total < GRAD_MIN_HRS;
           const gradOver = isGrad && total > GRAD_MAX_HRS;
           // เกินเพดานรายวันตามประกาศ → ลงบันทึกเวลาจริงไม่ได้ ต้องบล็อก
           const overDaily = payableWorkload(a, sections) > weeklyCap;
-          const bad = gradUnder || gradOver || overDaily || (!isGrad && total === 0);
+          const bad = gradOver || overDaily || (!isGrad && total === 0);
           const msg = overDaily
             ? t("เกิน {weekly} ชม./สัปดาห์ ที่ลงบันทึกเวลาได้จริง (เพดาน {daily} ชม./วัน ตามประกาศ × {days} วันทำการ)", {
               weekly: weeklyCap.toFixed(0), daily: (weeklyCap / WORKING_DAYS_PER_WEEK).toFixed(0), days: WORKING_DAYS_PER_WEEK,
             })
-            : gradUnder
-            ? t("ต้องกรอกอย่างน้อย {n} ชม./สัปดาห์ ตามระเบียบบัณฑิตศึกษา ยังส่งคำขอไม่ได้", { n: GRAD_MIN_HRS })
             : gradOver
             ? t("เกินขีดจำกัด {n} ชม./สัปดาห์", { n: GRAD_MAX_HRS })
             : !isGrad && total === 0
             ? t("ยังไม่ได้ระบุภาระงาน")
             : isGrad
-            ? t("อยู่ในช่วง 10–12 ชม./สัปดาห์")
+            ? t("ไม่เกิน 12 ชม./สัปดาห์")
             : t("ภาระงานรวม");
           return (
             <div data-tour="req-total" className={

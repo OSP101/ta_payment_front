@@ -1,3 +1,5 @@
+import { APP_VERSION } from "../lib/docs/version";
+
 export default function FooterCredit({ onPhoto = false }: { onPhoto?: boolean }) {
   return (
     <span
@@ -6,6 +8,7 @@ export default function FooterCredit({ onPhoto = false }: { onPhoto?: boolean })
       <span>© {new Date().getFullYear()} College of Computing, Khon Kaen University</span>
       <span aria-hidden="true" className={onPhoto ? "" : "hidden opacity-40 sm:inline"}>·</span>
       <DeveloperCredit onPhoto={onPhoto} />
+      <span className={onPhoto ? "text-white/80" : "text-[11px] text-muted"}>เวอร์ชัน {APP_VERSION}</span>
     </span>
   );
 }

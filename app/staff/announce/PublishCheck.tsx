@@ -4,7 +4,7 @@ import { AlertTriangle, Check, Mail, Send, ShieldCheck } from "lucide-react";
 import { toast } from "@/app/lib/toast";
 import { api, errMessage } from "../../lib/api";
 import { Button, Modal, Tip } from "../../components/ui";
-import { useI18n } from "../../lib/i18n/client";
+import { msg, useI18n } from "../../lib/i18n/client";
 import {
   CAT_META, fmtDateTime, fromLocalParts, mailSubject,
   type Ann, type AudiencePreview, type Draft,
@@ -99,11 +99,11 @@ export default function PublishCheck({
       size="lg"
       footer={
         <div className="flex w-full flex-wrap items-center justify-end gap-2">
-          <Tip content={t("ส่งอีเมลฉบับนี้ถึงอีเมลของคุณคนเดียว เพื่อดูว่าผู้รับจะเห็นอย่างไร ไม่มีใครอื่นได้รับ")}>
+          {draft.sendEmail && <Tip content={t("ส่งอีเมลฉบับนี้ถึงอีเมลของคุณคนเดียว เพื่อดูว่าผู้รับจะเห็นอย่างไร ไม่มีใครอื่นได้รับ")}>
             <Button variant="ghost" onPress={sendTest} isPending={testing} disabled={testing || pending}>
               <Mail size={14} /> {t("ส่งทดสอบถึงตัวเอง")}
             </Button>
-          </Tip>
+          </Tip>}
           <span className="flex-1" />
           <Button variant="tertiary" onPress={onClose} disabled={pending}>{t("กลับไปแก้ไข")}</Button>
           <Tip content={blockedWhy}>
@@ -139,7 +139,7 @@ export default function PublishCheck({
             <div className="mt-2 space-y-1.5 text-xs">
               {diff.added.length > 0 && (
                 <div className="rounded-lg border border-border bg-surface-secondary px-3 py-2">
-                  {t.rich("{added} จะได้รับแจ้งเตือนและอีเมลเมื่อบันทึก", { added: <b>{t("เพิ่มใหม่ {n} คน", { n: diff.added.length })}</b> })}
+                  {t.rich(draft.sendEmail ? msg("{added} จะได้รับแจ้งเตือนและอีเมลเมื่อบันทึก") : msg("{added} จะได้รับแจ้งเตือนในระบบเมื่อบันทึก"), { added: <b>{t("เพิ่มใหม่ {n} คน", { n: diff.added.length })}</b> })}
                   <div className="mt-0.5 text-muted">{diff.added.map(n => n.name).join(" · ")}</div>
                 </div>
               )}
@@ -153,6 +153,7 @@ export default function PublishCheck({
           )}
         </Row>
 
+        <Row ok title={draft.sendEmail ? t("ในระบบพร้อมอีเมล") : t("ในระบบเท่านั้น")} />
         <Row
           ok
           title={draft.title.trim() || t("ยังไม่มีหัวข้อ")}
@@ -172,7 +173,7 @@ export default function PublishCheck({
             detail={
               nobody
                 ? t("ไม่มีการส่งแจ้งเตือนหรืออีเมล")
-                : t("ผู้รับได้ทั้งการแจ้งเตือนในระบบและอีเมล หัวเรื่อง “{subject}”", { subject: mailSubject(draft.category, draft.title.trim()) })
+                : draft.sendEmail ? t("ผู้รับได้ทั้งการแจ้งเตือนในระบบและอีเมล หัวเรื่อง “{subject}”", { subject: mailSubject(draft.category, draft.title.trim()) }) : t("ผู้รับได้รับประกาศและการแจ้งเตือนในระบบเท่านั้น ไม่ส่งอีเมล")
             }
           />
         )}

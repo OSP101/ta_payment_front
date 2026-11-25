@@ -40,6 +40,8 @@ export interface Ann {
   updated_at?: string;
   status: Status;
   is_public?: boolean;
+  send_email?: boolean;
+  target_term_id?: string | null;
   target_course_ids?: string[];
   target_user_ids?: string[];
   target_filters?: string[];
@@ -92,6 +94,8 @@ export interface Draft {
   /** Status of the row being edited; undefined for a new one. */
   originalStatus?: Status;
   isPublic: boolean;
+  sendEmail: boolean;
+  targetTermId: string;
   targetUsers: PickedUser[];
   targetCourses: { id: string; label: string }[];
   targetFilters: string[];
@@ -117,6 +121,8 @@ export const emptyDraft: Draft = {
   expireTime: "",
   originalPublishedAt: null,
   isPublic: false,
+  sendEmail: false,
+  targetTermId: "",
   targetUsers: [],
   targetCourses: [],
   targetFilters: [],
@@ -289,6 +295,8 @@ export function draftFromAnn(a: Ann): Draft {
     originalPublishedAt: a.published_at ?? null,
     originalStatus: a.status,
     isPublic: !!a.is_public,
+    sendEmail: a.send_email ?? true,
+    targetTermId: a.target_term_id ?? "",
     targetUsers: a.target_users ?? [],
     targetCourses: (a.target_courses ?? []).map(c => ({ id: c.id, label: `${c.code} ${c.name}` })),
     targetFilters: a.target_filters ?? [],
@@ -301,6 +309,7 @@ export interface AudienceRule {
   course_ids: string[];
   user_ids: string[];
   filters: string[];
+  term_id?: string;
 }
 
 export function ruleOf(d: Draft): AudienceRule {
@@ -309,6 +318,7 @@ export function ruleOf(d: Draft): AudienceRule {
     course_ids: d.targetCourses.map(c => c.id),
     user_ids: d.targetUsers.map(u => u.id),
     filters: d.targetFilters,
+    term_id: d.targetTermId || undefined,
   };
 }
 
@@ -327,6 +337,8 @@ export interface UpsertPayload {
   published_at: string | null;
   expires_at: string | null;
   is_public: boolean;
+  send_email: boolean;
+  target_term_id: string | null;
   target_course_ids: string[];
   target_user_ids: string[];
   target_filters: string[];
@@ -387,6 +399,8 @@ export function buildPayload(d: Draft, asDraft: boolean): UpsertPayload | { erro
     published_at: publishedAt,
     expires_at: expiresAt,
     is_public: d.isPublic,
+    send_email: d.sendEmail,
+    target_term_id: d.targetTermId || null,
     target_course_ids: d.targetCourses.map(c => c.id),
     target_user_ids: d.targetUsers.map(u => u.id),
     target_filters: d.targetFilters,

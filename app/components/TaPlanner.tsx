@@ -292,10 +292,6 @@ function templateWorkload(level: "undergrad" | "master", s: PlanSection, t: Temp
     w.help_teach_hrs = lec + lab;
     w.grade_hrs = review;
     w.grade_desc = review > 0 ? "ตรวจการบ้าน" : ""; // i18n-ignore — workload text saved with the request
-    // Regulation total for a graduate is 10–12 h/week; the rest is
-    // preparation, which is administrative and not billed.
-    w.prep_hrs = Math.max(0, 10 - (w.help_teach_hrs + w.grade_hrs));
-    w.prep_desc = w.prep_hrs > 0 ? "เตรียมการสอน" : ""; // i18n-ignore — workload text saved with the request
   }
   return w;
 }
@@ -1176,11 +1172,11 @@ function ManualCalculator({ f, regular, special, hasSpecial, scope, groups }: {
     }
     return best || 5;
   })();
-  // A graduate's 10–12 h/week includes preparation, which is not billed: only
+  // A graduate's up to 12 h/week includes preparation, which is not billed: only
   // class time plus ≤ 2 h grading is — the same ceiling the plan uses.
   const gradBillable = typical;
   const seed = (pool: Pool): ManualPoolInput => ({
-    students: pool.students, ugCount: 0, ugHrs: typical, gradCount: 0, gradHrs: Math.max(typical, 10),
+    students: pool.students, ugCount: 0, ugHrs: typical, gradCount: 0, gradHrs: Math.min(typical, 12),
   });
   const [reg, setReg] = useState<ManualPoolInput>(() => seed(regular));
   const [spc, setSpc] = useState<ManualPoolInput>(() => seed(special));
@@ -1216,7 +1212,7 @@ function ManualCalculator({ f, regular, special, hasSpecial, scope, groups }: {
         {" · "}{t("เปลี่ยนจำนวน นศ. แล้วเพดานงบจะเลื่อนตามสูตร")}
       </div>
       <div className={"grid gap-3 " + (hasSpecial ? "lg:grid-cols-2" : "")}>
-        <ManualPoolCard label={t("ภาคปกติ")} tone="brand" inp={reg} onChange={setReg} res={R} months={months} rateNote={t("ป.ตรี {ug}/ชม. · บัณฑิต {grad}/ชม. (10–12 ชม./สัปดาห์)", { ug: baht(f.rates.undergrad_regular), grad: baht(f.rates.graduate_regular_hourly) })} gradHrsEditable />
+        <ManualPoolCard label={t("ภาคปกติ")} tone="brand" inp={reg} onChange={setReg} res={R} months={months} rateNote={t("ป.ตรี {ug}/ชม. · บัณฑิต {grad}/ชม. (ไม่เกิน 12 ชม./สัปดาห์)", { ug: baht(f.rates.undergrad_regular), grad: baht(f.rates.graduate_regular_hourly) })} gradHrsEditable />
         {hasSpecial && (
           <ManualPoolCard label={t("ภาคพิเศษ")} tone="warn" inp={spc} onChange={setSpc} res={S} months={months}
             rateNote={t("ป.ตรี {ug}/ชม. ไม่เกิน {cap}/เดือน · บัณฑิต เหมาจ่าย {lump}/คน/เทอม", { ug: baht(f.rates.undergrad_special), cap: baht(f.rates.ug_special_monthly_cap), lump: baht(f.rates.graduate_special_lumpsum) })} />

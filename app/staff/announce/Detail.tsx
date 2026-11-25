@@ -209,7 +209,7 @@ export default function Detail({
         {wasSent && (
           <section className="border-t border-hairline pt-4" data-testid="delivery">
             <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              <Mail size={14} /> {t("ผลการส่ง")}
+              <Mail size={14} /> {t("ผลการส่ง")} · {a.send_email ? t("ในระบบพร้อมอีเมล") : t("ในระบบเท่านั้น")}
             </h3>
             {total === 0 ? (
               <p className="text-sm text-muted">{a.is_public ? t("ไม่มีผู้รับในระบบ ประกาศนี้อ่านได้ทางลิงก์สาธารณะ") : t("ไม่มีผู้รับในระบบ")}</p>
@@ -236,7 +236,7 @@ export default function Detail({
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {failed + waiting > 0 && a.status === "live" && (
-                    <Tip content={t("ลองส่งอีเมลอีกครั้งเฉพาะคนที่ยังไม่สำเร็จหรือค้างส่ง คนที่ได้รับแล้วไม่ถูกส่งซ้ำ")}>
+                    <Tip content={t("ส่งซ้ำผ่านช่องทางที่เลือก เฉพาะคนที่ยังไม่สำเร็จหรือค้างส่ง คนที่ได้รับแล้วไม่ถูกส่งซ้ำ")}>
                       <Button variant="secondary" size="sm" onPress={resend} isPending={busy === "resend"} disabled={!!busy}>
                         <RefreshCw size={13} /> {t("ส่งซ้ำ {n} คนที่ยังไม่สำเร็จ", { n: failed + waiting })}
                       </Button>
@@ -245,7 +245,7 @@ export default function Detail({
                   {a.status === "live" && unread > 0 && (
                     <Tip content={remindedRecently
                       ? t("เตือนซ้ำไปแล้วเมื่อ {at} เตือนได้อีกครั้งหลังผ่านไป 24 ชั่วโมง", { at: fmtDateTime(a.reminded_at, intl) })
-                      : t("ส่งแจ้งเตือนและอีเมลอีกครั้งเฉพาะคนที่ยังไม่เปิดอ่าน")}>
+                      : a.send_email ? t("ส่งแจ้งเตือนและอีเมลอีกครั้งเฉพาะคนที่ยังไม่เปิดอ่าน") : t("ส่งแจ้งเตือนในระบบอีกครั้งเฉพาะคนที่ยังไม่เปิดอ่าน")}>
                       <Button variant="secondary" size="sm" onPress={() => setConfirm("remind")} disabled={!!busy || remindedRecently}>
                         <BellRing size={13} /> {t("เตือน {n} คนที่ยังไม่อ่าน", { n: unread })}
                       </Button>
@@ -297,7 +297,7 @@ export default function Detail({
         isPending={busy === "publish"}
         icon={<Send size={18} />}
         title={t("เผยแพร่ตอนนี้เลย?")}
-        message={t("ประกาศนี้ตั้งเวลาไว้ {at} หากยืนยัน ผู้รับ ({who}) จะได้รับแจ้งเตือนและอีเมลทันที และเรียกคืนไม่ได้", { at: fmtDateTime(a.published_at, intl), who: sentence || t("ตามกลุ่มที่ตั้งไว้") })}
+        message={t("ประกาศนี้ตั้งเวลาไว้ {at} หากยืนยัน ผู้รับ ({who}) จะได้รับแจ้งเตือนผ่านช่องทางที่เลือกทันที", { at: fmtDateTime(a.published_at, intl), who: sentence || t("ตามกลุ่มที่ตั้งไว้") })}
         confirmLabel={t("เผยแพร่ตอนนี้")}
       />
       <ConfirmDialog
@@ -307,7 +307,7 @@ export default function Detail({
         isPending={busy === "remind"}
         icon={<BellRing size={18} />}
         title={t("เตือน {n} คนที่ยังไม่เปิดอ่าน?", { n: unread })}
-        message={t("ระบบจะส่งแจ้งเตือนและอีเมลอีกครั้งเฉพาะคนที่ยังไม่เปิดอ่านประกาศนี้ เตือนซ้ำได้วันละครั้งต่อประกาศ")}
+        message={t("ระบบจะเตือนอีกครั้งผ่านช่องทางที่เลือก เฉพาะคนที่ยังไม่เปิดอ่านประกาศนี้ เตือนซ้ำได้วันละครั้งต่อประกาศ")}
         confirmLabel={t("ส่งคำเตือน")}
       />
     </div>
@@ -394,8 +394,8 @@ function RecipientTable({ rows }: { rows: Recipient[] }) {
                     {r.status === "pending" && <Chip tone="neutral">{t("รอส่ง")}</Chip>}
                     {r.status === "skipped" && <Chip tone="neutral">{t("ข้าม")}</Chip>}
                     {r.status === "failed" && (
-                      <Tip content={r.error ? t("อีเมลส่งไม่ผ่าน: {error}\nการแจ้งเตือนในระบบส่งถึงแล้ว", { error: r.error }) : t("อีเมลส่งไม่ผ่าน")}>
-                        <span><Chip tone="danger">{t("อีเมลไม่สำเร็จ")}</Chip></span>
+                      <Tip content={r.error ? t("ส่งไม่สำเร็จ: {error}", { error: r.error }) : t("ส่งไม่สำเร็จ")}>
+                        <span><Chip tone="danger">{t("ส่งไม่สำเร็จ")}</Chip></span>
                       </Tip>
                     )}
                   </td>

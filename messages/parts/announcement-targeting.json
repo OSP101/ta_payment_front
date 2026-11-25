@@ -1,0 +1,23 @@
+{
+ "ทุกกลุ่มที่เลือก": "All selected groups",
+ "ภาคการศึกษาของกลุ่มเป้าหมาย": "Target academic term",
+ "ภาคการศึกษาปัจจุบัน": "Current academic term",
+ "โหลดภาคการศึกษาไม่สำเร็จ กรุณาลองใหม่": "Could not load academic terms. Please try again.",
+ "ผู้ช่วยสอนต้องมีชื่อในคำขอที่อาจารย์ส่งแล้วของเทอมนี้ รวมที่รออนุมัติและอนุมัติแล้ว ไม่รวมรายชื่อที่ถอนออก": "TAs must be listed in a submitted or approved lecturer request for this term. Dropped assignments are excluded.",
+ "ช่องทางเผยแพร่": "Delivery channel",
+ "ในระบบเท่านั้น": "In app only",
+ "ในระบบพร้อมอีเมล": "In app and email",
+ "ทั้งสองแบบแสดงประกาศและแจ้งเตือนในระบบ การส่งซ้ำและเตือนผู้ที่ยังไม่อ่านจะใช้ช่องทางเดียวกัน": "Both options publish the announcement and notify recipients in app. Retries and unread reminders use the same channel.",
+ "ประกาศทั่วไปถึงทุกกลุ่ม": "General announcement to all groups",
+ "แจ้งเตือนในระบบ": "In app notification",
+ "ไม่ส่งอีเมลสำหรับประกาศนี้": "Email is disabled for this announcement",
+ "ส่งแจ้งเตือนในระบบอีกครั้งเฉพาะคนที่ยังไม่เปิดอ่าน": "Send an in app reminder only to recipients who have not read it",
+ "ประกาศนี้ตั้งเวลาไว้ {at} หากยืนยัน ผู้รับ ({who}) จะได้รับแจ้งเตือนผ่านช่องทางที่เลือกทันที": "This announcement is scheduled for {at}. Confirming will notify recipients ({who}) immediately through the selected channel.",
+ "ระบบจะเตือนอีกครั้งผ่านช่องทางที่เลือก เฉพาะคนที่ยังไม่เปิดอ่านประกาศนี้ เตือนซ้ำได้วันละครั้งต่อประกาศ": "Remind recipients who have not read this announcement through the selected channel. Reminders are limited to once a day per announcement.",
+ "ผู้รับได้รับประกาศและการแจ้งเตือนในระบบเท่านั้น ไม่ส่งอีเมล": "Recipients receive the announcement and an in app notification only. No email is sent.",
+ "{added} จะได้รับแจ้งเตือนในระบบเมื่อบันทึก": "{added} will receive an in app notification when saved",
+ "ส่งซ้ำผ่านช่องทางที่เลือก เฉพาะคนที่ยังไม่สำเร็จหรือค้างส่ง คนที่ได้รับแล้วไม่ถูกส่งซ้ำ": "Retry through the selected channel only for failed or pending recipients. Recipients already reached will not be notified again.",
+ "ส่งไม่สำเร็จ: {error}": "Delivery failed: {error}",
+ "เขียนประกาศถึงกลุ่มเป้าหมายตามภาคการศึกษา ผู้ช่วยสอนอ้างอิงคำขอที่อาจารย์ส่งแล้ว เลือกส่ง<b>ในระบบเท่านั้น หรือในระบบพร้อมอีเมล</b>ได้": "Write announcements to groups for a selected academic term. TAs are identified through submitted lecturer requests. Choose <b>in app only or in app and email</b>.",
+ "ยังไม่มีคำขอที่อนุมัติในเทอมนี้": "No approved request in this term yet"
+}

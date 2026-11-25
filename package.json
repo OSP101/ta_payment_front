@@ -1,10 +1,10 @@
 {
   "name": "ta_payment_front",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NEXT_PUBLIC_APP_VERSION=$(node -p "require(\'./package.json\').version") next build",
     "start": "next start",
     "docs:media": "node scripts/docs-media-checklist.mjs",
     "test:telemetry": "node --test scripts/api-telemetry.test.mjs",
