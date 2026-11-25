@@ -248,7 +248,13 @@ export default function TeachingPage() {
         pickLecturers
       />
 
-      {mergeExistingOpen && <MergeExistingCoursesModal termId={termId} courses={courses ?? []} onClose={() => setMergeExistingOpen(false)} onMerged={() => { setMergeExistingOpen(false); void mutate((k: unknown) => typeof k === "string" && k.startsWith("/teaching-courses")); toast.success(t("รวมวิชาเรียบร้อยแล้ว")); }} />}
+      {mergeExistingOpen && <MergeExistingCoursesModal termId={termId} courses={courses ?? []} onClose={() => setMergeExistingOpen(false)} onMerged={(sourceId) => {
+        setMergeExistingOpen(false);
+        // The absorbed course no longer exists; do not refetch its mounted budget row.
+        const sourceKey = `/teaching-courses/${sourceId}`;
+        void mutate((k: unknown) => typeof k === "string" && k.startsWith("/teaching-courses") && k !== sourceKey && !k.startsWith(`${sourceKey}/`) && !k.startsWith(`${sourceKey}?`));
+        toast.success(t("รวมวิชาเรียบร้อยแล้ว"));
+      }} />}
       <ImportModal
         draftOwner={importOwner?.id}
         onResume={() => setImporting(true)}

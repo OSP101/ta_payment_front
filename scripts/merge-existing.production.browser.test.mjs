@@ -45,12 +45,14 @@ try{
  });
  await new Promise((resolve,reject)=>{gateway.once('error',reject);gateway.listen(3326,'127.0.0.1',resolve)});
  for(const data of fixture.cases){
-  const safari=data.mode==='safari',mobile=data.mode==='mobile'||safari;
+  const action=data.mode.replace(/^approved-/,'');
+  const safari=action==='safari',mobile=action==='mobile'||safari;
   browser=await(safari?webkit:chromium).launch(safari?{}:{channel:'chrome'});
   const context=await browser.newContext({...safari?devices['iPhone 13']:{},viewport:mobile?{width:390,height:640}:{width:1440,height:1000},hasTouch:mobile,isMobile:mobile,ignoreHTTPSErrors:true});
   await context.addCookies([{name:'access_token',value:fixture.token,url:origin,httpOnly:true,secure:true,sameSite:'Lax'}]);
   const page=await context.newPage(),trace=[],pending=[],errors=[];let noticeAcknowledged=false;
   const watch=p=>{p.setDefaultTimeout(45000);p.on('pageerror',e=>errors.push(e.message));p.on('response',r=>{
+   if(r.url().includes('/api/v1/')&&(r.status()===404||r.status()>=500))errors.push(`Unexpected API response ${r.status()} ${new URL(r.url()).pathname}`);
    if(!r.url().includes('/merge-existing'))return;
    pending.push((async()=>{let body;try{body=await r.json()}catch{}let scopes=[];try{scopes=Object.keys(JSON.parse(r.request().headers()['x-edit-views']||'{}'))}catch{}
     trace.push({commit:r.url().includes('commit=1'),status:r.status(),error:body?.error,blockers:body?.blockers,scopes});})());
@@ -72,6 +74,7 @@ try{
    await p.getByRole('listbox',{name:/วิชาที่จะนำมารวม/}).getByRole('option',{name:reverse?/CP321004/:/SC361004/}).click();
    const next=response(p,false);await dialog(p).getByRole('button',{name:'ดูข้อมูลก่อนรวม',exact:true}).click();const r=await next;if(r.status()!==200)throw Error(`First preview: ${r.status()} ${await r.text()}`);
    await expect(approve(p)).toBeDisabled();await expect(commit(p)).toBeDisabled();
+   if(data.approval?.request_id)await expect(dialog(p).getByText('คงคำขอ TA ที่อนุมัติแล้วของวิชาหลัก',{exact:true})).toBeVisible();
   };
   const map=async p=>{
    const first=dialog(p).getByLabel('จัดการ Section 1 regular',{exact:true});
@@ -85,7 +88,7 @@ try{
   const check=async p=>{await expect(approve(p)).toBeEnabled();await expect(approve(p)).toBeInViewport({ratio:1});if(mobile)await approve(p).tap();else await approve(p).click();await expect(commit(p)).toBeEnabled()};
   const verifyMerged=async()=>{
    const r=await context.request.get(`${origin}/api/v1/teaching-courses?term_id=${data.term}`);if(r.status()!==200)throw Error(`Reload list: ${r.status()}`);const list=await r.json();
-   if(list.length!==1||list[0].id!==data.target||list[0].num_students_regular!==45||list[0].num_students_special!==35)throw Error('Incorrect merged course data');
+   if(list.length!==1||list[0].id!==data.target||list[0].num_students_regular!==(data.regular_after||45)||list[0].num_students_special!==35)throw Error('Incorrect merged course data');
   };
   try{
    console.log(`Actual /staff/teaching production scenario: ${data.mode}`);
@@ -95,16 +98,16 @@ try{
     await expect(dialog(page).getByText(/เลือกรหัสหลักสูตรใหม่กว่า/)).toBeVisible();await expect(approve(page)).toBeDisabled();
    }else{
     await map(page);
-    if(['ta-request','incompatible'].includes(data.mode)){
+    if(['ta-request','incompatible','draft-time','submitted-time','reviewed-month'].includes(action)){
      await expect(approve(page)).toBeDisabled();await expect(commit(page)).toBeDisabled();
-     const expected=data.mode==='ta-request'?/มีข้อมูลการใช้งาน/:/หน่วยกิต ชั่วโมง หรือระดับการศึกษาต่างกัน/;
+     const expected=action==='ta-request'?/มีข้อมูลการใช้งาน/:action==='incompatible'?/หน่วยกิต ชั่วโมง หรือระดับการศึกษาต่างกัน/:action==='reviewed-month'?/ตรวจหรือส่งเวลาประจำเดือน/:/มีบันทึกเวลาปฏิบัติงานแล้ว/;
      await expect(page.locator('.modal__footer').getByText(expected)).toBeVisible();
-    }else if(data.mode==='two-tabs'){
+    }else if(action==='two-tabs'){
      const other=await context.newPage();watch(other);await open(other);await map(other);await check(other);
      await check(page);await submit(page,200);await expect(dialog(page)).toHaveCount(0);
      await submit(other,409);await expect(commit(other)).toBeDisabled();await verifyMerged();await other.close();
-    }else if(['target-changed','source-changed'].includes(data.mode)){
-     const id=data.mode==='target-changed'?data.target:data.source;
+    }else if(['target-changed','source-changed'].includes(action)){
+     const id=action==='target-changed'?data.target:data.source;
      const read=await context.request.get(`${origin}/api/v1/teaching-courses/${id}`);
      const patch=await context.request.patch(`${origin}/api/v1/teaching-courses/${id}/info`,{headers:{'X-Edit-Views':read.headers()['x-edit-views'],'Idempotency-Key':crypto.randomUUID()},data:{name_th:'Changed after preview'}});
      if(patch.status()!==200)throw Error(`Concurrent edit: ${patch.status()} ${await patch.text()}`);

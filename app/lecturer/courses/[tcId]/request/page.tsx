@@ -163,6 +163,12 @@ interface Assignment {
   workload_rule_version?: number;
 }
 
+interface EditingRequest {
+  id: string;
+  reimburse_scope: "lecture" | "lab" | "both";
+  assignments: Assignment[];
+}
+
 interface RequestWindow {
   id: string;
   term_id: string;
@@ -293,6 +299,14 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
   const onBehalf = !!me && (me.roles.includes("admin") || me.roles.includes("staff"))
     && !lecturers.some(l => l.id === me.id);
   const [pickedLecturer, setPickedLecturer] = useState("");
+  const [editing, setEditing] = useState<EditingRequest | null>(null);
+  async function editRequest(id: string) {
+    try {
+      const input = await api.get<{reimburse_scope: EditingRequest["reimburse_scope"]; assignments: (Omit<Assignment,"section_workloads"> & {section_workloads: {section_id: string; workload: WorkloadFields}[]})[]}>(`/ta-requests/${id}/edit`);
+      setEditing({ id, reimburse_scope: input.reimburse_scope, assignments: input.assignments.map(a => ({...a, section_workloads: Object.fromEntries(a.section_workloads.map(w => [w.section_id,w.workload]))})) });
+      window.scrollTo({top:0,behavior:"smooth"});
+    } catch (e) { notify.error(e); }
+  }
   const forLecturer = onBehalf
     ? (pickedLecturer && lecturers.some(l => l.id === pickedLecturer)
         ? pickedLecturer
@@ -384,6 +398,9 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
           the form to be right there, not behind a button). */}
       {!wbaBlocked && !windowBlocked && (
         <RequestFormSection
+          key={editing?.id ?? "new"}
+          editing={editing}
+          onCancelEdit={() => setEditing(null)}
           tcId={tcId}
           course={course}
           budget={budget}
@@ -394,6 +411,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
             // The form already toasts the actual verdict (approved / waiting on
             // a TA timetable). A second "รอเจ้าหน้าที่ตรวจสอบ" toast contradicted
             // it — requests are decided automatically, not by staff.
+            setEditing(null);
             mutate("/ta-requests");
           }}
         />
@@ -402,7 +420,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
       <div data-tour="req-history">
         {/* undefined (not []) while loading, so the table shows skeleton rows
             instead of flashing "ยังไม่มีคำขอ". */}
-        <RequestsTable rows={allReqs ? courseReqs : undefined} loading={!allReqs} />
+        <RequestsTable rows={allReqs ? courseReqs : undefined} loading={!allReqs} onEdit={!onBehalf ? editRequest : undefined} />
       </div>
     </div>
   );
@@ -453,7 +471,7 @@ function GradSpecialAlert({ g }: { g: GradSpecialFacts }) {
   const who = g.names.join(", ");
   return (
     <Alert
-      status={g.over ? "danger" : "warning"}
+      status="warning"
       icon={<Wallet size={18} />}
       title={g.over
         ? t("TA บัณฑิตศึกษาใน section ภาคพิเศษ งบภาคพิเศษไม่พอ")
@@ -466,9 +484,7 @@ function GradSpecialAlert({ g }: { g: GradSpecialFacts }) {
           {g.already > 0 && <> {t("ผูกไว้แล้ว {n} จากคำขอก่อนหน้า", { n: fmt(g.already) })}</>}
           {" "}{t("รวมเป็น {n}", { n: fmt(g.committed) })}{" "}
           {g.over ? (
-            t.rich("{over} TA ปริญญาตรีทุกคนใน section ภาคพิเศษ จะเบิกชั่วโมงไม่ได้เลย ถ้าไม่ตั้งใจ ให้ย้าย TA คนนี้ไป section ภาคปกติ หรือเลือก TA ปริญญาตรีแทน", {
-              over: <b>{t("เกินงบ {n}", { n: fmt(g.committed - g.cap) })}</b>,
-            })
+            t("ส่งคำขอได้ ระบบจะเฉลี่ยงบภาคพิเศษเท่ากันตามจำนวน TA บัณฑิตศึกษา โดยยอดที่ส่งเบิกจ่ายแล้วจะคงเดิม")
           ) : (
             t("เหลือให้ TA ปริญญาตรีใน section ภาคพิเศษเบิกรายชั่วโมง {n}", { n: fmt(g.cap - g.committed) })
           )}
@@ -483,9 +499,11 @@ function GradSpecialAlert({ g }: { g: GradSpecialFacts }) {
 /* -------------------------------------------------------------------------- */
 
 function RequestFormSection({
-  tcId, course, budget, canSend, lecturerId, late, onSubmitted,
+  tcId, course, budget, canSend, lecturerId, late, onSubmitted, editing, onCancelEdit,
 }: {
   tcId: string;
+  editing?: EditingRequest | null;
+  onCancelEdit?: () => void;
   course?: {
     id: string; code: string; name_th: string;
     lecture_hrs?: number; lab_hrs?: number;
@@ -509,7 +527,9 @@ function RequestFormSection({
   const { data: payCaps } = useSWR<PayRateCaps>("/settings/pay-rate");
   // Only resolved selections are needed by the form's calculations. The picker
   // searches all TAs, including those at quota, and explains disabled results.
-  const allTas = useMemo(() => Object.values(knownTas), [knownTas]);
+  const allTas = useMemo(() => Object.values(knownTas).map(ta => editing && ta.existing_request_id === editing.id
+    ? {...ta, already_in_course: false, existing_request_id: undefined, held_section_ids: [], at_quota: false, existing_workload_rule_version: 2}
+    : ta), [knownTas, editing]);
 
   // Q&A rule 3: default reimburse_scope from the course's credit hours.
   //   lecture-only → "lecture"; lab-only → "lab"; both → "both".
@@ -523,8 +543,8 @@ function RequestFormSection({
     return "both";
   }, [course?.id, course?.lecture_hrs, course?.lab_hrs]);
 
-  const [scope, setScope] = useState<"lecture" | "lab" | "both">(defaultScope);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [scope, setScope] = useState<"lecture" | "lab" | "both">(editing?.reimburse_scope ?? defaultScope);
+  const [assignments, setAssignments] = useState<Assignment[]>(editing?.assignments ?? []);
   const selectedIds = [...new Set(assignments.map(a => a.ta_id).filter(Boolean))].sort().join(",");
   const selectedKey = candidatesKey && selectedIds ? `${candidatesKey}&ids=${encodeURIComponent(selectedIds)}` : null;
   const { data: selectedTas, error: selectedError, mutate: refreshSelected } = useSWR<{ items: TA[] }>(selectedKey, async (key: string) => {
@@ -602,8 +622,8 @@ function RequestFormSection({
   // The section mounts fresh each time the lecturer opens it, so state starts
   // empty. Re-derive the default scope once the course data loads.
   useEffect(() => {
-    setScope(defaultScope);
-  }, [defaultScope]);
+    setScope(editing?.reimburse_scope ?? defaultScope);
+  }, [defaultScope, editing]);
 
   /* --- draft persistence ----------------------------------------------- */
   // What the lecturer typed lives on the server (one draft per lecturer per
@@ -611,8 +631,8 @@ function RequestFormSection({
   // form back as it was. Loaded once per course; saved three seconds after the
   // last change; dropped on a successful submit.
   type DraftPayload = { v: 1; scope: "lecture" | "lab" | "both"; assignments: Assignment[] };
-  const draftKey = tcId ? `/teaching-courses/${tcId}/request-draft` : null;
-  const [draftReady, setDraftReady] = useState(false);
+  const draftKey = tcId && !editing ? `/teaching-courses/${tcId}/request-draft` : null;
+  const [draftReady, setDraftReady] = useState(!!editing);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const lastSavedJson = useRef<string>("");
   useEffect(() => {
@@ -786,7 +806,7 @@ function RequestFormSection({
   const gradSpecial = useMemo(() => {
     const lump = budget?.rates?.graduate_special_lumpsum ?? 0;
     const cap = budget?.term_pay_special ?? 0;
-    if (!lump || !cap) return null;
+    if (!lump) return null;
     const specialIds = new Set(secs.filter(s => s.track === "special").map(s => s.id));
     const byId = new Map(allTas.map(t => [t.id, t]));
     const names: string[] = [];
@@ -833,6 +853,7 @@ function RequestFormSection({
     if (items.length) setProposedPlan(items);
   }, []);
   function acceptPlan() {
+    if (editing) return;
     if (!proposedPlan) return;
     setBeforePlan(structuredClone(assignments));
     setAssignments(proposedPlan.map(it => ({
@@ -845,6 +866,7 @@ function RequestFormSection({
     openBook();
   }
   function resizeAssignments(count: number) {
+    if (editing) return;
     if (!Number.isSafeInteger(count) || count < 0) { setPersonCount(String(assignments.length)); return; }
     if (count < assignments.length) { setResizeTo(count); return; }
     if (count === assignments.length) return;
@@ -859,7 +881,7 @@ function RequestFormSection({
   // A plan handed over from the budget page: applied once, then forgotten, so
   // a reload does not add the rows twice.
   useEffect(() => {
-    if (!tcId || !course?.sections) return;
+    if (editing || !tcId || !course?.sections) return;
     let raw: string | null = null;
     try {
       raw = sessionStorage.getItem(planHandoffKey(tcId));
@@ -876,6 +898,7 @@ function RequestFormSection({
 
   /* --- helpers --------------------------------------------------------- */
   function addAssignment(secId?: string, taId = "", level = "undergrad") {
+    if (editing) return;
     const initial = secId ?? firstSectionId;
     setActivePerson(assignments.length);
     setBookNotice(t("เพิ่มหน้า TA แล้ว กรุณาเลือกชื่อและกำหนดภาระงาน"));
@@ -946,6 +969,19 @@ function RequestFormSection({
 
   async function submit() {
     if (!tcId) return;
+    if (editing) {
+      setErr(null); setPending(true);
+      try {
+        await api.put(`/ta-requests/${editing.id}`, {teaching_course_id: tcId, reimburse_scope: scope,
+          assignments: assignments.map(a => ({...a, section_workloads: a.section_ids.map(sid => ({section_id:sid, workload:workloadOf(a,sid)}))}))});
+        notify.success(t("แก้ไขคำขอเรียบร้อยแล้ว"));
+        mutate(`/ta-requests/${editing.id}`);
+        mutate(key => typeof key === "string" && (key.startsWith("/ta-requests/candidates") || key.includes("budget")));
+        onSubmitted();
+      } catch (e) { setErr((e as Error).message); notify.error(e); }
+      finally { setPending(false); }
+      return;
+    }
     setErr(null); setPending(true);
     // A TA already on this course is not filed again: their new sections are
     // added to the request they are on. Everyone else goes into a new request.
@@ -1097,12 +1133,13 @@ function RequestFormSection({
   const scopeLabel = scope === "lecture" ? t("บรรยาย") : scope === "lab" ? t("ปฏิบัติการ") : t("บรรยาย+ปฏิบัติการ");
   return (
     <div className={styles.form}>
+      {editing && <Alert status="accent" title={t("แก้ไขคำขอ")} description={t("คำขอเดิมจะยังอยู่จนกว่าจะบันทึกข้อมูลใหม่สำเร็จ หากออกใบแต่งตั้งแล้วจะบันทึกการแก้ไขไม่ได้")} action={<Button variant="secondary" onClick={onCancelEdit}>{t("ออกจากการแก้ไข")}</Button>} />}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="w-8 h-8 rounded-lg bg-accent-soft text-accent-soft-foreground flex items-center justify-center shrink-0">
           <Send size={16} />
         </div>
         <div className="min-w-0">
-          <div className="font-semibold">{t("ส่งคำขอผู้ช่วยสอน")}</div>
+          <div className="font-semibold">{editing ? t("แก้ไขคำขอ") : t("ส่งคำขอผู้ช่วยสอน")}</div>
           <div className="text-xs text-muted">{t("ทำทีละขั้นตามหมายเลข แล้วกด “ส่งคำขอ” ด้านล่าง")}</div>
         </div>
         <Button size="sm" variant="secondary" onClick={() => setGuideTopic("hours")}><Info size={14} />{t("วิธีกรอกคำขอและชั่วโมง TA")}</Button>
@@ -1155,13 +1192,13 @@ function RequestFormSection({
           <div className={styles.countSetup}>
             <label htmlFor="request-person-count" className="font-medium text-sm">{t("จำนวน TA ที่อาจารย์ต้องการขอ")}</label>
             <div className={styles.countControls}>
-              <Button variant="secondary" onClick={() => resizeAssignments(Math.max(0, assignments.length - 1))} disabled={!assignments.length || !draftReady} aria-label={t("ลดจำนวน TA")}>−</Button>
+              <Button variant="secondary" onClick={() => resizeAssignments(Math.max(0, assignments.length - 1))} disabled={!!editing || !assignments.length || !draftReady} aria-label={t("ลดจำนวน TA")}>−</Button>
               <TextInput id="request-person-count" type="number" min={0} step={1} value={personCount}
                 onChange={e => setPersonCount(e.target.value)}
                 onBlur={() => resizeAssignments(personCount.trim() ? Number(personCount) : assignments.length)}
                 onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                disabled={!draftReady} className="w-24 text-center" />
-              <Button variant="secondary" onClick={() => resizeAssignments(assignments.length + 1)} disabled={!draftReady} aria-label={t("เพิ่มจำนวน TA")}>+</Button>
+                disabled={!!editing || !draftReady} className="w-24 text-center" />
+              <Button variant="secondary" onClick={() => resizeAssignments(assignments.length + 1)} disabled={!!editing || !draftReady} aria-label={t("เพิ่มจำนวน TA")}>+</Button>
               <span>{t("คน")}</span>
             </div>
             <p className="text-sm text-ink-3">{t("อาจารย์กำหนดจำนวนได้เอง ขอน้อยกว่าหรือมากกว่าคำแนะนำได้")}</p>
@@ -1174,7 +1211,8 @@ function RequestFormSection({
         scope={scope}
         schedules={plannerSchedules}
         drafts={plannerDrafts}
-        onApplyPlan={applyPlan}
+        replacingTAIds={editing?.assignments.map(a => a.ta_id)}
+        onApplyPlan={editing ? undefined : applyPlan}
         onDraftEstimate={setEstimate}
         onOpenGuide={() => setGuideTopic("plans")}
       />
@@ -1236,7 +1274,7 @@ function RequestFormSection({
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => setCopying(true)}
+                      disabled={!!editing} onClick={() => setCopying(true)}
                     >
                       <Copy size={14} /> {t("เพิ่มคนใหม่ด้วยงานแบบเดียวกัน")}
                     </Button>
@@ -1244,7 +1282,7 @@ function RequestFormSection({
                   <Button
                     variant="primary"
                     size="sm"
-                    onClick={() => addAssignment()}
+                    disabled={!!editing} onClick={() => addAssignment()}
                   >
                     <Plus size={14} /> {t("เพิ่ม TA")}
                   </Button>
@@ -1314,6 +1352,7 @@ function RequestFormSection({
                         onConflicts={reportConflicts}
                         onUpdate={updateAssign}
                         onWorkload={updateWorkload}
+                        canRemove={!editing}
                         onRemove={() => setResizeTo(-(idx + 1))}
                         onOpenGuide={setGuideTopic}
                       />
@@ -1407,7 +1446,7 @@ function RequestFormSection({
             isPending={pending}
           >
             <Send size={16} />
-            {pending ? t("กำลังส่ง…") : t("ส่งคำขอ ({n} คน)", { n: assignments.length })}
+            {pending ? t("กำลังส่ง…") : editing ? t("บันทึกการแก้ไข") : t("ส่งคำขอ ({n} คน)", { n: assignments.length })}
           </Button>
           </TipWrap>
         </div>
@@ -1440,7 +1479,7 @@ function RequestFormSection({
       <Modal
         open={confirming}
         onClose={() => setConfirming(false)}
-        title={t("ยืนยันการส่งคำขอ")}
+        title={editing ? t("ยืนยันการแก้ไขคำขอ") : t("ยืนยันการส่งคำขอ")}
         icon={<Send size={18} />}
         footer={
           <>
@@ -1450,7 +1489,7 @@ function RequestFormSection({
               isPending={pending}
               onClick={() => { setConfirming(false); submit(); }}
             >
-              <Send size={16} /> {t("ยืนยันส่งคำขอ")}
+              <Send size={16} /> {editing ? t("ยืนยันบันทึกการแก้ไข") : t("ยืนยันส่งคำขอ")}
             </Button>
           </>
         }
@@ -1653,7 +1692,7 @@ function payableWorkload(a: Assignment, sections: Section[]): number {
 }
 
 function AssignmentBlock({
-  idx, n, assignment: a, sections, tas, selectedPositions, onCandidate, scope, weeklyCap, tcId, onConflicts, onUpdate, onWorkload, onRemove, onOpenGuide,
+  idx, n, assignment: a, sections, tas, selectedPositions, onCandidate, scope, weeklyCap, tcId, onConflicts, onUpdate, onWorkload, onRemove, onOpenGuide, canRemove = true,
 }: {
   idx: number;
   n: number;
@@ -1670,6 +1709,7 @@ function AssignmentBlock({
   onUpdate: (idx: number, patch: Partial<Assignment>) => void;
   onWorkload: (idx: number, sectionId: string, patch: Partial<WorkloadFields>) => void;
   onRemove: () => void;
+  canRemove?: boolean;
   onOpenGuide: (topic: WorkloadGuideTopic) => void;
 }) {
   const { t } = useI18n();
@@ -1736,7 +1776,7 @@ function AssignmentBlock({
             <span className="text-xs text-ink-3">{t("ยังไม่ได้เลือก TA")}</span>
           )}
         </div>
-        <IconButton label={t("ลบ")} variant="ghost" size="sm" onClick={onRemove}>
+        <IconButton label={t("ลบ")} variant="ghost" size="sm" onClick={onRemove} disabled={!canRemove}>
           <Trash2 size={14} />
         </IconButton>
       </div>

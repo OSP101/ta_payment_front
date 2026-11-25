@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "NEXT_PUBLIC_APP_VERSION=$(node -p "require(\'./package.json\').version") next build",
+    "build": "NEXT_PUBLIC_APP_VERSION=$(node -p \"require('./package.json').version\") next build",
     "start": "next start",
     "docs:media": "node scripts/docs-media-checklist.mjs",
     "test:telemetry": "node --test scripts/api-telemetry.test.mjs",

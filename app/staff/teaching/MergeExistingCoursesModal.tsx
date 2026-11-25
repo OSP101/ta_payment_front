@@ -8,9 +8,9 @@ import REGSearchSelect from "./REGSearchSelect";
 
 type Section = { id: string; sec_no: string; track: string; students: number; data: { schedules: { day_of_week: number; start_time: string; end_time: string; kind: string; room?: string }[]; exams: { kind: string; exam_date: string; start_time: string; end_time: string }[]; reg_pending_schedule?: boolean } };
 type Course = { id: string; code: string; name: string; alt_codes: string[]; credits: number; lecture: number; lab: number; self: number; level: string; sections: Section[]; data: { lecturers: { name: string; email: string; is_primary: boolean }[] } };
-type Preview = { source: Course; target: Course; blockers: string[]; token: string };
+type Preview = { source: Course; target: Course; blockers: string[]; token: string; approved_request_ids?: string[] };
 export default function MergeExistingCoursesModal({ termId, courses, onClose, onMerged }: {
- termId: string; courses: { id: string; code: string; name_th: string; exported_at?: string | null }[]; onClose: () => void; onMerged: () => void;
+ termId: string; courses: { id: string; code: string; name_th: string; exported_at?: string | null }[]; onClose: () => void; onMerged: (sourceId: string) => void;
 }) {
  const { t } = useI18n();
  const [target, setTarget] = useState(""); const [source, setSource] = useState("");
@@ -45,7 +45,7 @@ export default function MergeExistingCoursesModal({ termId, courses, onClose, on
  async function commit() {
   if (!approved || !checkedToken || busy) return;
   setBusy(true); setError("");
-  try { await api.post(`/teaching-courses/${target}/merge-existing?commit=1`,{source_id:source,mappings:mappings(),token:checkedToken,confirmed:true}); onMerged(); }
+  try { await api.post(`/teaching-courses/${target}/merge-existing?commit=1`,{source_id:source,mappings:mappings(),token:checkedToken,confirmed:true}); onMerged(source); }
   catch(e) { setError((e as Error).message); setCheckedToken(""); setApproved(false); }
   finally { setBusy(false); }
  }
@@ -63,9 +63,10 @@ export default function MergeExistingCoursesModal({ termId, courses, onClose, on
     <REGSearchSelect label={t("วิชาหลักที่จะเก็บไว้")} placeholder={t("เลือกวิชาหลัก")} searchLabel={t("ค้นหาวิชาหลักด้วยรหัสหรือชื่อ")} emptyText={t("ไม่พบวิชา")} value={target} disabled={busy} options={eligible.filter(c=>c.id!==source).map(c=>({id:c.id,label:c.code,description:c.name_th}))} onChange={v=>change("target",v)}/>
     <REGSearchSelect label={t("วิชาที่จะนำมารวม")} placeholder={t("เลือกวิชาที่เปิดแยกไว้")} searchLabel={t("ค้นหาวิชาที่จะรวมด้วยรหัสหรือชื่อ")} emptyText={t("ไม่พบวิชา")} value={source} disabled={busy} options={eligible.filter(c=>c.id!==target).map(c=>({id:c.id,label:c.code,description:c.name_th}))} onChange={v=>change("source",v)}/>
    </div>
-   <p className="text-xs text-muted">{t("รวมได้ในภาคการศึกษาเดียวกัน และยังไม่มีข้อมูลใช้งานผูกอยู่ วิชาที่ส่งออกเอกสารแล้วจะไม่อยู่ในรายการ ให้เลือก CP เป็นวิชาหลักก่อน SC และรหัสตัวเลข")}</p>
+   <p className="text-xs text-muted">{t("รวมได้ในภาคการศึกษาเดียวกัน วิชาหลักมีคำขอ TA ที่อนุมัติแล้วได้ หากยังไม่เริ่มบันทึกหรือส่งเวลา ส่วนวิชาที่นำมารวมต้องยังไม่มีข้อมูลใช้งาน ให้เลือก CP เป็นวิชาหลักก่อน SC และรหัสตัวเลข")}</p>
    {preview&&<>
     {preview.blockers.length>0&&<Alert status="warning" title={t("รายการที่ต้องจัดการก่อนรวม")} description={preview.blockers.join("\n")}/>}
+    {!!preview.approved_request_ids?.length&&<Alert status="default" title={t("คงคำขอ TA ที่อนุมัติแล้วของวิชาหลัก")} description={t("ระบบจะคงสถานะอนุมัติ รายชื่อ TA และภาระงานเดิม พร้อมเก็บหลักฐานก่อนและหลังรวม งบประมาณจะคำนวณตามจำนวนผู้เรียนหลังรวม ส่วน Section ที่คงแยกจะไม่ถูกเพิ่มในการมอบหมายเดิมโดยอัตโนมัติ")}/>}
     <div className="grid gap-4 sm:grid-cols-2">{[preview.target,preview.source].map((c,i)=><section key={c.id} className="min-w-0 rounded-lg border border-(--hairline) bg-(--panel-bg) p-4"><h3 className="font-semibold">{i===0?t("วิชาหลัก"):t("วิชาที่จะรวม")}: {c.code}</h3><p className="mt-1 text-sm">{c.name}</p><p className="mt-1 text-sm">{t("หน่วยกิต")} {c.credits} ({c.lecture}-{c.lab}-{c.self}) · {c.level}</p><p className="mt-2 text-sm">{t("ผู้เรียน")} {c.sections.reduce((n,s)=>n+s.students,0)} {t("คน")}</p><ul className="mt-2 space-y-1 text-xs text-muted">{c.data.lecturers.map((l,j)=><li key={j}>{l.name} · {l.email}{l.is_primary?` (${t("ผู้รับผิดชอบหลัก")})`:""}</li>)}</ul>{c.sections.map(s=><div key={s.id} className="mt-3 border-t border-(--hairline) pt-3"><strong className="text-sm">Section {s.sec_no} · {s.track==="special"?t("พิเศษ"):t("ปกติ")} · {s.students} {t("คน")}</strong>{timetable(s)}</div>)}</section>)}</div>
     <fieldset disabled={busy} className="space-y-4"><legend className="mb-3 font-semibold">{t("กำหนด Section หลังรวม")}</legend>
      {preview.source.sections.map(s=><label key={s.id} className="block rounded-lg border border-(--hairline) p-3 text-sm"><span className="mb-2 block font-medium">{preview.source.code} · Section {s.sec_no} · {s.track==="special"?t("พิเศษ"):t("ปกติ")} · {s.students} {t("คน")}</span><select aria-label={`${t("จัดการ Section")} ${s.sec_no} ${s.track}`} className="w-full rounded-md border border-(--hairline) bg-(--panel-bg) p-2" value={mapping[s.id]??"?"} onChange={e=>changeMapping(s.id,e.target.value)}><option value="?">{t("เลือกวิธีจัดการ Section")}</option><option value="">{t("คงเป็น Section แยก พร้อมตารางและกำหนดสอบเดิม")}</option>{preview.target.sections.filter(dst=>dst.track===s.track).map(dst=><option key={dst.id} value={dst.id}>{t("รวมผู้เรียนเข้ากับ")} {preview.target.code} · Section {dst.sec_no} ({dst.students+s.students} {t("คน")})</option>)}</select></label>)}

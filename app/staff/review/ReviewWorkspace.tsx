@@ -708,7 +708,7 @@ function DownloadAllButton({ approvedHere }: { approvedHere: Pending[] }) {
               before the download rather than after. */}
           <div>
             <p className="text-sm text-muted">
-              {t.rich("ระบบจะรวมเอกสารของ {people} เป็น PDF เล่มเดียว เรียงตามรหัสนักศึกษา", {
+              {t.rich("ระบบจะดาวน์โหลด ZIP ของ {people} โดยรวมเอกสาร 3 อย่างของแต่ละคนเป็น PDF ชื่อ รหัสนักศึกษา_ชื่อ_นามสกุล.pdf", {
                 people: <b className="text-foreground">{t("{n} คนที่คุณอนุมัติในรอบนี้", { n: approvedCount })}</b>,
               })}
             </p>

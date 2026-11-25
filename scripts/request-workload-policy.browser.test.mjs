@@ -22,15 +22,17 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => localStorage.setItem('ta-payment:request-guide:v1:lecturer-playground', '1'));
   await page.goto(`${origin}/dev/request-preview`, {waitUntil:"domcontentloaded",timeout:60000});
+  // Wait for the real form to hydrate and restore its server draft before checking totals.
+  await expect(page.locator("#request-person-0")).toBeVisible({timeout:60000});
   const total = page.locator('[data-tour="req-total"]');
   await expect(total).toContainText('10.0');
   await expect(page.getByText(explanation, {exact:true})).toBeVisible();
-  await expect(page.getByRole('button', {name:'ส่งคำขอ (1 คน)',exact:true})).toBeEnabled();
+  await expect(page.locator('button').filter({hasText:/^ส่งคำขอ \(1 คน\)$/})).toBeEnabled();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
   await total.scrollIntoViewIfNeeded();
   await page.screenshot({path:`/tmp/request-workload-policy-${name}.png`});
   if (name === 'desktop') {
-   await page.getByRole('button', {name:'ส่งคำขอ (1 คน)',exact:true}).click();
+   await page.locator('button').filter({hasText:/^ส่งคำขอ \(1 คน\)$/}).click();
    const pending = page.waitForRequest(r => new URL(r.url()).pathname === '/api/v1/ta-requests' && r.method()==='POST');
    await page.getByRole('button', {name:'ยืนยันส่งคำขอ',exact:true}).click();
    const body = (await pending).postDataJSON();
@@ -45,7 +47,7 @@ try {
   await page.addInitScript(() => localStorage.setItem('ta-payment:request-guide:v1:lecturer-playground', '1'));
   await page.goto(`${origin}/dev/request-preview`, {waitUntil:"domcontentloaded",timeout:60000});
   await expect(page.locator('[data-tour="req-total"]')).toContainText((hours * 2).toFixed(1));
-  const send = page.getByRole('button', {name:'ส่งคำขอ (1 คน)',exact:true});
+  const send = page.locator('button').filter({hasText:/^ส่งคำขอ \(1 คน\)$/});
   if (allowed) await expect(send).toBeEnabled();
   else await expect(send).toBeDisabled();
   await page.close();

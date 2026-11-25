@@ -366,12 +366,13 @@ export interface DraftEstimate {
 }
 
 export function TaPlanner({
-  tcId, schedules, drafts, scope, onApplyPlan, onDraftEstimate, onOpenGuide, variant = "request",
+  tcId, schedules, drafts, scope, onApplyPlan, onDraftEstimate, onOpenGuide, replacingTAIds, variant = "request",
 }: {
   tcId: string;
   /** Section timetables from /teaching-courses/:id — to detect shared sittings. */
   schedules: Record<string, { day_of_week: number; start_time: string; end_time: string }[]>;
   drafts: PlanDraft[];
+  replacingTAIds?: string[];
   scope: Scope;
   onApplyPlan?: (items: PlanItem[]) => void;
   onDraftEstimate?: (est: DraftEstimate | null) => void;
@@ -384,7 +385,22 @@ export function TaPlanner({
   variant?: "request" | "budget";
 }) {
   const { t } = useI18n();
-  const { data: f } = useSWR<PlanFacts>(tcId ? `/teaching-courses/${tcId}/ta-plan` : null);
+  const { data: rawFacts } = useSWR<PlanFacts>(tcId ? `/teaching-courses/${tcId}/ta-plan` : null);
+  const replacingKey = replacingTAIds?.join(",") ?? "";
+  const f = useMemo(() => {
+    if (!rawFacts || !replacingKey) return rawFacts;
+    const ids = new Set(replacingKey.split(","));
+    const removed = rawFacts.existing.filter(p => ids.has(p.ta_id));
+    const tracks = structuredClone(rawFacts.tracks);
+    for (const p of removed) {
+      tracks.regular.existing_baht -= p.regular_baht;
+      tracks.special.existing_baht -= p.special_baht;
+      tracks.special.existing_lump_baht -= p.lump_baht;
+      if (p.tracks.includes("regular")) tracks.regular.existing_tas--;
+      if (p.tracks.includes("special")) tracks.special.existing_tas--;
+    }
+    return {...rawFacts, tracks, existing: rawFacts.existing.filter(p => !ids.has(p.ta_id))};
+  }, [rawFacts, replacingKey]);
   const [open, setOpen] = useState(true);
   const [tab, setTab] = useState<"plan" | "manual">("plan");
   const collapsible = variant === "request";
@@ -1025,11 +1041,7 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
       );
     }
     if (f.rates.graduate_special_lumpsum > special.free) {
-      const v = { lump: baht(f.rates.graduate_special_lumpsum), free: baht(special.free) };
-      advice.push(special.existingTAs > 0
-        ? t("อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษเพิ่ม เหมาจ่าย {lump}/คน/เทอม มากกว่างบพิเศษที่เหลือ ({free}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย", v)
-        : t("อย่าใส่ TA ป.โท/เอก ใน sec ภาคพิเศษของวิชานี้ เหมาจ่าย {lump}/คน/เทอม มากกว่างบพิเศษที่มี ({free}) และจะทำให้ TA ป.ตรีใน sec นั้นเบิกไม่ได้เลย", v),
-      );
+      advice.push(t("ส่งคำขอ TA บัณฑิตศึกษาได้แม้งบไม่พอ ระบบจะเฉลี่ยงบภาคพิเศษเท่ากันตามจำนวน TA โดยยอดที่ส่งเบิกจ่ายแล้วจะคงเดิม"));
     }
   }
 
@@ -1056,11 +1068,16 @@ function buildModel(f: PlanFacts, groups: Map<string, number>, scope: Scope, dra
   // Proportional cut, as the settlement does, so each person sees roughly what
   // they would actually get.
   const regRatio = regularTotal > regular.cap && regularTotal > 0 ? regular.cap / regularTotal : 1;
-  const spFree = Math.max(0, special.cap - lumpTotal);
+  const existingLumpPeople = f.existing.filter(p => p.tracks.includes("special") && (p.level === "master" || p.level === "phd"));
+  const draftLumpPeople = people.filter(p => p.cost.lump > 0);
+  const lumpCount = existingLumpPeople.length + draftLumpPeople.length;
+  const equalLump = lumpCount > 0 ? Math.min(f.rates.graduate_special_lumpsum, Math.floor(special.cap * 100 / lumpCount) / 100) : 0;
+  const fundedLumps = lumpCount * equalLump;
+  const spFree = Math.max(0, special.cap - fundedLumps);
   const spHourly = people.reduce((s, p) => s + p.cost.special, 0) + f.tracks.special.existing_baht;
   const spRatio = spHourly > spFree && spHourly > 0 ? spFree / spHourly : 1;
   for (const p of people) {
-    p.share = p.cost.regular * regRatio + p.cost.special * spRatio + p.cost.lump;
+    p.share = p.cost.regular * regRatio + p.cost.special * spRatio + (p.cost.lump > 0 ? equalLump : 0);
   }
   const slack = regular.cap - regularTotal;
   const verdict: DraftEval["verdict"] =

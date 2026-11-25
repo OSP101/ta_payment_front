@@ -1,0 +1,5 @@
+{
+ "รวมได้ในภาคการศึกษาเดียวกัน วิชาหลักมีคำขอ TA ที่อนุมัติแล้วได้ หากยังไม่เริ่มบันทึกหรือส่งเวลา ส่วนวิชาที่นำมารวมต้องยังไม่มีข้อมูลใช้งาน ให้เลือก CP เป็นวิชาหลักก่อน SC และรหัสตัวเลข": "Merge within the same term. The main course may have approved TA requests if work logging and time submission have not started. The source course must have no operational records. Choose CP as the main code before SC and numeric codes.",
+ "คงคำขอ TA ที่อนุมัติแล้วของวิชาหลัก": "Keep the main course’s approved TA requests",
+ "ระบบจะคงสถานะอนุมัติ รายชื่อ TA และภาระงานเดิม พร้อมเก็บหลักฐานก่อนและหลังรวม งบประมาณจะคำนวณตามจำนวนผู้เรียนหลังรวม ส่วน Section ที่คงแยกจะไม่ถูกเพิ่มในการมอบหมายเดิมโดยอัตโนมัติ": "Approval status, assigned TAs and declared workloads will be preserved, with evidence recorded before and after the merge. The budget will use the merged student counts. Sections kept separate will not be added to existing assignments automatically."
+}

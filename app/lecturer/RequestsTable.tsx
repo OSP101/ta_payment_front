@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
-import { AlertCircle, Eye, Ban } from "lucide-react";
+import { AlertCircle, Eye, Ban, Pencil } from "lucide-react";
 import { Tooltip, Button } from "@heroui/react";
 import { Chip, Modal, ConfirmDialog } from "../components/ui";
 import { DataTable, type DataColumn } from "../components/DataTable";
@@ -78,6 +78,7 @@ function buildColumns(
   intl: string,
   onDetail: (id: string) => void,
   onCancel: (id: string) => void,
+  onEdit?: (id: string) => void,
 ): DataColumn<TARequestRow>[] { return [
   {
     id: "submitted_at", width: 150, label: t("วันที่ยื่นคำขอ"), sortable: true, isRowHeader: true,
@@ -161,6 +162,12 @@ function buildColumns(
           </Button>
           <Tooltip.Content className="text-xs">{t("ดูรายละเอียด ใครถูกส่งไปในรอบนี้บ้าง")}</Tooltip.Content>
         </Tooltip>
+        {r.can_cancel && (r.ta_count ?? 1) === 1 && onEdit && (
+          <Tooltip delay={0}>
+            <Button isIconOnly variant="tertiary" size="sm" aria-label={t("แก้ไขคำขอ")} onPress={() => onEdit(r.id)}><Pencil size={16} /></Button>
+            <Tooltip.Content className="text-xs">{t("แก้ไขคำขอ")}</Tooltip.Content>
+          </Tooltip>
+        )}
         {r.can_cancel && (
           <Tooltip delay={0}>
             <Button
@@ -277,10 +284,11 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
 }
 
 export function RequestsTable({
-  rows, loading, emptyDescription = msg("เริ่มจากปุ่ม 'ส่งคำขอ TA'"),
+  rows, loading, onEdit, emptyDescription = msg("เริ่มจากปุ่ม 'ส่งคำขอ TA'"),
 }: {
   rows: TARequestRow[] | undefined;
   loading?: boolean;
+  onEdit?: (id: string) => void;
   emptyDescription?: string;
 }) {
   const { t, intl } = useI18n();
@@ -334,7 +342,7 @@ export function RequestsTable({
         pageSize={10}
         emptyTitle={t("ยังไม่มีคำขอ")}
         emptyDescription={t(emptyDescription)}
-        columns={buildColumns(t, intl, setDetailId, setCancelId)}
+        columns={buildColumns(t, intl, setDetailId, setCancelId, onEdit)}
       />
       <RequestDetailModal id={detailId} onClose={() => setDetailId(null)} />
       <ConfirmDialog
