@@ -33,10 +33,10 @@ const buildNav = (docsStatus?: NavStatus, docsLabel?: string,
       // page, one URL, identical for a TA and a lecturer. /ta/profile still
       // resolves — it redirects here — so old links and bookmarks survive.
       { label: msg("โปรไฟล์และบัญชี"), href: "/account", icon: IdCard },
-      { label: msg("ตารางเรียนของฉัน"), href: "/ta/schedule", icon: CalendarDays,
-        status: schedStatus, statusLabel: schedLabel },
       { label: msg("เอกสารของฉัน"), href: "/ta/documents", icon: FileText,
         status: docsStatus, statusLabel: docsLabel },
+      { label: msg("ตารางเรียนของฉัน"), href: "/ta/schedule", icon: CalendarDays,
+        status: schedStatus, statusLabel: schedLabel },
     ],
   },
   {
