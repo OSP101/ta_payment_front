@@ -635,7 +635,7 @@ export default function LoginForm({
                   </>
                 )}
                 {sso.status === "confirm" && (() => {
-                  const { email, first_name, last_name } = sso.pending;
+                  const { email, first_name, last_name, avatar_url } = sso.pending;
                   const fullName = `${first_name} ${last_name}`.trim();
                   return (
                     <>
@@ -653,6 +653,12 @@ export default function LoginForm({
                         </div>
                         <div className="flex flex-col items-center text-center px-5 pt-6 pb-5">
                           <Avatar className="size-16">
+                            {avatar_url && (
+                              <Avatar.Image
+                                src={avatar_url}
+                                alt={fullName ? t("รูปโปรไฟล์ของ {name}", { name: fullName }) : t("รูปโปรไฟล์")}
+                              />
+                            )}
                             <Avatar.Fallback className="bg-accent-soft text-link text-2xl font-semibold">
                               {accountInitial(first_name, email)}
                             </Avatar.Fallback>

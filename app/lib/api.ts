@@ -821,6 +821,7 @@ export const loginTwoFactor = (challenge: string, code: string) =>
  * loginTwoFactor.
  */
 export interface SSOPending {
+  avatar_url?: string | null;
   ticket: string;
   email: string;
   first_name: string;
