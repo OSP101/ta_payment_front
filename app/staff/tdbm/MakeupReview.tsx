@@ -30,6 +30,9 @@ export interface ReviewTeaching {
   original_holiday_date?: string;
   resolution_reason?: string;
   opt_status: string;
+  source_missing?: boolean;
+  source_reference?: boolean;
+  reconciliation_error?: string;
   match_options?: MatchOption[];
 }
 
@@ -49,7 +52,7 @@ export default function MakeupReview({ rows, academicYear, semester, onSaved }: 
   const pending = useMemo(() => {
     const seen = new Set<string>();
     return rows.filter(r => {
-      if (r.original_holiday_date || r.opt_status === "C") return false;
+      if (r.original_holiday_date || r.source_missing || r.source_reference || r.reconciliation_error || !["A", "D"].includes(r.opt_status)) return false;
       // Merged course aliases describe the same sitting. Review it once;
       // the server links every alias in the same transaction.
       if (!r.matched_section_id) return true;
@@ -131,7 +134,7 @@ export default function MakeupReview({ rows, academicYear, semester, onSaved }: 
         searchFn={r => `${r.matched_course_code ?? r.course_code ?? ""} ${r.matched_course_name ?? ""} ${r.matched_sec_no ?? ""}`}
         searchPlaceholder={t("ค้นหาวิชาหรือกลุ่มเรียน…")}
         emptyTitle={t("ไม่มีรายการรอจับคู่")}
-        emptyDescription={t("รายการสอนชดเชยทั้งหมดจับคู่แล้ว หรือถูกยกเลิกใน TDBM")} />
+        emptyDescription={t("ไม่มีรายการสถานะ A หรือ D ที่ยังรอจับคู่คาบวันหยุด")} />
     </div>
     {selected.length > 100 && <p role="alert" className="mt-2 text-sm text-danger-soft-foreground">{t("เลือกได้ครั้งละไม่เกิน 100 รายการ กรุณาลดจำนวนที่เลือก")}</p>}
     {(stale || duplicate) && <p role="alert" className="mt-2 text-sm text-danger-soft-foreground">{t("คาบที่เลือกซ้ำหรือข้อมูลเปลี่ยนแล้ว กรุณาเลือกคาบใหม่ก่อนบันทึก")}</p>}

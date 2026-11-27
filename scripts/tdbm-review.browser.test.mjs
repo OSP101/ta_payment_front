@@ -9,6 +9,7 @@ const port = Number(process.env.TDBM_TEST_PORT || 3327);
 const baseUrl = process.env.TDBM_TEST_BASE_URL || `http://localhost:${port}`;
 const route = `tdbm-review-regression-${process.pid}`, dir = path.resolve('app', route);
 const dates = ['2026-11-10', '2026-11-17', '2026-11-24'];
+const syncWarning = 'ซิงก์ข้อมูล TDBM แล้ว แต่มี 2 รายการที่ต้องตรวจสอบคาบชดเชย';
 const options = section => dates.flatMap(date => ['lecture', 'lab'].map(kind => ({
   section_id: section, original_date: date, holiday_name: 'วันหยุดทดสอบ', kind,
   start_time: kind === 'lecture' ? '10:00' : '13:00', end_time: kind === 'lecture' ? '12:00' : '15:00', blocked: false,
@@ -23,6 +24,15 @@ function fixtures() {
   }));
   rows.push({ ...rows[0], extra_class_id: 200 }); // alias, same sitting
   rows.push({ ...rows[0], extra_class_id: 201, matched_section_id: undefined, matched_sec_no: undefined, match_options: [], resolution_reason: 'ยังจับคู่วิชาและกลุ่มเรียนไม่ได้ กรุณาตรวจสอบข้อมูลวิชาและกลุ่ม' });
+  // Excluded statuses must not consume alias grouping or appear for review,
+  // even if an old response still contains match options.
+  for (const [i, status] of ['P', 'C', 'X', '', '?'].entries()) {
+    rows.unshift({ ...rows.find(r => r.extra_class_id === 100), extra_class_id: 300 + i, opt_status: status });
+  }
+  rows.find(r => r.extra_class_id === 100).opt_status = 'A';
+  rows.push({ ...rows.find(r => r.extra_class_id === 100), extra_class_id: 305, source_missing: true });
+  rows.push({ ...rows.find(r => r.extra_class_id === 100), extra_class_id: 306, reconciliation_error: 'ข้อมูล TDBM เปลี่ยน แต่ปรับคาบชดเชยไม่ได้ กรุณาตรวจสอบบันทึกเวลา งวดเบิกจ่าย และรายการชดเชยที่ซ้ำกัน', source_original_date: '2026-11-24', source_original_kind: 'lecture', resolution_reason: 'ข้อมูล TDBM เปลี่ยน แต่ปรับคาบชดเชยไม่ได้ กรุณาตรวจสอบบันทึกเวลา งวดเบิกจ่าย และรายการชดเชยที่ซ้ำกัน' });
+  rows.push({ ...rows.find(r => r.extra_class_id === 100), extra_class_id: 307, source_reference: true });
   return rows;
 }
 
@@ -50,7 +60,8 @@ try {
     page.on('pageerror', e => errors.push(e.message));
     await page.route('**/api/v1/terms', r => r.fulfill({ json: [{ id: 'term-1', academic_year: 2569, semester: 2, starts_on: '2026-11-01', ends_on: '2027-03-31', is_active: true }] }));
     await page.route('**/api/v1/holidays', r => r.fulfill({ json: [] }));
-    await page.route('**/api/v1/tdbm/sync-log**', r => r.fulfill({ json: [] }));
+    await page.route('**/api/v1/tdbm/sync-log**', r => r.fulfill({ json: [{id:'sync-1',resource:'extra-teachings',trigger_kind:'manual',academic_year:2569,semester:2,fetched:21,inserted:0,updated:21,skipped:0,warning:syncWarning,started_at:'2026-11-27T18:37:00',finished_at:'2026-11-27T18:37:01'}] }));
+    await page.route('**/api/v1/tdbm/sync-now', r => r.fulfill({json:[{resource:'extra-teachings',fetched:21,warning:syncWarning,conflicts:2}]}));
     await page.route('**/api/v1/tdbm/extra-teachings**', r => r.fulfill({ json: rows }));
     await page.route('**/api/v1/tdbm/match-makeups', r => {
       const body = r.request().postDataJSON(); requests.push(body);
@@ -62,9 +73,14 @@ try {
       return r.fulfill({ json: { matched: body.items.length } });
     });
     await page.goto(`${baseUrl}/${route}`);
+    await expect(page.getByText('ซิงก์ข้อมูลแล้ว มีบางรายการต้องตรวจสอบ', {exact:true})).toBeVisible();
+    await expect(page.getByText('ซิงก์วันสอนชดเชยล่าสุดล้มเหลว', {exact:true})).toHaveCount(0);
+    await page.getByRole('button', {name:'ซิงก์ตอนนี้',exact:true}).click();
+    await expect(page.getByText(syncWarning, {exact:true})).toHaveCount(2);
     const review = page.getByRole('region', { name: /จับคู่คาบวันหยุดที่ยังค้าง/ });
     await expect(review.getByRole('heading')).toContainText('(13 รายการ)');
     const select = id => review.getByRole('combobox', { name: `คาบวันหยุดเดิมของรายการ ${id}`, exact: true }).filter({ visible: true });
+    for (let id = 300; id < 308; id++) await expect(select(id)).toHaveCount(0);
     await select(100).selectOption('sec-1/2026-11-24/lecture');
     // A second TDBM entry cannot select a period already selected elsewhere.
     await expect(select(101).locator('option[value="sec-1/2026-11-24/lecture"]')).toBeDisabled();

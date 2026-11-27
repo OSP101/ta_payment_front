@@ -443,8 +443,8 @@ const scenarios: Record<string, {action: string[]; result: string[]}> = {
   },
   "staff:settings/curricula": {
     "action": [
-      "แก้ชื่อหลักสูตรและชื่อที่ใช้ในเอกสาร",
-      "Edit curriculum names and document labels"
+      "เพิ่ม แก้ไข หรือลบหลักสูตรที่ยังไม่มีรายวิชาใช้งาน",
+      "Add, edit or delete unused curricula"
     ],
     "result": [
       "บันทึกข้อมูลหลักสูตรสำหรับรายงานที่เกี่ยวข้อง",

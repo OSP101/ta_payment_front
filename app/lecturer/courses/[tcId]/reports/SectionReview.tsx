@@ -89,6 +89,7 @@ interface HolidayImpactsResponse {
 
 const ACTIVITY_LABEL: Record<string, string> = {
   lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ"), review: msg("ตรวจงาน"), makeup: msg("ชดเชย"), other: msg("อื่น ๆ"),
+  prep: msg("เตรียมการสอน"),
 };
 const PARENT_KIND_LABEL: Record<string, string> = { lecture: msg("คู่กับบรรยาย"), lab: msg("คู่กับปฏิบัติการ") };
 const TRACK_LABEL: Record<string, string> = { regular: msg("ภาคปกติ"), special: msg("ภาคพิเศษ") };

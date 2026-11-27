@@ -21,6 +21,7 @@ import {
 import { api, type Me } from "../../../../lib/api";
 import { notify } from "../../../../lib/notify";
 import SendCredentialsButton from "../../../../components/SendCredentialsButton";
+import TAConflictScheduleModal from "../../../../components/TAConflictScheduleModal";
 import {
   PageHeader, Panel, Button, IconButton, TextInput, Select, SelectField, FieldGroup, Chip, EmptyState, Alert, Modal, Tip, TipWrap,
   ConfirmDialog,
@@ -134,10 +135,11 @@ const DEFAULT_COURSE_CAP = 3;
 interface SectionConflict {
   section_id: string;
   messages: string[];
-  /** Session kinds whose EVERY meeting collides with this TA's own class. */
+  /** Session kinds with no meetings available for this TA. */
   blocked_kinds?: string[];
-  /** Overlap with a DIFFERENT course the TA already assists — still blocking. */
+  /** Informational: the overlapping meetings are excluded on submission. */
   cross_conflict?: boolean;
+  available_hours?: { lecture: number; lab: number };
 }
 interface ConflictsResp { conflicts: SectionConflict[]; }
 interface WorkloadFields {
@@ -349,7 +351,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
 
       <WindowStatusBanner state={windowState} loading={windowLoading} />
 
-      {onBehalf && (
+      {onBehalf && !editing && (
         <div className="mb-4">
           <Alert
             status={noLecturer ? "danger" : "accent"}
@@ -420,7 +422,7 @@ export default function RequestPage({ params }: { params: Promise<{ tcId: string
       <div data-tour="req-history">
         {/* undefined (not []) while loading, so the table shows skeleton rows
             instead of flashing "ยังไม่มีคำขอ". */}
-        <RequestsTable rows={allReqs ? courseReqs : undefined} loading={!allReqs} onEdit={!onBehalf ? editRequest : undefined} />
+        <RequestsTable rows={allReqs ? courseReqs : undefined} loading={!allReqs} onEdit={editRequest} />
       </div>
     </div>
   );
@@ -608,8 +610,7 @@ function RequestFormSection({
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [creatingTa, setCreatingTa] = useState(false);
-  // Schedule-conflict cache lifted from AssignmentBlock: keyed by TA id so the
-  // modal can gate Submit on "no picked section conflicts anywhere".
+  // Schedule preview cache shared with the assignment editor.
   const [conflictsByTa, setConflictsByTa] = useState<Record<string, SectionConflict[]>>({});
   const reportConflicts = useCallback((taId: string, list: SectionConflict[]) => {
     setConflictsByTa(prev => {
@@ -753,22 +754,8 @@ function RequestFormSection({
     return t > 0;
   });
   const sectionChosen = assignments.length > 0 && assignments.every(a => a.section_ids.length > 0);
-  // Only a clash with ANOTHER course the TA already assists blocks the send.
-  //
-  // A clash with the TA's own class no longer does. It cannot be resolved by
-  // removing the TA — the group still needs one — and it does not stop them
-  // working: the in-class duty for the clashing kind is disabled above, while
-  // grading and other work carry on outside the session. Refusing the whole
-  // request threw away sections that were perfectly workable.
-  const anyScheduleConflict = assignments.some(a => {
-    if (!a.ta_id) return false;
-    const conflicts = conflictsByTa[a.ta_id];
-    if (!conflicts?.length) return false;
-    const blocking = new Set(conflicts.filter(c => c.cross_conflict).map(c => c.section_id));
-    return a.section_ids.some(sid => blocking.has(sid));
-  });
-
-  const canSubmit = taChosen && !selectedPending && !selectedError && workloadOk && sectionChosen && !anyScheduleConflict;
+  // Meeting conflicts trim only in-class work; the server persists exclusions.
+  const canSubmit = taChosen && !selectedPending && !selectedError && workloadOk && sectionChosen;
   // Why ส่งคำขอ is greyed out, in the same order as step 2's status line.
   const submitBlockReason =
     canSubmit ? undefined
@@ -777,7 +764,6 @@ function RequestFormSection({
     : selectedPending ? t("กำลังโหลดข้อมูล TA ที่เลือกไว้")
     : !taChosen ? t("ยังไม่ได้เลือก TA ให้ครบทุกแถว")
     : !sectionChosen ? t("ยังไม่ได้เลือก section ให้ครบทุกคน")
-    : anyScheduleConflict ? t("มี TA ที่ตารางทับซ้อนกับรายวิชาอื่น กรุณาเอาชื่อออกก่อน")
     : t("ภาระงานยังไม่ครบตามระเบียบ");
 
   // TAs on this form who have not filed a timetable yet. Submitting is still
@@ -1241,8 +1227,6 @@ function RequestFormSection({
               ? { tone: "warn", text: t("ยังไม่ได้เลือก TA") }
               : !sectionChosen
               ? { tone: "warn", text: t("ยังไม่ได้เลือก section") }
-              : anyScheduleConflict
-              ? { tone: "danger", text: t("มี TA ที่ตารางทับซ้อน เอาชื่อออกก่อน") }
               : !workloadOk
               ? { tone: "warn", text: t("ภาระงานยังไม่ครบตามระเบียบ") }
               : { tone: "success", text: t("{n} คน · พร้อมส่ง", { n: assignments.length }) }
@@ -1713,6 +1697,7 @@ function AssignmentBlock({
   onOpenGuide: (topic: WorkloadGuideTopic) => void;
 }) {
   const { t } = useI18n();
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const isGrad = a.level === "master" || a.level === "phd";
   const total = sumWorkload(a, sections);
   // Which of the picked sections are taught together. Drives the "billed once"
@@ -1723,8 +1708,7 @@ function AssignmentBlock({
   );
 
   // Preview schedule conflicts for this TA against every section of the
-  // course. Runs whenever a TA is picked; the modal's Submit gate consumes
-  // this data via onConflicts so a conflicting TA can't be sent through.
+  // course. Only the unavailable in-class duties are disabled.
   const { data: conflictsData } = useSWR<ConflictsResp>(
     a.ta_id && tcId ? `/ta-requests/preview-conflicts?ta_id=${a.ta_id}&teaching_course_id=${tcId}` : null,
   );
@@ -1737,17 +1721,24 @@ function AssignmentBlock({
     for (const c of conflicts) m.set(c.section_id, c);
     return m;
   }, [conflicts]);
-  // Only a clash with ANOTHER course the TA assists blocks the section. A clash
-  // with the TA's own class leaves the section pickable: the kinds it fully
-  // covers have their in-class duty disabled below (e.g. lecture still
-  // requestable while สอนปฏิบัติการ is greyed out), and the server trims any
-  // clashing session on submit (applyClashOutcome).
   const pickedConflicts = a.section_ids
     .map(sid => ({ sid, c: conflictBySection.get(sid) }))
     .filter((x): x is { sid: string; c: SectionConflict } => !!x.c && x.c.messages.length > 0);
-  const pickedHard = pickedConflicts.filter(x => x.c.cross_conflict);
-  const pickedSoft = pickedConflicts.filter(x => !x.c.cross_conflict);
-  const blocked = pickedHard.length > 0;
+  // A conflict never disables the whole section or its off-slot duties.
+  useEffect(() => {
+    for (const sid of a.section_ids) {
+      const conflict = conflictBySection.get(sid);
+      if (!conflict) continue;
+      const w = workloadOf(a, sid);
+      const patch: Partial<WorkloadFields> = {};
+      const available = conflict.available_hours;
+      const lecture = conflict.blocked_kinds?.includes("lecture") ? 0 : conflict.cross_conflict ? available?.lecture : undefined;
+      const lab = conflict.blocked_kinds?.includes("lab") ? 0 : conflict.cross_conflict ? available?.lab : undefined;
+      if (lecture !== undefined && w.attendance_hrs > lecture) patch.attendance_hrs = lecture;
+      if (lab !== undefined && w.lab_hrs > lab) patch.lab_hrs = lab;
+      if (Object.keys(patch).length) onWorkload(idx, sid, patch);
+    }
+  }, [a, conflictBySection, idx, onWorkload]);
 
   const ta = tas.find(x => x.id === a.ta_id);
   // Already on this course: this block adds sections to their request.
@@ -1758,11 +1749,11 @@ function AssignmentBlock({
     .sort((x, y) => x.localeCompare(y, undefined, { numeric: true }));
 
   return (
-    <div className={styles.assignment} data-blocked={blocked || undefined}>
+    <div className={styles.assignment}>
       {/* Header */}
       <div className={styles.assignmentHeader}>
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <Chip tone={blocked ? "danger" : "brand"}>{t("คนที่ {n}", { n })}</Chip>
+          <Chip tone="brand">{t("คนที่ {n}", { n })}</Chip>
           {ta ? (
             <>
               <Tip content={`${ta.first_name} ${ta.last_name}`}>
@@ -1824,51 +1815,32 @@ function AssignmentBlock({
           conflictBySection={conflictBySection}
           heldIds={heldIds}
         />
+        {a.ta_id && <div className="mt-2">
+          <Button size="sm" variant="secondary" onClick={() => setScheduleOpen(true)}>
+            <CalendarClock size={14} />{conflicts.some(c => c.cross_conflict || c.messages.length > 0) ? t("ดูรายละเอียดเวลาชนและตาราง TA") : t("ดูตารางเรียนและช่วยสอนของ TA")}
+          </Button>
+          {scheduleOpen && <TAConflictScheduleModal open onClose={() => setScheduleOpen(false)} taId={a.ta_id} taName={ta ? `${ta.first_name} ${ta.last_name}` : t("ผู้ช่วยสอน")} courseId={tcId} />}
+        </div>}
 
-        {/* Blocking banner when a picked section clashes with an approved TA
-            duty in another course — the one clash that still refuses the send. */}
-        {blocked && (
-          <div className="rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-800 space-y-1.5">
-            <div className="flex items-center gap-1.5 font-medium">
-              <AlertCircle size={13} />
-              {t("TA คนนี้มีตารางทับซ้อน กรุณาเอาชื่อออกหรือเปลี่ยน section")}
-            </div>
-            <ul className="pl-5 list-disc space-y-0.5">
-              {pickedHard.flatMap(x =>
-                x.c.messages.map((m, i) => <li key={`${x.sid}-${i}`}>{m}</li>),
-              )}
+        {pickedConflicts.length > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 space-y-2" role="status">
+            <p className="font-medium">{t("ส่งคำขอได้เฉพาะคาบที่ไม่ชน และงานตรวจ/งานอื่นนอกคาบ")}</p>
+            <p>{t("คาบที่ชนจะถูกตัดทั้งคาบ แม้เวลาทับกันเพียงบางส่วน ระบบจะปรับเฉพาะชั่วโมงงานในคาบ ส่วนงานนอกคาบยังระบุได้")}</p>
+            <ul className="pl-5 list-disc space-y-2">
+              {pickedConflicts.map(({ sid, c }) => <li key={sid}>
+                <span className="font-medium">Sec {sections.find(s => s.id === sid)?.sec_no ?? "?"}: </span>
+                {(c.blocked_kinds ?? []).length > 0
+                  ? t("{kinds} ชนทุกคาบ จึงรับงานในคาบส่วนนี้ไม่ได้", { kinds: (c.blocked_kinds ?? []).map(k => k === "lab" ? t("ปฏิบัติการ") : t("บรรยาย")).join(" / ") })
+                  : t("ชนบางคาบ คาบที่ไม่ชนยังขอได้")}
+                {c.available_hours && <span className="block">{t("คาบที่ไม่ชน: บรรยาย {lecture} ชม./สัปดาห์ · ปฏิบัติการ {lab} ชม./สัปดาห์", { lecture: c.available_hours.lecture, lab: c.available_hours.lab })}</span>}
+              </li>)}
             </ul>
           </div>
         )}
 
-        {/* Own-class clash: a notice, not a block. The clashing kind's in-class
-            duty is disabled in the workload below; the rest stays requestable. */}
-        {pickedSoft.length > 0 && (
-          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 space-y-1.5">
-            <div className="flex items-center gap-1.5 font-medium">
-              <AlertCircle size={13} />
-              {t("บางคาบตรงกับตารางเรียนของ TA ส่งคำขอได้เฉพาะส่วนที่ไม่ทับ")}
-            </div>
-            <ul className="pl-5 list-disc space-y-0.5">
-              {pickedSoft.map(x => {
-                const sec = sections.find(s => s.id === x.sid);
-                const kinds = x.c.blocked_kinds ?? [];
-                const what = kinds.length === 0
-                  ? t("ทับบางคาบ คาบที่ทับจะถูกตัดออกเมื่อส่งคำขอ")
-                  : t("{kinds} ทับทุกคาบ งานในคาบส่วนนี้ส่งคำขอไม่ได้", {
-                    kinds: kinds.map(k => (k === "lab" ? t("ปฏิบัติการ") : t("บรรยาย"))).reduce((p, q) => t("{a} และ {b}", { a: p, b: q })),
-                  });
-                return <li key={x.sid}>Sec {sec?.sec_no ?? "?"}: {what}</li>;
-              })}
-            </ul>
-          </div>
-        )}
-
-        {/* Workload section — disabled visually and via pointer-events while
-            a schedule conflict is unresolved so the lecturer must fix the
-            picking before entering hours. */}
+        {/* Only unavailable in-class duties are disabled; off-slot work stays editable. */}
         <div className={styles.guideHelp}><Button size="sm" variant="ghost" onClick={() => onOpenGuide("hours")}><Info size={14} />{t("ชั่วโมงแต่ละงานคืออะไร?")}</Button></div>
-        <div data-tour="req-workload" className={blocked ? "opacity-50 pointer-events-none select-none" : ""}>
+        <div data-tour="req-workload">
           {a.section_ids.length === 0 ? (
             <div className="text-xs text-ink-3 py-3 text-center border border-dashed border-hairline rounded-md">
               {t("เลือก section ก่อน จึงจะกำหนดชั่วโมงได้")}
@@ -1970,6 +1942,7 @@ function AssignmentBlock({
                           lectureHrs={sectionWeeklyHours(sections.find(x => x.id === sid)).lecture}
                           labHrs={sectionWeeklyHours(sections.find(x => x.id === sid)).lab}
                           blockedKinds={conflicts.find(c => c.section_id === sid)?.blocked_kinds ?? []}
+                          availableHours={conflicts.find(c => c.section_id === sid)?.cross_conflict ? conflicts.find(c => c.section_id === sid)?.available_hours : undefined}
                           onWorkload={onWorkload}
                         />
                       )}
@@ -2022,7 +1995,7 @@ function AssignmentBlock({
 }
 
 function UndergradWorkload({
-  idx, sectionId, workload, scope, lectureHrs, labHrs, blockedKinds, onWorkload,
+  idx, sectionId, workload, scope, lectureHrs, labHrs, blockedKinds, availableHours, onWorkload,
 }: {
   idx: number;
   sectionId: string;
@@ -2040,6 +2013,7 @@ function UndergradWorkload({
   // Grading and other work happen outside the session and stay available, which
   // is why the section is still worth assigning at all.
   blockedKinds: string[];
+  availableHours?: { lecture: number; lab: number };
   onWorkload: (idx: number, sectionId: string, patch: Partial<WorkloadFields>) => void;
 }) {
   const { t } = useI18n();
@@ -2074,7 +2048,7 @@ function UndergradWorkload({
           </div>
           {lecBlocked && (
             <div className="mb-2 text-[11px] text-amber-700">
-              {t("ทุกคาบบรรยายของกลุ่มนี้ตรงกับตารางเรียนของ TA เช็คชื่อไม่ได้ แต่ยังช่วยตรวจงาน/งานอื่นนอกคาบได้")}
+              {t("ทุกคาบบรรยายของกลุ่มนี้มีเวลาชน เช็คชื่อไม่ได้ แต่ยังช่วยตรวจงาน/งานอื่นนอกคาบได้")}
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -2087,9 +2061,9 @@ function UndergradWorkload({
             <CheckHrs
               label={t("เช็คชื่อ / เก็บใบงาน")}
               hrs={workload.attendance_hrs}
-              max={lectureHrs}
+              max={availableHours?.lecture ?? lectureHrs}
               disabled={lecBlocked}
-              disabledHint={t("ตรงกับตารางเรียนของ TA ทุกคาบ")}
+              disabledHint={t("ทุกคาบประเภทนี้มีเวลาชน")}
               onH={v => onWorkload(idx, sectionId, { attendance_hrs: v })}
             />
             <div className="md:col-span-2">
@@ -2118,16 +2092,16 @@ function UndergradWorkload({
           <div className="mb-2 text-[11px] text-ink-3">{t("เลือกได้อย่างใดอย่างหนึ่ง")}</div>
           {labBlocked && (
             <div className="mb-2 text-[11px] text-amber-700">
-              {t("ทุกคาบปฏิบัติการของกลุ่มนี้ตรงกับตารางเรียนของ TA สอนปฏิบัติการไม่ได้ แต่ยังทำงานอื่นนอกคาบได้")}
+              {t("ทุกคาบปฏิบัติการของกลุ่มนี้มีเวลาชน สอนปฏิบัติการไม่ได้ แต่ยังทำงานอื่นนอกคาบได้")}
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <CheckHrs
               label={t("สอนปฏิบัติการ")}
               hrs={workload.lab_hrs}
-              max={labHrs}
+              max={availableHours?.lab ?? labHrs}
               disabled={labBlocked || labMode === "other"}
-              disabledHint={labBlocked ? t("ตรงกับตารางเรียนของ TA ทุกคาบ") : t("เลือก 'อื่น ๆ' ไว้แล้ว")}
+              disabledHint={labBlocked ? t("ทุกคาบประเภทนี้มีเวลาชน") : t("เลือก 'อื่น ๆ' ไว้แล้ว")}
               onH={v => onWorkload(idx, sectionId, { lab_hrs: v, lab_other_hrs: 0, lab_other_desc: "" })}
             />
             <div className="md:col-span-2">
@@ -2265,14 +2239,6 @@ function SectionPicker({
 }) {
   const { t } = useI18n();
   const invalid = value.length === 0;
-  // Only a clash with another course the TA assists makes a section
-  // unpickable — the server refuses that one. A clash with the TA's own class
-  // does not: the section stays pickable and only the clashing kind's in-class
-  // duty is disabled in the workload form.
-  const blockedIds = useMemo(
-    () => new Set([...(conflictBySection?.values() ?? [])].filter(c => c.cross_conflict).map(c => c.section_id)),
-    [conflictBySection],
-  );
   return (
     <CheckboxGroup
       value={value}
@@ -2289,20 +2255,17 @@ function SectionPicker({
           const on = value.includes(s.id);
           const conflictMsgs = conflictBySection?.get(s.id)?.messages;
           const held = heldIds.includes(s.id);
-          const bad = !held && blockedIds.has(s.id);
-          const partial = !bad && !!conflictMsgs?.length;
+          const partial = !!conflictMsgs?.length;
           return (
             <Checkbox
               key={s.id}
               value={s.id}
-              isDisabled={held || blockedIds.has(s.id)}
-              aria-label={bad || partial ? `Sec ${s.sec_no} - ${conflictMsgs?.join("; ")}` : `Sec ${s.sec_no}`}
+              isDisabled={held}
+              aria-label={partial ? `Sec ${s.sec_no} - ${conflictMsgs?.join("; ")}` : `Sec ${s.sec_no}`}
               className={
                 "border rounded-lg px-3 py-1.5 transition-colors " +
                 (held
                   ? "border-brand/30 bg-slate-100 cursor-not-allowed"
-                  : bad
-                  ? "border-red-300 bg-red-50/60 cursor-not-allowed opacity-70"
                   : on && partial
                   ? "border-amber-300 bg-amber-50 cursor-pointer"
                   : on
@@ -2320,8 +2283,7 @@ function SectionPicker({
                     <span className="text-xs text-ink-3 ml-1">· {t("ภาคพิเศษ")}</span>
                   ) : null}
                   {held && <span className="text-[10px] text-brand ml-1">· {t("อยู่ในคำขอเดิม")}</span>}
-                  {bad && <span className="text-[10px] text-danger-soft-foreground ml-1">· {t("เลือกไม่ได้ ทับวิชาอื่นที่ช่วยสอน")}</span>}
-                  {partial && <span className="text-[10px] text-amber-700 ml-1">· {t("ตารางเรียนทับบางส่วน")}</span>}
+                  {partial && <span className="text-[10px] text-amber-700 ml-1">· {t("มีคาบชน · เลือกส่วนที่ไม่ชนได้")}</span>}
                 </span>
               </Checkbox.Content>
             </Checkbox>
@@ -2330,17 +2292,6 @@ function SectionPicker({
       </div>
       {invalid && (
         <div className="text-xs text-danger-soft-foreground mt-1">{t("กรุณาเลือก section อย่างน้อย 1 กลุ่ม")}</div>
-      )}
-      {blockedIds.size > 0 && (
-        <div className="mt-1.5 space-y-0.5">
-          {sections
-            .filter(s => blockedIds.has(s.id))
-            .map(s => (
-              <div key={s.id} className="text-xs text-danger-soft-foreground">
-                Sec {s.sec_no}: {conflictBySection?.get(s.id)?.messages.join(" · ")}
-              </div>
-            ))}
-        </div>
       )}
     </CheckboxGroup>
   );

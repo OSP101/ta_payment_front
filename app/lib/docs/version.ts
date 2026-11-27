@@ -5,7 +5,7 @@
  * screen. Bump this alongside a real release tag (see PLAN-manual-docs-platform.md
  * §5) — not on every commit.
  */
-export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "1.1.0";
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "1.2.29";
 
 /** `"1.0.0"` → `"1.0"` — the granularity content and media are tagged at. */
 export function minorVersion(v: string = APP_VERSION): string {
@@ -16,4 +16,4 @@ export function minorVersion(v: string = APP_VERSION): string {
 /** Last date the manual's content was revised (ISO). Shown in the manual's
  *  footer (formatted per reader with fmtDate); bump it with any content
  *  change that readers should notice. */
-export const DOCS_UPDATED = "2026-11-07";
+export const DOCS_UPDATED = "2026-11-26";

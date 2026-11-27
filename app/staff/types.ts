@@ -197,7 +197,7 @@ export const CURRICULUM_TH: Record<string, string> = {
   OTHER: msg("คณะอื่น ๆ"),
 };
 // Returns a Thai key (msg); callers translate with t(curriculumTH(code)).
-export const curriculumTH = (code: string) => CURRICULUM_TH[code] ?? msg("ยังไม่ระบุ");
+export const curriculumTH = (code: string) => CURRICULUM_TH[code] ?? (code || msg("ยังไม่ระบุ"));
 
 export const emptyExecutive: Executive = {
   term_id: null,

@@ -38,6 +38,14 @@ interface TDBMExtraTeaching {
   section_label?: string;
   semester_type?: string;
   opt_status: string;
+  source_missing?: boolean;
+  source_reference?: boolean;
+  source_original_date?: string;
+  source_original_kind?: string;
+  reconciliation_error?: string;
+  applied_makeup_date?: string;
+  applied_start_time?: string;
+  applied_end_time?: string;
   matched_course_code?: string;
   matched_course_name?: string;
   matched_sec_no?: string;
@@ -63,6 +71,7 @@ interface TDBMSyncLogEntry {
   skipped: number;
   matched?: number;
   error?: string;
+  warning?: string;
   started_at: string;
   finished_at?: string;
 }
@@ -96,6 +105,11 @@ function isMatched(r: TDBMExtraTeaching) {
   return !!r.matched_sec_no;
 }
 
+function syncMessage(t: TFn, message: string): string {
+  const match = /^ซิงก์ข้อมูล TDBM แล้ว แต่มี ([0-9]+) รายการที่ต้องตรวจสอบคาบชดเชย$/.exec(message);
+  return match ? t("ซิงก์ข้อมูล TDBM แล้ว แต่มี {n} รายการที่ต้องตรวจสอบคาบชดเชย", { n: Number(match[1]) }) : t(message);
+}
+
 export default function StaffTDBMPage() {
   const { term, loaded } = useTerm();
   const { t, fmtDate } = useI18n();
@@ -103,9 +117,10 @@ export default function StaffTDBMPage() {
   const [syncing, setSyncing] = useState(false);
 
   const listKey = term ? `/tdbm/extra-teachings?academic_year=${term.academic_year}&semester=${term.semester}` : null;
+  const logKey = term ? `/tdbm/sync-log?limit=10&academic_year=${term.academic_year}&semester=${term.semester}` : null;
   // Do not carry actionable rows across terms while the new term loads.
   const { data: rows, isLoading, error } = useSWR<TDBMExtraTeaching[]>(listKey);
-  const { data: syncLog } = useSWR<TDBMSyncLogEntry[]>("/tdbm/sync-log?limit=10");
+  const { data: syncLog } = useSWR<TDBMSyncLogEntry[]>(logKey);
   // No year filter — /staff/holidays' own year picker aside, a term can span
   // two calendar years (e.g. Aug–Jan), so filtering by the TERM's date range
   // below is the only scoping that can't miss a holiday at either end.
@@ -137,9 +152,13 @@ export default function StaffTDBMPage() {
   async function handleSyncNow() {
     setSyncing(true);
     try {
-      await api.post("/tdbm/sync-now");
-      notify.success(t("ซิงก์จาก TDBM เรียบร้อยแล้ว"));
-      await Promise.all([mutate(listKey), mutate("/tdbm/sync-log?limit=10")]);
+      const results = await api.post<{ error?: string; warning?: string }[]>("/tdbm/sync-now");
+      const failure = results.find(r => r.error)?.error;
+      const warning = results.find(r => r.warning)?.warning;
+      if (failure) notify.error(t(failure));
+      else if (warning) notify.warning(syncMessage(t, warning));
+      else notify.success(t("ซิงก์จาก TDBM เรียบร้อยแล้ว"));
+      await Promise.all([mutate(listKey), mutate(logKey), mutate("/holidays")]);
     } catch (e) {
       notify.error(e);
     } finally {
@@ -161,10 +180,11 @@ export default function StaffTDBMPage() {
       ),
     },
     {
-      id: "original_holiday", width: 160, label: t("ตรงกับวันหยุด"), sortable: true,
+      id: "original_holiday", width: 160, label: t("คาบเดิมที่ชดเชย"), sortable: true,
       sortValue: r => r.original_holiday_date ?? "",
-      render: r =>
-        r.original_holiday_date ? (
+      render: r => <>
+        {r.reconciliation_error && r.original_holiday_date && <span className="mb-1 block whitespace-normal text-danger-soft-foreground">{t(r.reconciliation_error)}</span>}
+        {r.original_holiday_date ? (
           <span className="whitespace-nowrap">
             {formatDateShort(r.original_holiday_date)}
             {r.original_holiday_name && <span className="ml-1.5 text-muted">({r.original_holiday_name})</span>}
@@ -172,7 +192,10 @@ export default function StaffTDBMPage() {
           </span>
         ) : (
           <span className="inline-block max-w-xs whitespace-normal text-muted">{r.resolution_reason ? t(r.resolution_reason) : t("รอจับคู่คาบวันหยุด")}</span>
-        ),
+        )}
+        {(!r.original_holiday_date || r.reconciliation_error) && r.source_original_date && <span className="mt-1 block text-xs text-muted">{t("คาบเดิมจาก TDBM")}: {formatDateShort(r.source_original_date)} · {r.source_original_kind === "lab" ? t("ปฏิบัติการ") : r.source_original_kind === "lecture" ? t("บรรยาย") : ""}</span>}
+        {r.reconciliation_error && r.applied_makeup_date && <span className="mt-1 block text-xs text-muted">{t("คาบชดเชยที่ยังใช้อยู่")}: {formatDateShort(r.applied_makeup_date)} {r.applied_start_time}–{r.applied_end_time}</span>}
+      </>,
     },
     {
       id: "course", width: 260, label: t("วิชา / กลุ่ม"), sortable: true,
@@ -219,6 +242,14 @@ export default function StaffTDBMPage() {
 
   const filters: DataFilter<TDBMExtraTeaching>[] = [
     {
+      id: "issue", placeholder: t("การตรวจสอบข้อมูล TDBM"),
+      options: [
+        { id: "", label: t("ทุกรายการ") },
+        { id: "conflict", label: t("ต้องตรวจสอบข้อมูล TDBM") },
+      ],
+      predicate: r => !!r.reconciliation_error,
+    },
+    {
       id: "holiday", placeholder: t("การจับคู่คาบวันหยุด"),
       options: [
         { id: "", label: t("ทุกรายการ") },
@@ -226,7 +257,7 @@ export default function StaffTDBMPage() {
         { id: "automatic", label: t("จับคู่อัตโนมัติ") },
         { id: "manual", label: t("เจ้าหน้าที่ยืนยันคู่แล้ว") },
       ],
-      predicate: (r, v) => v === "pending" ? !r.original_holiday_date && r.opt_status !== "C" : r.match_method === v,
+      predicate: (r, v) => v === "pending" ? !r.original_holiday_date && !r.source_missing && !r.source_reference && !r.reconciliation_error && ["A", "D"].includes(r.opt_status) : r.match_method === v,
     },
     {
       id: "match", placeholder: t("สถานะจับคู่"),
@@ -321,6 +352,11 @@ export default function StaffTDBMPage() {
       {lastExtra?.error && (
         <div className="mt-4">
           <Alert status="danger" title={t("ซิงก์วันสอนชดเชยล่าสุดล้มเหลว")} description={lastExtra.error} />
+        </div>
+      )}
+      {lastExtra?.warning && (
+        <div className="mt-4">
+          <Alert status="warning" title={t("ซิงก์ข้อมูลแล้ว มีบางรายการต้องตรวจสอบ")} description={syncMessage(t, lastExtra.warning)} />
         </div>
       )}
 

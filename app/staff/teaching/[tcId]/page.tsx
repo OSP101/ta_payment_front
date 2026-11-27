@@ -1,4 +1,5 @@
 "use client";
+import { useCurricula } from "../useCurricula";
 import { use, useEffect, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
@@ -38,15 +39,10 @@ interface SectionRow {
   schedules?: SectionScheduleRow[];
 }
 
-const CURRICULUM_OPTIONS = [
-  { id: "", label: msg("ยังไม่ระบุ") },
-  { id: "CS", label: msg("วิทยาการคอมพิวเตอร์ (CS)") },
-  { id: "IT", label: msg("เทคโนโลยีสารสนเทศ (IT)") },
-  { id: "GIS", label: msg("ภูมิสารสนเทศศาสตร์ (GIS)") },
-  { id: "AI", label: msg("ปัญญาประดิษฐ์ (AI)") },
-  { id: "CY", label: msg("ความมั่นคงปลอดภัยไซเบอร์ (CY)") },
-  { id: "OTHER", label: msg("คณะอื่น ๆ") },
-];
+function useCurriculumOptions() {
+  const { t } = useI18n();
+  return [{ id: "", label: t("ยังไม่ระบุ") }, ...useCurricula().map(c => ({ id: c.code, label: `${c.full_name_th} (${c.code})` }))];
+}
 
 interface TC {
   id: string;
@@ -361,7 +357,7 @@ function SectionScheduleBlock({
         </Chip>
         {section.curriculum && (
           <Chip tone="neutral">
-            {t(CURRICULUM_OPTIONS.find(c => c.id === section.curriculum)?.label ?? section.curriculum)}
+            {t(section.curriculum)}
           </Chip>
         )}
         <span className="text-xs text-muted">{t("{n} คน", { n: section.num_students })}</span>
@@ -428,6 +424,7 @@ function SectionFormModal({
   const [secNo, setSecNo] = useState("");
   const [track, setTrack] = useState<"regular" | "special">("regular");
   const [students, setStudents] = useState("0");
+  const curriculumOptions = useCurriculumOptions();
   const [curriculum, setCurriculum] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -543,7 +540,7 @@ function SectionFormModal({
             label={t("หลักสูตรของกลุ่มเรียน")}
             value={curriculum}
             onChange={setCurriculum}
-            options={CURRICULUM_OPTIONS.map(o => ({ ...o, label: t(o.label) }))}
+            options={curriculumOptions}
           />
         )}
 
@@ -734,6 +731,7 @@ function CourseInfoModal({
   const [lec, setLec] = useState(String(tc.lecture_hrs));
   const [lab, setLab] = useState(String(tc.lab_hrs));
   const [self, setSelf] = useState(String(tc.self_hrs));
+  const curriculumOptions = useCurriculumOptions();
   const [curriculum, setCurriculum] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -876,7 +874,7 @@ function CourseInfoModal({
           label={t("หลักสูตร (ใช้กับทุกกลุ่มเรียน)")}
           value={curriculum}
           onChange={setCurriculum}
-          options={[{ id: "", label: t("ไม่เปลี่ยน") }, ...CURRICULUM_OPTIONS.slice(1).map(o => ({ ...o, label: t(o.label) }))]}
+          options={[{ id: "", label: t("ไม่เปลี่ยน") }, ...curriculumOptions.slice(1)]}
         />
         <p className="-mt-2 text-xs text-muted">
           {t("เลือกแล้วจะเขียนทับหลักสูตรของทุกกลุ่มเรียนในรายวิชานี้ หากต้องการกำหนดต่างกันรายกลุ่ม ให้แก้ที่แต่ละ section")}

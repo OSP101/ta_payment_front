@@ -1,0 +1,19 @@
+{
+  "งานที่ได้รับมอบหมาย": "Assigned duties",
+  "รายละเอียดจากฟอร์มคำขอ TA ของอาจารย์ แสดงชั่วโมงต่อสัปดาห์แยกตามกลุ่มเรียน": "Details from the lecturer’s TA request, with weekly hours for each section",
+  "โหลดรายละเอียดงานไม่สำเร็จ": "Could not load assigned duties",
+  "ยังไม่มีงานที่ได้รับมอบหมาย": "No duties assigned yet",
+  "รายละเอียดจะแสดงเมื่อคำขอ TA ของอาจารย์ได้รับอนุมัติ": "Details will appear once the lecturer’s TA request is approved",
+  "กลุ่มเรียน {n}": "Section {n}",
+  "รวม {n} ชั่วโมง/สัปดาห์": "Total: {n} hours/week",
+  "{n} ชั่วโมง/สัปดาห์": "{n} hours/week",
+  "ยังไม่มีรายละเอียดชั่วโมงงานในฟอร์มคำขอ กรุณาติดต่ออาจารย์ผู้สอน": "The request has no duty hours recorded. Please contact your lecturer.",
+  "ตรวจการบ้าน / รายงาน": "Mark homework / reports",
+  "เช็คชื่อ": "Take attendance",
+  "อื่น ๆ (บรรยาย)": "Other (lecture)",
+  "อื่น ๆ (ปฏิบัติการ)": "Other (lab)",
+  "สอนปฏิบัติการ": "Teach the lab",
+  "ช่วยสอน": "Teaching assistance",
+  "เตรียมการสอน": "Teaching preparation",
+  "อื่น ๆ": "Other"
+}

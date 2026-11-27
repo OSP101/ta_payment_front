@@ -18,7 +18,7 @@ export function canBulkAcknowledge(issue: REGIssue): boolean {
 }
 
 /** One plan powers both the reviewable preview and the applied values. No DB writes. */
-export function planREGBulk(review: REGReview, codes: string[], action: REGBulkAction) {
+export function planREGBulk(review: REGReview, codes: string[], action: REGBulkAction, curricula: readonly string[] = REG_CURRICULA) {
   const targets = new Set(codes);
   const included = review.courses.filter(c => targets.has(c.code) && !c.skip && !c.existing_id);
   const eligible = new Set(included.map(c => c.code));
@@ -35,7 +35,7 @@ export function planREGBulk(review: REGReview, codes: string[], action: REGBulkA
     }
     result.acknowledged = [...new Set([...review.acknowledged, ...issues.map(i => i.id)])];
   } else {
-    const valid = action.type === "curriculum" ? REG_CURRICULA.includes(action.value as typeof REG_CURRICULA[number])
+    const valid = action.type === "curriculum" ? curricula.includes(action.value)
       : action.type === "track" ? ["regular", "special"].includes(action.value)
       : action.type === "level" ? ["undergrad", "graduate"].includes(action.value)
       : review.lecturers.some(l => l.id === action.value);
@@ -56,7 +56,7 @@ export function planREGBulk(review: REGReview, codes: string[], action: REGBulkA
       }
       return { ...c, sections: c.sections.map(s => {
         const before = s[action.type];
-        if ((action.type === "curriculum" && action.onlyMissing && REG_CURRICULA.includes(s.curriculum as typeof REG_CURRICULA[number])) || before === action.value) return s;
+        if ((action.type === "curriculum" && action.onlyMissing && curricula.includes(s.curriculum)) || before === action.value) return s;
         changes.push({ id: `${c.code}:${s.id}`, code: c.code, section: s.sec_no, track: s.track, sourceRow: s.source_row, before, after: action.value });
         return { ...s, [action.type]: action.value };
       }) };

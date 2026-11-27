@@ -45,7 +45,7 @@ try{
  });
  await new Promise((resolve,reject)=>{gateway.once('error',reject);gateway.listen(3326,'127.0.0.1',resolve)});
  for(const data of fixture.cases){
-  const action=data.mode.replace(/^approved-/,'');
+  const action=data.mode.includes('real-term2')?data.mode.split('-').at(-1):data.mode.replace(/^approved-/,'');
   const safari=action==='safari',mobile=action==='mobile'||safari;
   browser=await(safari?webkit:chromium).launch(safari?{}:{channel:'chrome'});
   const context=await browser.newContext({...safari?devices['iPhone 13']:{},viewport:mobile?{width:390,height:640}:{width:1440,height:1000},hasTouch:mobile,isMobile:mobile,ignoreHTTPSErrors:true});
@@ -85,7 +85,7 @@ try{
     if(dst==='3'){const next=response(p,false);await select.selectOption(id);const r=await next;if(r.status()!==200)throw Error(`Mapping preview: ${r.status()} ${await r.text()}`)}else{await select.selectOption(id);await expect(approve(p)).toBeDisabled()}
    }
   };
-  const check=async p=>{await expect(approve(p)).toBeEnabled();await expect(approve(p)).toBeInViewport({ratio:1});if(mobile)await approve(p).tap();else await approve(p).click();await expect(commit(p)).toBeEnabled()};
+  const check=async p=>{await expect(approve(p)).toBeEnabled();await expect(approve(p)).toBeInViewport({ratio:1});if(mobile)await approve(p).tap();else await approve(p).click();await expect(commit(p)).toBeEnabled();if(data.mode.includes('real-term2'))await p.screenshot({path:`/tmp/merge-production-${data.mode}-ready.png`,fullPage:true})};
   const verifyMerged=async()=>{
    const r=await context.request.get(`${origin}/api/v1/teaching-courses?term_id=${data.term}`);if(r.status()!==200)throw Error(`Reload list: ${r.status()}`);const list=await r.json();
    if(list.length!==1||list[0].id!==data.target||list[0].num_students_regular!==(data.regular_after||45)||list[0].num_students_special!==35)throw Error('Incorrect merged course data');

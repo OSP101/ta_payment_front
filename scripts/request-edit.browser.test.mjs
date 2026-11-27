@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium, expect as baseExpect } from '@playwright/test';
-import { initialDraft, workload, candidates } from './fixtures/request-playground.mjs';
+import { initialDraft, workload, candidates, lecturer } from './fixtures/request-playground.mjs';
 const expect = baseExpect.configure({ timeout: 20000 });
 const origin = process.env.REQUEST_FORM_TEST_ORIGIN || 'http://localhost:3330';
 const api = process.env.REQUEST_FORM_TEST_API || 'http://127.0.0.1:3331';
@@ -13,12 +13,16 @@ const draftURL = `${api}/api/v1/teaching-courses/request-playground/request-draf
 await mkdir('/tmp/ta-staff-fixes',{recursive:true});
 const browser = await chromium.launch({channel:'chrome'});
 try {
+ for (const role of ['lecturer', 'staff', 'admin']) {
  for (const [name,viewport] of [['desktop',{width:1440,height:1050}],['mobile',{width:390,height:844}]]) {
   const draft=initialDraft();
   await fetch(draftURL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(draft)});
   const page=await browser.newPage({viewport});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.addInitScript(()=>localStorage.setItem('ta-payment:request-guide:v1:lecturer-playground','1'));
+  await page.addInitScript(role => localStorage.setItem(`ta-payment:request-guide:v1:${role}-playground`,'1'), role);
+  if (role !== 'lecturer') {
+   await page.route('**/api/v1/me', route => route.fulfill({json:{...lecturer,id:`${role}-playground`,roles:[role]}}));
+  }
   let saved=false;let fail=true;let payload;
   const row={id:'request-edit',status:'approved',ta_names:'ผู้ช่วยสอน ตัวอย่าง 1',ta_count:1,teaching_course_id:'request-playground',submitted_at:new Date().toISOString(),can_cancel:true};
   await page.route('**/api/v1/ta-requests',route=>route.fulfill({json:[row,{...row,id:'request-issued',ta_names:'ออกใบแต่งตั้งแล้ว',can_cancel:false}]}));
@@ -40,7 +44,7 @@ try {
   await expect(grading).toHaveValue('1');await grading.fill('1.5');await grading.press('Tab');
   await expect(page.getByRole('button',{name:'บันทึกการแก้ไข',exact:true})).toBeEnabled();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'horizontal overflow');
-  await page.screenshot({path:`/tmp/ta-staff-fixes/request-edit-${name}.png`,fullPage:true});
+  await page.screenshot({path:`/tmp/ta-staff-fixes/request-edit-${role}-${name}.png`,fullPage:true});
   await page.getByRole('button',{name:'บันทึกการแก้ไข',exact:true}).click();
   await page.getByRole('button',{name:'ยืนยันบันทึกการแก้ไข',exact:true}).click();
   await expect(page.getByText('ออกใบแต่งตั้งให้ TA คนนี้แล้ว',{exact:true}).first()).toBeVisible();
@@ -52,7 +56,17 @@ try {
   assert.equal(saved,true);assert.equal(payload.assignments.length,1);
   assert.equal(payload.assignments[0].section_workloads[0].workload.check_work_hrs,1.5);
   assert.deepEqual((await (await fetch(draftURL)).json()).payload,draft,'editing must preserve the separate saved draft');
+  let cancelled=false;
+  await page.route('**/api/v1/ta-requests/request-edit/cancel', route => {
+   assert.equal(route.request().method(),'POST');cancelled=true;
+   return route.fulfill({json:{ok:true}});
+  });
+  await expect(page.getByRole('button',{name:'ยกเลิกคำขอ',exact:true})).toHaveCount(1);
+  await page.getByRole('button',{name:'ยกเลิกคำขอ',exact:true}).click();
+  await page.getByRole('button',{name:'ยืนยันยกเลิก',exact:true}).click();
+  await expect.poll(()=>cancelled).toBe(true);
   assert.deepEqual(errors,[]);await page.close();
-  console.log(`${name}: edit prefill, issued lock, error recovery, save payload and draft preservation passed`);
+  console.log(`${role} ${name}: edit prefill, issued lock, error recovery, save payload and draft preservation passed`);
  }
+}
 } finally {await browser.close();}

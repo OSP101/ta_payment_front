@@ -200,7 +200,7 @@ export default function OpenCourseModal({
   // pickLecturers is set — every course-open form offers this field.
   const { data: curriculaData } = useSWR<CurriculumRow[]>(open ? "/curricula" : null);
   const curriculumOptions = useMemo(() => {
-    const rows = (curriculaData ?? []).filter(c => c.level === "undergrad");
+    const rows = (curriculaData ?? []);
     return [
       { id: "", label: t("ยังไม่ระบุ") },
       ...rows.map(c => ({ id: c.code, label: `${c.full_name_th} (${c.code})` })),

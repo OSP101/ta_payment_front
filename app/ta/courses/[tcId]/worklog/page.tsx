@@ -218,6 +218,8 @@ interface Assignment {
   weekly_cap_lab: number;
   weekly_cap_review: number;
   weekly_cap_other: number;
+  weekly_cap_prep: number;
+  level: "undergrad" | "master" | "phd";
   // For grad-level assignments, help_teach_hrs is a shared cap covering both
   // lecture and lab combined — the UI sums lecture+lab weekly totals when
   // checking against this cap.
@@ -517,6 +519,7 @@ const ACTIVITY_LABEL: Record<string, string> = {
   review: msg("ตรวจงาน"),
   makeup: msg("ชดเชย"),
   other: msg("อื่น ๆ"),
+  prep: msg("เตรียมการสอน"),
 };
 
 // One fixed colour per activity, used everywhere an activity breakdown is
@@ -528,6 +531,7 @@ const ACTIVITY_BAR_COLOR: Record<string, string> = {
   review: "bg-amber-500",
   makeup: "bg-teal-500",
   other: "bg-slate-400",
+  prep: "bg-rose-500",
 };
 
 type Scope = "lecture" | "lab" | "both";
@@ -543,6 +547,18 @@ function allowedActivitiesFor(scope: Scope | undefined): string[] {
   // "both" or unknown scope — show everything so the TA isn't locked out if
   // the request row is missing scope data.
   return ["lecture", "lab", ...base];
+}
+
+function worklogActivities(scope: Scope | undefined, caps?: { lecture: number; lab: number; review: number; other: number; prep?: number; lectureLabShared: boolean; capsSet: boolean }): string[] {
+  if (!caps?.lectureLabShared) return allowedActivitiesFor(scope);
+  return [...(scope === "lab" ? ["lab"] : scope === "lecture" ? ["lecture"] : ["lecture", "lab"]), "review", "prep", "other"]
+    .filter(k => !caps.capsSet || (caps[k as "lecture" | "lab" | "review" | "other" | "prep"] ?? 0) > 0);
+}
+function worklogActivityLabel(kind: string, grad: boolean): string {
+  if (grad && kind === "lecture") return msg("ช่วยสอน (บรรยาย)");
+  if (grad && kind === "lab") return msg("ช่วยสอน (ปฏิบัติการ)");
+  if (grad && kind === "review") return msg("ตรวจการบ้าน");
+  return ACTIVITY_LABEL[kind] ?? kind;
 }
 
 // For activity="other", the parent-kind picker is restricted the same way —
@@ -1301,7 +1317,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
     l => l.status === "draft" && !monthLockFor(l.work_date) && !keptMonths.includes(monthKey(l.work_date)),
   ).length;
   const activeScope = activeAssignment?.reimburse_scope;
-  const canGenerate = !!activeAssignment?.has_schedule;
+  const canGenerate = !!activeAssignment && (activeAssignment.has_schedule ||
+    activeAssignment.weekly_cap_review > 0 || activeAssignment.weekly_cap_other > 0 || activeAssignment.weekly_cap_prep > 0);
 
   // Weekly caps for the active assignment, shared between the "add row" modal
   // and the inline table's stepper so both enforce the same ใบคำขอ-declared
@@ -1314,6 +1331,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
             lab: activeAssignment.weekly_cap_lab,
             review: activeAssignment.weekly_cap_review,
             other: activeAssignment.weekly_cap_other,
+            prep: activeAssignment.weekly_cap_prep ?? 0,
             lectureLabShared: activeAssignment.weekly_lecture_lab_shared,
             capsSet: activeAssignment.weekly_caps_set,
           }
@@ -1327,6 +1345,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       case "lab":     return weeklyCapsInfo.lab;
       case "review":  return weeklyCapsInfo.review;
       case "other":   return weeklyCapsInfo.other;
+      case "prep":    return weeklyCapsInfo.prep;
       default:        return 0; // makeup — no weekly cap enforced
     }
   }
@@ -1744,14 +1763,14 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       render: l => {
         const w = view(l);
         if (!rowEditable(w)) {
-          const label = ACTIVITY_LABEL[w.activity] ? t(ACTIVITY_LABEL[w.activity]) : w.activity;
-          if (w.activity === "other" && (w.parent_kind === "lecture" || w.parent_kind === "lab")) {
+          const label = t(worklogActivityLabel(w.activity, !!weeklyCapsInfo?.lectureLabShared));
+          if (!weeklyCapsInfo?.lectureLabShared && w.activity === "other" && (w.parent_kind === "lecture" || w.parent_kind === "lab")) {
             return `${label} (${t(PARENT_KIND_LABEL[w.parent_kind])})`;
           }
           return label;
         }
         const scope = activeAssignment?.reimburse_scope;
-        const activityKeys = allowedActivitiesFor(scope);
+        const activityKeys = worklogActivities(scope, weeklyCapsInfo);
         const parentKindKeys = allowedParentKindsFor(scope);
         return (
           <div className="flex flex-col gap-1">
@@ -1768,10 +1787,10 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
               }}
             >
               {activityKeys.map(v => (
-                <option key={v} value={v}>{t(ACTIVITY_LABEL[v])}</option>
+                <option key={v} value={v}>{t(worklogActivityLabel(v, !!weeklyCapsInfo?.lectureLabShared))}</option>
               ))}
             </Select>
-            {w.activity === "other" && (
+            {w.activity === "other" && !weeklyCapsInfo?.lectureLabShared && (
               <Select
                 value={parentKindKeys.includes(w.parent_kind as "lecture" | "lab") ? (w.parent_kind ?? parentKindKeys[0]) : parentKindKeys[0]}
                 onChange={e => patch(l, { parent_kind: e.target.value as "lecture" | "lab" })}
@@ -2468,6 +2487,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       />
 
       <AddWorklogModal
+        key={aid}
         open={showAdd}
         onClose={() => { setShowAdd(false); setQuickAddDate(null); }}
         onSave={async form => {
@@ -2671,6 +2691,7 @@ interface AddWorklogModalProps {
     lab: number;
     review: number;
     other: number;
+    prep: number;
     lectureLabShared: boolean;
     capsSet: boolean;
   };
@@ -2816,7 +2837,7 @@ function AddWorklogModal({
   // Cache the allowed key lists per render — the caller usually doesn't switch
   // scope mid-modal, but we still recompute so a section switch behind the
   // modal doesn't leave stale options showing.
-  const activityKeys = allowedActivitiesFor(scope);
+  const activityKeys = worklogActivities(scope, weeklyCaps);
   const parentKindKeys = allowedParentKindsFor(scope);
   // Sensible default activity given the scope: lecture-scope → บรรยาย,
   // lab-scope → ปฏิบัติการ, both → บรรยาย (first option).
@@ -2845,6 +2866,7 @@ function AddWorklogModal({
         case "lab":     return weeklyCaps.lab;
         case "review":  return weeklyCaps.review;
         case "other":   return weeklyCaps.other;
+        case "prep":    return weeklyCaps.prep;
         default:        return 0; // makeup — no weekly cap enforced
       }
     };
@@ -2863,7 +2885,7 @@ function AddWorklogModal({
       // specific ("ช่วยสอน (บรรยาย+ปฏิบัติ)" for grad shared, else per-kind).
       labelTH: shared
         ? t("ช่วยสอน (บรรยาย+ปฏิบัติการ)")
-        : ACTIVITY_LABEL[activity] ? t(ACTIVITY_LABEL[activity]) : activity,
+        : t(worklogActivityLabel(activity, !!weeklyCaps?.lectureLabShared)),
     };
   }, [weeklyCaps, existingLogs, workDate, activity, t]);
 
@@ -2929,7 +2951,7 @@ function AddWorklogModal({
     setStart(recovered.start);
     setEnd(recovered.end);
     setHours(recovered.hours);
-    setActivity(recovered.activity);
+    setActivity(activityKeys.includes(recovered.activity) ? recovered.activity : defaultActivity);
     setParentKind(recovered.parentKind);
     setNote(recovered.note);
     setDirty(true); // recovered content is worth persisting again
@@ -3097,7 +3119,7 @@ function AddWorklogModal({
             depend on which activity kind the TA is logging, so we ask for it
             up-front instead of letting them fill time and discover a cap
             violation on save. */}
-        <div className={activity === "other" ? "grid grid-cols-2 gap-3" : ""}>
+        <div className={activity === "other" && !weeklyCaps?.lectureLabShared ? "grid grid-cols-2 gap-3" : ""}>
           <FieldGroup label={t("ประเภทกิจกรรม")}>
             <Select
               value={activity}
@@ -3113,11 +3135,11 @@ function AddWorklogModal({
               }}
             >
               {activityKeys.map(v => (
-                <option key={v} value={v}>{t(ACTIVITY_LABEL[v])}</option>
+                <option key={v} value={v}>{t(worklogActivityLabel(v, !!weeklyCaps?.lectureLabShared))}</option>
               ))}
             </Select>
           </FieldGroup>
-          {activity === "other" && (
+          {activity === "other" && !weeklyCaps?.lectureLabShared && (
             <FieldGroup
               label={t("ประเภทกิจกรรมหลัก")}
               hint={parentKindKeys.length === 1 ? t("ล็อกไว้ตามขอบเขตของคำขอ") : undefined}
@@ -4153,9 +4175,17 @@ interface TAReviewSchedule {
  * OUTSIDE the class session, which is why they exist as a schedule of their own
  * rather than following the section timetable.
  */
-const DUTY_KINDS = ["review", "other_lecture", "other_lab"] as const;
+const DUTY_KINDS = ["review", "prep", "grad_other", "other_lecture", "other_lab"] as const;
 
 const DUTY_META: Record<string, { title: string; short: string; blurb: string; activity: string }> = {
+  prep: {
+    title: msg("ตารางเตรียมการสอนของคุณ"), short: msg("เตรียมการสอน"),
+    blurb: msg("กำหนดวันเวลาที่คุณเตรียมการสอนตามคำขอของอาจารย์"), activity: msg("เตรียมการสอน"),
+  },
+  grad_other: {
+    title: msg("ตารางงานอื่น ๆ ของคุณ"), short: msg("อื่น ๆ"),
+    blurb: msg("กำหนดวันเวลาที่คุณทำงานอื่นตามคำขอของอาจารย์"), activity: msg("อื่น ๆ"),
+  },
   review: {
     title: msg("ตารางตรวจการบ้านของคุณ"),
     short: msg("ตรวจงาน"),
@@ -4346,7 +4376,7 @@ function DutySchedulePanel({ assignmentId, kind }: { assignmentId: string; kind:
         onConfirm={handleDelete}
         isPending={deleting}
         danger
-        title={t("ลบวันตรวจการบ้าน")}
+        title={t("ลบช่วงเวลา {duty}", { duty: t(meta.short) })}
         confirmLabel={t("ลบ")}
         message={t("รายการที่เคยสร้างไปแล้วจะไม่ถูกลบ แต่การกด 'สร้างอัตโนมัติ' ครั้งถัดไปจะไม่มีรายการของวันนี้อีก ต้องการลบหรือไม่?")}
       />
@@ -4391,6 +4421,7 @@ function ReviewScheduleModal({
   const priorSlotHrs = initial ? hoursOf(initial.start_time, initial.end_time) : 0;
   const projected = reviewHrs - priorSlotHrs + currentSlotHrs;
   const overCap = lectureHrs > 0 && projected > lectureHrs + 1e-6;
+  const overRowLimit = (kind === "prep" || kind === "grad_other") && currentSlotHrs > MAX_ROW_HOURS;
 
   // Time-conflict preview: fetch the TA's occupied slots (class timetable +
   // teaching + review) once and flag overlap with the drafted slot before
@@ -4426,6 +4457,10 @@ function ReviewScheduleModal({
       );
       return;
     }
+    if (overRowLimit) {
+      notify.error(t("ช่วงเวลางานต้องไม่เกิน 7 ชั่วโมงต่อรายการ กรุณาแบ่งเป็นหลายช่วงเวลา"));
+      return;
+    }
     if (overCap) {
       notify.error(t("ชั่วโมง{duty}รวมต่อสัปดาห์ ({h} ชม.) เกินที่อาจารย์ระบุไว้ ({max} ชม.)", { duty: t(meta.short), h: projected.toFixed(1), max: lectureHrs.toFixed(1) }));
       return;
@@ -4456,7 +4491,7 @@ function ReviewScheduleModal({
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
-          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving || overCap || !!conflict}>
+          <Button variant="primary" onClick={handleSave} isPending={saving} disabled={saving || overCap || overRowLimit || !!conflict}>
             {t("บันทึก")}
           </Button>
         </div>
@@ -4482,7 +4517,7 @@ function ReviewScheduleModal({
           <TextInput value={room} onChange={e => setRoom(e.target.value)} placeholder={t("เช่น SC5.5 หรือ ที่บ้าน")} />
         </FieldGroup>
         <FieldGroup label={t("หมายเหตุ (ระบุก็ได้)")} hint={t("{n}/{max} ตัวอักษร", { n: note.length, max: NOTE_MAX })}>
-          <TextInput value={note} maxLength={NOTE_MAX} onChange={e => setNote(e.target.value)} placeholder={t("เช่น ตรวจการบ้านสัปดาห์ที่ 1–3")} />
+          <TextInput value={note} maxLength={NOTE_MAX} onChange={e => setNote(e.target.value)} placeholder={t("รายละเอียดงานตามที่ได้รับมอบหมาย")} />
         </FieldGroup>
 
         {conflict && (
@@ -4498,17 +4533,18 @@ function ReviewScheduleModal({
           />
         )}
 
+        {overRowLimit && <Alert status="danger" title={t("ช่วงเวลางานต้องไม่เกิน 7 ชั่วโมงต่อรายการ กรุณาแบ่งเป็นหลายช่วงเวลา")} />}
         {lectureHrs > 0 && (
           overCap ? (
             <Alert
               status="danger"
               icon={<AlertTriangle size={14} />}
-              title={t("เกินเพดาน รวมต่อสัปดาห์ {h} ชม. เกินชั่วโมงบรรยาย {max} ชม.", { h: projected.toFixed(1), max: lectureHrs.toFixed(1) })}
-              description={t("ลดช่วงเวลาลง หรือลบวันตรวจอื่นก่อน")}
+              title={t("ชั่วโมง{duty}รวมต่อสัปดาห์ ({h} ชม.) เกินที่อาจารย์ระบุไว้ ({max} ชม.)", { duty: t(meta.short), h: projected.toFixed(1), max: lectureHrs.toFixed(1) })}
+              description={t("ลดช่วงเวลาลง หรือแก้ไขช่วงเวลางานอื่นก่อน")}
             />
           ) : (
             <div className="text-xs text-muted">
-              {t.rich("รวมต่อสัปดาห์หลังบันทึก: {h} / {max} ชม. (ชั่วโมงบรรยายของ section)", {
+              {t.rich("รวมต่อสัปดาห์หลังบันทึก: {h} / {max} ชม. ตามภาระงานที่อาจารย์ระบุ", {
                 h: <span className="tabular-nums font-medium text-foreground">{projected.toFixed(1)}</span>,
                 max: lectureHrs.toFixed(1),
               })}

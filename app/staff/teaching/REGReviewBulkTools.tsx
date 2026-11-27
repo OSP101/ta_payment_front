@@ -1,10 +1,11 @@
 "use client";
+import { useCurricula } from "./useCurricula";
 import { useState } from "react";
 import { Button } from "../../components/ui";
 import { useI18n } from "../../lib/i18n/client";
 import type { REGReview } from "./REGReviewEditor";
 import REGSearchSelect from "./REGSearchSelect";
-import { canBulkAcknowledge, planREGBulk, REG_CURRICULA, regIssueKind, type REGBulkAction } from "./regReviewBulk";
+import { canBulkAcknowledge, planREGBulk, regIssueKind, type REGBulkAction } from "./regReviewBulk";
 
 const kindLabels: Record<string, string> = {
   lecturer_match: "รายชื่ออาจารย์ที่จับคู่แล้ว", name_lines: "ชื่อวิชาหลายบรรทัด", shared_name: "ชื่อวิชาเหมือนกัน", merge: "ยืนยันเรียนรวม",
@@ -16,6 +17,7 @@ export default function REGReviewBulkTools({ review, visibleCodes, selectedCode,
   review: REGReview; visibleCodes: string[]; selectedCode: string; disabled: boolean; onChange: (review: REGReview) => void; onClose: () => void;
 }) {
   const { t } = useI18n();
+  const curricula = useCurricula();
   const [codes, setCodes] = useState([selectedCode]);
   const [type, setType] = useState<REGBulkAction["type"]>("curriculum");
   const [curriculum, setCurriculum] = useState("");
@@ -32,7 +34,7 @@ export default function REGReviewBulkTools({ review, visibleCodes, selectedCode,
   const action: REGBulkAction = type === "curriculum" ? { type, value: curriculum, onlyMissing }
     : type === "track" ? { type, value: track } : type === "level" ? { type, value: level }
     : type === "lecturer" ? { type, value: lecturer, primary } : { type, kinds };
-  const plan = planREGBulk(review, scoped, action);
+  const plan = planREGBulk(review, scoped, action, curricula.map(c => c.code));
   const signature = JSON.stringify([action, scoped, plan.changes]);
   const groups = [...new Set(review.issues.filter(i => scoped.includes(i.code) && canBulkAcknowledge(i) && !review.acknowledged.includes(i.id)).map(regIssueKind))];
   const manualCount = review.issues.filter(i => scoped.includes(i.code) && i.severity === "warning" && !canBulkAcknowledge(i) && !review.acknowledged.includes(i.id)).length;
@@ -56,7 +58,7 @@ export default function REGReviewBulkTools({ review, visibleCodes, selectedCode,
       <label className="reg-review-field"><span>{t("สิ่งที่ต้องการทำพร้อมกัน")}</span><select aria-label={t("สิ่งที่ต้องการทำพร้อมกัน")} className="reg-review-control" value={type} onChange={e => { setType(e.target.value as REGBulkAction["type"]); setApplied(0); }}>
         <option value="curriculum">{t("กำหนดกลุ่มหลักสูตร")}</option><option value="track">{t("กำหนดประเภทภาค")}</option><option value="level">{t("กำหนดระดับการศึกษา")}</option><option value="lecturer">{t("เพิ่มอาจารย์ผู้สอน")}</option><option value="acknowledge">{t("ยืนยันคำเตือนที่ตรวจแล้ว")}</option>
       </select></label>
-      {type === "curriculum" && <><label className="reg-review-field"><span>{t("กลุ่มหลักสูตรที่จะใช้")}</span><select aria-label={t("กลุ่มหลักสูตรที่จะใช้")} className="reg-review-control" value={curriculum} onChange={e => setCurriculum(e.target.value)}><option value="">{t("เลือกกลุ่มหลักสูตร")}</option>{REG_CURRICULA.map(k => <option key={k} value={k}>{k === "OTHER" ? t("OTHER — คณะอื่น / กลุ่มทั่วไป") : k}</option>)}</select></label><label className="reg-bulk-choice"><input type="checkbox" checked={onlyMissing} onChange={e => setOnlyMissing(e.target.checked)} />{t("เติมเฉพาะ Section ที่ยังไม่มีกลุ่มหลักสูตรที่ถูกต้อง")}</label></>}
+      {type === "curriculum" && <><label className="reg-review-field"><span>{t("กลุ่มหลักสูตรที่จะใช้")}</span><select aria-label={t("กลุ่มหลักสูตรที่จะใช้")} className="reg-review-control" value={curriculum} onChange={e => setCurriculum(e.target.value)}><option value="">{t("เลือกกลุ่มหลักสูตร")}</option>{curricula.map(c => <option key={c.code} value={c.code}>{c.full_name_th} ({c.code})</option>)}</select></label><label className="reg-bulk-choice"><input type="checkbox" checked={onlyMissing} onChange={e => setOnlyMissing(e.target.checked)} />{t("เติมเฉพาะ Section ที่ยังไม่มีกลุ่มหลักสูตรที่ถูกต้อง")}</label></>}
       {type === "track" && <label className="reg-review-field"><span>{t("ประเภทภาคที่จะใช้")}</span><select aria-label={t("ประเภทภาคที่จะใช้")} className="reg-review-control" value={track} onChange={e => setTrack(e.target.value)}><option value="regular">{t("ภาคปกติ")}</option><option value="special">{t("ภาคพิเศษ")}</option></select></label>}
       {type === "level" && <label className="reg-review-field"><span>{t("ระดับการศึกษาที่จะใช้")}</span><select aria-label={t("ระดับการศึกษาที่จะใช้")} className="reg-review-control" value={level} onChange={e => setLevel(e.target.value)}><option value="undergrad">{t("ปริญญาตรี")}</option><option value="graduate">{t("บัณฑิตศึกษา")}</option></select></label>}
       {type === "lecturer" && <><REGSearchSelect label={t("อาจารย์ที่จะเพิ่มให้วิชาที่เลือก")} placeholder={t("เลือกอาจารย์")} searchLabel={t("ค้นหาอาจารย์สำหรับหลายวิชา")} emptyText={t("ไม่พบอาจารย์ ลองค้นหาด้วยอีเมล")} value={lecturer} options={review.lecturers.map(l => ({ id: l.id, label: l.name, description: l.email }))} disabled={disabled} onChange={setLecturer} /><label className="reg-bulk-choice"><input type="checkbox" checked={primary} onChange={e => setPrimary(e.target.checked)} />{t("ให้อาจารย์คนนี้เป็นผู้รับผิดชอบหลักของวิชาที่เลือก")}</label><p className="text-xs text-muted">{t("คงอาจารย์เดิมไว้ เพิ่มบัญชีที่เลือกโดยไม่ซ้ำ ตรวจชื่อเต็มและอีเมลก่อนใช้กับหลายวิชา")}</p></>}

@@ -1038,6 +1038,7 @@ function CreditorFormStep({
   const [showGrid, setShowGrid] = useState(false);
   const [previewURL, setPreviewURL] = useState<string | null>(null);
   const [previewErr, setPreviewErr] = useState<string | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
 
   // The preview is POSTed, not linked: the server has nothing stored to render
   // from, so the data travels in the body. That also keeps the national ID and
@@ -1048,12 +1049,13 @@ function CreditorFormStep({
   // of the tab.
   const formKey = JSON.stringify(form);
   useEffect(() => {
-    if (!profileReady) { setPreviewURL(null); return; }
+    setPreviewURL(null);
+    setPreviewErr(null);
+    if (!profileReady) return;
     let url: string | null = null;
     let cancelled = false;
     (async () => {
       try {
-        setPreviewErr(null);
         const blob = await api.post<Blob>(
           `/me/creditor-form/preview.pdf${showGrid ? "?grid=1" : ""}`, form);
         if (cancelled) return;
@@ -1068,10 +1070,10 @@ function CreditorFormStep({
       if (url) URL.revokeObjectURL(url);
     };
     // formKey (not form) so an identical object identity change doesn't refetch.
-  }, [formKey, profileReady, showGrid]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [formKey, profileReady, showGrid, previewAttempt]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function confirm() {
-    if (submitting.current) return;
+    if (submitting.current || !previewURL || previewErr) return;
     submitting.current = true;
     setConfirming(true);
     try {
@@ -1143,7 +1145,12 @@ function CreditorFormStep({
         </div>
         <div className="border border-[var(--hairline)] rounded-md overflow-hidden bg-slate-100">
           {previewErr ? (
-            <div className="p-4 text-sm text-danger-soft-foreground">{previewErr}</div>
+            <div className="p-4 space-y-3">
+              <p role="alert" className="text-sm text-danger-soft-foreground">{previewErr}</p>
+              <Button variant="secondary" onClick={() => setPreviewAttempt(attempt => attempt + 1)}>
+                {t("กรุณาลองใหม่อีกครั้ง")}
+              </Button>
+            </div>
           ) : previewURL ? (
             <PdfFrame
               src={previewURL}
@@ -1161,7 +1168,7 @@ function CreditorFormStep({
       {doc && <SubmittedDoc doc={doc} />}
 
       <div className="flex flex-wrap gap-2 items-center">
-        <Button variant="primary" onClick={confirm} disabled={confirming || uploading} isPending={confirming}>
+        <Button variant="primary" onClick={confirm} disabled={confirming || uploading || !previewURL || !!previewErr} isPending={confirming}>
           <CheckCircle2 size={14} /> {confirming ? t("กำลังบันทึก…") : t("ยืนยันและบันทึกเอกสารนี้")}
         </Button>
         {/* The button IS the anchor. Nested inside one, the press handler eats

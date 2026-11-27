@@ -54,6 +54,7 @@ const ACTIVITY_OPTS = [
   { v: "lab", l: msg("ปฏิบัติการ") },
   { v: "review", l: msg("ตรวจงาน") },
   { v: "other", l: msg("อื่นๆ") },
+  { v: "prep", l: msg("เตรียมการสอน") },
 ];
 const activityLabel = (a: string) => ACTIVITY_OPTS.find(o => o.v === a)?.l ?? a;
 const PARENT_KIND_TH: Record<string, string> = { lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ") };
@@ -454,7 +455,7 @@ function EditableRow({ row, onChanged }: { row: StaffWorkLog; onChanged: () => v
       <td className="px-3 py-2 align-middle">
         <div className="flex flex-col gap-1">
           <Select value={draft.activity} onChange={e => setDraft({ ...draft, activity: e.target.value })} className="w-32">
-            {ACTIVITY_OPTS.map(o => <option key={o.v} value={o.v}>{t(o.l)}</option>)}
+            {ACTIVITY_OPTS.filter(o => o.v !== "prep" || row.level === "master" || row.level === "phd").map(o => <option key={o.v} value={o.v}>{t(o.l)}</option>)}
           </Select>
           {draft.activity === "other" && (
             <Select
@@ -599,7 +600,7 @@ function NewRow({
       <td className="px-3 py-2 align-middle">
         <div className="flex flex-col gap-1">
           <Select value={activity} onChange={e => setActivity(e.target.value)} className="w-32">
-            {ACTIVITY_OPTS.map(o => <option key={o.v} value={o.v}>{t(o.l)}</option>)}
+            {ACTIVITY_OPTS.filter(o => o.v !== "prep" || ["master", "phd"].includes(assignments.find(a => a.assignment_id === assignmentId)?.level ?? "")).map(o => <option key={o.v} value={o.v}>{t(o.l)}</option>)}
           </Select>
           {activity === "other" && (
             <Select value={parentKind} onChange={e => setParentKind(e.target.value as "lecture" | "lab" | "")} className="w-32">

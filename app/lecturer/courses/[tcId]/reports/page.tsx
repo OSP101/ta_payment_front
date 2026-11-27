@@ -109,6 +109,7 @@ const ACTIVITY_LABEL: Record<string, string> = {
   review: msg("ตรวจงาน"),
   makeup: msg("ชดเชย"),
   other: msg("อื่น ๆ"),
+  prep: msg("เตรียมการสอน"),
 };
 const PARENT_KIND_LABEL: Record<string, string> = {
   lecture: msg("คู่กับบรรยาย"),

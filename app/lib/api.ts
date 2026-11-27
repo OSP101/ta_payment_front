@@ -8,6 +8,7 @@ import { beginRequest, endRequest } from "./loadingBar";
 import { tc as clientTc } from "./i18n/client";
 import { interpolate, msg, type Vars } from "./i18n/core";
 import { recordAPI, responseReference, type DiagnosticReference } from "./apiTelemetry";
+import { requestTimeout } from "./requestTimeout";
 
 // This module is also loaded on the server (lib/session → getMe), where the
 // client-only tc() must not be called; there the Thai key is returned as is.
@@ -374,13 +375,14 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const tracked = !SILENT_PATHS.includes(path);
   if (tracked) beginRequest();
+  const timeout = requestTimeout(TIMEOUT_MS, init.signal);
   try {
     let res: Response;
     try {
       res = await apiFetch(`${apiPrefix}${path}`, {
         ...init,
         credentials: "include",
-        signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
+        signal: timeout.signal,
         headers: {
           "Content-Type": "application/json",
           ...(init.headers as Record<string, string> | undefined),
@@ -388,7 +390,7 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
       });
     } catch (e) {
       // Network failure or timeout — no HTTP status.
-      if (e instanceof DOMException && e.name === "TimeoutError") {
+      if (timeout.timedOut() || (e instanceof DOMException && e.name === "TimeoutError")) {
         throw new ApiError(408, humanMessage(408, ""));
       }
       throw new ApiError(0, humanMessage(0, ""));
@@ -400,6 +402,7 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (ct.includes("application/json")) return (await res.json()) as T;
     return (await res.blob()) as unknown as T;
   } finally {
+    timeout.dispose();
     if (tracked) endRequest();
   }
 }

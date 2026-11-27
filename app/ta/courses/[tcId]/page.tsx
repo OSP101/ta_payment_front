@@ -53,7 +53,18 @@ interface TAStatus {
   estimated_baht_special: number;
 }
 
+interface Workload {
+  help_teach_hrs: number; help_teach_desc: string;
+  prep_hrs: number; prep_desc: string;
+  grade_hrs: number; grade_desc: string;
+  other_hrs: number; other_desc: string;
+  check_work_hrs: number; attendance_hrs: number;
+  ug_other_hrs: number; ug_other_desc: string;
+  lab_hrs: number; lab_other_hrs: number; lab_other_desc: string;
+}
+
 interface Assignment {
+  workload?: Workload | null;
   id: string;
   teaching_course_id: string;
   course_code: string;
@@ -66,6 +77,26 @@ interface Assignment {
   state?: string;
   /** Why some sessions of this section are unavailable, in Thai. */
   state_reason?: string;
+}
+
+// Keep the request's individual duties: graduate help-teaching is one shared
+// allocation, and undergraduate lecture/lab support have separate descriptions.
+function assignedDuties(a: Assignment) {
+  const w = a.workload;
+  if (!w) return [];
+  const duties = a.level === "undergrad" ? [
+    { label: msg("ตรวจการบ้าน / รายงาน"), hours: w.check_work_hrs, description: "" },
+    { label: msg("เช็คชื่อ"), hours: w.attendance_hrs, description: "" },
+    { label: msg("อื่น ๆ (บรรยาย)"), hours: w.ug_other_hrs, description: w.ug_other_desc },
+    { label: msg("สอนปฏิบัติการ"), hours: w.lab_hrs, description: "" },
+    { label: msg("อื่น ๆ (ปฏิบัติการ)"), hours: w.lab_other_hrs, description: w.lab_other_desc },
+  ] : [
+    { label: msg("ช่วยสอน"), hours: w.help_teach_hrs, description: w.help_teach_desc },
+    { label: msg("เตรียมการสอน"), hours: w.prep_hrs, description: w.prep_desc },
+    { label: msg("ตรวจการบ้าน / รายงาน"), hours: w.grade_hrs, description: w.grade_desc },
+    { label: msg("อื่น ๆ"), hours: w.other_hrs, description: w.other_desc },
+  ];
+  return duties.filter(duty => duty.hours > 0);
 }
 
 const DOW_LABEL = [msg("อา"), msg("จ"), msg("อ"), msg("พ"), msg("พฤ"), msg("ศ"), msg("ส")];
@@ -230,6 +261,70 @@ export default function TACoursePage({ params }: { params: Promise<{ tcId: strin
               />
             </div>
           )}
+
+          <Panel
+            title={t("งานที่ได้รับมอบหมาย")}
+            description={t("รายละเอียดจากฟอร์มคำขอ TA ของอาจารย์ แสดงชั่วโมงต่อสัปดาห์แยกตามกลุ่มเรียน")}
+            className="mb-4"
+            padded={false}
+          >
+            {assignmentsError ? (
+              <div className="p-4">
+                <Alert status="danger" title={t("โหลดรายละเอียดงานไม่สำเร็จ")} description={t("กรุณาลองใหม่อีกครั้ง")} />
+              </div>
+            ) : !myAssignments ? (
+              <SkelRegion className="p-4 space-y-3">
+                <Skel className="h-5 w-40" />
+                <Skel className="h-4 w-full" />
+                <Skel className="h-4 w-3/4" />
+              </SkelRegion>
+            ) : myAssignments.length === 0 ? (
+              <div className="p-6">
+                <EmptyState title={t("ยังไม่มีงานที่ได้รับมอบหมาย")} description={t("รายละเอียดจะแสดงเมื่อคำขอ TA ของอาจารย์ได้รับอนุมัติ")} />
+              </div>
+            ) : (
+              <div className="divide-y divide-[var(--hairline)]">
+                {myAssignments.map(a => {
+                  const duties = assignedDuties(a);
+                  const total = duties.reduce((sum, duty) => sum + duty.hours, 0);
+                  return (
+                    <section key={a.id} className="p-4" aria-label={t("กลุ่มเรียน {n}", { n: a.sec_no })}>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-sm font-semibold">{t("กลุ่มเรียน {n}", { n: a.sec_no })}</h2>
+                          <Chip tone={a.track === "special" ? "warn" : "info"}>
+                            {a.track === "special" ? t("ภาคพิเศษ") : t("ภาคปกติ")}
+                          </Chip>
+                        </div>
+                        {duties.length > 0 && (
+                          <span className="text-sm font-medium tabular-nums">
+                            {t("รวม {n} ชั่วโมง/สัปดาห์", { n: total.toLocaleString(undefined, { maximumFractionDigits: 2 }) })}
+                          </span>
+                        )}
+                      </div>
+                      {duties.length === 0 ? (
+                        <p className="text-sm text-muted">{t("ยังไม่มีรายละเอียดชั่วโมงงานในฟอร์มคำขอ กรุณาติดต่ออาจารย์ผู้สอน")}</p>
+                      ) : (
+                        <dl className="divide-y divide-[var(--hairline)]">
+                          {duties.map(duty => (
+                            <div key={duty.label} className="flex items-start justify-between gap-4 py-3">
+                              <dt className="min-w-0 text-sm">
+                                <span className="font-medium">{t(duty.label)}</span>
+                                {duty.description && <p className="mt-1 text-muted whitespace-pre-line break-words">{duty.description}</p>}
+                              </dt>
+                              <dd className="shrink-0 text-sm tabular-nums">
+                                {t("{n} ชั่วโมง/สัปดาห์", { n: duty.hours.toLocaleString(undefined, { maximumFractionDigits: 2 }) })}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
 
           {/* Section schedule */}
           <Panel

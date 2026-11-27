@@ -1,4 +1,5 @@
 "use client";
+import { useCurricula } from "./useCurricula";
 
 import { cloneElement, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { AlertCircle, CheckCircle2, ChevronRight, ClipboardCheck, FileText, List, TriangleAlert } from "lucide-react";
@@ -63,6 +64,7 @@ export default function REGReviewEditor({ review, onChange, disabled, validation
   validationState?: "idle" | "waiting" | "checking" | "failed";
 }) {
   const { t } = useI18n();
+  const curricula = useCurricula();
   const [selected, setSelected] = useState(review.courses[0]?.code ?? "");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -260,7 +262,7 @@ export default function REGReviewEditor({ review, onChange, disabled, validation
                 <Field label={t("เลข Section")} attention={attention(sec.id, /เลข Section|เลข.*ซ้ำ/)}><input className={control} value={sec.sec_no} onChange={e => section(sec.id, { sec_no: e.target.value })} /></Field>
                 <Field label={t("ประเภทภาค")} attention={attention(sec.id, /ประเภทภาค|เลือกภาค/)}><select className={control} value={sec.track} onChange={e => section(sec.id, { track: e.target.value })}><option value="">{t("ต้องเลือก")}</option><option value="regular">{t("ปกติ")}</option><option value="special">{t("พิเศษ")}</option></select></Field>
                 <div><Field label={course.source_format === "programme" ? t("จำนวนผู้ลงทะเบียนจริงจากไฟล์") : t("จำนวนรับจาก REG (ยังไม่ใช่ยอดลงทะเบียนจริง)")} attention={attention(sec.id, /จำนวนรับ|จำนวนผู้ลงทะเบียน|จำนวน.*คน|จำนวนที่นั่ง/)}><input className={control} type="number" min={0} max={3000} step={1} value={sec.students ?? ""} onChange={e => section(sec.id, { students: e.target.value === "" ? null : Number(e.target.value) })} /></Field>{sec.source_capacity != null && <p className="mt-1 text-xs text-muted">{t("จำนวนรับตามไฟล์ {n} คน", { n: sec.source_capacity })}</p>}</div>
-                <Field label={t("กลุ่มหลักสูตรหลัก")} attention={attention(sec.id, /หลักสูตร|กลุ่มหลัก/)}><select className={control} value={sec.curriculum} onChange={e => section(sec.id, { curriculum: e.target.value })}><option value="">{t("ต้องเลือก")}</option>{["CS", "IT", "GIS", "AI", "CY", "KKBS", "OTHER"].map(k => <option value={k} key={k}>{k === "OTHER" ? t("OTHER — คณะอื่น / กลุ่มทั่วไป") : k}</option>)}</select></Field>
+                <Field label={t("กลุ่มหลักสูตรหลัก")} attention={attention(sec.id, /หลักสูตร|กลุ่มหลัก/)}><select className={control} value={sec.curriculum} onChange={e => section(sec.id, { curriculum: e.target.value })}><option value="">{t("ต้องเลือก")}</option>{curricula.map(c => <option value={c.code} key={c.code}>{c.full_name_th} ({c.code})</option>)}</select></Field>
               </div>
               <div className="space-y-3">
                 {sec.schedules.map((sch, i) => <div key={i} className="reg-slot" data-pending={sch.pending} aria-label={`${t("คาบที่")} ${i + 1}`}>

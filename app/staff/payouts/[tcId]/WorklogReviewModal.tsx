@@ -85,6 +85,7 @@ export interface ReviewTarget {
 
 const ACTIVITY_LABEL: Record<string, string> = {
   lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ"), review: msg("ตรวจงาน"), other: msg("อื่นๆ"), makeup: msg("ชดเชย"),
+  prep: msg("เตรียมการสอน"),
 };
 /**
  * ภาคปกติ vs ภาคพิเศษ decides the hourly rate (ป.ตรี: 40฿ vs 50฿), so a section

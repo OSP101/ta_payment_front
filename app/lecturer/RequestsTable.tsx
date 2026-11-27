@@ -37,6 +37,9 @@ export interface TARequestRow {
 /** One row of /ta-requests/:id — who was actually sent in this round. */
 interface RequestAssignmentDetail {
   section_no: string;
+  ta_id?: string;
+  student_id?: string;
+  workload?: RequestWorkload | null;
   ta_name: string;
   email: string;
   level: string;
@@ -44,7 +47,15 @@ interface RequestAssignmentDetail {
   state: string;
   state_reason?: string;
 }
+type RequestWorkload = Partial<Record<
+  "help_teach_hrs" | "prep_hrs" | "grade_hrs" | "other_hrs" | "check_work_hrs" |
+  "attendance_hrs" | "ug_other_hrs" | "lab_hrs" | "lab_other_hrs", number> & Record<
+  "help_teach_desc" | "prep_desc" | "grade_desc" | "other_desc" | "ug_other_desc" | "lab_other_desc", string>>;
+
 interface RequestDetail extends TARequestRow {
+  lecturer_name?: string;
+  academic_year?: number;
+  semester?: number;
   reimburse_scope: string;
   assignments: RequestAssignmentDetail[] | null;
 }
@@ -200,6 +211,7 @@ interface GroupedAssignment {
   ta_name: string;
   email: string;
   level: string;
+  student_id?: string;
   sections: RequestAssignmentDetail[];
 }
 
@@ -209,22 +221,59 @@ interface GroupedAssignment {
 function groupByTa(list: RequestAssignmentDetail[]): GroupedAssignment[] {
   const byEmail = new Map<string, GroupedAssignment>();
   for (const a of list) {
-    const key = a.email || a.ta_name;
+    const key = a.ta_id || a.email || a.ta_name;
     const g = byEmail.get(key);
     if (g) g.sections.push(a);
-    else byEmail.set(key, { ta_name: a.ta_name, email: a.email, level: a.level, sections: [a] });
+    else byEmail.set(key, { ta_name: a.ta_name, email: a.email, level: a.level, student_id: a.student_id, sections: [a] });
   }
   return [...byEmail.values()];
+}
+
+const WORKLOAD_ITEMS = [
+  ["help_teach_hrs", "help_teach_desc", msg("ช่วยสอน")],
+  ["grade_hrs", "grade_desc", msg("ตรวจการบ้าน")],
+  ["prep_hrs", "prep_desc", msg("เตรียมการสอน")],
+  ["other_hrs", "other_desc", msg("อื่น ๆ ระบุ")],
+  ["check_work_hrs", null, msg("ช่วยตรวจงาน")],
+  ["attendance_hrs", null, msg("เช็คชื่อ / เก็บใบงาน")],
+  ["ug_other_hrs", "ug_other_desc", msg("อื่น ๆ (บรรยาย)")],
+  ["lab_hrs", null, msg("สอนปฏิบัติการ")],
+  ["lab_other_hrs", "lab_other_desc", msg("อื่น ๆ (ปฏิบัติการ)")],
+] as const;
+
+function WorkloadDetail({ workload }: { workload?: RequestWorkload | null }) {
+  const { t, intl } = useI18n();
+  if (!workload) return <p className="mt-2 text-xs text-muted">{t("ไม่มีข้อมูลภาระงานที่บันทึกไว้")}</p>;
+  const items = WORKLOAD_ITEMS.filter(([hours, desc]) => (workload[hours] ?? 0) > 0 || (desc && workload[desc]?.trim()));
+  if (!items.length) return <p className="mt-2 text-xs text-muted">{t("ไม่ได้ระบุภาระงาน")}</p>;
+  return (
+    <dl className="mt-3 divide-y divide-hairline">
+      {items.map(([hours, desc, label]) => (
+        <div key={hours} className="py-2 first:pt-0 last:pb-0">
+          <div className="flex items-start justify-between gap-3">
+            <dt className="text-ink-2">{t(label)}</dt>
+            <dd className="shrink-0 tabular-nums text-ink-1">{t("{hrs} ชม./สัปดาห์", { hrs: (workload[hours] ?? 0).toLocaleString(intl, { maximumFractionDigits: 2 }) })}</dd>
+          </div>
+          {desc && workload[desc] && <dd className="mt-1 whitespace-pre-wrap break-words text-muted">{workload[desc]}</dd>}
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 /** Who was actually sent in this round — opened from the history table. */
 function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { t, intl } = useI18n();
-  const { data: d } = useSWR<RequestDetail>(id ? `/ta-requests/${id}` : null);
+  const { data: d, error, mutate: reload } = useSWR<RequestDetail>(id ? `/ta-requests/${id}` : null);
   const grouped = d?.assignments?.length ? groupByTa(d.assignments) : [];
   return (
-    <Modal open={!!id} onClose={onClose} title={t("รายละเอียดคำขอ")} icon={<Eye size={18} />} size="lg">
-      {!d ? (
+    <Modal open={!!id} onClose={onClose} title={t("รายละเอียดคำขอ")} icon={<Eye size={18} />} size="xl">
+      {error ? (
+        <div role="alert" className="space-y-3 text-sm">
+          <p>{t("โหลดรายละเอียดคำขอไม่สำเร็จ")}</p>
+          <Button variant="secondary" onPress={() => { void reload(); }}>{t("ลองอีกครั้ง")}</Button>
+        </div>
+      ) : !d ? (
         // Shaped like the loaded body: status line, then one card per TA.
         <div className="space-y-3">
           <div className="flex items-center gap-1.5">
@@ -237,8 +286,27 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
         <div className="space-y-3 text-sm">
           <div className="flex flex-wrap items-center gap-1.5">
             <RequestStatusChip status={d.status} />
-            <span className="text-muted">{thDate(d.submitted_at, intl)}</span>
+            <Chip tone={d.is_late ? "warn" : "success"}>{t(d.is_late ? "ส่งช้า" : "ส่งทันเวลา")}</Chip>
           </div>
+          <section className="space-y-3 border-b border-hairline pb-4">
+            <h3 className="font-semibold text-ink-1 break-words">{d.course_code} {d.course_name}</h3>
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[
+                [t("อาจารย์ผู้ยื่นคำขอ"), d.lecturer_name || "-"],
+                ...(d.submitted_by_name ? [[t("ส่งแทนโดย"), d.submitted_by_name]] : []),
+                [t("ปีการศึกษา / ภาคเรียน"), d.academic_year && d.semester ? `${d.academic_year} / ${d.semester}` : "-"],
+                [t("วันที่ยื่นคำขอ"), thDate(d.submitted_at, intl)],
+                [t("วันที่พิจารณา"), thDate(d.decided_at, intl)],
+                [t("ประเภทที่ขอเบิก"), t(({ lecture: msg("บรรยาย"), lab: msg("ปฏิบัติการ"), both: msg("บรรยายและปฏิบัติการ") } as Record<string, string>)[d.reimburse_scope] ?? d.reimburse_scope)],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0">
+                  <dt className="text-xs text-muted">{label}</dt>
+                  <dd className="mt-1 break-words text-ink-1">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <h3 className="font-semibold text-ink-1">{t("ภาระงานที่ระบุในคำขอ")}</h3>
           {d.reject_reason && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-800 whitespace-pre-line">
               {d.reject_reason}
@@ -254,18 +322,20 @@ function RequestDetailModal({ id, onClose }: { id: string | null; onClose: () =>
                     <div className="font-medium text-ink-1">{g.ta_name}</div>
                     <Chip tone="neutral">{LEVEL_LABEL[g.level] ? t(LEVEL_LABEL[g.level]) : g.level}</Chip>
                   </div>
-                  <div className="text-xs text-muted mt-0.5">{g.email}</div>
-                  <ul className="mt-2 space-y-1.5">
+                  <div className="text-xs text-muted mt-0.5 break-words">{g.email}</div>
+                  {g.student_id && <div className="mt-1 text-xs text-muted">{t("รหัสนักศึกษา")}: {g.student_id}</div>}
+                  <ul className="mt-3 divide-y divide-hairline">
                     {g.sections.map((a, j) => {
                       const st = STATE_LABEL[a.state];
                       return (
-                        <li key={j} className="rounded-md bg-slate-50 border border-hairline px-2.5 py-1.5">
+                        <li key={j} className="py-3 first:pt-0 last:pb-0">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="text-xs text-ink-2">
                               {t("กลุ่ม {sec} · {hrs} ชม./สัปดาห์", { sec: a.section_no, hrs: a.total_hrs.toFixed(1) })}
                             </span>
                             {st && <Chip tone={st.tone}>{t(st.label)}</Chip>}
                           </div>
+                          <WorkloadDetail workload={a.workload} />
                           {a.state_reason && (
                             <div className="text-xs text-amber-700 mt-1">{a.state_reason}</div>
                           )}

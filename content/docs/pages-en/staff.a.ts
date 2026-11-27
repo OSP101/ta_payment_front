@@ -277,7 +277,7 @@ export const staffPagesEnA: DocPage[] = [
     blocks: [
       text(
         "The list of curricula, with the **Sheet name** and **Full name** printed on the summary of courses using TAs and on the direct-payment cover sheet. " +
-        "If the college renames a curriculum (e.g. IT to ITII), change it on this tab; no code changes are needed.",
+        "Choose **Add curriculum** and enter its code, sheet name, full name, level and print order. Codes cannot change after creation. Names and print order can be edited. Only curricula with no courses or course groups can be deleted.",
       ),
       screenshot("S-SE-11", "The curricula table: code, sheet name, full name and level"),
     ],

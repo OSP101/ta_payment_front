@@ -2813,16 +2813,31 @@ interface Curriculum {
 
 function CurriculaSection() {
   const { t } = useI18n();
-  const { data } = useSWR<Curriculum[]>("/curricula");
+  const { data, error: loadError, mutate: reload } = useSWR<Curriculum[]>("/curricula");
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<Curriculum | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Curriculum | null>(null);
   const rows = data ?? [];
 
+  async function remove() {
+    if (!deleting || removing) return;
+    setRemoving(true); setDeleteError(null);
+    try {
+      await api.del(`/curricula/${encodeURIComponent(deleting.code)}`);
+      await reload(); setDeleting(null);
+      toast.success(t("ลบหลักสูตรเรียบร้อยแล้ว"));
+    } catch (e) { setDeleteError((e as Error).message); }
+    finally { setRemoving(false); }
+  }
   return (
     <Panel
       title={t("หลักสูตร")}
-      description={t("ชื่อชีตและชื่อเต็มของแต่ละหลักสูตร ใช้พิมพ์ในเอกสารสรุปรายวิชาที่ขอใช้ TA และปะหน้าจ่ายตรง แก้ตรงนี้เมื่อคณะเปลี่ยนชื่อหลักสูตร (เช่น IT → ITII) โดยไม่ต้องแก้โค้ด")}
+      description={t("จัดการหลักสูตรที่ใช้กับรายวิชาและเอกสารจ่ายเงิน ลบได้เฉพาะหลักสูตรที่ยังไม่มีรายวิชาหรือกลุ่มรายวิชาใช้งาน")}
+      actions={<Button variant="primary" onClick={() => setCreating(true)}><Plus size={14} />{t("เพิ่มหลักสูตร")}</Button>}
     >
-      {data && rows.length === 0 ? (
+      {loadError ? <Alert status="danger" title={t("โหลดหลักสูตรไม่สำเร็จ")} action={<Button variant="ghost" onClick={() => reload()}>{t("ลองอีกครั้ง")}</Button>} /> : data && rows.length === 0 ? (
         <div className="text-sm text-muted py-4">{t("ยังไม่มีหลักสูตรในระบบ")}</div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -2861,6 +2876,7 @@ function CurriculaSection() {
                     <Button variant="ghost" size="sm" onClick={() => setEditing(cur)}>
                       <Pencil size={13} />{t("แก้ไข")}
                     </Button>
+                    <Button variant="ghost" size="sm" aria-label={t("ลบหลักสูตร {code}", { code: cur.code })} onClick={() => { setDeleteError(null); setDeleting(cur); }}><Trash2 size={13} />{t("ลบ")}</Button>
                   </td>
                 </tr>
               ))}
@@ -2870,25 +2886,35 @@ function CurriculaSection() {
       )}
 
       <CurriculumEditModal
+        creating={creating}
+        nextOrder={Math.max(0, ...rows.map(c => c.sort_order)) + 1}
         editing={editing}
-        onClose={() => setEditing(null)}
+        onClose={() => { setEditing(null); setCreating(false); }}
         onSaved={() => {
-          setEditing(null);
+          setEditing(null); setCreating(false);
           toast.success(t("บันทึกการแก้ไขหลักสูตรเรียบร้อยแล้ว"));
         }}
       />
+      <Modal open={deleting !== null} onClose={() => { if (!removing) setDeleting(null); }} title={t("ลบหลักสูตร {code}", { code: deleting?.code ?? "" })}
+        footer={<><Button variant="ghost" onClick={() => setDeleting(null)} disabled={removing}>{t("ยกเลิก")}</Button><Button variant="danger" onClick={remove} isPending={removing} disabled={removing}>{t("ลบหลักสูตร")}</Button></>}>
+        <div className="space-y-4"><p>{deleting?.full_name_th}</p><p>{t("ยืนยันการลบหลักสูตรนี้? ลบได้เฉพาะหลักสูตรที่ยังไม่มีรายวิชาหรือกลุ่มรายวิชาใช้งาน")}</p>{deleteError && <Alert status="danger" title={deleteError} />}</div>
+      </Modal>
     </Panel>
   );
 }
 
 function CurriculumEditModal({
-  editing, onClose, onSaved,
+  editing, creating, nextOrder, onClose, onSaved,
 }: {
   editing: Curriculum | null;
+  creating: boolean;
+  nextOrder: number;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = useI18n();
+  const [code, setCode] = useState("");
+  const [level, setLevel] = useState<"undergrad" | "graduate">("undergrad");
   const [sheetName, setSheetName] = useState("");
   const [fullName, setFullName] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
@@ -2896,25 +2922,27 @@ function CurriculumEditModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!editing) return;
-    setSheetName(editing.sheet_name);
-    setFullName(editing.full_name_th);
-    setSortOrder(editing.sort_order);
+    if (!editing && !creating) return;
+    setCode(editing?.code ?? "");
+    setLevel(editing?.level ?? "undergrad");
+    setSheetName(editing?.sheet_name ?? "");
+    setFullName(editing?.full_name_th ?? "");
+    setSortOrder(editing?.sort_order ?? nextOrder);
     setError(null);
-  }, [editing]);
+  }, [editing, creating, nextOrder]);
 
   const sheetTrim = sheetName.trim();
   const fullTrim = fullName.trim();
-  const canSave = sheetTrim !== "" && fullTrim !== "";
+  const canSave = /^[A-Z][A-Z0-9_]{0,39}$/.test(code) && sheetTrim !== "" && sheetTrim.length <= 31 && !/[:\\/?*\[\]]/.test(sheetTrim) && !sheetTrim.startsWith("'") && !sheetTrim.endsWith("'") && fullTrim !== "" && Number.isInteger(sortOrder) && sortOrder >= 0;
 
   async function save() {
-    if (!editing || !canSave) return;
+    if ((!editing && !creating) || !canSave || saving) return;
     setSaving(true);
     setError(null);
     try {
-      await api.patch(`/curricula/${editing.code}`, {
-        sheet_name: sheetTrim, full_name_th: fullTrim, sort_order: sortOrder,
-      });
+      const payload = { sheet_name: sheetTrim, full_name_th: fullTrim, level, sort_order: sortOrder };
+      if (creating) await api.post("/curricula", { code, ...payload });
+      else await api.patch(`/curricula/${encodeURIComponent(editing!.code)}`, payload);
       await mutate("/curricula");
       onSaved();
     } catch (e) {
@@ -2926,34 +2954,40 @@ function CurriculumEditModal({
 
   return (
     <Modal
-      open={editing !== null}
-      onClose={onClose}
+      open={editing !== null || creating}
+      onClose={() => { if (!saving) onClose(); }}
       title={
         <span className="inline-flex items-center gap-2">
           <Pencil size={18} />
-          {editing ? t("แก้ไขหลักสูตร {code}", { code: editing.code }) : ""}
+          {creating ? t("เพิ่มหลักสูตร") : editing ? t("แก้ไขหลักสูตร {code}", { code: editing.code }) : ""}
         </span>
       }
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={saving}>{t("ยกเลิก")}</Button>
           <Button variant="primary" onClick={save} disabled={!canSave || saving} isPending={saving}>
-            <Save size={14} />{t("บันทึกการแก้ไข")}
+            <Save size={14} />{t("บันทึก")}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         {error && <Alert status="danger" title={error} />}
+        <FieldGroup label={t("รหัสหลักสูตร")} hint={t("ใช้ A–Z, 0–9 หรือ _ และเปลี่ยนรหัสหลังสร้างไม่ได้")}>
+          <TextInput value={code} onChange={e => setCode(e.target.value.toUpperCase())} maxLength={40} disabled={!creating} autoFocus={creating} />
+        </FieldGroup>
+        <FieldGroup label={t("ระดับ")}>
+          <Select value={level} onChange={e => setLevel(e.target.value as "undergrad" | "graduate")}><option value="undergrad">{t("ปริญญาตรี")}</option><option value="graduate">{t("บัณฑิตศึกษา")}</option></Select>
+        </FieldGroup>
         <FieldGroup label={t("ชื่อชีต")} hint={t("ชื่อแท็บชีตที่พิมพ์ในเอกสาร Excel")}>
-          <TextInput value={sheetName} onChange={e => setSheetName(e.target.value)} maxLength={40} autoFocus />
+          <TextInput value={sheetName} onChange={e => setSheetName(e.target.value)} maxLength={31} />
         </FieldGroup>
         <FieldGroup label={t("ชื่อเต็มหลักสูตร")}>
           <TextInput value={fullName} onChange={e => setFullName(e.target.value)} maxLength={200} />
         </FieldGroup>
         <FieldGroup label={t("ลำดับการพิมพ์")} hint={t("ชีตที่มีเลขน้อยกว่าจะอยู่ก่อนในเอกสาร")}>
           <TextInput
-            type="number"
+            type="number" min={0} step={1}
             value={String(sortOrder)}
             onChange={e => setSortOrder(Number(e.target.value) || 0)}
           />
@@ -3768,7 +3802,9 @@ function SubmissionPeriodModal({
   async function save() {
     setSaving(true); setError(null);
     try {
-      await api.post("/submission-periods", { ...draft, term_id: termId });
+      // A new period has no UUID yet; an empty string fails API JSON binding.
+      const { id, ...fields } = draft;
+      await api.post("/submission-periods", { ...fields, term_id: termId, ...(id ? { id } : {}) });
       onSaved();
     } catch (e) {
       setError((e as Error).message);

@@ -13,6 +13,7 @@ await seed();
 const browser = await chromium.launch({ channel: 'chrome' });
 async function newPage(options) {
  const page = await browser.newPage(options);
+ page.setDefaultNavigationTimeout(120000);
  await page.addInitScript(() => localStorage.setItem('ta-payment:request-guide:v1:lecturer-playground', '1'));
  return page;
 }
@@ -59,24 +60,25 @@ try {
  await page.getByRole('button', { name: 'คืนรายการก่อนใช้แผน', exact: true }).click();
  await expect(nav.getByRole('button')).toHaveCount(3);
  await expect(grading).toHaveValue('1.5');
- // A blocking schedule clash on an inactive page still prevents submission.
+ // A partial clash on an inactive page keeps its free lab requestable.
  await page.close();
  await seed();
  const conflict = await newPage();
  await conflict.route('**/api/v1/ta-requests/preview-conflicts?*', async route => {
   if (new URL(route.request().url()).searchParams.get('ta_id') !== 'ta-2') return route.continue();
-  await route.fulfill({ json: { conflicts: [{ section_id: 'sec-2', messages: ['Schedule clash'], blocked_kinds: [], cross_conflict: true }] } });
+  await route.fulfill({ json: { conflicts: [{ section_id: 'sec-2', messages: ['Lecture overlaps an approved course'], blocked_kinds: ['lecture'], cross_conflict: true, available_hours: {lecture: 0, lab: 2} }] } });
  });
  await conflict.goto(`${origin}/dev/request-preview`);
- await expect(conflict.getByText('มี TA ที่ตารางทับซ้อนกับรายวิชาอื่น กรุณาเอาชื่อออกก่อน', { exact: true })).toBeVisible();
- await expect(conflict.locator('button').filter({ hasText: /^ส่งคำขอ \(/ })).toBeDisabled();
+ await expect(conflict.locator('button').filter({ hasText: /^ส่งคำขอ \(/ })).toBeEnabled();
+ await conflict.getByRole('navigation', { name: 'เลือกหน้าภาระงาน TA' }).getByRole('button').nth(1).click();
+ await expect(conflict.getByText('ส่งคำขอได้เฉพาะคาบที่ไม่ชน และงานตรวจ/งานอื่นนอกคาบ', {exact: true})).toBeVisible();
  await conflict.close();
  // Exercise the real submit payload against the playground, not a real request.
  await seed();
  const submitPage = await newPage(); submitPage.on('pageerror', e => errors.push(e.message));
  await submitPage.goto(`${origin}/dev/request-preview`);
- await expect(submitPage.getByRole('button', { name: 'ส่งคำขอ (2 คน)', exact: true })).toBeEnabled();
- await submitPage.getByRole('button', { name: 'ส่งคำขอ (2 คน)', exact: true }).click();
+ await expect(submitPage.locator('button').filter({ hasText: /^ส่งคำขอ \(2 คน\)$/ })).toBeEnabled();
+ await submitPage.locator('button').filter({ hasText: /^ส่งคำขอ \(2 คน\)$/ }).click();
  const request = submitPage.waitForRequest(r => new URL(r.url()).pathname === '/api/v1/ta-requests' && r.method() === 'POST');
  await submitPage.getByRole('button', { name: 'ยืนยันส่งคำขอ', exact: true }).click();
  const body = (await request).postDataJSON();

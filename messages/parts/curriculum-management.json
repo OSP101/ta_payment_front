@@ -1,0 +1,11 @@
+{
+ "จัดการหลักสูตรที่ใช้กับรายวิชาและเอกสารจ่ายเงิน ลบได้เฉพาะหลักสูตรที่ยังไม่มีรายวิชาหรือกลุ่มรายวิชาใช้งาน": "Manage curricula used by courses and payment documents. Only unused curricula can be deleted.",
+ "เพิ่มหลักสูตร": "Add curriculum",
+ "ลบหลักสูตร": "Delete curriculum",
+ "ลบหลักสูตร {code}": "Delete curriculum {code}",
+ "ลบหลักสูตรเรียบร้อยแล้ว": "Curriculum deleted.",
+ "โหลดหลักสูตรไม่สำเร็จ": "Unable to load curricula.",
+ "ยืนยันการลบหลักสูตรนี้? ลบได้เฉพาะหลักสูตรที่ยังไม่มีรายวิชาหรือกลุ่มรายวิชาใช้งาน": "Delete this curriculum? Only curricula without courses or course groups can be deleted.",
+ "รหัสหลักสูตร": "Curriculum code",
+ "ใช้ A–Z, 0–9 หรือ _ และเปลี่ยนรหัสหลังสร้างไม่ได้": "Use A–Z, 0–9 or _. The code cannot be changed after creation."
+}
