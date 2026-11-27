@@ -2,7 +2,7 @@
 import { Fragment, use, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid, Lock, CalendarOff, CalendarDays, ChevronRight } from "lucide-react";
+import { Wand2, Send, Save, Clock, ChevronLeft, Plus, Trash2, AlertTriangle, BookOpenCheck, Pencil, Cloud, CloudOff, Check, CheckCircle2, LayoutGrid, Lock, CalendarOff, CalendarDays, ChevronRight, ArrowDown } from "lucide-react";
 import { api, type Me } from "../../../../lib/api";
 import { PayEstimateCard, type PayEstimate, type PayEstimateMonth } from "../../../../components/PayEstimate";
 import { notify } from "../../../../lib/notify";
@@ -19,6 +19,7 @@ import { type DataColumn } from "../../../../components/DataTable";
 import { Skel, SkelRegion, SkelRows, SkelValue } from "../../../../components/Skeletons";
 import { LockedActionButton, useTAApproval } from "../../../TAGate";
 import { ClaimSheetDownload } from "./ClaimSheetDownload";
+import { resolveManualClassDate } from "./manualMakeup";
 import { msg, useI18n, type I18n, type TFn } from "../../../../lib/i18n/client";
 
 // What the module-level date helpers below need from useI18n().
@@ -292,6 +293,7 @@ interface TC {
 interface HolidayImpactMakeup {
   id: string;
   makeup_date: string;
+  waived?: boolean;
   start_time?: string;
   end_time?: string;
 }
@@ -299,6 +301,8 @@ interface HolidayImpactSection {
   section_id: string;
   sec_no: string;
   kind: "lecture" | "lab";
+  start_time?: string;
+  end_time?: string;
   makeup: HolidayImpactMakeup | null;
 }
 interface HolidayImpact {
@@ -488,6 +492,8 @@ interface PayRateEstimate {
 // form can't accidentally assign a status or bind to a persisted id.
 interface NewWorkLog {
   work_date: string;
+  original_work_date?: string;
+  makeup_id?: string;
   start_time: string;
   end_time: string;
   hours: number;
@@ -703,7 +709,7 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
   // Holiday impacts drive both the AddWorklogModal's inline "you can't log
   // here" hint and the MonthlyWorklogView's per-month warning strip. Shared
   // SWR key = one fetch for the whole page.
-  const { data: impacts } = useSWR<HolidayImpactsResponse>(
+  const { data: impacts, error: impactsError } = useSWR<HolidayImpactsResponse>(
     tcId ? `/teaching-courses/${tcId}/holiday-impacts` : null,
   );
   // Monthly submission periods gate TA writes: a closed period blocks edits to
@@ -1557,6 +1563,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
       await api.put(`/assignments/${aid}/worklog`, {
         assignment_id: aid,
         work_date: form.work_date,
+        original_work_date: form.original_work_date,
+        makeup_id: form.makeup_id,
         start_time: form.start_time,
         end_time: form.end_time,
         hours: form.hours,
@@ -2511,6 +2519,8 @@ export default function WorklogPage({ params }: { params: Promise<{ tcId: string
           return null;
         }}
         impacts={impacts?.impacts ?? []}
+        holidayDataReady={!!impacts && !impactsError}
+        holidayDataError={!!impactsError}
         sectionId={activeAssignment?.section_id}
         tcId={tcId}
         weeklyCaps={weeklyCapsInfo}
@@ -2676,6 +2686,8 @@ interface AddWorklogModalProps {
   // when the user picks a date that will get rejected by the server (holiday,
   // no makeup, moved elsewhere). tcId is used to link to the holidays page.
   impacts?: HolidayImpact[];
+  holidayDataReady?: boolean;
+  holidayDataError?: boolean;
   sectionId?: string;
   tcId?: string;
   // Returns why a date's MONTH cannot take a new row, or null when it can. The
@@ -2825,7 +2837,7 @@ function classWindowError(
 
 function AddWorklogModal({
   open, onClose, onSave, isPending, scope, sectionNo, sectionTrack, defaultDate,
-  impacts, sectionId, tcId, blockedMonth, weeklyCaps, existingLogs, sectionSchedules,
+  impacts, holidayDataReady = false, holidayDataError = false, sectionId, tcId, blockedMonth, weeklyCaps, existingLogs, sectionSchedules,
   termStart, termEnd, reviewSlotLabels, userId, aid,
 }: AddWorklogModalProps) {
   const i18n = useI18n();
@@ -2852,6 +2864,14 @@ function AddWorklogModal({
   const [parentKind, setParentKind] = useState<"lecture" | "lab">(defaultParentKind);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const classActivity = activity === "lecture" || activity === "lab";
+  const originalTimes = useMemo(() => defaultTimesForActivity(activity, sectionSchedules, workDate), [activity, sectionSchedules, workDate]);
+  const dateResolution = useMemo(() => resolveManualClassDate(workDate, activity, sectionId, impacts ?? [], originalTimes), [workDate, activity, sectionId, impacts, originalTimes]);
+  const recordedDate = dateResolution.workDate;
+  const makeupStart = dateResolution.state === "makeup" ? dateResolution.start : undefined;
+  const makeupEnd = dateResolution.state === "makeup" ? dateResolution.end : undefined;
+  const noBillableClass = classActivity && (!holidayDataReady || dateResolution.state === "blocked");
+
 
   // Weekly quota derived from the assignment's workload declaration. The
   // running total is computed from existingLogs so no extra fetch is needed —
@@ -2873,7 +2893,7 @@ function AddWorklogModal({
     const cap = capFor(activity);
     if (cap <= 0) return null;
     const used = weeklyUsedHours(
-      existingLogs, workDate, activity, weeklyCaps.lectureLabShared,
+      existingLogs, recordedDate, activity, weeklyCaps.lectureLabShared,
     );
     const remaining = Math.max(0, cap - used);
     const shared = weeklyCaps.lectureLabShared && (activity === "lecture" || activity === "lab");
@@ -2887,14 +2907,13 @@ function AddWorklogModal({
         ? t("ช่วยสอน (บรรยาย+ปฏิบัติการ)")
         : t(worklogActivityLabel(activity, !!weeklyCaps?.lectureLabShared)),
     };
-  }, [weeklyCaps, existingLogs, workDate, activity, t]);
+  }, [weeklyCaps, existingLogs, recordedDate, activity, t]);
 
   // Effective max the stepper will allow. MAX_ROW_HOURS is the hard per-row
   // ceiling; when a weekly quota is in play we further clamp to how much is
   // left this week so the TA can't over-enter and get a 400 on save.
-  const effectiveMax = weeklyInfo
-    ? Math.min(MAX_ROW_HOURS, weeklyInfo.remaining)
-    : MAX_ROW_HOURS;
+  const makeupHours = makeupStart && makeupEnd ? spanHours(makeupStart, makeupEnd) : null;
+  const effectiveMax = Math.min(MAX_ROW_HOURS, weeklyInfo?.remaining ?? MAX_ROW_HOURS, makeupHours ?? MAX_ROW_HOURS);
 
   // recovered holds the last-persisted form (if any) from a prior modal
   // session that was closed without saving. Read once on open so the debounced
@@ -2982,11 +3001,11 @@ function AddWorklogModal({
   // that the default, TA will edit if wrong." The hours follow the new span.
   useEffect(() => {
     if (!open) return;
-    const times = defaultTimesForActivity(activity, sectionSchedules, workDate);
+    const times = makeupStart && makeupEnd ? { start: makeupStart, end: makeupEnd } : originalTimes;
     if (!times) return;
     setStart(times.start);
     setEnd(times.end);
-  }, [open, activity, workDate, sectionSchedules]);
+  }, [open, activity, workDate, originalTimes, makeupStart, makeupEnd]);
 
   // If the user picks a new activity whose remaining quota is smaller than
   // the current hours, pull the value down — and the end time with it, so the
@@ -3000,6 +3019,10 @@ function AddWorklogModal({
   }, [effectiveMax, hours, start]);
 
   function handleSave() {
+    if (noBillableClass) { setError(t("วันหยุดนี้ยังไม่มีข้อมูลชดเชยที่ใช้งานได้ จึงลงเวลาเบิกคาบนี้ไม่ได้")); return; }
+    if (dateResolution.state === "makeup" && (start < dateResolution.start || end > dateResolution.end)) {
+      setError(t("เวลาที่ลงต้องอยู่ในช่วงชดเชย {start}–{end}", { start: dateResolution.start, end: dateResolution.end })); return;
+    }
     // Quota already used up: the stepper was clamped to 0 by the effect above,
     // and the generic validator then said "จำนวนชั่วโมงต้องมากกว่า 0" — true,
     // but it hid the actual reason. Say the week is full, with the figures.
@@ -3012,7 +3035,9 @@ function AddWorklogModal({
       return;
     }
     const form: NewWorkLog = {
-      work_date: workDate,
+      work_date: recordedDate,
+      original_work_date: dateResolution.state === "makeup" ? dateResolution.originalDate : undefined,
+      makeup_id: dateResolution.state === "makeup" ? dateResolution.makeupID : undefined,
       start_time: start,
       end_time: end,
       hours,
@@ -3029,11 +3054,11 @@ function AddWorklogModal({
     if (err) { setError(err); return; }
     // Inside the term staff opened. Checked before everything else: a date
     // outside it is not a quota question, it is not a date the course exists on.
-    if (termStart && workDate < termStart) {
+    if (termStart && recordedDate < termStart) {
       setError(t("ภาคการศึกษาเริ่ม {date} ลงเวลาก่อนหน้านั้นไม่ได้", { date: formatWorkDate(termStart) }));
       return;
     }
-    if (termEnd && workDate > termEnd) {
+    if (termEnd && recordedDate > termEnd) {
       setError(t("ภาคการศึกษาสิ้นสุด {date} ลงเวลาหลังจากนั้นไม่ได้", { date: formatWorkDate(termEnd) }));
       return;
     }
@@ -3042,12 +3067,12 @@ function AddWorklogModal({
     // is the period-aware answer (it reads the real submission_periods rows), so
     // it is what decides back-dating too — a month staff deliberately kept open
     // must stay writable here.
-    const monthErr = blockedMonth?.(workDate);
+    const monthErr = blockedMonth?.(recordedDate);
     if (monthErr) { setError(monthErr); return; }
     // The คาบ has to exist. Mirrors the server's validateClassWindow so a TA is
     // told on the form, not after a round-trip, that no บรรยาย/ปฏิบัติการ of this
     // section runs at that hour on that day.
-    const windowErr = classWindowError(activity, workDate, start, end, sectionSchedules, dateIndex, i18n);
+    const windowErr = classWindowError(activity, recordedDate, start, end, sectionSchedules, dateIndex, i18n);
     if (windowErr) { setError(windowErr); return; }
     // Weekly quota preflight — mirrors the server-side enforceWeeklyActivityCap
     // check. Gives the TA a clear reason before hitting the network.
@@ -3078,8 +3103,8 @@ function AddWorklogModal({
       footer={
         <div className="flex justify-end gap-2 w-full">
           <Button variant="ghost" onClick={onClose} disabled={isPending}>{t("ยกเลิก")}</Button>
-          <Button variant="primary" onClick={handleSave} isPending={isPending} disabled={isPending}>
-            <Save size={14} /> {t("บันทึกรายการ")}
+          <Button variant="primary" onClick={handleSave} isPending={isPending} disabled={isPending || noBillableClass}>
+            <Save size={14} /> {dateResolution.state === "makeup" ? t("บันทึกเป็นวันที่ {date}", { date: formatWorkDate(recordedDate) }) : t("บันทึกรายการ")}
           </Button>
         </div>
       }
@@ -3193,7 +3218,7 @@ function AddWorklogModal({
         )}
 
         <FieldGroup
-          label={t("วันที่ปฏิบัติงาน")}
+          label={classActivity ? t("วันที่คาบเรียนเดิม") : t("วันที่ปฏิบัติงาน")}
           hint={
             termStart && termEnd
               ? t("ภาคการศึกษา {start} – {end}", { start: formatWorkDate(termStart), end: formatWorkDate(termEnd) })
@@ -3206,25 +3231,44 @@ function AddWorklogModal({
             // Lower bound is whichever is later: the term's own start, or the
             // 1st of this month (past months are closed to back-dating).
             minValue={
-              termStart && termStart > currentMonthStartIso()
+              classActivity ? termStart : termStart && termStart > currentMonthStartIso()
                 ? termStart
                 : currentMonthStartIso()
             }
             maxValue={termEnd}
-            label={t("วันที่ปฏิบัติงาน")}
+            label={classActivity ? t("วันที่คาบเรียนเดิม") : t("วันที่ปฏิบัติงาน")}
             autoFocus
           />
         </FieldGroup>
 
-        <HolidayHint
-          workDate={workDate}
-          startTime={start}
-          endTime={end}
-          activity={activity}
-          parentKind={parentKind}
-          dateIndex={dateIndex}
-          tcId={tcId}
-        />
+        {classActivity ? (
+          !holidayDataReady ? <Alert status="warning" title={holidayDataError ? t("โหลดข้อมูลวันหยุดและชดเชยไม่สำเร็จ กรุณารีเฟรชแล้วลองใหม่") : t("กำลังตรวจสอบวันหยุดและข้อมูลชดเชย กรุณารอสักครู่")} /> :
+          dateResolution.state === "makeup" ? (
+            <div role="group" aria-label={t("วันเรียนเดิมและวันชดเชยจาก TDBM")} className="rounded-xl border border-accent/25 bg-accent/5 p-4">
+              <p className="mb-3 text-sm font-semibold">{t("ใช้วันชดเชยที่อาจารย์กำหนดจาก TDBM")}</p>
+              <div className="rounded-lg bg-surface px-3 py-2.5">
+                <p className="text-xs text-muted">{t("วันเรียนเดิม (วันหยุด)")}</p>
+                <p className="mt-1 font-semibold">{formatWorkDate(workDate)}</p>
+                {originalTimes && <p className="text-sm tabular-nums text-muted">{originalTimes.start}–{originalTimes.end}</p>}
+              </div>
+              <div className="flex items-center justify-center gap-2 py-2 text-accent">
+                <ArrowDown size={22} strokeWidth={2.5} aria-hidden="true" />
+                <span className="text-xs font-medium">{t("ลงเวลาสอนชดเชยแทนเป็น")}</span>
+              </div>
+              <div className="rounded-lg border border-accent/30 bg-surface px-3 py-2.5">
+                <p className="text-xs text-muted">{t("วันชดเชยจาก TDBM")}</p>
+                <p className="mt-1 font-semibold text-accent">{formatWorkDate(recordedDate)}</p>
+                <p className="text-sm font-medium tabular-nums">{dateResolution.start}–{dateResolution.end}</p>
+              </div>
+              <p className="mt-3 text-xs text-muted">{dateResolution.workDate === workDate
+                ? t("อาจารย์กำหนดชดเชยในวันหยุดนี้ ระบบอนุญาตให้ลงเวลาตามช่วงชดเชยได้")
+                : t("เมื่อบันทึก ระบบจะใช้วันและเวลาชดเชยด้านบน")}</p>
+            </div>
+          ) :
+          dateResolution.state === "blocked" ? <Alert status="warning"
+            title={dateResolution.reason === "waived" ? t("คาบนี้ระบุว่าไม่มีการชดเชย จึงลงเวลาเบิกคาบนี้ไม่ได้") : dateResolution.reason === "invalid" ? t("ข้อมูลวันชดเชยไม่ครบหรือไม่ชัดเจน จึงยังลงเวลาเบิกคาบนี้ไม่ได้") : t("วันหยุดนี้ยังไม่มีข้อมูลชดเชย จึงลงเวลาเบิกคาบนี้ไม่ได้")}
+            description={t("ตรวจสอบข้อมูลกับอาจารย์และรอซิงก์ข้อมูล TDBM ก่อนลงเวลา")} /> : null
+        ) : <HolidayHint workDate={workDate} startTime={start} endTime={end} activity={activity} parentKind={parentKind} dateIndex={dateIndex} tcId={tcId} />}
 
         {/* Two times fit a phone row; the third field does not. */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
